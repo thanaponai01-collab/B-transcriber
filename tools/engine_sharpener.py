@@ -16,6 +16,8 @@ What it checks
 4. GitHub repos    — upstream tags for tools you care about
 5. Anthropic API   — current available models (so your Director/Editor
                      agents can be pointed at the latest Claude)
+6. Local repos     — your own engine clone(s) vs their git origin
+                     (unpulled commits + uncommitted working-tree changes)
 
 Output is a single Markdown report with three buckets:
   ✅ up to date
@@ -28,6 +30,8 @@ Usage
     python tools/engine_sharpener.py --json out.json # machine-readable
     python tools/engine_sharpener.py --quiet         # only show items needing action
     python tools/engine_sharpener.py --section pypi  # check one section only
+    python tools/engine_sharpener.py --repo ~/code/story-pipeline
+    python tools/engine_sharpener.py --repo ~/engine --repo ~/harness   # multiple
 
 Design notes
 ------------
@@ -352,6 +356,162 @@ def check_anthropic_models() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# Local git repo checks
+# ---------------------------------------------------------------------------
+
+def _run_git(repo: Path, *args: str, timeout: int = 10) -> Optional[str]:
+    """Run a git command inside repo, return stdout or None on failure."""
+    exe = shutil.which("git")
+    if not exe:
+        return None
+    try:
+        out = subprocess.run(
+            [exe, "-C", str(repo), *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log.debug("git %s failed in %s: %s", args, repo, e)
+        return None
+    if out.returncode != 0:
+        log.debug("git %s in %s returned %d: %s",
+                  args, repo, out.returncode, out.stderr.strip())
+        return None
+    return out.stdout.strip()
+
+
+def check_local_repo(repo_path: str, do_fetch: bool = True) -> CheckResult:
+    """
+    Compare a local clone against its upstream and report:
+      - how many commits behind/ahead of origin
+      - whether the working tree is dirty (uncommitted changes)
+    """
+    repo = Path(repo_path).expanduser().resolve()
+    name = f"repo: {repo.name}"
+
+    if not repo.exists():
+        return CheckResult(name=name, status="unknown",
+                           note=f"path does not exist: {repo}")
+    if not (repo / ".git").exists():
+        return CheckResult(name=name, status="unknown",
+                           note=f"not a git repo: {repo}")
+
+    # Current branch.
+    branch = _run_git(repo, "rev-parse", "--abbrev-ref", "HEAD") or "HEAD"
+
+    # Refresh remote refs. Skippable if you're offline.
+    if do_fetch:
+        _run_git(repo, "fetch", "--quiet", timeout=15)
+
+    # Find the upstream tracking branch (e.g. origin/main).
+    upstream = _run_git(repo, "rev-parse", "--abbrev-ref",
+                        "--symbolic-full-name", "@{u}")
+    if not upstream:
+        # No tracking branch configured. Still useful to report dirty state.
+        dirty_note = _dirty_summary(repo)
+        return CheckResult(
+            name=name,
+            local=f"branch {branch}",
+            latest="(no upstream)",
+            status="unknown" if not dirty_note else "minor",
+            note=("no upstream tracking branch set"
+                  + (f"; {dirty_note}" if dirty_note else "")),
+        )
+
+    # Count commits behind / ahead of upstream.
+    counts = _run_git(repo, "rev-list", "--left-right", "--count",
+                      f"HEAD...{upstream}")
+    ahead = behind = 0
+    if counts:
+        try:
+            ahead_s, behind_s = counts.split()
+            ahead, behind = int(ahead_s), int(behind_s)
+        except ValueError:
+            pass
+
+    # Dirty working tree?
+    dirty_note = _dirty_summary(repo)
+
+    # Decide status.
+    if behind == 0 and ahead == 0 and not dirty_note:
+        status = "ok"
+    elif behind >= 10 or (dirty_note and "untracked" not in dirty_note and behind > 0):
+        status = "major"
+    else:
+        status = "minor"
+
+    # Build the note.
+    bits = []
+    if behind:
+        bits.append(f"{behind} commit(s) behind {upstream}")
+    if ahead:
+        bits.append(f"{ahead} commit(s) ahead (unpushed)")
+    if dirty_note:
+        bits.append(dirty_note)
+    if not bits:
+        bits.append(f"in sync with {upstream}")
+
+    return CheckResult(
+        name=name,
+        local=f"branch {branch}",
+        latest=upstream,
+        status=status,
+        note="; ".join(bits),
+    )
+
+
+def _dirty_summary(repo: Path) -> str:
+    """
+    Return a short description of working-tree state, or "" if clean.
+    Uses `git status --porcelain` so it works on any git >= 1.7.
+
+    Note: we can't go through _run_git here because its .strip() would
+    eat the leading space in lines like " M file.txt", which is
+    semantically meaningful in porcelain output (col 0 = index state,
+    col 1 = worktree state).
+    """
+    exe = shutil.which("git")
+    if not exe:
+        return ""
+    try:
+        out = subprocess.run(
+            [exe, "-C", str(repo), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+    if out.returncode != 0 or not out.stdout:
+        return ""
+
+    modified = staged = untracked = 0
+    for line in out.stdout.splitlines():
+        if len(line) < 2:
+            continue
+        # Porcelain format: XY <path>
+        #   X = index (staged) state
+        #   Y = worktree (unstaged) state
+        #   "??" = untracked
+        x, y = line[0], line[1]
+        if x == "?" and y == "?":
+            untracked += 1
+            continue
+        if x != " " and x != "?":
+            staged += 1
+        if y != " " and y != "?":
+            modified += 1
+
+    parts = []
+    if modified:
+        parts.append(f"{modified} modified")
+    if staged:
+        parts.append(f"{staged} staged")
+    if untracked:
+        parts.append(f"{untracked} untracked")
+    if not parts:
+        return ""
+    return "dirty working tree (" + ", ".join(parts) + ")"
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
@@ -364,7 +524,11 @@ SECTIONS = {
 }
 
 
-def run_checks(only: Optional[str] = None) -> Report:
+def run_checks(
+    only: Optional[str] = None,
+    repos: Optional[list[str]] = None,
+    fetch: bool = True,
+) -> Report:
     report = Report()
     for key, (title, fn) in SECTIONS.items():
         if only and key != only:
@@ -375,6 +539,18 @@ def run_checks(only: Optional[str] = None) -> Report:
                 report.add(title, r)
         except Exception as e:
             report.add(title, CheckResult(name=key, status="unknown", note=str(e)))
+
+    # Local repo section runs only if the user asked for it via --repo.
+    # It's also gated by `only` so `--section repos` works as expected.
+    if repos and (only is None or only == "repos"):
+        log.info("Checking local repos…")
+        for r in repos:
+            try:
+                report.add("Local repos", check_local_repo(r, do_fetch=fetch))
+            except Exception as e:
+                report.add("Local repos", CheckResult(
+                    name=f"repo: {r}", status="unknown", note=str(e)))
+
     return report
 
 
@@ -412,9 +588,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Check what's new across the engine's stack.")
     p.add_argument("--json", metavar="PATH", help="Write machine-readable JSON here.")
     p.add_argument("--quiet", action="store_true", help="Only show items needing action.")
-    p.add_argument("--section", choices=list(SECTIONS.keys()),
+    p.add_argument("--section", choices=list(SECTIONS.keys()) + ["repos"],
                    help="Run only one section.")
-    p.add_argument("--no-cache", action="store_true", help="Bypass the 6h cache.")
+    p.add_argument("--repo", action="append", default=[], metavar="PATH",
+                   help="Local git repo to check vs origin. Repeatable.")
+    p.add_argument("--no-fetch", action="store_true",
+                   help="Skip `git fetch` (use cached remote state — faster, offline-safe).")
+    p.add_argument("--no-cache", action="store_true", help="Bypass the 6h HTTP cache.")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -427,7 +607,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         for f in CACHE_DIR.glob("*.json"):
             f.unlink()
 
-    report = run_checks(only=args.section)
+    report = run_checks(
+        only=args.section,
+        repos=args.repo or None,
+        fetch=not args.no_fetch,
+    )
 
     if args.json:
         payload = {
