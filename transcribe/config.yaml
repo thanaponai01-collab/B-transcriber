@@ -1,0 +1,33 @@
+# Engine choices — determined by eval harness bootstrapping
+# Engine A: Thai specialist (Thonburian Whisper lineage)
+# Engine B: Code-switch model (FunASR SenseVoiceSmall)
+engine_a: whisper_thai
+engine_b: passthrough  # funasr unavailable on Python 3.13 (editdistance has no wheel)
+
+# Ingestion
+denoise: true
+vad_threshold: 0.5
+vad_min_speech_ms: 250
+vad_min_silence_ms: 300
+
+# Normalization
+normalization:
+  exception_lexicon:
+    - COVID-19
+    - iPhone
+    - YouTube
+    - LINE
+    - TikTok
+    - Facebook
+    - ChatGPT
+    - GPT-4
+    - AI
+    - API
+
+# Eval regression gate: reject if WER or BER increases by more than this fraction
+regression_tolerance: 0.02
+
+# Flywheel
+flywheel:
+  min_occurrences: 3       # corrections needed before a term enters the bias index
+  stale_engine_weight: 0.2 # weight for corrections from engines no longer active

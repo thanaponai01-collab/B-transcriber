@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transcriber Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #1a1a1a; color: #e0e0e0; }
+  header { padding: 12px 20px; background: #111; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 1rem; font-weight: 600; color: #fff; }
+  #job-select { background: #222; color: #e0e0e0; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; }
+  #btn-load { padding: 4px 12px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  #btn-save { padding: 4px 12px; background: #16a34a; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-left: auto; }
+  #btn-srt, #btn-vtt { padding: 4px 10px; background: #555; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+
+  #main { display: grid; grid-template-rows: auto 1fr; height: calc(100vh - 49px); }
+  #audio-bar { padding: 8px 20px; background: #111; border-bottom: 1px solid #333; }
+  audio { width: 100%; }
+
+  #tokens { padding: 16px 20px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+
+  .token {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    cursor: text;
+    min-width: 28px;
+    font-size: 0.95rem;
+    outline: none;
+  }
+  .token[contenteditable="true"]:focus { border-color: #2563eb; background: #1e3a5f; }
+  .token.highlight { background: #78350f; border-color: #d97706; }
+  .token[data-script="thai"] { font-family: 'Sarabun', 'TH Sarabun New', system-ui, sans-serif; }
+  .token[data-script="latin"] { font-family: monospace; }
+
+  #status-bar { padding: 4px 20px; font-size: 0.75rem; color: #888; background: #111; border-top: 1px solid #222; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Transcriber Editor</h1>
+  <select id="job-select"><option value="">— select job —</option></select>
+  <button id="btn-load">Load</button>
+  <button id="btn-srt">↓ SRT</button>
+  <button id="btn-vtt">↓ VTT</button>
+  <button id="btn-save">Save corrections</button>
+</header>
+<div id="main">
+  <div id="audio-bar"><audio id="player" controls></audio></div>
+  <div id="tokens"></div>
+</div>
+<div id="status-bar" id="status">Ready</div>
+
+<script>
+let currentJobId = null;
+let originalTokens = [];  // [{idx, text, source_engine}]
+let tokenEls = [];        // DOM elements, indexed by position
+
+const jobSelect = document.getElementById('job-select');
+const player    = document.getElementById('player');
+const tokensDiv = document.getElementById('tokens');
+const status    = document.getElementById('status-bar');
+
+async function loadJobs() {
+  const res = await fetch('/jobs');
+  const jobs = await res.json();
+  jobs.forEach(j => {
+    const opt = document.createElement('option');
+    opt.value = j.id;
+    opt.textContent = `#${j.id} — ${j.status} — ${j.created_at.slice(0,19)}`;
+    jobSelect.appendChild(opt);
+  });
+}
+
+async function loadJob() {
+  const id = jobSelect.value;
+  if (!id) return;
+  currentJobId = id;
+  status.textContent = 'Loading…';
+
+  const res = await fetch(`/jobs/${id}`);
+  const data = await res.json();
+  originalTokens = data.tokens.map(t => ({...t}));
+
+  player.src = `/jobs/${id}/audio`;
+  player.load();
+
+  renderTokens(data.tokens);
+  status.textContent = `Loaded job #${id} — ${data.tokens.length} tokens`;
+}
+
+function renderTokens(tokens) {
+  tokensDiv.innerHTML = '';
+  tokenEls = [];
+  tokens.forEach((t, i) => {
+    const el = document.createElement('span');
+    el.className = 'token';
+    el.dataset.idx = t.idx;
+    el.dataset.script = t.script;
+    el.dataset.startMs = t.start_ms;
+    el.dataset.endMs = t.end_ms;
+    el.contentEditable = 'true';
+    el.textContent = t.text;
+    el.title = `${t.source_engine} | ${(t.start_ms/1000).toFixed(2)}s–${(t.end_ms/1000).toFixed(2)}s`;
+    el.addEventListener('click', () => {
+      player.currentTime = t.start_ms / 1000;
+    });
+    tokensDiv.appendChild(el);
+    tokenEls.push(el);
+  });
+}
+
+// Sync highlight during playback
+player.addEventListener('timeupdate', () => {
+  const ms = player.currentTime * 1000;
+  tokenEls.forEach(el => {
+    const start = +el.dataset.startMs;
+    const end   = +el.dataset.endMs;
+    el.classList.toggle('highlight', ms >= start && ms < end);
+  });
+});
+
+async function saveCorrections() {
+  if (!currentJobId) return;
+  status.textContent = 'Saving…';
+
+  const corrected = tokenEls.map(el => ({
+    idx: +el.dataset.idx,
+    text: el.textContent.trim(),
+  }));
+
+  const res = await fetch(`/jobs/${currentJobId}/save`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tokens: corrected}),
+  });
+  const data = await res.json();
+  status.textContent = `Saved ${data.saved} corrections`;
+}
+
+document.getElementById('btn-load').addEventListener('click', loadJob);
+document.getElementById('btn-save').addEventListener('click', saveCorrections);
+document.getElementById('btn-srt').addEventListener('click', () => {
+  if (currentJobId) window.open(`/jobs/${currentJobId}/export/srt`);
+});
+document.getElementById('btn-vtt').addEventListener('click', () => {
+  if (currentJobId) window.open(`/jobs/${currentJobId}/export/vtt`);
+});
+
+loadJobs();
+</script>
+</body>
+</html>
