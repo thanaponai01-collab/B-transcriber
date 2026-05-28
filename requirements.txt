@@ -10,7 +10,7 @@ PyYAML>=6.0
 
 # ASR engines
 funasr>=1.1.0
-openai-whisper>=20231117
+openai-whisper>=20250625
 
 # Thai NLP
 pythainlp>=5.0.0
