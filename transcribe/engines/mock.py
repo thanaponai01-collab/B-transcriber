@@ -32,6 +32,7 @@ class MockEngine(Engine):
         return EngineResult(
             tokens=tokens,
             engine_name=self._name,
+            word_level_timestamps=True,
             raw={"mock": True, "audio_path": inp.audio_path},
         )
 

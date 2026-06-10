@@ -56,8 +56,10 @@ CREATE TABLE IF NOT EXISTS bias_term (
 CREATE TABLE IF NOT EXISTS eval_run (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     config_hash         TEXT    NOT NULL,
-    wer                 REAL    NOT NULL,
-    boundary_error_rate REAL    NOT NULL,
+    wer                 REAL    NOT NULL,  -- overall word-level WER (coarse signal)
+    boundary_error_rate REAL    NOT NULL,  -- temporal switch-point error (1 - F1)
+    cer_thai            REAL    NOT NULL DEFAULT 1.0,  -- primary Thai signal (char error rate)
+    wer_latin           REAL    NOT NULL DEFAULT 1.0,  -- primary Latin signal (word error rate)
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

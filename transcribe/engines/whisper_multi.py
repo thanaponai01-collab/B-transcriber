@@ -1,8 +1,17 @@
-"""Engine A — Thai-specialist Whisper adapter.
+"""Engine B — multilingual Whisper generalist.
 
-Uses a Thai-fine-tuned Whisper model (Thonburian lineage).
-Recommended checkpoint: biodatlab/whisper-th-medium-combined (fits 8GB VRAM).
-Model is loaded and unloaded explicitly; never assume it shares VRAM with Engine B.
+The code-switch slot. Where the Thai specialist (Engine A) is strongest on pure-Thai
+spans, this generalist is strongest at switch points, because it was trained on many
+languages jointly and detects Thai↔English transitions natively rather than via a
+language router.
+
+Runs through HuggingFace transformers (same stack as whisper_thai), so it works on
+Python 3.13 — unlike FunASR, whose dependency (editdistance) ships no 3.13 wheel.
+Language is left on auto-detect; we do NOT force Thai here — forcing the generalist
+to Thai would throw away exactly the code-switch capability it is here to provide.
+
+VRAM: large-v3 is ~3 GB in fp16, well under the 8 GB ceiling when loaded ALONE.
+Engine A is unloaded before this loads — never assume shared VRAM.
 """
 
 from __future__ import annotations
@@ -17,12 +26,12 @@ from transcribe.engines.registry import register
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = "biodatlab/whisper-th-medium-combined"
+_DEFAULT_MODEL = "openai/whisper-large-v3"
 
 
-@register("whisper_thai")
-class WhisperThaiEngine(Engine):
-    """Wraps a Thai-fine-tuned Whisper model via HuggingFace transformers."""
+@register("whisper_multi")
+class WhisperMultiEngine(Engine):
+    """Multilingual Whisper for the generalist / code-switch slot."""
 
     def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda"):
         self._model_id = model_id
@@ -34,7 +43,7 @@ class WhisperThaiEngine(Engine):
     def load(self) -> None:
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline as hf_pipeline
 
-        logger.info("Loading WhisperThai: %s", self._model_id)
+        logger.info("Loading WhisperMulti: %s", self._model_id)
         self._processor = AutoProcessor.from_pretrained(self._model_id)
         dtype = torch.float16 if self._device != "cpu" else torch.float32
         self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
@@ -43,7 +52,6 @@ class WhisperThaiEngine(Engine):
             low_cpu_mem_usage=True,
         ).to(self._device)
         self._model.eval()
-        # Build ASR pipeline for word-timestamp support
         self._pipe = hf_pipeline(
             "automatic-speech-recognition",
             model=self._model,
@@ -51,7 +59,7 @@ class WhisperThaiEngine(Engine):
             feature_extractor=self._processor.feature_extractor,
             device=self._device,
         )
-        logger.info("WhisperThai loaded on %s", self._device)
+        logger.info("WhisperMulti loaded on %s", self._device)
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._pipe is not None, "load() must be called first"
@@ -59,18 +67,17 @@ class WhisperThaiEngine(Engine):
 
         audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
 
-        # return_timestamps="word" gives per-word chunks when supported;
-        # falls back to segment-level chunks on older checkpoints.
+        # language=None → Whisper auto-detects per segment; this is what lets the
+        # generalist follow intra-sentential code-switches.
         result = self._pipe(
             {"array": audio, "sampling_rate": 16000},
-            generate_kwargs={"language": "th", "task": "transcribe"},
+            generate_kwargs={"task": "transcribe"},
             return_timestamps="word",
             chunk_length_s=30,
         )
 
         tokens: list[RecognizedToken] = []
         raw_chunks = result.get("chunks", [])
-
         for chunk in raw_chunks:
             text = chunk.get("text", "").strip()
             if not text:
@@ -84,7 +91,6 @@ class WhisperThaiEngine(Engine):
             ))
 
         if not tokens:
-            # Last-resort fallback: whole transcript as one token
             full_text = (result.get("text") or "").strip()
             if full_text:
                 tokens.append(RecognizedToken(
@@ -94,7 +100,7 @@ class WhisperThaiEngine(Engine):
 
         return EngineResult(
             tokens=tokens,
-            engine_name="whisper_thai",
+            engine_name="whisper_multi",
             word_level_timestamps=bool(raw_chunks),
             raw={"chunks": raw_chunks},
         )
@@ -111,4 +117,4 @@ class WhisperThaiEngine(Engine):
             self._processor = None
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        logger.info("WhisperThai unloaded, VRAM freed")
+        logger.info("WhisperMulti unloaded, VRAM freed")

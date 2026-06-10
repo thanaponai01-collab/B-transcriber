@@ -62,9 +62,17 @@ audio → ingest.py (denoise + VAD → chunks)
 ## Current engines
 
 - **Engine A** (`whisper_thai`): `biodatlab/whisper-th-medium-combined` — Thai specialist
-- **Engine B** (`funasr`): `FunAudioLLM/SenseVoiceSmall` — code-switch model
+- **Engine B** (`whisper_multi`): `openai/whisper-large-v3` — multilingual generalist / code-switch slot. Runs on Python 3.13 (transformers). A real second hypothesis, so cross-engine agreement is a live confidence signal.
+- **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): registered but unavailable on Python 3.13 (editdistance has no wheel). Alternative generalist.
+- **`passthrough`** (null): single-engine fallback — Engine A only, no agreement signal.
 - **MockEngine** (`mock`): canned tokens, no GPU required — used for all pipeline tests
 
 ## Eval golden set format
 
-See `transcribe/eval/README.md`. Boundary error rate (BER) is computed over words within 2 positions of a Thai↔Latin script boundary — this is the primary quality signal, not plain WER.
+See `transcribe/eval/README.md` and `STYLE_GUIDE.md`. Three signals, each on a
+well-defined unit: **`cer_thai`** (character error rate over the Thai stream —
+tokenization-free, the primary Thai signal), **`wer_latin`** (case-insensitive
+word error over Latin runs), and **`boundary_error_rate`** (temporal: `1 − F1` of
+Thai↔Latin switch *timestamps* within `boundary_tol_ms`). Plain `wer` is a coarse
+sanity number, never the gate. The harness normalizes gold and hypothesis with the
+same `normalize()` before scoring, so policy changes can't desync them.

@@ -1,0 +1,88 @@
+# Transcription Style Guide
+
+The cheapest accuracy gains in Thai ASR are linguistic policy decisions, not GPU
+decisions. (Typhoon, Jan 2026: rigorous text normalization matched the impact of
+model scaling — a compact model reached Whisper-Large-v3 accuracy at ~45× less
+compute, purely by resolving ambiguities like number verbalization and mai yamok.)
+
+This file is the **one place** those decisions are written down. Every decision
+here is either enforced deterministically in `transcribe/pipeline/normalize.py`
+(marked **[code]**) or is a rule the human follows when authoring the gold set
+(marked **[gold]**). The same `normalize()` runs over hypotheses *and* the gold
+set during evaluation, so a policy change can never silently desync the two.
+
+If you change a rule here, change `normalize.py` and re-run the eval harness.
+
+---
+
+## 1. Atomic unit
+
+The atomic unit of a transcript is a **character-aligned span**, not a "word".
+Thai has no orthographic word boundaries, so word tokenization (newmm vs attacut)
+is a *derived view*, computed afterwards, never ground truth. Consequences:
+
+- Thai accuracy is measured as **CER** over the Thai character stream.
+- English accuracy is measured as **WER** over Latin word runs.
+- Never freeze a gold set around a particular Thai tokenizer's output.
+
+## 2. Numbers — **[code]** + **[gold]**
+
+- **[code]** Thai numerals `๐–๙` are always mapped to Arabic `0–9`. This is
+  context-free and lossless, so it is applied unconditionally
+  (`normalization.thai_digits`, default on).
+- **[gold]** *Verbalization* (สิบ ↔ 10) is **not** normalized automatically — it
+  requires semantics and is ambiguous. Gold policy: **transcribe numbers as the
+  speaker said them.** "สิบบาท" stays สิบบาท; "10 บาท" (read as a numeral) stays 10.
+  Write it the way it was spoken, not the way it is conventionally typed.
+
+## 3. Mai yamok ( ๆ ) — **[code]**
+
+- Canonical form: **attached, no preceding space, never doubled** → `เด็กๆ`.
+  `normalize()` collapses `เด็ก ๆ` and `เด็กๆๆ` to `เด็กๆ`
+  (`normalization.mai_yamok_attach`, default on).
+- We do **not** expand `ๆ` into a repeated word (`เด็ก เด็ก`), because expansion
+  needs word segmentation and is therefore ambiguous. CER over the character
+  stream already credits/penalizes the `ๆ` correctly without expansion.
+
+## 4. Loanwords — **[gold]**
+
+A loanword is transcribed **in the script the speaker actually produced.**
+
+- Spoken as Thai phonology, written Thai: `คอมพิวเตอร์`. This is **Thai script**
+  and is **not** a code-switch boundary.
+- Inserted as an English word (English phonology) inside Thai speech: `computer`.
+  This **is** a code-switch boundary and counts toward the switch-point metric.
+
+The test is *how it was pronounced*, not *what the word means*. Pick per token and
+write it down; do not let "either is defensible" make the gold set a moving target.
+
+## 5. English casing — **[gold]** / eval-insensitive
+
+- **[gold]** Preserve natural casing in the transcript: proper nouns and brands
+  keep their canonical case (`YouTube`, `iPhone`, `API`); ordinary words are
+  lowercase unless sentence-initial.
+- **Evaluation is case-insensitive** for Latin spans — casing is a presentation
+  choice, not an accuracy signal, so it must not move WER. (`metrics.py` lowercases
+  Latin runs before scoring.)
+
+## 6. Mixed-script proper nouns / brands — **[code]**
+
+Terms that legitimately straddle scripts or contain punctuation (`COVID-19`,
+`GPT-4`, `iPhone`) are protected from boundary-spacing by
+`normalization.exception_lexicon` in `config.yaml`. Add new brands there, longest
+first is handled automatically.
+
+---
+
+## Metrics that enforce this guide
+
+See `transcribe/eval/README.md`. In short:
+
+| Signal | Unit | Why |
+| --- | --- | --- |
+| **CER (Thai)** | character | Thai word boundaries are ambiguous |
+| **WER (Latin)** | word, case-insensitive | English words have real boundaries |
+| **Switch-point error** | timestamp (±tol) | code-switch is the hardest case; position alone isn't enough |
+
+`wer` (overall, word-level) is reported but is a coarse, tokenizer-sensitive
+sanity number — never the gate.

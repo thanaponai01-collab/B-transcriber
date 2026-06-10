@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 
-from transcribe.contracts import EngineInput
+from transcribe.contracts import EngineInput, PipelineToken, detect_script
 from transcribe.db import store
 from transcribe.engines.registry import get_engine
 from transcribe.pipeline import align_force, align_hyp, ingest, normalize, reconcile
@@ -23,31 +23,31 @@ def _log_vram(stage: str) -> None:
         logger.info("[VRAM] %s: %.1f MB free / %.1f MB total", stage, free / 1e6, total / 1e6)
 
 
-def _filter_hallucinations(token_dicts: list[dict], max_run: int = 3) -> list[dict]:
+def _filter_hallucinations(tokens: list[PipelineToken], max_run: int = 3) -> list[PipelineToken]:
     """Remove tokens where the same word repeats more than max_run times in a row.
 
     Whisper hallucinates on silence/music by looping filler words.
     """
-    if not token_dicts:
-        return token_dicts
+    if not tokens:
+        return tokens
     result = []
     run = 0
     prev = None
-    for tok in token_dicts:
-        if tok["text"] == prev:
+    for tok in tokens:
+        if tok.text == prev:
             run += 1
         else:
             run = 1
-            prev = tok["text"]
+            prev = tok.text
         if run <= max_run:
             result.append(tok)
-    removed = len(token_dicts) - len(result)
+    removed = len(tokens) - len(result)
     if removed:
         logger.info("Hallucination filter removed %d repeated tokens", removed)
     return result
 
 
-def _expand_to_words(token_dicts: list[dict]) -> list[dict]:
+def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
     """Split sentence-level tokens into word-level tokens for the CTC aligner.
 
     Uses pythainlp for Thai segments, whitespace split for Latin. Inherits
@@ -56,44 +56,31 @@ def _expand_to_words(token_dicts: list[dict]) -> list[dict]:
     """
     result = []
     idx = 0
-    for tok in token_dicts:
-        script = tok.get("script", _detect_script(tok["text"]))
-        if script in ("thai", "mixed"):
+    for tok in tokens:
+        if tok.script in ("thai", "mixed"):
             try:
                 from pythainlp.tokenize import word_tokenize
-                words = [w for w in word_tokenize(tok["text"], engine="newmm") if w.strip()]
+                words = [w for w in word_tokenize(tok.text, engine="newmm") if w.strip()]
             except Exception:
-                words = list(tok["text"])  # character fallback
+                words = list(tok.text)  # character fallback
         else:
-            words = tok["text"].split()
+            words = tok.text.split()
 
         if not words:
-            words = [tok["text"]]
+            words = [tok.text]
 
         for word in words:
-            result.append({
-                "idx": idx,
-                "text": word,
-                "start_ms": tok["start_ms"],
-                "end_ms": tok["end_ms"],
-                "script": _detect_script(word),
-                "confidence": tok.get("confidence"),
-                "source_engine": tok.get("source_engine", "a"),
-            })
+            result.append(PipelineToken(
+                idx=idx,
+                text=word,
+                start_ms=tok.start_ms,
+                end_ms=tok.end_ms,
+                script=detect_script(word),
+                confidence=tok.confidence,
+                source_engine=tok.source_engine,
+            ))
             idx += 1
     return result
-
-
-def _detect_script(text: str) -> str:
-    thai = sum(1 for c in text if "฀" <= c <= "๿")
-    latin = sum(1 for c in text if c.isascii() and c.isalpha())
-    if thai and not latin:
-        return "thai"
-    if latin and not thai:
-        return "latin"
-    if thai and latin:
-        return "mixed"
-    return "other"
 
 
 def run_file(
@@ -135,6 +122,7 @@ def run_file(
         engine_a.load()
         _log_vram("engine-a-loaded")
 
+        engine_a_word_level = False
         result_a_tokens = []
         for chunk in chunks:
             import tempfile, soundfile as sf, os
@@ -147,6 +135,7 @@ def run_file(
                 language_hint="th",
             )
             result = engine_a.transcribe(eng_input)
+            engine_a_word_level = engine_a_word_level or result.word_level_timestamps
             # Offset timestamps to global position
             for tok in result.tokens:
                 tok.start_ms += chunk.start_ms
@@ -196,63 +185,59 @@ def run_file(
         logger.info("Reconciled: %d tokens", len(reconciled))
 
         # ── Phase 6: Normalization ────────────────────────────────────────────
-        token_dicts = []
-        for idx, (tok, src) in enumerate(reconciled):
-            token_dicts.append({
-                "idx": idx,
-                "text": tok.text,
-                "start_ms": tok.start_ms,
-                "end_ms": tok.end_ms,
-                "script": tok.script,
-                "confidence": tok.confidence,
-                "source_engine": src,
-            })
-        token_dicts = normalize.normalize_tokens(token_dicts, config)
+        pipeline_tokens: list[PipelineToken] = [
+            PipelineToken(
+                idx=idx,
+                text=tok.text,
+                start_ms=tok.start_ms,
+                end_ms=tok.end_ms,
+                script=tok.script,
+                confidence=tok.confidence,
+                source_engine=src,
+            )
+            for idx, (tok, src) in enumerate(reconciled)
+        ]
+        pipeline_tokens = normalize.normalize_tokens(pipeline_tokens, config)
 
         # ── Phase 6b: Hallucination filter ───────────────────────────────────
-        token_dicts = _filter_hallucinations(token_dicts)
+        pipeline_tokens = _filter_hallucinations(pipeline_tokens)
 
         # ── Phase 6c: Word-level expansion ───────────────────────────────────
-        # Only expand tokens whose timestamps are identical (sentence-level);
-        # tokens that already have distinct per-word timestamps from Whisper
-        # word-mode are left as-is.
-        has_word_ts = len(token_dicts) > 1 and any(
-            t["start_ms"] != token_dicts[0]["start_ms"] for t in token_dicts[1:]
-        )
-        if not has_word_ts:
-            token_dicts = _expand_to_words(token_dicts)
-            logger.info("After word expansion: %d words", len(token_dicts))
+        # Engine A signals word_level_timestamps when it returned per-word spans.
+        if not engine_a_word_level:
+            pipeline_tokens = _expand_to_words(pipeline_tokens)
+            logger.info("After word expansion: %d words", len(pipeline_tokens))
 
         # ── Phase 7: Forced alignment ─────────────────────────────────────────
-        # Skip if tokens already carry real word-level timestamps from the engine.
-        if not has_word_ts:
+        # Skip if Engine A already provided per-word timestamps.
+        if not engine_a_word_level:
             audio_arr, sr = ingest.load_audio(audio_path)
-            words = [t["text"] for t in token_dicts]
+            words = [t.text for t in pipeline_tokens]
             forced = align_force.forced_align(
                 audio_arr, sr, words,
                 aligner=align_force.CTCForcedAligner(device=device),
             )
-            for t, f in zip(token_dicts, forced):
-                t["start_ms"] = f.start_ms
-                t["end_ms"] = f.end_ms
+            for t, f in zip(pipeline_tokens, forced):
+                t.start_ms = f.start_ms
+                t.end_ms = f.end_ms
         else:
             logger.info("Skipping forced alignment — Whisper word timestamps used directly")
 
         # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{
             "job_id": job_id,
-            "idx": t["idx"],
-            "text": t["text"],
-            "start_ms": t["start_ms"],
-            "end_ms": t["end_ms"],
-            "script": t["script"],
-            "confidence": t["confidence"],
-            "source_engine": t["source_engine"],
+            "idx": t.idx,
+            "text": t.text,
+            "start_ms": t.start_ms,
+            "end_ms": t.end_ms,
+            "script": t.script,
+            "confidence": t.confidence,
+            "source_engine": t.source_engine,
             "speaker_id": None,
-        } for t in token_dicts]
+        } for t in pipeline_tokens]
         store.bulk_create_tokens(conn, db_rows)
         store.update_job_status(conn, job_id, "done")
-        logger.info("Job %d done: %d tokens written", job_id, len(token_dicts))
+        logger.info("Job %d done: %d tokens written", job_id, len(pipeline_tokens))
 
     except Exception:
         store.update_job_status(conn, job_id, "failed")
@@ -260,7 +245,13 @@ def run_file(
         raise
 
     conn.close()
-    return token_dicts
+    return [
+        {
+            "idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms,
+            "script": t.script, "confidence": t.confidence, "source_engine": t.source_engine,
+        }
+        for t in pipeline_tokens
+    ]
 
 
 if __name__ == "__main__":

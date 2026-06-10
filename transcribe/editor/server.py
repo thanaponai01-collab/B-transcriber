@@ -117,8 +117,13 @@ def get_audio(job_id: int):
     return FileResponse(media.path, media_type="audio/mpeg")
 
 
+class TokenPatch(BaseModel):
+    idx: int
+    text: str
+
+
 class SaveRequest(BaseModel):
-    tokens: list[dict]  # [{"idx": int, "text": str}, ...]
+    tokens: list[TokenPatch]
 
 
 @app.post("/jobs/{job_id}/save")
@@ -133,7 +138,7 @@ def save_corrections(job_id: int, req: SaveRequest):
         {"idx": t.idx, "text": t.text, "source_engine": t.source_engine}
         for t in store.get_tokens(conn, job_id)
     ]
-    pairs = diff_corrections(original_tokens, req.tokens)
+    pairs = diff_corrections(original_tokens, [{"idx": t.idx, "text": t.text} for t in req.tokens])
 
     for pair in pairs:
         store.create_correction(

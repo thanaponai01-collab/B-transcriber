@@ -10,25 +10,13 @@ import logging
 
 import torch
 
-from transcribe.contracts import EngineInput, EngineResult, RecognizedToken
+from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.engines.base import Engine
 from transcribe.engines.registry import register
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "FunAudioLLM/SenseVoiceSmall"
-
-
-def _detect_script(text: str) -> str:
-    thai = sum(1 for c in text if "฀" <= c <= "๿")
-    latin = sum(1 for c in text if c.isascii() and c.isalpha())
-    if thai and not latin:
-        return "thai"
-    if latin and not thai:
-        return "latin"
-    if thai and latin:
-        return "mixed"
-    return "other"
 
 
 @register("funasr")
@@ -81,7 +69,7 @@ class FunASREngine(Engine):
                         start_ms=start_ms,
                         end_ms=end_ms,
                         confidence=seg.get("confidence"),
-                        script=_detect_script(text),
+                        script=detect_script(text),
                     ))
             else:
                 # Fallback: treat whole result as one token
@@ -89,7 +77,7 @@ class FunASREngine(Engine):
                 if text:
                     tokens.append(RecognizedToken(
                         text=text, start_ms=0, end_ms=5000,
-                        confidence=None, script=_detect_script(text),
+                        confidence=None, script=detect_script(text),
                     ))
 
         return EngineResult(tokens=tokens, engine_name="funasr", raw={"result": raw_list})

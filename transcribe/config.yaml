@@ -1,8 +1,11 @@
 # Engine choices — determined by eval harness bootstrapping
 # Engine A: Thai specialist (Thonburian Whisper lineage)
-# Engine B: Code-switch model (FunASR SenseVoiceSmall)
+# Engine B: multilingual generalist (Whisper large-v3) — the code-switch slot.
+#           Real second hypothesis ⇒ cross-engine agreement is a live confidence
+#           signal. (FunASR is still registered but has no Python 3.13 wheel; set
+#           engine_b: passthrough to fall back to single-engine, Engine-A-only output.)
 engine_a: whisper_thai
-engine_b: passthrough  # funasr unavailable on Python 3.13 (editdistance has no wheel)
+engine_b: whisper_multi
 
 # Ingestion
 denoise: true
@@ -10,8 +13,14 @@ vad_threshold: 0.5
 vad_min_speech_ms: 250
 vad_min_silence_ms: 300
 
-# Normalization
+# Evaluation
+boundary_tol_ms: 300   # switch-point match tolerance (see eval/README.md)
+
+# Normalization — explicit policy, see STYLE_GUIDE.md. Applied identically to
+# hypotheses and to the gold set during eval.
 normalization:
+  thai_digits: true        # map Thai numerals ๐-๙ → Arabic 0-9
+  mai_yamok_attach: true   # canonicalize 'word ๆ' / 'wordๆๆ' → 'wordๆ' (no expansion)
   exception_lexicon:
     - COVID-19
     - iPhone

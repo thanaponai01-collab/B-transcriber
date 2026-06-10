@@ -197,11 +197,89 @@ def test_boundary_detection():
 
     # Thai → Latin boundary between index 1 and 2
     ref = [
-        {"text": "สวัสดี", "script": "thai"},
-        {"text": "ครับ", "script": "thai"},
-        {"text": "Hello", "script": "latin"},
-        {"text": "world", "script": "latin"},
+        {"text": "สวัสดี", "script": "thai", "start_ms": 0},
+        {"text": "ครับ", "script": "thai", "start_ms": 500},
+        {"text": "Hello", "script": "latin", "start_ms": 1000},
+        {"text": "world", "script": "latin", "start_ms": 1400},
     ]
     m = compute_metrics(ref, ref)
     assert m.wer == 0.0
-    assert m.boundary_words > 0  # should detect the Thai→Latin boundary
+    assert m.ref_switches == 1          # one Thai→Latin transition
+    assert m.boundary_error_rate == 0.0  # ref vs itself: perfect timing
+
+
+def test_temporal_boundary_penalizes_wrong_timing():
+    from transcribe.eval.metrics import compute_metrics
+
+    ref = [
+        {"text": "ครับ", "script": "thai", "start_ms": 0},
+        {"text": "Hello", "script": "latin", "start_ms": 1000},  # switch @1000ms
+    ]
+    # Hypothesis puts the switch 5s away — outside the 300ms tolerance.
+    hyp = [
+        {"text": "ครับ", "script": "thai", "start_ms": 0},
+        {"text": "Hello", "script": "latin", "start_ms": 6000},
+    ]
+    m = compute_metrics(ref, hyp, boundary_tol_ms=300.0)
+    assert m.boundary_error_rate > 0.0  # mistimed switch is penalized
+    # Within tolerance, the same switch scores clean.
+    hyp_ok = [
+        {"text": "ครับ", "script": "thai", "start_ms": 0},
+        {"text": "Hello", "script": "latin", "start_ms": 1100},
+    ]
+    assert compute_metrics(ref, hyp_ok, boundary_tol_ms=300.0).boundary_error_rate == 0.0
+
+
+def test_cer_thai_is_tokenization_free():
+    from transcribe.eval.metrics import compute_metrics
+
+    # Same Thai characters, different (arbitrary) word splits → CER must be 0.
+    ref = [{"text": "สวัสดีครับ", "script": "thai", "start_ms": 0}]
+    hyp = [
+        {"text": "สวัส", "script": "thai", "start_ms": 0},
+        {"text": "ดีครับ", "script": "thai", "start_ms": 300},
+    ]
+    m = compute_metrics(ref, hyp)
+    assert m.cer_thai == 0.0
+    assert m.thai_chars == len("สวัสดีครับ")
+
+    # One wrong character → non-zero CER.
+    hyp_bad = [{"text": "สวัสดีคระ", "script": "thai", "start_ms": 0}]
+    assert compute_metrics(ref, hyp_bad).cer_thai > 0.0
+
+
+def test_wer_latin_is_case_insensitive():
+    from transcribe.eval.metrics import compute_metrics
+
+    ref = [{"text": "Hello", "script": "latin"}, {"text": "World", "script": "latin"}]
+    hyp = [{"text": "hello", "script": "latin"}, {"text": "world", "script": "latin"}]
+    assert compute_metrics(ref, hyp).wer_latin == 0.0
+
+
+# ── Normalization policy (STYLE_GUIDE.md) ───────────────────────────────────────
+
+def test_normalize_thai_digits():
+    from transcribe.pipeline.normalize import normalize
+
+    assert normalize("ราคา๑๐๐บาท") == normalize("ราคา100บาท")
+    assert "100" in normalize("๑๐๐")
+
+
+def test_normalize_mai_yamok_canonical():
+    from transcribe.pipeline.normalize import normalize
+
+    assert normalize("เด็ก ๆ") == normalize("เด็กๆ")
+    assert normalize("เด็กๆๆ") == normalize("เด็กๆ")
+
+
+def test_eval_normalizes_gold_and_hyp_identically():
+    """A policy-equivalent gold/hyp pair must score perfectly once config is passed."""
+    from transcribe.eval.metrics import compute_metrics
+
+    config = {"normalization": {"thai_digits": True, "mai_yamok_attach": True}}
+    ref = [{"text": "ราคา๑๐๐", "script": "thai", "start_ms": 0}]
+    hyp = [{"text": "ราคา100", "script": "thai", "start_ms": 0}]
+    # Without normalization the Thai digits differ → CER > 0.
+    assert compute_metrics(ref, hyp).cer_thai > 0.0
+    # With the shared policy applied to both sides → CER 0.
+    assert compute_metrics(ref, hyp, config=config).cer_thai == 0.0

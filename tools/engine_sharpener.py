@@ -598,6 +598,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
+    # Force UTF-8 on Windows consoles that default to cp1252; emoji won't render
+    # otherwise.  reconfigure() is a no-op on platforms that already use UTF-8.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(message)s",

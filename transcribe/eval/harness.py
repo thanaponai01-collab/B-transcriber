@@ -58,48 +58,68 @@ def run_harness(
     if not samples:
         print("[harness] WARNING: goldenset is empty — add audio+json pairs to eval/goldenset/")
 
-    total_wer_num = 0.0
-    total_ber_num = 0.0
-    total_ref = 0
-    total_boundary = 0
+    tol = float(config.get("boundary_tol_ms", 300.0))
+
+    # Numerators are weighted by the reference size of each signal so per-sample
+    # rates aggregate into a corpus-level rate.
+    cer_num = wer_lat_num = wer_num = ber_num = 0.0
+    total_thai = total_latin = total_words = total_switches = 0
 
     for audio_path, ref_tokens in samples:
         hyp_tokens = pipeline_fn(audio_path, config)
-        m = compute_metrics(ref_tokens, hyp_tokens)
-        total_wer_num += m.wer * m.total_words
-        total_ber_num += m.boundary_error_rate * m.boundary_words
-        total_ref += m.total_words
-        total_boundary += m.boundary_words
-
-    agg_wer = total_wer_num / total_ref if total_ref else 0.0
-    agg_ber = total_ber_num / total_boundary if total_boundary else 0.0
+        # Pass config so reference and hypothesis are normalized identically.
+        m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
+        cer_num     += m.cer_thai * m.thai_chars
+        wer_lat_num += m.wer_latin * m.latin_words
+        wer_num     += m.wer * m.total_words
+        ber_num     += m.boundary_error_rate * m.ref_switches
+        total_thai     += m.thai_chars
+        total_latin    += m.latin_words
+        total_words    += m.total_words
+        total_switches += m.ref_switches
 
     agg = EvalMetrics(
-        wer=agg_wer,
-        boundary_error_rate=agg_ber,
-        total_words=total_ref,
-        boundary_words=total_boundary,
+        cer_thai=cer_num / total_thai if total_thai else 0.0,
+        wer_latin=wer_lat_num / total_latin if total_latin else 0.0,
+        boundary_error_rate=ber_num / total_switches if total_switches else 0.0,
+        wer=wer_num / total_words if total_words else 0.0,
+        thai_chars=total_thai,
+        latin_words=total_latin,
+        total_words=total_words,
+        ref_switches=total_switches,
     )
 
     conn = store.connect(db_path)
     cfg_hash = _config_hash(config)
 
+    tol_frac = 1.0 + float(config.get("regression_tolerance", 0.02))
     last = store.get_last_passing_eval(conn)
     passed = True
     if last is not None:
-        if agg.wer > last.wer * 1.02 or agg.boundary_error_rate > last.boundary_error_rate * 1.02:
-            passed = False
-            print(
-                f"[harness] REGRESSION: WER {agg.wer:.4f} vs last {last.wer:.4f}, "
-                f"BER {agg.boundary_error_rate:.4f} vs last {last.boundary_error_rate:.4f}"
+        regressions = []
+        if agg.cer_thai > last.cer_thai * tol_frac:
+            regressions.append(f"CER_thai {agg.cer_thai:.4f} vs {last.cer_thai:.4f}")
+        if agg.wer_latin > last.wer_latin * tol_frac:
+            regressions.append(f"WER_latin {agg.wer_latin:.4f} vs {last.wer_latin:.4f}")
+        if agg.boundary_error_rate > last.boundary_error_rate * tol_frac:
+            regressions.append(
+                f"BER {agg.boundary_error_rate:.4f} vs {last.boundary_error_rate:.4f}"
             )
+        if regressions:
+            passed = False
+            print("[harness] REGRESSION: " + "; ".join(regressions))
 
-    store.create_eval_run(conn, cfg_hash, agg.wer, agg.boundary_error_rate, passed)
+    store.create_eval_run(
+        conn, cfg_hash, agg.wer, agg.boundary_error_rate,
+        passed, cer_thai=agg.cer_thai, wer_latin=agg.wer_latin,
+    )
     conn.close()
 
     print(
-        f"[harness] WER={agg.wer:.4f}  BER={agg.boundary_error_rate:.4f}  "
-        f"words={total_ref}  boundary_words={total_boundary}  passed={passed}"
+        f"[harness] CER_thai={agg.cer_thai:.4f}  WER_latin={agg.wer_latin:.4f}  "
+        f"BER={agg.boundary_error_rate:.4f}  WER={agg.wer:.4f}  "
+        f"thai_chars={total_thai}  latin_words={total_latin}  "
+        f"switches={total_switches}  passed={passed}"
     )
     return agg
 

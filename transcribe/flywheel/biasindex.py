@@ -57,13 +57,13 @@ def update_bias_index(
     Returns:
         list of bias term strings
     """
-    corrections = store.get_all_corrections(conn)
+    counts = store.get_correction_counts(conn)
 
-    # Weight corrections by staleness
+    # Weight correction counts by staleness; aggregation done in SQLite
     weighted: Counter[str] = Counter()
-    for c in corrections:
-        weight = 1.0 if c.source_engine in active_engines else _STALE_WEIGHT
-        weighted[c.corrected_text] += weight
+    for corrected_text, source_engine, n in counts:
+        weight = 1.0 if source_engine in active_engines else _STALE_WEIGHT
+        weighted[corrected_text] += weight * n
 
     # Promote terms that cross the threshold
     promoted = []
@@ -97,8 +97,7 @@ def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> N
         )
         conn = store.connect(db_path)
         for term in new_terms:
-            conn.execute("DELETE FROM bias_term WHERE term = ?", (term,))
-        conn.commit()
+            store.delete_bias_term(conn, term)
         conn.close()
         raise RuntimeError(
             f"Bias update rejected by regression gate: "

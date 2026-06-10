@@ -22,8 +22,21 @@ def connect(db_path: Path = _DEFAULT_DB) -> sqlite3.Connection:
 def init_db(db_path: Path = _DEFAULT_DB) -> None:
     conn = connect(db_path)
     conn.executescript(_SCHEMA.read_text())
+    _migrate(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent column additions for tables created before a schema bump.
+
+    CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns
+    on eval_run must be added explicitly for pre-existing databases."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(eval_run)").fetchall()}
+    if "cer_thai" not in cols:
+        conn.execute("ALTER TABLE eval_run ADD COLUMN cer_thai REAL NOT NULL DEFAULT 1.0")
+    if "wer_latin" not in cols:
+        conn.execute("ALTER TABLE eval_run ADD COLUMN wer_latin REAL NOT NULL DEFAULT 1.0")
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
@@ -91,6 +104,8 @@ class EvalRunRow:
     config_hash: str
     wer: float
     boundary_error_rate: float
+    cer_thai: float
+    wer_latin: float
     ran_at: str
     passed: bool
 
@@ -227,6 +242,15 @@ def get_all_corrections(conn: sqlite3.Connection) -> list[CorrectionRow]:
     return [CorrectionRow(**dict(r)) for r in rows]
 
 
+def get_correction_counts(conn: sqlite3.Connection) -> list[tuple[str, str, int]]:
+    """Return (corrected_text, source_engine, count) aggregated in SQLite."""
+    rows = conn.execute(
+        "SELECT corrected_text, source_engine, COUNT(*) AS n "
+        "FROM correction GROUP BY corrected_text, source_engine"
+    ).fetchall()
+    return [(r["corrected_text"], r["source_engine"], r["n"]) for r in rows]
+
+
 # ── bias_term ─────────────────────────────────────────────────────────────────
 
 def upsert_bias_term(
@@ -258,6 +282,11 @@ def get_bias_term_strings(conn: sqlite3.Connection) -> list[str]:
     return [r.term for r in get_bias_terms(conn)]
 
 
+def delete_bias_term(conn: sqlite3.Connection, term: str) -> None:
+    conn.execute("DELETE FROM bias_term WHERE term = ?", (term,))
+    conn.commit()
+
+
 # ── eval_run ──────────────────────────────────────────────────────────────────
 
 def create_eval_run(
@@ -266,10 +295,13 @@ def create_eval_run(
     wer: float,
     boundary_error_rate: float,
     passed: bool,
+    cer_thai: float = 1.0,
+    wer_latin: float = 1.0,
 ) -> int:
     cur = conn.execute(
-        "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, passed) VALUES (?, ?, ?, ?)",
-        (config_hash, wer, boundary_error_rate, int(passed)),
+        "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, int(passed)),
     )
     conn.commit()
     return cur.lastrowid
