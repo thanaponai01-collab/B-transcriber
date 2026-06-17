@@ -133,5 +133,5 @@ if __name__ == "__main__":
     parser.add_argument("--db", default="transcriber.db")
     args = parser.parse_args()
 
-    cfg = yaml.safe_load(Path(args.config).read_text())
+    cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     run_harness(cfg, Path(args.db))

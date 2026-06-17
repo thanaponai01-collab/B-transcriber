@@ -21,7 +21,7 @@ def connect(db_path: Path = _DEFAULT_DB) -> sqlite3.Connection:
 
 def init_db(db_path: Path = _DEFAULT_DB) -> None:
     conn = connect(db_path)
-    conn.executescript(_SCHEMA.read_text())
+    conn.executescript(_SCHEMA.read_text(encoding="utf-8"))
     _migrate(conn)
     conn.commit()
     conn.close()

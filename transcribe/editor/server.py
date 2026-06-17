@@ -39,7 +39,7 @@ def _conn():
 
 def _config() -> dict:
     if _CONFIG_PATH.exists():
-        return yaml.safe_load(_CONFIG_PATH.read_text())
+        return yaml.safe_load(_CONFIG_PATH.read_text(encoding="utf-8"))
     return {}
 
 

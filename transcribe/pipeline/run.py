@@ -264,7 +264,7 @@ if __name__ == "__main__":
     parser.add_argument("--db", default="transcriber.db")
     args = parser.parse_args()
 
-    cfg = yaml.safe_load(Path(args.config).read_text())
+    cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     tokens = run_file(args.audio, cfg, Path(args.db))
     import sys, io
     out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
