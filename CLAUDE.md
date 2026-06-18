@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Full file-by-file system spec, structure, and workflow: see [SYSTEM_SPEC.md](SYSTEM_SPEC.md).
+
 ## Commands
 
 ```bash

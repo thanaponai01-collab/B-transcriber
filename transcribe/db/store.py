@@ -31,12 +31,28 @@ def _migrate(conn: sqlite3.Connection) -> None:
     """Idempotent column additions for tables created before a schema bump.
 
     CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns
-    on eval_run must be added explicitly for pre-existing databases."""
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(eval_run)").fetchall()}
-    if "cer_thai" not in cols:
-        conn.execute("ALTER TABLE eval_run ADD COLUMN cer_thai REAL NOT NULL DEFAULT 1.0")
-    if "wer_latin" not in cols:
-        conn.execute("ALTER TABLE eval_run ADD COLUMN wer_latin REAL NOT NULL DEFAULT 1.0")
+    must be added explicitly for pre-existing databases. (New *tables* like
+    speech_span are created by re-running schema.sql in init_db.)"""
+    def _add(table: str, column: str, ddl: str) -> None:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+    # eval_run signals + attribution (A.2)
+    _add("eval_run", "cer_thai", "cer_thai REAL NOT NULL DEFAULT 1.0")
+    _add("eval_run", "wer_latin", "wer_latin REAL NOT NULL DEFAULT 1.0")
+    _add("eval_run", "kind", "kind TEXT NOT NULL DEFAULT 'transcribe'")
+    _add("eval_run", "pipeline_version", "pipeline_version TEXT")
+    _add("eval_run", "engine_pair", "engine_pair TEXT")
+    _add("eval_run", "bias_hash", "bias_hash TEXT")
+
+    # media timebase (GAP-1/2)
+    _add("media", "fps_num", "fps_num INTEGER")
+    _add("media", "fps_den", "fps_den INTEGER")
+    _add("media", "is_vfr", "is_vfr INTEGER NOT NULL DEFAULT 0")
+
+    # correction reason (GAP-7)
+    _add("correction", "reason", "reason TEXT")
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
@@ -47,6 +63,9 @@ class MediaRow:
     path: str
     duration_ms: Optional[int]
     sha256: str
+    fps_num: Optional[int]
+    fps_den: Optional[int]
+    is_vfr: int
     created_at: str
 
 
@@ -84,6 +103,27 @@ class CorrectionRow:
     corrected_text: str
     error_type: Optional[str]
     source_engine: str
+    reason: Optional[str]
+    created_at: str
+
+
+@dataclass
+class SpeechSpanRow:
+    id: int
+    job_id: int
+    idx: int
+    start_ms: int
+    end_ms: int
+    kind: str
+
+
+@dataclass
+class CutPlanRow:
+    id: int
+    job_id: int
+    plan_version: str
+    plan_json: str
+    status: str
     created_at: str
 
 
@@ -106,6 +146,10 @@ class EvalRunRow:
     boundary_error_rate: float
     cer_thai: float
     wer_latin: float
+    kind: str
+    pipeline_version: Optional[str]
+    engine_pair: Optional[str]
+    bias_hash: Optional[str]
     ran_at: str
     passed: bool
 
@@ -138,6 +182,21 @@ def get_media(conn: sqlite3.Connection, media_id: int) -> Optional[MediaRow]:
     if row is None:
         return None
     return MediaRow(**dict(row))
+
+
+def set_media_timebase(
+    conn: sqlite3.Connection,
+    media_id: int,
+    fps_num: int,
+    fps_den: int,
+    is_vfr: bool,
+) -> None:
+    """Persist a probed Timebase (GAP-1/2). fps stored as an integer pair only."""
+    conn.execute(
+        "UPDATE media SET fps_num = ?, fps_den = ?, is_vfr = ? WHERE id = ?",
+        (fps_num, fps_den, int(is_vfr), media_id),
+    )
+    conn.commit()
 
 
 # ── job ───────────────────────────────────────────────────────────────────────
@@ -220,11 +279,12 @@ def create_correction(
     corrected_text: str,
     source_engine: str,
     error_type: Optional[str] = None,
+    reason: Optional[str] = None,
 ) -> int:
     cur = conn.execute(
-        """INSERT INTO correction (job_id, token_idx, raw_text, corrected_text, error_type, source_engine)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (job_id, token_idx, raw_text, corrected_text, error_type, source_engine),
+        """INSERT INTO correction (job_id, token_idx, raw_text, corrected_text, error_type, source_engine, reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (job_id, token_idx, raw_text, corrected_text, error_type, source_engine, reason),
     )
     conn.commit()
     return cur.lastrowid
@@ -249,6 +309,61 @@ def get_correction_counts(conn: sqlite3.Connection) -> list[tuple[str, str, int]
         "FROM correction GROUP BY corrected_text, source_engine"
     ).fetchall()
     return [(r["corrected_text"], r["source_engine"], r["n"]) for r in rows]
+
+
+# ── speech_span (VAD master timeline, GAP-3) ──────────────────────────────────
+
+def bulk_create_speech_spans(conn: sqlite3.Connection, job_id: int, spans: list[dict]) -> None:
+    """Persist VAD spans for a job. Each span dict: {idx, start_ms, end_ms, kind}."""
+    conn.executemany(
+        """INSERT INTO speech_span (job_id, idx, start_ms, end_ms, kind)
+           VALUES (:job_id, :idx, :start_ms, :end_ms, :kind)""",
+        [{"job_id": job_id, **s} for s in spans],
+    )
+    conn.commit()
+
+
+def get_speech_spans(conn: sqlite3.Connection, job_id: int) -> list[SpeechSpanRow]:
+    rows = conn.execute(
+        "SELECT * FROM speech_span WHERE job_id = ? ORDER BY idx", (job_id,)
+    ).fetchall()
+    return [SpeechSpanRow(**dict(r)) for r in rows]
+
+
+# ── cut_plan (CutDeck Layer-4 artifact, Part B) ───────────────────────────────
+
+def create_cut_plan(
+    conn: sqlite3.Connection,
+    job_id: int,
+    plan_version: str,
+    plan_json: str,
+    status: str = "proposed",
+) -> int:
+    cur = conn.execute(
+        "INSERT INTO cut_plan (job_id, plan_version, plan_json, status) VALUES (?, ?, ?, ?)",
+        (job_id, plan_version, plan_json, status),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_cut_plan(conn: sqlite3.Connection, plan_id: int) -> Optional[CutPlanRow]:
+    row = conn.execute("SELECT * FROM cut_plan WHERE id = ?", (plan_id,)).fetchone()
+    if row is None:
+        return None
+    return CutPlanRow(**dict(row))
+
+
+def get_cut_plans_for_job(conn: sqlite3.Connection, job_id: int) -> list[CutPlanRow]:
+    rows = conn.execute(
+        "SELECT * FROM cut_plan WHERE job_id = ? ORDER BY created_at DESC, id DESC", (job_id,)
+    ).fetchall()
+    return [CutPlanRow(**dict(r)) for r in rows]
+
+
+def update_cut_plan_status(conn: sqlite3.Connection, plan_id: int, status: str) -> None:
+    conn.execute("UPDATE cut_plan SET status = ? WHERE id = ?", (status, plan_id))
+    conn.commit()
 
 
 # ── bias_term ─────────────────────────────────────────────────────────────────
@@ -297,11 +412,17 @@ def create_eval_run(
     passed: bool,
     cer_thai: float = 1.0,
     wer_latin: float = 1.0,
+    kind: str = "transcribe",
+    pipeline_version: Optional[str] = None,
+    engine_pair: Optional[str] = None,
+    bias_hash: Optional[str] = None,
 ) -> int:
     cur = conn.execute(
-        "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, int(passed)),
+        "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
+        "kind, pipeline_version, engine_pair, bias_hash, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
+         kind, pipeline_version, engine_pair, bias_hash, int(passed)),
     )
     conn.commit()
     return cur.lastrowid

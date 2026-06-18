@@ -12,8 +12,10 @@ import logging
 import torch
 
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
+from transcribe.engines._batch import run_batched_with_oom_backoff
 from transcribe.engines.base import Engine
 from transcribe.engines.registry import register
+from transcribe.flywheel.inject import build_prompt_ids
 
 logger = logging.getLogger(__name__)
 
@@ -53,21 +55,15 @@ class WhisperThaiEngine(Engine):
         )
         logger.info("WhisperThai loaded on %s", self._device)
 
-    def transcribe(self, inp: EngineInput) -> EngineResult:
-        assert self._pipe is not None, "load() must be called first"
+    def _load_array(self, inp: EngineInput):
+        """Use the pre-decoded array when given one (skips a disk round-trip)."""
+        if inp.audio is not None:
+            return inp.audio
         import librosa
-
         audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
+        return audio
 
-        # return_timestamps="word" gives per-word chunks when supported;
-        # falls back to segment-level chunks on older checkpoints.
-        result = self._pipe(
-            {"array": audio, "sampling_rate": 16000},
-            generate_kwargs={"language": "th", "task": "transcribe"},
-            return_timestamps="word",
-            chunk_length_s=30,
-        )
-
+    def _result_to_tokens(self, result: dict) -> tuple[list[RecognizedToken], list[dict]]:
         tokens: list[RecognizedToken] = []
         raw_chunks = result.get("chunks", [])
 
@@ -91,13 +87,68 @@ class WhisperThaiEngine(Engine):
                     text=full_text, start_ms=0, end_ms=0,
                     confidence=None, script=detect_script(full_text),
                 ))
+        return tokens, raw_chunks
 
+    def transcribe(self, inp: EngineInput) -> EngineResult:
+        assert self._pipe is not None, "load() must be called first"
+        audio = self._load_array(inp)
+
+        generate_kwargs = {"language": "th", "task": "transcribe"}
+        # GAP-5: pack flywheel bias terms into the prompt under a token budget,
+        # using THIS engine's tokenizer so the count is real. Non-fatal — a
+        # prompt failure must never block transcription.
+        prompt_ids = build_prompt_ids(self._processor, self._device, inp.bias_terms)
+        if prompt_ids is not None:
+            generate_kwargs["prompt_ids"] = prompt_ids
+
+        # return_timestamps="word" gives per-word chunks when supported;
+        # falls back to segment-level chunks on older checkpoints.
+        result = self._pipe(
+            {"array": audio, "sampling_rate": 16000},
+            generate_kwargs=generate_kwargs,
+            return_timestamps="word",
+            chunk_length_s=30,
+        )
+
+        tokens, raw_chunks = self._result_to_tokens(result)
         return EngineResult(
             tokens=tokens,
             engine_name="whisper_thai",
             word_level_timestamps=bool(raw_chunks),
             raw={"chunks": raw_chunks},
         )
+
+    def transcribe_batch(self, inputs: list[EngineInput], batch_size: int = 8) -> list[EngineResult]:
+        """Batched GPU inference — one or few forward passes instead of len(inputs).
+
+        Bias terms are assumed identical across the batch (true for every caller
+        in this pipeline, which reuses the same flywheel bias_terms per job); the
+        prompt is built once from the first input rather than per-chunk.
+        """
+        assert self._pipe is not None, "load() must be called first"
+        if not inputs:
+            return []
+
+        generate_kwargs = {"language": "th", "task": "transcribe"}
+        prompt_ids = build_prompt_ids(self._processor, self._device, inputs[0].bias_terms)
+        if prompt_ids is not None:
+            generate_kwargs["prompt_ids"] = prompt_ids
+
+        batch = [{"array": self._load_array(inp), "sampling_rate": 16000} for inp in inputs]
+        raw_results = run_batched_with_oom_backoff(
+            self._pipe, batch, generate_kwargs, batch_size,
+        )
+
+        out: list[EngineResult] = []
+        for result in raw_results:
+            tokens, raw_chunks = self._result_to_tokens(result)
+            out.append(EngineResult(
+                tokens=tokens,
+                engine_name="whisper_thai",
+                word_level_timestamps=bool(raw_chunks),
+                raw={"chunks": raw_chunks},
+            ))
+        return out
 
     def unload(self) -> None:
         if self._pipe is not None:

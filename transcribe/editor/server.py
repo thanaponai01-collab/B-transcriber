@@ -120,6 +120,8 @@ def get_audio(job_id: int):
 class TokenPatch(BaseModel):
     idx: int
     text: str
+    # GAP-7: optional one-tap reason tag. Never required — must not block a save.
+    reason: str | None = None
 
 
 class SaveRequest(BaseModel):
@@ -138,7 +140,10 @@ def save_corrections(job_id: int, req: SaveRequest):
         {"idx": t.idx, "text": t.text, "source_engine": t.source_engine}
         for t in store.get_tokens(conn, job_id)
     ]
-    pairs = diff_corrections(original_tokens, [{"idx": t.idx, "text": t.text} for t in req.tokens])
+    pairs = diff_corrections(
+        original_tokens,
+        [{"idx": t.idx, "text": t.text, "reason": t.reason} for t in req.tokens],
+    )
 
     for pair in pairs:
         store.create_correction(
@@ -148,6 +153,7 @@ def save_corrections(job_id: int, req: SaveRequest):
             raw_text=pair.raw_text,
             corrected_text=pair.corrected_text,
             source_engine=pair.source_engine,
+            reason=pair.reason,
         )
 
     conn.close()

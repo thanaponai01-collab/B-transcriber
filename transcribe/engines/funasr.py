@@ -44,14 +44,29 @@ class FunASREngine(Engine):
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"
 
-        result = self._model.generate(
-            input=inp.audio_path,
-            cache={},
-            language="auto",
-            use_itn=True,
-            batch_size_s=60,
-            hotword=" ".join(inp.bias_terms) if inp.bias_terms else None,
-        )
+        # FunASR needs a path; write one if the caller only supplied a decoded array.
+        audio_path = inp.audio_path
+        tmp_path = None
+        if audio_path is None and inp.audio is not None:
+            import tempfile, soundfile as sf
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                tmp_path = f.name
+            sf.write(tmp_path, inp.audio, 16000)
+            audio_path = tmp_path
+
+        try:
+            result = self._model.generate(
+                input=audio_path,
+                cache={},
+                language="auto",
+                use_itn=True,
+                batch_size_s=60,
+                hotword=" ".join(inp.bias_terms) if inp.bias_terms else None,
+            )
+        finally:
+            if tmp_path is not None:
+                import os
+                os.unlink(tmp_path)
 
         tokens: list[RecognizedToken] = []
         raw_list = result if isinstance(result, list) else [result]

@@ -18,6 +18,15 @@ class Engine(ABC):
     def transcribe(self, inp: EngineInput) -> EngineResult:
         """Transcribe audio. Engine must be loaded first."""
 
+    def transcribe_batch(self, inputs: list[EngineInput], batch_size: int = 8) -> list[EngineResult]:
+        """Transcribe many inputs, in order. Default: one transcribe() call per input.
+
+        Override when the backend supports batched GPU inference — that's where
+        the real throughput win is, since it replaces N separate forward passes
+        with ceil(N / batch_size) of them.
+        """
+        return [self.transcribe(inp) for inp in inputs]
+
     @abstractmethod
     def unload(self) -> None:
         """Release model weights and free VRAM/RAM."""

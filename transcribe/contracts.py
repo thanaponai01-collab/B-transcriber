@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+import numpy as np
+
 
 def detect_script(text: str) -> str:
     """Classify text as 'thai' | 'latin' | 'mixed' | 'other'."""
@@ -25,7 +27,8 @@ def detect_script(text: str) -> str:
 
 @dataclass
 class EngineInput:
-    audio_path: str
+    audio_path: Optional[str] = None
+    audio: Optional[np.ndarray] = None  # pre-decoded 16kHz mono float32; skips disk I/O if set
     bias_terms: list[str] = field(default_factory=list)
     language_hint: Optional[str] = None  # "th", "en", or None
 

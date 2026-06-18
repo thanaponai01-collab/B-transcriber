@@ -10,7 +10,7 @@ import torch
 from transcribe.contracts import EngineInput, PipelineToken, detect_script
 from transcribe.db import store
 from transcribe.engines.registry import get_engine
-from transcribe.pipeline import align_force, align_hyp, ingest, normalize, reconcile
+from transcribe.pipeline import align_force, align_hyp, ingest, normalize, reconcile, stitch
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +109,33 @@ def run_file(
     store.update_job_status(conn, job_id, "running")
     logger.info("Job %d started: %s", job_id, audio_path)
 
+    # ── Timebase probe (GAP-1) — best-effort; needs ffprobe + a video stream ──
+    try:
+        from transcribe.timebase import probe as probe_timebase
+        tb = probe_timebase(audio_path)
+        store.set_media_timebase(conn, media_id, tb.fps_num, tb.fps_den, tb.is_vfr)
+        if tb.is_vfr:
+            logger.warning(
+                "Job %d: source is VFR (variable frame rate) — frame-based export "
+                "requires a conformed CFR proxy (config ingest.conform_vfr)", job_id
+            )
+    except Exception as e:
+        logger.info("Timebase probe skipped (%s)", e)
+
     try:
         # ── Phase 2: Ingestion ────────────────────────────────────────────────
-        chunks = ingest.ingest(audio_path, denoise=config.get("denoise", True))
-        logger.info("Ingestion: %d chunks", len(chunks))
+        ingest_result = ingest.ingest(audio_path, denoise=config.get("denoise", True))
+        chunks = ingest_result.chunks
+        logger.info("Ingestion: %d chunks, %d VAD spans", len(chunks), len(ingest_result.spans))
+
+        # Persist the VAD master timeline (GAP-3).
+        store.bulk_create_speech_spans(conn, job_id, [
+            {"idx": s.idx, "start_ms": s.start_ms, "end_ms": s.end_ms, "kind": s.kind}
+            for s in ingest_result.spans
+        ])
+        silence_spans = [
+            (s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "silence"
+        ]
 
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -122,26 +145,27 @@ def run_file(
         engine_a.load()
         _log_vram("engine-a-loaded")
 
+        engine_batch_size = int(config.get("engine_batch_size", 8))
+
+        a_inputs = [
+            EngineInput(audio=chunk.audio, bias_terms=bias_terms, language_hint="th")
+            for chunk in chunks
+        ]
+        a_results = engine_a.transcribe_batch(a_inputs, batch_size=engine_batch_size)
+
         engine_a_word_level = False
-        result_a_tokens = []
-        for chunk in chunks:
-            import tempfile, soundfile as sf, os
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                tmp = f.name
-            sf.write(tmp, chunk.audio, 16000)
-            eng_input = EngineInput(
-                audio_path=tmp,
-                bias_terms=bias_terms,
-                language_hint="th",
-            )
-            result = engine_a.transcribe(eng_input)
+        a_chunk_tokens: list[stitch.ChunkTokens] = []
+        for chunk, result in zip(chunks, a_results):
             engine_a_word_level = engine_a_word_level or result.word_level_timestamps
             # Offset timestamps to global position
             for tok in result.tokens:
                 tok.start_ms += chunk.start_ms
                 tok.end_ms += chunk.start_ms
-            result_a_tokens.extend(result.tokens)
-            os.unlink(tmp)
+            a_chunk_tokens.append(stitch.ChunkTokens(result.tokens, chunk.start_ms, chunk.end_ms))
+
+        # GAP-4: drop duplicate words from any chunk-overlap windows (no-op when
+        # chunks do not overlap; ready once ingest emits ~0.5–1s overlap).
+        result_a_tokens = stitch.stitch(a_chunk_tokens)
 
         engine_a.unload()
         del engine_a
@@ -153,23 +177,20 @@ def run_file(
         engine_b.load()
         _log_vram("engine-b-loaded")
 
-        result_b_tokens = []
-        for chunk in chunks:
-            import tempfile, soundfile as sf, os
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                tmp = f.name
-            sf.write(tmp, chunk.audio, 16000)
-            eng_input = EngineInput(
-                audio_path=tmp,
-                bias_terms=bias_terms,
-                language_hint=None,
-            )
-            result = engine_b.transcribe(eng_input)
+        b_inputs = [
+            EngineInput(audio=chunk.audio, bias_terms=bias_terms, language_hint=None)
+            for chunk in chunks
+        ]
+        b_results = engine_b.transcribe_batch(b_inputs, batch_size=engine_batch_size)
+
+        b_chunk_tokens: list[stitch.ChunkTokens] = []
+        for chunk, result in zip(chunks, b_results):
             for tok in result.tokens:
                 tok.start_ms += chunk.start_ms
                 tok.end_ms += chunk.start_ms
-            result_b_tokens.extend(result.tokens)
-            os.unlink(tmp)
+            b_chunk_tokens.append(stitch.ChunkTokens(result.tokens, chunk.start_ms, chunk.end_ms))
+
+        result_b_tokens = stitch.stitch(b_chunk_tokens)
 
         engine_b.unload()
         del engine_b
@@ -199,8 +220,19 @@ def run_file(
         ]
         pipeline_tokens = normalize.normalize_tokens(pipeline_tokens, config)
 
-        # ── Phase 6b: Hallucination filter ───────────────────────────────────
+        # ── Phase 6b: Hallucination filters ──────────────────────────────────
         pipeline_tokens = _filter_hallucinations(pipeline_tokens)
+        if config.get("drop_tokens_over_silence", True):
+            before = len(pipeline_tokens)
+            pipeline_tokens = normalize.drop_tokens_over_silence(
+                pipeline_tokens, silence_spans,
+                overlap=float(config.get("silence_overlap", 0.8)),
+            )
+            if len(pipeline_tokens) != before:
+                logger.info(
+                    "Silence filter removed %d tokens over VAD silence",
+                    before - len(pipeline_tokens),
+                )
 
         # ── Phase 6c: Word-level expansion ───────────────────────────────────
         # Engine A signals word_level_timestamps when it returned per-word spans.

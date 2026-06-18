@@ -24,6 +24,26 @@ class AudioChunk:
     end_ms: int
 
 
+@dataclass
+class SpeechSpan:
+    """One span of the VAD master timeline (GAP-3)."""
+    idx: int
+    start_ms: int
+    end_ms: int
+    kind: str  # 'speech' | 'silence'
+
+
+@dataclass
+class IngestResult:
+    """Output of ingestion: the speech chunks fed to engines, plus the full
+    speech/silence timeline (persisted to speech_span for CutDeck + the
+    hallucination filter) and the sample rate."""
+    chunks: list[AudioChunk]
+    spans: list[SpeechSpan]
+    sample_rate: int
+    duration_ms: int
+
+
 _AV_CONTAINERS = frozenset({
     # Common video containers
     ".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm",
@@ -153,10 +173,37 @@ def _vad_chunks(audio: np.ndarray, sr: int) -> list[tuple[int, int]]:
         return [(0, len(audio))]
 
 
-def ingest(path: str, denoise: bool = True) -> list[AudioChunk]:
+def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -> list[SpeechSpan]:
+    """Turn VAD speech segments into a gap-free, ordered speech/silence timeline
+    covering [0, total]. The silence between/around speech is the master timeline
+    CutDeck cuts against and the silence-overlap hallucination filter consults."""
+    def to_ms(s: int) -> int:
+        return int(s * 1000 / sr)
+
+    spans: list[SpeechSpan] = []
+    cursor = 0
+    idx = 0
+    for start_s, end_s in segments:
+        start_s = max(0, min(start_s, total_samples))
+        end_s = max(0, min(end_s, total_samples))
+        if start_s > cursor:
+            spans.append(SpeechSpan(idx, to_ms(cursor), to_ms(start_s), "silence"))
+            idx += 1
+        if end_s > start_s:
+            spans.append(SpeechSpan(idx, to_ms(start_s), to_ms(end_s), "speech"))
+            idx += 1
+        cursor = max(cursor, end_s)
+    if total_samples > cursor:
+        spans.append(SpeechSpan(idx, to_ms(cursor), to_ms(total_samples), "silence"))
+    return spans
+
+
+def ingest(path: str, denoise: bool = True) -> IngestResult:
     """
     Main ingestion entry point.
-    Returns a list of speech AudioChunks (denoised, 16kHz mono float32).
+
+    Returns an IngestResult: speech AudioChunks (denoised, 16kHz mono float32)
+    plus the full VAD speech/silence timeline (GAP-3) and the sample rate.
     """
     logger.info("Ingesting: %s", path)
     audio, sr = load_audio(path)
@@ -175,4 +222,11 @@ def ingest(path: str, denoise: bool = True) -> list[AudioChunk]:
             start_ms=int(start_s * 1000 / sr),
             end_ms=int(end_s * 1000 / sr),
         ))
-    return chunks
+
+    spans = _build_spans(segments, len(audio), sr)
+    return IngestResult(
+        chunks=chunks,
+        spans=spans,
+        sample_rate=sr,
+        duration_ms=int(len(audio) * 1000 / sr),
+    )

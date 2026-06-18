@@ -6,12 +6,20 @@
 #           engine_b: passthrough to fall back to single-engine, Engine-A-only output.)
 engine_a: whisper_thai
 engine_b: whisper_multi
+engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
+                        # auto-halves on CUDA OOM (variable-length VAD chunks get padded to
+                        # the longest one in a batch, so peak VRAM varies even at fixed batch_size)
 
 # Ingestion
 denoise: true
 vad_threshold: 0.5
 vad_min_speech_ms: 250
 vad_min_silence_ms: 300
+conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources before frame export
+
+# Hallucination filtering (GAP-3): drop tokens that sit mostly inside VAD silence
+drop_tokens_over_silence: true
+silence_overlap: 0.8        # fraction of a token's span inside silence to drop it
 
 # Evaluation
 boundary_tol_ms: 300   # switch-point match tolerance (see eval/README.md)
@@ -40,3 +48,22 @@ regression_tolerance: 0.02
 flywheel:
   min_occurrences: 3       # corrections needed before a term enters the bias index
   stale_engine_weight: 0.2 # weight for corrections from engines no longer active
+  bias_prompt_budget: 200  # GAP-5: max tokens packed into an engine's initial_prompt
+
+# CutDeck rough-cut system (Part B) — config consumed by the cutdeck/ package.
+# Present now so Phase 0 (timebase + VAD persistence) has a home; the deterministic
+# rules pass turns on after the first eval baseline.
+cut:
+  min_silence_ms: 900       # VAD silence longer than this becomes a cut
+  pad_pre_ms: 250           # kept pre-roll before speech (attack matters most)
+  pad_post_ms: 120          # kept post-roll after speech
+  min_clip_ms: 1200         # kept clips shorter than this merge into a neighbor
+  fillers_enabled: false    # turn on after first eval baseline
+  filler_lexicon: [เอ่อ, อ่า, อืม, เอิ่ม, um, uh]
+  filler_lexicon_contextual: [แบบ, แบบว่า, ก็คือ, คือว่า, like, you know]
+  retake_markers: [เดี๋ยวเอาใหม่, เอาใหม่นะ, ตัดตรงนี้, อันนี้ผิด, เมื่อกี้พูดผิด]
+  llm_enabled: true
+  keep_last_take: true
+segment:
+  gap_ms: 700               # token gap larger than this starts a new segment
+  vad_silence_ms: 500       # VAD silence between tokens that forces a split

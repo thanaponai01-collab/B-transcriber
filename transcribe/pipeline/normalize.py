@@ -112,3 +112,36 @@ def normalize(text: str, config: dict | None = None) -> str:
 
 def normalize_tokens(tokens: list[PipelineToken], config: dict | None = None) -> list[PipelineToken]:
     return [replace(t, text=normalize(t.text, config)) for t in tokens]
+
+
+def _silence_overlap_ms(tok: PipelineToken, silences: list[tuple[int, int]]) -> int:
+    """Total milliseconds of a token's span that fall inside any silence span."""
+    total = 0
+    for s_start, s_end in silences:
+        total += max(0, min(tok.end_ms, s_end) - max(tok.start_ms, s_start))
+    return total
+
+
+def drop_tokens_over_silence(
+    tokens: list[PipelineToken],
+    silence_spans: list[tuple[int, int]],
+    overlap: float = 0.8,
+) -> list[PipelineToken]:
+    """Phase 6b — drop tokens that sit mostly inside VAD silence (GAP-3).
+
+    A token whose span overlaps silence by >= ``overlap`` of its own duration is
+    almost certainly a Whisper hallucination over dead air — a stronger signal
+    than the >3x repeat rule. A token straddling a boundary (e.g. 50% overlap) is
+    kept. Re-indexes survivors so idx stays contiguous.
+    """
+    if not silence_spans or not tokens:
+        return tokens
+    kept: list[PipelineToken] = []
+    for tok in tokens:
+        duration = max(1, tok.end_ms - tok.start_ms)
+        if _silence_overlap_ms(tok, silence_spans) / duration >= overlap:
+            continue
+        kept.append(tok)
+    for new_idx, tok in enumerate(kept):
+        tok.idx = new_idx
+    return kept

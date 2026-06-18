@@ -5,17 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+from typing import Optional
+
+
 @dataclass
 class CorrectionPair:
     token_idx: int
     raw_text: str
     corrected_text: str
     source_engine: str
+    reason: Optional[str] = None  # GAP-7: optional one-tap tag from the editor
 
 
 def diff_corrections(
     original_tokens: list[dict],   # from DB: {"idx", "text", "source_engine", ...}
-    corrected_tokens: list[dict],  # from editor: {"idx", "text", ...}
+    corrected_tokens: list[dict],  # from editor: {"idx", "text", "reason"?, ...}
 ) -> list[CorrectionPair]:
     """
     Compare original and corrected token lists by idx.
@@ -35,5 +39,6 @@ def diff_corrections(
                 raw_text=orig["text"],
                 corrected_text=corr["text"],
                 source_engine=orig.get("source_engine", "unknown"),
+                reason=corr.get("reason"),
             ))
     return pairs

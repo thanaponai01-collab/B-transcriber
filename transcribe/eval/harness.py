@@ -17,6 +17,22 @@ def _config_hash(config: dict) -> str:
     return hashlib.sha256(blob).hexdigest()[:16]
 
 
+def _pipeline_version() -> str:
+    """Read the live pipeline version without importing the GPU stack at module load."""
+    try:
+        from transcribe.pipeline.run import PIPELINE_VERSION
+        return PIPELINE_VERSION
+    except Exception:
+        return "unknown"
+
+
+def _bias_hash(conn) -> str:
+    """Hash of the active bias index — makes a regression attributable to the
+    exact term set that produced it (A.2)."""
+    terms = sorted(store.get_bias_term_strings(conn))
+    return hashlib.sha256("\n".join(terms).encode()).hexdigest()[:16]
+
+
 def _load_goldenset() -> list[tuple[Path, list[dict]]]:
     """Return [(audio_path, ref_tokens), ...] for every sample in the golden set."""
     samples = []
@@ -112,6 +128,9 @@ def run_harness(
     store.create_eval_run(
         conn, cfg_hash, agg.wer, agg.boundary_error_rate,
         passed, cer_thai=agg.cer_thai, wer_latin=agg.wer_latin,
+        pipeline_version=_pipeline_version(),
+        engine_pair=f"{config.get('engine_a', '?')}+{config.get('engine_b', '?')}",
+        bias_hash=_bias_hash(conn),
     )
     conn.close()
 
