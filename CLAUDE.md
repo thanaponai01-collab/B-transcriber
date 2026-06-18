@@ -63,7 +63,13 @@ audio → ingest.py (denoise + VAD → chunks)
 
 ## Current engines
 
-- **Engine A** (`whisper_thai`): `biodatlab/whisper-th-medium-combined` — Thai specialist
+- **Engine A** (`faster_whisper`, default): `biodatlab/whisper-th-medium-combined`
+  converted to CTranslate2 (`models/whisper-th-medium-ct2`). Whole-file engine
+  (`prefers_whole_file=True`) — ~3.5× faster than realtime on the 3070, vs the HF
+  `transformers` path that is ~2× *slower* than realtime. Returns segment-level
+  cues. Convert the model per the comment in `requirements.txt`.
+- **Engine A alt** (`whisper_thai`): same checkpoint via HF `transformers` — kept
+  as a fallback; per-chunk, word-level, much slower on 8 GB VRAM.
 - **Engine B** (`whisper_multi`): `openai/whisper-large-v3` — multilingual generalist / code-switch slot. Runs on Python 3.13 (transformers). A real second hypothesis, so cross-engine agreement is a live confidence signal.
 - **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): registered but unavailable on Python 3.13 (editdistance has no wheel). Alternative generalist.
 - **`passthrough`** (null): single-engine fallback — Engine A only, no agreement signal.

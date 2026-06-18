@@ -11,6 +11,12 @@ from dataclasses import dataclass, field
 from transcribe.contracts import RecognizedToken
 
 
+# Two tokens may only be matched if they are temporally near. Without this, two
+# identical common words far apart in the file (e.g. "โอเค" … "โอเค") match on text
+# alone, and reconcile's agreement-merge stretches one token across the whole file.
+_MATCH_PROX_MS = 1500
+
+
 @dataclass
 class AlignSlot:
     candidates_a: list[RecognizedToken] = field(default_factory=list)
@@ -65,6 +71,9 @@ def align(
         best_j, best_score = -1, -1.0
         for j, tb in enumerate(tokens_b):
             if j in matched_b:
+                continue
+            # Temporal gate: only match tokens that overlap or sit close in time.
+            if _token_overlap_ms(ta, tb) == 0 and abs(ta.start_ms - tb.start_ms) > _MATCH_PROX_MS:
                 continue
             s = _score(ta, tb)
             if s > best_score:

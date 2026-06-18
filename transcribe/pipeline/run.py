@@ -23,13 +23,31 @@ def _log_vram(stage: str) -> None:
         logger.info("[VRAM] %s: %.1f MB free / %.1f MB total", stage, free / 1e6, total / 1e6)
 
 
-def _filter_hallucinations(tokens: list[PipelineToken], max_run: int = 3) -> list[PipelineToken]:
-    """Remove tokens where the same word repeats more than max_run times in a row.
+import re
 
-    Whisper hallucinates on silence/music by looping filler words.
+# A unit of 1+ chars repeated 3+ times in a row = a Whisper loop, not real text
+# (e.g. "อื้อฮือฮือฮือ…"). Collapse to a single copy. ponytail: 3+ identical
+# repeats of a substring is essentially never legitimate Thai/Latin; mai-yamok (ๆ)
+# carries genuine repetition.
+_LOOP_RE = re.compile(r"(.+?)\1{2,}")
+
+
+def _collapse_loops(text: str) -> str:
+    return _LOOP_RE.sub(r"\1", text)
+
+
+def _filter_hallucinations(tokens: list[PipelineToken], max_run: int = 3) -> list[PipelineToken]:
+    """Strip Whisper repetition loops — both inside a single token and across tokens.
+
+    Whisper hallucinates on silence/music by looping filler words. Two shapes:
+    one token whose own text is a looped unit, and the same word as N consecutive
+    tokens. Handle both.
     """
     if not tokens:
         return tokens
+    for tok in tokens:
+        tok.text = _collapse_loops(tok.text)
+
     result = []
     run = 0
     prev = None
@@ -81,6 +99,37 @@ def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
             ))
             idx += 1
     return result
+
+
+def _transcribe_with(engine, chunks, full_audio, bias_terms, language_hint, batch_size):
+    """Run one engine over the audio → (global-timestamped tokens, word_level).
+
+    Whole-file engines get the full track in a single call (their own VAD and
+    segmentation is the point) and already return absolute timestamps. Chunk
+    engines get the VAD chunks; we offset each chunk's tokens to global time and
+    stitch overlaps.
+    """
+    if getattr(engine, "prefers_whole_file", False):
+        res = engine.transcribe(
+            EngineInput(audio=full_audio, bias_terms=bias_terms, language_hint=language_hint)
+        )
+        return res.tokens, res.word_level_timestamps
+
+    inputs = [
+        EngineInput(audio=c.audio, bias_terms=bias_terms, language_hint=language_hint)
+        for c in chunks
+    ]
+    results = engine.transcribe_batch(inputs, batch_size=batch_size)
+    word_level = False
+    chunk_tokens: list[stitch.ChunkTokens] = []
+    for c, r in zip(chunks, results):
+        word_level = word_level or r.word_level_timestamps
+        for tok in r.tokens:  # offset to global position
+            tok.start_ms += c.start_ms
+            tok.end_ms += c.start_ms
+        chunk_tokens.append(stitch.ChunkTokens(r.tokens, c.start_ms, c.end_ms))
+    # GAP-4: stitch drops duplicate words from any chunk-overlap windows.
+    return stitch.stitch(chunk_tokens), word_level
 
 
 def run_file(
@@ -140,58 +189,33 @@ def run_file(
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info("Using device: %s", device)
-        _log_vram("pre-engine-a")
-        engine_a = get_engine(engine_a_name, device=device)
-        engine_a.load()
-        _log_vram("engine-a-loaded")
-
         engine_batch_size = int(config.get("engine_batch_size", 8))
 
-        a_inputs = [
-            EngineInput(audio=chunk.audio, bias_terms=bias_terms, language_hint="th")
-            for chunk in chunks
-        ]
-        a_results = engine_a.transcribe_batch(a_inputs, batch_size=engine_batch_size)
+        # Instantiate (no weights loaded yet) to learn capabilities; load the full
+        # track once if any engine wants whole-file input.
+        engine_a = get_engine(engine_a_name, device=device)
+        engine_b = get_engine(engine_b_name, device=device)
+        full_audio = None
+        if engine_a.prefers_whole_file or engine_b.prefers_whole_file:
+            full_audio, _ = ingest.load_audio(audio_path)
 
-        engine_a_word_level = False
-        a_chunk_tokens: list[stitch.ChunkTokens] = []
-        for chunk, result in zip(chunks, a_results):
-            engine_a_word_level = engine_a_word_level or result.word_level_timestamps
-            # Offset timestamps to global position
-            for tok in result.tokens:
-                tok.start_ms += chunk.start_ms
-                tok.end_ms += chunk.start_ms
-            a_chunk_tokens.append(stitch.ChunkTokens(result.tokens, chunk.start_ms, chunk.end_ms))
-
-        # GAP-4: drop duplicate words from any chunk-overlap windows (no-op when
-        # chunks do not overlap; ready once ingest emits ~0.5–1s overlap).
-        result_a_tokens = stitch.stitch(a_chunk_tokens)
-
+        _log_vram("pre-engine-a")
+        engine_a.load()
+        _log_vram("engine-a-loaded")
+        result_a_tokens, engine_a_word_level = _transcribe_with(
+            engine_a, chunks, full_audio, bias_terms, "th", engine_batch_size,
+        )
         engine_a.unload()
         del engine_a
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         _log_vram("post-engine-a")
 
         _log_vram("pre-engine-b")
-        engine_b = get_engine(engine_b_name, device=device)
         engine_b.load()
         _log_vram("engine-b-loaded")
-
-        b_inputs = [
-            EngineInput(audio=chunk.audio, bias_terms=bias_terms, language_hint=None)
-            for chunk in chunks
-        ]
-        b_results = engine_b.transcribe_batch(b_inputs, batch_size=engine_batch_size)
-
-        b_chunk_tokens: list[stitch.ChunkTokens] = []
-        for chunk, result in zip(chunks, b_results):
-            for tok in result.tokens:
-                tok.start_ms += chunk.start_ms
-                tok.end_ms += chunk.start_ms
-            b_chunk_tokens.append(stitch.ChunkTokens(result.tokens, chunk.start_ms, chunk.end_ms))
-
-        result_b_tokens = stitch.stitch(b_chunk_tokens)
-
+        result_b_tokens, _ = _transcribe_with(
+            engine_b, chunks, full_audio, bias_terms, None, engine_batch_size,
+        )
         engine_b.unload()
         del engine_b
         torch.cuda.empty_cache() if torch.cuda.is_available() else None

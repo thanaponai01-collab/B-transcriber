@@ -35,6 +35,8 @@ htmlcov/
 Thumbs.db
 
 # Model weights / large files
+# CT2-converted engines, regenerated via ct2-transformers-converter
+models/
 *.bin
 *.pt
 *.pth

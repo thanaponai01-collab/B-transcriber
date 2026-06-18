@@ -4,8 +4,8 @@
 #           Real second hypothesis ⇒ cross-engine agreement is a live confidence
 #           signal. (FunASR is still registered but has no Python 3.13 wheel; set
 #           engine_b: passthrough to fall back to single-engine, Engine-A-only output.)
-engine_a: whisper_thai
-engine_b: whisper_multi
+engine_a: faster_whisper
+engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
                         # auto-halves on CUDA OOM (variable-length VAD chunks get padded to
                         # the longest one in a batch, so peak VRAM varies even at fixed batch_size)

@@ -5,6 +5,25 @@ makes it due. Owner: build-discipline.
 
 ## Transcriber gaps (Part A)
 
+- **Engine default switched to `faster_whisper` (CTranslate2), single-engine
+  (2026-06-18).** `config.yaml` now runs `engine_a: faster_whisper` /
+  `engine_b: passthrough`. Whole-file transcription (capability flag
+  `Engine.prefers_whole_file`) on the RTX 3070: 5-min clip in ~1m30 (was 10m+ and
+  the HF transformers dual-engine path never finished). Also fixed this session:
+  HF `array`→`raw` input-key break (transformers 5.9.0), OOM-retry reusing
+  mutated dicts (`_batch.py`), repetition-loop survival, and the align_hyp
+  far-match producing file-spanning timestamps.
+- **Cue granularity — DONE (2026-06-18).** faster-whisper now runs with
+  `word_timestamps=True` and `_group_words_into_cues` re-joins the sub-word Thai
+  pieces into phrase cues, breaking only at word boundaries on a >700 ms gap or a
+  >6 s span. Result on the 5-min clip: ~37 cues, median ~7 s, no mid-word cuts;
+  runtime ~1m40 (word timestamps roughly double the engine pass, still sub-
+  realtime). Tested in `tests/test_faster_whisper_cues.py`. Residual: occasional
+  long cue when Whisper drifts a single word's end timestamp — cosmetic.
+- **Engine B re-introduction is eval-gated.** Cross-engine agreement only earns
+  its 2× cost if the harness proves it lowers `cer_thai`. **Due when:** a real
+  bias-sensitive gold set exists to measure it.
+
 - **GAP-4 chunk overlap (other half).** `stitch.py` is built, tested, and wired
   into `run.py`, but `ingest.py` still emits non-overlapping VAD chunks, so the
   stitcher is currently a no-op. **Due when:** chunking is changed to emit

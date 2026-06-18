@@ -36,6 +36,7 @@ def _lazy_load(name: str) -> None:
     loaders = {
         "mock":          "transcribe.engines.mock",
         "whisper_thai":  "transcribe.engines.whisper_thai",
+        "faster_whisper": "transcribe.engines.faster_whisper",
         "whisper_multi": "transcribe.engines.whisper_multi",
         "funasr":        "transcribe.engines.funasr",
         "passthrough":   "transcribe.engines.null_engine",
