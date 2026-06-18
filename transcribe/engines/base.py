@@ -10,6 +10,12 @@ from transcribe.contracts import EngineInput, EngineResult
 class Engine(ABC):
     """All ASR engine adapters must subclass this."""
 
+    # Whole-file engines (CTranslate2 / faster-whisper) do their own internal VAD
+    # and segmentation and are crippled by per-chunk feeding (per-call overhead +
+    # an alignment pass per chunk). When True, the pipeline hands the engine the
+    # full audio in one call and trusts its absolute timestamps.
+    prefers_whole_file: bool = False
+
     @abstractmethod
     def load(self) -> None:
         """Load model weights into memory."""

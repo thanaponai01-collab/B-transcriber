@@ -93,7 +93,11 @@ class WhisperThaiEngine(Engine):
         assert self._pipe is not None, "load() must be called first"
         audio = self._load_array(inp)
 
-        generate_kwargs = {"language": "th", "task": "transcribe"}
+        # no_repeat_ngram_size kills Whisper's repetition loops on non-speech
+        # (music/silence/breaths). ponytail: 3-gram block is the standard chunked-
+        # path loop guard; compression_ratio_threshold only works on the long-form
+        # (non-chunked) algorithm, which we don't use.
+        generate_kwargs = {"language": "th", "task": "transcribe", "no_repeat_ngram_size": 3}
         # GAP-5: pack flywheel bias terms into the prompt under a token budget,
         # using THIS engine's tokenizer so the count is real. Non-fatal — a
         # prompt failure must never block transcription.
@@ -104,7 +108,7 @@ class WhisperThaiEngine(Engine):
         # return_timestamps="word" gives per-word chunks when supported;
         # falls back to segment-level chunks on older checkpoints.
         result = self._pipe(
-            {"array": audio, "sampling_rate": 16000},
+            {"raw": audio, "sampling_rate": 16000},
             generate_kwargs=generate_kwargs,
             return_timestamps="word",
             chunk_length_s=30,
@@ -129,12 +133,16 @@ class WhisperThaiEngine(Engine):
         if not inputs:
             return []
 
-        generate_kwargs = {"language": "th", "task": "transcribe"}
+        # no_repeat_ngram_size kills Whisper's repetition loops on non-speech
+        # (music/silence/breaths). ponytail: 3-gram block is the standard chunked-
+        # path loop guard; compression_ratio_threshold only works on the long-form
+        # (non-chunked) algorithm, which we don't use.
+        generate_kwargs = {"language": "th", "task": "transcribe", "no_repeat_ngram_size": 3}
         prompt_ids = build_prompt_ids(self._processor, self._device, inputs[0].bias_terms)
         if prompt_ids is not None:
             generate_kwargs["prompt_ids"] = prompt_ids
 
-        batch = [{"array": self._load_array(inp), "sampling_rate": 16000} for inp in inputs]
+        batch = [{"raw": self._load_array(inp), "sampling_rate": 16000} for inp in inputs]
         raw_results = run_batched_with_oom_backoff(
             self._pipe, batch, generate_kwargs, batch_size,
         )
