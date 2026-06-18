@@ -9,6 +9,10 @@ numpy>=1.26.0
 PyYAML>=6.0
 
 # ASR engines
+faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-converted model:
+                        #   ct2-transformers-converter --model biodatlab/whisper-th-medium-combined \
+                        #     --output_dir models/whisper-th-medium-ct2 --quantization float16 \
+                        #     --copy_files tokenizer.json preprocessor_config.json
 funasr>=1.1.0
 openai-whisper>=20250625
 

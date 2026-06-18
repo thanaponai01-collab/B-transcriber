@@ -99,7 +99,9 @@ class WhisperMultiEngine(Engine):
         assert self._pipe is not None, "load() must be called first"
         audio = self._load_array(inp)
 
-        generate_kwargs = {"task": "transcribe"}
+        # no_repeat_ngram_size kills Whisper's repetition loops on non-speech.
+        # ponytail: 3-gram block is the standard chunked-path loop guard.
+        generate_kwargs = {"task": "transcribe", "no_repeat_ngram_size": 3}
         # GAP-5: inject flywheel bias terms via this engine's own tokenizer budget.
         prompt_ids = build_prompt_ids(self._processor, self._device, inp.bias_terms)
         if prompt_ids is not None:
@@ -108,7 +110,7 @@ class WhisperMultiEngine(Engine):
         # language=None → Whisper auto-detects per segment; this is what lets the
         # generalist follow intra-sentential code-switches.
         result = self._pipe(
-            {"array": audio, "sampling_rate": 16000},
+            {"raw": audio, "sampling_rate": 16000},
             generate_kwargs=generate_kwargs,
             return_timestamps="word",
             chunk_length_s=30,
@@ -133,12 +135,14 @@ class WhisperMultiEngine(Engine):
         if not inputs:
             return []
 
-        generate_kwargs = {"task": "transcribe"}
+        # no_repeat_ngram_size kills Whisper's repetition loops on non-speech.
+        # ponytail: 3-gram block is the standard chunked-path loop guard.
+        generate_kwargs = {"task": "transcribe", "no_repeat_ngram_size": 3}
         prompt_ids = build_prompt_ids(self._processor, self._device, inputs[0].bias_terms)
         if prompt_ids is not None:
             generate_kwargs["prompt_ids"] = prompt_ids
 
-        batch = [{"array": self._load_array(inp), "sampling_rate": 16000} for inp in inputs]
+        batch = [{"raw": self._load_array(inp), "sampling_rate": 16000} for inp in inputs]
         raw_results = run_batched_with_oom_backoff(
             self._pipe, batch, generate_kwargs, batch_size,
         )
