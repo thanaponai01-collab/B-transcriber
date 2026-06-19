@@ -9,6 +9,22 @@ from pathlib import Path
 import pytest
 
 
+# ── Regression gate near-zero floor (#6) ──────────────────────────────────────
+
+def test_regressed_abs_floor():
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from transcribe.eval.metrics import regressed
+
+    # Near-zero baseline: relative-only would trip on any nonzero score; the
+    # absolute floor must absorb a small worsening.
+    assert not regressed(0.004, 0.0, tol_frac=1.02, abs_floor=0.005)
+    assert regressed(0.02, 0.0, tol_frac=1.02, abs_floor=0.005)
+    # Normal baseline: relative band dominates the (wider) floor.
+    assert not regressed(0.101, 0.10, tol_frac=1.02, abs_floor=0.005)  # +1% < 2%
+    assert regressed(0.13, 0.10, tol_frac=1.02, abs_floor=0.005)       # +30%
+
+
 # ── Step 1: DB schema + store ─────────────────────────────────────────────────
 
 def _tmp_db():

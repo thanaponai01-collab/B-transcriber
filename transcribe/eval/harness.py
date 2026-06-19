@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import tempfile
 from pathlib import Path
 
 from transcribe.db import store
-from transcribe.eval.metrics import EvalMetrics, compute_metrics
+from transcribe.eval.metrics import EvalMetrics, compute_metrics, regressed
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
 
@@ -65,10 +67,18 @@ def run_harness(
     Returns:
         EvalMetrics aggregate over all golden samples.
     """
+    # #5: eval transcription writes media/job/token rows. Keep those OUT of the
+    # caller's DB (the editor and flywheel read it) by sending run_file to a
+    # throwaway scratch DB. eval_run *history* still goes to db_path below, so the
+    # regression gate stays coherent across runs.
+    scratch_dir: Path | None = None
     if pipeline_fn is None:
         from transcribe.pipeline import run as pipeline_run
+        scratch_dir = Path(tempfile.mkdtemp(prefix="eval_scratch_"))
+        scratch_db = scratch_dir / "scratch.db"
+        store.init_db(scratch_db)
         def pipeline_fn(audio_path, cfg):
-            return pipeline_run.run_file(str(audio_path), cfg, db_path)
+            return pipeline_run.run_file(str(audio_path), cfg, scratch_db)
 
     samples = _load_goldenset()
     if not samples:
@@ -94,6 +104,9 @@ def run_harness(
         total_words    += m.total_words
         total_switches += m.ref_switches
 
+    if scratch_dir is not None:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+
     agg = EvalMetrics(
         cer_thai=cer_num / total_thai if total_thai else 0.0,
         wer_latin=wer_lat_num / total_latin if total_latin else 0.0,
@@ -109,15 +122,16 @@ def run_harness(
     cfg_hash = _config_hash(config)
 
     tol_frac = 1.0 + float(config.get("regression_tolerance", 0.02))
+    abs_floor = float(config.get("regression_abs_floor", 0.005))
     last = store.get_last_passing_eval(conn)
     passed = True
     if last is not None:
         regressions = []
-        if agg.cer_thai > last.cer_thai * tol_frac:
+        if regressed(agg.cer_thai, last.cer_thai, tol_frac, abs_floor):
             regressions.append(f"CER_thai {agg.cer_thai:.4f} vs {last.cer_thai:.4f}")
-        if agg.wer_latin > last.wer_latin * tol_frac:
+        if regressed(agg.wer_latin, last.wer_latin, tol_frac, abs_floor):
             regressions.append(f"WER_latin {agg.wer_latin:.4f} vs {last.wer_latin:.4f}")
-        if agg.boundary_error_rate > last.boundary_error_rate * tol_frac:
+        if regressed(agg.boundary_error_rate, last.boundary_error_rate, tol_frac, abs_floor):
             regressions.append(
                 f"BER {agg.boundary_error_rate:.4f} vs {last.boundary_error_rate:.4f}"
             )
