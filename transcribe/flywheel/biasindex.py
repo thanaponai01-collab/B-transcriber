@@ -91,7 +91,9 @@ def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> N
     last = store.get_last_passing_eval(conn)
     conn.close()
 
-    if last is not None and not _passed_gate(metrics, last):
+    tol_frac = 1.0 + float(config.get("regression_tolerance", 0.02))
+    abs_floor = float(config.get("regression_abs_floor", 0.005))
+    if last is not None and not _passed_gate(metrics, last, tol_frac, abs_floor):
         logger.warning(
             "Regression gate BLOCKED: rolling back %d bias terms", len(new_terms)
         )
@@ -105,9 +107,9 @@ def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> N
         )
 
 
-def _passed_gate(current, last) -> bool:
-    from transcribe.eval.metrics import EvalMetrics
-    return (
-        current.wer <= last.wer * 1.02
-        and current.boundary_error_rate <= last.boundary_error_rate * 1.02
+def _passed_gate(current, last, tol_frac: float = 1.02, abs_floor: float = 0.005) -> bool:
+    from transcribe.eval.metrics import regressed
+    return not (
+        regressed(current.wer, last.wer, tol_frac, abs_floor)
+        or regressed(current.boundary_error_rate, last.boundary_error_rate, tol_frac, abs_floor)
     )

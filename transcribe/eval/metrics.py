@@ -42,6 +42,18 @@ class EvalMetrics:
     ref_switches: int           # reference switch-point count (aggregation weight)
 
 
+# ── regression gate ───────────────────────────────────────────────────────────
+
+def regressed(now: float, base: float, tol_frac: float = 1.02, abs_floor: float = 0.005) -> bool:
+    """True if `now` is worse than `base` by more than the allowed band.
+
+    Relative tolerance alone collapses to zero when base≈0 (0 * 1.02 == 0), so a
+    perfect or tiny baseline would trip the gate on any nonzero score. Floor the
+    band with an absolute slack (#6).
+    """
+    return now > max(base * tol_frac, base + abs_floor)
+
+
 # ── edit distance ─────────────────────────────────────────────────────────────
 
 def _edit_distance(ref: list | str, hyp: list | str) -> int:

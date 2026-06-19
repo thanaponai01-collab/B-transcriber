@@ -41,8 +41,12 @@ normalization:
     - AI
     - API
 
-# Eval regression gate: reject if WER or BER increases by more than this fraction
+# Eval regression gate: reject if a metric worsens by more than this fraction,
+# OR by more than regression_abs_floor in absolute terms — whichever band is
+# wider. The absolute floor keeps a near-zero baseline from tripping on any
+# nonzero score (relative-only collapses to 0 when the baseline is 0).
 regression_tolerance: 0.02
+regression_abs_floor: 0.005
 
 # Flywheel
 flywheel:
