@@ -173,7 +173,13 @@ def run_file(
 
     try:
         # ── Phase 2: Ingestion ────────────────────────────────────────────────
-        ingest_result = ingest.ingest(audio_path, denoise=config.get("denoise", True))
+        ingest_result = ingest.ingest(
+            audio_path,
+            denoise=config.get("denoise", True),
+            vad_threshold=float(config.get("vad_threshold", 0.5)),
+            vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
+            vad_min_silence_ms=int(config.get("vad_min_silence_ms", 300)),
+        )
         chunks = ingest_result.chunks
         logger.info("Ingestion: %d chunks, %d VAD spans", len(chunks), len(ingest_result.spans))
 
@@ -193,8 +199,27 @@ def run_file(
 
         # Instantiate (no weights loaded yet) to learn capabilities; load the full
         # track once if any engine wants whole-file input.
-        engine_a = get_engine(engine_a_name, device=device)
-        engine_b = get_engine(engine_b_name, device=device)
+        # Optional per-engine overrides from config. Only forwarded to engines
+        # whose constructor accepts them, so passthrough/mock stay untouched.
+        def _engine_kwargs(model_key: str) -> dict:
+            kw = {"device": device}
+            model_id = config.get(model_key)
+            if model_id:
+                kw["model_id"] = model_id
+            ct = config.get("compute_type")
+            if ct:
+                kw["compute_type"] = ct
+            return kw
+
+        def _safe_get_engine(name: str, model_key: str):
+            try:
+                return get_engine(name, **_engine_kwargs(model_key))
+            except TypeError:
+                # Engine doesn't accept model_id/compute_type (e.g. passthrough, mock)
+                return get_engine(name, device=device)
+
+        engine_a = _safe_get_engine(engine_a_name, "engine_a_model")
+        engine_b = _safe_get_engine(engine_b_name, "engine_b_model")
         full_audio = None
         if engine_a.prefers_whole_file or engine_b.prefers_whole_file:
             full_audio, _ = ingest.load_audio(audio_path)

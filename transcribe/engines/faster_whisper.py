@@ -27,44 +27,82 @@ logger = logging.getLogger(__name__)
 # it resolves regardless of the caller's cwd.
 _DEFAULT_MODEL = str(Path(__file__).resolve().parents[2] / "models" / "whisper-th-medium-ct2")
 
-# Phrase-cue grouping. ponytail: fixed heuristics — break on a speech gap or when a
-# cue would run too long. Tune here if cues read too long/short; matches the
-# pipeline's segment.gap_ms default (700 ms).
+# Phrase-cue grouping. ponytail: fixed heuristics — break on a speech gap, or once a
+# cue reaches target length/duration. Tune here if cues read too long/short; gap_ms
+# matches the pipeline's segment.gap_ms default (700 ms), target_chars/target_ms are
+# subtitle-line sizing.
 _CUE_GAP_MS = 700
-_CUE_MAX_MS = 6000
+_CUE_TARGET_MS = 4000
+_CUE_TARGET_CHARS = 42
 
 
-def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, max_cue_ms=_CUE_MAX_MS):
-    """Group consecutive Whisper word-pieces into subtitle-length phrase cues.
+def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
+                           target_chars=_CUE_TARGET_CHARS):
+    """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
 
     `words` is a list of (text, start_ms, end_ms). Whisper word-pieces for spaceless
-    Thai are sub-word, but each carries its own leading space at word boundaries, so
-    concatenating the pieces in a cue reconstructs correctly spaced text. A new cue
-    starts on a silence gap >= gap_ms or once the current cue would exceed max_cue_ms.
+    Thai are sub-word and only sporadically carry a leading space, so they cannot be
+    used to find word boundaries — a long spaceless run would never break. Instead we
+    rebuild the full text with a per-character timeline, segment it with pythainlp
+    (Latin/whitespace preserved), and group whole words into cues. A new cue starts on
+    a silence gap >= gap_ms or once the cue reaches target_ms / target_chars.
     Returns list of (text, start_ms, end_ms).
     """
-    groups: list[list] = []
-    cur: list = []
-    for w in words:
-        # Only break at a word boundary — a piece whose text starts with a space.
-        # Mid-word sub-pieces (spaceless Thai) must never be split off, or a word
-        # like แล้ว gets cut across two cues.
-        at_word_start = w[0][:1].isspace()
-        if cur and at_word_start:
-            gap = w[1] - cur[-1][2]
-            span = w[2] - cur[0][1]
-            if gap >= gap_ms or span > max_cue_ms:
-                groups.append(cur)
-                cur = []
-        cur.append(w)
-    if cur:
-        groups.append(cur)
+    from pythainlp.tokenize import word_tokenize
 
-    cues = []
-    for g in groups:
-        text = "".join(w[0] for w in g).strip()
+    # 1. per-character timeline (each char inherits its source piece's span)
+    chartime: list[tuple[int, int]] = []
+    chars: list[str] = []
+    for txt, s, e in words:
+        for ch in txt:
+            chars.append(ch)
+            chartime.append((s, e))
+    if not chars:
+        return []
+
+    # 2. real word boundaries (pythainlp keeps Latin runs and spaces intact)
+    toks = word_tokenize("".join(chars), keep_whitespace=True)
+
+    # 3. map each token back to its time span via the char timeline
+    timed: list[tuple[str, int, int]] = []
+    pos = 0
+    for t in toks:
+        start = chartime[pos][0]
+        end = chartime[pos + len(t) - 1][1]
+        pos += len(t)
+        timed.append((t, start, end))
+
+    # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
+    # kept once a real word follows in the same cue, so a cue never starts or ends on
+    # whitespace (a trailing space carries the next word's timing and would corrupt
+    # the cue's end time and the gap check).
+    cues: list[tuple[str, int, int]] = []
+    cur: list[tuple[str, int, int]] = []
+    pending_ws: list[tuple[str, int, int]] = []
+
+    def _close():
+        text = "".join(x[0] for x in cur).strip()
         if text:
-            cues.append((text, g[0][1], g[-1][2]))
+            cues.append((text, cur[0][1], cur[-1][2]))
+
+    for t, s, e in timed:
+        if not t.strip():
+            if cur:
+                pending_ws.append((t, s, e))
+            continue
+        if cur:
+            gap = s - cur[-1][2]
+            span = e - cur[0][1]
+            n_chars = len("".join(x[0] for x in cur).strip())
+            if gap >= gap_ms or span > target_ms or n_chars >= target_chars:
+                _close()
+                cur = []
+        if cur:
+            cur.extend(pending_ws)  # interior whitespace only
+        pending_ws = []
+        cur.append((t, s, e))
+    if cur:
+        _close()
     return cues
 
 
@@ -74,15 +112,19 @@ class FasterWhisperEngine(Engine):
 
     prefers_whole_file = True
 
-    def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda"):
+    def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda",
+                 compute_type: str | None = None):
         self._model_id = model_id
         self._device = device
+        # compute_type override lets an 8GB card fall back to int8_float16 if a
+        # large model OOMs at float16. None → pick a sane default per device.
+        self._compute_type = compute_type
         self._model = None
 
     def load(self) -> None:
         from faster_whisper import WhisperModel
 
-        compute_type = "float16" if self._device != "cpu" else "int8"
+        compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
         logger.info("Loading FasterWhisper: %s (%s)", self._model_id, compute_type)
         self._model = WhisperModel(self._model_id, device=self._device, compute_type=compute_type)
         logger.info("FasterWhisper loaded on %s", self._device)

@@ -57,10 +57,21 @@ makes it due. Owner: build-discipline.
   `python -m cutdeck.plan --job-id N` CLI). `cut_plan` table + store CRUD added.
   18 acceptance tests green in `tests/test_cutdeck_phase1.py`; Phase 0 + smoke
   unaffected. Determinism, padding-no-overlap, and min-clip invariants all proven.
-- **Phase 2 — next.** `xml_export.py` (FCP7 XML out). The single acceptance that
-  matters: a real 29.97 file imports clean into Premiere, frame-accurate at the
-  60-min mark. Per §B.6, do this before the LLM (Phase 5) — it is the riskiest
-  external interface. Note: GAP-2 (VFR refuse-to-export) is due here too.
+- **Phase 2 — BUILT (2026-06-19), real-import acceptance PENDING.**
+  `cutdeck/xml_export.py`: CutPlan → FCP7 (xmeml v5) XML. One `<sequence>`, video
+  track + 2 linked audio tracks (stereo), one clipitem per KEEP span laid
+  end-to-end, all referencing a single `<file>` listing. Frame math via
+  `timebase.ms_to_frame` only; rate emitted as integer timebase + ntsc flag.
+  GAP-2 satisfied: VFR timebase → export refuses. Round-trip key
+  `cd{job}_p{plan}_s{span}` on clip name + comments. CLI:
+  `python -m cutdeck.xml_export --job-id N` (or `--plan-id N`), writes the file
+  and flips plan status to `exported`. 3 acceptance tests in
+  `tests/test_cutdeck_xml_export.py` (frame accuracy/contiguity, VFR refusal, no-
+  keep refusal); phase0/1 + smoke unaffected (35 green). **The acceptance that
+  actually matters is still open:** a real 29.97 file must import clean into
+  Premiere, frame-accurate at the 60-min mark, audio linked, no offline media —
+  verify on the real machine. Untested in the wild: stereo link layout and the
+  Windows `file://localhost/C%3A/` pathurl form.
 - Deferred within Phase 1: `cut_correction` table is **not** added yet (it is the
   Phase 3 flywheel artifact); only `cut_plan` exists. The `Label` contract type
   exists but is unused until the LLM classifier (Phase 5) produces judgement

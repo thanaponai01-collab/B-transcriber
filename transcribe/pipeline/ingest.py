@@ -152,7 +152,10 @@ def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
     return output
 
 
-def _vad_chunks(audio: np.ndarray, sr: int) -> list[tuple[int, int]]:
+def _vad_chunks(audio: np.ndarray, sr: int,
+                threshold: float = 0.5,
+                min_speech_ms: int = 250,
+                min_silence_ms: int = 300) -> list[tuple[int, int]]:
     """Run Silero VAD; return list of (start_sample, end_sample) speech segments."""
     try:
         import torch
@@ -165,7 +168,9 @@ def _vad_chunks(audio: np.ndarray, sr: int) -> list[tuple[int, int]]:
         (get_speech_ts, *_) = utils
         speech_timestamps = get_speech_ts(
             torch.from_numpy(audio), model, sampling_rate=sr,
-            threshold=0.5, min_speech_duration_ms=250, min_silence_duration_ms=300,
+            threshold=threshold,
+            min_speech_duration_ms=min_speech_ms,
+            min_silence_duration_ms=min_silence_ms,
         )
         return [(s["start"], s["end"]) for s in speech_timestamps]
     except Exception as e:
@@ -198,7 +203,10 @@ def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -
     return spans
 
 
-def ingest(path: str, denoise: bool = True) -> IngestResult:
+def ingest(path: str, denoise: bool = True,
+           vad_threshold: float = 0.5,
+           vad_min_speech_ms: int = 250,
+           vad_min_silence_ms: int = 300) -> IngestResult:
     """
     Main ingestion entry point.
 
@@ -211,7 +219,12 @@ def ingest(path: str, denoise: bool = True) -> IngestResult:
     if denoise:
         audio = _apply_rolling_denoise(audio, sr)
 
-    segments = _vad_chunks(audio, sr)
+    segments = _vad_chunks(
+        audio, sr,
+        threshold=vad_threshold,
+        min_speech_ms=vad_min_speech_ms,
+        min_silence_ms=vad_min_silence_ms,
+    )
     logger.info("VAD found %d speech segments", len(segments))
 
     chunks = []
