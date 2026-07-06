@@ -75,11 +75,14 @@ def build_prompt(
     return " ".join(chosen)
 
 
-def build_prompt_ids(processor, device: str, bias_terms: list[str]):
+def build_prompt_ids(processor, device: str, bias_terms: list[str],
+                     budget_tokens: int = _BUDGET_TOKENS):
     """Build Whisper prompt_ids from bias terms within the token budget (GAP-5).
 
     Shared by both Whisper engine adapters — each just supplies its own
-    processor/device. Non-fatal: a prompt failure must never block ASR.
+    processor/device. ``budget_tokens`` comes from config.flywheel.bias_prompt_budget
+    when the engine threads it through; defaults to _BUDGET_TOKENS otherwise.
+    Non-fatal: a prompt failure must never block ASR.
     """
     if not bias_terms:
         return None
@@ -87,7 +90,7 @@ def build_prompt_ids(processor, device: str, bias_terms: list[str]):
         tok = processor.tokenizer
         prompt = build_prompt(
             [BiasTerm(t) for t in bias_terms],
-            budget_tokens=_BUDGET_TOKENS,
+            budget_tokens=budget_tokens,
             count_tokens=lambda s: len(tok(s, add_special_tokens=False).input_ids),
         )
         if not prompt:

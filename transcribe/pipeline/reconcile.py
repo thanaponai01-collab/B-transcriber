@@ -1,7 +1,8 @@
 """Phase 5 — Reconciler.
 
 SELECTS between candidate tokens. NEVER generates text that no engine proposed.
-The no-generation constraint is enforced by assertion in _pick().
+The no-generation constraint is enforced by an explicit raise in _pick() — not
+an assert, which vanishes under `python -O`.
 """
 
 from __future__ import annotations
@@ -12,6 +13,10 @@ from transcribe.contracts import RecognizedToken
 from transcribe.pipeline.align_hyp import AlignSlot
 
 logger = logging.getLogger(__name__)
+
+
+class ReconcilerViolation(RuntimeError):
+    """The reconciler emitted text no engine proposed — a select-only breach."""
 
 
 def _candidates_text(slot: AlignSlot) -> set[str]:
@@ -27,7 +32,7 @@ def _pick(
     Choose one token from the slot. Returns (token, source_engine).
     source_engine: 'a' | 'b' | 'both'
 
-    The assertion at the end guarantees no-generation.
+    The raise at the end guarantees no-generation.
     """
     a_tokens = slot.candidates_a
     b_tokens = slot.candidates_b
@@ -74,12 +79,13 @@ def _pick(
             else:
                 chosen, source = _script_fallback(ta, tb)
 
-    # ── No-generation assertion ───────────────────────────────────────────────
+    # ── No-generation guard (raise, not assert: survives python -O) ───────────
     allowed = _candidates_text(slot)
-    assert chosen.text in allowed, (
-        f"Reconciler produced text {chosen.text!r} not in candidate set {allowed!r}. "
-        "This violates the select-only rule."
-    )
+    if chosen.text not in allowed:
+        raise ReconcilerViolation(
+            f"Reconciler produced text {chosen.text!r} not in candidate set {allowed!r}. "
+            "This violates the select-only rule."
+        )
 
     return chosen, source
 
