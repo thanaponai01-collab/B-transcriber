@@ -38,6 +38,7 @@ def _lazy_load(name: str) -> None:
         "whisper_thai":  "transcribe.engines.whisper_thai",
         "faster_whisper": "transcribe.engines.faster_whisper",
         "whisper_multi": "transcribe.engines.whisper_multi",
+        "typhoon_rt":    "transcribe.engines.typhoon_rt",
         "funasr":        "transcribe.engines.funasr",
         "passthrough":   "transcribe.engines.null_engine",
     }

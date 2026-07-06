@@ -20,6 +20,7 @@ from pathlib import Path
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.engines.base import Engine
 from transcribe.engines.registry import register
+from transcribe.flywheel.inject import BiasTerm, build_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,17 @@ _DEFAULT_MODEL = str(Path(__file__).resolve().parents[2] / "models" / "whisper-t
 _CUE_GAP_MS = 700
 _CUE_TARGET_MS = 4000
 _CUE_TARGET_CHARS = 42
+
+
+def _is_cuda_oom(e: Exception) -> bool:
+    """True for a CUDA out-of-memory error, however the stack surfaces it."""
+    try:
+        import torch
+        if isinstance(e, torch.cuda.OutOfMemoryError):
+            return True
+    except Exception:
+        pass
+    return "out of memory" in str(e).lower()
 
 
 def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
@@ -113,21 +125,54 @@ class FasterWhisperEngine(Engine):
     prefers_whole_file = True
 
     def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda",
-                 compute_type: str | None = None):
+                 compute_type: str | None = None, beam_size: int = 5,
+                 cue_gap_ms: int = _CUE_GAP_MS, cue_max_ms: int = _CUE_TARGET_MS,
+                 bias_prompt_budget: int = 200, batch_size: int = 8):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
         # large model OOMs at float16. None → pick a sane default per device.
         self._compute_type = compute_type
+        self._beam_size = beam_size
+        self._cue_gap_ms = cue_gap_ms
+        self._cue_max_ms = cue_max_ms
+        self._bias_prompt_budget = bias_prompt_budget
+        self._batch_size = batch_size
         self._model = None
+        self._pipeline = None
 
     def load(self) -> None:
-        from faster_whisper import WhisperModel
+        from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
         logger.info("Loading FasterWhisper: %s (%s)", self._model_id, compute_type)
         self._model = WhisperModel(self._model_id, device=self._device, compute_type=compute_type)
-        logger.info("FasterWhisper loaded on %s", self._device)
+        # BatchedInferencePipeline VAD-segments the track and decodes voiced regions
+        # as parallel batches (WhisperX-style) — ~3× the sequential 30 s-window path
+        # on the 3070 (3.1). self._model is kept for tokenizer access + unload.
+        self._pipeline = BatchedInferencePipeline(model=self._model)
+        logger.info("FasterWhisper (batched) loaded on %s", self._device)
+
+    def _ct2_token_counter(self):
+        """CT2's own tokenizer counts prompt tokens (Thai is token-dense; a Latin
+        heuristic under-counts). Falls back to inject._approx_tokens if the
+        installed faster-whisper doesn't expose hf_tokenizer."""
+        tok = getattr(self._model, "hf_tokenizer", None)
+        if tok is None:
+            return None
+        try:
+            return lambda s: len(tok.encode(s).ids)
+        except Exception:
+            return None
+
+    def _build_bias_prompt(self, inp: EngineInput) -> str:
+        weights = inp.bias_weights or {}
+        terms = [BiasTerm(t, weight=float(weights.get(t, 1.0))) for t in inp.bias_terms]
+        return build_prompt(
+            terms,
+            budget_tokens=self._bias_prompt_budget,
+            count_tokens=self._ct2_token_counter(),  # None → inject's approx fallback
+        )
 
     def _load_array(self, inp: EngineInput):
         if inp.audio is not None:
@@ -136,35 +181,58 @@ class FasterWhisperEngine(Engine):
         audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
         return audio
 
+    def _transcribe_batched(self, audio, language_hint, initial_prompt):
+        """Decode via BatchedInferencePipeline, halving batch_size on CUDA OOM.
+
+        The batched API is a generator that runs inference lazily, so we
+        materialize it inside the try — that's where an OOM actually surfaces.
+        Mirrors _batch.py's OOM-halving philosophy without reusing it (that path
+        is HF-pipeline-specific). word_timestamps + the anti-hallucination knobs
+        are all supported by the batched signature (verified against fw 1.2.x)."""
+        import torch
+
+        bs = self._batch_size
+        while True:
+            try:
+                segments, _info = self._pipeline.transcribe(
+                    audio,
+                    language=language_hint or "th",
+                    task="transcribe",
+                    initial_prompt=initial_prompt,
+                    beam_size=self._beam_size,
+                    word_timestamps=True,
+                    # vad_filter: the pipeline VAD-segments the track (also kills
+                    # hallucination loops at the source).
+                    vad_filter=True,
+                    condition_on_previous_text=False,
+                    compression_ratio_threshold=2.4,
+                    log_prob_threshold=-1.0,
+                    no_speech_threshold=0.6,
+                    batch_size=bs,
+                )
+                return list(segments)  # materialize here so OOM lands in this try
+            except Exception as e:  # noqa: BLE001 — narrowed by _is_cuda_oom
+                if _is_cuda_oom(e) and bs > 1:
+                    bs = max(1, bs // 2)
+                    logger.warning("CUDA OOM in batched decode — retrying at batch_size=%d", bs)
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    continue
+                raise
+
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"
         audio = self._load_array(inp)
 
         # bias terms ride in as initial_prompt (CT2's native biasing channel).
-        initial_prompt = " ".join(inp.bias_terms) if inp.bias_terms else None
+        # GAP-5 / 5.1: budget-aware packing, ranked by learned weight (not insertion
+        # order), counted with CT2's own tokenizer so Thai token density is honoured.
+        initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms else None
 
-        # word_timestamps gives per-word boundaries so we can cut ~30s Whisper
-        # segments down to subtitle-length phrase cues. The pieces are sub-word for
-        # spaceless Thai, but _group_words_into_cues re-joins them — we never emit a
-        # raw per-character token.
-        segments, _info = self._model.transcribe(
-            audio,
-            language=inp.language_hint or "th",
-            task="transcribe",
-            initial_prompt=initial_prompt,
-            beam_size=5,
-            word_timestamps=True,
-            # vad_filter: faster-whisper's own VAD skips music/silence on the full
-            # track — this is what kills the hallucination loops at the source.
-            vad_filter=True,
-            condition_on_previous_text=False,
-            compression_ratio_threshold=2.4,
-            log_prob_threshold=-1.0,
-            no_speech_threshold=0.6,
-        )
+        segments = self._transcribe_batched(audio, inp.language_hint, initial_prompt)
 
         words = []
-        for seg in segments:  # generator — consuming it runs inference
+        for seg in segments:
             for w in (seg.words or []):
                 if w.word.strip():  # keep w.word verbatim (its leading space marks the word boundary)
                     words.append((w.word, int(w.start * 1000), int(w.end * 1000)))
@@ -174,17 +242,24 @@ class FasterWhisperEngine(Engine):
                 text=text, start_ms=start, end_ms=end,
                 confidence=None, script=detect_script(text),
             )
-            for text, start, end in _group_words_into_cues(words)
+            for text, start, end in _group_words_into_cues(
+                words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms)
         ]
 
         return EngineResult(
             tokens=tokens,
             engine_name="faster_whisper",
-            word_level_timestamps=True,  # phrase cues are final; skip re-align
-            raw={},
+            timestamps_final=True,  # phrase cues are final; skip re-align
+            # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
+            # cues; word granularity is re-derived on demand from here (CutDeck Phase
+            # 5 filler excision needs word-level cuts inside a cue).
+            raw={"words": [{"text": t, "start_ms": s, "end_ms": e} for t, s, e in words]},
         )
 
     def unload(self) -> None:
+        if self._pipeline is not None:
+            del self._pipeline
+            self._pipeline = None
         if self._model is not None:
             del self._model
             self._model = None

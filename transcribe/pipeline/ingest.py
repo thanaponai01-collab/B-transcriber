@@ -37,11 +37,17 @@ class SpeechSpan:
 class IngestResult:
     """Output of ingestion: the speech chunks fed to engines, plus the full
     speech/silence timeline (persisted to speech_span for CutDeck + the
-    hallucination filter) and the sample rate."""
+    hallucination filter) and the sample rate.
+
+    `audio` is the exact array the VAD/spans were derived from — raw for
+    whole-file engines (denoise skipped), denoised when a chunk engine is active.
+    run.py feeds THIS same array to the engine so the silence timeline and the
+    audio the engine hears can never desync (3.2)."""
     chunks: list[AudioChunk]
     spans: list[SpeechSpan]
     sample_rate: int
     duration_ms: int
+    audio: np.ndarray | None = None
 
 
 _AV_CONTAINERS = frozenset({
@@ -152,12 +158,14 @@ def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
     return output
 
 
-def _vad_chunks(audio: np.ndarray, sr: int,
-                threshold: float = 0.5,
-                min_speech_ms: int = 250,
-                min_silence_ms: int = 300) -> list[tuple[int, int]]:
-    """Run Silero VAD; return list of (start_sample, end_sample) speech segments."""
+def _load_silero():
+    """Load Silero VAD. Prefer the pip package `silero-vad` (no first-run network
+    fetch, no torch.hub supply-chain surface); fall back to torch.hub only if the
+    package is absent. Returns (model, get_speech_timestamps_fn)."""
     try:
+        from silero_vad import load_silero_vad, get_speech_timestamps
+        return load_silero_vad(onnx=False), get_speech_timestamps
+    except ImportError:
         import torch
         model, utils = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
@@ -165,7 +173,17 @@ def _vad_chunks(audio: np.ndarray, sr: int,
             force_reload=False,
             onnx=False,
         )
-        (get_speech_ts, *_) = utils
+        return model, utils[0]
+
+
+def _vad_chunks(audio: np.ndarray, sr: int,
+                threshold: float = 0.5,
+                min_speech_ms: int = 250,
+                min_silence_ms: int = 300) -> list[tuple[int, int]]:
+    """Run Silero VAD; return list of (start_sample, end_sample) speech segments."""
+    try:
+        import torch
+        model, get_speech_ts = _load_silero()
         speech_timestamps = get_speech_ts(
             torch.from_numpy(audio), model, sampling_rate=sr,
             threshold=threshold,
@@ -203,18 +221,50 @@ def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -
     return spans
 
 
+def _materialize_chunks(audio: np.ndarray, sr: int,
+                        segments: list[tuple[int, int]],
+                        overlap_ms: int) -> list[AudioChunk]:
+    """Cut speech chunks, extending each window by `overlap_ms` on both sides so
+    adjacent chunks overlap (GAP-4). The engine then transcribes each boundary
+    word in both chunks and stitch.py drops the duplicate — words are no longer
+    lost at segment seams. start_ms is the extended window's true global start, so
+    run.py's token offset stays correct."""
+    overlap = int(overlap_ms * sr / 1000)
+    n = len(audio)
+    chunks = []
+    for start_s, end_s in segments:
+        a = max(0, start_s - overlap)
+        b = min(n, end_s + overlap)
+        chunks.append(AudioChunk(
+            audio=audio[a:b],
+            start_ms=int(a * 1000 / sr),
+            end_ms=int(b * 1000 / sr),
+        ))
+    return chunks
+
+
 def ingest(path: str, denoise: bool = True,
            vad_threshold: float = 0.5,
            vad_min_speech_ms: int = 250,
-           vad_min_silence_ms: int = 300) -> IngestResult:
+           vad_min_silence_ms: int = 300,
+           audio: np.ndarray | None = None,
+           sr: int | None = None,
+           materialize_chunks: bool = True,
+           chunk_overlap_ms: int = 0) -> IngestResult:
     """
     Main ingestion entry point.
 
-    Returns an IngestResult: speech AudioChunks (denoised, 16kHz mono float32)
-    plus the full VAD speech/silence timeline (GAP-3) and the sample rate.
+    Returns an IngestResult: speech AudioChunks plus the full VAD speech/silence
+    timeline (GAP-3), the sample rate, and the array the timeline was derived from.
+
+    `audio`/`sr`: pass a pre-decoded array to avoid re-decoding (3.2 — run.py
+    decodes once). `materialize_chunks=False` skips chunk cutting entirely (whole-
+    file engines don't need them — only the span timeline). `chunk_overlap_ms`
+    (>0) makes adjacent chunks overlap so stitch.py can dedupe seam words.
     """
     logger.info("Ingesting: %s", path)
-    audio, sr = load_audio(path)
+    if audio is None:
+        audio, sr = load_audio(path)
 
     if denoise:
         audio = _apply_rolling_denoise(audio, sr)
@@ -227,14 +277,7 @@ def ingest(path: str, denoise: bool = True,
     )
     logger.info("VAD found %d speech segments", len(segments))
 
-    chunks = []
-    for start_s, end_s in segments:
-        chunk_audio = audio[start_s:end_s]
-        chunks.append(AudioChunk(
-            audio=chunk_audio,
-            start_ms=int(start_s * 1000 / sr),
-            end_ms=int(end_s * 1000 / sr),
-        ))
+    chunks = _materialize_chunks(audio, sr, segments, chunk_overlap_ms) if materialize_chunks else []
 
     spans = _build_spans(segments, len(audio), sr)
     return IngestResult(
@@ -242,4 +285,5 @@ def ingest(path: str, denoise: bool = True,
         spans=spans,
         sample_rate=sr,
         duration_ms=int(len(audio) * 1000 / sr),
+        audio=audio,
     )

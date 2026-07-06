@@ -41,7 +41,11 @@ CREATE TABLE IF NOT EXISTS correction (
     job_id         INTEGER NOT NULL REFERENCES job(id),
     token_idx      INTEGER NOT NULL,
     raw_text       TEXT    NOT NULL,
-    corrected_text TEXT    NOT NULL,
+    corrected_text TEXT    NOT NULL,   -- full corrected cue (audit + editor display)
+    -- 5.3: minimal changed word/phrase extracted from the cue diff. This — not the
+    -- whole ~7s cue — is the unit the flywheel promotes to a bias term. NULL on
+    -- pre-5.3 rows; promotion falls back to corrected_text for those.
+    corrected_span TEXT,
     error_type     TEXT,
     source_engine  TEXT    NOT NULL,
     -- GAP-7: coarse reason tag (misheard | spelling | code-switch boundary |

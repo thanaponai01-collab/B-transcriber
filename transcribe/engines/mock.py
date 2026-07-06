@@ -11,7 +11,9 @@ from transcribe.engines.registry import register
 class MockEngine(Engine):
     """Deterministic mock for testing. Returns predictable tokens from the audio path."""
 
-    def __init__(self, name: str = "mock", lang: str = "th"):
+    def __init__(self, name: str = "mock", lang: str = "th", **kwargs):
+        # **kwargs so config-driven per-engine overrides (device, compute_type, …)
+        # never break the test engine (2.3).
         self._name = name
         self._lang = lang
         self._loaded = False
@@ -32,7 +34,7 @@ class MockEngine(Engine):
         return EngineResult(
             tokens=tokens,
             engine_name=self._name,
-            word_level_timestamps=True,
+            timestamps_final=True,
             raw={"mock": True, "audio_path": inp.audio_path},
         )
 

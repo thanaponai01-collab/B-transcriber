@@ -10,11 +10,28 @@ engine_batch_size: 4   # chunks per forward pass when an engine supports batched
                         # auto-halves on CUDA OOM (variable-length VAD chunks get padded to
                         # the longest one in a batch, so peak VRAM varies even at fixed batch_size)
 
+# Per-engine construction overrides (2.3), keyed by registry name. run.py forwards
+# the matching block as kwargs to the engine constructor — an engine/model/compute
+# swap is a YAML edit only. Engines that don't accept a key (passthrough/mock) get
+# device only. To swap to Typhoon Turbo CT2 or int8_float16, edit here — no code.
+engines:
+  faster_whisper:
+    # model_id: models/whisper-th-medium-ct2   # or models/typhoon-whisper-turbo-ct2
+    compute_type: float16                        # int8_float16 frees 8GB headroom for larger batch_size
+    beam_size: 5
+    cue_gap_ms: 700
+    cue_max_ms: 4000
+    bias_prompt_budget: 200
+    batch_size: 8                                # BatchedInferencePipeline parallel batch (3.1);
+                                                 # auto-halves on CUDA OOM. Raise with int8_float16 headroom.
+
 # Ingestion
 denoise: true
-vad_threshold: 0.5
+vad_threshold: 0.35        # Thai sentence-final particles (ครับ/ค่ะ) get cut at 0.5
 vad_min_speech_ms: 250
-vad_min_silence_ms: 300
+vad_min_silence_ms: 500    # wider silence window keeps soft particles intact
+chunk_overlap_ms: 750       # GAP-4: adjacent VAD chunks overlap this much so stitch.py
+                            # dedupes seam words (only used when a chunk engine is active)
 conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources before frame export
 
 # Hallucination filtering (GAP-3): drop tokens that sit mostly inside VAD silence
