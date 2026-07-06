@@ -65,15 +65,26 @@ audio → ingest.py (denoise + VAD → chunks)
 
 - **Engine A** (`faster_whisper`, default): `biodatlab/whisper-th-medium-combined`
   converted to CTranslate2 (`models/whisper-th-medium-ct2`). Whole-file engine
-  (`prefers_whole_file=True`) — ~3.5× faster than realtime on the 3070, vs the HF
-  `transformers` path that is ~2× *slower* than realtime. Returns segment-level
-  cues. Convert the model per the comment in `requirements.txt`.
+  (`prefers_whole_file=True`) run through `BatchedInferencePipeline` (VAD-batched
+  parallel decode; auto-halves `batch_size` on CUDA OOM). Returns phrase cues with
+  final timestamps. Convert the model per the comment in `requirements.txt`.
 - **Engine A alt** (`whisper_thai`): same checkpoint via HF `transformers` — kept
   as a fallback; per-chunk, word-level, much slower on 8 GB VRAM.
 - **Engine B** (`whisper_multi`): `openai/whisper-large-v3` — multilingual generalist / code-switch slot. Runs on Python 3.13 (transformers). A real second hypothesis, so cross-engine agreement is a live confidence signal.
+- **`typhoon_rt`**: SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. Adapter built; **not activated** (NeMo Py3.13 wheel unverified; activation is eval-gated — stays `passthrough` until the gold set proves it lowers `cer_thai`/BER).
 - **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): registered but unavailable on Python 3.13 (editdistance has no wheel). Alternative generalist.
 - **`passthrough`** (null): single-engine fallback — Engine A only, no agreement signal.
 - **MockEngine** (`mock`): canned tokens, no GPU required — used for all pipeline tests
+
+**Token granularity (5.4):** tokens persisted to the DB are **phrase cues** (not
+words). `EngineResult.timestamps_final` (formerly `word_level_timestamps`) signals
+that a cue's timestamps are final, so the pipeline skips forced alignment + word
+expansion. Word granularity is **re-derived on demand** — faster-whisper keeps its
+raw per-word list in `EngineResult.raw["words"]` for CutDeck Phase 5 filler excision.
+
+**Per-engine config (2.3):** construction knobs live under `config["engines"][<name>]`
+(model_id, compute_type, beam_size, batch_size, cue thresholds, bias budget). `run.py`
+forwards the matching block as kwargs — an engine/model/compute swap is a YAML edit.
 
 ## Eval golden set format
 

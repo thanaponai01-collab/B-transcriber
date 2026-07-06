@@ -25,15 +25,29 @@ def _log_vram(stage: str) -> None:
 
 import re
 
-# A unit of 1+ chars repeated 3+ times in a row = a Whisper loop, not real text
-# (e.g. "อื้อฮือฮือฮือ…"). Collapse to a single copy. ponytail: 3+ identical
-# repeats of a substring is essentially never legitimate Thai/Latin; mai-yamok (ๆ)
-# carries genuine repetition.
-_LOOP_RE = re.compile(r"(.+?)\1{2,}")
+# Whisper loops are long units repeated many times (e.g. "อื้อฮือฮือฮือ…"). The
+# old blanket `(.+?)\1{2,}` corrupted real text: "2000"→"20", "555" (Thai
+# laughter)→"5", phone numbers, "www". faster-whisper already kills loops at the
+# source (condition_on_previous_text=False, vad_filter, compression/log-prob
+# thresholds), so this pass only needs to catch the rare residual — and must not
+# touch legitimate text.
+#   • ≥3-char units: 3+ repeats is a real loop (Whisper loops are long units).
+#   • ≤2-char units: need 5+ repeats before it's suspect ("www" survives).
+#   • digits-only / digits+punct tokens are never touched.
+_LOOP_RE_LONG = re.compile(r"(.{3,}?)\1{2,}")
+_LOOP_RE_SHORT = re.compile(r"(.{1,2})\1{4,}")
+_DIGITS_ONLY_RE = re.compile(r"^[\d\W_]+$")  # digits + punctuation, no letters (\w)
 
 
 def _collapse_loops(text: str) -> str:
-    return _LOOP_RE.sub(r"\1", text)
+    if _DIGITS_ONLY_RE.match(text):
+        return text  # 2000, 555, 0812345555 — never a loop
+    # Short units first: otherwise the ≥3-char pattern greedily eats a 2-char
+    # loop as a 4-char super-unit and only half-collapses it.
+    collapsed = _LOOP_RE_LONG.sub(r"\1", _LOOP_RE_SHORT.sub(r"\1", text))
+    if collapsed != text:
+        logger.info("Loop-collapse: %r → %r", text, collapsed)
+    return collapsed
 
 
 def _filter_hallucinations(tokens: list[PipelineToken], max_run: int = 3) -> list[PipelineToken]:
@@ -101,7 +115,7 @@ def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
     return result
 
 
-def _transcribe_with(engine, chunks, full_audio, bias_terms, language_hint, batch_size):
+def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint, batch_size):
     """Run one engine over the audio → (global-timestamped tokens, word_level).
 
     Whole-file engines get the full track in a single call (their own VAD and
@@ -111,25 +125,27 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, language_hint, batc
     """
     if getattr(engine, "prefers_whole_file", False):
         res = engine.transcribe(
-            EngineInput(audio=full_audio, bias_terms=bias_terms, language_hint=language_hint)
+            EngineInput(audio=full_audio, bias_terms=bias_terms,
+                        bias_weights=bias_weights, language_hint=language_hint)
         )
-        return res.tokens, res.word_level_timestamps
+        return res.tokens, res.timestamps_final
 
     inputs = [
-        EngineInput(audio=c.audio, bias_terms=bias_terms, language_hint=language_hint)
+        EngineInput(audio=c.audio, bias_terms=bias_terms,
+                    bias_weights=bias_weights, language_hint=language_hint)
         for c in chunks
     ]
     results = engine.transcribe_batch(inputs, batch_size=batch_size)
-    word_level = False
+    timestamps_final = False
     chunk_tokens: list[stitch.ChunkTokens] = []
     for c, r in zip(chunks, results):
-        word_level = word_level or r.word_level_timestamps
+        timestamps_final = timestamps_final or r.timestamps_final
         for tok in r.tokens:  # offset to global position
             tok.start_ms += c.start_ms
             tok.end_ms += c.start_ms
         chunk_tokens.append(stitch.ChunkTokens(r.tokens, c.start_ms, c.end_ms))
     # GAP-4: stitch drops duplicate words from any chunk-overlap windows.
-    return stitch.stitch(chunk_tokens), word_level
+    return stitch.stitch(chunk_tokens), timestamps_final
 
 
 def run_file(
@@ -146,8 +162,9 @@ def run_file(
     """
     conn = store.connect(db_path)
 
-    # Bias terms from flywheel
+    # Bias terms from flywheel (+ weights for budget-aware prompt ranking, 5.1)
     bias_terms = store.get_bias_term_strings(conn)
+    bias_weights = store.get_bias_term_weights(conn)
 
     engine_a_name = config["engine_a"]
     engine_b_name = config["engine_b"]
@@ -172,15 +189,54 @@ def run_file(
         logger.info("Timebase probe skipped (%s)", e)
 
     try:
-        # ── Phase 2: Ingestion ────────────────────────────────────────────────
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info("Using device: %s", device)
+        engine_batch_size = int(config.get("engine_batch_size", 8))
+
+        # Instantiate engines first (no weights loaded yet) to learn capabilities —
+        # whether a chunk engine is active decides whether ingest denoises and cuts
+        # chunks at all (3.2). Per-engine overrides live under config["engines"]
+        # [<registry name>] so a model/compute_type/beam swap is a YAML edit, never
+        # a code edit (2.3). Forwarded only to engines whose constructor accepts
+        # them, so passthrough/mock stay untouched.
+        engines_cfg = config.get("engines", {}) or {}
+
+        def _safe_get_engine(name: str):
+            kw = {"device": device, **engines_cfg.get(name, {})}
+            try:
+                return get_engine(name, **kw)
+            except TypeError:
+                # Engine doesn't accept these kwargs (e.g. passthrough, mock)
+                return get_engine(name, device=device)
+
+        engine_a = _safe_get_engine(engine_a_name)
+        engine_b = _safe_get_engine(engine_b_name)
+
+        def _is_chunk_engine(name: str, eng) -> bool:
+            # passthrough consumes nothing; whole-file engines want the raw track.
+            return name != "passthrough" and not getattr(eng, "prefers_whole_file", False)
+        chunk_engine_active = (_is_chunk_engine(engine_a_name, engine_a)
+                               or _is_chunk_engine(engine_b_name, engine_b))
+
+        # ── Phase 2: Ingestion — decode ONCE, share the array with the engines ─
+        audio_arr, sr = ingest.load_audio(audio_path)
         ingest_result = ingest.ingest(
             audio_path,
-            denoise=config.get("denoise", True),
+            # Denoise only helps chunk engines. Whole-file engines load the raw
+            # track, so denoising here burns ~1.8k file writes/hr and desyncs the
+            # silence timeline from the audio the engine actually hears (3.2).
+            denoise=config.get("denoise", True) and chunk_engine_active,
             vad_threshold=float(config.get("vad_threshold", 0.5)),
             vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
             vad_min_silence_ms=int(config.get("vad_min_silence_ms", 300)),
+            audio=audio_arr, sr=sr,
+            materialize_chunks=chunk_engine_active,
+            chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)) if chunk_engine_active else 0,
         )
         chunks = ingest_result.chunks
+        # The exact array the VAD/spans came from — feed it to the engine so the
+        # silence filter can never drop words the engine heard (3.2).
+        engine_audio = ingest_result.audio
         logger.info("Ingestion: %d chunks, %d VAD spans", len(chunks), len(ingest_result.spans))
 
         # Persist the VAD master timeline (GAP-3).
@@ -193,42 +249,13 @@ def run_file(
         ]
 
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info("Using device: %s", device)
-        engine_batch_size = int(config.get("engine_batch_size", 8))
-
-        # Instantiate (no weights loaded yet) to learn capabilities; load the full
-        # track once if any engine wants whole-file input.
-        # Optional per-engine overrides from config. Only forwarded to engines
-        # whose constructor accepts them, so passthrough/mock stay untouched.
-        def _engine_kwargs(model_key: str) -> dict:
-            kw = {"device": device}
-            model_id = config.get(model_key)
-            if model_id:
-                kw["model_id"] = model_id
-            ct = config.get("compute_type")
-            if ct:
-                kw["compute_type"] = ct
-            return kw
-
-        def _safe_get_engine(name: str, model_key: str):
-            try:
-                return get_engine(name, **_engine_kwargs(model_key))
-            except TypeError:
-                # Engine doesn't accept model_id/compute_type (e.g. passthrough, mock)
-                return get_engine(name, device=device)
-
-        engine_a = _safe_get_engine(engine_a_name, "engine_a_model")
-        engine_b = _safe_get_engine(engine_b_name, "engine_b_model")
-        full_audio = None
-        if engine_a.prefers_whole_file or engine_b.prefers_whole_file:
-            full_audio, _ = ingest.load_audio(audio_path)
+        full_audio = engine_audio if (engine_a.prefers_whole_file or engine_b.prefers_whole_file) else None
 
         _log_vram("pre-engine-a")
         engine_a.load()
         _log_vram("engine-a-loaded")
-        result_a_tokens, engine_a_word_level = _transcribe_with(
-            engine_a, chunks, full_audio, bias_terms, "th", engine_batch_size,
+        result_a_tokens, engine_a_timestamps_final = _transcribe_with(
+            engine_a, chunks, full_audio, bias_terms, bias_weights, "th", engine_batch_size,
         )
         engine_a.unload()
         del engine_a
@@ -239,7 +266,7 @@ def run_file(
         engine_b.load()
         _log_vram("engine-b-loaded")
         result_b_tokens, _ = _transcribe_with(
-            engine_b, chunks, full_audio, bias_terms, None, engine_batch_size,
+            engine_b, chunks, full_audio, bias_terms, bias_weights, None, engine_batch_size,
         )
         engine_b.unload()
         del engine_b
@@ -284,18 +311,19 @@ def run_file(
                 )
 
         # ── Phase 6c: Word-level expansion ───────────────────────────────────
-        # Engine A signals word_level_timestamps when it returned per-word spans.
-        if not engine_a_word_level:
+        # Engine A signals timestamps_final when its cue timestamps are already
+        # final (skip word expansion + forced alignment).
+        if not engine_a_timestamps_final:
             pipeline_tokens = _expand_to_words(pipeline_tokens)
             logger.info("After word expansion: %d words", len(pipeline_tokens))
 
         # ── Phase 7: Forced alignment ─────────────────────────────────────────
-        # Skip if Engine A already provided per-word timestamps.
-        if not engine_a_word_level:
-            audio_arr, sr = ingest.load_audio(audio_path)
+        # Skip if Engine A already provided final timestamps.
+        if not engine_a_timestamps_final:
+            # Reuse the already-decoded array — no third decode (3.2).
             words = [t.text for t in pipeline_tokens]
             forced = align_force.forced_align(
-                audio_arr, sr, words,
+                engine_audio, ingest_result.sample_rate, words,
                 aligner=align_force.CTCForcedAligner(device=device),
             )
             for t, f in zip(pipeline_tokens, forced):

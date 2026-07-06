@@ -57,7 +57,20 @@ def regressed(now: float, base: float, tol_frac: float = 1.02, abs_floor: float 
 # ── edit distance ─────────────────────────────────────────────────────────────
 
 def _edit_distance(ref: list | str, hyp: list | str) -> int:
-    """Levenshtein distance over any two indexable sequences (chars or words)."""
+    """Levenshtein distance over any two indexable sequences (chars or words).
+
+    Uses rapidfuzz (C, ~100× faster) when present — the harness reruns on every
+    bias update and a 15-min Thai gold set is ~10^8 pure-Python ops per signal.
+    Falls back to the pure-Python DP if rapidfuzz is absent.
+    """
+    try:
+        from rapidfuzz.distance import Levenshtein
+        return Levenshtein.distance(ref, hyp)
+    except ImportError:
+        return _edit_distance_py(ref, hyp)
+
+
+def _edit_distance_py(ref: list | str, hyp: list | str) -> int:
     n, m = len(ref), len(hyp)
     dp = list(range(m + 1))
     for i in range(1, n + 1):

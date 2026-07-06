@@ -32,13 +32,18 @@ def _start_editor() -> None:
     if _port_open(EDITOR_HOST, EDITOR_PORT):
         print(f"Editor already running on http://{EDITOR_HOST}:{EDITOR_PORT}")
         return
+    # CREATE_NEW_CONSOLE is Windows-only; on other platforms it doesn't exist and
+    # would raise AttributeError. Guard so the entry point runs anywhere.
+    popen_kwargs = {}
+    if sys.platform == "win32":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
     subprocess.Popen(
         [
             sys.executable, "-m", "uvicorn", "transcribe.editor.server:app",
             "--host", EDITOR_HOST, "--port", str(EDITOR_PORT),
         ],
         cwd=ROOT,
-        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        **popen_kwargs,
     )
     for _ in range(30):
         if _port_open(EDITOR_HOST, EDITOR_PORT):
