@@ -15,12 +15,17 @@ faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-convert
                         #     --copy_files tokenizer.json preprocessor_config.json
 funasr>=1.1.0
 openai-whisper>=20250625
+# Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree;
+# Python 3.13 wheel support UNVERIFIED — install only when activating typhoon_rt
+# (engine_b stays passthrough until the gold set eval-gates it). See TODO_LEDGER.
+# nemo_toolkit[asr]>=2.7.0
 
 # Thai NLP
 pythainlp>=5.0.0
 
 # VAD
-# Silero VAD loaded via torch.hub at runtime
+silero-vad>=5.1   # pip package — no torch.hub network fetch / supply-chain surface
+                  # (falls back to torch.hub if this package is absent)
 
 # Denoising
 deepfilternet>=0.5.6
@@ -32,3 +37,4 @@ pydantic>=2.0.0
 
 # Eval
 jiwer>=3.0.0
+rapidfuzz>=3.0.0   # C Levenshtein for eval metrics (~100× the pure-Python fallback)

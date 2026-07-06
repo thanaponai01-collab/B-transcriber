@@ -154,6 +154,7 @@ def save_corrections(job_id: int, req: SaveRequest):
             corrected_text=pair.corrected_text,
             source_engine=pair.source_engine,
             reason=pair.reason,
+            corrected_span=pair.corrected_span,
         )
 
     conn.close()

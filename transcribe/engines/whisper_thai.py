@@ -118,7 +118,7 @@ class WhisperThaiEngine(Engine):
         return EngineResult(
             tokens=tokens,
             engine_name="whisper_thai",
-            word_level_timestamps=bool(raw_chunks),
+            timestamps_final=bool(raw_chunks),
             raw={"chunks": raw_chunks},
         )
 
@@ -153,7 +153,7 @@ class WhisperThaiEngine(Engine):
             out.append(EngineResult(
                 tokens=tokens,
                 engine_name="whisper_thai",
-                word_level_timestamps=bool(raw_chunks),
+                timestamps_final=bool(raw_chunks),
                 raw={"chunks": raw_chunks},
             ))
         return out

@@ -30,6 +30,9 @@ class EngineInput:
     audio_path: Optional[str] = None
     audio: Optional[np.ndarray] = None  # pre-decoded 16kHz mono float32; skips disk I/O if set
     bias_terms: list[str] = field(default_factory=list)
+    # {term: weight} for budget-aware prompt ranking (5.1). Optional — engines that
+    # ignore it fall back to unit weight (insertion order).
+    bias_weights: dict = field(default_factory=dict)
     language_hint: Optional[str] = None  # "th", "en", or None
 
 
@@ -46,7 +49,11 @@ class RecognizedToken:
 class EngineResult:
     tokens: list[RecognizedToken]
     engine_name: str
-    word_level_timestamps: bool = False  # True when engine returned per-word spans
+    # True ⇒ these tokens carry final timestamps; the pipeline skips forced
+    # alignment and word expansion. (Renamed from word_level_timestamps: the
+    # faster-whisper tokens are phrase cues with final timestamps, not words —
+    # word granularity is re-derived on demand from `raw`. See CLAUDE.md 5.4.)
+    timestamps_final: bool = False
     raw: dict = field(default_factory=dict)  # untouched native output, for debugging
 
 

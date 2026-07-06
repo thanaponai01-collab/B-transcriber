@@ -53,6 +53,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
     # correction reason (GAP-7)
     _add("correction", "reason", "reason TEXT")
+    # sub-cue promotable span (5.3)
+    _add("correction", "corrected_span", "corrected_span TEXT")
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
@@ -105,6 +107,7 @@ class CorrectionRow:
     source_engine: str
     reason: Optional[str]
     created_at: str
+    corrected_span: Optional[str] = None
 
 
 @dataclass
@@ -280,11 +283,13 @@ def create_correction(
     source_engine: str,
     error_type: Optional[str] = None,
     reason: Optional[str] = None,
+    corrected_span: Optional[str] = None,
 ) -> int:
     cur = conn.execute(
-        """INSERT INTO correction (job_id, token_idx, raw_text, corrected_text, error_type, source_engine, reason)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (job_id, token_idx, raw_text, corrected_text, error_type, source_engine, reason),
+        """INSERT INTO correction
+             (job_id, token_idx, raw_text, corrected_text, corrected_span, error_type, source_engine, reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (job_id, token_idx, raw_text, corrected_text, corrected_span, error_type, source_engine, reason),
     )
     conn.commit()
     return cur.lastrowid
@@ -303,12 +308,15 @@ def get_all_corrections(conn: sqlite3.Connection) -> list[CorrectionRow]:
 
 
 def get_correction_counts(conn: sqlite3.Connection) -> list[tuple[str, str, int]]:
-    """Return (corrected_text, source_engine, count) aggregated in SQLite."""
+    """Return (term, source_engine, count) aggregated in SQLite.
+
+    `term` is the minimal promotable span (5.3) — COALESCE so pre-5.3 rows without
+    a span fall back to the full corrected cue."""
     rows = conn.execute(
-        "SELECT corrected_text, source_engine, COUNT(*) AS n "
-        "FROM correction GROUP BY corrected_text, source_engine"
+        "SELECT COALESCE(corrected_span, corrected_text) AS term, source_engine, COUNT(*) AS n "
+        "FROM correction GROUP BY term, source_engine"
     ).fetchall()
-    return [(r["corrected_text"], r["source_engine"], r["n"]) for r in rows]
+    return [(r["term"], r["source_engine"], r["n"]) for r in rows]
 
 
 # ── speech_span (VAD master timeline, GAP-3) ──────────────────────────────────
@@ -395,6 +403,12 @@ def get_bias_terms(conn: sqlite3.Connection) -> list[BiasTermRow]:
 
 def get_bias_term_strings(conn: sqlite3.Connection) -> list[str]:
     return [r.term for r in get_bias_terms(conn)]
+
+
+def get_bias_term_weights(conn: sqlite3.Connection) -> dict[str, float]:
+    """{term: weight} so prompt packing can rank by learned weight, not insertion
+    order (5.1)."""
+    return {r.term: r.weight for r in get_bias_terms(conn)}
 
 
 def delete_bias_term(conn: sqlite3.Connection, term: str) -> None:

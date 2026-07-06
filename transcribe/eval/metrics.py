@@ -42,10 +42,35 @@ class EvalMetrics:
     ref_switches: int           # reference switch-point count (aggregation weight)
 
 
+# ── regression gate ───────────────────────────────────────────────────────────
+
+def regressed(now: float, base: float, tol_frac: float = 1.02, abs_floor: float = 0.005) -> bool:
+    """True if `now` is worse than `base` by more than the allowed band.
+
+    Relative tolerance alone collapses to zero when base≈0 (0 * 1.02 == 0), so a
+    perfect or tiny baseline would trip the gate on any nonzero score. Floor the
+    band with an absolute slack (#6).
+    """
+    return now > max(base * tol_frac, base + abs_floor)
+
+
 # ── edit distance ─────────────────────────────────────────────────────────────
 
 def _edit_distance(ref: list | str, hyp: list | str) -> int:
-    """Levenshtein distance over any two indexable sequences (chars or words)."""
+    """Levenshtein distance over any two indexable sequences (chars or words).
+
+    Uses rapidfuzz (C, ~100× faster) when present — the harness reruns on every
+    bias update and a 15-min Thai gold set is ~10^8 pure-Python ops per signal.
+    Falls back to the pure-Python DP if rapidfuzz is absent.
+    """
+    try:
+        from rapidfuzz.distance import Levenshtein
+        return Levenshtein.distance(ref, hyp)
+    except ImportError:
+        return _edit_distance_py(ref, hyp)
+
+
+def _edit_distance_py(ref: list | str, hyp: list | str) -> int:
     n, m = len(ref), len(hyp)
     dp = list(range(m + 1))
     for i in range(1, n + 1):
