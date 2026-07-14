@@ -46,6 +46,9 @@ models/
 # Logs
 *.log
 
+# Transcript exports
+output/
+
 # Environment
 .env
 .env.*
