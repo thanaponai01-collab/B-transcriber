@@ -295,6 +295,14 @@ def create_correction(
     return cur.lastrowid
 
 
+def update_correction_span(conn: sqlite3.Connection, correction_id: int, corrected_span: str) -> None:
+    conn.execute(
+        "UPDATE correction SET corrected_span = ? WHERE id = ?",
+        (corrected_span, correction_id),
+    )
+    conn.commit()
+
+
 def get_corrections(conn: sqlite3.Connection, job_id: int) -> list[CorrectionRow]:
     rows = conn.execute(
         "SELECT * FROM correction WHERE job_id = ? ORDER BY token_idx", (job_id,)

@@ -45,10 +45,19 @@ def _extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRES
 
     Returns the full `corrected` when both sides are short (nothing to gain) or if
     no change is found. For "…ChatGBT…" → "…ChatGPT…" this yields "ChatGPT", not
-    the whole sentence."""
+    the whole sentence.
+
+    Diffs at word granularity, not characters: a character-level diff on Thai text
+    gets smeared across the whole cue when a short syllable (e.g. "อ" inside a
+    removed "อ๋อ") also recurs in unrelated nearby words, since SequenceMatcher
+    then treats most of the string as "changed". Word tokens don't have that
+    collision.
+    """
     if len(raw) <= threshold and len(corrected) <= threshold:
         return corrected
-    sm = difflib.SequenceMatcher(a=raw, b=corrected, autojunk=False)
+    raw_words = [w for (w, _s, _e) in _word_spans(raw)]
+    corr_words = [w for (w, _s, _e) in _word_spans(corrected)]
+    sm = difflib.SequenceMatcher(a=raw_words, b=corr_words, autojunk=False)
     lo = hi = None
     for tag, _i1, _i2, j1, j2 in sm.get_opcodes():
         if tag != "equal":
@@ -56,10 +65,18 @@ def _extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRES
             hi = j2 if hi is None else max(hi, j2)
     if lo is None:
         return corrected
-    # any word overlapping [lo, hi); zero-width change (pure deletion) picks the
-    # word straddling the point.
-    picked = [w for (w, s, e) in _word_spans(corrected) if s < max(hi, lo + 1) and e > lo]
-    return "".join(picked).strip() or corrected
+    hi = max(hi, lo + 1)
+    # Widen outward until the picked range has non-whitespace content — a pure
+    # deletion (e.g. dropping a filler word) can leave the diff straddling only
+    # a whitespace token, which would otherwise strip to "".
+    while True:
+        picked = "".join(corr_words[lo:hi]).strip()
+        if picked or (lo == 0 and hi >= len(corr_words)):
+            return picked or corrected
+        if lo > 0:
+            lo -= 1
+        if hi < len(corr_words):
+            hi += 1
 
 
 def diff_corrections(
