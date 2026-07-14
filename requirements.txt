@@ -22,6 +22,7 @@ openai-whisper>=20250625
 
 # Thai NLP
 pythainlp>=5.0.0
+python-crfsuite>=0.9  # pythainlp's crfcut sentence tokenizer (unpunctuated Thai text)
 
 # VAD
 silero-vad>=5.1   # pip package — no torch.hub network fetch / supply-chain surface

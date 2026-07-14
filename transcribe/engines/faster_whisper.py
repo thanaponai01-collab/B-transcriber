@@ -60,6 +60,20 @@ _SR = 16000
 _LONG_SPAN_SAFE_S = 25.0
 _LONG_SPAN_OVERLAP_S = 4.0
 
+# Truncated-tail recovery: faster-whisper occasionally stops generating well
+# before a window's audio actually ends (early EOS on a hard passage), then
+# stretches the *last* word's end-timestamp out to the window boundary to
+# fill the gap — so several real seconds of dropped speech show up as one
+# absurdly long "word" instead of an obvious hole. _TRUNCATION_TAIL_MS is how
+# long a single word's span has to be to count as suspicious;
+# _TRUNCATION_STRETCH_TOL_MS is how close its end has to land to the window's
+# own end to count as "stretched to fill". _TRUNCATION_LOOKBACK_MS bounds how
+# far back _find_safe_cut searches for a genuine inter-token pause to cut on.
+# See _recover_truncated_tail.
+_TRUNCATION_TAIL_MS = 1500
+_TRUNCATION_STRETCH_TOL_MS = 500
+_TRUNCATION_LOOKBACK_MS = 2500
+
 
 def _is_cuda_oom(e: Exception) -> bool:
     """True for a CUDA out-of-memory error, however the stack surfaces it."""
@@ -108,6 +122,33 @@ def _split_long_span(start_s: float, end_s: float,
     return windows
 
 
+def _sentence_boundary_offsets(text: str) -> list[int]:
+    """Character offsets in `text` where pythainlp's crfcut model believes a new
+    sentence begins (offset 0 excluded — the first token always starts a cue
+    regardless). crfcut is a CRF trained to segment *unpunctuated* running
+    text, which is what Whisper's raw Thai output is (no periods/commas) —
+    this is the intended use case, not a punctuation-based fallback.
+    Best-effort: any failure (missing optional dependency, model fetch
+    issue) degrades to no forced sentence breaks rather than raising, since
+    the gap/length heuristics below still produce usable cues on their own.
+    """
+    from pythainlp.tokenize import sent_tokenize
+
+    try:
+        sentences = sent_tokenize(text, engine="crfcut", keep_whitespace=True)
+    except Exception:
+        logger.warning("Sentence tokenization unavailable — cues will not be "
+                        "forced to start on sentence boundaries", exc_info=True)
+        return []
+    offsets = []
+    pos = 0
+    for sent in sentences:
+        if pos:
+            offsets.append(pos)
+        pos += len(sent)
+    return offsets
+
+
 def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                            target_chars=_CUE_TARGET_CHARS):
     """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
@@ -116,8 +157,15 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     Thai are sub-word and only sporadically carry a leading space, so they cannot be
     used to find word boundaries — a long spaceless run would never break. Instead we
     rebuild the full text with a per-character timeline, segment it with pythainlp
-    (Latin/whitespace preserved), and group whole words into cues. A new cue starts on
-    a silence gap >= gap_ms or once the cue reaches target_ms / target_chars.
+    (Latin/whitespace preserved), and group whole words into cues.
+
+    A cue must never start mid-sentence: a long sentence can still be split into
+    several cues (on a silence gap >= gap_ms, or once target_ms / target_chars is
+    hit, same as before), but a cue break is also forced at every sentence
+    boundary crfcut finds, so a cue never opens with the tail of one sentence
+    fused to the head of the next. Sentence detection on raw ASR output (no
+    punctuation, colloquial speech) is inherently imperfect — treat it as a
+    heuristic that reduces mid-sentence cue starts, not a guarantee.
     Returns list of (text, start_ms, end_ms).
     """
     from pythainlp.tokenize import word_tokenize
@@ -131,18 +179,23 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
             chartime.append((s, e))
     if not chars:
         return []
+    full_text = "".join(chars)
 
     # 2. real word boundaries (pythainlp keeps Latin runs and spaces intact)
-    toks = word_tokenize("".join(chars), keep_whitespace=True)
+    toks = word_tokenize(full_text, keep_whitespace=True)
 
-    # 3. map each token back to its time span via the char timeline
-    timed: list[tuple[str, int, int]] = []
+    # 2b. sentence-start offsets in the same char coordinates as `toks` below.
+    boundary_offsets = _sentence_boundary_offsets(full_text)
+    boundary_idx = 0
+
+    # 3. map each token back to its time span + char start via the char timeline
+    timed: list[tuple[str, int, int, int]] = []
     pos = 0
     for t in toks:
         start = chartime[pos][0]
         end = chartime[pos + len(t) - 1][1]
+        timed.append((t, start, end, pos))
         pos += len(t)
-        timed.append((t, start, end))
 
     # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
     # kept once a real word follows in the same cue, so a cue never starts or ends on
@@ -157,16 +210,23 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
         if text:
             cues.append((text, cur[0][1], cur[-1][2]))
 
-    for t, s, e in timed:
+    for t, s, e, char_pos in timed:
         if not t.strip():
             if cur:
                 pending_ws.append((t, s, e))
             continue
+        # Consume any sentence boundary at or before this token — forces a
+        # break here even if the gap/length heuristics wouldn't have broken
+        # on their own (e.g. no pause between "...ทั้งนั้น" and "อย่า...").
+        new_sentence = False
+        while boundary_idx < len(boundary_offsets) and char_pos >= boundary_offsets[boundary_idx]:
+            new_sentence = True
+            boundary_idx += 1
         if cur:
             gap = s - cur[-1][2]
             span = e - cur[0][1]
             n_chars = len("".join(x[0] for x in cur).strip())
-            if gap >= gap_ms or span > target_ms or n_chars >= target_chars:
+            if new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars:
                 _close()
                 cur = []
         if cur:
@@ -292,6 +352,68 @@ class FasterWhisperEngine(Engine):
                     ))
         return out
 
+    @staticmethod
+    def _find_safe_cut(tokens_before, anchor_ms, lookback_ms=_TRUNCATION_LOOKBACK_MS):
+        """Index of the token after which to cut, chosen as the largest
+        inter-token gap within lookback_ms of anchor_ms — an actual acoustic
+        pause Whisper's own timings already show, not an arbitrary time
+        offset. A fixed offset back from the suspicious word can land
+        mid-syllable regardless of how big it is (Thai subword pieces don't
+        align to word boundaries), which is what caused earlier attempts at
+        this fix to reproduce a stray syllable on both sides of the cut.
+        Returns None if there aren't at least two tokens within range to
+        compare (nothing to cut between)."""
+        in_range = [i for i, t in enumerate(tokens_before) if anchor_ms - t.end_ms <= lookback_ms]
+        if len(in_range) < 2:
+            return None
+        best_i, best_gap = None, -1
+        for i in range(in_range[0], len(tokens_before) - 1):
+            gap = tokens_before[i + 1].start_ms - tokens_before[i].end_ms
+            if gap > best_gap:
+                best_i, best_gap = i, gap
+        return best_i
+
+    def _recover_truncated_tail(self, tokens, sub_audio, common, bs, win_dur_ms):
+        """Detect and recover content dropped by an early-EOS decode within one
+        long-span window (see _TRUNCATION_TAIL_MS above for the failure mode).
+        One-shot: redecodes standalone from the nearest safe cut point (see
+        _find_safe_cut) to the window's end (a much shorter, easier decode)
+        and concatenates — no overlap-and-dedup splice, since Thai's lack of
+        clean word boundaries makes stitch.py's exact-text dedup miss the
+        resulting near-duplicates (verified empirically while building this:
+        a fixed-offset cut reproduced a stray syllable on both sides no
+        matter how the offset was tuned). No recursion — if the redecode
+        hits the same issue, its result is kept as-is."""
+        if not tokens:
+            return tokens, bs
+        last = tokens[-1]
+        dur = last.end_ms - last.start_ms
+        if dur < _TRUNCATION_TAIL_MS or win_dur_ms - last.end_ms > _TRUNCATION_STRETCH_TOL_MS:
+            return tokens, bs
+
+        cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
+        if cut_i is None:
+            return tokens, bs
+        kept = tokens[:cut_i + 1]
+        tail_start_ms = tokens[cut_i + 1].start_ms
+        tail_audio = sub_audio[int(tail_start_ms / 1000 * _SR):]
+        if len(tail_audio) < _SR * 0.5:
+            return tokens, bs
+
+        segments, bs = self._decode(tail_audio, None, False, common, bs)
+        tail_tokens = self._words_of(segments)
+        if not tail_tokens:
+            return tokens, bs
+        for t in tail_tokens:
+            t.start_ms += tail_start_ms
+            t.end_ms += tail_start_ms
+
+        merged = kept + tail_tokens
+        logger.info("Recovered truncated tail: suspect word spanned %d-%dms, "
+                    "redecoded from %.2fs -> %d token(s)",
+                    last.start_ms, last.end_ms, tail_start_ms / 1000, len(tail_tokens))
+        return merged, bs
+
     def _transcribe_batched(self, audio, language_hint, initial_prompt) -> list[tuple[str, int, int]]:
         """Decode the whole file, splitting+stitching any pause-free run too long
         for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
@@ -337,6 +459,8 @@ class FasterWhisperEngine(Engine):
                 sub_audio = audio[int(win_start * _SR):int(win_end * _SR)]
                 segments, bs = self._decode(sub_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
+                win_dur_ms = int(round((win_end - win_start) * 1000))
+                win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs, win_dur_ms)
                 for t in win_tokens:  # offset local → global
                     t.start_ms += int(win_start * 1000)
                     t.end_ms += int(win_start * 1000)
