@@ -49,6 +49,11 @@ models/
 # Transcript exports
 output/
 
+# Gold-set source video: audio (.mp3/.wav) + .json ground truth stay tracked,
+# but raw video clips are too large for GitHub (89MB tripped their 50MB
+# warning) — keep these local only, alongside the .json they belong to.
+transcribe/eval/goldenset/*.mp4
+
 # Environment
 .env
 .env.*
