@@ -4,6 +4,8 @@
     python -m tools.make_gold draft path/to/clip.wav --db transcriber.db --job-id 12
     # or draft by running the pipeline fresh
     python -m tools.make_gold draft path/to/clip.wav --run --config transcribe/config.yaml
+    # or draft from an already hand-corrected SRT (fastest path when one exists)
+    python -m tools.make_gold from-srt path/to/clip.srt --audio path/to/clip.wav
     # human edits eval/goldenset/<clip>.draft.json, then:
     python -m tools.make_gold freeze eval/goldenset/<clip>.draft.json
 
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -39,6 +42,50 @@ def _to_gold_token(t: dict) -> dict:
         "start_ms": t["start_ms"],
         "end_ms": t.get("end_ms", t["start_ms"]),
     }
+
+
+_SRT_TIME_RE = re.compile(
+    r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})"
+)
+
+
+def _srt_ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
+    return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms)
+
+
+def parse_srt(text: str) -> list[dict]:
+    """Parse SRT (or VTT-style comma/dot timestamps) into gold tokens.
+
+    Each cue becomes one phrase-cue token (5.4 granularity) with an
+    auto-detected script tag — matches what harness/make_gold consume."""
+    text = text.lstrip("﻿")
+    blocks = re.split(r"\r?\n\r?\n+", text.strip())
+    tokens: list[dict] = []
+    for block in blocks:
+        lines = [ln for ln in block.splitlines() if ln.strip() != ""]
+        if not lines:
+            continue
+        m = None
+        content_lines = lines
+        for i, ln in enumerate(lines):
+            m = _SRT_TIME_RE.search(ln)
+            if m:
+                content_lines = lines[i + 1:]
+                break
+        if not m:
+            continue
+        start_ms = _srt_ts_to_ms(*m.group(1, 2, 3, 4))
+        end_ms = _srt_ts_to_ms(*m.group(5, 6, 7, 8))
+        cue_text = " ".join(content_lines).strip()
+        if not cue_text:
+            continue
+        tokens.append({
+            "text": cue_text,
+            "script": detect_script(cue_text),
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+        })
+    return tokens
 
 
 def write_draft(audio_path: str, tokens: list[dict], goldenset: Path = _GOLDENSET) -> Path:
@@ -127,6 +174,10 @@ def main() -> None:
     d.add_argument("--run", action="store_true", help="run the pipeline fresh instead")
     d.add_argument("--config", default="transcribe/config.yaml")
 
+    s = sub.add_parser("from-srt", help="draft from an already hand-corrected SRT/VTT file")
+    s.add_argument("srt")
+    s.add_argument("--audio", required=True, help="source audio/video to pair with this SRT")
+
     f = sub.add_parser("freeze", help="validate + promote a draft to a frozen gold file")
     f.add_argument("draft")
     f.add_argument("--force", action="store_true", help="overwrite an existing frozen file")
@@ -144,6 +195,11 @@ def main() -> None:
             ap.error("choose a source: --job-id (with --db) or --run")
         out = write_draft(args.audio, tokens)
         print(f"[make_gold] wrote {out} ({len(tokens)} tokens) — hand-correct, then `freeze`.")
+    elif args.cmd == "from-srt":
+        tokens = parse_srt(Path(args.srt).read_text(encoding="utf-8-sig"))
+        out = write_draft(args.audio, tokens)
+        print(f"[make_gold] wrote {out} ({len(tokens)} tokens) from {args.srt} — "
+              f"review, then `freeze`.")
     elif args.cmd == "freeze":
         frozen = freeze(args.draft, force=args.force)
         print(f"[make_gold] froze {frozen.name} — run_harness will now consume it.")

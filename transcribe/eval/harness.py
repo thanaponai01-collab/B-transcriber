@@ -46,13 +46,18 @@ def _bias_hash(conn) -> str:
     return hashlib.sha256("\n".join(terms).encode()).hexdigest()[:16]
 
 
+def _media_extensions() -> tuple[str, ...]:
+    """Every extension the pipeline can actually ingest (audio + AV containers) —
+    a gold sample's source clip is frequently a raw video export, not audio-only."""
+    from transcribe.pipeline.ingest import _AV_CONTAINERS
+    return (".wav", ".mp3", ".flac") + tuple(sorted(_AV_CONTAINERS))
+
+
 def _load_goldenset() -> list[tuple[Path, list[dict]]]:
     """Return [(audio_path, ref_tokens), ...] for every sample in the golden set."""
     samples = []
     for gt_file in sorted(_GOLDENSET.glob("*.json")):
-        audio_candidates = [
-            gt_file.with_suffix(ext) for ext in (".wav", ".mp3", ".flac", ".m4a")
-        ]
+        audio_candidates = [gt_file.with_suffix(ext) for ext in _media_extensions()]
         audio_file = next((p for p in audio_candidates if p.exists()), None)
         if audio_file is None:
             print(f"[harness] WARNING: no audio for {gt_file.name}, skipping")
@@ -194,11 +199,16 @@ if __name__ == "__main__":
     parser.add_argument("--db", default="transcriber.db")
     parser.add_argument("--engine-b", help="Override engine_b for a one-command A/B "
                         "comparison, e.g. --engine-b typhoon_rt (4.2)")
+    parser.add_argument("--llm-enabled", action="store_true",
+                        help="Turn on the local-Ollama LLM reconciler tiebreak for this "
+                        "run, for an A/B comparison against the script fallback (Phase 3)")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     if args.engine_b:
         cfg["engine_b"] = args.engine_b
+    if args.llm_enabled:
+        cfg.setdefault("reconciler", {})["llm_enabled"] = True
     import sys
     result = run_harness(cfg, Path(args.db))
     if result is None or not result.passed:

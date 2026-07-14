@@ -2,8 +2,14 @@
 # Engine A: Thai specialist (Thonburian Whisper lineage)
 # Engine B: multilingual generalist (Whisper large-v3) — the code-switch slot.
 #           Real second hypothesis ⇒ cross-engine agreement is a live confidence
-#           signal. (FunASR is still registered but has no Python 3.13 wheel; set
-#           engine_b: passthrough to fall back to single-engine, Engine-A-only output.)
+#           signal. (FunASR/SenseVoiceSmall imports and runs fine on this venv
+#           (Python 3.11.9, hub="hf" set in engines/funasr.py) — it's no longer
+#           environment-blocked. It's off (passthrough) because activating it
+#           moves nothing on cer_thai/BER yet: reconcile._script_fallback trusts
+#           Engine A on every Thai-script disagreement, so any engine_b is inert
+#           on Thai-dominant footage until reconciler.llm_enabled is turned on below
+#           (Phase 3). Re-run the harness with engine_b: funasr once the LLM
+#           reconciler is gated on the gold set.)
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
@@ -16,7 +22,8 @@ engine_batch_size: 4   # chunks per forward pass when an engine supports batched
 # device only. To swap to Typhoon Turbo CT2 or int8_float16, edit here — no code.
 engines:
   faster_whisper:
-    # model_id: models/whisper-th-medium-ct2   # or models/typhoon-whisper-turbo-ct2
+    # model_id: models/whisper-th-medium-ct2   # tried models/typhoon-whisper-turbo-ct2
+    # (2026-07 gold-set eval): CER_thai 0.1336 vs 0.1069 for th-medium — turbo lost, reverted.
     compute_type: float16                        # int8_float16 frees 8GB headroom for larger batch_size
     beam_size: 5
     cue_gap_ms: 700
@@ -111,3 +118,17 @@ cut:
 segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split
+
+# Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
+# model served by `ollama serve`, never an external API. Off by default —
+# reconcile._pick() falls back to _script_fallback whenever llm_enabled is
+# false, Ollama isn't running, or the model isn't pulled (any exception from
+# llm_reconcile.make_llm_fn's callable is caught there). Requires
+# `ollama pull <model>` once, and `ollama serve` running locally, before
+# enabling.
+reconciler:
+  llm_enabled: false
+  ollama:
+    host: http://localhost:11434
+    model: qwen2.5:3b-instruct
+    timeout_s: 30   # first call after Ollama has unloaded the model can take >10s to reload

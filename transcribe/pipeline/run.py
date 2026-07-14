@@ -278,7 +278,12 @@ def run_file(
         logger.info("Alignment: %d slots", len(slots))
 
         # ── Phase 5: Reconciliation ───────────────────────────────────────────
-        reconciled = reconcile.reconcile(slots, bias_terms=bias_terms)
+        reconciler_cfg = config.get("reconciler", {}) or {}
+        llm_fn = None
+        if reconciler_cfg.get("llm_enabled", False):
+            from transcribe.pipeline.llm_reconcile import make_llm_fn
+            llm_fn = make_llm_fn(reconciler_cfg.get("ollama", {}))
+        reconciled = reconcile.reconcile(slots, bias_terms=bias_terms, llm_fn=llm_fn)
         logger.info("Reconciled: %d tokens", len(reconciled))
 
         # ── Phase 6: Normalization ────────────────────────────────────────────

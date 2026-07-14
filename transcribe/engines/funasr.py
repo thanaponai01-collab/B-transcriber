@@ -34,6 +34,7 @@ class FunASREngine(Engine):
         logger.info("Loading FunASR: %s", self._model_id)
         self._model = AutoModel(
             model=self._model_id,
+            hub="hf",  # ModelScope (funasr's default hub) 404s for this model outside China
             trust_remote_code=True,
             vad_model="fsmn-vad",
             vad_kwargs={"max_single_segment_time": 30000},

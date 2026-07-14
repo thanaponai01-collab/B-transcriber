@@ -93,13 +93,16 @@ def _pick(
 def _script_fallback(
     ta: RecognizedToken, tb: RecognizedToken
 ) -> tuple[RecognizedToken, str]:
-    """Thai-script → Engine A; Latin-script → Engine B."""
-    script = ta.script  # use A's script as the tiebreaker
+    """Confidence decides when both engines report one; A's own script classification
+    of A's own output is a weak signal (circular on the hard Thai-disagreement case),
+    so it's only the tiebreaker when confidence can't decide."""
+    if ta.confidence is not None and tb.confidence is not None and ta.confidence != tb.confidence:
+        return (ta, "a") if ta.confidence > tb.confidence else (tb, "b")
+    script = ta.script
     if script == "thai":
         return ta, "a"
     if script == "latin":
         return tb, "b"
-    # Mixed or other: prefer whichever has higher confidence
     ca = ta.confidence or 0.0
     cb = tb.confidence or 0.0
     if ca >= cb:
