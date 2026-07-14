@@ -56,6 +56,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # sub-cue promotable span (5.3)
     _add("correction", "corrected_span", "corrected_span TEXT")
 
+    # job resumability (4.1, GAP-8)
+    _add("job", "job_phase", "job_phase TEXT")
+
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
 
@@ -80,6 +83,7 @@ class JobRow:
     pipeline_version: str
     created_at: str
     status: str
+    job_phase: Optional[str] = None
 
 
 @dataclass
@@ -108,6 +112,18 @@ class CorrectionRow:
     reason: Optional[str]
     created_at: str
     corrected_span: Optional[str] = None
+
+
+@dataclass
+class EngineResultRow:
+    id: int
+    job_id: int
+    engine_slot: str
+    engine_name: str
+    tokens_json: str
+    timestamps_final: bool
+    raw_words_json: Optional[str]
+    created_at: str
 
 
 @dataclass
@@ -236,6 +252,33 @@ def list_jobs(conn: sqlite3.Connection) -> list[JobRow]:
     return [JobRow(**dict(r)) for r in rows]
 
 
+def update_job_phase(conn: sqlite3.Connection, job_id: int, phase: str) -> None:
+    conn.execute("UPDATE job SET job_phase = ? WHERE id = ?", (phase, job_id))
+    conn.commit()
+
+
+def find_resumable_job(
+    conn: sqlite3.Connection,
+    media_id: int,
+    engine_a: str,
+    engine_b: str,
+    pipeline_version: str,
+) -> Optional[JobRow]:
+    """The most recent 'failed' job for this exact (media, engine pair, pipeline
+    version) — a crash mid-run leaves state we can resume from (4.1, GAP-8).
+    Engine/version must match exactly: swapping an engine invalidates any
+    persisted engine_result rows, so that job is not resumable, only re-runnable
+    as a fresh job."""
+    row = conn.execute(
+        "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
+        "AND pipeline_version = ? AND status = 'failed' ORDER BY id DESC LIMIT 1",
+        (media_id, engine_a, engine_b, pipeline_version),
+    ).fetchone()
+    if row is None:
+        return None
+    return JobRow(**dict(row))
+
+
 # ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(
@@ -270,6 +313,12 @@ def bulk_create_tokens(conn: sqlite3.Connection, rows: list[dict]) -> None:
 def get_tokens(conn: sqlite3.Connection, job_id: int) -> list[TokenRow]:
     rows = conn.execute("SELECT * FROM token WHERE job_id = ? ORDER BY idx", (job_id,)).fetchall()
     return [TokenRow(**dict(r)) for r in rows]
+
+
+def delete_tokens(conn: sqlite3.Connection, job_id: int) -> None:
+    """Clear a job's tokens before re-writing (idempotent final write on resume, 4.1)."""
+    conn.execute("DELETE FROM token WHERE job_id = ?", (job_id,))
+    conn.commit()
 
 
 # ── correction ────────────────────────────────────────────────────────────────
@@ -361,6 +410,54 @@ def get_speech_spans(conn: sqlite3.Connection, job_id: int) -> list[SpeechSpanRo
         "SELECT * FROM speech_span WHERE job_id = ? ORDER BY idx", (job_id,)
     ).fetchall()
     return [SpeechSpanRow(**dict(r)) for r in rows]
+
+
+def delete_speech_spans(conn: sqlite3.Connection, job_id: int) -> None:
+    """Clear spans for a job before re-inserting (idempotent re-ingest on resume, 4.1)."""
+    conn.execute("DELETE FROM speech_span WHERE job_id = ?", (job_id,))
+    conn.commit()
+
+
+# ── engine_result (4.1/4.2, GAP-8) ────────────────────────────────────────────
+
+def save_engine_result(
+    conn: sqlite3.Connection,
+    job_id: int,
+    engine_slot: str,
+    engine_name: str,
+    tokens_json: str,
+    timestamps_final: bool,
+    raw_words_json: Optional[str] = None,
+) -> int:
+    cur = conn.execute(
+        """INSERT INTO engine_result (job_id, engine_slot, engine_name, tokens_json, timestamps_final, raw_words_json)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(job_id, engine_slot) DO UPDATE SET
+             engine_name = excluded.engine_name,
+             tokens_json = excluded.tokens_json,
+             timestamps_final = excluded.timestamps_final,
+             raw_words_json = excluded.raw_words_json""",
+        (job_id, engine_slot, engine_name, tokens_json, int(timestamps_final), raw_words_json),
+    )
+    conn.commit()
+    if cur.lastrowid:
+        return cur.lastrowid
+    return conn.execute(
+        "SELECT id FROM engine_result WHERE job_id = ? AND engine_slot = ?",
+        (job_id, engine_slot),
+    ).fetchone()["id"]
+
+
+def get_engine_result(conn: sqlite3.Connection, job_id: int, engine_slot: str) -> Optional[EngineResultRow]:
+    row = conn.execute(
+        "SELECT * FROM engine_result WHERE job_id = ? AND engine_slot = ?",
+        (job_id, engine_slot),
+    ).fetchone()
+    if row is None:
+        return None
+    r = dict(row)
+    r["timestamps_final"] = bool(r["timestamps_final"])
+    return EngineResultRow(**r)
 
 
 # ── cut_plan (CutDeck Layer-4 artifact, Part B) ───────────────────────────────

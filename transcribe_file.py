@@ -73,9 +73,9 @@ def main() -> None:
         sys.exit(result.returncode)
 
     job_id = None
-    for line in reversed(result.stderr.splitlines()):
-        if "Job " in line and " done:" in line:
-            job_id = line.split("Job ", 1)[1].split(" done:", 1)[0].strip()
+    for line in reversed(result.stdout.splitlines()):
+        if line.startswith("JOB_ID="):
+            job_id = line.split("=", 1)[1].strip()
             break
     if job_id:
         subprocess.run(

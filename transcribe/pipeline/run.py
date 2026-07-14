@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import logging
 from pathlib import Path
 
 import torch
 
-from transcribe.contracts import EngineInput, PipelineToken, detect_script
+from transcribe.contracts import EngineInput, PipelineToken, RecognizedToken, detect_script
 from transcribe.db import store
 from transcribe.engines.registry import get_engine
 from transcribe.pipeline import align_force, align_hyp, ingest, normalize, reconcile, stitch
@@ -15,6 +17,22 @@ from transcribe.pipeline import align_force, align_hyp, ingest, normalize, recon
 logger = logging.getLogger(__name__)
 
 PIPELINE_VERSION = "1.0.0"
+
+# job_phase values (4.1, GAP-8): a resumed 'failed' job skips every phase up to
+# and including its last recorded one, reusing cached engine_result rows instead
+# of re-running GPU inference.
+_PHASE_ENGINE_A_DONE = "engine_a_done"
+_PHASE_ENGINE_B_DONE = "engine_b_done"
+_PHASE_RECONCILED = "reconciled"
+_PHASE_WRITTEN = "written"
+
+
+def _tokens_to_json(tokens: list[RecognizedToken]) -> str:
+    return json.dumps([dataclasses.asdict(t) for t in tokens])
+
+
+def _tokens_from_json(blob: str) -> list[RecognizedToken]:
+    return [RecognizedToken(**d) for d in json.loads(blob)]
 
 
 def _log_vram(stage: str) -> None:
@@ -116,19 +134,26 @@ def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
 
 
 def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint, batch_size):
-    """Run one engine over the audio → (global-timestamped tokens, word_level).
+    """Run one engine over the audio → (global-timestamped tokens, word_level, raw_words).
 
     Whole-file engines get the full track in a single call (their own VAD and
     segmentation is the point) and already return absolute timestamps. Chunk
     engines get the VAD chunks; we offset each chunk's tokens to global time and
     stitch overlaps.
+
+    raw_words (4.2): the engine's own per-word timestamp list, when it provides
+    one (`EngineResult.raw["words"]` — faster-whisper does; re-derived on demand
+    downstream, e.g. CutDeck Phase 5 filler excision, instead of discarded here.
+    Only captured for whole-file engines — chunk-engine raw words would need
+    per-chunk offsetting/restitching that isn't wired up yet.
     """
     if getattr(engine, "prefers_whole_file", False):
         res = engine.transcribe(
             EngineInput(audio=full_audio, bias_terms=bias_terms,
                         bias_weights=bias_weights, language_hint=language_hint)
         )
-        return res.tokens, res.timestamps_final
+        raw_words = res.raw.get("words") if isinstance(res.raw, dict) else None
+        return res.tokens, res.timestamps_final, raw_words
 
     inputs = [
         EngineInput(audio=c.audio, bias_terms=bias_terms,
@@ -145,7 +170,7 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
             tok.end_ms += c.start_ms
         chunk_tokens.append(stitch.ChunkTokens(r.tokens, c.start_ms, c.end_ms))
     # GAP-4: stitch drops duplicate words from any chunk-overlap windows.
-    return stitch.stitch(chunk_tokens), timestamps_final
+    return stitch.stitch(chunk_tokens), timestamps_final, None
 
 
 def run_file(
@@ -171,9 +196,24 @@ def run_file(
 
     # ── Media record ──────────────────────────────────────────────────────────
     media_id = store.create_media(conn, audio_path)
-    job_id = store.create_job(conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION)
+
+    # 4.1 (GAP-8): a 'failed' job for this exact media + engine pair + pipeline
+    # version is resumable — reuse it instead of starting over from scratch, so
+    # a crash after the (expensive, GPU-bound) engine passes doesn't cost them.
+    resume_job = store.find_resumable_job(conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION)
+    if resume_job is not None:
+        job_id = resume_job.id
+        resume_phase = resume_job.job_phase
+        logger.info("Resuming job %d from phase %r: %s", job_id, resume_phase, audio_path)
+    else:
+        job_id = store.create_job(conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION)
+        resume_phase = None
+        logger.info("Job %d started: %s", job_id, audio_path)
     store.update_job_status(conn, job_id, "running")
-    logger.info("Job %d started: %s", job_id, audio_path)
+
+    skip_engine_a = resume_phase in (_PHASE_ENGINE_A_DONE, _PHASE_ENGINE_B_DONE,
+                                      _PHASE_RECONCILED, _PHASE_WRITTEN)
+    skip_engine_b = resume_phase in (_PHASE_ENGINE_B_DONE, _PHASE_RECONCILED, _PHASE_WRITTEN)
 
     # ── Timebase probe (GAP-1) — best-effort; needs ffprobe + a video stream ──
     try:
@@ -183,7 +223,7 @@ def run_file(
         if tb.is_vfr:
             logger.warning(
                 "Job %d: source is VFR (variable frame rate) — frame-based export "
-                "requires a conformed CFR proxy (config ingest.conform_vfr)", job_id
+                "requires a conformed CFR proxy (config conform_vfr: true)", job_id
             )
     except Exception as e:
         logger.info("Timebase probe skipped (%s)", e)
@@ -239,7 +279,11 @@ def run_file(
         engine_audio = ingest_result.audio
         logger.info("Ingestion: %d chunks, %d VAD spans", len(chunks), len(ingest_result.spans))
 
-        # Persist the VAD master timeline (GAP-3).
+        # Persist the VAD master timeline (GAP-3). Ingestion isn't itself
+        # persisted across a resume (4.1) — it's cheap/CPU-only and deterministic,
+        # so it always re-runs; clear any spans a prior attempt already wrote so
+        # resuming doesn't duplicate them against the UNIQUE(job_id, idx) index.
+        store.delete_speech_spans(conn, job_id)
         store.bulk_create_speech_spans(conn, job_id, [
             {"idx": s.idx, "start_ms": s.start_ms, "end_ms": s.end_ms, "kind": s.kind}
             for s in ingest_result.spans
@@ -251,27 +295,50 @@ def run_file(
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
         full_audio = engine_audio if (engine_a.prefers_whole_file or engine_b.prefers_whole_file) else None
 
-        _log_vram("pre-engine-a")
-        engine_a.load()
-        _log_vram("engine-a-loaded")
-        result_a_tokens, engine_a_timestamps_final = _transcribe_with(
-            engine_a, chunks, full_audio, bias_terms, bias_weights, "th", engine_batch_size,
-        )
-        engine_a.unload()
+        if skip_engine_a:
+            cached_a = store.get_engine_result(conn, job_id, "a")
+            logger.info("Job %d: reusing cached engine-a result (resume)", job_id)
+            result_a_tokens = _tokens_from_json(cached_a.tokens_json)
+            engine_a_timestamps_final = cached_a.timestamps_final
+        else:
+            _log_vram("pre-engine-a")
+            engine_a.load()
+            _log_vram("engine-a-loaded")
+            result_a_tokens, engine_a_timestamps_final, raw_words_a = _transcribe_with(
+                engine_a, chunks, full_audio, bias_terms, bias_weights, "th", engine_batch_size,
+            )
+            engine_a.unload()
+            _log_vram("post-engine-a")
+            store.save_engine_result(
+                conn, job_id, "a", engine_a_name,
+                _tokens_to_json(result_a_tokens), engine_a_timestamps_final,
+                json.dumps(raw_words_a) if raw_words_a is not None else None,
+            )
+            store.update_job_phase(conn, job_id, _PHASE_ENGINE_A_DONE)
         del engine_a
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        _log_vram("post-engine-a")
 
-        _log_vram("pre-engine-b")
-        engine_b.load()
-        _log_vram("engine-b-loaded")
-        result_b_tokens, _ = _transcribe_with(
-            engine_b, chunks, full_audio, bias_terms, bias_weights, None, engine_batch_size,
-        )
-        engine_b.unload()
+        if skip_engine_b:
+            cached_b = store.get_engine_result(conn, job_id, "b")
+            logger.info("Job %d: reusing cached engine-b result (resume)", job_id)
+            result_b_tokens = _tokens_from_json(cached_b.tokens_json)
+        else:
+            _log_vram("pre-engine-b")
+            engine_b.load()
+            _log_vram("engine-b-loaded")
+            result_b_tokens, timestamps_final_b, raw_words_b = _transcribe_with(
+                engine_b, chunks, full_audio, bias_terms, bias_weights, None, engine_batch_size,
+            )
+            engine_b.unload()
+            _log_vram("post-engine-b")
+            store.save_engine_result(
+                conn, job_id, "b", engine_b_name,
+                _tokens_to_json(result_b_tokens), timestamps_final_b,
+                json.dumps(raw_words_b) if raw_words_b is not None else None,
+            )
+            store.update_job_phase(conn, job_id, _PHASE_ENGINE_B_DONE)
         del engine_b
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        _log_vram("post-engine-b")
 
         # ── Phase 4: Hypothesis alignment ────────────────────────────────────
         slots = align_hyp.align(result_a_tokens, result_b_tokens)
@@ -285,6 +352,7 @@ def run_file(
             llm_fn = make_llm_fn(reconciler_cfg.get("ollama", {}))
         reconciled = reconcile.reconcile(slots, bias_terms=bias_terms, llm_fn=llm_fn)
         logger.info("Reconciled: %d tokens", len(reconciled))
+        store.update_job_phase(conn, job_id, _PHASE_RECONCILED)
 
         # ── Phase 6: Normalization ────────────────────────────────────────────
         pipeline_tokens: list[PipelineToken] = [
@@ -349,9 +417,15 @@ def run_file(
             "source_engine": t.source_engine,
             "speaker_id": None,
         } for t in pipeline_tokens]
+        # A resumed job may have partially written tokens from the attempt that
+        # crashed after this point but before job_phase reached 'written' (4.1) —
+        # clear first so the UNIQUE(job_id, idx) index can't reject the re-write.
+        store.delete_tokens(conn, job_id)
         store.bulk_create_tokens(conn, db_rows)
+        store.update_job_phase(conn, job_id, _PHASE_WRITTEN)
         store.update_job_status(conn, job_id, "done")
         logger.info("Job %d done: %d tokens written", job_id, len(pipeline_tokens))
+        print(f"JOB_ID={job_id}", flush=True)
 
     except Exception:
         store.update_job_status(conn, job_id, "failed")

@@ -18,8 +18,14 @@ CREATE TABLE IF NOT EXISTS job (
     engine_b         TEXT    NOT NULL,
     pipeline_version TEXT    NOT NULL,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
-    status           TEXT    NOT NULL DEFAULT 'pending'
+    status           TEXT    NOT NULL DEFAULT 'pending',
     -- status: pending | running | done | failed
+    -- job_phase (4.1, resumability GAP-8): last completed pipeline phase, so a
+    -- re-run of a 'failed' job for the same media can skip finished (expensive,
+    -- GPU-bound) engine passes instead of redoing everything from a crash at
+    -- minute 45. NULL until the first phase completes.
+    -- phase: engine_a_done | engine_b_done | reconciled | written
+    job_phase        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS token (
@@ -90,6 +96,22 @@ CREATE TABLE IF NOT EXISTS bias_term (
     weight    REAL NOT NULL DEFAULT 1.0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (term)
+);
+
+-- Per-engine transcription output (4.1/4.2, GAP-8). Persisted so a resumed job
+-- never re-runs a completed engine pass, and so the raw per-word timestamp list
+-- (EngineResult.raw["words"]) survives for CutDeck Phase 5 filler excision
+-- instead of being discarded after the reconciler consumes cue-level tokens.
+CREATE TABLE IF NOT EXISTS engine_result (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id            INTEGER NOT NULL REFERENCES job(id),
+    engine_slot       TEXT    NOT NULL CHECK (engine_slot IN ('a', 'b')),
+    engine_name       TEXT    NOT NULL,
+    tokens_json       TEXT    NOT NULL,  -- list of RecognizedToken dicts, global-timestamped
+    timestamps_final  INTEGER NOT NULL DEFAULT 0,
+    raw_words_json    TEXT,              -- nullable: per-word timestamps (5.4/CutDeck Phase 5)
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (job_id, engine_slot)
 );
 
 CREATE TABLE IF NOT EXISTS eval_run (

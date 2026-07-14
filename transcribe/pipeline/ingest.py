@@ -108,33 +108,37 @@ def _rms_db(window: np.ndarray) -> float:
     return 20.0 * np.log10(rms)
 
 
-def _denoise_window(window: np.ndarray, sr: int, model, df_state, enhance_fn, df_load_fn) -> np.ndarray:
-    """Apply a pre-loaded DeepFilterNet model to one audio window."""
-    import tempfile, os
-    import soundfile as sf
+def _denoise_window(window: np.ndarray, sr: int, model, df_state, enhance_fn) -> np.ndarray:
+    """Apply a pre-loaded DeepFilterNet model to one audio window, in-memory.
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        tmp = f.name
+    4.4: the previous version round-tripped through a temp WAV per window
+    (~1.8k file writes/hr at the 2s window size) purely to satisfy
+    `load_audio`'s file-path signature. Build the tensor directly instead."""
+    import torch
+
     try:
-        sf.write(tmp, window, sr)
-        audio_t, _ = df_load_fn(tmp, df_state.sr())
+        df_sr = df_state.sr()
+        src = window if sr == df_sr else _resample(window, sr, df_sr)
+        audio_t = torch.from_numpy(src).float().unsqueeze(0)
         enhanced = enhance_fn(model, df_state, audio_t)
         out = enhanced.squeeze().numpy() if hasattr(enhanced, "numpy") else np.array(enhanced)
-        if df_state.sr() != sr:
-            import librosa
-            out = librosa.resample(out, orig_sr=df_state.sr(), target_sr=sr)
+        if df_sr != sr:
+            out = _resample(out, df_sr, sr)
         return out.astype(np.float32)
     except Exception as e:
         logger.warning("Window denoise failed (%s), using original", e)
         return window
-    finally:
-        os.unlink(tmp)
+
+
+def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+    import librosa
+    return librosa.resample(audio, orig_sr=orig_sr, target_sr=target_sr)
 
 
 def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
     """Apply DeepFilterNet only to windows whose RMS exceeds the noise threshold."""
     try:
-        from df.enhance import enhance, init_df, load_audio as df_load
+        from df.enhance import enhance, init_df
         model, df_state, _ = init_df()  # load once for all windows
     except Exception as e:
         logger.warning("DeepFilterNet unavailable (%s), skipping denoise", e)
@@ -150,7 +154,7 @@ def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
         end = min(start + window_samples, len(audio))
         window = audio[start:end]
         if _rms_db(window) > _NOISE_DB_THRESHOLD:
-            output[start:end] = _denoise_window(window, sr, model, df_state, enhance, df_load)
+            output[start:end] = _denoise_window(window, sr, model, df_state, enhance)
             denoised_count += 1
 
     if denoised_count:
