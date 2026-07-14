@@ -24,6 +24,17 @@ engines:
     bias_prompt_budget: 200
     batch_size: 8                                # BatchedInferencePipeline parallel batch (3.1);
                                                  # auto-halves on CUDA OOM. Raise with int8_float16 headroom.
+    # This engine is whole-file (prefers_whole_file=True), so ingest.py's VAD never
+    # touches this audio — these mirror the top-level ingest.vad_threshold /
+    # vad_min_silence_ms values and feed the engine's own VAD pass (run in
+    # _transcribe_batched via _vad_speech_spans) instead of faster-whisper's
+    # defaults (threshold=0.5, min_silence_duration_ms=2000), which were clipping
+    # soft trailing speech and Thai sentence-final particles (ครับ/ค่ะ). Speech runs
+    # longer than ~25s with no pause near that boundary (faster-whisper's own
+    # aggressive-split point) are chopped into overlapping windows and stitched
+    # instead of cut arbitrarily mid-utterance — see _LONG_SPAN_SAFE_S.
+    vad_threshold: 0.35
+    vad_min_silence_ms: 500
 
 # Ingestion
 denoise: true
