@@ -132,9 +132,8 @@ def _sentence_boundary_offsets(text: str) -> list[int]:
     issue) degrades to no forced sentence breaks rather than raising, since
     the gap/length heuristics below still produce usable cues on their own.
     """
-    from pythainlp.tokenize import sent_tokenize
-
     try:
+        from pythainlp.tokenize import sent_tokenize
         sentences = sent_tokenize(text, engine="crfcut", keep_whitespace=True)
     except Exception:
         logger.warning("Sentence tokenization unavailable — cues will not be "

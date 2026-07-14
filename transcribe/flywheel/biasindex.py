@@ -87,6 +87,12 @@ def update_bias_index(
     # eat the prompt budget or bias toward phrase repetition.
     promoted = []
     for term, w in weighted.items():
+        # Deleting a hallucinated cue is a legitimate correction whose
+        # corrected text is "" — a valid signal for the corpus, but never a
+        # promotable term (an empty bias term would pollute the index and the
+        # prompt, and _classify_term would crash on term[0]).
+        if not term or not term.strip():
+            continue
         if w >= min_occurrences and not _too_long_to_promote(term):
             term_type, script = _classify_term(term)
             store.upsert_bias_term(conn, term, term_type, script, "flywheel", min(w, 5.0))

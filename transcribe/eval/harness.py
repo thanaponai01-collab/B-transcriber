@@ -88,6 +88,16 @@ def run_harness(
         scratch_dir = Path(tempfile.mkdtemp(prefix="eval_scratch_"))
         scratch_db = scratch_dir / "scratch.db"
         store.init_db(scratch_db)
+        # run_file reads its bias index from the DB it runs against. A fresh
+        # scratch DB has no bias terms, so the eval would silently measure a
+        # prompt-less pipeline — the one thing a bias-update gate must not do.
+        # Mirror the live bias index into the scratch DB before any sample runs.
+        _src = store.connect(db_path)
+        _dst = store.connect(scratch_db)
+        for _t in store.get_bias_terms(_src):
+            store.upsert_bias_term(_dst, _t.term, _t.term_type, _t.script, _t.added_by, _t.weight)
+        _src.close()
+        _dst.close()
         def pipeline_fn(audio_path, cfg):
             return pipeline_run.run_file(str(audio_path), cfg, scratch_db)
 

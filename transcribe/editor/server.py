@@ -12,10 +12,8 @@ Endpoints:
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
-import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +25,6 @@ from transcribe.pipeline.align_force import export_srt, export_vtt
 
 _HERE = Path(__file__).parent
 _DB_PATH = Path("transcriber.db")
-_CONFIG_PATH = Path("config.yaml")
 
 app = FastAPI(title="Transcriber Editor")
 app.mount("/static", StaticFiles(directory=str(_HERE / "static"), html=True), name="static")
@@ -35,12 +32,6 @@ app.mount("/static", StaticFiles(directory=str(_HERE / "static"), html=True), na
 
 def _conn():
     return store.connect(_DB_PATH)
-
-
-def _config() -> dict:
-    if _CONFIG_PATH.exists():
-        return yaml.safe_load(_CONFIG_PATH.read_text(encoding="utf-8"))
-    return {}
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -77,6 +68,9 @@ def get_job(job_id: int):
         raise HTTPException(404, "Job not found")
     tokens = store.get_tokens(conn, job_id)
     media = store.get_media(conn, job.media_id)
+    # Merge saved corrections into the view: reopening a corrected job must show
+    # the corrected text, not silently present the raw ASR output again.
+    corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
     conn.close()
     return {
         "job": {
@@ -91,7 +85,9 @@ def get_job(job_id: int):
         "tokens": [
             {
                 "idx": t.idx,
-                "text": t.text,
+                "text": corrections.get(t.idx, t.text),
+                "raw_text": t.text,
+                "corrected": t.idx in corrections,
                 "start_ms": t.start_ms,
                 "end_ms": t.end_ms,
                 "script": t.script,
@@ -136,9 +132,10 @@ def save_corrections(job_id: int, req: SaveRequest):
         conn.close()
         raise HTTPException(404, "Job not found")
 
+    original = {t.idx: t for t in store.get_tokens(conn, job_id)}
     original_tokens = [
         {"idx": t.idx, "text": t.text, "source_engine": t.source_engine}
-        for t in store.get_tokens(conn, job_id)
+        for t in original.values()
     ]
     pairs = diff_corrections(
         original_tokens,
@@ -146,6 +143,8 @@ def save_corrections(job_id: int, req: SaveRequest):
     )
 
     for pair in pairs:
+        # create_correction replaces any prior row for this (job, token), so
+        # repeated saves refine the correction instead of stacking duplicates.
         store.create_correction(
             conn,
             job_id=job_id,
@@ -157,8 +156,19 @@ def save_corrections(job_id: int, req: SaveRequest):
             corrected_span=pair.corrected_span,
         )
 
+    # A token sent back matching its raw text is a revert: drop any stale
+    # correction so exports and the flywheel stop seeing the old edit.
+    reverted = 0
+    changed = {p.token_idx for p in pairs}
+    existing = {c.token_idx for c in store.get_corrections(conn, job_id)}
+    for t in req.tokens:
+        orig = original.get(t.idx)
+        if orig is not None and t.idx not in changed and t.idx in existing and t.text == orig.text:
+            store.delete_correction(conn, job_id, t.idx)
+            reverted += 1
+
     conn.close()
-    return {"saved": len(pairs)}
+    return {"saved": len(pairs), "reverted": reverted}
 
 
 @app.get("/jobs/{job_id}/export/srt")

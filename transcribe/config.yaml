@@ -60,14 +60,26 @@ normalization:
   exception_lexicon:
     - COVID-19
     - iPhone
+    - iPad
     - YouTube
+    - LINE OA        # before LINE: longest-first protection needs the longer form listed too
     - LINE
     - TikTok
     - Facebook
+    - Instagram
     - ChatGPT
     - GPT-4
     - AI
     - API
+    # Thai e-commerce / daily-life brands that show up constantly in creator speech
+    - Shopee
+    - Lazada
+    - Grab
+    - Netflix
+    - Google
+    - Zoom
+    - WiFi
+    - Premiere Pro
 
 # Eval regression gate: reject if a metric worsens by more than this fraction,
 # OR by more than regression_abs_floor in absolute terms — whichever band is

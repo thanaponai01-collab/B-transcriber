@@ -3,6 +3,28 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## IMPLEMENT_IMPROVEMENTS.md pass — executed 2026-07-14
+
+Fixed with tests (`tests/test_improvements_202607.py`, suite 116 green):
+harness scratch-DB bias-index mirroring (eval was running prompt-less);
+correction upsert per (job, token) + revert deletion (re-saves were stacking
+duplicate rows and inflating flywheel counts); editor job view merges saved
+corrections; empty corrected text never promoted as a bias term;
+`get_last_passing_eval` filters kind + id tie-break; mai-yamok spaced-repeat
+collapse; `sent_tokenize` import inside its best-effort try; exception lexicon
+expanded; dead `_config()` removed from editor server.
+
+**Environment truth (2026-07-14):** the working venv is **Python 3.11.9** —
+`funasr` and `editdistance` import fine. The "no Py3.13 wheel" blocker recorded
+below for FunASR/NeMo does not apply to this venv; Engine-B activation is
+eval-gated only. CLAUDE.md/config comments still say 3.13 — update them when
+Engine B lands.
+
+Remaining phases (gold set → typhoon-whisper-turbo Engine A → decorrelated
+Engine B → LLM reconciler → resumability/raw-word persistence → editor
+reason-tag/confidence UI): see IMPLEMENT_IMPROVEMENTS.md §2. **Due when:** Phase
+0 (gold set) is human work and unblocks every gate.
+
 ## HANDOFF_SPEED_AND_ROBUSTNESS — executed 2026-07-06
 
 Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests:

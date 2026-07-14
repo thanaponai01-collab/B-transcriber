@@ -285,6 +285,14 @@ def create_correction(
     reason: Optional[str] = None,
     corrected_span: Optional[str] = None,
 ) -> int:
+    # Latest correction wins per (job, token): a re-save of the same job must
+    # replace the earlier row, not stack a duplicate — stacked rows inflate the
+    # flywheel's occurrence counts (min_occurrences could be crossed by saving
+    # the same edit three times instead of by three independent corrections).
+    conn.execute(
+        "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
+        (job_id, token_idx),
+    )
     cur = conn.execute(
         """INSERT INTO correction
              (job_id, token_idx, raw_text, corrected_text, corrected_span, error_type, source_engine, reason)
@@ -293,6 +301,15 @@ def create_correction(
     )
     conn.commit()
     return cur.lastrowid
+
+
+def delete_correction(conn: sqlite3.Connection, job_id: int, token_idx: int) -> None:
+    """Remove the correction for one token (the user reverted it to the raw text)."""
+    conn.execute(
+        "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
+        (job_id, token_idx),
+    )
+    conn.commit()
 
 
 def update_correction_span(conn: sqlite3.Connection, correction_id: int, corrected_span: str) -> None:
@@ -450,9 +467,14 @@ def create_eval_run(
     return cur.lastrowid
 
 
-def get_last_passing_eval(conn: sqlite3.Connection) -> Optional[EvalRunRow]:
+def get_last_passing_eval(conn: sqlite3.Connection, kind: str = "transcribe") -> Optional[EvalRunRow]:
+    # Filter by kind so a future CutDeck cut-quality run can never become the
+    # transcription gate's baseline (or vice versa). id tie-breaks runs that
+    # land within the same datetime('now') second.
     row = conn.execute(
-        "SELECT * FROM eval_run WHERE passed = 1 ORDER BY ran_at DESC LIMIT 1"
+        "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? "
+        "ORDER BY ran_at DESC, id DESC LIMIT 1",
+        (kind,),
     ).fetchone()
     if row is None:
         return None

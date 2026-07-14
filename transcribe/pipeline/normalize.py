@@ -32,7 +32,9 @@ _THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 # Mai yamok (ๆ) = "repeat preceding word". Canonical form attaches it to the
 # word with no preceding whitespace; we do NOT expand it, because expansion
 # requires word segmentation (ambiguous). Collapse runs and strip leading space.
-_MAI_YAMOK = re.compile(r"\s*ๆ+")
+# The group repeats so space-separated runs ("เร็ว ๆ ๆ") collapse to a single ๆ
+# in one pass — r"\s*ๆ+" only handled contiguous repeats.
+_MAI_YAMOK = re.compile(r"(?:\s*ๆ)+")
 
 
 def _load_exception_lexicon(config: dict) -> list[str]:
