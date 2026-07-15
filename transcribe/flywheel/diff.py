@@ -40,7 +40,7 @@ def _word_spans(text: str) -> list[tuple[str, int, int]]:
     return spans
 
 
-def _extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRESHOLD) -> str:
+def extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRESHOLD) -> str:
     """Minimal changed region of `corrected` vs `raw`, expanded to word boundaries.
 
     Returns the full `corrected` when both sides are short (nothing to gain) or if
@@ -102,6 +102,6 @@ def diff_corrections(
                 corrected_text=corr["text"],
                 source_engine=orig.get("source_engine", "unknown"),
                 reason=corr.get("reason"),
-                corrected_span=_extract_changed_span(orig["text"], corr["text"]),
+                corrected_span=extract_changed_span(orig["text"], corr["text"]),
             ))
     return pairs

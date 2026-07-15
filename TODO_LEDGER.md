@@ -3,6 +3,46 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## diff-srt flywheel path — executed 2026-07-15
+
+The web editor's correction capture (diff.py) only matches original vs.
+corrected tokens by `idx`, which breaks the moment a final NLE pass (Premiere
+Pro: re-time, re-cut, merge, split cues) is fed back in — there was previously
+no path for that at all, and `update_bias_index` had zero production call
+sites (only tests called it, confirmed via grep).
+
+Built: `transcribe/srt_io.py` (parse_srt relocated out of tools/make_gold.py,
+which now re-exports it); `transcribe/flywheel/align_srt.py` (connected-
+components-over-time-overlap grouping — handles merge/split/deletion/insertion
+without special-casing each; a timebase-divergence guard measured as *matched
+coverage* rather than raw min/max span, so a normal edit that adds a trailing
+title/outro card doesn't false-positive as a wrong-file mismatch); promoted
+`diff.py`'s `_extract_changed_span` to public `extract_changed_span` for reuse
+(second concrete use). `scripts/learn_from_srt.py` CLI: prints a match/mismatch
+summary before writing anything (mirrors make_gold's draft→freeze ceremony),
+requires `--yes` or an interactive confirm, then writes corrections and (unless
+`--no-promote`) calls `update_bias_index(..., run_regression_gate=True)` —
+closing the promotion gap above. 19 new tests (`test_align_srt.py`,
+`test_learn_from_srt.py`); full suite 167 green.
+
+**Known simplification, not a bug:** a merged/split group's correction row is
+owned by the group's *lowest* original `token_idx` (the `correction` table is
+keyed one row per original token; there is no schema concept of a many-token
+group). Reopening that job in the web editor will only show that one idx as
+"corrected" — the other merged-away idxs still display raw text. **Due when:**
+the web editor needs accurate per-idx corrected-state display for a job that
+went through an SRT re-import — would need either a nullable
+`group_token_idxs` JSON column (additive migration, low regret) or a separate
+join table.
+
+**Also deferred:** `update_bias_index`'s real GPU regression-gate path (run_harness
+with pipeline_fn=None) is exercised only via monkeypatch in
+`test_learn_from_srt.py` — the gate's own pass/rollback correctness is already
+proven in `test_phase5_flywheel.py`, so this wasn't re-proven end-to-end on real
+audio. **Due when:** the gold set grows enough to make a real `learn_from_srt`
+promotion worth measuring (same gate as Engine B/LLM-reconciler, see the
+2026-07-15 entry below).
+
 ## IMPLEMENT_IMPROVEMENTS.md pass — executed 2026-07-14
 
 Fixed with tests (`tests/test_improvements_202607.py`, suite 116 green):
