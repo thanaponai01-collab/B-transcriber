@@ -2,14 +2,21 @@
 # Engine A: Thai specialist (Thonburian Whisper lineage)
 # Engine B: multilingual generalist (Whisper large-v3) — the code-switch slot.
 #           Real second hypothesis ⇒ cross-engine agreement is a live confidence
-#           signal. (FunASR/SenseVoiceSmall imports and runs fine on this venv
-#           (Python 3.11.9, hub="hf" set in engines/funasr.py) — it's no longer
-#           environment-blocked. It's off (passthrough) because activating it
-#           moves nothing on cer_thai/BER yet: reconcile._script_fallback trusts
-#           Engine A on every Thai-script disagreement, so any engine_b is inert
-#           on Thai-dominant footage until reconciler.llm_enabled is turned on below
-#           (Phase 3). Re-run the harness with engine_b: funasr once the LLM
-#           reconciler is gated on the gold set.)
+#           signal. (FunASR/SenseVoiceSmall imports and runs fine on this venv —
+#           it's no longer environment-blocked.) It's off (passthrough) because
+#           it was TRIED (2026-07-15 gold-set eval, --engine-b funasr) and the
+#           gate rejected it: CER_thai 0.1069 unchanged, BER 0.0 unchanged,
+#           WER_latin regressed 1.1164 vs 1.0205 (>2% tolerance) — reproduced
+#           exactly against an earlier same-day attempt, so not GPU noise.
+#           CER_thai can't move regardless of the LLM reconciler setting:
+#           SenseVoiceSmall's word-level output path always sets
+#           confidence=None (engines/funasr.py), so reconcile._script_fallback's
+#           confidence tiebreak never fires for it and every Thai-script
+#           disagreement still resolves to Engine A on script alone. FunASR can
+#           only ever win Latin-script disagreements, and it loses there too.
+#           Don't re-try funasr without fixing its confidence reporting first;
+#           try typhoon_rt or a Qwen3-ASR adapter instead (see
+#           IMPLEMENT_IMPROVEMENTS.md Phase 2).
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;

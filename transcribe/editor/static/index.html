@@ -36,6 +36,30 @@
   .token[data-script="thai"] { font-family: 'Sarabun', 'TH Sarabun New', system-ui, sans-serif; }
   .token[data-script="latin"] { font-family: monospace; }
 
+  /* A.2: tint cues the model itself was unsure about, so correction effort
+     goes where it's most needed. Border only (not background) so it composes
+     cleanly with .highlight during playback. */
+  .token.conf-low { border-color: #dc2626; border-width: 2px; }
+  .token.conf-mid { border-color: #f59e0b; border-width: 2px; }
+
+  /* GAP-7: one-tap reason tag, shown as a colored underline so it doesn't
+     compete with the confidence border. */
+  .token[data-reason="misheard"] { border-bottom: 3px solid #ef4444; }
+  .token[data-reason="spelling"] { border-bottom: 3px solid #f59e0b; }
+  .token[data-reason="code-switch"] { border-bottom: 3px solid #8b5cf6; }
+  .token[data-reason="name-term"] { border-bottom: 3px solid #06b6d4; }
+  .token[data-reason="style"] { border-bottom: 3px solid #ec4899; }
+
+  /* Corrected state wins visually over confidence tint — declared last so
+     the cascade favors it when both classes are present. */
+  .token.corrected { border-color: #16a34a; }
+
+  #reason-bar { padding: 6px 20px; background: #111; border-top: 1px solid #222; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+  #reason-bar .target { color: #888; margin-right: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #reason-bar button { padding: 3px 10px; background: #2a2a2a; border: 1px solid #444; color: #ccc; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
+  #reason-bar button.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+  #reason-bar button:disabled { opacity: 0.4; cursor: default; }
+
   #status-bar { padding: 4px 20px; font-size: 0.75rem; color: #888; background: #111; border-top: 1px solid #222; }
 </style>
 </head>
@@ -52,17 +76,30 @@
   <div id="audio-bar"><audio id="player" controls></audio></div>
   <div id="tokens"></div>
 </div>
+<div id="reason-bar">
+  <span class="target" id="reason-target">Click a token to tag it</span>
+  <button data-reason="misheard" disabled>Misheard</button>
+  <button data-reason="spelling" disabled>Spelling</button>
+  <button data-reason="code-switch" disabled>Code-switch</button>
+  <button data-reason="name-term" disabled>Name/term</button>
+  <button data-reason="style" disabled>Style</button>
+  <button data-reason="" disabled>Clear tag</button>
+</div>
 <div id="status-bar" id="status">Ready</div>
 
 <script>
 let currentJobId = null;
 let originalTokens = [];  // [{idx, text, source_engine}]
 let tokenEls = [];        // DOM elements, indexed by position
+let tokenReasons = new Map();  // idx -> reason tag, GAP-7
+let focusedIdx = null;         // idx of the token the reason bar currently targets
 
 const jobSelect = document.getElementById('job-select');
 const player    = document.getElementById('player');
 const tokensDiv = document.getElementById('tokens');
 const status    = document.getElementById('status-bar');
+const reasonBar = document.getElementById('reason-bar');
+const reasonTarget = document.getElementById('reason-target');
 
 async function loadJobs() {
   const res = await fetch('/jobs');
@@ -95,6 +132,8 @@ async function loadJob() {
 function renderTokens(tokens) {
   tokensDiv.innerHTML = '';
   tokenEls = [];
+  tokenReasons = new Map();
+  focusedIdx = null;
   tokens.forEach((t, i) => {
     const el = document.createElement('span');
     el.className = 'token';
@@ -102,16 +141,58 @@ function renderTokens(tokens) {
     el.dataset.script = t.script;
     el.dataset.startMs = t.start_ms;
     el.dataset.endMs = t.end_ms;
+    el.dataset.reason = '';
     el.contentEditable = 'true';
     el.textContent = t.text;
-    el.title = `${t.source_engine} | ${(t.start_ms/1000).toFixed(2)}s–${(t.end_ms/1000).toFixed(2)}s`;
+    el.title = `${t.source_engine} | ${(t.start_ms/1000).toFixed(2)}s–${(t.end_ms/1000).toFixed(2)}s` +
+               (t.confidence != null ? ` | conf ${t.confidence.toFixed(2)}` : '');
+    el.classList.toggle('corrected', !!t.corrected);
+    // A.2: tint cues the model was unsure about. No data (null) → no tint,
+    // since that's the common case (Engine B, corrections) not low confidence.
+    if (t.confidence != null) {
+      if (t.confidence < 0.6) el.classList.add('conf-low');
+      else if (t.confidence < 0.85) el.classList.add('conf-mid');
+    }
     el.addEventListener('click', () => {
       player.currentTime = t.start_ms / 1000;
+    });
+    el.addEventListener('focus', () => {
+      focusedIdx = t.idx;
+      updateReasonBar();
     });
     tokensDiv.appendChild(el);
     tokenEls.push(el);
   });
+  updateReasonBar();
 }
+
+function updateReasonBar() {
+  const buttons = reasonBar.querySelectorAll('button');
+  if (focusedIdx === null) {
+    reasonTarget.textContent = 'Click a token to tag it';
+    buttons.forEach(b => { b.disabled = true; b.classList.remove('active'); });
+    return;
+  }
+  const el = tokenEls.find(e => +e.dataset.idx === focusedIdx);
+  reasonTarget.textContent = el ? `Tag: "${el.textContent.trim()}"` : '';
+  const current = tokenReasons.get(focusedIdx) || '';
+  buttons.forEach(b => {
+    b.disabled = false;
+    b.classList.toggle('active', b.dataset.reason === current);
+  });
+}
+
+reasonBar.querySelectorAll('button[data-reason]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (focusedIdx === null) return;
+    const tag = btn.dataset.reason;
+    if (tag) tokenReasons.set(focusedIdx, tag);
+    else tokenReasons.delete(focusedIdx);
+    const el = tokenEls.find(e => +e.dataset.idx === focusedIdx);
+    if (el) el.dataset.reason = tag;
+    updateReasonBar();
+  });
+});
 
 // Sync highlight during playback
 player.addEventListener('timeupdate', () => {
@@ -130,6 +211,7 @@ async function saveCorrections() {
   const corrected = tokenEls.map(el => ({
     idx: +el.dataset.idx,
     text: el.textContent.trim(),
+    reason: tokenReasons.get(+el.dataset.idx) || null,
   }));
 
   const res = await fetch(`/jobs/${currentJobId}/save`, {

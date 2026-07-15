@@ -152,11 +152,13 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                            target_chars=_CUE_TARGET_CHARS):
     """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
 
-    `words` is a list of (text, start_ms, end_ms). Whisper word-pieces for spaceless
-    Thai are sub-word and only sporadically carry a leading space, so they cannot be
-    used to find word boundaries — a long spaceless run would never break. Instead we
-    rebuild the full text with a per-character timeline, segment it with pythainlp
-    (Latin/whitespace preserved), and group whole words into cues.
+    `words` is a list of (text, start_ms, end_ms, confidence) — confidence is the
+    source word-piece's probability, or None if the engine didn't report one.
+    Whisper word-pieces for spaceless Thai are sub-word and only sporadically
+    carry a leading space, so they cannot be used to find word boundaries — a
+    long spaceless run would never break. Instead we rebuild the full text with
+    a per-character timeline, segment it with pythainlp (Latin/whitespace
+    preserved), and group whole words into cues.
 
     A cue must never start mid-sentence: a long sentence can still be split into
     several cues (on a silence gap >= gap_ms, or once target_ms / target_chars is
@@ -165,17 +167,20 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     fused to the head of the next. Sentence detection on raw ASR output (no
     punctuation, colloquial speech) is inherently imperfect — treat it as a
     heuristic that reduces mid-sentence cue starts, not a guarantee.
-    Returns list of (text, start_ms, end_ms).
+    Returns list of (text, start_ms, end_ms, confidence) — confidence is the mean
+    of the constituent word-pieces' probabilities, or None if none carried one.
     """
     from pythainlp.tokenize import word_tokenize
 
-    # 1. per-character timeline (each char inherits its source piece's span)
+    # 1. per-character timeline (each char inherits its source piece's span + confidence)
     chartime: list[tuple[int, int]] = []
+    charconf: list[float | None] = []
     chars: list[str] = []
-    for txt, s, e in words:
+    for txt, s, e, conf in words:
         for ch in txt:
             chars.append(ch)
             chartime.append((s, e))
+            charconf.append(conf)
     if not chars:
         return []
     full_text = "".join(chars)
@@ -187,32 +192,36 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     boundary_offsets = _sentence_boundary_offsets(full_text)
     boundary_idx = 0
 
-    # 3. map each token back to its time span + char start via the char timeline
-    timed: list[tuple[str, int, int, int]] = []
+    # 3. map each token back to its time span + confidence + char start via the char timeline
+    timed: list[tuple[str, int, int, float | None, int]] = []
     pos = 0
     for t in toks:
         start = chartime[pos][0]
         end = chartime[pos + len(t) - 1][1]
-        timed.append((t, start, end, pos))
+        confs = [c for c in charconf[pos:pos + len(t)] if c is not None]
+        conf = sum(confs) / len(confs) if confs else None
+        timed.append((t, start, end, conf, pos))
         pos += len(t)
 
     # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
     # kept once a real word follows in the same cue, so a cue never starts or ends on
     # whitespace (a trailing space carries the next word's timing and would corrupt
     # the cue's end time and the gap check).
-    cues: list[tuple[str, int, int]] = []
-    cur: list[tuple[str, int, int]] = []
-    pending_ws: list[tuple[str, int, int]] = []
+    cues: list[tuple[str, int, int, float | None]] = []
+    cur: list[tuple[str, int, int, float | None]] = []
+    pending_ws: list[tuple[str, int, int, float | None]] = []
 
     def _close():
         text = "".join(x[0] for x in cur).strip()
         if text:
-            cues.append((text, cur[0][1], cur[-1][2]))
+            confs = [x[3] for x in cur if x[3] is not None]
+            conf = sum(confs) / len(confs) if confs else None
+            cues.append((text, cur[0][1], cur[-1][2], conf))
 
-    for t, s, e, char_pos in timed:
+    for t, s, e, conf, char_pos in timed:
         if not t.strip():
             if cur:
-                pending_ws.append((t, s, e))
+                pending_ws.append((t, s, e, conf))
             continue
         # Consume any sentence boundary at or before this token — forces a
         # break here even if the gap/length heuristics wouldn't have broken
@@ -231,7 +240,7 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
         if cur:
             cur.extend(pending_ws)  # interior whitespace only
         pending_ws = []
-        cur.append((t, s, e))
+        cur.append((t, s, e, conf))
     if cur:
         _close()
     return cues
@@ -347,7 +356,7 @@ class FasterWhisperEngine(Engine):
                 if w.word.strip():  # keep w.word verbatim (its leading space marks the word boundary)
                     out.append(RecognizedToken(
                         text=w.word, start_ms=int(w.start * 1000), end_ms=int(w.end * 1000),
-                        confidence=None, script=detect_script(w.word),
+                        confidence=w.probability, script=detect_script(w.word),
                     ))
         return out
 
@@ -413,7 +422,7 @@ class FasterWhisperEngine(Engine):
                     last.start_ms, last.end_ms, tail_start_ms / 1000, len(tail_tokens))
         return merged, bs
 
-    def _transcribe_batched(self, audio, language_hint, initial_prompt) -> list[tuple[str, int, int]]:
+    def _transcribe_batched(self, audio, language_hint, initial_prompt) -> list[tuple[str, int, int, float | None]]:
         """Decode the whole file, splitting+stitching any pause-free run too long
         for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
         the anti-hallucination knobs are all supported by the batched signature
@@ -432,7 +441,7 @@ class FasterWhisperEngine(Engine):
             no_speech_threshold=0.6,
         )
         bs = self._batch_size
-        words: list[tuple[str, int, int]] = []
+        words: list[tuple[str, int, int, float | None]] = []
 
         spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
         normal = [(s, e) for s, e in spans if e - s <= _LONG_SPAN_SAFE_S]
@@ -444,13 +453,13 @@ class FasterWhisperEngine(Engine):
             clip = [{"start": s, "end": e} for s, e in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
             for tok in self._words_of(segments):
-                words.append((tok.text, tok.start_ms, tok.end_ms))
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
         elif not long_spans:
             # No speech spans detected at all (rare) — fall back to faster-whisper's
             # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
             for tok in self._words_of(segments):
-                words.append((tok.text, tok.start_ms, tok.end_ms))
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         for span_start, span_end in long_spans:
             chunk_tokens = []
@@ -468,7 +477,7 @@ class FasterWhisperEngine(Engine):
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
                         span_start, span_end, len(chunk_tokens))
             for tok in stitch.stitch(chunk_tokens):
-                words.append((tok.text, tok.start_ms, tok.end_ms))
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])
         return words
@@ -487,9 +496,9 @@ class FasterWhisperEngine(Engine):
         tokens = [
             RecognizedToken(
                 text=text, start_ms=start, end_ms=end,
-                confidence=None, script=detect_script(text),
+                confidence=conf, script=detect_script(text),
             )
-            for text, start, end in _group_words_into_cues(
+            for text, start, end, conf in _group_words_into_cues(
                 words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms)
         ]
 
@@ -500,7 +509,7 @@ class FasterWhisperEngine(Engine):
             # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
             # cues; word granularity is re-derived on demand from here (CutDeck Phase
             # 5 filler excision needs word-level cuts inside a cue).
-            raw={"words": [{"text": t, "start_ms": s, "end_ms": e} for t, s, e in words]},
+            raw={"words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
         )
 
     def unload(self) -> None:

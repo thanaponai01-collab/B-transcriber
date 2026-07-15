@@ -24,10 +24,11 @@ def _tok(text, start_ms, end_ms):
 
 
 class _FakeWord:
-    def __init__(self, word, start, end):
+    def __init__(self, word, start, end, probability=0.9):
         self.word = word
         self.start = start
         self.end = end
+        self.probability = probability
 
 
 class _FakeSegment:

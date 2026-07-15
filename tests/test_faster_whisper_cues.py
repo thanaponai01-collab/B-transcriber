@@ -10,13 +10,22 @@ def test_splits_on_gap_and_preserves_text():
     # Sub-word Thai pieces; a >700ms gap forces a cue break. pythainlp finds the
     # word boundaries — the leading-space convention is not relied upon.
     words = [
-        ("โ", 0, 200), ("อ", 200, 300), ("เค", 300, 500),
-        (" โ", 600, 700), ("อ", 700, 750), ("เค", 750, 900),
-        (" แต", 4000, 4200), ("่", 4200, 4250), ("ละ", 4250, 4500),
+        ("โ", 0, 200, 0.9), ("อ", 200, 300, 0.9), ("เค", 300, 500, 0.9),
+        (" โ", 600, 700, 0.9), ("อ", 700, 750, 0.9), ("เค", 750, 900, 0.9),
+        (" แต", 4000, 4200, 0.9), ("่", 4200, 4250, 0.9), ("ละ", 4250, 4500, 0.9),
     ]
     cues = group(words, gap_ms=700)
     assert [c[0] for c in cues] == ["โอเค โอเค", "แต่ละ"]
     assert cues[0][1] == 0 and cues[0][2] == 900
+
+
+def test_cue_confidence_is_mean_of_constituent_words():
+    words = [
+        ("โ", 0, 200, 1.0), ("อ", 200, 300, 0.5), ("เค", 300, 500, None),
+    ]
+    cues = group(words, gap_ms=700)
+    assert len(cues) == 1
+    assert cues[0][3] == 0.75  # mean of 1.0 and 0.5; None words are excluded
 
 
 def test_spaceless_thai_run_still_splits():
@@ -27,7 +36,7 @@ def test_spaceless_thai_run_still_splits():
     t = 0
     for _ in range(8):
         for ch in word:
-            pieces.append((ch, t, t + 100))
+            pieces.append((ch, t, t + 100, 0.9))
             t += 100
     cues = group(pieces, gap_ms=700, target_ms=4000, target_chars=42)
     assert len(cues) >= 3                                  # actually splits
@@ -74,7 +83,7 @@ def test_group_words_forces_break_at_sentence_boundary_even_without_gap():
     words = []
     t = 0
     for ch in text:
-        words.append((ch, t, t + 50))
+        words.append((ch, t, t + 50, 0.9))
         t += 50
     cues = group(words, gap_ms=700, target_ms=4000, target_chars=42)
     assert len(cues) == 2
