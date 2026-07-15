@@ -35,10 +35,11 @@ python -m pytest tests/test_smoke.py::test_reconciler_no_generation -v
 **Pipeline flow (batch, offline):**
 ```
 audio → ingest.py (denoise + VAD → chunks)
-      → Engine A (whisper_thai) → EngineResult   # sequential, not parallel
-      → Engine B (funasr)       → EngineResult   # VRAM freed between engines
+      → Engine A (faster_whisper) → EngineResult   # sequential, not parallel
+      → Engine B (passthrough, none active) → EngineResult   # VRAM freed between engines
       → align_hyp.py (hypothesis-to-hypothesis alignment → AlignSlots)
-      → reconcile.py (select-only → (RecognizedToken, source_engine) pairs)
+      → reconcile.py (select-only → (RecognizedToken, source_engine) pairs; llm_fn hook
+        optionally tiebreaks disagreements via local Ollama, gated off by default)
       → normalize.py (script-boundary spacing + Thai cleanup)
       → align_force.py (final timestamps → token table + SRT/VTT)
       → editor/ (human corrections → diff.py → correction table → biasindex.py)
@@ -60,21 +61,59 @@ audio → ingest.py (denoise + VAD → chunks)
 - `speaker_id` on the `token` table is nullable and reserved for v2 diarization — do not remove it.
 - Corrections in the `correction` table carry `source_engine` so stale corrections from swapped-out models can be down-weighted by the flywheel (`stale_engine_weight: 0.2`).
 - The normalization exception lexicon (brands, mixed-script proper nouns, COVID-19, etc.) lives in `config.yaml` under `normalization.exception_lexicon`.
+- `job.job_phase` (`ingested → engine_a_done → engine_b_done → reconciled → written`) plus the `engine_result` table make jobs resumable: re-running a `failed` job for the same media sha256 reuses cached per-engine token lists instead of redoing finished work. `EngineResult.raw["words"]` (raw per-word timestamps, e.g. for CutDeck filler excision) is persisted there too.
 
 ## Current engines
 
-- **Engine A** (`faster_whisper`, default): `biodatlab/whisper-th-medium-combined`
+The working venv is **Python 3.11.9** (not 3.13, despite older comments
+elsewhere) — `funasr` and `editdistance` import fine in it. Engine-B
+candidates below are eval-gated, not environment-blocked.
+
+- **Engine A** (`faster_whisper`, active): `biodatlab/whisper-th-medium-combined`
   converted to CTranslate2 (`models/whisper-th-medium-ct2`). Whole-file engine
   (`prefers_whole_file=True`) run through `BatchedInferencePipeline` (VAD-batched
   parallel decode; auto-halves `batch_size` on CUDA OOM). Returns phrase cues with
   final timestamps. Convert the model per the comment in `requirements.txt`.
+  `typhoon-whisper-turbo` was tried as a replacement (2026-07) and **reverted**
+  — it regressed `cer_thai` to 0.1336 vs 0.1069 on the gold set despite its
+  published benchmark; see IMPLEMENT_IMPROVEMENTS.md Phase 1.
 - **Engine A alt** (`whisper_thai`): same checkpoint via HF `transformers` — kept
   as a fallback; per-chunk, word-level, much slower on 8 GB VRAM.
-- **Engine B** (`whisper_multi`): `openai/whisper-large-v3` — multilingual generalist / code-switch slot. Runs on Python 3.13 (transformers). A real second hypothesis, so cross-engine agreement is a live confidence signal.
-- **`typhoon_rt`**: SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. Adapter built; **not activated** (NeMo Py3.13 wheel unverified; activation is eval-gated — stays `passthrough` until the gold set proves it lowers `cer_thai`/BER).
-- **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): registered but unavailable on Python 3.13 (editdistance has no wheel). Alternative generalist.
-- **`passthrough`** (null): single-engine fallback — Engine A only, no agreement signal.
+- **Engine B active config: `passthrough`** (null) — single-engine fallback,
+  Engine A only, no agreement signal. Decorrelated candidates below are wired
+  and eval-tested but deliberately left inactive because the current 4-clip
+  gold set has zero Thai↔Latin code-switching (`switches=0`), so the harness
+  can't yet prove any of them earns its 2× runtime. See
+  IMPLEMENT_IMPROVEMENTS.md Phase 2.
+- **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter registered, deps import
+  fine on this venv (`hub="hf"` needed in `AutoModel(...)` — funasr defaults to
+  ModelScope, which 404s for this model outside China). Activating it produced
+  byte-identical harness metrics to `passthrough` until the `_script_fallback`
+  circularity was fixed (see reconciler note below) — still gated off pending
+  gold-set evidence.
+- **`whisper_multi`**: `openai/whisper-large-v3` — multilingual generalist /
+  code-switch slot, a real second hypothesis so cross-engine agreement would
+  be a live confidence signal if activated.
+- **`typhoon_rt`**: SCB10X Typhoon ASR Real-time (FastConformer-Transducer,
+  ~115M) via NeMo — decorrelated Engine B candidate. Adapter built + mock-tested;
+  NeMo not yet installed (should install clean on this Py3.11 venv, unlike the
+  Py3.13 risk originally logged). Do not install before growing the gold set —
+  it would hit the same "can't prove a lift" wall as `funasr`, not a
+  `typhoon_rt`-specific blocker.
 - **MockEngine** (`mock`): canned tokens, no GPU required — used for all pipeline tests
+
+**LLM reconciler tiebreak (`transcribe/pipeline/llm_reconcile.py`):** on an
+Engine A/B disagreement, `reconcile._pick()` can call an `llm_fn(ta, tb,
+bias_terms) -> 0|1` hook instead of falling straight to `_script_fallback`.
+`make_llm_fn()` wires this to a **local Ollama** instance (`qwen2.5:3b-instruct`
+over stdlib `urllib`, no external API) — an unreachable/unpulled model falls
+through to `_script_fallback` automatically. Gated off by default
+(`reconciler.llm_enabled: false` in config.yaml); the wiring is verified
+end-to-end but not yet proven to move `cer_thai`/BER for the same gold-set
+reason as Engine B above. `_script_fallback` no longer trusts Engine A's own
+script classification of its own output on every Thai disagreement — when both
+engines report a confidence, confidence decides first and script is only the
+final tiebreak.
 
 **Token granularity (5.4):** tokens persisted to the DB are **phrase cues** (not
 words). `EngineResult.timestamps_final` (formerly `word_level_timestamps`) signals

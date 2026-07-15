@@ -20,10 +20,18 @@ below for FunASR/NeMo does not apply to this venv; Engine-B activation is
 eval-gated only. CLAUDE.md/config comments still say 3.13 — update them when
 Engine B lands.
 
-Remaining phases (gold set → typhoon-whisper-turbo Engine A → decorrelated
-Engine B → LLM reconciler → resumability/raw-word persistence → editor
-reason-tag/confidence UI): see IMPLEMENT_IMPROVEMENTS.md §2. **Due when:** Phase
-0 (gold set) is human work and unblocks every gate.
+**Update (2026-07-15): all six phases executed.** Gold set live (4 clips);
+typhoon-whisper-turbo Engine A tried and reverted (lost the gate); decorrelated
+Engine B (`funasr`) wired and eval-tested but left `passthrough` (correctly
+gated — see below); LLM reconciler (`llm_reconcile.py`, local Ollama) wired and
+gated off (`llm_enabled: false`); resumability/raw-word persistence
+(`job_phase` + `engine_result` table) done; editor reason-tag/confidence/
+corrected-state UI done. `pytest tests/` → 148 passed. Full detail and
+resolution notes: IMPLEMENT_IMPROVEMENTS.md §2 (each phase now has a
+**Resolution** block). **Remaining due-when:** Engine B / LLM-reconciler
+activation is still gated on a gold set with real code-switch-heavy or
+noisy material — the current 4 clips have `switches=0`, so the gate can't yet
+prove either feature earns its runtime. Grow the gold set to make that call.
 
 ## HANDOFF_SPEED_AND_ROBUSTNESS — executed 2026-07-06
 

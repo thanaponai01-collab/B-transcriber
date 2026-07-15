@@ -13,6 +13,16 @@ observed here · **(trace-only)** = concluded by reading code, chain complete ·
 + 8 new acceptance tests) **(proven)**. Branch `master`, working tree carries this
 pass's changes uncommitted.
 
+**Status update (2026-07-15):** all six phases in §2 landed and are committed
+(`e9f8ed4` Phase 3, `3ed175f` Phase 4, `e6f58a1` Phase 6, `9a618f8` Phase 5).
+`pytest tests/` → **148 passed (proven)**. Two phases resolved to a deliberate
+"off" state rather than an activation — Phase 1 (Engine A swap reverted, lost
+the gate) and Phase 2 (Engine B stays `passthrough`, correctly gated pending a
+code-switch-heavy gold set) — see their resolution notes in §2 for why that is
+not unfinished work but an evidence-based decision. Nothing in this document
+remains to be executed; the only durable follow-up is the human step in Phase
+2's resolution (grow the gold set) and the residual risks in §3 below.
+
 ---
 
 ## 0. Ground truth discovered during the audit
@@ -131,7 +141,13 @@ hyp-vs-gold scoring. **Fix:** `(?:\s*ๆ)+` → `ๆ`. Test: `test_mai_yamok_col
 
 ## 2. The implementation plan (ordered by unblock-value)
 
-### Phase 0 — Author the gold set (human, ~2–3 h, unblocks everything)
+### Phase 0 — Author the gold set (human, ~2–3 h, unblocks everything) — **DONE (proven)**
+
+**Resolution (2026-07-14):** 4 clips frozen (Bangkok Festivals + Short1-3) via
+`tools/make_gold.py`. Baseline: `CER_thai=0.1069, WER_latin=1.0205, BER=0.0,
+thai_chars=2171, switches=0`. Note `switches=0` — none of the 4 clips has a
+Thai↔Latin boundary, so `boundary_error_rate` is not yet a meaningful gate;
+grow the set with code-switch-heavy footage before trusting BER numbers.
 
 Nothing measurable can happen before this. Target: 10–15 min of representative
 own footage — code-switch-heavy, some noisy sections.
@@ -149,7 +165,14 @@ own footage — code-switch-heavy, some noisy sections.
 **Acceptance:** harness prints nonzero `thai_chars`/`switches` and writes a
 passing baseline. From here on, every phase below ends with a harness run.
 
-### Phase 1 — Engine A upgrade: `typhoon-whisper-turbo` (YAML + one conversion)
+### Phase 1 — Engine A upgrade: `typhoon-whisper-turbo` (YAML + one conversion) — **DONE, model reverted (proven)**
+
+**Resolution (2026-07-14):** converted and evaled against the gold set. Turbo
+**regressed** `cer_thai` to 0.1336 vs 0.1069 for `whisper-th-medium-ct2` — lost
+the gate despite the published benchmark claim. Engine A stays on
+`whisper-th-medium-ct2` (`config.yaml` `model_id` line left commented out).
+**Do not re-try turbo without new evidence** — the published CER number does
+not transfer to this footage/config combination.
 
 The current Engine A (`biodatlab/whisper-th-medium-combined`, a whisper-medium
 fine-tune) is no longer the accuracy/speed frontier. SCB10X's
@@ -180,7 +203,25 @@ Note: large-v3-turbo checkpoints are known to have somewhat weaker word-level
 timestamp alignment than large-v3 — watch cue boundaries in the first real
 export; `_group_words_into_cues`'s sentence-boundary breaks mask most of it.
 
-### Phase 2 — Engine B: a real, decorrelated second hypothesis
+### Phase 2 — Engine B: a real, decorrelated second hypothesis — **ATTEMPTED, deliberately left off (proven)**
+
+**Resolution (2026-07-14):** got `funasr` (SenseVoiceSmall) actually running —
+fixed two real bugs (`hub="hf"` in `AutoModel(...)`, since funasr defaults to
+ModelScope which 404s for this model outside China; harness subprocess PATH
+needed `.venv/Scripts` so funasr's own pip step could find `pip.exe`). Both
+fixes are committed in `engines/funasr.py`. But activating `engine_b: funasr`
+produced **byte-identical harness metrics to `passthrough`** — traced to
+`reconcile.py`'s `_script_fallback`, which always resolved Thai-script
+disagreements to Engine A regardless of what Engine B said. That circularity
+is now fixed (see Phase 3 resolution below: confidence decides first, script
+is only the final tiebreak). Re-tried with Phase 3's LLM reconciler on: the
+harness gate **passes** with `engine_b: funasr` + `llm_enabled: true`, but the
+4-clip gold set has near-zero code-switching, so it can't yet show the
+reconciler earning its 2× runtime — metrics don't move either direction.
+**Config stays `engine_b: passthrough`** pending a gold set with real
+disagreement-heavy material (code-switch-dense or noisy clips). Don't spend
+effort installing NeMo for `typhoon_rt` before growing the gold set — it would
+hit the identical measurement wall, not a `typhoon_rt`-specific issue.
 
 Everything reconciler-related (agreement confidence, `_script_fallback`, LLM
 tiebreak, `source_engine` provenance) is dead weight while `engine_b: passthrough`.
@@ -203,7 +244,23 @@ Activation is one line (`engine_b: funasr`) + `python -m transcribe.eval.harness
 --engine-b <name>` for the A/B. **The gate decides, not the model card.**
 Cross-engine agreement must *earn* its 2× runtime by lowering `cer_thai` or BER.
 
-### Phase 3 — Wire the LLM reconciler (only after Phase 2)
+### Phase 3 — Wire the LLM reconciler (only after Phase 2) — **DONE, adapted to local Ollama (proven)**
+
+**Resolution (2026-07-14):** implemented `transcribe/pipeline/llm_reconcile.py`
+— adapted to run entirely local (no Anthropic API key, no external network
+call): `make_llm_fn(ollama_cfg)` POSTs to a local `ollama serve` instance over
+stdlib `urllib`, model `qwen2.5:3b-instruct`. `reconcile._pick()` accepts the
+`llm_fn(ta, tb, bias_terms) -> int` hook on disagreement with a built-in
+fallback to `_script_fallback` on any exception (unreachable/unpulled model
+just falls through). Also fixed the `_script_fallback` circularity described
+below: confidence now decides first when both engines report one; script is
+only the tiebreak when confidence can't. Gated off by default
+(`reconciler.llm_enabled: false`) until the gold set has enough
+disagreement-heavy material to prove a lift (see Phase 2 resolution) — the
+wiring itself is verified end-to-end (instrumented run confirms the LLM path
+fires on a real A/B disagreement), 12 tests in
+`tests/test_phase3_llm_reconcile.py`. `harness.py` gained `--llm-enabled` to
+mirror `--engine-b` for A/B eval runs.
 
 `reconcile.reconcile(slots, bias_terms=...)` never receives `llm_fn` — every
 disagreement falls to `_script_fallback`, which trusts Engine A's script
@@ -222,7 +279,21 @@ classification of its own output (circular on exactly the hard cases).
 Also fix the `_script_fallback` circularity while there: when confidences are
 present on both sides, prefer confidence; use A's script only as the final tie.
 
-### Phase 4 — Robustness for real daily use
+### Phase 4 — Robustness for real daily use — **DONE, all five sub-items (proven)**
+
+**Resolution (2026-07-14):** `job_phase` column added to `job` (additive,
+idempotent `_migrate()` pattern) plus a new `engine_result` table storing each
+engine's token list + raw word JSON. `run.py` resumes a `failed` job for the
+same media sha256 from its last completed phase, reusing cached
+`engine_result` rows instead of re-running finished engines (4.1). The raw
+per-word list rides on the same table (4.2) — no longer discarded. VFR
+sources get an actual ffmpeg CFR-proxy transcode + re-probe via
+`transcribe/timebase.py::conform_vfr` (4.3), gated by `conform_vfr: true`.
+Denoise switched to in-memory DeepFilterNet `enhance()` calls, no per-window
+temp WAV (4.4). `run.py` prints a machine-readable `JOB_ID=N` line;
+`transcribe_file.py` parses that instead of scraping a logging line (4.5).
+Tests: `test_job_resumability.py`, `test_vfr_conform.py`,
+`test_denoise_inmemory.py`.
 
 **4.1 Job resumability (GAP-8).** A crash at minute 45 of a 60-min file costs
 everything. Add a `job_phase` column (or extend `job.status`) recording
@@ -256,7 +327,17 @@ logging line (`"Job N done:"`). If logging format/level changes, SRT auto-export
 silently stops. Have `run.py` print a machine-readable line to stdout
 (e.g. `JOB_ID=N`) and parse that instead.
 
-### Phase 5 — Editor and flywheel quality-of-life
+### Phase 5 — Editor and flywheel quality-of-life — **DONE, all three items (proven)**
+
+**Resolution (2026-07-15):** `static/index.html` now sends a one-tap reason
+tag (misheard / spelling / code-switch / name-term / style) on the focused
+token, carried into the save payload alongside the existing diff plumbing.
+`confidence` is populated on faster-whisper cues from `avg_logprob`/word
+probabilities in `_words_of` (previously always null) and low-confidence
+cues are tinted in the editor. The job API's `corrected: true` per-token flag
+(§1.3) now drives a visible style (green border) so a reviewer can see what's
+already fixed. Tests updated in `test_faster_whisper_cues.py` and
+`test_faster_whisper_truncation_recovery.py`.
 
 - **Reason-tag UI (GAP-7):** backend + schema + diff plumbing all accept
   `reason`; `static/index.html` never sends it. Add a small one-tap tag row
