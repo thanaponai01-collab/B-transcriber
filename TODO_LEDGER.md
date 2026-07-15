@@ -23,6 +23,18 @@ Suite: **176 passed** (was 167; +9 new tests across three new files).
    pass. Partition on intent (experiment vs production), not on config
    identity. Tests: `tests/test_eval_baseline_partitioning.py` (store-level
    exclusion + the baseline → passing-experiment → production round-trip).
+   **Migration note:** any pre-existing `transcriber.db` (the live/local DB —
+   gitignored, not shipped in the repo) predates the `is_experiment` column
+   and must run `init_db()` once (idempotent `_migrate`, additive-only, no
+   data touched) before the harness will run against it — it fails fast with
+   `sqlite3.OperationalError: no such column: is_experiment` otherwise.
+   **Confirmed on the real gold set (2026-07-15):** ran
+   `python -m transcribe.eval.harness --config transcribe/config.yaml --db
+   transcriber.db` after migrating — passed, cer_thai 0.1451 vs prior baseline
+   0.1486 (improved), wer_latin/BER unchanged. No regression from this pass's
+   four fixes. `switches=0` still holds (gold set has no code-switch samples
+   yet), so BER/Engine-B activation remain unproven either way — unchanged
+   from the pre-existing known gap.
 
 2. **Stitch seam-window dedup.** `stitch()` compared each candidate only
    against `kept[-1]`, so an A-B-A' pattern (duplicate copies of a seam word
