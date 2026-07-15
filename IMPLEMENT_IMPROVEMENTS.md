@@ -271,7 +271,7 @@ silently stops. Have `run.py` print a machine-readable line to stdout
   token (§1.3) — style corrected tokens (e.g. green border) so a reviewer can
   see what's already been fixed.
 
-### Phase 6 — Normalization polish (with the gold set as referee)
+### Phase 6 — Normalization polish (with the gold set as referee) — **DONE (proven)**
 
 - Align number-verbalization policy (สิบ ↔ 10) and mai-yamok expansion policy
   explicitly in STYLE_GUIDE.md with the Na-Thalang-style canonical guideline the
@@ -282,6 +282,37 @@ silently stops. Have `run.py` print a machine-readable line to stdout
   skip Thai↔Latin *boundary* spacing around them (placeholder side effect,
   consistent on both sides of the eval, but a style choice worth making
   deliberately).
+
+**Resolution (2026-07-15):** Fetched and read the Na-Thalang et al. (2025)
+guideline via the Typhoon ASR Real-time paper ([arXiv:2601.13044](https://arxiv.org/abs/2601.13044))
+— it's a real, published standard, not a placeholder citation. It normalizes
+numbers to full spoken-Thai-word form and expands mai yamok to the repeated
+word (`เก่งๆ` → `เก่ง เก่ง`), for word-level benchmark scoring.
+
+**Decision: do NOT adopt either transform.** Both require word-segmentation
+ground truth that STYLE_GUIDE §1 deliberately refuses to depend on (Thai has
+no orthographic word boundaries — that's *why* this project scores Thai as
+character-level CER instead of word-level WER in the first place). Adopting
+Na-Thalang's word-form normalization now would also force hand-re-authoring
+the gold set frozen in Phase 0 (`transcribe/eval/goldenset/*.json` already
+contains real attached-ๆ examples: `จริงๆ`, `ต่างๆ`, `หลายๆ`, `ใครๆ`). The
+divergence and its exact trigger to revisit — a Typhoon-trained Engine A (Phase
+1) regressing `cer_thai` because its raw output verbalizes numbers/expands ๆ
+even when otherwise correct — are written into STYLE_GUIDE.md §2 and §3 so the
+harness, not intuition, makes the call when Phase 1 actually runs.
+
+**Exception-lexicon spacing: decided in favor of normal boundary-spacing.**
+Read `transcribe/eval/metrics.py` end to end: `_thai_char_stream` and
+`_latin_word_stream` extract by character class, not whitespace, and
+`_switch_points` uses each token's `script` field — so this style choice was
+**never observable by any eval gate**, only by a human reading the text. Since
+gluing brand names to Thai neighbors (`ผมใช้iPhoneอยู่`) has no accuracy
+upside and reads worse than spacing them like any other code-switch word
+(`ผมใช้ iPhone อยู่`, consistent with STYLE_GUIDE §4), `normalize()` was
+reordered so boundary-spacing runs before exception protection — the lexicon
+now only shields a term's interior from digit/yamok/PyThaiNLP passes, not its
+edges. New test: `test_normalization_exception_lexicon_gets_boundary_spacing`
+in `tests/test_smoke.py`.
 
 ---
 
@@ -294,6 +325,7 @@ silently stops. Have `run.py` print a machine-readable line to stdout
 | 3 | Gold set of 10–15 min is representative enough to gate on | gates pass/fail on noise; keep `regression_abs_floor` | grows with every corrected job |
 | 4 | Long-span stitch (`_LONG_SPAN_SAFE_S=25`) still has one residual gap on very dense speech | occasional missing words in pause-free monologue | revisit if real footage shows gaps; fuzzy dedup in stitch.py is the documented fix |
 | 5 | `whisper_multi` (large-v3) stays the fallback Engine B doc'd in config | correlated-error false agreement (June audit BLOCKER 3) | never activate two Whispers together |
+| 6 | Gold set + `normalize()` deliberately diverge from Na-Thalang word-form number/ๆ verbalization (Phase 6) | if wrong, a Typhoon-trained Engine A's raw output looks worse than it is — spurious `cer_thai` regression, not a real accuracy loss | Phase 1 harness run on typhoon-whisper-turbo; if `ๆ`-bearing or number-bearing spans specifically regress, build the canonicalizer then |
 
 ## 4. Sources
 
@@ -301,5 +333,6 @@ silently stops. Have `run.py` print a machine-readable line to stdout
 - [typhoon-ai/typhoon-whisper-large-v3](https://huggingface.co/typhoon-ai/typhoon-whisper-large-v3) — 5.69% Thai CER reference point
 - [Typhoon ASR Real-time paper](https://arxiv.org/pdf/2601.13044) — FastConformer-Transducer, CER 0.0984, CPU-capable
 - [scb-10x/typhoon-asr](https://github.com/scb-10x/typhoon-asr) — runtime + CLI
+- [Na-Thalang et al. (2025) canonical guideline](https://arxiv.org/html/2601.13044v1) — described in §III of the Typhoon ASR Real-time paper; verbalizes numbers to Thai words and expands mai yamok to the repeated word for benchmark scoring (Phase 6: read directly, confirmed real, deliberately not adopted — see §2 above and STYLE_GUIDE.md §2/§3)
 - [Qwen/Qwen3-ASR-1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) + [technical report](https://arxiv.org/pdf/2601.21337) — 52-language LLM-decoder ASR incl. Thai, Jan 2026
 - [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) — CT2 conversion of fine-tuned checkpoints

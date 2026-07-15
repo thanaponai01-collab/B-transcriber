@@ -7,9 +7,20 @@ against an un-normalized, moving target.
 
 Every transform here is deterministic and tokenization-free. Decisions that
 require segmentation or semantics (loanword script choice, number *verbalization*
-สิบ↔10) are gold-authoring policy, not code — see STYLE_GUIDE.md.
+สิบ↔10, mai-yamok word-repeat expansion) are gold-authoring policy, not code —
+see STYLE_GUIDE.md §2/§3 for why this deliberately diverges from the Na-Thalang
+et al. (2025) canonical standard the Typhoon ASR project trains and benchmarks
+against.
 
-Order matters: digits → mai yamok → boundary spacing → Thai cleanup.
+Order matters: digits → mai yamok → boundary spacing → protect exceptions →
+Thai cleanup → restore exceptions. Digits and mai-yamok run unprotected because
+no exception-lexicon term contains a Thai numeral or ๆ, and Thai-numeral input
+must normalize identically to pre-converted Arabic-numeral input before
+boundary spacing sees it. Boundary spacing also runs unprotected so
+exception-lexicon brand terms (iPhone, Shopee, ...) get spaced from
+surrounding Thai like any other code-switch word (STYLE_GUIDE §6); the
+lexicon only shields a term's literal characters from PyThaiNLP cleanup, the
+one remaining pass that could touch them.
 """
 
 from __future__ import annotations
@@ -43,7 +54,10 @@ def _load_exception_lexicon(config: dict) -> list[str]:
 
 
 def _protect_exceptions(text: str, exceptions: list[str]) -> tuple[str, dict[str, str]]:
-    """Replace exception terms with placeholders before spacing."""
+    """Replace exception terms with placeholders before PyThaiNLP cleanup.
+
+    Called AFTER boundary spacing, so a term's edges are already spaced
+    naturally against surrounding Thai; this only shields its interior."""
     placeholders: dict[str, str] = {}
     for term in sorted(exceptions, key=len, reverse=True):  # longest first
         if term in text:
@@ -87,10 +101,16 @@ def _thai_cleanup(text: str) -> str:
 def normalize(text: str, config: dict | None = None) -> str:
     """
     Normalize a transcript string per STYLE_GUIDE.md:
-    0. Protect exception lexicon items (brands/mixed-script proper nouns).
-    1. Thai numerals → Arabic digits (policy: numbers written as Arabic).
-    2. Mai yamok (ๆ) → canonical attached form (no expansion).
-    3. Add spaces at Thai↔Latin boundaries.
+    0. Thai numerals → Arabic digits (policy: numbers written as Arabic). Runs
+       unprotected: no exception-lexicon term contains a Thai numeral, and
+       Thai-numeral vs. Arabic-numeral input must normalize identically before
+       boundary spacing sees it (`test_normalize_thai_digits`).
+    1. Mai yamok (ๆ) → canonical attached form (no expansion). Also unprotected:
+       no exception term contains ๆ.
+    2. Add spaces at Thai↔Latin boundaries — exception-lexicon terms included
+       (STYLE_GUIDE §6: they read as ordinary code-switch words at their edges).
+    3. Protect exception lexicon items (brands/mixed-script proper nouns) from
+       the one remaining pass that operates on literal Thai characters.
     4. PyThaiNLP Thai cleanup (tone-mark/sara ordering).
     5. Restore exceptions.
     6. Collapse multiple spaces.
@@ -102,10 +122,10 @@ def normalize(text: str, config: dict | None = None) -> str:
     norm_cfg = config.get("normalization", {})
     exceptions = _load_exception_lexicon(config)
 
-    text, placeholders = _protect_exceptions(text, exceptions)
     text = _normalize_thai_digits(text, norm_cfg.get("thai_digits", True))
     text = _canonical_mai_yamok(text, norm_cfg.get("mai_yamok_attach", True))
     text = _add_boundary_spaces(text)
+    text, placeholders = _protect_exceptions(text, exceptions)
     text = _thai_cleanup(text)
     text = _restore_exceptions(text, placeholders)
     text = re.sub(r" {2,}", " ", text).strip()

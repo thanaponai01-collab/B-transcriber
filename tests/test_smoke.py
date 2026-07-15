@@ -189,6 +189,17 @@ def test_normalization_exception_lexicon():
     assert "COVID-19" in result, f"Exception term was split: {result!r}"
 
 
+def test_normalization_exception_lexicon_gets_boundary_spacing():
+    """Phase 6 decision (STYLE_GUIDE §6): exception terms are spaced from
+    surrounding Thai like any other code-switch word — the lexicon protects
+    a term's interior, not its edges."""
+    from transcribe.pipeline.normalize import normalize
+
+    config = {"normalization": {"exception_lexicon": ["iPhone"]}}
+    result = normalize("ผมใช้iPhoneอยู่", config)
+    assert result == "ผมใช้ iPhone อยู่", f"Exception term glued to Thai neighbors: {result!r}"
+
+
 # ── Metrics ───────────────────────────────────────────────────────────────────
 
 def test_wer_perfect():

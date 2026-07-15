@@ -63,7 +63,8 @@ boundary_tol_ms: 300   # switch-point match tolerance (see eval/README.md)
 # hypotheses and to the gold set during eval.
 normalization:
   thai_digits: true        # map Thai numerals ๐-๙ → Arabic 0-9
-  mai_yamok_attach: true   # canonicalize 'word ๆ' / 'wordๆๆ' → 'wordๆ' (no expansion)
+  mai_yamok_attach: true   # canonicalize 'word ๆ' / 'wordๆๆ' → 'wordๆ' (no expansion —
+                            # deliberate divergence from Na-Thalang/Typhoon, see STYLE_GUIDE.md §3)
   exception_lexicon:
     - COVID-19
     - iPhone

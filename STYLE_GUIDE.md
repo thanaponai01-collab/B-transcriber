@@ -34,6 +34,19 @@ is a *derived view*, computed afterwards, never ground truth. Consequences:
   requires semantics and is ambiguous. Gold policy: **transcribe numbers as the
   speaker said them.** "สิบบาท" stays สิบบาท; "10 บาท" (read as a numeral) stays 10.
   Write it the way it was spoken, not the way it is conventionally typed.
+- **Divergence from Na-Thalang et al. (2025):** the canonical guideline the
+  Typhoon ASR project trains and benchmarks against (see [arXiv:2601.13044](https://arxiv.org/abs/2601.13044))
+  normalizes numbers to full spoken-Thai-word form for *scoring* — e.g. an ID
+  read digit-by-digit becomes "หนึ่งศูนย์หนึ่งห้าศูนย์", not "10150". We deliberately
+  do **not** adopt this: it requires a correct Thai numeral-to-words converter
+  (itself context-dependent — Na-Thalang's own examples split "read as a
+  quantity" from "read digit-by-digit") and it would force re-authoring every
+  gold sample already frozen under the as-spoken policy. **Trigger to
+  revisit:** once Engine A is Typhoon-trained (Phase 1), if its raw output
+  systematically verbalizes numbers as Thai words even for correct
+  transcriptions, `cer_thai` will show a mismatch the gold set didn't earn —
+  that harness result, not the paper, decides whether a canonicalizing pass
+  gets built.
 
 ## 3. Mai yamok ( ๆ ) — **[code]**
 
@@ -43,6 +56,24 @@ is a *derived view*, computed afterwards, never ground truth. Consequences:
 - We do **not** expand `ๆ` into a repeated word (`เด็ก เด็ก`), because expansion
   needs word segmentation and is therefore ambiguous. CER over the character
   stream already credits/penalizes the `ๆ` correctly without expansion.
+- **Divergence from Na-Thalang et al. (2025):** the Typhoon canonical guideline
+  *does* expand mai yamok contextually — `เก่งๆ` → `เก่ง เก่ง`, `เป็นอย่างๆ` →
+  `เป็น อย่าง อย่าง` (the repeated *word*, not the whole phrase) — because it
+  scores at word granularity and word-repeat runs need canonical word forms to
+  compare. We deliberately keep the attached, unexpanded form instead, for two
+  concrete reasons, not just "expansion is hard": (1) §1's atomic unit is the
+  character span — CER already treats `ๆ` as a normal character and doesn't
+  need word identity to score it correctly; (2) the gold set authored under
+  Phase 0 (`transcribe/eval/goldenset/*.json`) already contains real attached
+  `ๆ` (`จริงๆ`, `ต่างๆ`, `หลายๆ`, `ใครๆ`) — adopting expansion now means
+  hand-editing already-frozen gold data, not just flipping a config flag.
+  Implementing a correct expander also requires the word-boundary detection
+  §1 explicitly refuses to treat as ground truth (mai yamok always repeats the
+  *preceding word*, which Thai's lack of orthographic word breaks makes
+  ambiguous to recover deterministically). **Trigger to revisit:** same as
+  the number-verbalization divergence above — a Typhoon-trained Engine A
+  regressing `cer_thai` specifically on `ๆ`-bearing spans is the signal to
+  build a `pythainlp`-based context-aware expander, gated by the harness.
 
 ## 4. Loanwords — **[gold]**
 
@@ -67,10 +98,24 @@ write it down; do not let "either is defensible" make the gold set a moving targ
 
 ## 6. Mixed-script proper nouns / brands — **[code]**
 
-Terms that legitimately straddle scripts or contain punctuation (`COVID-19`,
-`GPT-4`, `iPhone`) are protected from boundary-spacing by
-`normalization.exception_lexicon` in `config.yaml`. Add new brands there, longest
-first is handled automatically.
+Terms with internal punctuation or digits that must never be split
+(`COVID-19`, `GPT-4`) are listed in `normalization.exception_lexicon` in
+`config.yaml`. Add new brands there, longest first is handled automatically.
+
+**Spacing policy (decided; was an implicit side effect before):** exception
+terms get the *same* Thai↔Latin boundary spacing as any other embedded Latin
+word — `iPhone` in `ผมใช้iPhoneอยู่` normalizes to `ผมใช้ iPhone อยู่`, not
+`ผมใช้iPhoneอยู่`. A brand name embedded in Thai speech is exactly the
+code-switch case §4 describes, and gluing it to the surrounding Thai for no
+reason hurt readability with no accuracy benefit (`compute_metrics` extracts
+Thai and Latin streams by character class, not by whitespace, so spacing here
+was already invisible to every gate — see `transcribe/eval/metrics.py`
+`_thai_char_stream`/`_latin_word_stream`). The lexicon's actual job is
+narrower than "protect from boundary-spacing": it shields a term's *interior*
+characters from the digit-translation, mai-yamok-collapse, and PyThaiNLP
+cleanup passes, which run after boundary spacing in `normalize()`. No entry
+currently listed contains an internal Thai↔Latin transition, so this only
+matters for a future term shaped that way.
 
 ---
 
