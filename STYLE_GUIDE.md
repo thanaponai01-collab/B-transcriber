@@ -117,6 +117,38 @@ cleanup passes, which run after boundary spacing in `normalize()`. No entry
 currently listed contains an internal Thai↔Latin transition, so this only
 matters for a future term shaped that way.
 
+## 7. Line breaks in multi-line captions — **[gold]**, **[code]** once implemented
+
+Not yet enforced by any code today — `align_force.py`'s `export_srt`/`export_vtt`
+write one line per phrase-cue and never split a cue across display lines, and
+CutDeck captions burn-in (`TODO_LEDGER.md`) hasn't been built yet. Recorded here
+now so whichever feature ships the first line-wrapper (two-line SRT formatting,
+burned captions, etc.) has a policy to implement against, not improvise one.
+
+- **Never break inside a word.** Because Thai has no orthographic word
+  boundaries (§1), "word" here is not free — a line-wrapper must call a real
+  segmenter (`pythainlp`, already a dependency) to find candidate break points,
+  never a naive character-count cutoff.
+- **When the character/CPS budget forces a break mid-word, back off to the
+  nearest earlier complete-word boundary.** Never truncate or hyphenate to hit
+  a length target — a shorter line beats a broken word.
+- **Treat `normalization.exception_lexicon` terms (§6) as unsplittable units**
+  — the same list that protects `COVID-19`/`GPT-4` from mid-token normalization
+  must also block a line-wrapper from breaking inside them.
+- **Never separate mai yamok (§3) from the word it repeats** — `เด็กๆ` must
+  stay on one line.
+- **Never split a number from its unit or classifier** (`100 บาท`, `3 คน`) —
+  keep the numeral and its following word together even if that pushes the
+  break point earlier.
+- **Prefer breaking at a clause or phrase boundary** (before a conjunction like
+  แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
+  prefer a roughly even split across lines over one long line + one short
+  orphaned word.
+- **Whichever segmenter gets used for this must be the same one `normalize.py`
+  already depends on** (not a second, independently-tuned heuristic) — two
+  segmentation policies drifting apart is exactly the kind of implicit
+  divergence §4/§6 already had to call out once.
+
 ---
 
 ## Metrics that enforce this guide
