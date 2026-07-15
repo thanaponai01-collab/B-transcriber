@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import gc
 import logging
+import os
+import sys
 from pathlib import Path
 
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
@@ -23,6 +25,36 @@ from transcribe.engines.registry import register
 from transcribe.flywheel.inject import BiasTerm, build_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _register_cuda_dll_dirs() -> None:
+    """Make the pip nvidia-*-cu12 wheels' bundled DLLs (cublas64_12.dll,
+    cudnn64_9.dll, ...) loadable by CTranslate2 on Windows.
+
+    Those wheels drop their DLLs under site-packages/nvidia/<pkg>/bin, which is
+    never on PATH. torch works around the equivalent problem for its own
+    (bundled, different-version) CUDA libs by registering torch/lib itself, but
+    that's a separate cublas64_13.dll — CTranslate2 needs the CUDA-12 one.
+    CTranslate2 resolves it via a bare LoadLibrary call deep inside its native
+    code (lazily, on first GPU op) rather than through Python's import
+    machinery, so os.add_dll_directory() does not cover it (that only affects
+    extension-module imports and ctypes loads) — PATH is the search list a bare
+    LoadLibrary call actually consults, so that's what has to be extended.
+    Without this, load fails with 'cublas64_12.dll is not found or cannot be
+    loaded' even though the DLL is present in the venv.
+    """
+    if sys.platform != "win32":
+        return
+    nvidia_root = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    if not nvidia_root.is_dir():
+        return
+    bin_dirs = [str(p) for p in nvidia_root.glob("*/bin")]
+    path = os.environ.get("PATH", "")
+    for bin_dir in bin_dirs:
+        if bin_dir not in path:
+            path = bin_dir + os.pathsep + path
+    os.environ["PATH"] = path
+
 
 # Converted once via ct2-transformers-converter (see README). Repo-root-relative so
 # it resolves regardless of the caller's cwd.
@@ -281,6 +313,7 @@ class FasterWhisperEngine(Engine):
         self._pipeline = None
 
     def load(self) -> None:
+        _register_cuda_dll_dirs()
         from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")

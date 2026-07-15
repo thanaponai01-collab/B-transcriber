@@ -7,6 +7,7 @@ librosa>=0.10.0
 soundfile>=0.12.0
 numpy>=1.26.0
 PyYAML>=6.0
+av>=13.0.0   # ingest.py video/m4a/broadcast-container decode path (_load_audio_av)
 
 # ASR engines
 faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-converted model:
