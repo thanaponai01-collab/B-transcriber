@@ -45,6 +45,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "pipeline_version", "pipeline_version TEXT")
     _add("eval_run", "engine_pair", "engine_pair TEXT")
     _add("eval_run", "bias_hash", "bias_hash TEXT")
+    # A/B experiment runs never become the regression baseline
+    _add("eval_run", "is_experiment", "is_experiment INTEGER NOT NULL DEFAULT 0")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -171,6 +173,7 @@ class EvalRunRow:
     bias_hash: Optional[str]
     ran_at: str
     passed: bool
+    is_experiment: bool = False
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -552,39 +555,44 @@ def create_eval_run(
     pipeline_version: Optional[str] = None,
     engine_pair: Optional[str] = None,
     bias_hash: Optional[str] = None,
+    is_experiment: bool = False,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
-        "kind, pipeline_version, engine_pair, bias_hash, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
-         kind, pipeline_version, engine_pair, bias_hash, int(passed)),
+         kind, pipeline_version, engine_pair, bias_hash, int(is_experiment), int(passed)),
     )
     conn.commit()
     return cur.lastrowid
 
 
+def _eval_row(row: sqlite3.Row) -> EvalRunRow:
+    r = dict(row)
+    r["passed"] = bool(r["passed"])
+    r["is_experiment"] = bool(r.get("is_experiment", 0))
+    return EvalRunRow(**r)
+
+
 def get_last_passing_eval(conn: sqlite3.Connection, kind: str = "transcribe") -> Optional[EvalRunRow]:
     # Filter by kind so a future CutDeck cut-quality run can never become the
-    # transcription gate's baseline (or vice versa). id tie-breaks runs that
-    # land within the same datetime('now') second.
+    # transcription gate's baseline (or vice versa), and exclude experiment runs
+    # (e.g. `harness --engine-b X` A/B probes) — an experiment is *judged against*
+    # the production baseline but must never become it, or a passing experiment
+    # on a different engine pair / bias index would silently shift what the next
+    # production run is compared against. id tie-breaks runs that land within
+    # the same datetime('now') second.
     row = conn.execute(
-        "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? "
+        "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? AND is_experiment = 0 "
         "ORDER BY ran_at DESC, id DESC LIMIT 1",
         (kind,),
     ).fetchone()
     if row is None:
         return None
-    r = dict(row)
-    r["passed"] = bool(r["passed"])
-    return EvalRunRow(**r)
+    return _eval_row(row)
 
 
 def list_eval_runs(conn: sqlite3.Connection) -> list[EvalRunRow]:
     rows = conn.execute("SELECT * FROM eval_run ORDER BY ran_at DESC").fetchall()
-    result = []
-    for row in rows:
-        r = dict(row)
-        r["passed"] = bool(r["passed"])
-        result.append(EvalRunRow(**r))
-    return result
+    return [_eval_row(row) for row in rows]

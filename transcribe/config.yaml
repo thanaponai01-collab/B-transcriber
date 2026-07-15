@@ -35,6 +35,9 @@ engines:
     beam_size: 5
     cue_gap_ms: 700
     cue_max_ms: 4000
+    cue_target_chars: 42   # cue closes once it holds this many chars (subtitle-line
+                           # sizing, same family as cue_gap_ms/cue_max_ms — see
+                           # _group_words_into_cues; STYLE_GUIDE line-break policy)
     bias_prompt_budget: 200
     batch_size: 8                                # BatchedInferencePipeline parallel batch (3.1);
                                                  # auto-halves on CUDA OOM. Raise with int8_float16 headroom.

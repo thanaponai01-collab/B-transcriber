@@ -45,12 +45,21 @@ def _interiority(tok: RecognizedToken, chunk_start: int, chunk_end: int) -> int:
     return min(center - chunk_start, chunk_end - center)
 
 
-def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5) -> list[RecognizedToken]:
+def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5,
+           seam_window_ms: int = 1000) -> list[RecognizedToken]:
     """Merge per-chunk token streams, dropping duplicates in overlap windows.
 
     Two tokens from *different* chunks that share text and overlap by at least
     ``iou_threshold`` are the same word seen twice; keep the copy more interior
     to its own chunk, tie-breaking on confidence then text length.
+
+    A duplicate is searched for among ALL recently-kept tokens whose span ends
+    within ``seam_window_ms`` of the candidate's start — not just the single
+    most recent one — so an A-B-A' pattern (the two copies of the same word
+    separated in the sorted stream by an intervening token from the other
+    chunk) still dedupes. Pass the active chunk overlap (e.g. config
+    ``chunk_overlap_ms``) as ``seam_window_ms`` so the search covers exactly
+    the zone where a word can legitimately appear twice.
     """
     # Flatten, tagging each token with its chunk's identity and span.
     tagged: list[tuple[RecognizedToken, int, int, int]] = []
@@ -63,18 +72,31 @@ def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5) -> list[Recogn
     dropped = 0
     for cand in tagged:
         tok, ci, cs, ce = cand
-        if kept:
-            ptok, pci, pcs, pce = kept[-1]
+        # Scan recently-kept tokens newest-first; stop once a kept token ended
+        # more than seam_window_ms before the candidate starts — anything that
+        # far back can no longer overlap enough to be the same word. (Word
+        # tokens are short, so start-order ≈ end-order within a window.)
+        dup_idx = None
+        for i in range(len(kept) - 1, -1, -1):
+            ptok, pci, pcs, pce = kept[i]
+            if tok.start_ms - ptok.end_ms > seam_window_ms:
+                break
             same_word = tok.text.strip() == ptok.text.strip() and ci != pci
             if same_word and _iou(tok, ptok) >= iou_threshold:
-                if _prefer(cand, kept[-1]):
-                    kept[-1] = cand
-                dropped += 1
-                continue
+                dup_idx = i
+                break
+        if dup_idx is not None:
+            if _prefer(cand, kept[dup_idx]):
+                kept[dup_idx] = cand
+            dropped += 1
+            continue
         kept.append(cand)
 
     if dropped:
         logger.info("Stitch removed %d duplicate tokens across chunk seams", dropped)
+    # An interior replacement can nudge a kept token's start past its successor's;
+    # re-sort so the output stream stays time-ordered.
+    kept.sort(key=lambda t: (t[0].start_ms, t[0].end_ms))
     return [t[0] for t in kept]
 
 

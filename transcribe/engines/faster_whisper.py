@@ -287,6 +287,7 @@ class FasterWhisperEngine(Engine):
     def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda",
                  compute_type: str | None = None, beam_size: int = 5,
                  cue_gap_ms: int = _CUE_GAP_MS, cue_max_ms: int = _CUE_TARGET_MS,
+                 cue_target_chars: int = _CUE_TARGET_CHARS,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500):
         self._model_id = model_id
@@ -297,6 +298,7 @@ class FasterWhisperEngine(Engine):
         self._beam_size = beam_size
         self._cue_gap_ms = cue_gap_ms
         self._cue_max_ms = cue_max_ms
+        self._cue_target_chars = cue_target_chars
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
         # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
@@ -509,7 +511,8 @@ class FasterWhisperEngine(Engine):
                     win_tokens, int(win_start * 1000), int(win_end * 1000)))
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
                         span_start, span_end, len(chunk_tokens))
-            for tok in stitch.stitch(chunk_tokens):
+            for tok in stitch.stitch(chunk_tokens,
+                                     seam_window_ms=int(_LONG_SPAN_OVERLAP_S * 1000)):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])
@@ -532,7 +535,8 @@ class FasterWhisperEngine(Engine):
                 confidence=conf, script=detect_script(text),
             )
             for text, start, end, conf in _group_words_into_cues(
-                words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms)
+                words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms,
+                target_chars=self._cue_target_chars)
         ]
 
         return EngineResult(

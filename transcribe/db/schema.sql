@@ -128,6 +128,11 @@ CREATE TABLE IF NOT EXISTS eval_run (
     pipeline_version    TEXT,
     engine_pair         TEXT,
     bias_hash           TEXT,
+    -- A/B experiment runs (e.g. `harness --engine-b X`) are gated against the
+    -- production baseline but must never BECOME it — get_last_passing_eval
+    -- excludes them, so a passing experiment can't shift what production
+    -- config changes are compared against.
+    is_experiment       INTEGER NOT NULL DEFAULT 0 CHECK (is_experiment IN (0, 1)),
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

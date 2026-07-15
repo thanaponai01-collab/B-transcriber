@@ -3,6 +3,73 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Four confirmed-issue fixes — executed 2026-07-15 (after the diff-srt pass)
+
+Suite: **176 passed** (was 167; +9 new tests across three new files).
+
+1. **Eval regression-baseline partitioning (integrity).** An A/B probe
+   (`harness --engine-b X` / `--llm-enabled`) wrote a normal `eval_run`; if it
+   passed, `get_last_passing_eval` would hand it to the next production run as
+   the baseline. Fixed with an `eval_run.is_experiment` column (schema.sql +
+   idempotent `_migrate` add): `run_harness(..., experiment=True)` marks the
+   row, `get_last_passing_eval` excludes it, and the harness CLI implies the
+   flag for `--engine-b`/`--llm-enabled` (plus an explicit `--experiment`).
+   An experiment is still *judged against* the production baseline — it just
+   can never *become* it. **Design note:** the alternative fix — filtering the
+   baseline by the current run's `engine_pair`/`bias_hash` — was rejected
+   deliberately: the flywheel gate exists to compare an engine swap or bias
+   update AGAINST the previous config's baseline, so partitioning lineage by
+   those columns would hand every swap/update an empty baseline and a free
+   pass. Partition on intent (experiment vs production), not on config
+   identity. Tests: `tests/test_eval_baseline_partitioning.py` (store-level
+   exclusion + the baseline → passing-experiment → production round-trip).
+
+2. **Stitch seam-window dedup.** `stitch()` compared each candidate only
+   against `kept[-1]`, so an A-B-A' pattern (duplicate copies of a seam word
+   separated by an intervening token from the other chunk) kept the duplicate.
+   It now scans all recently-kept tokens whose span ends within
+   `seam_window_ms` of the candidate's start (interiority/confidence
+   tie-breaks unchanged; output re-sorted since an interior replacement can
+   nudge ordering). Call sites thread the real overlap: `run.py` passes config
+   `chunk_overlap_ms`, faster_whisper's long-span path passes its 4 s window
+   overlap. Tests: `tests/test_stitch_seam_window.py`.
+
+3. **Cue target width in config.** `_CUE_TARGET_CHARS` (42) was hardcoded
+   while its siblings `cue_gap_ms`/`cue_max_ms` were config-driven — and
+   `transcribe()` wasn't even passing it, silently always using the default.
+   Now `engines.faster_whisper.cue_target_chars` in config.yaml → constructor
+   kwarg → `_group_words_into_cues`. Named `cue_target_chars` (not bare
+   `target_chars`) to match the `cue_*` kwarg family. Tests:
+   `tests/test_cue_target_chars_config.py` (constructor override, default =
+   module constant, capture test proving the value reaches the grouping,
+   functional shorter-cues test).
+
+4. **Engine-reuse state-bleed audit — CLEAN; don't re-investigate blind.**
+   No `language_hint`/`bias_terms` bleed exists across chunks or jobs within a
+   process. Checked (2026-07-15): `registry.get_engine` returns a fresh
+   `cls(**kwargs)` per call, and nothing in `transcribe/` caches an engine
+   instance (grep `get_engine|lru_cache|_ENGINE|engine_cache` — only run.py
+   calls it); `run.py` engine instances live for exactly one `run_file` and
+   are `del`'d, `bias_terms`/`bias_weights` are re-read from the DB per job,
+   and language hints are per-call literals ("th" for A, None for B); every
+   adapter builds its per-call kwargs *inside* `transcribe()`/
+   `transcribe_batch()` (whisper_thai/whisper_multi: `generate_kwargs` +
+   `prompt_ids` fresh each call; faster_whisper: `initial_prompt` + `common`
+   dict fresh, and the OOM-halved `bs` is a local never written back to
+   `self._batch_size`; funasr: `cache={}` fresh per call — the classic FunASR
+   bleed vector — and hotword rebuilt per call; typhoon_rt holds only the
+   model); `_batch.py` retries hand the HF pipeline fresh dict wrappers
+   (fixed 2026-06-18) and never mutate `generate_kwargs`; `inject.build_prompt`
+   uses `sorted()` (copies) and fresh `BiasTerm` objects, so the *shared*
+   `bias_terms` list that rides in every chunk's `EngineInput` is never
+   mutated. Two non-bleed observations recorded for posterity: (a)
+   `language_hint` is *honored* only by faster_whisper — whisper_thai forces
+   `"th"`, whisper_multi/funasr force auto-detect (each documented/deliberate);
+   (b) whisper_* `transcribe_batch` builds its bias prompt from `inputs[0]`
+   under a documented same-job assumption. **Due when:** any caller ever
+   batches `EngineInput`s across jobs or bias sets in one `transcribe_batch`
+   call — the `inputs[0]` prompt assumption then breaks silently.
+
 ## diff-srt flywheel path — executed 2026-07-15
 
 The web editor's correction capture (diff.py) only matches original vs.

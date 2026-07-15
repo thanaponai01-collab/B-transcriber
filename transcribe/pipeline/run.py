@@ -133,7 +133,8 @@ def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
     return result
 
 
-def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint, batch_size):
+def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint,
+                     batch_size, chunk_overlap_ms=750):
     """Run one engine over the audio → (global-timestamped tokens, word_level, raw_words).
 
     Whole-file engines get the full track in a single call (their own VAD and
@@ -169,8 +170,9 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
             tok.start_ms += c.start_ms
             tok.end_ms += c.start_ms
         chunk_tokens.append(stitch.ChunkTokens(r.tokens, c.start_ms, c.end_ms))
-    # GAP-4: stitch drops duplicate words from any chunk-overlap windows.
-    return stitch.stitch(chunk_tokens), timestamps_final, None
+    # GAP-4: stitch drops duplicate words from any chunk-overlap windows. The
+    # seam search window matches the overlap ingest actually materialized.
+    return stitch.stitch(chunk_tokens, seam_window_ms=chunk_overlap_ms), timestamps_final, None
 
 
 def run_file(
@@ -306,6 +308,7 @@ def run_file(
             _log_vram("engine-a-loaded")
             result_a_tokens, engine_a_timestamps_final, raw_words_a = _transcribe_with(
                 engine_a, chunks, full_audio, bias_terms, bias_weights, "th", engine_batch_size,
+                chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)),
             )
             engine_a.unload()
             _log_vram("post-engine-a")
@@ -328,6 +331,7 @@ def run_file(
             _log_vram("engine-b-loaded")
             result_b_tokens, timestamps_final_b, raw_words_b = _transcribe_with(
                 engine_b, chunks, full_audio, bias_terms, bias_weights, None, engine_batch_size,
+                chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)),
             )
             engine_b.unload()
             _log_vram("post-engine-b")

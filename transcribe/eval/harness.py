@@ -71,6 +71,7 @@ def run_harness(
     config: dict,
     db_path: Path,
     pipeline_fn=None,
+    experiment: bool = False,
 ) -> HarnessResult | None:
     """
     Run the golden set through the pipeline and compute aggregate metrics.
@@ -80,6 +81,14 @@ def run_harness(
         db_path: path to the SQLite database
         pipeline_fn: callable(audio_path, config) -> list[dict{"text","script"}]
                      If None, the real pipeline is used (imports pipeline.run).
+        experiment: True for an A/B probe (e.g. `--engine-b X`, `--llm-enabled`).
+                    The run is still gated against the production baseline, but
+                    its eval_run row is marked is_experiment=1 so it can never
+                    BECOME the baseline a later production run is compared to.
+                    Production config changes (engine swap in config.yaml, bias
+                    promotion) stay experiment=False — the gate must compare
+                    them against the previous production baseline and, on pass,
+                    they legitimately become the new one.
     Returns:
         EvalMetrics aggregate over all golden samples.
     """
@@ -178,6 +187,7 @@ def run_harness(
         pipeline_version=_pipeline_version(),
         engine_pair=f"{config.get('engine_a', '?')}+{config.get('engine_b', '?')}",
         bias_hash=_bias_hash(conn),
+        is_experiment=experiment,
     )
     conn.close()
 
@@ -202,14 +212,24 @@ if __name__ == "__main__":
     parser.add_argument("--llm-enabled", action="store_true",
                         help="Turn on the local-Ollama LLM reconciler tiebreak for this "
                         "run, for an A/B comparison against the script fallback (Phase 3)")
+    parser.add_argument("--experiment", action="store_true",
+                        help="Mark this run as an A/B experiment: gated against the "
+                        "production baseline but never recorded AS a baseline. Implied "
+                        "by --engine-b / --llm-enabled (those override config.yaml, so "
+                        "their runs don't describe the production config).")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    # Any CLI override means this run measures a config that is NOT config.yaml —
+    # its result must not become the production baseline.
+    experiment = bool(args.experiment or args.engine_b or args.llm_enabled)
     if args.engine_b:
         cfg["engine_b"] = args.engine_b
     if args.llm_enabled:
         cfg.setdefault("reconciler", {})["llm_enabled"] = True
+    if experiment:
+        print("[harness] experiment run — result will not become the regression baseline")
     import sys
-    result = run_harness(cfg, Path(args.db))
+    result = run_harness(cfg, Path(args.db), experiment=experiment)
     if result is None or not result.passed:
         sys.exit(1)
