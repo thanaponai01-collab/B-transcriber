@@ -1,7 +1,32 @@
-"""Engine B — Code-switch ASR adapter using FunASR (SeAcoParaformer or SenseVoice).
+"""Engine B candidate — FunASR adapter, currently wired to SenseVoiceSmall.
 
-FunASR's SenseVoiceSmall handles Thai-English code-switching and fits 8GB VRAM.
-Model is loaded and unloaded explicitly; never assume it shares VRAM with Engine A.
+**NOT VIABLE FOR THIS PROJECT (confirmed 2026-07-16): SenseVoiceSmall does not
+support Thai.** Its own model card (README.md, `language=` kwarg docstring)
+lists exactly five languages: `zh` (Mandarin), `en`, `yue` (Cantonese), `ja`,
+`ko` — no `th`. With `language="auto"` (below), its language-ID misclassifies
+Thai speech as Cantonese and decodes it as Chinese-script text throughout —
+verified by inspecting raw output: `result["text"]` carries an explicit
+`<|yue|>` (Cantonese) tag, and every emitted "word" is a CJK Unified
+Ideograph codepoint (e.g. U+56F0 '困'), not Thai script at all.
+
+Every harness probe of this engine to date — including the two run against
+the 2026-07-16 gold set (`--engine-b funasr` alone showed BER "improved" but
+WER_latin regressed; `--engine-b funasr --llm-enabled` was byte-identical to
+that, because Engine A/B token text never overlaps enough for align_hyp.align
+to ever produce a real disagreement slot — 0 of 52 slots had both candidates
+on a sample clip) — was measuring this Cantonese/Chinese misdetection, not a
+genuine Thai-code-switch accuracy tradeoff. The apparent "BER improvement"
+in the plain probe is not trustworthy evidence of decorrelation value; do not
+cite it. See TODO_LEDGER.md for the correction and CLAUDE.md's engine table.
+
+There is no language code in SenseVoiceSmall's `language=` kwarg that fixes
+this — Thai genuinely isn't in the model's training languages, so this is a
+model-selection dead end for this project, not an adapter bug. The adapter
+code below is left intact (its sentence_info/words parsing, hotword
+injection, and load/unload discipline are all otherwise correct and could be
+reused for a future FunASR checkpoint that does support Thai), but do not
+activate `engine_b: funasr` in production and do not re-probe it as a
+Thai-code-switch candidate without a different underlying model.
 """
 
 from __future__ import annotations

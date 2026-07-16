@@ -89,20 +89,27 @@ candidates below are eval-gated, not environment-blocked.
   code-switch gap that Engine-B / LLM-reconciler A/B probes can finally be
   judged against. See IMPLEMENT_IMPROVEMENTS.md Phase 2 for history.
 - **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter registered, deps import
-  fine on this venv (`hub="hf"` needed in `AutoModel(...)` — funasr defaults to
-  ModelScope, which 404s for this model outside China). Activating it produced
-  byte-identical harness metrics to `passthrough` until the `_script_fallback`
-  circularity was fixed (see reconciler note below) — still gated off pending
-  gold-set evidence.
+  fine on this venv. **RETIRED as a Thai candidate (2026-07-16): the model
+  itself does not support Thai** — its README documents exactly five languages
+  (zh/en/yue/ja/ko), and with `language="auto"` it misdetects Thai speech as
+  Cantonese, decoding Chinese-script garbage throughout (confirmed via raw
+  output inspection: an explicit `<|yue|>` tag, CJK codepoints). Every prior
+  harness number for this engine — including the "byte-identical to
+  passthrough" result below and the 2026-07-15/16 WER_latin/BER probes — was
+  measuring that garbage, not a real Thai accuracy tradeoff. See
+  `engines/funasr.py`'s docstring. Do not re-probe without a different model.
 - **`whisper_multi`**: `openai/whisper-large-v3` — multilingual generalist /
-  code-switch slot, a real second hypothesis so cross-engine agreement would
-  be a live confidence signal if activated.
+  code-switch slot, genuinely Thai-capable (~100 languages incl. Thai) so this
+  is the architecturally correct decorrelated candidate, unlike funasr. A real
+  second hypothesis so cross-engine agreement would be a live confidence
+  signal if activated. Probed 2026-07-16 — see TODO_LEDGER for the result.
 - **`typhoon_rt`**: SCB10X Typhoon ASR Real-time (FastConformer-Transducer,
-  ~115M) via NeMo — decorrelated Engine B candidate. Adapter built + mock-tested;
-  NeMo not yet installed (should install clean on this Py3.11 venv, unlike the
-  Py3.13 risk originally logged). Do not install before growing the gold set —
-  it would hit the same "can't prove a lift" wall as `funasr`, not a
-  `typhoon_rt`-specific blocker.
+  ~115M) via NeMo — decorrelated Engine B candidate. Adapter built; NeMo
+  installed and verified clean on this 3.11.9 venv (`nemo_toolkit==2.7.3`) —
+  the Py3.13 wheel risk originally logged doesn't apply here. **TRIED and
+  REJECTED (2026-07-16):** regresses CER_thai and WER_latin vs baseline with
+  only a marginal BER edge — worse than every other candidate on accuracy.
+  Don't re-try without new evidence.
 - **MockEngine** (`mock`): canned tokens, no GPU required — used for all pipeline tests
 
 **LLM reconciler tiebreak (`transcribe/pipeline/llm_reconcile.py`):** on an
@@ -111,13 +118,29 @@ bias_terms) -> 0|1` hook instead of falling straight to `_script_fallback`.
 `make_llm_fn()` wires this to a **local Ollama** instance (`qwen2.5:3b-instruct`
 over stdlib `urllib`, no external API) — an unreachable/unpulled model falls
 through to `_script_fallback` automatically. Gated off by default
-(`reconciler.llm_enabled: false` in config.yaml); the wiring is verified
-end-to-end. With metrics v2 the BER gap it should attack is finally measurable
-(see Engine B note above) — run `harness --llm-enabled` with Ollama serving to
-judge it. `_script_fallback` no longer trusts Engine A's own
-script classification of its own output on every Thai disagreement — when both
-engines report a confidence, confidence decides first and script is only the
-final tiebreak.
+(`reconciler.llm_enabled: false` in config.yaml). `_script_fallback` no longer
+trusts Engine A's own script classification of its own output on every Thai
+disagreement — when both engines report a confidence, confidence decides
+first and script is only the final tiebreak.
+
+**PROBED 2026-07-16, wiring confirmed correct, output not yet useful.**
+With Ollama serving and `engine_b: whisper_multi` (the first candidate that
+produces real disagreements — funasr never does, see above), the reconciler
+was instrumented directly: `llm_fn` was called 11 times on one clip with zero
+errors, and picked Engine A on **all 11** — including cases where Engine B's
+text was visibly longer and more complete. That's not credible as genuine
+judgment; it reads as positional bias. Two compounding causes found: (1)
+`_PROMPT_TEMPLATE` still says "disagree on **one word**" though tokens have
+been phrase cues since 5.4 — the model is shown two full sentences while told
+to expect one word; (2) `whisper_multi` correctly reports `confidence=None`
+(never faked), which means `_script_fallback`'s confidence-tiebreak never
+fires against it either, so it degrades to same-script routing that also
+always favors A. Net effect: harness output was byte-identical with and
+without `--llm-enabled`. This is not evidence the reconciler design is wrong
+— it's an unfixed prompt plus an untested model, both fixable. See
+TODO_LEDGER.md for the full diagnosis and next steps (prompt fix, position-
+randomization test to isolate the bias, a fallback tiebreak for the
+null-confidence case) before re-probing.
 
 **Token granularity (5.4):** tokens persisted to the DB are **phrase cues** (not
 words). `EngineResult.timestamps_final` (formerly `word_level_timestamps`) signals

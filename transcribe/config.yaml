@@ -2,30 +2,49 @@
 # Engine A: Thai specialist (Thonburian Whisper lineage)
 # Engine B: multilingual generalist (Whisper large-v3) — the code-switch slot.
 #           Real second hypothesis ⇒ cross-engine agreement is a live confidence
-#           signal. (FunASR/SenseVoiceSmall imports and runs fine on this venv —
-#           it's no longer environment-blocked.) It's off (passthrough) because
-#           it was TRIED and the gate rejected it, twice, for the same reason:
-#           2026-07-15 (metrics v1): WER_latin regressed 1.1164 vs 1.0205.
-#           2026-07-16 (metrics v2, BER finally live): BER IMPROVED 0.7882 vs
-#           0.8592 (hyp switch points 66 vs 38, matched 18 vs 10 — funasr
-#           really does find code-switches Engine A misses) but WER_latin
-#           regressed 1.2258 vs 1.0452 — its extra Latin output is mostly
-#           wrong words, so the gate blocks it. CER_thai 0.1451 unchanged in
-#           both: SenseVoiceSmall's word-level path always sets
-#           confidence=None (engines/funasr.py), so _script_fallback's
-#           confidence tiebreak never fires for it and Thai disagreements
-#           resolve to Engine A on script alone. The measured tradeoff says a
-#           decorrelated Engine B IS worth having for BER — funasr just isn't
-#           accurate enough on Latin words.
-#           2026-07-16, typhoon_rt also TRIED and rejected: CER_thai regressed
-#           0.1601 vs 0.1451, WER_latin regressed 1.1290 vs 1.0452, BER only
-#           marginally better (0.8537 vs 0.8592 — far short of funasr's 0.7882).
-#           Worse than funasr on every axis except a negligible BER edge. (Its
-#           first run crashed on CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH — a
-#           real, separate bug in faster_whisper.py's PATH mutation leaking
-#           into any same-process NeMo engine, now fixed; see TODO_LEDGER.)
-#           Don't re-try typhoon_rt without new evidence. Next candidate: a
-#           Qwen3-ASR adapter (see IMPLEMENT_IMPROVEMENTS.md Phase 2).
+#           signal. It's off (passthrough) because every candidate tried so far
+#           has been rejected:
+#
+#           funasr (SenseVoiceSmall) — RETRACTED, not just rejected. Its own
+#           model card documents exactly five supported languages (zh/en/yue/
+#           ja/ko) — Thai isn't one. With language="auto" it misdetects Thai
+#           speech as Cantonese and decodes Chinese-script garbage throughout
+#           (confirmed 2026-07-16 by inspecting raw output: an explicit <|yue|>
+#           tag and CJK Unified Ideograph codepoints, not Thai script). The
+#           2026-07-15/16 "WER_latin regressed / BER improved" numbers earlier
+#           recorded here were measuring that garbage, not a real accuracy
+#           tradeoff — DO NOT cite them as evidence about decorrelated engines
+#           in general. See engines/funasr.py's docstring and TODO_LEDGER.md.
+#           Not re-testable without a different underlying model.
+#
+#           typhoon_rt (2026-07-16) — TRIED and rejected on genuine accuracy
+#           grounds: CER_thai regressed 0.1601 vs 0.1451 baseline, WER_latin
+#           regressed 1.1290 vs 1.0452, BER only marginally better (0.8537 vs
+#           0.8592). (Its first run crashed on CUDNN_STATUS_SUBLIBRARY_VERSION_
+#           MISMATCH — a real, separate bug in faster_whisper.py's PATH
+#           mutation leaking into any same-process NeMo engine, since fixed;
+#           see TODO_LEDGER.) Don't re-try without new evidence.
+#
+#           whisper_multi (Whisper large-v3) — genuinely Thai-capable (~100
+#           languages incl. Thai), architecturally the right decorrelated
+#           candidate — but REJECTED on this probe too: CER_thai regressed
+#           0.2323 vs 0.1451 (~60% relative), WER_latin regressed 1.0903 vs
+#           1.0452, BER unchanged (0.8616 vs 0.8592). Root cause (diagnosed,
+#           not a mystery): on every real A/B disagreement instrumented (11/11
+#           on a sample clip), BOTH the LLM reconciler and _script_fallback
+#           picked Engine A — the LLM shows a suspicious 100% positional bias
+#           under the current (stale, pre-phrase-cue) prompt, and
+#           _script_fallback degrades to pure same-script routing because
+#           whisper_multi correctly reports confidence=None (never faked) so
+#           its confidence-tiebreak never fires. Engine B's only route into
+#           the output is un-reconciled solo tokens, which dilute rather than
+#           correct. See TODO_LEDGER for the full diagnosis and next steps
+#           (prompt fix, position-randomization test, fallback tiebreak).
+#           NOT evidence the architecture can't work — evidence the current
+#           prompt/model/fallback combination doesn't yet make it work.
+#
+#           Next untried candidate: a Qwen3-ASR adapter (see
+#           IMPLEMENT_IMPROVEMENTS.md Phase 2).
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
@@ -146,6 +165,15 @@ segment:
 # llm_reconcile.make_llm_fn's callable is caught there). Requires
 # `ollama pull <model>` once, and `ollama serve` running locally, before
 # enabling.
+#
+# PROBED 2026-07-16 (Ollama running, qwen2.5:3b-instruct serving, engine_b=
+# whisper_multi so real disagreements existed): the LLM picked Engine A on
+# 11/11 instrumented real disagreements — a suspicious 100% rate, likely
+# positional bias rather than judgment, under llm_reconcile.py's CURRENT
+# prompt (_PROMPT_TEMPLATE still says "disagree on one word" — stale since
+# tokens became phrase cues, 5.4). Made zero measurable difference to harness
+# output. Do not re-probe as-is; fix the prompt for phrase-cue framing and/or
+# test with position-randomized A/B assignment first. See TODO_LEDGER.md.
 reconciler:
   llm_enabled: false
   ollama:

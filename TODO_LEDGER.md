@@ -46,9 +46,38 @@ switches.
 funasr` (experiment row, baseline untouched): **BER improved 0.7882 vs
 0.8592** (hyp switches 66 vs 38, matched 18 vs 10 — the decorrelated engine
 genuinely finds switches Engine A misses) but **WER_latin regressed 1.2258
-vs 1.0452** → gate blocked, correctly. CER_thai 0.1451 unchanged. Verdict:
-a decorrelated Engine B is worth having for BER; funasr specifically is too
-inaccurate on Latin words.
+vs 1.0452** → gate blocked, correctly. CER_thai 0.1451 unchanged. Verdict
+recorded at the time: a decorrelated Engine B is worth having for BER;
+funasr specifically is too inaccurate on Latin words.
+
+**⚠ CORRECTION (same session, after probing the LLM reconciler): the above
+verdict is WRONG — retracted, not just superseded.** Probing `--engine-b
+funasr --llm-enabled` produced metrics **byte-identical** to the plain
+funasr run above (down to hyp_switches/matched_switches), which meant the
+LLM tiebreak fired zero times. Instrumenting `align_hyp.align()` directly on
+a gold clip confirmed why: **0 of 52 slots had both an A and a B candidate**
+— faster_whisper and funasr's outputs never overlap enough to be treated as
+a disagreement at all. Inspecting funasr's raw output explained that:
+`result["text"]` carries an explicit `<|yue|>` (Cantonese) tag, and every
+"word" token is a CJK Unified Ideograph codepoint (e.g. `困` '困'), not
+Thai script. Checked SenseVoiceSmall's own model card: it documents exactly
+five supported languages — `zh, en, yue, ja, ko` — **Thai is not one of
+them**. With `language="auto"` (`engines/funasr.py`), its language-ID
+misdetects Thai speech as Cantonese and decodes Chinese-script garbage
+throughout. **The "BER improved 0.7882" and "WER_latin regressed 1.2258"
+numbers above were measuring that garbage — not a genuine Thai-code-switch
+accuracy tradeoff.** They are not evidence that a decorrelated Engine B is
+or isn't worth having; they are evidence that SenseVoiceSmall cannot
+transcribe Thai. This also retroactively explains the *older*,
+pre-2026-07-16 "byte-identical to passthrough" funasr result noted elsewhere
+in this ledger/CLAUDE.md — consistent with zero real A/B overlap having
+existed the whole time, for the same underlying reason. **funasr/
+SenseVoiceSmall is retired as a Thai-code-switch candidate** (see
+`engines/funasr.py`'s corrected docstring) — not gated pending more gold
+data, structurally incapable regardless of gold-set size. Don't re-probe it
+without a different underlying model. Tests unaffected (no test asserted the
+old, wrong conclusion — this was a documentation/interpretation error, not a
+code defect with a regression test to write).
 
 **Second probe: typhoon_rt (same session, 2026-07-16).** Installed
 `nemo_toolkit[asr]==2.7.3` cleanly on this 3.11.9 venv (the Py3.13 wheel risk
@@ -87,6 +116,65 @@ engine and a NeMo engine in the same process — Engine B has been
 `passthrough` since typhoon_rt's adapter was built. Would have bitten anyone
 activating typhoon_rt in production. Tests: `tests/test_faster_whisper_
 path_scoping.py` (3 new; suite 187 green).
+
+**Third probe: whisper_multi + the LLM reconciler (same session, 2026-07-16)
+— the first genuine test bed, and a real diagnosed finding.** Unlike funasr,
+`whisper_multi` (Whisper large-v3) genuinely supports Thai, so this was the
+first candidate where the LLM tiebreak could actually be exercised on real
+disagreements.
+
+`harness --engine-b whisper_multi --llm-enabled` (Ollama serving
+`qwen2.5:3b-instruct` locally): **CER_thai regressed sharply to 0.2323**
+(vs 0.1451 baseline — a ~60% relative increase), `WER_latin 1.0903` (mild
+regression vs 1.0452), `BER 0.8616` (not better than 0.8592). An isolation
+re-run (`--engine-b whisper_multi`, no `--llm-enabled`) produced **byte-
+identical** numbers — the LLM tiebreak made zero measurable difference here
+too, same symptom as the retired funasr probe but a *different* root cause
+(whisper_multi is not broken like funasr — align_hyp genuinely produces
+overlapping A+B slots against it, 12 of 26 on a sample clip, several with
+real text differences).
+
+Instrumenting `reconcile._pick()`'s `llm_fn` directly on one clip (11 real
+disagreements) explains why: **the LLM picked Engine A (index 0) on all 11
+of 11 calls** — including cases where Engine B's text was visibly longer and
+more complete than Engine A's truncated cue. A 100% rate across diverse,
+non-trivial disagreements is not credible as genuine semantic judgment; it
+reads as a positional/first-option bias in `qwen2.5:3b-instruct` under the
+current prompt. Two compounding, real defects found along the way:
+1. **Prompt staleness bug** (`llm_reconcile.py`'s `_PROMPT_TEMPLATE`): it
+   still says *"Two Thai speech-recognition engines disagree on **one
+   word**"* — but tokens have been phrase cues since 5.4 (CLAUDE.md), so the
+   model is actually shown two full sentences while being told to expect one
+   word. Never updated when token granularity changed.
+2. **`_script_fallback` degrades to pure script-routing here for an
+   unrelated reason:** `engines/whisper_multi.py` hardcodes
+   `confidence=None` on every token (deliberate — the contract's "never fake
+   a confidence" rule, correctly followed), which means
+   `_script_fallback`'s confidence-tiebreak branch never fires against it.
+   Since most disagreements here are both-Thai-script, the script-routing
+   fallback then also trivially picks A every time. So on every reconciled
+   ("both A+B") slot, *neither* path — LLM or fallback — ever selects
+   Engine B; the only way whisper_multi's content enters the final
+   transcript at all is via the 12 unmatched "only-B" solo slots that pass
+   straight through un-reconciled, and that's what drives the CER_thai
+   regression (whisper_multi's own segmentation/accuracy on those unmatched
+   spans is worse, diluting rather than correcting Engine A's output).
+
+**Verdict: whisper_multi + LLM reconciler rejected on the current gold set —
+but unlike funasr/typhoon_rt, this is NOT evidence the architecture can't
+work.** It's evidence the *current* prompt and local model provide no
+discriminative signal, compounded by a null-confidence engine collapsing the
+fallback to a routing rule that happens to always favor A on same-script
+disagreements. **Due next (in order of cheapest-to-test):**
+(a) fix the prompt's stale "one word" framing to describe phrase-cue
+comparison: (b) test with per-call randomization of which candidate is
+presented as "A" vs "B" to separate genuine judgment from positional bias —
+if index 0 still wins ~100% after randomization, the bias is confirmed and a
+larger/better local model is needed; (c) reconsider whether `_script_fallback`
+should have a non-confidence tiebreak (e.g. length/completeness heuristic)
+for exactly this null-confidence-engine case, since the contract correctly
+forbids faking confidence but the fallback currently has no fallback *within*
+the fallback when confidence is absent on one side.
 
 **Known limitation (accepted):** intra-cue interpolation assumes uniform
 character rate; on long cues the placement error can approach
