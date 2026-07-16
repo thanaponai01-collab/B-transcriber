@@ -27,9 +27,10 @@ from transcribe.flywheel.inject import BiasTerm, build_prompt
 logger = logging.getLogger(__name__)
 
 
-def _register_cuda_dll_dirs() -> None:
+def _register_cuda_dll_dirs() -> str:
     """Make the pip nvidia-*-cu12 wheels' bundled DLLs (cublas64_12.dll,
-    cudnn64_9.dll, ...) loadable by CTranslate2 on Windows.
+    cudnn64_9.dll, ...) loadable by CTranslate2 on Windows. Returns the PATH
+    value from before mutation, so the caller can restore it later.
 
     Those wheels drop their DLLs under site-packages/nvidia/<pkg>/bin, which is
     never on PATH. torch works around the equivalent problem for its own
@@ -42,18 +43,33 @@ def _register_cuda_dll_dirs() -> None:
     LoadLibrary call actually consults, so that's what has to be extended.
     Without this, load fails with 'cublas64_12.dll is not found or cannot be
     loaded' even though the DLL is present in the venv.
+
+    CALLER MUST RESTORE PATH ON unload(): this prepends a CUDA-12 cuDNN
+    (cudnn64_9.dll) ahead of everything else on PATH, process-wide. A
+    same-process engine loaded afterward that resolves its OWN cuDNN via
+    Windows' DLL search order — e.g. NeMo/PyTorch (torch 2.13+cu130, a
+    different CUDA generation) — can have Windows hand it THIS prepended
+    cudnn64_9.dll instead of the one it actually linked against, producing
+    'CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH' on its very first conv forward
+    pass. Reproduced 2026-07-16: typhoon_rt (NeMo) works standalone but
+    crashes the same way after only calling this function — no CTranslate2
+    model even needs to load — confirming the PATH mutation itself, not GPU
+    residency, is the cause. This makes the mutation load()-scoped instead of
+    process-lifetime: see FasterWhisperEngine.unload().
     """
     if sys.platform != "win32":
-        return
+        return os.environ.get("PATH", "")
+    original_path = os.environ.get("PATH", "")
     nvidia_root = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
     if not nvidia_root.is_dir():
-        return
+        return original_path
     bin_dirs = [str(p) for p in nvidia_root.glob("*/bin")]
-    path = os.environ.get("PATH", "")
+    path = original_path
     for bin_dir in bin_dirs:
         if bin_dir not in path:
             path = bin_dir + os.pathsep + path
     os.environ["PATH"] = path
+    return original_path
 
 
 # Converted once via ct2-transformers-converter (see README). Repo-root-relative so
@@ -313,9 +329,12 @@ class FasterWhisperEngine(Engine):
         self._vad_min_silence_ms = vad_min_silence_ms
         self._model = None
         self._pipeline = None
+        self._pre_load_path: str | None = None
 
     def load(self) -> None:
-        _register_cuda_dll_dirs()
+        # Restored in unload() — see _register_cuda_dll_dirs's docstring for
+        # why this PATH mutation must not outlive this engine's residency.
+        self._pre_load_path = _register_cuda_dll_dirs()
         from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
@@ -556,5 +575,13 @@ class FasterWhisperEngine(Engine):
         if self._model is not None:
             del self._model
             self._model = None
+        # Undo _register_cuda_dll_dirs's PATH prepend now that this engine no
+        # longer needs it — an engine loaded afterward in this process (e.g. a
+        # NeMo-based Engine B) must not inherit a CUDA-12 cudnn64_9.dll ahead
+        # of its own on PATH. See that function's docstring for the crash this
+        # caused before the fix (CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH).
+        if self._pre_load_path is not None:
+            os.environ["PATH"] = self._pre_load_path
+            self._pre_load_path = None
         gc.collect()
         logger.info("FasterWhisper unloaded, VRAM freed")

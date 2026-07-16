@@ -16,9 +16,13 @@ faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-convert
                         #     --copy_files tokenizer.json preprocessor_config.json
 funasr>=1.1.0
 openai-whisper>=20250625
-# Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree;
-# Python 3.13 wheel support UNVERIFIED — install only when activating typhoon_rt
-# (engine_b stays passthrough until the gold set eval-gates it). See TODO_LEDGER.
+# Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree
+# (pytorch-lightning, optuna, wandb, ...) — kept commented out of the default
+# install. VERIFIED 2026-07-16: installs and imports cleanly on this 3.11.9
+# venv (nemo_toolkit==2.7.3) — the old "Python 3.13 wheel UNVERIFIED" note no
+# longer applies. Probed as engine_b and REJECTED on accuracy: regresses
+# CER_thai and WER_latin vs both the passthrough baseline and funasr, with
+# only a marginal BER edge. Don't re-try without new evidence; see TODO_LEDGER.
 # nemo_toolkit[asr]>=2.7.0
 
 # Thai NLP

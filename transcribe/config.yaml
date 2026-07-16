@@ -16,9 +16,16 @@
 #           confidence tiebreak never fires for it and Thai disagreements
 #           resolve to Engine A on script alone. The measured tradeoff says a
 #           decorrelated Engine B IS worth having for BER — funasr just isn't
-#           accurate enough on Latin words. Next candidates: typhoon_rt
-#           (adapter built, needs NeMo) or a Qwen3-ASR adapter (see
-#           IMPLEMENT_IMPROVEMENTS.md Phase 2).
+#           accurate enough on Latin words.
+#           2026-07-16, typhoon_rt also TRIED and rejected: CER_thai regressed
+#           0.1601 vs 0.1451, WER_latin regressed 1.1290 vs 1.0452, BER only
+#           marginally better (0.8537 vs 0.8592 — far short of funasr's 0.7882).
+#           Worse than funasr on every axis except a negligible BER edge. (Its
+#           first run crashed on CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH — a
+#           real, separate bug in faster_whisper.py's PATH mutation leaking
+#           into any same-process NeMo engine, now fixed; see TODO_LEDGER.)
+#           Don't re-try typhoon_rt without new evidence. Next candidate: a
+#           Qwen3-ASR adapter (see IMPLEMENT_IMPROVEMENTS.md Phase 2).
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;

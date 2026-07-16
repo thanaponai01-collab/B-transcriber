@@ -48,9 +48,45 @@ funasr` (experiment row, baseline untouched): **BER improved 0.7882 vs
 genuinely finds switches Engine A misses) but **WER_latin regressed 1.2258
 vs 1.0452** → gate blocked, correctly. CER_thai 0.1451 unchanged. Verdict:
 a decorrelated Engine B is worth having for BER; funasr specifically is too
-inaccurate on Latin words. **Due next:** probe typhoon_rt (needs NeMo
-install) and `--llm-enabled` (needs `ollama serve` + pulled model — Ollama
-was not running this session) against the same v2 baseline.
+inaccurate on Latin words.
+
+**Second probe: typhoon_rt (same session, 2026-07-16).** Installed
+`nemo_toolkit[asr]==2.7.3` cleanly on this 3.11.9 venv (the Py3.13 wheel risk
+in the code comments doesn't apply here). First attempt crashed with
+`CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH` on typhoon_rt's very first conv
+forward — traced to a real, separate bug (see "PATH-scoping bugfix" entry
+below) and fixed. Re-run after the fix: **all 5 clips transcribed cleanly**,
+but the result is a clear regression across every signal: `CER_thai 0.1601`
+(vs 0.1451 baseline), `WER_latin 1.1290` (vs 1.0452), `BER 0.8537` (vs 0.8592
+— a marginal 0.6pp gain, far short of funasr's 0.71). switches hyp=60,
+matched=12. **Verdict: typhoon_rt does not currently earn Engine-B activation
+— worse than funasr on every axis except a negligible BER edge.** Plausible
+causes not yet investigated: this specific NeMo release/checkpoint pairing,
+audio preprocessing mismatch (16kHz mono float32 assumed but not verified
+against what `typhoon-asr-realtime.nemo`'s manifest expects), or the model
+being tuned for streaming/short-utterance input rather than the ~30s+ whole-
+file spans this adapter feeds it. **Due when:** don't re-try without new
+evidence (mirrors the typhoon-whisper-turbo Engine-A precedent) — either
+diagnose why NeMo's own reference eval numbers don't reproduce here, or move
+on to a Qwen3-ASR adapter / `--llm-enabled` probe instead.
+
+**PATH-scoping bugfix (same session, real bug, not NeMo/typhoon_rt-specific):**
+`engines/faster_whisper.py`'s `_register_cuda_dll_dirs()` prepended nvidia
+pip wheels' bin dirs (incl. a CUDA-12 `cudnn64_9.dll`) onto process-wide
+`PATH` so CTranslate2 could find `cublas64_12.dll` — but never reverted it.
+Any NeMo-based engine (torch 2.13+cu130, a different CUDA generation) loaded
+afterward in the *same process* inherited that prepended cuDNN and crashed on
+its first conv forward with `CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH`.
+Confirmed via a minimal repro: calling only `_register_cuda_dll_dirs()` (zero
+CTranslate2 model loaded) was sufficient to break typhoon_rt; typhoon_rt
+worked fine standalone. **Fix:** the function now returns the pre-mutation
+PATH; `FasterWhisperEngine.load()` captures it, `unload()` restores it — the
+mutation is now load()-scoped instead of process-lifetime. This was silent
+and untested before because no test or eval run had ever loaded a CTranslate2
+engine and a NeMo engine in the same process — Engine B has been
+`passthrough` since typhoon_rt's adapter was built. Would have bitten anyone
+activating typhoon_rt in production. Tests: `tests/test_faster_whisper_
+path_scoping.py` (3 new; suite 187 green).
 
 **Known limitation (accepted):** intra-cue interpolation assumes uniform
 character rate; on long cues the placement error can approach
