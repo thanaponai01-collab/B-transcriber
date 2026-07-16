@@ -176,6 +176,54 @@ for exactly this null-confidence-engine case, since the contract correctly
 forbids faking confidence but the fallback currently has no fallback *within*
 the fallback when confidence is absent on one side.
 
+**Fourth probe: prompt fix + position randomization (same session,
+2026-07-16, item (a)+(b) above executed).** `llm_reconcile.py` rewritten:
+`_PROMPT_TEMPLATE` now describes segment/phrase-level candidates (never says
+"one word"), and `make_llm_fn` randomizes per call which of (ta, tb) is shown
+as prompt slot 0 vs 1, remapping the model's answer back to ta/tb afterward.
+Tests: `tests/test_phase3_llm_reconcile.py` (+2: prompt no longer claims
+single-word, swap/no-swap mapping verified directly; suite 189 green).
+
+**Re-instrumented on the same clip:** the degenerate lock-in is confirmed
+gone — `llm_idx` now varies (7 of 11 calls picked Engine A, 4 picked Engine
+B), where before the fix it was 11 of 11 Engine A. The fix does exactly what
+it was built to do: a model with positional bias no longer manifests as
+"always trust Engine A."
+
+**But the corpus-level harness result got WORSE, not better — report this
+honestly, not as a clean win:**
+
+| Config | CER_thai | WER_latin | BER |
+|---|---|---|---|
+| baseline (passthrough) | 0.1451 | 1.0452 | 0.8592 |
+| whisper_multi, broken prompt (pre-fix), llm-enabled | 0.2323 | 1.0903 | 0.8616 |
+| whisper_multi, **fixed prompt + randomized**, llm-enabled | **0.3505** | 1.0387 | 0.8658 |
+
+CER_thai got substantially worse after the fix (0.3505 vs 0.2323), WER_latin
+improved slightly (1.0387 vs 1.0903), BER is essentially flat/marginally
+worse. **Diagnosis: this is not a regression in the fix — it's the fix
+correctly exposing that `qwen2.5:3b-instruct`'s judgment on real
+disagreements isn't good enough to beat the naive heuristic of always
+trusting the stronger engine.** Before the fix, the degenerate "always pick
+Engine A" bug was *accidentally* a decent heuristic on this gold set, because
+Engine A (faster_whisper) is empirically the stronger engine here (lowest
+CER_thai of any config tried all session, 0.1451). Once the reconciler can
+genuinely pick Engine B and does so ~36% of the time, and Engine B's picks
+are not reliably better, overall accuracy drops. This is a **model-quality
+problem, not a bias/wiring problem** — categorically different from, and now
+cleanly separated from, the bug that was fixed.
+
+**Verdict: `llm_enabled: true` stays off. The wiring, prompt framing, and
+positional-bias defect are now all fixed and tested — do not revisit those.**
+What remains is a genuine open question: is `qwen2.5:3b-instruct` too weak
+for this task, or does the prompt need few-shot examples / more context
+(surrounding tokens, not just the two candidates) to reason well? **Due
+next:** try a larger local model (`qwen2.5:7b-instruct` is already referenced
+in this file's own docstrings/tests as a plausible next step) before
+concluding the LLM-tiebreak approach itself doesn't work — the current
+result rules out the *specific* small model + minimal-context prompt tried
+here, not the architecture.
+
 **Known limitation (accepted):** intra-cue interpolation assumes uniform
 character rate; on long cues the placement error can approach
 `boundary_tol_ms` (300 ms). Both sides share the bias, so matches survive in

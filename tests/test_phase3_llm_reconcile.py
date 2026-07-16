@@ -9,27 +9,42 @@ from urllib.error import URLError
 import pytest
 
 
+class _FixedRand:
+    """Stub matching random.Random's `.random()` interface, for deterministic
+    slot-assignment tests (see make_llm_fn's position randomization)."""
+    def __init__(self, value: float):
+        self._value = value
+
+    def random(self) -> float:
+        return self._value
+
+
 # ── llm_reconcile: prompt/parse helpers, no network ────────────────────────
 
 def test_build_prompt_includes_bias_terms():
-    from transcribe.contracts import RecognizedToken
     from transcribe.pipeline.llm_reconcile import _build_prompt
 
-    ta = RecognizedToken("ครับ", 0, 500, 0.9, "thai")
-    tb = RecognizedToken("คะ", 0, 500, 0.8, "thai")
-    prompt = _build_prompt(ta, tb, ["สวัสดี"])
+    prompt = _build_prompt("ครับ", "คะ", ["สวัสดี"])
     assert "ครับ" in prompt and "คะ" in prompt
     assert "สวัสดี" in prompt
 
 
 def test_build_prompt_no_bias_line_when_empty():
-    from transcribe.contracts import RecognizedToken
     from transcribe.pipeline.llm_reconcile import _build_prompt
 
-    ta = RecognizedToken("hello", 0, 500, 0.9, "latin")
-    tb = RecognizedToken("halo", 0, 500, 0.8, "latin")
-    prompt = _build_prompt(ta, tb, [])
+    prompt = _build_prompt("hello", "halo", [])
     assert "Known correct terms" not in prompt
+
+
+def test_build_prompt_does_not_claim_single_word():
+    """2026-07-16 regression: the old prompt said 'disagree on one word' while
+    tokens are actually full phrase cues (5.4) — a stale framing that misled
+    a weak local model. Candidates are segment-level, and the prompt must say so."""
+    from transcribe.pipeline.llm_reconcile import _build_prompt
+
+    prompt = _build_prompt("วันนี้อากาศดีมากเลยครับ", "some other candidate sentence", [])
+    assert "one word" not in prompt.lower()
+    assert "segment" in prompt.lower() or "phrase" in prompt.lower() or "sentence" in prompt.lower()
 
 
 @pytest.mark.parametrize("reply,expected", [
@@ -73,9 +88,12 @@ def test_make_llm_fn_posts_to_configured_host(monkeypatch):
 
     monkeypatch.setattr(llm_reconcile.urllib.request, "urlopen", fake_urlopen)
 
-    llm_fn = llm_reconcile.make_llm_fn({
-        "host": "http://localhost:11434", "model": "qwen2.5:7b-instruct", "timeout_s": 5,
-    })
+    # rand=_FixedRand(0.9) forces no position swap (0.9 >= 0.5), so this test's
+    # slot-0/slot-1 mapping is deterministic: slot 0 == ta, slot 1 == tb.
+    llm_fn = llm_reconcile.make_llm_fn(
+        {"host": "http://localhost:11434", "model": "qwen2.5:7b-instruct", "timeout_s": 5},
+        rand=_FixedRand(0.9),
+    )
     ta = RecognizedToken("ครับ", 0, 500, 0.9, "thai")
     tb = RecognizedToken("คะ", 0, 500, 0.8, "thai")
     idx = llm_fn(ta, tb, [])
@@ -84,6 +102,51 @@ def test_make_llm_fn_posts_to_configured_host(monkeypatch):
     assert captured["url"] == "http://localhost:11434/api/generate"
     assert captured["body"]["model"] == "qwen2.5:7b-instruct"
     assert captured["timeout"] == 5
+
+
+def test_make_llm_fn_position_randomization_swaps_and_maps_back(monkeypatch):
+    """2026-07-16 fix: qwen2.5:3b-instruct picked slot 0 on 11/11 real
+    disagreements under a FIXED ta=slot-0 mapping — not credible as genuine
+    judgment. make_llm_fn now randomizes which of (ta, tb) lands in which
+    prompt slot per call, and must translate the model's slot answer back to
+    the correct token. Verify both the swap and no-swap mappings directly."""
+    from transcribe.contracts import RecognizedToken
+    from transcribe.pipeline import llm_reconcile
+
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def read(self):
+            return json.dumps({"response": "1"}).encode("utf-8")  # model always answers slot 1
+
+    def fake_urlopen(req, timeout=None):
+        captured["prompt"] = json.loads(req.data.decode("utf-8"))["prompt"]
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_reconcile.urllib.request, "urlopen", fake_urlopen)
+
+    ta = RecognizedToken("AAA_TEXT", 0, 500, None, "latin")
+    tb = RecognizedToken("BBB_TEXT", 0, 500, None, "latin")
+
+    # No swap (rand >= 0.5): slot 0 = ta, slot 1 = tb. Model says slot 1 -> tb -> idx 1.
+    no_swap_fn = llm_reconcile.make_llm_fn(
+        {"host": "http://localhost:11434", "model": "m"}, rand=_FixedRand(0.9),
+    )
+    idx_no_swap = no_swap_fn(ta, tb, [])
+    assert idx_no_swap == 1
+    assert captured["prompt"].index("AAA_TEXT") < captured["prompt"].index("BBB_TEXT")
+
+    # Swap (rand < 0.5): slot 0 = tb, slot 1 = ta. Model still says slot 1 -> ta -> idx 0.
+    swap_fn = llm_reconcile.make_llm_fn(
+        {"host": "http://localhost:11434", "model": "m"}, rand=_FixedRand(0.1),
+    )
+    idx_swap = swap_fn(ta, tb, [])
+    assert idx_swap == 0
+    assert captured["prompt"].index("BBB_TEXT") < captured["prompt"].index("AAA_TEXT")
 
 
 def test_llm_fn_failure_falls_back_to_script(monkeypatch):

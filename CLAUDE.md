@@ -123,24 +123,38 @@ trusts Engine A's own script classification of its own output on every Thai
 disagreement — when both engines report a confidence, confidence decides
 first and script is only the final tiebreak.
 
-**PROBED 2026-07-16, wiring confirmed correct, output not yet useful.**
-With Ollama serving and `engine_b: whisper_multi` (the first candidate that
-produces real disagreements — funasr never does, see above), the reconciler
-was instrumented directly: `llm_fn` was called 11 times on one clip with zero
-errors, and picked Engine A on **all 11** — including cases where Engine B's
-text was visibly longer and more complete. That's not credible as genuine
-judgment; it reads as positional bias. Two compounding causes found: (1)
-`_PROMPT_TEMPLATE` still says "disagree on **one word**" though tokens have
-been phrase cues since 5.4 — the model is shown two full sentences while told
-to expect one word; (2) `whisper_multi` correctly reports `confidence=None`
-(never faked), which means `_script_fallback`'s confidence-tiebreak never
-fires against it either, so it degrades to same-script routing that also
-always favors A. Net effect: harness output was byte-identical with and
-without `--llm-enabled`. This is not evidence the reconciler design is wrong
-— it's an unfixed prompt plus an untested model, both fixable. See
-TODO_LEDGER.md for the full diagnosis and next steps (prompt fix, position-
-randomization test to isolate the bias, a fallback tiebreak for the
-null-confidence case) before re-probing.
+**PROBED and FIXED 2026-07-16 (two rounds) — bias eliminated, but the model
+still isn't good enough to activate.** Round 1: with `engine_b:
+whisper_multi` (the first candidate producing real disagreements — funasr
+never does, see above), `llm_fn` was instrumented directly and picked Engine
+A on **11 of 11** real disagreements — including cases where Engine B's text
+was visibly longer and more complete. Not credible as judgment; positional
+bias. Two causes: (1) `_PROMPT_TEMPLATE` said "disagree on **one word**"
+though tokens have been phrase cues since 5.4 — the model was shown two full
+sentences while told to expect one word; (2) `whisper_multi` correctly
+reports `confidence=None` (never faked), so `_script_fallback`'s
+confidence-tiebreak never fires against it either, degrading it to
+same-script routing that also always favored A. Harness output was
+byte-identical with/without `--llm-enabled`.
+
+**Fixed:** `_PROMPT_TEMPLATE` now describes segment/phrase-level candidates;
+`make_llm_fn` randomizes per call which of (ta, tb) lands in prompt slot 0 vs
+1 and remaps the answer back (`tests/test_phase3_llm_reconcile.py`, +2,
+suite 189 green). Round 2 (re-instrumented, same clip): the lock-in is gone
+— 7/11 picked A, 4/11 picked B, no longer deterministic. **But the harness
+result got WORSE, not better: `CER_thai 0.3505`** (vs round 1's 0.2323, vs
+0.1451 baseline). This is the fix correctly exposing a **model-quality**
+problem: Engine A (faster_whisper) is empirically the strongest engine on
+this gold set, and round 1's degenerate "always A" was *accidentally* a good
+heuristic — once `qwen2.5:3b-instruct` can genuinely pick Engine B and does
+so ~36% of the time, its judgment isn't reliable enough to beat that
+heuristic. `llm_enabled` stays `false`. Do not revisit the wiring, prompt
+framing, or bias fix — they're done and tested. What's still open: try a
+larger local model (`qwen2.5:7b-instruct`?) or a richer prompt (few-shot
+examples, surrounding-token context) before concluding the LLM-tiebreak
+*approach* doesn't work — this result only rules out this specific small
+model + minimal-context prompt. See TODO_LEDGER.md for full before/after
+numbers.
 
 **Token granularity (5.4):** tokens persisted to the DB are **phrase cues** (not
 words). `EngineResult.timestamps_final` (formerly `word_level_timestamps`) signals

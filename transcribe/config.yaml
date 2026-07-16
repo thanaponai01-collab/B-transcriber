@@ -166,14 +166,21 @@ segment:
 # `ollama pull <model>` once, and `ollama serve` running locally, before
 # enabling.
 #
-# PROBED 2026-07-16 (Ollama running, qwen2.5:3b-instruct serving, engine_b=
-# whisper_multi so real disagreements existed): the LLM picked Engine A on
-# 11/11 instrumented real disagreements — a suspicious 100% rate, likely
-# positional bias rather than judgment, under llm_reconcile.py's CURRENT
-# prompt (_PROMPT_TEMPLATE still says "disagree on one word" — stale since
-# tokens became phrase cues, 5.4). Made zero measurable difference to harness
-# output. Do not re-probe as-is; fix the prompt for phrase-cue framing and/or
-# test with position-randomized A/B assignment first. See TODO_LEDGER.md.
+# PROBED 2026-07-16 (Ollama running, qwen2.5:3b-instruct, engine_b=
+# whisper_multi so real disagreements existed) in two rounds:
+#   Round 1 (stale prompt, fixed ta=slot-0 mapping): LLM picked Engine A on
+#   11/11 real disagreements — positional bias, not judgment.
+#   Round 2 (llm_reconcile.py fixed: phrase-cue-aware prompt + per-call
+#   position randomization, see its module docstring): the degenerate lock-in
+#   is confirmed gone (7/11 A, 4/11 B on re-instrumentation) — but corpus
+#   CER_thai got WORSE (0.3505 vs round 1's 0.2323 vs 0.1451 baseline). This
+#   is the fix correctly exposing a model-quality problem, not a new bug:
+#   qwen2.5:3b-instruct's judgment on real disagreements isn't good enough to
+#   beat the (accidental, round-1) heuristic of always trusting the stronger
+#   engine. The wiring/prompt/bias defects are fixed and should not be
+#   revisited; what remains is whether a bigger local model (qwen2.5:7b-
+#   instruct?) or a richer prompt (few-shot examples, surrounding context)
+#   can do genuinely better than always-trust-Engine-A. See TODO_LEDGER.md.
 reconciler:
   llm_enabled: false
   ollama:
