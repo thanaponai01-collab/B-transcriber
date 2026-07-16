@@ -47,6 +47,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "bias_hash", "bias_hash TEXT")
     # A/B experiment runs never become the regression baseline
     _add("eval_run", "is_experiment", "is_experiment INTEGER NOT NULL DEFAULT 0")
+    # metric-definition version — baselines partition by it (pre-column rows = v1)
+    _add("eval_run", "metrics_version", "metrics_version INTEGER NOT NULL DEFAULT 1")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -174,6 +176,7 @@ class EvalRunRow:
     ran_at: str
     passed: bool
     is_experiment: bool = False
+    metrics_version: int = 1
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -556,13 +559,21 @@ def create_eval_run(
     engine_pair: Optional[str] = None,
     bias_hash: Optional[str] = None,
     is_experiment: bool = False,
+    metrics_version: Optional[int] = None,
 ) -> int:
+    # None → stamp the current metric definitions' version. Lazy import: the
+    # semantic owner of the version is eval/metrics.py, and the db layer must
+    # not import the eval layer at module load.
+    if metrics_version is None:
+        from transcribe.eval.metrics import METRICS_VERSION
+        metrics_version = METRICS_VERSION
     cur = conn.execute(
         "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
-        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
-         kind, pipeline_version, engine_pair, bias_hash, int(is_experiment), int(passed)),
+         kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
+         int(metrics_version), int(passed)),
     )
     conn.commit()
     return cur.lastrowid
@@ -575,18 +586,29 @@ def _eval_row(row: sqlite3.Row) -> EvalRunRow:
     return EvalRunRow(**r)
 
 
-def get_last_passing_eval(conn: sqlite3.Connection, kind: str = "transcribe") -> Optional[EvalRunRow]:
+def get_last_passing_eval(
+    conn: sqlite3.Connection,
+    kind: str = "transcribe",
+    metrics_version: Optional[int] = None,
+) -> Optional[EvalRunRow]:
     # Filter by kind so a future CutDeck cut-quality run can never become the
     # transcription gate's baseline (or vice versa), and exclude experiment runs
     # (e.g. `harness --engine-b X` A/B probes) — an experiment is *judged against*
     # the production baseline but must never become it, or a passing experiment
     # on a different engine pair / bias index would silently shift what the next
-    # production run is compared against. id tie-breaks runs that land within
-    # the same datetime('now') second.
+    # production run is compared against. Baselines also partition by
+    # metrics_version (None → current METRICS_VERSION): scores computed under
+    # different metric definitions are incomparable, so the first run after a
+    # metric change establishes a fresh baseline instead of tripping the gate
+    # against numbers a different rule produced. id tie-breaks runs that land
+    # within the same datetime('now') second.
+    if metrics_version is None:
+        from transcribe.eval.metrics import METRICS_VERSION
+        metrics_version = METRICS_VERSION
     row = conn.execute(
         "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? AND is_experiment = 0 "
-        "ORDER BY ran_at DESC, id DESC LIMIT 1",
-        (kind,),
+        "AND metrics_version = ? ORDER BY ran_at DESC, id DESC LIMIT 1",
+        (kind, int(metrics_version)),
     ).fetchone()
     if row is None:
         return None

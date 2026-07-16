@@ -3,6 +3,72 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Metrics v2 — intra-cue switch points (BER un-blinded) — executed 2026-07-16
+
+Suite: **184 passed** (was 176; +8 in `tests/test_metrics_v2.py`).
+
+**The finding:** `metrics._switch_points` derived Thai↔Latin switches from the
+token-level `script` field only. Tokens are phrase cues, so every real
+code-switch sits *inside* a `mixed` cue — invisible by construction. The whole
+gold set therefore scored `switches=0` regardless of content, BER was pinned
+at a structural 0.0, and every "grow the gold set to unblock Engine B / the
+LLM reconciler" plan was chasing a gate that could never fire. (The
+code-switch clips added 2026-07-15 were already in the set — they just
+couldn't register.) Second, smaller defect: corpus BER was a ref-weighted
+mean, so hypothesis switches hallucinated on zero-switch samples carried
+weight 0 and were never penalized.
+
+**The fix (metrics v2, `metrics.METRICS_VERSION = 2`):**
+1. Switch points walk every *character* of every token; an intra-cue switch's
+   timestamp is linearly interpolated across the cue's `[start_ms, end_ms]`
+   by char offset (same approximation on both sides). Digits/punct are
+   script-neutral. Pure-script token streams behave exactly as v1.
+2. Corpus BER = `1 − micro-F1` over summed matched/ref/hyp switch counts
+   (`metrics.boundary_f1_error`; per-sample counts now on `EvalMetrics.
+   hyp_switches/matched_switches`).
+3. **Baseline partitioning:** `eval_run.metrics_version` column (additive
+   `_migrate`, pre-existing rows default v1). `get_last_passing_eval` and
+   `create_eval_run` default to the current `METRICS_VERSION` — a metric
+   change starts a fresh baseline instead of tripping the gate against
+   incomparable numbers (the old v1 baseline had BER 0.0 with zero weight; any
+   real v2 score would have "regressed" forever). Bump the version on any
+   future metric-definition change.
+
+**Proven on the real gold set (2026-07-16):** migrated `transcriber.db`
+(16 rows stamped v1), ran the production harness: `CER_thai 0.1451`
+(unchanged from the 2026-07-15 baseline — Thai scoring untouched),
+`WER_latin 1.0452`, **`switches=104 (hyp 38, matched 10)` → `BER 0.8592`**,
+passed=True as the fresh v2 baseline. The system's real code-switch gap is
+now visible and gated: Engine A finds barely a third of the reference
+switches.
+
+**First decidable Engine-B probe (same session):** `harness --engine-b
+funasr` (experiment row, baseline untouched): **BER improved 0.7882 vs
+0.8592** (hyp switches 66 vs 38, matched 18 vs 10 — the decorrelated engine
+genuinely finds switches Engine A misses) but **WER_latin regressed 1.2258
+vs 1.0452** → gate blocked, correctly. CER_thai 0.1451 unchanged. Verdict:
+a decorrelated Engine B is worth having for BER; funasr specifically is too
+inaccurate on Latin words. **Due next:** probe typhoon_rt (needs NeMo
+install) and `--llm-enabled` (needs `ollama serve` + pulled model — Ollama
+was not running this session) against the same v2 baseline.
+
+**Known limitation (accepted):** intra-cue interpolation assumes uniform
+character rate; on long cues the placement error can approach
+`boundary_tol_ms` (300 ms). Both sides share the bias, so matches survive in
+practice. **Due when:** if real A/B probes show BER noise swamping signal,
+widen `boundary_tol_ms` or re-derive switch timestamps from
+`engine_result.raw_words_json` word timings instead of interpolation.
+
+**Environment finding (same session):** DeepFilterNet denoise is silently
+dead on this venv — `df.enhance` imports `torchaudio.backend`, which
+torchaudio 2.x removed, so `_apply_rolling_denoise` warns and returns the
+raw audio whenever a chunk engine activates (`denoise: true` is a no-op).
+Harmless today (the production engine is whole-file, denoise already skipped
+by design), and possibly net-positive to leave dead (INFRA-6 in the 2026-06
+audit questioned whether denoise helps at all). **Due when:** a chunk engine
+is activated for production — either pin/patch DeepFilterNet for torchaudio
+2.x, or measure a denoise-off baseline and delete the path.
+
 ## Four confirmed-issue fixes — executed 2026-07-15 (after the diff-srt pass)
 
 Suite: **176 passed** (was 167; +9 new tests across three new files).

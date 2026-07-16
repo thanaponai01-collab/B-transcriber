@@ -133,6 +133,11 @@ CREATE TABLE IF NOT EXISTS eval_run (
     -- excludes them, so a passing experiment can't shift what production
     -- config changes are compared against.
     is_experiment       INTEGER NOT NULL DEFAULT 0 CHECK (is_experiment IN (0, 1)),
+    -- Which metric definitions produced these numbers (metrics.METRICS_VERSION).
+    -- Scores from different versions are incomparable, so the regression gate
+    -- only reads baselines of the version it is about to write. DEFAULT 1:
+    -- rows that predate the column were computed under v1 rules.
+    metrics_version     INTEGER NOT NULL DEFAULT 1,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

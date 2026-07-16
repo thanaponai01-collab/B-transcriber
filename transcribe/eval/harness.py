@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 from transcribe.db import store
-from transcribe.eval.metrics import EvalMetrics, compute_metrics, regressed
+from transcribe.eval.metrics import (
+    EvalMetrics, boundary_f1_error, compute_metrics, regressed,
+)
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
 
@@ -129,9 +131,13 @@ def run_harness(
     tol = float(config.get("boundary_tol_ms", 300.0))
 
     # Numerators are weighted by the reference size of each signal so per-sample
-    # rates aggregate into a corpus-level rate.
-    cer_num = wer_lat_num = wer_num = ber_num = 0.0
-    total_thai = total_latin = total_words = total_switches = 0
+    # rates aggregate into a corpus-level rate. BER instead aggregates by
+    # micro-F1 (summed matched/ref/hyp switch counts, one F1 at the end) — a
+    # ref-weighted mean would zero out samples with no reference switches, so
+    # switches hallucinated on monolingual clips would never be penalized.
+    cer_num = wer_lat_num = wer_num = 0.0
+    total_thai = total_latin = total_words = 0
+    total_switches = total_hyp_switches = total_matched = 0
 
     for audio_path, ref_tokens in samples:
         hyp_tokens = pipeline_fn(audio_path, config)
@@ -140,11 +146,12 @@ def run_harness(
         cer_num     += m.cer_thai * m.thai_chars
         wer_lat_num += m.wer_latin * m.latin_words
         wer_num     += m.wer * m.total_words
-        ber_num     += m.boundary_error_rate * m.ref_switches
         total_thai     += m.thai_chars
         total_latin    += m.latin_words
         total_words    += m.total_words
-        total_switches += m.ref_switches
+        total_switches     += m.ref_switches
+        total_hyp_switches += m.hyp_switches
+        total_matched      += m.matched_switches
 
     if scratch_dir is not None:
         shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -152,12 +159,15 @@ def run_harness(
     agg = EvalMetrics(
         cer_thai=cer_num / total_thai if total_thai else 0.0,
         wer_latin=wer_lat_num / total_latin if total_latin else 0.0,
-        boundary_error_rate=ber_num / total_switches if total_switches else 0.0,
+        boundary_error_rate=boundary_f1_error(
+            total_matched, total_switches, total_hyp_switches),
         wer=wer_num / total_words if total_words else 0.0,
         thai_chars=total_thai,
         latin_words=total_latin,
         total_words=total_words,
         ref_switches=total_switches,
+        hyp_switches=total_hyp_switches,
+        matched_switches=total_matched,
     )
 
     conn = store.connect(db_path)
@@ -195,7 +205,8 @@ def run_harness(
         f"[harness] CER_thai={agg.cer_thai:.4f}  WER_latin={agg.wer_latin:.4f}  "
         f"BER={agg.boundary_error_rate:.4f}  WER={agg.wer:.4f}  "
         f"thai_chars={total_thai}  latin_words={total_latin}  "
-        f"switches={total_switches}  passed={passed}"
+        f"switches={total_switches} (hyp {total_hyp_switches}, matched {total_matched})  "
+        f"passed={passed}"
     )
     return HarnessResult(metrics=agg, passed=passed, baseline=last)
 

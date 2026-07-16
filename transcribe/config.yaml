@@ -4,18 +4,20 @@
 #           Real second hypothesis ⇒ cross-engine agreement is a live confidence
 #           signal. (FunASR/SenseVoiceSmall imports and runs fine on this venv —
 #           it's no longer environment-blocked.) It's off (passthrough) because
-#           it was TRIED (2026-07-15 gold-set eval, --engine-b funasr) and the
-#           gate rejected it: CER_thai 0.1069 unchanged, BER 0.0 unchanged,
-#           WER_latin regressed 1.1164 vs 1.0205 (>2% tolerance) — reproduced
-#           exactly against an earlier same-day attempt, so not GPU noise.
-#           CER_thai can't move regardless of the LLM reconciler setting:
-#           SenseVoiceSmall's word-level output path always sets
-#           confidence=None (engines/funasr.py), so reconcile._script_fallback's
-#           confidence tiebreak never fires for it and every Thai-script
-#           disagreement still resolves to Engine A on script alone. FunASR can
-#           only ever win Latin-script disagreements, and it loses there too.
-#           Don't re-try funasr without fixing its confidence reporting first;
-#           try typhoon_rt or a Qwen3-ASR adapter instead (see
+#           it was TRIED and the gate rejected it, twice, for the same reason:
+#           2026-07-15 (metrics v1): WER_latin regressed 1.1164 vs 1.0205.
+#           2026-07-16 (metrics v2, BER finally live): BER IMPROVED 0.7882 vs
+#           0.8592 (hyp switch points 66 vs 38, matched 18 vs 10 — funasr
+#           really does find code-switches Engine A misses) but WER_latin
+#           regressed 1.2258 vs 1.0452 — its extra Latin output is mostly
+#           wrong words, so the gate blocks it. CER_thai 0.1451 unchanged in
+#           both: SenseVoiceSmall's word-level path always sets
+#           confidence=None (engines/funasr.py), so _script_fallback's
+#           confidence tiebreak never fires for it and Thai disagreements
+#           resolve to Engine A on script alone. The measured tradeoff says a
+#           decorrelated Engine B IS worth having for BER — funasr just isn't
+#           accurate enough on Latin words. Next candidates: typhoon_rt
+#           (adapter built, needs NeMo) or a Qwen3-ASR adapter (see
 #           IMPLEMENT_IMPROVEMENTS.md Phase 2).
 engine_a: faster_whisper
 engine_b: passthrough

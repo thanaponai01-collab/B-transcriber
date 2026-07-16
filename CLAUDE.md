@@ -81,10 +81,13 @@ candidates below are eval-gated, not environment-blocked.
   as a fallback; per-chunk, word-level, much slower on 8 GB VRAM.
 - **Engine B active config: `passthrough`** (null) — single-engine fallback,
   Engine A only, no agreement signal. Decorrelated candidates below are wired
-  and eval-tested but deliberately left inactive because the current 4-clip
-  gold set has zero Thai↔Latin code-switching (`switches=0`), so the harness
-  can't yet prove any of them earns its 2× runtime. See
-  IMPLEMENT_IMPROVEMENTS.md Phase 2.
+  and eval-tested but not yet proven to earn their 2× runtime. **The old
+  "switches=0 so nothing can be measured" blocker is gone (2026-07-16):**
+  metrics v2 derives switch points character-by-character inside mixed cues,
+  and the 5-clip gold set now scores `switches=104` with a live baseline of
+  `BER 0.8592` (hyp emits only 38 switch points, 10 matched) — a huge, real
+  code-switch gap that Engine-B / LLM-reconciler A/B probes can finally be
+  judged against. See IMPLEMENT_IMPROVEMENTS.md Phase 2 for history.
 - **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter registered, deps import
   fine on this venv (`hub="hf"` needed in `AutoModel(...)` — funasr defaults to
   ModelScope, which 404s for this model outside China). Activating it produced
@@ -109,8 +112,9 @@ bias_terms) -> 0|1` hook instead of falling straight to `_script_fallback`.
 over stdlib `urllib`, no external API) — an unreachable/unpulled model falls
 through to `_script_fallback` automatically. Gated off by default
 (`reconciler.llm_enabled: false` in config.yaml); the wiring is verified
-end-to-end but not yet proven to move `cer_thai`/BER for the same gold-set
-reason as Engine B above. `_script_fallback` no longer trusts Engine A's own
+end-to-end. With metrics v2 the BER gap it should attack is finally measurable
+(see Engine B note above) — run `harness --llm-enabled` with Ollama serving to
+judge it. `_script_fallback` no longer trusts Engine A's own
 script classification of its own output on every Thai disagreement — when both
 engines report a confidence, confidence decides first and script is only the
 final tiebreak.
@@ -134,3 +138,13 @@ word error over Latin runs), and **`boundary_error_rate`** (temporal: `1 − F1`
 Thai↔Latin switch *timestamps* within `boundary_tol_ms`). Plain `wer` is a coarse
 sanity number, never the gate. The harness normalizes gold and hypothesis with the
 same `normalize()` before scoring, so policy changes can't desync them.
+
+**Metrics v2 (2026-07-16, `metrics.METRICS_VERSION`):** switch points are derived
+character-by-character *inside* every token — tokens are phrase cues, so real
+code-switches live inside `mixed` cues, which the v1 token-script rule could never
+see (BER was structurally 0.0). Intra-cue switch timestamps are interpolated
+across the cue span; corpus BER is a micro-F1 so hallucinated switches on
+monolingual clips are penalized. `eval_run.metrics_version` partitions regression
+baselines: scores from different metric versions are never compared, so a metric
+change starts a fresh baseline instead of wedging the gate. Bump the version on
+any metric-definition change that makes old scores incomparable.

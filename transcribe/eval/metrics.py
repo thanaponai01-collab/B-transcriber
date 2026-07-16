@@ -29,6 +29,20 @@ from dataclasses import dataclass
 _THAI_CHAR = re.compile(r"[฀-๿]")
 _LATIN_RUN = re.compile(r"[a-z0-9]+")  # applied to lowercased text
 
+# Version of the metric definitions. Bump whenever a change makes new scores
+# incomparable to old ones — the regression gate then partitions baselines by
+# this value (store.get_last_passing_eval), so the first run under a new
+# version establishes a fresh baseline instead of tripping the gate against
+# numbers computed by a different rule.
+#   v1: switch points from token-level `script` only (a `mixed` phrase cue
+#       could never yield a switch → BER was structurally 0 at cue
+#       granularity); corpus BER = per-sample 1−F1 weighted by ref switches
+#       (false-positive switches on zero-switch samples were unpenalized).
+#   v2: switch points derived character-by-character inside every token, with
+#       the timestamp linearly interpolated across the token's span; corpus
+#       BER = 1 − micro-F1 over summed matched/ref/hyp switch counts.
+METRICS_VERSION = 2
+
 
 @dataclass
 class EvalMetrics:
@@ -40,6 +54,8 @@ class EvalMetrics:
     latin_words: int            # reference Latin-word count (aggregation weight)
     total_words: int            # reference token count (aggregation weight)
     ref_switches: int           # reference switch-point count (aggregation weight)
+    hyp_switches: int = 0       # hypothesis switch-point count (micro-F1 numerator base)
+    matched_switches: int = 0   # ref↔hyp switch points matched within tolerance
 
 
 # ── regression gate ───────────────────────────────────────────────────────────
@@ -118,32 +134,58 @@ def _is_switch(prev: str, curr: str) -> bool:
     return (prev == "thai" and curr == "latin") or (prev == "latin" and curr == "thai")
 
 
-def _switch_points(tokens: list[dict]) -> list[float]:
-    """Timestamps (ms) of Thai↔Latin transitions.
+def _char_script(c: str) -> str | None:
+    """'thai' | 'latin' | None (neutral: digits, punctuation, space).
 
-    Uses each token's start_ms; when timestamps are absent (e.g. unit fixtures)
-    falls back to token index so identical sequences still align under tolerance."""
+    Mirrors contracts.detect_script at character level: only Thai-block chars
+    and ASCII letters carry a script; digits stay neutral so "ก 2 ก" is not a
+    switch (STYLE_GUIDE §4: the test is how the word was *pronounced*)."""
+    if _THAI_CHAR.match(c):
+        return "thai"
+    if c.isascii() and c.isalpha():
+        return "latin"
+    return None
+
+
+def _switch_points(tokens: list[dict]) -> list[float]:
+    """Timestamps (ms) of Thai↔Latin transitions, derived character-by-character.
+
+    Tokens are phrase cues, so a real code-switch usually happens INSIDE a
+    `mixed` cue — deriving switches from the token-level script field alone
+    (metrics v1) made those invisible and pinned BER at a structural 0.0.
+    Instead, walk every character of every token: a Thai↔Latin transition in
+    the character stream is a switch, and its timestamp is linearly
+    interpolated across the token's [start_ms, end_ms] span by character
+    offset (uniform char rate — an approximation, but the same one on both
+    sides of the comparison; widen boundary_tol_ms if it proves too tight).
+
+    When a token has no start_ms (unit fixtures), falls back to token index +
+    intra-token char fraction so identical sequences still align under
+    tolerance."""
     points: list[float] = []
     prev: str | None = None
     for i, t in enumerate(tokens):
-        script = t["script"]
-        if prev is not None and _is_switch(prev, script):
-            time = t.get("start_ms")
-            points.append(float(i) if time is None else float(time))
-        if script in ("thai", "latin"):
+        text = t["text"]
+        start = t.get("start_ms")
+        end = t.get("end_ms")
+        n = max(1, len(text))
+        for k, c in enumerate(text):
+            script = _char_script(c)
+            if script is None:
+                continue
+            if prev is not None and _is_switch(prev, script):
+                if start is None:
+                    points.append(float(i) + k / n)
+                else:
+                    span = float(end) - float(start) if end is not None else 0.0
+                    points.append(float(start) + span * (k / n))
             prev = script
-        elif prev is None:
-            prev = script  # seed on first token even if other/mixed
     return points
 
 
-def _temporal_boundary_error(
-    ref_pts: list[float], hyp_pts: list[float], tol_ms: float
-) -> float:
-    """1 − F1 of reference switch points matched to hypothesis switch points
-    within ±tol_ms. Greedy nearest-match, each hyp point used once."""
-    if not ref_pts and not hyp_pts:
-        return 0.0
+def _match_switch_points(ref_pts: list[float], hyp_pts: list[float], tol_ms: float) -> int:
+    """Count of reference switch points matched to distinct hypothesis switch
+    points within ±tol_ms. Greedy nearest-match, each hyp point used once."""
     used: set[int] = set()
     matched = 0
     for r in ref_pts:
@@ -157,12 +199,30 @@ def _temporal_boundary_error(
         if best_j >= 0:
             used.add(best_j)
             matched += 1
-    precision = matched / len(hyp_pts) if hyp_pts else 0.0
-    recall = matched / len(ref_pts) if ref_pts else 0.0
+    return matched
+
+
+def boundary_f1_error(matched: int, ref_count: int, hyp_count: int) -> float:
+    """1 − F1 from switch-point counts. Also the corpus-level aggregation rule:
+    sum matched/ref/hyp over all samples and call this once (micro-F1), so
+    hallucinated switches on zero-switch samples are penalized instead of
+    vanishing under a ref-weighted mean (metrics v2)."""
+    if not ref_count and not hyp_count:
+        return 0.0
+    precision = matched / hyp_count if hyp_count else 0.0
+    recall = matched / ref_count if ref_count else 0.0
     if precision + recall == 0.0:
         return 1.0
     f1 = 2 * precision * recall / (precision + recall)
     return 1.0 - f1
+
+
+def _temporal_boundary_error(
+    ref_pts: list[float], hyp_pts: list[float], tol_ms: float
+) -> tuple[float, int]:
+    """(1 − F1, matched count) of ref switch points vs hyp switch points."""
+    matched = _match_switch_points(ref_pts, hyp_pts, tol_ms)
+    return boundary_f1_error(matched, len(ref_pts), len(hyp_pts)), matched
 
 
 # ── normalization (identical treatment of ref and hyp) ─────────────────────────
@@ -202,7 +262,7 @@ def compute_metrics(
     # Temporal switch-point error
     ref_pts = _switch_points(ref_tokens)
     hyp_pts = _switch_points(hyp_tokens)
-    ber = _temporal_boundary_error(ref_pts, hyp_pts, boundary_tol_ms)
+    ber, matched = _temporal_boundary_error(ref_pts, hyp_pts, boundary_tol_ms)
 
     # Overall word-level WER (coarse)
     ref_words = [t["text"] for t in ref_tokens]
@@ -218,4 +278,6 @@ def compute_metrics(
         latin_words=len(ref_latin),
         total_words=len(ref_words),
         ref_switches=len(ref_pts),
+        hyp_switches=len(hyp_pts),
+        matched_switches=matched,
     )
