@@ -409,6 +409,23 @@ def run_file(
         else:
             logger.info("Skipping forced alignment — Whisper word timestamps used directly")
 
+        # ── Phase 7b: Cue-timing conform ─────────────────────────────────────
+        # Runs on EVERY path, including the timestamps_final one above that skips
+        # Phase 7 — the aligner used to be the only place the no-overlap/monotonic
+        # invariant was enforced, so on the active engine path it was enforced
+        # nowhere and overlapping cues reached the exported SRT.
+        conform_report = align_force.conform_cues(
+            pipeline_tokens,
+            max_close_gap_ms=int(config.get("cue_max_close_gap_ms", align_force._GAP_CLOSE_MS)),
+            duration_ms=int(len(engine_audio) * 1000 / ingest_result.sample_rate),
+        )
+        if any(conform_report.values()):
+            logger.info(
+                "Cue conform: %d overlap(s) fixed, %d gap(s) closed, %d bound clamp(s)",
+                conform_report["overlaps_fixed"], conform_report["gaps_closed"],
+                conform_report["bounds_clamped"],
+            )
+
         # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{
             "job_id": job_id,

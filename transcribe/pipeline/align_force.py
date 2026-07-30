@@ -92,6 +92,80 @@ def _linear_fallback(words: list[str], duration_ms: int) -> list[ForcedToken]:
     return tokens
 
 
+# Cue-timing conform (see conform_cues). A gap this short between consecutive
+# cues is not a real pause — it is timestamp noise, and it makes burned-in
+# subtitles flicker off and back on. Hand-cut reference SRTs are gapless.
+_GAP_CLOSE_MS = 200
+
+
+def conform_cues(
+    tokens: list,
+    max_close_gap_ms: int = 0,
+    duration_ms: int | None = None,
+) -> dict[str, int]:
+    """Enforce the timing invariants every subtitle consumer assumes.
+
+    Operates in place on any token objects exposing ``start_ms``/``end_ms``
+    (ForcedToken, PipelineToken, ...). Guarantees on return:
+
+    * time-ordered, and re-indexed if the tokens carry an ``idx``
+    * ``0 <= start_ms < end_ms`` (and ``<= duration_ms`` when given)
+    * **no two cues overlap** — an overlapping cue's start is pushed to the
+      previous cue's end
+    * when ``max_close_gap_ms > 0``, any gap that small is closed by extending
+      the earlier cue, so the output is gapless like a hand-cut SRT
+
+    This lives outside ``forced_align`` on purpose. The pipeline skips forced
+    alignment entirely whenever the engine reports ``timestamps_final`` (which
+    faster-whisper always does), so an invariant enforced only inside the
+    aligner is an invariant enforced on no active path — that is how an
+    overlapping cue pair reached an exported SRT. Call this unconditionally.
+
+    Returns a report of what it had to change; an all-zero report means the
+    engine's own timestamps were already conformant.
+    """
+    report = {"overlaps_fixed": 0, "gaps_closed": 0, "bounds_clamped": 0}
+    if not tokens:
+        return report
+
+    tokens.sort(key=lambda t: (t.start_ms, t.end_ms))
+
+    prev_end = 0
+    for tok in tokens:
+        start, end = tok.start_ms, tok.end_ms
+        ceiling = duration_ms if duration_ms is not None else max(start, end)
+        clamped_start = max(0, min(start, ceiling))
+        clamped_end = max(0, min(end, ceiling))
+        if (clamped_start, clamped_end) != (start, end):
+            report["bounds_clamped"] += 1
+        start, end = clamped_start, clamped_end
+
+        if start < prev_end:
+            start = prev_end
+            report["overlaps_fixed"] += 1
+        # A zero/negative-length cue never renders; give it a single ms. This can
+        # push past `ceiling` only when the whole cue sits at the very end.
+        end = max(end, start + 1)
+
+        tok.start_ms, tok.end_ms = start, end
+        prev_end = end
+
+    if max_close_gap_ms > 0:
+        for earlier, later in zip(tokens, tokens[1:]):
+            gap = later.start_ms - earlier.end_ms
+            if 0 < gap <= max_close_gap_ms:
+                earlier.end_ms = later.start_ms
+                report["gaps_closed"] += 1
+
+    # Sorting may have moved tokens; idx is positional for every consumer that
+    # has one (same contract as normalize.drop_tokens_over_silence).
+    if hasattr(tokens[0], "idx"):
+        for i, tok in enumerate(tokens):
+            tok.idx = i
+
+    return report
+
+
 def forced_align(
     audio: np.ndarray,
     sr: int,
@@ -106,18 +180,9 @@ def forced_align(
         aligner = CTCForcedAligner()
 
     tokens = aligner.align(audio, sr, words)
-    duration_ms = int(len(audio) * 1000 / sr)
-
-    # Validate: monotonic and within bounds
-    prev_end = 0
-    for tok in tokens:
-        tok.start_ms = max(0, min(tok.start_ms, duration_ms))
-        tok.end_ms = max(tok.start_ms + 1, min(tok.end_ms, duration_ms))
-        if tok.start_ms < prev_end:
-            tok.start_ms = prev_end
-            tok.end_ms = max(tok.start_ms + 1, tok.end_ms)
-        prev_end = tok.end_ms
-
+    # Word-level output: clamp and de-overlap only. Gaps between words are real
+    # (they are the pauses), so gap-closing stays off here — it is a cue policy.
+    conform_cues(tokens, max_close_gap_ms=0, duration_ms=int(len(audio) * 1000 / sr))
     return tokens
 
 

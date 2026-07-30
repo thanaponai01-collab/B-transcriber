@@ -31,15 +31,30 @@ def test_constructor_default_matches_module_constant():
     assert eng._cue_target_chars == fw._CUE_TARGET_CHARS == 42
 
 
-def test_cue_target_chars_reaches_grouping(monkeypatch):
-    """transcribe() must pass the configured width into _group_words_into_cues —
-    a stored-but-unused kwarg would be dead config."""
-    eng = get_engine("faster_whisper", device="cpu", cue_target_chars=10)
+def test_constructor_accepts_space_break_overrides():
+    eng = get_engine("faster_whisper", device="cpu",
+                     cue_space_min_chars=20, cue_space_min_ms=1200)
+    assert eng._cue_space_min_chars == 20
+    assert eng._cue_space_min_ms == 1200
+
+
+def test_space_break_defaults_match_module_constants():
+    eng = get_engine("faster_whisper", device="cpu")
+    assert eng._cue_space_min_chars == fw._CUE_SPACE_MIN_CHARS
+    assert eng._cue_space_min_ms == fw._CUE_SPACE_MIN_MS
+
+
+def test_cue_knobs_reach_grouping(monkeypatch):
+    """transcribe() must pass every configured cue knob into
+    _group_words_into_cues — a stored-but-unused kwarg would be dead config.
+    **kwargs so adding a knob doesn't silently skip this check."""
+    eng = get_engine("faster_whisper", device="cpu", cue_target_chars=10,
+                     cue_space_min_chars=20, cue_space_min_ms=1200)
 
     captured = {}
 
-    def fake_group(words, gap_ms, target_ms, target_chars):
-        captured["target_chars"] = target_chars
+    def fake_group(words, **kwargs):
+        captured.update(kwargs)
         return [("สวัสดี", 0, 500, 0.9)]
 
     monkeypatch.setattr(fw, "_group_words_into_cues", fake_group)
@@ -51,6 +66,8 @@ def test_cue_target_chars_reaches_grouping(monkeypatch):
 
     res = eng.transcribe(EngineInput(audio=np.zeros(1600, dtype=np.float32)))
     assert captured["target_chars"] == 10
+    assert captured["space_min_chars"] == 20
+    assert captured["space_min_ms"] == 1200
     assert res.tokens and res.tokens[0].text == "สวัสดี"
 
 

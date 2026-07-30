@@ -84,6 +84,17 @@ _CUE_GAP_MS = 700
 _CUE_TARGET_MS = 4000
 _CUE_TARGET_CHARS = 42
 
+# Whisper inserts spaces into Thai (which has none) roughly at breath/clause
+# boundaries — a free segmentation signal from the acoustic model that cue
+# grouping used to discard, buffering whitespace as cue-interior only. Measured
+# against a hand-recut reference SRT, every space Whisper emitted inside a cue
+# was a place the human either split or would have, had the cue been longer.
+# So a space is a break candidate — but only once the cue already carries enough
+# text to stand alone, otherwise short interjections ("โอเค โอเค") shatter into
+# one-word cues. Both minima must be met.
+_CUE_SPACE_MIN_CHARS = 12
+_CUE_SPACE_MIN_MS = 700
+
 _SR = 16000
 
 # Whisper's encoder hard-caps a single decode window at ~30s. A speech run longer
@@ -97,14 +108,21 @@ _SR = 16000
 # long-pause-free-run case.
 # Tuning note: shrinking _LONG_SPAN_SAFE_S (e.g. to 15-20s) recovers a decode-
 # quality drop that can still happen *within* a single 25s window on very dense
-# speech, but widening the overlap that comes with it exposes stitch.py's
-# exact-text dedup to more words in the ambiguous zone — Thai has no word
-# boundaries, so two independent decodes of the same audio often tokenize it
-# slightly differently, and dedup misses the near-duplicates, producing visible
-# stutter (e.g. "ที่ี่เกี่ี่ยว") across many seams. Verified empirically: 25s/4s
-# stutter-free with one small residual gap on a hard passage; 15-20s recovers
-# that gap but stutters broadly. Don't lower this without also making stitch.py's
-# duplicate match fuzzy (e.g. edit-distance) rather than exact-text.
+# speech, but widening the overlap that comes with it exposes stitch.py's dedup
+# to more words in the ambiguous zone — Thai has no word boundaries, so two
+# independent decodes of the same audio often tokenize it slightly differently,
+# producing visible stutter (e.g. "ที่ี่เกี่ี่ยว") across many seams. Verified
+# empirically: 25s/4s stutter-free with one small residual gap on a hard passage;
+# 15-20s recovers that gap but stutters broadly.
+#
+# Update (2026-07-30): that stutter turned out NOT to be a text-matching problem
+# — the seam duplicates matched on text fine and were lost to stitch.py's IoU
+# gate, which is structurally 0.0 for the zero-length combining-mark pieces
+# Whisper emits for Thai. stitch.py now also accepts centre-coincident
+# duplicates (_coincident), which fixed the observed stutter at 25s. Re-probing
+# a shorter _LONG_SPAN_SAFE_S is now worth doing, but measure it — the residual
+# artifacts here are the model stuttering inside one window, which no amount of
+# seam handling can fix.
 _LONG_SPAN_SAFE_S = 25.0
 _LONG_SPAN_OVERLAP_S = 4.0
 
@@ -197,7 +215,9 @@ def _sentence_boundary_offsets(text: str) -> list[int]:
 
 
 def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
-                           target_chars=_CUE_TARGET_CHARS):
+                           target_chars=_CUE_TARGET_CHARS,
+                           space_min_chars=_CUE_SPACE_MIN_CHARS,
+                           space_min_ms=_CUE_SPACE_MIN_MS):
     """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
 
     `words` is a list of (text, start_ms, end_ms, confidence) — confidence is the
@@ -215,6 +235,13 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     fused to the head of the next. Sentence detection on raw ASR output (no
     punctuation, colloquial speech) is inherently imperfect — treat it as a
     heuristic that reduces mid-sentence cue starts, not a guarantee.
+
+    A space Whisper itself emitted inside Thai is a third break signal (see
+    _CUE_SPACE_MIN_CHARS): it marks a breath/clause boundary the acoustic model
+    heard, and breaking there beats breaking wherever the character budget
+    happens to run out. It applies only once the cue holds space_min_chars AND
+    space_min_ms, so short interjections stay whole.
+
     Returns list of (text, start_ms, end_ms, confidence) — confidence is the mean
     of the constituent word-pieces' probabilities, or None if none carried one.
     """
@@ -266,9 +293,67 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
             conf = sum(confs) / len(confs) if confs else None
             cues.append((text, cur[0][1], cur[-1][2], conf))
 
-    for t, s, e, conf, char_pos in timed:
+    def _cue_so_far() -> tuple[int, int]:
+        """(chars, span_ms) of the open cue — 0/0 when nothing is open."""
+        if not cur:
+            return 0, 0
+        return len("".join(x[0] for x in cur).strip()), cur[-1][2] - cur[0][1]
+
+    def _may_break_at_space(i: int) -> bool:
+        """STYLE_GUIDE §7 unsplittable units — a space is not always a legal
+        break point even when the size minima are met.
+
+        Whisper writes mai yamok as a separate ' ๆ' piece, so the naive rule
+        would orphan it from the word it repeats on almost every ๆ in the
+        corpus (§3/§7: `เด็กๆ` must never be separated). Likewise a numeral must
+        stay with its unit/classifier (`100 บาท`, `3 คน`).
+        """
+        nxt = next((x[0] for x in timed[i + 1:] if x[0].strip()), "")
+        if nxt.lstrip().startswith("ๆ"):
+            return False
+        prev = "".join(x[0] for x in cur).strip()
+        if prev and prev[-1].isdigit():
+            return False
+        return True
+
+    def _remainder_stands_alone(i: int) -> bool:
+        """Would the text AFTER this space form a viable cue on its own?
+
+        Breaking at a space only helps if both sides are viable — otherwise it
+        trades one bad boundary for a flash-frame runt (a 140ms 'โอเค' cue was
+        exactly this). Scans forward to wherever the next break would land
+        anyway: the next space, the next real pause, or end of stream.
+        """
+        chars, first_start, last_end = 0, None, None
+        for t2, s2, e2, _conf2, _pos2 in timed[i + 1:]:
+            if not t2.strip():
+                break                        # the next space closes the remainder
+            if last_end is not None and s2 - last_end >= gap_ms:
+                break                        # a real pause closes it
+            if first_start is None:
+                first_start = s2
+            chars += len(t2.strip())
+            last_end = e2
+            if chars >= target_chars:
+                return True                  # long enough on its own regardless
+        if first_start is None:
+            return False
+        return chars >= space_min_chars and (last_end - first_start) >= space_min_ms
+
+    for i, (t, s, e, conf, char_pos) in enumerate(timed):
         if not t.strip():
-            if cur:
+            if not cur:
+                continue
+            n_chars, span = _cue_so_far()
+            if (n_chars >= space_min_chars and span >= space_min_ms
+                    and _may_break_at_space(i) and _remainder_stands_alone(i)):
+                # Break on Whisper's own breath boundary. The whitespace itself is
+                # dropped: a cue must not end on a space (it carries the *next*
+                # word's timing, which would corrupt the cue end and the gap check).
+                _close()
+                cur = []
+                pending_ws = []
+            else:
                 pending_ws.append((t, s, e, conf))
             continue
         # Consume any sentence boundary at or before this token — forces a
@@ -304,6 +389,8 @@ class FasterWhisperEngine(Engine):
                  compute_type: str | None = None, beam_size: int = 5,
                  cue_gap_ms: int = _CUE_GAP_MS, cue_max_ms: int = _CUE_TARGET_MS,
                  cue_target_chars: int = _CUE_TARGET_CHARS,
+                 cue_space_min_chars: int = _CUE_SPACE_MIN_CHARS,
+                 cue_space_min_ms: int = _CUE_SPACE_MIN_MS,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500):
         self._model_id = model_id
@@ -313,6 +400,8 @@ class FasterWhisperEngine(Engine):
         self._compute_type = compute_type
         self._beam_size = beam_size
         self._cue_gap_ms = cue_gap_ms
+        self._cue_space_min_chars = cue_space_min_chars
+        self._cue_space_min_ms = cue_space_min_ms
         self._cue_max_ms = cue_max_ms
         self._cue_target_chars = cue_target_chars
         self._bias_prompt_budget = bias_prompt_budget
@@ -555,7 +644,9 @@ class FasterWhisperEngine(Engine):
             )
             for text, start, end, conf in _group_words_into_cues(
                 words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms,
-                target_chars=self._cue_target_chars)
+                target_chars=self._cue_target_chars,
+                space_min_chars=self._cue_space_min_chars,
+                space_min_ms=self._cue_space_min_ms)
         ]
 
         return EngineResult(

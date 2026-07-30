@@ -3,6 +3,88 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Cue timing + sub-word seam dedup + space breaks — executed 2026-07-30
+
+Suite: **216 passed** (was 214; +26 across `tests/test_cue_conform.py`,
+`tests/test_cue_space_break.py`, `tests/test_stitch_subword_coincidence.py`,
+minus the rewritten `test_cue_target_chars_config.py` capture test).
+
+Driven by a **hand-recut reference SRT** for `Short4.mp3` (46.5s, pure Thai,
+re-cut in Premiere Pro): 31 cues vs the pipeline's 22, `cer_thai 0.0448`. The
+text was already 95.5% right — what the human actually rewrote was
+segmentation and timing, which no metric in the harness measures.
+
+**1. Cue-timing conform is now unconditional (`align_force.conform_cues`).**
+The monotonic/no-overlap invariant lived *inside* `forced_align`, and
+`run.py` skips Phase 7 whenever the engine reports `timestamps_final` — which
+`faster_whisper` always does. So on the only active engine path the invariant
+was enforced nowhere, and cues 20/21 shipped as `42,740 --> 42,660`
+(overlapping) in `output/Short4.srt`. New Phase 7b runs on every path;
+`forced_align` delegates to it (word-level behaviour unchanged — gap closing
+is a cue policy and stays off there). `cue_max_close_gap_ms: 200` closes
+timestamp-noise gaps that flicker burned-in subtitles.
+
+**2. Stitch dedup now sees sub-word pieces (`stitch._coincident`).** The seam
+stutter documented in `faster_whisper.py`'s `_LONG_SPAN_SAFE_S` block was
+misdiagnosed there as an exact-text-matching problem needing edit distance.
+It was not: the duplicates matched on text fine and were lost to the **IoU
+gate**. Whisper's Thai output is sub-word — pieces run 20–80ms and combining
+marks land at `start == end`, where IoU is structurally 0.0 and no threshold
+can ever match. Measured at the 42–46s window seam: `'อะไร'` IoU 0.44, `'ก'`
+0.43, `'ก'` (both zero-length) 0.00, `'จ'` 0.33. Centre-coincidence is
+duration-scaled, so genuinely repeated Thai consonants (`แบบ`, `รักกับ` — 130ms
+apart) are still kept, and the `ci != pci` cross-chunk guard still carries the
+real safety.
+
+**3. Whisper's own spaces are cue-break candidates.** Gated on
+`cue_space_min_chars`/`cue_space_min_ms` plus STYLE_GUIDE §7 vetoes (mai yamok
+must not be orphaned — Whisper emits `' ๆ'` as its own space-prefixed piece,
+so this is the common case; numeral must stay with its classifier) and a
+runt guard (both sides of the break must be viable — an early version shipped
+a 140ms `'โอเค'` flash cue).
+
+**Measured before → after on the reference clip:**
+
+| | before | after | your SRT |
+| --- | --- | --- | --- |
+| `cer_thai` | 0.0448 | **0.0433** | — |
+| overlapping cues | **1** | **0** | 0 |
+| non-zero gaps | 6 (max 140ms) | **0** | 0 |
+| shortest cue | 0.46s | **0.56s** | 0.56s |
+| stitch dups removed | 27 | 36 | — |
+| cue-start F1 @300ms | 0.717 | 0.691 | — |
+
+Fixed in the transcript: `อะไรกก็ตาม`→`อะไรก็ตาม`, `ทรมานใจจ`→`ทรมานใจ`,
+`ไกลกลไกกล`→`ไกลไกล`.
+
+**Honest negative result on (3):** the space break is F1-neutral-to-slightly-
+negative in isolation (a grid over `space_min_chars` × `space_min_ms` was flat
+at 0.70–0.73 vs a 0.717 baseline). It breaks in linguistically correct places,
+but the greedy `cue_target_chars` fill then just relocates the arbitrary
+boundary into the following cue — net wash. **Do not tune these knobs further;
+the blocker is the greedy fill itself.** Set both to a large number to disable.
+
+**Still open, in impact order:**
+- **Replace greedy cue fill with a cost-minimising split.** `_group_words_into_cues`
+  closes a cue the instant `n_chars >= target_chars` and breaks at whatever word
+  boundary it is standing on — measured exactly: the 42-char cue
+  `เขาสามารถบอกได้ว่าไม่เป็นไรเธอมีแฟนแล้วฉัน` is *precisely* 42 codepoints and split
+  `ฉัน | จะรอ`, subject from verb. Same mechanism gave `นะคะให้ | น้อง` and
+  `พออยู่ | ด้วยแล้ว`. This is the real segmentation fix and (3) is its input signal.
+- **Cue-structure metrics in `compute_metrics` (bump `METRICS_VERSION`).** On this
+  clip `wer_latin` scored 0 Latin words and BER scored 0 switch points — two of
+  three gate signals were inert, and segmentation error 0.31 is invisible. An
+  engine swap could wreck timing on pure-Thai production content and pass clean.
+  Overlap count belongs in as a hard assertion of 0, not a rate.
+- **Mai-yamok contraction policy.** Whisper emits `ดีดี`/`ใหม่ใหม่` (and `จริงๆ`
+  correctly two cues earlier — it is inconsistent). STYLE_GUIDE §3 fixes gold on
+  attached-`ๆ` and refuses `ๆ`→expansion, but nothing does the contraction
+  direction, so `cer_thai` pays for it forever. Same class: `คนนึง`→`คนหนึ่ง` is an
+  unstated colloquial-vs-formal policy. Needs a decision, not code.
+- Bias-index candidates from this clip: `พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`.
+- Two `make_gold.py` copies exist (`tools/` and `scripts/`); both `transcribe.db`
+  and `transcriber.db` sit at the repo root but only the latter is used.
+
 ## Metrics v2 — intra-cue switch points (BER un-blinded) — executed 2026-07-16
 
 Suite: **184 passed** (was 176; +8 in `tests/test_metrics_v2.py`).
