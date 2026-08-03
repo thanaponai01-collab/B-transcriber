@@ -246,6 +246,64 @@ it passes. Phase 3 makes the *rough cut* watchable; it does nothing for the XML 
 
 ## PHASE 4 — segment-first rough cut (the structural fix)
 
+**STATUS: DONE and wired (2026-08-04), opt-in per the handoff's own risk
+mitigation.** `cut.rough_cut_mode: interval | segment` (default `interval`) —
+`interval` is byte-identical to pre-Phase-4 behaviour (untouched code path);
+`segment` is the new pass, built exactly as specified:
+
+- `cutdeck/contracts.py`: `ROUGH_CUT_INTERVAL`/`ROUGH_CUT_SEGMENT` constants,
+  `CutConfig.rough_cut_mode` (+ `from_yaml` plumbing).
+- `cutdeck/rules.py`: `label_segments(segments) -> list[Label]` — the first
+  real producer of the Layer-3 `Label` type that had sat unused since Phase 1;
+  currently trivial (every segment keeps — no cut-worthy classifier exists
+  yet, that's Phase 6's retake resolver), but `_segment_gap_cuts` reads
+  through it rather than iterating `segments` directly, so Phase 6 only has
+  to change what `label_segments` returns. `_segment_gap_cuts(segments,
+  duration_ms, cfg)` builds cuts only for the *gaps* around kept segments
+  (before the first, between two, after the last), gated by the same
+  `min_silence_ms`/pad thresholds the interval pass uses — segmentation
+  (Layer 2, `gap_ms`/`segment_vad_silence_ms`) and the cut decision (Layer 4,
+  `min_silence_ms`) are now genuinely decoupled: two segments can exist
+  side by side with a small pace-gap between them that never becomes a cut.
+  `build_cut_spans` dispatches on `cfg.rough_cut_mode`; word-level filler/
+  repeat cuts (Phase 2) apply identically in both modes. `apply_min_clip_merge`
+  and every existing test in `tests/test_cutdeck_phase1.py` are untouched —
+  `segment` mode never calls it at all, per the handoff ("no merging, no
+  dissolve caps, no protected islands").
+
+Verified directly: the three real-world bug fixtures that drove
+`dissolved_ms`/`_STANDALONE` (interval mode, `tests/test_cutdeck_phase1.py`)
+were rebuilt with tokens attached to the real speech (segment mode needs a
+token to have a segment at all) and re-run through `segment` mode —
+**identical correct answers, zero dissolve/merge machinery invoked**:
+tokenless blip between two long silences → no segment there, never a
+candidate keep (old: needed `max_dissolve_ms` + drop-instead-of-merge); chain
+of tokenless blips → same, whole chain stays cut (old: needed cumulative
+`dissolved_ms` capping to stop a 14s stitch-together); two short real-word
+islands either side of a real pause → both stand alone as their own short
+segments, `dissolved_ms == 0` throughout (old: needed `_has_token`/
+`_STANDALONE` to protect them from the merge).
+
+Acceptance tests: `tests/test_cutdeck_phase4.py` (13 new) — `label_segments`
+producing all-keep labels; config plumbing (`from_yaml` default + override);
+the three rebuilt bug fixtures; contiguous/exhaustive/deterministic under
+segment mode; every KEEP span backed by at least one (padded) segment window;
+zero segments → single CUT over the whole duration (`reason="no_speech"`);
+segmentation/cut-decision decoupling (tight `gap_ms` splits two segments but
+the same small gap stays pace under a higher `min_silence_ms`); repeat_cuts
+still fires under segment mode; interval mode's default-and-unaffected
+regression guard. Full suite: 268 collected, 267 passed / 1 pre-existing
+failure (`test_sentence_boundary_offsets_finds_the_split`, `pycrfsuite`
+missing on this Python 3.13 shell — present before this change too,
+unrelated, see Phase 1 status above).
+
+**Not done, intentionally (per the handoff's own risk note):** `segment`
+mode is unproven on real footage and stays opt-in — `interval` is still the
+config default and the only mode `propose_for_job`'s callers get without an
+explicit `cut.rough_cut_mode: segment` override. Deleting the old interval
+path is a follow-up commit once `segment` has been watched via
+`cutdeck/preview.py` on a real job, not this one.
+
 **The min-clip merge is fighting the silence pass, and its complexity is the proof.** `apply_min_clip_merge` (`rules.py:215-313`) is ~100 lines carrying `dissolved_ms` accumulators, `_STANDALONE` island protection, `_far_is_protected`, and a drop-instead-of-merge fallback — accreted across three rounds of real-world bug fixes (commit b820856 plus the 2026-08-03 comments). That is the signature of a repair pass cleaning up after a pass that lacked the information to decide correctly.
 
 The live config makes it worse: `min_silence_ms: 250` with `min_clip_ms: 1200` means the silence pass shatters the timeline into fragments and the merge pass must then reassemble it, deciding case-by-case how much dead air to re-admit.

@@ -625,7 +625,23 @@ for the full plan (Phases 0–6).
   synthetic forced-keyframe `lavfi` clip, not mocked) — GOP-tolerance
   duration match, cut-shortening, `--reencode` frame accuracy, missing-ffmpeg
   clear-error, no-keep-spans ValueError. Full suite: 255 collected, 254
-  green / 1 pre-existing unrelated failure (see above). **Still open, per
-  the handoff:** the real Premiere XML import acceptance — Phases 4–6 (
-  segment-first rough cut, dead-air wins, takes.py) stay blocked on it and
-  remain unbuilt.
+  green / 1 pre-existing unrelated failure (see above).
+- **Segment-first rough cut Phase 4 — DONE (2026-08-04), opt-in.**
+  `cut.rough_cut_mode: interval | segment` (default `interval`, byte-identical
+  to before). `segment` mode builds keeps outward from segments instead of
+  subtracting VAD silence out of the whole timeline: `rules.label_segments`
+  (first real producer of the long-unused `Label` type) + `_segment_gap_cuts`
+  replace rules 1+3 (silence cuts + min-clip merge) — a kept segment is an
+  utterance by construction, so `apply_min_clip_merge`'s `dissolved_ms`/
+  `_STANDALONE` machinery is never invoked in this mode at all. Verified
+  against the three real-world bug fixtures that machinery exists for
+  (tokenless blip between long silences, chained tokenless blips, short
+  real-word islands either side of a pause) — segment mode reaches the same
+  correct plans with zero merge/dissolve logic involved. 13 new tests in
+  `tests/test_cutdeck_phase4.py`; full suite 268 collected, 267 green (same
+  pre-existing `pycrfsuite` gap, unrelated). **Still open, per the handoff:**
+  the real Premiere XML import acceptance — Phases 5–6 (dead-air wins,
+  takes.py) stay blocked on it; `segment` mode itself stays opt-in until
+  watched on real footage via `cutdeck/preview.py`, then the old `interval`
+  path + `apply_min_clip_merge` become a deletion candidate in a follow-up
+  commit (not done here, per the handoff's own instruction).

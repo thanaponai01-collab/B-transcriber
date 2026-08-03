@@ -22,6 +22,17 @@ Layer 0 (these VAD spans) decides *where* the blade lands.
 
 The whole pass is a pure function of (tokens, spans, duration, cfg): identical
 inputs yield a byte-identical plan (determinism is an acceptance criterion).
+
+**``cfg.rough_cut_mode`` (HANDOFF_CUTDECK_WORDLEVEL.md Phase 4, default
+``"interval"``)** picks which rule builds rule 1's base keep/cut tiling.
+``"interval"`` is the three rules above — silence intervals subtracted out of
+the whole timeline, then rule 3 repairs any too-short kept island the
+subtraction left behind. ``"segment"`` replaces rules 1+3 with
+``label_segments``/``_segment_gap_cuts``: keeps are built *outward* from
+``segments`` (Layer 2) instead, so a kept segment is an utterance by
+construction and a short one is just a short utterance — nothing merges,
+nothing dissolves, because nothing ever subtracted an interval out of it.
+Filler and repeat cuts (rule 2, word-level) apply identically in both modes.
 """
 
 from __future__ import annotations
@@ -34,9 +45,12 @@ from cutdeck.contracts import (
     BLADE_WORD,
     CUT,
     KEEP,
+    LABEL_KEEP_WORTHY,
+    ROUGH_CUT_SEGMENT,
     SOURCE_RULE,
     CutConfig,
     CutSpan,
+    Label,
     Segment,
 )
 from cutdeck.words import Word
@@ -216,6 +230,67 @@ def _repeat_cuts_in_words(seg_words: list[Word], cfg: CutConfig) -> list[_RawCut
             break
         if not matched:
             i += 1
+    return cuts
+
+
+# ── rule 1, segment-first variant (Phase 4) ───────────────────────────────────
+
+def label_segments(segments: list[Segment]) -> list[Label]:
+    """Layer 3 — one keep/cut judgement per segment.
+
+    No cut-worthy classifier exists yet (that's Phase 6's retake/false-start
+    resolver — the ``Label`` contract type has sat unused since Phase 1
+    waiting for it), so every segment keeps for now. ``_segment_gap_cuts``
+    reads through this rather than iterating ``segments`` directly so Phase 6
+    only has to change what this function returns.
+    """
+    return [
+        Label(segment_id=seg.id, action=KEEP, kind=LABEL_KEEP_WORTHY, source=SOURCE_RULE)
+        for seg in segments
+    ]
+
+
+def _segment_gap_cuts(segments: list[Segment], duration_ms: int, cfg: CutConfig) -> list[_RawCut]:
+    """Cuts for the space *between* kept segments (Phase 4 — the segment-first
+    rough cut). A kept segment is an utterance by construction; there is
+    nothing to merge or dissolve because nothing subtracts an interval out of
+    it in the first place. Only the gaps — before the first segment, between
+    two segments, after the last — are candidates for a cut, gated by the same
+    ``min_silence_ms``/pad thresholds the interval pass uses, so segments
+    replace VAD silence spans as the source of *where* a boundary sits without
+    changing *how big* the padding is.
+
+    A gap with no segments in it at all (nothing kept anywhere) becomes one
+    cut over the whole duration — there is no utterance to pad around.
+    """
+    kept_ids = {l.segment_id for l in label_segments(segments) if l.action == KEEP}
+    kept = sorted((s for s in segments if s.id in kept_ids), key=lambda s: s.start_ms)
+    if not kept:
+        return [(0, duration_ms, "no_speech", SOURCE_RULE, BLADE_VAD)] if duration_ms > 0 else []
+
+    cuts: list[_RawCut] = []
+
+    lead_gap = kept[0].start_ms
+    if lead_gap > cfg.min_silence_ms:
+        cut_end = kept[0].start_ms - cfg.pad_pre_ms
+        if cut_end > 0:
+            cuts.append((0, cut_end, "silence", SOURCE_RULE, BLADE_VAD))
+
+    for a, b in zip(kept, kept[1:]):
+        gap = b.start_ms - a.end_ms
+        if gap <= cfg.min_silence_ms:
+            continue  # short gap is pace, not dead air — segments stay one kept run
+        cut_start = a.end_ms + cfg.pad_post_ms
+        cut_end = b.start_ms - cfg.pad_pre_ms
+        if cut_end > cut_start:
+            cuts.append((cut_start, cut_end, "silence", SOURCE_RULE, BLADE_VAD))
+
+    trail_gap = duration_ms - kept[-1].end_ms
+    if trail_gap > cfg.min_silence_ms:
+        cut_start = kept[-1].end_ms + cfg.pad_post_ms
+        if cut_start < duration_ms:
+            cuts.append((cut_start, duration_ms, "silence", SOURCE_RULE, BLADE_VAD))
+
     return cuts
 
 
@@ -430,16 +505,28 @@ def build_cut_spans(
     word timeline degrades to no filler/repeat cuts (``filler_cuts`` logs a
     warning), not a crash.
 
+    ``cfg.rough_cut_mode`` (Phase 4) picks which rule builds the base keep/cut
+    tiling: ``interval`` (default) subtracts VAD silences from the whole
+    timeline, then repairs too-short kept islands with ``apply_min_clip_merge``.
+    ``segment`` builds keeps outward from ``segments`` instead — a kept segment
+    is an utterance by construction, so a short one is just a short utterance,
+    never a merge/dissolve candidate. Filler and repeat cuts (word-level) apply
+    identically in both modes; only the base silence pass differs.
+
     Pure: same (tokens, spans, duration, cfg, words, segments) → identical output.
     """
     cfg = cfg or CutConfig()
     words = words or []
     segments = segments or []
     silences = _silence_intervals(spans)
+    word_cuts = filler_cuts(words, silences, cfg, job_id) + repeat_cuts(words, segments, cfg)
 
-    raw = (silence_cuts(silences, cfg)
-           + filler_cuts(words, silences, cfg, job_id)
-           + repeat_cuts(words, segments, cfg))
+    if cfg.rough_cut_mode == ROUGH_CUT_SEGMENT:
+        raw = _segment_gap_cuts(segments, duration_ms, cfg) + word_cuts
+        merged = _merge_overlaps(raw, duration_ms)
+        return _assemble(merged, duration_ms)
+
+    raw = silence_cuts(silences, cfg) + word_cuts
     merged = _merge_overlaps(raw, duration_ms)
     assembled = _assemble(merged, duration_ms)
     return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens)

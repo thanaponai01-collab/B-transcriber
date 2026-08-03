@@ -49,6 +49,14 @@ SOURCE_LLM = "llm"
 BLADE_VAD = "vad"
 BLADE_WORD = "word"
 
+# Rough-cut modes (HANDOFF_CUTDECK_WORDLEVEL.md Phase 4) — ``interval`` is the
+# original silence-interval-subtraction pass (rules.apply_min_clip_merge and
+# its dissolve/standalone bookkeeping); ``segment`` builds keeps outward from
+# segments instead, so a too-short kept island is just a short utterance, not
+# a case the merge pass has to reason about.
+ROUGH_CUT_INTERVAL = "interval"
+ROUGH_CUT_SEGMENT = "segment"
+
 
 @dataclass(frozen=True)
 class Segment:
@@ -169,6 +177,12 @@ class CutConfig:
     # Blade contract (Phase 2.3) — audio crossfade on mid-speech word-blade cuts.
     word_blade_crossfade_ms: int = 20
 
+    # Rough-cut pass (Phase 4). ``segment`` is new and unproven on real footage —
+    # stays opt-in until it's been watched (see cutdeck/preview.py), so
+    # ``apply_min_clip_merge`` and its tests stay intact behind this flag rather
+    # than being deleted in the same change that introduces the replacement.
+    rough_cut_mode: str = ROUGH_CUT_INTERVAL
+
     @classmethod
     def from_yaml(cls, cfg: dict) -> "CutConfig":
         cut = (cfg or {}).get("cut", {}) or {}
@@ -189,4 +203,5 @@ class CutConfig:
             repeat_max_ngram=int(cut.get("repeat_max_ngram", 4)),
             repeat_max_gap_ms=int(cut.get("repeat_max_gap_ms", 600)),
             word_blade_crossfade_ms=int(cut.get("word_blade_crossfade_ms", 20)),
+            rough_cut_mode=str(cut.get("rough_cut_mode", ROUGH_CUT_INTERVAL)),
         )
