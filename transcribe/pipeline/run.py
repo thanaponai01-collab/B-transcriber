@@ -271,6 +271,11 @@ def run_file(
             vad_threshold=float(config.get("vad_threshold", 0.5)),
             vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
             vad_min_silence_ms=int(config.get("vad_min_silence_ms", 300)),
+            rms_gate_enabled=bool(config.get("rms_gate_enabled", True)),
+            rms_gate_floor_db=(float(config["rms_gate_floor_db"])
+                               if config.get("rms_gate_floor_db") is not None else None),
+            rms_gate_floor_percentile=float(config.get("rms_gate_floor_percentile", 10.0)),
+            rms_gate_min_gap_ms=int(config.get("rms_gate_min_gap_ms", 300)),
             audio=audio_arr, sr=sr,
             materialize_chunks=chunk_engine_active,
             chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)) if chunk_engine_active else 0,

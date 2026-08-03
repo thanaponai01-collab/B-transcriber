@@ -186,43 +186,129 @@ def _coalesce(spans: list[CutSpan]) -> list[CutSpan]:
             if s.action == CUT:
                 prev.reason = _union(prev.reason, s.reason)
                 prev.source = _union(prev.source, s.source)
+            else:
+                prev.dissolved_ms += s.dissolved_ms
         else:
             out.append(CutSpan(0, s.src_in_ms, s.src_out_ms, s.action,
-                               reason=s.reason, source=s.source))
+                               reason=s.reason, source=s.source,
+                               dissolved_ms=s.dissolved_ms))
     for i, s in enumerate(out):
         s.idx = i
     return out
 
 
-def apply_min_clip_merge(spans: list[CutSpan], min_clip_ms: int) -> list[CutSpan]:
+_STANDALONE = "min_clip_standalone"
+
+
+def _has_token(tokens: Optional[list], span: CutSpan) -> bool:
+    """True if any token's midpoint falls inside ``span``. Real transcribed
+    content — never a pure VAD noise blip — so the merge must never erase it."""
+    if not tokens:
+        return False
+    for t in tokens:
+        mid = (t.start_ms + t.end_ms) / 2
+        if span.src_in_ms <= mid < span.src_out_ms:
+            return True
+    return False
+
+
+def apply_min_clip_merge(
+    spans: list[CutSpan], min_clip_ms: int, max_dissolve_ms: Optional[int] = None,
+    tokens: Optional[list] = None,
+) -> list[CutSpan]:
     """Dissolve cuts adjacent to too-short kept clips, toward the longer neighbour.
 
-    Each pass un-cuts exactly one cut, so cut count strictly decreases and the
-    loop terminates. A lone kept clip with no neighbouring cut is left as-is.
+    ``max_dissolve_ms`` caps how much dead air a *contiguous kept run* may
+    re-admit in total (None = uncapped, the old behaviour) — not just the one
+    cut being dissolved this iteration. A chain of several short blips each
+    bordered by silences individually under the cap would otherwise dissolve
+    one-by-one across iterations and stitch a large stretch of dead air back
+    together anyway; tracking cumulative ``dissolved_ms`` per run closes that.
+    A too-short keep island whose only merge options would blow the cumulative
+    cap is dropped (turned into CUT) instead — otherwise a stray
+    sub-``min_clip_ms`` blip between long silences forces the *whole* silence
+    back into the kept timeline, which defeats the silence pass rather than
+    merely tidying its edges.
+
+    ``tokens`` (real-world bug, 2026-08-03, round 3): a too-short keep island
+    that contains an actual transcribed word — e.g. two brief, separately
+    spoken words either side of a real ~1.8s pause — is never merged or
+    dropped, even though it is short and its neighbouring cut is well inside
+    the dissolve cap. Forcing that pause back into the kept timeline just to
+    satisfy ``min_clip_ms`` re-admits real dead air around real content;
+    instead the island stands alone as its own short clip, and neighbouring
+    cuts are barred from dissolving *through* it (which would silently absorb
+    it via coalescing from the far side). Only genuinely empty islands — no
+    token inside them — are still subject to merge/drop.
+
+    Each pass either shrinks a cut to nothing (dissolve), grows one (drop), or
+    settles a token-bearing island permanently, so the count of unsettled
+    too-short keeps strictly decreases and the loop terminates. A lone kept
+    clip with no neighbouring cut is left as-is.
     """
     spans = _coalesce(spans)
     while True:
         short = [i for i, s in enumerate(spans)
-                 if s.action == KEEP and s.duration_ms < min_clip_ms]
+                 if s.action == KEEP and s.duration_ms < min_clip_ms
+                 and s.reason != _STANDALONE]
         if not short:
             break
         # Shortest first; tie-break on position for determinism.
         i = min(short, key=lambda k: (spans[k].duration_ms, k))
+
+        if _has_token(tokens, spans[i]):
+            spans[i].reason = _STANDALONE
+            continue
 
         has_left_cut = i - 1 >= 0 and spans[i - 1].action == CUT
         has_right_cut = i + 1 < len(spans) and spans[i + 1].action == CUT
         if not has_left_cut and not has_right_cut:
             break  # isolated keep, nothing to merge into
 
-        if has_left_cut and has_right_cut:
+        def _reclaimed_total(cut_idx: int) -> int:
+            """Dead air the resulting merged run would carry if ``cut_idx`` dissolves:
+            the short keep's own accumulated total, this cut's full duration, and
+            (if present) the far KEEP neighbour's accumulated total."""
+            total = spans[i].dissolved_ms + spans[cut_idx].duration_ms
+            far = cut_idx - 1 if cut_idx < i else cut_idx + 1
+            if 0 <= far < len(spans) and spans[far].action == KEEP:
+                total += spans[far].dissolved_ms
+            return total
+
+        def _far_is_protected(cut_idx: int) -> bool:
+            """The far KEEP across this cut is a settled/token island — dissolving
+            this cut would silently swallow it into the merged run via coalescing."""
+            far = cut_idx - 1 if cut_idx < i else cut_idx + 1
+            if not (0 <= far < len(spans) and spans[far].action == KEEP):
+                return False
+            return spans[far].reason == _STANDALONE or _has_token(tokens, spans[far])
+
+        left_ok = (has_left_cut and not _far_is_protected(i - 1)
+                   and (max_dissolve_ms is None
+                        or _reclaimed_total(i - 1) <= max_dissolve_ms))
+        right_ok = (has_right_cut and not _far_is_protected(i + 1)
+                    and (max_dissolve_ms is None
+                         or _reclaimed_total(i + 1) <= max_dissolve_ms))
+
+        if not left_ok and not right_ok:
+            # Both neighbouring cuts are too long to absorb cheaply — the short
+            # island is more likely noise than a real utterance worth stitching
+            # two long silences back together for. Drop it instead.
+            spans[i] = CutSpan(0, spans[i].src_in_ms, spans[i].src_out_ms, CUT,
+                               reason="min_clip_drop", source=SOURCE_RULE)
+            spans = _coalesce(spans)
+            continue
+
+        if left_ok and right_ok:
             left_keep = spans[i - 2].duration_ms if i - 2 >= 0 else -1
             right_keep = spans[i + 2].duration_ms if i + 2 < len(spans) else -1
             dissolve = i - 1 if left_keep >= right_keep else i + 1
         else:
-            dissolve = i - 1 if has_left_cut else i + 1
+            dissolve = i - 1 if left_ok else i + 1
 
         spans[dissolve] = CutSpan(0, spans[dissolve].src_in_ms,
-                                  spans[dissolve].src_out_ms, KEEP)
+                                  spans[dissolve].src_out_ms, KEEP,
+                                  dissolved_ms=spans[dissolve].duration_ms)
         spans = _coalesce(spans)
     return spans
 
@@ -245,4 +331,4 @@ def build_cut_spans(
     raw = silence_cuts(silences, cfg) + filler_cuts(tokens or [], silences, cfg)
     merged = _merge_overlaps(raw, duration_ms)
     assembled = _assemble(merged, duration_ms)
-    return apply_min_clip_merge(assembled, cfg.min_clip_ms)
+    return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens)

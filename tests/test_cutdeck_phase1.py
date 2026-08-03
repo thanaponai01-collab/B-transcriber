@@ -152,6 +152,83 @@ def test_min_clip_merge_absorbs_short_island_toward_longer_neighbor():
     assert (cut.src_in_ms, cut.src_out_ms) == (2120, 3750)
 
 
+def test_min_clip_merge_drops_short_island_between_two_long_silences():
+    """Real-world bug (2026-08-03): a stray sub-min_clip_ms speech blip sitting
+    between two long silences was dissolving one of them wholesale, re-admitting
+    up to tens of seconds of dead air just to avoid a ~600ms kept island. With
+    max_dissolve_ms capping the absorb, the island is dropped instead — both
+    silences stay cut."""
+    cfg = CutConfig(min_silence_ms=350, pad_post_ms=40, pad_pre_ms=80,
+                     min_clip_ms=1200, max_dissolve_ms=4000)
+    spans = [
+        _speech(0, 2000), _silence(2000, 20500),   # 18.5s silence
+        _speech(20500, 20980),                     # 480ms blip — too short to keep
+        _silence(20980, 28790),                    # 7.8s silence
+        _speech(28790, 33000),
+    ]
+    out = build_cut_spans([], spans, 33000, cfg)
+    assert [s.action for s in out] == [KEEP, CUT, KEEP]
+    assert all(s.duration_ms >= cfg.min_clip_ms for s in out if s.action == KEEP)
+    cut = next(s for s in out if s.action == CUT)
+    # Both silences remain cut — the blip was dropped, not used to stitch them.
+    assert (cut.src_in_ms, cut.src_out_ms) == (2040, 28710)
+
+
+def test_min_clip_merge_caps_cumulative_chained_dissolves():
+    """Real-world bug (2026-08-03, round 2): max_dissolve_ms only capped the ONE
+    cut being dissolved per iteration, not the total dead air re-admitted into a
+    run across several iterations. A chain of short blips each bordered by
+    silences individually under the cap (but summing to far more) stitched a
+    whole ~14s stretch of near-continuous silence into one giant kept clip —
+    exactly the real-footage regression this test pins down. Cumulative
+    dissolved_ms bookkeeping must stop the chain once the run's total dead air
+    exceeds the cap, even though no single cut in the chain does."""
+    cfg = CutConfig(min_silence_ms=350, pad_post_ms=40, pad_pre_ms=80,
+                     min_clip_ms=1200, max_dissolve_ms=4000)
+    spans = [
+        _speech(0, 2000),
+        _silence(2000, 5500), _speech(5500, 6000),
+        _silence(6000, 9500), _speech(9500, 10000),
+        _silence(10000, 13500), _speech(13500, 14000),
+        _silence(14000, 17500), _speech(17500, 20000),
+    ]
+    out = build_cut_spans([], spans, 20000, cfg)
+    # Must NOT collapse into one long keep spanning the whole chain.
+    assert [s.action for s in out] != [KEEP]
+    for s in out:
+        if s.action == KEEP:
+            assert s.dissolved_ms <= cfg.max_dissolve_ms
+
+
+def test_min_clip_merge_preserves_short_islands_with_real_tokens():
+    """Real-world bug (2026-08-03, round 3): two brief separately-spoken words
+    ("เทส" / "เทสต์" — "test", "test") each land in a
+    sub-min_clip_ms keep island either side of a genuine ~1.8s pause. The old
+    merge unconditionally stitched them (and the pause) into one blob, re-admitting
+    real dead air just to satisfy the min_clip_ms floor even though both islands
+    hold real transcribed content. A short island containing a token must stand
+    alone — never merged into a neighbour, never dropped — and a neighbouring cut
+    must not dissolve *through* it either."""
+    cfg = CutConfig(min_silence_ms=350, pad_post_ms=40, pad_pre_ms=80,
+                     min_clip_ms=1200, max_dissolve_ms=4000)
+    tokens = [Tok(0, "เทส", 1520, 2420),
+              Tok(1, "เทสต์", 4030, 5210)]
+    spans = [
+        _silence(0, 1890), _speech(1890, 2558),
+        _silence(2558, 4386), _speech(4386, 5182),
+        _silence(5182, 23682),
+    ]
+    out = build_cut_spans(tokens, spans, 23682, cfg)
+    # The real pause between the two words must survive as its own cut.
+    assert any(s.action == CUT and s.src_in_ms >= 2400 and s.src_out_ms <= 4400
+               for s in out)
+    # Both word islands must still exist as short standalone keeps (not merged
+    # into a single long run, not dropped).
+    keeps = [s for s in out if s.action == KEEP and s.src_out_ms <= 5300]
+    assert len(keeps) == 2
+    assert all(s.duration_ms < cfg.min_clip_ms for s in keeps)
+
+
 def test_min_clip_does_not_fire_when_disabled():
     cfg = CutConfig(min_silence_ms=900, pad_post_ms=120, pad_pre_ms=250, min_clip_ms=0)
     spans = [_speech(0, 2000), _silence(2000, 4000),

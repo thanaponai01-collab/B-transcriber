@@ -18,6 +18,9 @@ re-import (Phase 3) can match Premiere's edited clips back to plan spans.
 from __future__ import annotations
 
 import argparse
+import json
+import logging
+import subprocess
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -27,11 +30,42 @@ from cutdeck.contracts import KEEP, CutPlan, Timebase
 from cutdeck.plan import load_plan
 from transcribe.timebase import ms_to_frame
 
+logger = logging.getLogger(__name__)
+
 # FCP7 stereo convention: two mono audio tracks linked to the video clip. Most
 # Premiere projects are stereo; mono sources still import (the second track is
 # simply silent). ponytail: fixed at 2, make it probe channel count if a real
 # mono/5.1 source ever needs exact channel mapping.
 AUDIO_CHANNELS = 2
+
+# Fallback frame size when ffprobe can't determine the source's real dimensions
+# (missing binary, unreadable file). 1920x1080 is a safer default than letting
+# Premiere pick its own — it matches the overwhelming majority of sources this
+# tool sees — but it is a guess, not a probe, so callers are warned.
+_FALLBACK_WIDTH, _FALLBACK_HEIGHT = 1920, 1080
+
+
+def probe_frame_size(media_path: str) -> tuple[int, int]:
+    """(width, height) of the video stream, via ffprobe.
+
+    Without an explicit frame size, FCP7/Premiere has no way to know the
+    source's real dimensions and silently substitutes its own default sequence
+    preset — producing the scale/crop mismatch this function exists to prevent.
+    """
+    try:
+        cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-show_entries", "stream=width,height", "-of", "json", media_path]
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        streams = json.loads(out).get("streams", [])
+        if streams and streams[0].get("width") and streams[0].get("height"):
+            return int(streams[0]["width"]), int(streams[0]["height"])
+    except Exception as e:
+        logger.warning("ffprobe frame-size probe failed for %s (%s); "
+                        "defaulting to %dx%d", media_path, e, _FALLBACK_WIDTH, _FALLBACK_HEIGHT)
+    else:
+        logger.warning("no video stream dimensions for %s; defaulting to %dx%d",
+                        media_path, _FALLBACK_WIDTH, _FALLBACK_HEIGHT)
+    return _FALLBACK_WIDTH, _FALLBACK_HEIGHT
 
 
 def name_key(job_id: int, plan_id: int, span_idx: int) -> str:
@@ -61,8 +95,20 @@ def _rate(parent: ET.Element, tb: Timebase) -> None:
     ET.SubElement(rate, "ntsc").text = "TRUE" if tb.fps_den == 1001 else "FALSE"
 
 
+def _samplecharacteristics(parent: ET.Element, tb: Timebase, width: int, height: int) -> None:
+    """FCP7 ``<samplecharacteristics>``: the frame size Premiere renders/scales
+    against. Omitting this is what causes an import to silently fall back to
+    Premiere's own default sequence preset (crop/scale mismatch)."""
+    sc = ET.SubElement(parent, "samplecharacteristics")
+    _rate(sc, tb)
+    ET.SubElement(sc, "width").text = str(width)
+    ET.SubElement(sc, "height").text = str(height)
+    ET.SubElement(sc, "pixelaspectratio").text = "square"
+    ET.SubElement(sc, "fielddominance").text = "none"
+
+
 def _file_element(parent: ET.Element, file_id: str, media_path: str, tb: Timebase,
-                  total_src_frames: int, full: bool) -> None:
+                  total_src_frames: int, width: int, height: int, full: bool) -> None:
     """A ``<file>`` ref. ``full=True`` emits the one complete listing; else a stub
     that points back to it by id (Premiere de-dupes on the id attribute)."""
     f = ET.SubElement(parent, "file", id=file_id)
@@ -73,7 +119,8 @@ def _file_element(parent: ET.Element, file_id: str, media_path: str, tb: Timebas
     _rate(f, tb)
     ET.SubElement(f, "duration").text = str(total_src_frames)
     media = ET.SubElement(f, "media")
-    ET.SubElement(media, "video")
+    video = ET.SubElement(media, "video")
+    _samplecharacteristics(video, tb, width, height)
     audio = ET.SubElement(media, "audio")
     ET.SubElement(audio, "channelcount").text = str(AUDIO_CHANNELS)
 
@@ -89,7 +136,8 @@ def _link(clipitem: ET.Element, ref_id: str, mediatype: str, trackindex: int,
 
 
 def to_xml(plan: CutPlan, media_path: str, plan_id: int,
-           sequence_name: Optional[str] = None) -> str:
+           sequence_name: Optional[str] = None,
+           frame_size: Optional[tuple[int, int]] = None) -> str:
     """Render a CutPlan's KEEP spans as an FCP7 XML string.
 
     Raises ValueError on a VFR timebase (GAP-2) or a plan with no keep spans.
@@ -106,6 +154,7 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
 
     file_id = "file-1"
     total_src_frames = ms_to_frame(plan.duration_ms, tb)
+    width, height = frame_size or probe_frame_size(media_path)
 
     # Pre-compute each keep span's source + timeline frame positions.
     clips = []          # (span, src_in, src_out, tl_start, tl_end)
@@ -129,6 +178,8 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
     _rate(seq, tb)
     media = ET.SubElement(seq, "media")
     video = ET.SubElement(media, "video")
+    fmt = ET.SubElement(video, "format")
+    _samplecharacteristics(fmt, tb, width, height)
     vtrack = ET.SubElement(video, "track")
     audio = ET.SubElement(media, "audio")
     atracks = [ET.SubElement(audio, "track") for _ in range(AUDIO_CHANNELS)]
@@ -149,7 +200,7 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
             ET.SubElement(ci, "end").text = str(tl_end)
             ET.SubElement(ci, "in").text = str(src_in)
             ET.SubElement(ci, "out").text = str(src_out)
-            _file_element(ci, file_id, media_path, tb, total_src_frames, full=first)
+            _file_element(ci, file_id, media_path, tb, total_src_frames, width, height, full=first)
             first = False
             if mediatype == "audio":
                 st = ET.SubElement(ci, "sourcetrack")
@@ -196,7 +247,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--plan-id", type=int, help="cut_plan row to export")
     g.add_argument("--job-id", type=int, help="export the latest plan for this job")
-    ap.add_argument("--out", default=None, help="output .xml path (default cd<job>_p<plan>.xml)")
+    ap.add_argument("--out", default=None,
+                     help="output .xml path (default: <footage folder>/CutDeck/"
+                          "cd<job>_p<plan>.xml, next to the source media)")
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
     ap.add_argument("--config", default=None,
                      help="pipeline config.yaml (for conform_vfr); "
@@ -223,6 +276,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             raise SystemExit(f"media for job {plan.job_id} not found")
 
         media_path = media.path
+        source_dir = Path(media.path).parent
         if plan.timebase.is_vfr and _conform_vfr_enabled(args.config):
             from transcribe.timebase import conform_vfr
             print(f"source is VFR — conforming a CFR proxy (fps {plan.timebase.fps_num}/{plan.timebase.fps_den})...")
@@ -230,7 +284,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"conformed proxy: {media_path}")
 
         xml = to_xml(plan, media_path, plan_id)
-        out = Path(args.out) if args.out else Path(f"cd{plan.job_id:03d}_p{plan_id:03d}.xml")
+        if args.out:
+            out = Path(args.out)
+        else:
+            out_dir = source_dir / "CutDeck"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / f"cd{plan.job_id:03d}_p{plan_id:03d}.xml"
+        out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(xml, encoding="utf-8")
         store.update_cut_plan_status(conn, plan_id, "exported")
         print(f"wrote {out} ({sum(1 for s in plan.spans if s.action == KEEP)} keep clips)")

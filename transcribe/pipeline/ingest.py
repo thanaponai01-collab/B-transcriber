@@ -200,6 +200,90 @@ def _vad_chunks(audio: np.ndarray, sr: int,
         return [(0, len(audio))]
 
 
+_FLOOR_DB_FALLBACK = -55.0     # used only when a file has too little speech to estimate from
+_FLOOR_DB_MIN = -80.0          # clamp: never gate this aggressively even on a very clean file
+_FLOOR_DB_MAX = -35.0          # clamp: never gate this leniently even on a very noisy file
+
+
+def _estimate_speech_floor_db(
+    audio: np.ndarray, sr: int, segments: list[tuple[int, int]],
+    percentile: float = 10.0, window_ms: int = 50,
+) -> float:
+    """Per-file noise floor: the ``percentile``-th quietest 50ms window *within
+    VAD-flagged speech segments* (not the whole file — real cut silence would
+    just pull this down to the digital floor and defeat the estimate).
+
+    A fixed dB threshold is calibrated to one recording's gain staging; a
+    quieter room mic or a hotter on-camera preamp shifts the whole noise floor
+    and needs a different number. Sampling from this file's own quietest
+    "speech" content instead means the gate self-calibrates per file. Clamped
+    to [_FLOOR_DB_MIN, _FLOOR_DB_MAX] so a pathological file (near-silent or
+    all-loud) can't make the gate absurdly aggressive or a no-op.
+    """
+    window = max(1, int(window_ms * sr / 1000))
+    vals: list[float] = []
+    for start_s, end_s in segments:
+        seg = audio[start_s:end_s]
+        for i in range(0, len(seg) - window, window):
+            vals.append(_rms_db(seg[i:i + window]))
+    if len(vals) < 20:  # not enough speech to estimate anything meaningful from
+        return _FLOOR_DB_FALLBACK
+    floor = float(np.percentile(vals, percentile))
+    return max(_FLOOR_DB_MIN, min(_FLOOR_DB_MAX, floor))
+
+
+def _rms_gate_segments(
+    audio: np.ndarray, sr: int, segments: list[tuple[int, int]],
+    floor_db: float = -55.0, min_gap_ms: int = 300, window_ms: int = 50,
+) -> list[tuple[int, int]]:
+    """Sub-split each VAD speech segment wherever raw RMS energy drops below
+    ``floor_db`` for at least ``min_gap_ms`` — independent of ``vad_threshold``.
+
+    Silero VAD is a probability model: at the low threshold Thai particle
+    survival needs (0.35), it happily calls extended stretches of near-silent
+    room tone "speech" as long as *something* voice-shaped is present nearby,
+    producing multi-second "speech" spans that are audibly mostly dead air.
+    Raising the threshold to fix that re-clips soft particles (measured
+    regression, see config.yaml). This is a second, orthogonal signal — plain
+    loudness — so it only removes stretches that are quiet by any measure,
+    without touching VAD's voice/no-voice judgement at segment edges (where
+    the particle-survival tuning actually matters).
+    """
+    window = max(1, int(window_ms * sr / 1000))
+    min_windows = max(1, int(min_gap_ms / window_ms))
+    out: list[tuple[int, int]] = []
+    for start_s, end_s in segments:
+        seg = audio[start_s:end_s]
+        n = len(seg)
+        if n <= 0:
+            continue
+        below = [_rms_db(seg[i:i + window]) < floor_db for i in range(0, n, window)]
+        gaps: list[tuple[int, int]] = []
+        run_start = None
+        run_len = 0
+        for wi, is_quiet in enumerate(below + [False]):  # sentinel flushes trailing run
+            if is_quiet:
+                if run_start is None:
+                    run_start = wi
+                run_len += 1
+            else:
+                if run_start is not None and run_len >= min_windows:
+                    gaps.append((run_start * window, min(n, wi * window)))
+                run_start = None
+                run_len = 0
+        if not gaps:
+            out.append((start_s, end_s))
+            continue
+        cursor = 0
+        for a, b in gaps:
+            if a > cursor:
+                out.append((start_s + cursor, start_s + a))
+            cursor = b
+        if cursor < n:
+            out.append((start_s + cursor, start_s + n))
+    return out
+
+
 def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -> list[SpeechSpan]:
     """Turn VAD speech segments into a gap-free, ordered speech/silence timeline
     covering [0, total]. The silence between/around speech is the master timeline
@@ -251,6 +335,10 @@ def ingest(path: str, denoise: bool = True,
            vad_threshold: float = 0.5,
            vad_min_speech_ms: int = 250,
            vad_min_silence_ms: int = 300,
+           rms_gate_enabled: bool = True,
+           rms_gate_floor_db: float | None = None,
+           rms_gate_floor_percentile: float = 10.0,
+           rms_gate_min_gap_ms: int = 300,
            audio: np.ndarray | None = None,
            sr: int | None = None,
            materialize_chunks: bool = True,
@@ -265,6 +353,10 @@ def ingest(path: str, denoise: bool = True,
     decodes once). `materialize_chunks=False` skips chunk cutting entirely (whole-
     file engines don't need them — only the span timeline). `chunk_overlap_ms`
     (>0) makes adjacent chunks overlap so stitch.py can dedupe seam words.
+
+    `rms_gate_floor_db=None` (default) estimates the gate's loudness floor from
+    this file's own quietest speech content (`_estimate_speech_floor_db`) instead
+    of using one fixed number for every recording — pass a float to pin it.
     """
     logger.info("Ingesting: %s", path)
     if audio is None:
@@ -280,6 +372,21 @@ def ingest(path: str, denoise: bool = True,
         min_silence_ms=vad_min_silence_ms,
     )
     logger.info("VAD found %d speech segments", len(segments))
+
+    if rms_gate_enabled:
+        floor_db = rms_gate_floor_db
+        if floor_db is None:
+            floor_db = _estimate_speech_floor_db(audio, sr, segments,
+                                                 percentile=rms_gate_floor_percentile)
+            logger.info("RMS gate: estimated floor %.1f dB (p%.0f of speech content)",
+                        floor_db, rms_gate_floor_percentile)
+        gated = _rms_gate_segments(audio, sr, segments,
+                                   floor_db=floor_db,
+                                   min_gap_ms=rms_gate_min_gap_ms)
+        if len(gated) != len(segments):
+            logger.info("RMS gate split %d VAD segment(s) into %d",
+                        len(segments), len(gated))
+        segments = gated
 
     chunks = _materialize_chunks(audio, sr, segments, chunk_overlap_ms) if materialize_chunks else []
 

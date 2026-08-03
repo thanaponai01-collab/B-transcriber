@@ -90,6 +90,11 @@ class CutSpan:
     reason: Optional[str] = None      # 'silence', 'filler', 'min_clip_merge', ...
     source: Optional[str] = None      # SOURCE_RULE | SOURCE_LLM
     segment_ids: list[int] = field(default_factory=list)
+    # Rules-pass bookkeeping only (not serialized, see plan.to_dict): for a KEEP
+    # span, how much dead air apply_min_clip_merge has already re-admitted into
+    # this contiguous run. Lets the merge cap cumulative chained dissolves, not
+    # just the size of the one cut being dissolved this iteration.
+    dissolved_ms: int = 0
 
     @property
     def duration_ms(self) -> int:
@@ -140,6 +145,12 @@ class CutConfig:
 
     # Min-clip merge (rules §3)
     min_clip_ms: int = 1200
+    # Cap on how much dead air a min-clip merge may un-cut to absorb a too-short
+    # kept island. Merging across a small incidental cut is fine; merging across
+    # a cut longer than this just to save a sub-min_clip_ms speech blip re-admits
+    # exactly the dead air the pass exists to remove — the blip is dropped
+    # instead (see apply_min_clip_merge).
+    max_dissolve_ms: int = 4000
 
     @classmethod
     def from_yaml(cls, cfg: dict) -> "CutConfig":
@@ -156,4 +167,5 @@ class CutConfig:
             filler_lexicon_contextual=tuple(cut.get("filler_lexicon_contextual", []) or []),
             contextual_isolation_ms=int(cut.get("contextual_isolation_ms", 200)),
             min_clip_ms=int(cut.get("min_clip_ms", 1200)),
+            max_dissolve_ms=int(cut.get("max_dissolve_ms", 4000)),
         )

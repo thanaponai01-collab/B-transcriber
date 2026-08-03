@@ -58,6 +58,73 @@ def test_ingest_returns_the_array_it_used(monkeypatch):
     assert len(res.spans) >= 1       # timeline still built
 
 
+# ── RMS silence gate (2026-08-03) ──────────────────────────────────────────────
+
+def test_rms_gate_splits_quiet_stretch_inside_a_speech_segment():
+    """A VAD 'speech' segment that goes near-silent in the middle for longer than
+    min_gap_ms must be split into two — this is the real-world bug where a
+    multi-second span reads as continuous 'speech' to VAD (threshold tuned low
+    for Thai particle survival) despite an audible dead patch in the middle."""
+    sr = 16000
+    loud = (0.2 * np.sin(2 * np.pi * 200 * np.linspace(0, 1, sr, endpoint=False))).astype(np.float32)
+    quiet = np.zeros(int(0.5 * sr), dtype=np.float32)  # 500ms of true silence
+    audio = np.concatenate([loud, quiet, loud])
+    segments = [(0, len(audio))]  # VAD called the whole thing one speech segment
+    gated = ingest._rms_gate_segments(audio, sr, segments, floor_db=-55.0, min_gap_ms=300)
+    assert len(gated) == 2
+    assert gated[0][1] < gated[1][0]  # a gap was removed between them
+
+
+def test_rms_gate_leaves_continuously_loud_segment_untouched():
+    sr = 16000
+    loud = (0.2 * np.sin(2 * np.pi * 200 * np.linspace(0, 2, 2 * sr, endpoint=False))).astype(np.float32)
+    segments = [(0, len(loud))]
+    gated = ingest._rms_gate_segments(loud, sr, segments, floor_db=-55.0, min_gap_ms=300)
+    assert gated == segments
+
+
+def test_estimate_speech_floor_scales_with_recording_loudness():
+    """A fixed dB threshold miscalibrates across recordings with different gain
+    staging. The estimate must track each file's own loudness instead of
+    returning the same number regardless of input level."""
+    sr = 16000
+    rng = np.random.default_rng(0)
+
+    def make(loud_amp, quiet_amp, n_windows=40, window_ms=50):
+        win = int(window_ms * sr / 1000)
+        parts = []
+        for i in range(n_windows):
+            amp = loud_amp if i % 2 == 0 else quiet_amp
+            parts.append((amp * rng.standard_normal(win)).astype(np.float32))
+        return np.concatenate(parts)
+
+    quiet_recording = make(0.02, 0.002)   # e.g. a hot preamp, low overall level
+    loud_recording = make(0.5, 0.05)      # e.g. a close mic, high overall level
+    segments_q = [(0, len(quiet_recording))]
+    segments_l = [(0, len(loud_recording))]
+
+    floor_q = ingest._estimate_speech_floor_db(quiet_recording, sr, segments_q)
+    floor_l = ingest._estimate_speech_floor_db(loud_recording, sr, segments_l)
+    assert floor_q < floor_l, "quieter recording must get a lower (stricter) floor"
+
+
+def test_estimate_speech_floor_falls_back_when_too_little_speech():
+    sr = 16000
+    audio = np.zeros(100, dtype=np.float32)
+    floor = ingest._estimate_speech_floor_db(audio, sr, [(0, 100)])
+    assert floor == ingest._FLOOR_DB_FALLBACK
+
+
+def test_rms_gate_ignores_dips_shorter_than_min_gap_ms():
+    sr = 16000
+    loud = (0.2 * np.sin(2 * np.pi * 200 * np.linspace(0, 1, sr, endpoint=False))).astype(np.float32)
+    brief_quiet = np.zeros(int(0.1 * sr), dtype=np.float32)  # 100ms — under min_gap_ms
+    audio = np.concatenate([loud, brief_quiet, loud])
+    segments = [(0, len(audio))]
+    gated = ingest._rms_gate_segments(audio, sr, segments, floor_db=-55.0, min_gap_ms=300)
+    assert gated == segments
+
+
 # ── 3.2 pipeline decodes the audio exactly once per job ───────────────────────
 
 def test_pipeline_decodes_audio_once(monkeypatch):

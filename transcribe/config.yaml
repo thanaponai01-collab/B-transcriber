@@ -96,6 +96,20 @@ denoise: true
 vad_threshold: 0.35        # Thai sentence-final particles (ครับ/ค่ะ) get cut at 0.5
 vad_min_speech_ms: 250
 vad_min_silence_ms: 500    # wider silence window keeps soft particles intact
+# RMS silence gate (2026-08-03): a second, energy-only pass that sub-splits a VAD
+# "speech" span wherever raw loudness drops below a floor for at least
+# rms_gate_min_gap_ms — independent of vad_threshold. Fixes multi-second "speech"
+# spans that are audibly mostly dead air (VAD's probability model calls quiet room
+# tone speech at threshold 0.35) without reintroducing the Thai-particle-clipping
+# regression that raising vad_threshold caused. See ingest._rms_gate_segments.
+rms_gate_enabled: true
+# floor_db: null means auto-estimate per file from its own quietest speech content
+# (see ingest._estimate_speech_floor_db) — a fixed dB number is calibrated to one
+# recording's gain staging and won't generalize across different mics/rooms/shoots.
+# Set a float here only to pin/override the estimate for a specific source.
+rms_gate_floor_db: null
+rms_gate_floor_percentile: 10.0   # how far into the quiet tail counts as "gate-able"
+rms_gate_min_gap_ms: 300
 chunk_overlap_ms: 750       # GAP-4: adjacent VAD chunks overlap this much so stitch.py
                             # dedupes seam words (only used when a chunk engine is active)
 conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources before frame export
@@ -161,10 +175,14 @@ flywheel:
 # Present now so Phase 0 (timebase + VAD persistence) has a home; the deterministic
 # rules pass turns on after the first eval baseline.
 cut:
-  min_silence_ms: 900       # VAD silence longer than this becomes a cut
-  pad_pre_ms: 250           # kept pre-roll before speech (attack matters most)
-  pad_post_ms: 120          # kept post-roll after speech
+  min_silence_ms: 250       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
+  pad_pre_ms: 50            # kept pre-roll before speech (attack matters most; tightened 2026-08-03: was 80)
+  pad_post_ms: 25           # kept post-roll after speech (tightened 2026-08-03: was 40)
   min_clip_ms: 1200         # kept clips shorter than this merge into a neighbor
+  max_dissolve_ms: 4000     # cap on dead air a merge may re-admit; longer cuts
+                             # get their too-short neighbor dropped instead (bug
+                             # fix 2026-08-03: a stray sub-min_clip_ms blip between
+                             # two long silences was stitching them back together)
   fillers_enabled: false    # turn on after first eval baseline
   filler_lexicon: [เอ่อ, อ่า, อืม, เอิ่ม, um, uh]
   filler_lexicon_contextual: [แบบ, แบบว่า, ก็คือ, คือว่า, like, you know]
