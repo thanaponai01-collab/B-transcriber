@@ -245,38 +245,18 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     Returns list of (text, start_ms, end_ms, confidence) — confidence is the mean
     of the constituent word-pieces' probabilities, or None if none carried one.
     """
-    from pythainlp.tokenize import word_tokenize
+    from cutdeck.words import timed_tokens
 
-    # 1. per-character timeline (each char inherits its source piece's span + confidence)
-    chartime: list[tuple[int, int]] = []
-    charconf: list[float | None] = []
-    chars: list[str] = []
-    for txt, s, e, conf in words:
-        for ch in txt:
-            chars.append(ch)
-            chartime.append((s, e))
-            charconf.append(conf)
-    if not chars:
+    # 1-3. per-character timeline -> real word boundaries -> mapped time spans.
+    # Shared with cutdeck/words.py (CutDeck Phase 1) so there is exactly one
+    # implementation of Thai word-timeline reconstruction, not two.
+    full_text, timed = timed_tokens(words)
+    if not full_text:
         return []
-    full_text = "".join(chars)
 
-    # 2. real word boundaries (pythainlp keeps Latin runs and spaces intact)
-    toks = word_tokenize(full_text, keep_whitespace=True)
-
-    # 2b. sentence-start offsets in the same char coordinates as `toks` below.
+    # sentence-start offsets in the same char coordinates as `timed` below.
     boundary_offsets = _sentence_boundary_offsets(full_text)
     boundary_idx = 0
-
-    # 3. map each token back to its time span + confidence + char start via the char timeline
-    timed: list[tuple[str, int, int, float | None, int]] = []
-    pos = 0
-    for t in toks:
-        start = chartime[pos][0]
-        end = chartime[pos + len(t) - 1][1]
-        confs = [c for c in charconf[pos:pos + len(t)] if c is not None]
-        conf = sum(confs) / len(confs) if confs else None
-        timed.append((t, start, end, conf, pos))
-        pos += len(t)
 
     # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
     # kept once a real word follows in the same cue, so a cue never starts or ends on
