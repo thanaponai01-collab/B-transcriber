@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 from transcribe.db import store
-from transcribe.eval.metrics import EvalMetrics, compute_metrics, regressed
+from transcribe.eval.metrics import (
+    EvalMetrics, boundary_f1_error, compute_metrics, regressed,
+)
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
 
@@ -46,13 +48,18 @@ def _bias_hash(conn) -> str:
     return hashlib.sha256("\n".join(terms).encode()).hexdigest()[:16]
 
 
+def _media_extensions() -> tuple[str, ...]:
+    """Every extension the pipeline can actually ingest (audio + AV containers) —
+    a gold sample's source clip is frequently a raw video export, not audio-only."""
+    from transcribe.pipeline.ingest import _AV_CONTAINERS
+    return (".wav", ".mp3", ".flac") + tuple(sorted(_AV_CONTAINERS))
+
+
 def _load_goldenset() -> list[tuple[Path, list[dict]]]:
     """Return [(audio_path, ref_tokens), ...] for every sample in the golden set."""
     samples = []
     for gt_file in sorted(_GOLDENSET.glob("*.json")):
-        audio_candidates = [
-            gt_file.with_suffix(ext) for ext in (".wav", ".mp3", ".flac", ".m4a")
-        ]
+        audio_candidates = [gt_file.with_suffix(ext) for ext in _media_extensions()]
         audio_file = next((p for p in audio_candidates if p.exists()), None)
         if audio_file is None:
             print(f"[harness] WARNING: no audio for {gt_file.name}, skipping")
@@ -66,6 +73,7 @@ def run_harness(
     config: dict,
     db_path: Path,
     pipeline_fn=None,
+    experiment: bool = False,
 ) -> HarnessResult | None:
     """
     Run the golden set through the pipeline and compute aggregate metrics.
@@ -75,6 +83,14 @@ def run_harness(
         db_path: path to the SQLite database
         pipeline_fn: callable(audio_path, config) -> list[dict{"text","script"}]
                      If None, the real pipeline is used (imports pipeline.run).
+        experiment: True for an A/B probe (e.g. `--engine-b X`, `--llm-enabled`).
+                    The run is still gated against the production baseline, but
+                    its eval_run row is marked is_experiment=1 so it can never
+                    BECOME the baseline a later production run is compared to.
+                    Production config changes (engine swap in config.yaml, bias
+                    promotion) stay experiment=False — the gate must compare
+                    them against the previous production baseline and, on pass,
+                    they legitimately become the new one.
     Returns:
         EvalMetrics aggregate over all golden samples.
     """
@@ -88,6 +104,16 @@ def run_harness(
         scratch_dir = Path(tempfile.mkdtemp(prefix="eval_scratch_"))
         scratch_db = scratch_dir / "scratch.db"
         store.init_db(scratch_db)
+        # run_file reads its bias index from the DB it runs against. A fresh
+        # scratch DB has no bias terms, so the eval would silently measure a
+        # prompt-less pipeline — the one thing a bias-update gate must not do.
+        # Mirror the live bias index into the scratch DB before any sample runs.
+        _src = store.connect(db_path)
+        _dst = store.connect(scratch_db)
+        for _t in store.get_bias_terms(_src):
+            store.upsert_bias_term(_dst, _t.term, _t.term_type, _t.script, _t.added_by, _t.weight)
+        _src.close()
+        _dst.close()
         def pipeline_fn(audio_path, cfg):
             return pipeline_run.run_file(str(audio_path), cfg, scratch_db)
 
@@ -105,9 +131,13 @@ def run_harness(
     tol = float(config.get("boundary_tol_ms", 300.0))
 
     # Numerators are weighted by the reference size of each signal so per-sample
-    # rates aggregate into a corpus-level rate.
-    cer_num = wer_lat_num = wer_num = ber_num = 0.0
-    total_thai = total_latin = total_words = total_switches = 0
+    # rates aggregate into a corpus-level rate. BER instead aggregates by
+    # micro-F1 (summed matched/ref/hyp switch counts, one F1 at the end) — a
+    # ref-weighted mean would zero out samples with no reference switches, so
+    # switches hallucinated on monolingual clips would never be penalized.
+    cer_num = wer_lat_num = wer_num = 0.0
+    total_thai = total_latin = total_words = 0
+    total_switches = total_hyp_switches = total_matched = 0
 
     for audio_path, ref_tokens in samples:
         hyp_tokens = pipeline_fn(audio_path, config)
@@ -116,11 +146,15 @@ def run_harness(
         cer_num     += m.cer_thai * m.thai_chars
         wer_lat_num += m.wer_latin * m.latin_words
         wer_num     += m.wer * m.total_words
-        ber_num     += m.boundary_error_rate * m.ref_switches
         total_thai     += m.thai_chars
         total_latin    += m.latin_words
         total_words    += m.total_words
-        total_switches += m.ref_switches
+        total_switches     += m.ref_switches
+        total_hyp_switches += m.hyp_switches
+        total_matched      += m.matched_switches
+
+    if scratch_dir is not None:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
 
     if scratch_dir is not None:
         shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -128,12 +162,15 @@ def run_harness(
     agg = EvalMetrics(
         cer_thai=cer_num / total_thai if total_thai else 0.0,
         wer_latin=wer_lat_num / total_latin if total_latin else 0.0,
-        boundary_error_rate=ber_num / total_switches if total_switches else 0.0,
+        boundary_error_rate=boundary_f1_error(
+            total_matched, total_switches, total_hyp_switches),
         wer=wer_num / total_words if total_words else 0.0,
         thai_chars=total_thai,
         latin_words=total_latin,
         total_words=total_words,
         ref_switches=total_switches,
+        hyp_switches=total_hyp_switches,
+        matched_switches=total_matched,
     )
 
     conn = store.connect(db_path)
@@ -163,6 +200,7 @@ def run_harness(
         pipeline_version=_pipeline_version(),
         engine_pair=f"{config.get('engine_a', '?')}+{config.get('engine_b', '?')}",
         bias_hash=_bias_hash(conn),
+        is_experiment=experiment,
     )
     conn.close()
 
@@ -170,7 +208,8 @@ def run_harness(
         f"[harness] CER_thai={agg.cer_thai:.4f}  WER_latin={agg.wer_latin:.4f}  "
         f"BER={agg.boundary_error_rate:.4f}  WER={agg.wer:.4f}  "
         f"thai_chars={total_thai}  latin_words={total_latin}  "
-        f"switches={total_switches}  passed={passed}"
+        f"switches={total_switches} (hyp {total_hyp_switches}, matched {total_matched})  "
+        f"passed={passed}"
     )
     return HarnessResult(metrics=agg, passed=passed, baseline=last)
 
@@ -184,12 +223,27 @@ if __name__ == "__main__":
     parser.add_argument("--db", default="transcriber.db")
     parser.add_argument("--engine-b", help="Override engine_b for a one-command A/B "
                         "comparison, e.g. --engine-b typhoon_rt (4.2)")
+    parser.add_argument("--llm-enabled", action="store_true",
+                        help="Turn on the local-Ollama LLM reconciler tiebreak for this "
+                        "run, for an A/B comparison against the script fallback (Phase 3)")
+    parser.add_argument("--experiment", action="store_true",
+                        help="Mark this run as an A/B experiment: gated against the "
+                        "production baseline but never recorded AS a baseline. Implied "
+                        "by --engine-b / --llm-enabled (those override config.yaml, so "
+                        "their runs don't describe the production config).")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    # Any CLI override means this run measures a config that is NOT config.yaml —
+    # its result must not become the production baseline.
+    experiment = bool(args.experiment or args.engine_b or args.llm_enabled)
     if args.engine_b:
         cfg["engine_b"] = args.engine_b
+    if args.llm_enabled:
+        cfg.setdefault("reconciler", {})["llm_enabled"] = True
+    if experiment:
+        print("[harness] experiment run — result will not become the regression baseline")
     import sys
-    result = run_harness(cfg, Path(args.db))
+    result = run_harness(cfg, Path(args.db), experiment=experiment)
     if result is None or not result.passed:
         sys.exit(1)

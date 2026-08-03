@@ -175,6 +175,22 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "transcribe" / "config.yaml"
+
+
+def _conform_vfr_enabled(config_path: Optional[str]) -> bool:
+    """Read ``conform_vfr`` from the pipeline config (GAP-2). Defaults False —
+    missing/unreadable config means export keeps refusing VFR, not silently
+    conforming."""
+    path = Path(config_path) if config_path else _DEFAULT_CONFIG
+    try:
+        import yaml
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return False
+    return bool(cfg.get("conform_vfr", False))
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Export a CutDeck plan to FCP7 XML for Premiere.")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -182,6 +198,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     g.add_argument("--job-id", type=int, help="export the latest plan for this job")
     ap.add_argument("--out", default=None, help="output .xml path (default cd<job>_p<plan>.xml)")
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
+    ap.add_argument("--config", default=None,
+                     help="pipeline config.yaml (for conform_vfr); "
+                          "defaults to transcribe/config.yaml")
     args = ap.parse_args(argv)
 
     from transcribe.db import store
@@ -203,7 +222,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         if media is None:
             raise SystemExit(f"media for job {plan.job_id} not found")
 
-        xml = to_xml(plan, media.path, plan_id)
+        media_path = media.path
+        if plan.timebase.is_vfr and _conform_vfr_enabled(args.config):
+            from transcribe.timebase import conform_vfr
+            print(f"source is VFR — conforming a CFR proxy (fps {plan.timebase.fps_num}/{plan.timebase.fps_den})...")
+            media_path, plan.timebase = conform_vfr(media.path, plan.timebase)
+            print(f"conformed proxy: {media_path}")
+
+        xml = to_xml(plan, media_path, plan_id)
         out = Path(args.out) if args.out else Path(f"cd{plan.job_id:03d}_p{plan_id:03d}.xml")
         out.write_text(xml, encoding="utf-8")
         store.update_cut_plan_status(conn, plan_id, "exported")

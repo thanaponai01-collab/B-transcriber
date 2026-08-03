@@ -1,0 +1,130 @@
+{
+  "tokens": [
+    {
+      "text": "หาไม่เจอสองวันละครับผม",
+      "script": "thai",
+      "start_ms": 0,
+      "end_ms": 1560
+    },
+    {
+      "text": "ผมขับรถตาม ทั้งวัน ทั้งคืนเลยครับ",
+      "script": "thai",
+      "start_ms": 1560,
+      "end_ms": 3380
+    },
+    {
+      "text": "<font color=#C160FDFF>ภรรยาหายไป</font> <font color=#C160FDFF>อย่างเงี้ยหรอคะ </font>",
+      "script": "mixed",
+      "start_ms": 3380,
+      "end_ms": 4800
+    },
+    {
+      "text": "หายไปเลยครับผม",
+      "script": "thai",
+      "start_ms": 4800,
+      "end_ms": 5840
+    },
+    {
+      "text": "ก็เลยมาไล่กล้อง ไล่อะไรดูนะครับ",
+      "script": "thai",
+      "start_ms": 5840,
+      "end_ms": 7740
+    },
+    {
+      "text": "ผมก็คุ้ยดูตามอีเมล",
+      "script": "thai",
+      "start_ms": 7740,
+      "end_ms": 9520
+    },
+    {
+      "text": "ตามอะไรพวกนี้ผมก็รู้ว่า",
+      "script": "thai",
+      "start_ms": 9520,
+      "end_ms": 10920
+    },
+    {
+      "text": "เขานั่งรถกลับไปหา ฝั่งชู้นะครับ",
+      "script": "thai",
+      "start_ms": 10920,
+      "end_ms": 12960
+    },
+    {
+      "text": "เหมือนเขาให้ผม เป็นตัวสำรองหรือเปล่า",
+      "script": "thai",
+      "start_ms": 13620,
+      "end_ms": 15260
+    },
+    {
+      "text": "ก็ไม่รู้ครับ",
+      "script": "thai",
+      "start_ms": 15260,
+      "end_ms": 16300
+    },
+    {
+      "text": "เพราะว่าชู้ก็เหมือน มีภรรยาอยู่แล้วนะครับ",
+      "script": "thai",
+      "start_ms": 16300,
+      "end_ms": 18440
+    },
+    {
+      "text": "<font color=#59E2FEFF>ใจของภรรยาเรา</font>",
+      "script": "mixed",
+      "start_ms": 18440,
+      "end_ms": 19580
+    },
+    {
+      "text": "<font color=#59E2FEFF>ไปอยู่ทางนั้น</font> <font color=#59E2FEFF>พอสมควรเลยนะคะ</font>",
+      "script": "mixed",
+      "start_ms": 19580,
+      "end_ms": 21520
+    },
+    {
+      "text": "<font color=#59E2FEFF>เดินหน้าต่อก็ได้นะ แต่ต้องยอมรับความจริง</font>",
+      "script": "mixed",
+      "start_ms": 21520,
+      "end_ms": 23620
+    },
+    {
+      "text": "<font color=#59E2FEFF>ว่า คุณภรรยา</font> <font color=#59E2FEFF>ไม่ได้รักเราเท่าเดิมแล้วอ่ะค่ะ</font>",
+      "script": "mixed",
+      "start_ms": 23620,
+      "end_ms": 26500
+    },
+    {
+      "text": "<font color=#C160FDFF>ถึงแม้ว่าอาจจะไม่ได้</font> <font color=#C160FDFF>ถูกใจภรรยาเหมือนเดิม</font>",
+      "script": "mixed",
+      "start_ms": 26500,
+      "end_ms": 28400
+    },
+    {
+      "text": "<font color=#C160FDFF>เมื่อกี้บอกตอนนี้ทำอะไร</font> <font color=#C160FDFF>ก็ดูผิดไปหมด</font>",
+      "script": "mixed",
+      "start_ms": 28400,
+      "end_ms": 31020
+    },
+    {
+      "text": "<font color=#C160FDFF>แต่ไม่ได้หมายความว่า</font> <font color=#C160FDFF>เราเป็นคนผิด</font>",
+      "script": "mixed",
+      "start_ms": 31020,
+      "end_ms": 32600
+    },
+    {
+      "text": "<font color=#C160FDFF>เพราะอย่างน้อยที่สุด</font> <font color=#C160FDFF>เราก็ซื่อสัตย์</font>",
+      "script": "mixed",
+      "start_ms": 32600,
+      "end_ms": 34020
+    },
+    {
+      "text": "<font color=#C160FDFF>มันก็ไม่แน่ว่าคนที่ซื่อสัตย์</font>",
+      "script": "mixed",
+      "start_ms": 34020,
+      "end_ms": 35620
+    },
+    {
+      "text": "<font color=#C160FDFF>บางทีก็ต้องเจ็บปวด ก็มี</font>",
+      "script": "mixed",
+      "start_ms": 35620,
+      "end_ms": 37120
+    }
+  ]
+}

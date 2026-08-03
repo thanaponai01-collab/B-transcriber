@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import gc
 import logging
+import os
+import sys
 from pathlib import Path
 
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
@@ -23,6 +25,52 @@ from transcribe.engines.registry import register
 from transcribe.flywheel.inject import BiasTerm, build_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _register_cuda_dll_dirs() -> str:
+    """Make the pip nvidia-*-cu12 wheels' bundled DLLs (cublas64_12.dll,
+    cudnn64_9.dll, ...) loadable by CTranslate2 on Windows. Returns the PATH
+    value from before mutation, so the caller can restore it later.
+
+    Those wheels drop their DLLs under site-packages/nvidia/<pkg>/bin, which is
+    never on PATH. torch works around the equivalent problem for its own
+    (bundled, different-version) CUDA libs by registering torch/lib itself, but
+    that's a separate cublas64_13.dll — CTranslate2 needs the CUDA-12 one.
+    CTranslate2 resolves it via a bare LoadLibrary call deep inside its native
+    code (lazily, on first GPU op) rather than through Python's import
+    machinery, so os.add_dll_directory() does not cover it (that only affects
+    extension-module imports and ctypes loads) — PATH is the search list a bare
+    LoadLibrary call actually consults, so that's what has to be extended.
+    Without this, load fails with 'cublas64_12.dll is not found or cannot be
+    loaded' even though the DLL is present in the venv.
+
+    CALLER MUST RESTORE PATH ON unload(): this prepends a CUDA-12 cuDNN
+    (cudnn64_9.dll) ahead of everything else on PATH, process-wide. A
+    same-process engine loaded afterward that resolves its OWN cuDNN via
+    Windows' DLL search order — e.g. NeMo/PyTorch (torch 2.13+cu130, a
+    different CUDA generation) — can have Windows hand it THIS prepended
+    cudnn64_9.dll instead of the one it actually linked against, producing
+    'CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH' on its very first conv forward
+    pass. Reproduced 2026-07-16: typhoon_rt (NeMo) works standalone but
+    crashes the same way after only calling this function — no CTranslate2
+    model even needs to load — confirming the PATH mutation itself, not GPU
+    residency, is the cause. This makes the mutation load()-scoped instead of
+    process-lifetime: see FasterWhisperEngine.unload().
+    """
+    if sys.platform != "win32":
+        return os.environ.get("PATH", "")
+    original_path = os.environ.get("PATH", "")
+    nvidia_root = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    if not nvidia_root.is_dir():
+        return original_path
+    bin_dirs = [str(p) for p in nvidia_root.glob("*/bin")]
+    path = original_path
+    for bin_dir in bin_dirs:
+        if bin_dir not in path:
+            path = bin_dir + os.pathsep + path
+    os.environ["PATH"] = path
+    return original_path
+
 
 # Converted once via ct2-transformers-converter (see README). Repo-root-relative so
 # it resolves regardless of the caller's cwd.
@@ -36,6 +84,62 @@ _CUE_GAP_MS = 700
 _CUE_TARGET_MS = 4000
 _CUE_TARGET_CHARS = 42
 
+# Whisper inserts spaces into Thai (which has none) roughly at breath/clause
+# boundaries — a free segmentation signal from the acoustic model that cue
+# grouping used to discard, buffering whitespace as cue-interior only. Measured
+# against a hand-recut reference SRT, every space Whisper emitted inside a cue
+# was a place the human either split or would have, had the cue been longer.
+# So a space is a break candidate — but only once the cue already carries enough
+# text to stand alone, otherwise short interjections ("โอเค โอเค") shatter into
+# one-word cues. Both minima must be met.
+_CUE_SPACE_MIN_CHARS = 12
+_CUE_SPACE_MIN_MS = 700
+
+_SR = 16000
+
+# Whisper's encoder hard-caps a single decode window at ~30s. A speech run longer
+# than this with no pause anywhere near the cap forces faster-whisper's own VAD to
+# split "aggressively" mid-utterance with no overlap — decode quality collapses
+# right at that seam (observed: several seconds of garbled/missing text at the
+# cut). Any span longer than _LONG_SPAN_SAFE_S gets split into our own overlapping
+# windows instead (see _split_long_span), decoded separately, and stitched back
+# together — the same seam-recovery trick chunk engines get from
+# config.yaml's chunk_overlap_ms, applied here to this whole-file engine's rare
+# long-pause-free-run case.
+# Tuning note: shrinking _LONG_SPAN_SAFE_S (e.g. to 15-20s) recovers a decode-
+# quality drop that can still happen *within* a single 25s window on very dense
+# speech, but widening the overlap that comes with it exposes stitch.py's dedup
+# to more words in the ambiguous zone — Thai has no word boundaries, so two
+# independent decodes of the same audio often tokenize it slightly differently,
+# producing visible stutter (e.g. "ที่ี่เกี่ี่ยว") across many seams. Verified
+# empirically: 25s/4s stutter-free with one small residual gap on a hard passage;
+# 15-20s recovers that gap but stutters broadly.
+#
+# Update (2026-07-30): that stutter turned out NOT to be a text-matching problem
+# — the seam duplicates matched on text fine and were lost to stitch.py's IoU
+# gate, which is structurally 0.0 for the zero-length combining-mark pieces
+# Whisper emits for Thai. stitch.py now also accepts centre-coincident
+# duplicates (_coincident), which fixed the observed stutter at 25s. Re-probing
+# a shorter _LONG_SPAN_SAFE_S is now worth doing, but measure it — the residual
+# artifacts here are the model stuttering inside one window, which no amount of
+# seam handling can fix.
+_LONG_SPAN_SAFE_S = 25.0
+_LONG_SPAN_OVERLAP_S = 4.0
+
+# Truncated-tail recovery: faster-whisper occasionally stops generating well
+# before a window's audio actually ends (early EOS on a hard passage), then
+# stretches the *last* word's end-timestamp out to the window boundary to
+# fill the gap — so several real seconds of dropped speech show up as one
+# absurdly long "word" instead of an obvious hole. _TRUNCATION_TAIL_MS is how
+# long a single word's span has to be to count as suspicious;
+# _TRUNCATION_STRETCH_TOL_MS is how close its end has to land to the window's
+# own end to count as "stretched to fill". _TRUNCATION_LOOKBACK_MS bounds how
+# far back _find_safe_cut searches for a genuine inter-token pause to cut on.
+# See _recover_truncated_tail.
+_TRUNCATION_TAIL_MS = 1500
+_TRUNCATION_STRETCH_TOL_MS = 500
+_TRUNCATION_LOOKBACK_MS = 2500
+
 
 def _is_cuda_oom(e: Exception) -> bool:
     """True for a CUDA out-of-memory error, however the stack surfaces it."""
@@ -48,71 +152,228 @@ def _is_cuda_oom(e: Exception) -> bool:
     return "out of memory" in str(e).lower()
 
 
+def _vad_speech_spans(audio, threshold: float, min_silence_ms: int) -> list[tuple[float, float]]:
+    """Real speech spans (in seconds) with NO max-duration cap.
+
+    We deliberately don't use faster-whisper's vad_filter=True path for this —
+    its internal VadOptions defaults max_speech_duration_s to the encoder's
+    chunk_length and splits long runs "aggressively" at that boundary if no
+    silence is nearby. Detecting spans uncapped lets the caller decide how to
+    split anything too long, with overlap, instead of an arbitrary hard cut.
+    """
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+
+    opts = VadOptions(threshold=threshold, min_silence_duration_ms=min_silence_ms)
+    ts = get_speech_timestamps(audio, opts)
+    return [(t["start"] / _SR, t["end"] / _SR) for t in ts]
+
+
+def _split_long_span(start_s: float, end_s: float,
+                      max_span_s: float = _LONG_SPAN_SAFE_S,
+                      overlap_s: float = _LONG_SPAN_OVERLAP_S) -> list[tuple[float, float]]:
+    """Chop a speech span longer than max_span_s into overlapping sub-windows,
+    each safely under Whisper's ~30s encoder limit. Returns [(start_s, end_s)]
+    unchanged if the span is already short enough."""
+    if end_s - start_s <= max_span_s:
+        return [(start_s, end_s)]
+    stride = max_span_s - overlap_s
+    windows = []
+    pos = start_s
+    while True:
+        win_end = min(pos + max_span_s, end_s)
+        windows.append((pos, win_end))
+        if win_end >= end_s:
+            break
+        pos += stride
+    return windows
+
+
+def _sentence_boundary_offsets(text: str) -> list[int]:
+    """Character offsets in `text` where pythainlp's crfcut model believes a new
+    sentence begins (offset 0 excluded — the first token always starts a cue
+    regardless). crfcut is a CRF trained to segment *unpunctuated* running
+    text, which is what Whisper's raw Thai output is (no periods/commas) —
+    this is the intended use case, not a punctuation-based fallback.
+    Best-effort: any failure (missing optional dependency, model fetch
+    issue) degrades to no forced sentence breaks rather than raising, since
+    the gap/length heuristics below still produce usable cues on their own.
+    """
+    try:
+        from pythainlp.tokenize import sent_tokenize
+        sentences = sent_tokenize(text, engine="crfcut", keep_whitespace=True)
+    except Exception:
+        logger.warning("Sentence tokenization unavailable — cues will not be "
+                        "forced to start on sentence boundaries", exc_info=True)
+        return []
+    offsets = []
+    pos = 0
+    for sent in sentences:
+        if pos:
+            offsets.append(pos)
+        pos += len(sent)
+    return offsets
+
+
 def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
-                           target_chars=_CUE_TARGET_CHARS):
+                           target_chars=_CUE_TARGET_CHARS,
+                           space_min_chars=_CUE_SPACE_MIN_CHARS,
+                           space_min_ms=_CUE_SPACE_MIN_MS):
     """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
 
-    `words` is a list of (text, start_ms, end_ms). Whisper word-pieces for spaceless
-    Thai are sub-word and only sporadically carry a leading space, so they cannot be
-    used to find word boundaries — a long spaceless run would never break. Instead we
-    rebuild the full text with a per-character timeline, segment it with pythainlp
-    (Latin/whitespace preserved), and group whole words into cues. A new cue starts on
-    a silence gap >= gap_ms or once the cue reaches target_ms / target_chars.
-    Returns list of (text, start_ms, end_ms).
+    `words` is a list of (text, start_ms, end_ms, confidence) — confidence is the
+    source word-piece's probability, or None if the engine didn't report one.
+    Whisper word-pieces for spaceless Thai are sub-word and only sporadically
+    carry a leading space, so they cannot be used to find word boundaries — a
+    long spaceless run would never break. Instead we rebuild the full text with
+    a per-character timeline, segment it with pythainlp (Latin/whitespace
+    preserved), and group whole words into cues.
+
+    A cue must never start mid-sentence: a long sentence can still be split into
+    several cues (on a silence gap >= gap_ms, or once target_ms / target_chars is
+    hit, same as before), but a cue break is also forced at every sentence
+    boundary crfcut finds, so a cue never opens with the tail of one sentence
+    fused to the head of the next. Sentence detection on raw ASR output (no
+    punctuation, colloquial speech) is inherently imperfect — treat it as a
+    heuristic that reduces mid-sentence cue starts, not a guarantee.
+
+    A space Whisper itself emitted inside Thai is a third break signal (see
+    _CUE_SPACE_MIN_CHARS): it marks a breath/clause boundary the acoustic model
+    heard, and breaking there beats breaking wherever the character budget
+    happens to run out. It applies only once the cue holds space_min_chars AND
+    space_min_ms, so short interjections stay whole.
+
+    Returns list of (text, start_ms, end_ms, confidence) — confidence is the mean
+    of the constituent word-pieces' probabilities, or None if none carried one.
     """
     from pythainlp.tokenize import word_tokenize
 
-    # 1. per-character timeline (each char inherits its source piece's span)
+    # 1. per-character timeline (each char inherits its source piece's span + confidence)
     chartime: list[tuple[int, int]] = []
+    charconf: list[float | None] = []
     chars: list[str] = []
-    for txt, s, e in words:
+    for txt, s, e, conf in words:
         for ch in txt:
             chars.append(ch)
             chartime.append((s, e))
+            charconf.append(conf)
     if not chars:
         return []
+    full_text = "".join(chars)
 
     # 2. real word boundaries (pythainlp keeps Latin runs and spaces intact)
-    toks = word_tokenize("".join(chars), keep_whitespace=True)
+    toks = word_tokenize(full_text, keep_whitespace=True)
 
-    # 3. map each token back to its time span via the char timeline
-    timed: list[tuple[str, int, int]] = []
+    # 2b. sentence-start offsets in the same char coordinates as `toks` below.
+    boundary_offsets = _sentence_boundary_offsets(full_text)
+    boundary_idx = 0
+
+    # 3. map each token back to its time span + confidence + char start via the char timeline
+    timed: list[tuple[str, int, int, float | None, int]] = []
     pos = 0
     for t in toks:
         start = chartime[pos][0]
         end = chartime[pos + len(t) - 1][1]
+        confs = [c for c in charconf[pos:pos + len(t)] if c is not None]
+        conf = sum(confs) / len(confs) if confs else None
+        timed.append((t, start, end, conf, pos))
         pos += len(t)
-        timed.append((t, start, end))
 
     # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
     # kept once a real word follows in the same cue, so a cue never starts or ends on
     # whitespace (a trailing space carries the next word's timing and would corrupt
     # the cue's end time and the gap check).
-    cues: list[tuple[str, int, int]] = []
-    cur: list[tuple[str, int, int]] = []
-    pending_ws: list[tuple[str, int, int]] = []
+    cues: list[tuple[str, int, int, float | None]] = []
+    cur: list[tuple[str, int, int, float | None]] = []
+    pending_ws: list[tuple[str, int, int, float | None]] = []
 
     def _close():
         text = "".join(x[0] for x in cur).strip()
         if text:
-            cues.append((text, cur[0][1], cur[-1][2]))
+            confs = [x[3] for x in cur if x[3] is not None]
+            conf = sum(confs) / len(confs) if confs else None
+            cues.append((text, cur[0][1], cur[-1][2], conf))
 
-    for t, s, e in timed:
+    def _cue_so_far() -> tuple[int, int]:
+        """(chars, span_ms) of the open cue — 0/0 when nothing is open."""
+        if not cur:
+            return 0, 0
+        return len("".join(x[0] for x in cur).strip()), cur[-1][2] - cur[0][1]
+
+    def _may_break_at_space(i: int) -> bool:
+        """STYLE_GUIDE §7 unsplittable units — a space is not always a legal
+        break point even when the size minima are met.
+
+        Whisper writes mai yamok as a separate ' ๆ' piece, so the naive rule
+        would orphan it from the word it repeats on almost every ๆ in the
+        corpus (§3/§7: `เด็กๆ` must never be separated). Likewise a numeral must
+        stay with its unit/classifier (`100 บาท`, `3 คน`).
+        """
+        nxt = next((x[0] for x in timed[i + 1:] if x[0].strip()), "")
+        if nxt.lstrip().startswith("ๆ"):
+            return False
+        prev = "".join(x[0] for x in cur).strip()
+        if prev and prev[-1].isdigit():
+            return False
+        return True
+
+    def _remainder_stands_alone(i: int) -> bool:
+        """Would the text AFTER this space form a viable cue on its own?
+
+        Breaking at a space only helps if both sides are viable — otherwise it
+        trades one bad boundary for a flash-frame runt (a 140ms 'โอเค' cue was
+        exactly this). Scans forward to wherever the next break would land
+        anyway: the next space, the next real pause, or end of stream.
+        """
+        chars, first_start, last_end = 0, None, None
+        for t2, s2, e2, _conf2, _pos2 in timed[i + 1:]:
+            if not t2.strip():
+                break                        # the next space closes the remainder
+            if last_end is not None and s2 - last_end >= gap_ms:
+                break                        # a real pause closes it
+            if first_start is None:
+                first_start = s2
+            chars += len(t2.strip())
+            last_end = e2
+            if chars >= target_chars:
+                return True                  # long enough on its own regardless
+        if first_start is None:
+            return False
+        return chars >= space_min_chars and (last_end - first_start) >= space_min_ms
+
+    for i, (t, s, e, conf, char_pos) in enumerate(timed):
         if not t.strip():
-            if cur:
-                pending_ws.append((t, s, e))
+            if not cur:
+                continue
+            n_chars, span = _cue_so_far()
+            if (n_chars >= space_min_chars and span >= space_min_ms
+                    and _may_break_at_space(i) and _remainder_stands_alone(i)):
+                # Break on Whisper's own breath boundary. The whitespace itself is
+                # dropped: a cue must not end on a space (it carries the *next*
+                # word's timing, which would corrupt the cue end and the gap check).
+                _close()
+                cur = []
+                pending_ws = []
+            else:
+                pending_ws.append((t, s, e, conf))
             continue
+        # Consume any sentence boundary at or before this token — forces a
+        # break here even if the gap/length heuristics wouldn't have broken
+        # on their own (e.g. no pause between "...ทั้งนั้น" and "อย่า...").
+        new_sentence = False
+        while boundary_idx < len(boundary_offsets) and char_pos >= boundary_offsets[boundary_idx]:
+            new_sentence = True
+            boundary_idx += 1
         if cur:
             gap = s - cur[-1][2]
             span = e - cur[0][1]
             n_chars = len("".join(x[0] for x in cur).strip())
-            if gap >= gap_ms or span > target_ms or n_chars >= target_chars:
+            if new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars:
                 _close()
                 cur = []
         if cur:
             cur.extend(pending_ws)  # interior whitespace only
         pending_ws = []
-        cur.append((t, s, e))
+        cur.append((t, s, e, conf))
     if cur:
         _close()
     return cues
@@ -127,7 +388,11 @@ class FasterWhisperEngine(Engine):
     def __init__(self, model_id: str = _DEFAULT_MODEL, device: str = "cuda",
                  compute_type: str | None = None, beam_size: int = 5,
                  cue_gap_ms: int = _CUE_GAP_MS, cue_max_ms: int = _CUE_TARGET_MS,
-                 bias_prompt_budget: int = 200, batch_size: int = 8):
+                 cue_target_chars: int = _CUE_TARGET_CHARS,
+                 cue_space_min_chars: int = _CUE_SPACE_MIN_CHARS,
+                 cue_space_min_ms: int = _CUE_SPACE_MIN_MS,
+                 bias_prompt_budget: int = 200, batch_size: int = 8,
+                 vad_threshold: float = 0.35, vad_min_silence_ms: int = 500):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -135,13 +400,30 @@ class FasterWhisperEngine(Engine):
         self._compute_type = compute_type
         self._beam_size = beam_size
         self._cue_gap_ms = cue_gap_ms
+        self._cue_space_min_chars = cue_space_min_chars
+        self._cue_space_min_ms = cue_space_min_ms
         self._cue_max_ms = cue_max_ms
+        self._cue_target_chars = cue_target_chars
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
+        # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
+        # never runs on this audio — we run our own Silero VAD pass in
+        # _transcribe_batched (via _vad_speech_spans) using these thresholds, instead
+        # of letting faster-whisper fall back to its defaults (threshold=0.5,
+        # min_silence_duration_ms=2000), which clip soft Thai sentence-final
+        # particles (ครับ/ค่ะ) exactly like ingest.vad_threshold's docstring warns
+        # about. Defaulting these to match config.yaml's tuned ingest values keeps
+        # both VAD paths consistent.
+        self._vad_threshold = vad_threshold
+        self._vad_min_silence_ms = vad_min_silence_ms
         self._model = None
         self._pipeline = None
+        self._pre_load_path: str | None = None
 
     def load(self) -> None:
+        # Restored in unload() — see _register_cuda_dll_dirs's docstring for
+        # why this PATH mutation must not outlive this engine's residency.
+        self._pre_load_path = _register_cuda_dll_dirs()
         from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
@@ -181,36 +463,25 @@ class FasterWhisperEngine(Engine):
         audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
         return audio
 
-    def _transcribe_batched(self, audio, language_hint, initial_prompt):
-        """Decode via BatchedInferencePipeline, halving batch_size on CUDA OOM.
-
-        The batched API is a generator that runs inference lazily, so we
+    def _decode(self, audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        """One BatchedInferencePipeline.transcribe call, halving batch_size on CUDA
+        OOM. The batched API is a generator that runs inference lazily, so we
         materialize it inside the try — that's where an OOM actually surfaces.
         Mirrors _batch.py's OOM-halving philosophy without reusing it (that path
-        is HF-pipeline-specific). word_timestamps + the anti-hallucination knobs
-        are all supported by the batched signature (verified against fw 1.2.x)."""
+        is HF-pipeline-specific). Returns (segments, batch_size_used) so the
+        caller's next call starts from whatever size succeeded."""
         import torch
 
-        bs = self._batch_size
         while True:
             try:
                 segments, _info = self._pipeline.transcribe(
-                    audio,
-                    language=language_hint or "th",
-                    task="transcribe",
-                    initial_prompt=initial_prompt,
-                    beam_size=self._beam_size,
-                    word_timestamps=True,
-                    # vad_filter: the pipeline VAD-segments the track (also kills
-                    # hallucination loops at the source).
-                    vad_filter=True,
-                    condition_on_previous_text=False,
-                    compression_ratio_threshold=2.4,
-                    log_prob_threshold=-1.0,
-                    no_speech_threshold=0.6,
+                    audio_arr,
+                    vad_filter=vad_filter,
+                    clip_timestamps=clip_timestamps,
                     batch_size=bs,
+                    **common_kwargs,
                 )
-                return list(segments)  # materialize here so OOM lands in this try
+                return list(segments), bs  # materialize here so OOM lands in this try
             except Exception as e:  # noqa: BLE001 — narrowed by _is_cuda_oom
                 if _is_cuda_oom(e) and bs > 1:
                     bs = max(1, bs // 2)
@@ -219,6 +490,141 @@ class FasterWhisperEngine(Engine):
                         torch.cuda.empty_cache()
                     continue
                 raise
+
+    @staticmethod
+    def _words_of(segments) -> list[RecognizedToken]:
+        out = []
+        for seg in segments:
+            for w in (seg.words or []):
+                if w.word.strip():  # keep w.word verbatim (its leading space marks the word boundary)
+                    out.append(RecognizedToken(
+                        text=w.word, start_ms=int(w.start * 1000), end_ms=int(w.end * 1000),
+                        confidence=w.probability, script=detect_script(w.word),
+                    ))
+        return out
+
+    @staticmethod
+    def _find_safe_cut(tokens_before, anchor_ms, lookback_ms=_TRUNCATION_LOOKBACK_MS):
+        """Index of the token after which to cut, chosen as the largest
+        inter-token gap within lookback_ms of anchor_ms — an actual acoustic
+        pause Whisper's own timings already show, not an arbitrary time
+        offset. A fixed offset back from the suspicious word can land
+        mid-syllable regardless of how big it is (Thai subword pieces don't
+        align to word boundaries), which is what caused earlier attempts at
+        this fix to reproduce a stray syllable on both sides of the cut.
+        Returns None if there aren't at least two tokens within range to
+        compare (nothing to cut between)."""
+        in_range = [i for i, t in enumerate(tokens_before) if anchor_ms - t.end_ms <= lookback_ms]
+        if len(in_range) < 2:
+            return None
+        best_i, best_gap = None, -1
+        for i in range(in_range[0], len(tokens_before) - 1):
+            gap = tokens_before[i + 1].start_ms - tokens_before[i].end_ms
+            if gap > best_gap:
+                best_i, best_gap = i, gap
+        return best_i
+
+    def _recover_truncated_tail(self, tokens, sub_audio, common, bs, win_dur_ms):
+        """Detect and recover content dropped by an early-EOS decode within one
+        long-span window (see _TRUNCATION_TAIL_MS above for the failure mode).
+        One-shot: redecodes standalone from the nearest safe cut point (see
+        _find_safe_cut) to the window's end (a much shorter, easier decode)
+        and concatenates — no overlap-and-dedup splice, since Thai's lack of
+        clean word boundaries makes stitch.py's exact-text dedup miss the
+        resulting near-duplicates (verified empirically while building this:
+        a fixed-offset cut reproduced a stray syllable on both sides no
+        matter how the offset was tuned). No recursion — if the redecode
+        hits the same issue, its result is kept as-is."""
+        if not tokens:
+            return tokens, bs
+        last = tokens[-1]
+        dur = last.end_ms - last.start_ms
+        if dur < _TRUNCATION_TAIL_MS or win_dur_ms - last.end_ms > _TRUNCATION_STRETCH_TOL_MS:
+            return tokens, bs
+
+        cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
+        if cut_i is None:
+            return tokens, bs
+        kept = tokens[:cut_i + 1]
+        tail_start_ms = tokens[cut_i + 1].start_ms
+        tail_audio = sub_audio[int(tail_start_ms / 1000 * _SR):]
+        if len(tail_audio) < _SR * 0.5:
+            return tokens, bs
+
+        segments, bs = self._decode(tail_audio, None, False, common, bs)
+        tail_tokens = self._words_of(segments)
+        if not tail_tokens:
+            return tokens, bs
+        for t in tail_tokens:
+            t.start_ms += tail_start_ms
+            t.end_ms += tail_start_ms
+
+        merged = kept + tail_tokens
+        logger.info("Recovered truncated tail: suspect word spanned %d-%dms, "
+                    "redecoded from %.2fs -> %d token(s)",
+                    last.start_ms, last.end_ms, tail_start_ms / 1000, len(tail_tokens))
+        return merged, bs
+
+    def _transcribe_batched(self, audio, language_hint, initial_prompt) -> list[tuple[str, int, int, float | None]]:
+        """Decode the whole file, splitting+stitching any pause-free run too long
+        for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
+        the anti-hallucination knobs are all supported by the batched signature
+        (verified against fw 1.2.x)."""
+        from transcribe.pipeline import stitch
+
+        common = dict(
+            language=language_hint or "th",
+            task="transcribe",
+            initial_prompt=initial_prompt,
+            beam_size=self._beam_size,
+            word_timestamps=True,
+            condition_on_previous_text=False,
+            compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0,
+            no_speech_threshold=0.6,
+        )
+        bs = self._batch_size
+        words: list[tuple[str, int, int, float | None]] = []
+
+        spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
+        normal = [(s, e) for s, e in spans if e - s <= _LONG_SPAN_SAFE_S]
+        long_spans = [(s, e) for s, e in spans if e - s > _LONG_SPAN_SAFE_S]
+
+        if normal:
+            # One batched call for every normal-length span (own VAD spans, already
+            # each under the encoder cap, so no arbitrary internal re-split happens).
+            clip = [{"start": s, "end": e} for s, e in normal]
+            segments, bs = self._decode(audio, clip, False, common, bs)
+            for tok in self._words_of(segments):
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
+        elif not long_spans:
+            # No speech spans detected at all (rare) — fall back to faster-whisper's
+            # own automatic VAD/whole-file path rather than emitting nothing.
+            segments, bs = self._decode(audio, None, True, common, bs)
+            for tok in self._words_of(segments):
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
+
+        for span_start, span_end in long_spans:
+            chunk_tokens = []
+            for win_start, win_end in _split_long_span(span_start, span_end):
+                sub_audio = audio[int(win_start * _SR):int(win_end * _SR)]
+                segments, bs = self._decode(sub_audio, None, False, common, bs)
+                win_tokens = self._words_of(segments)
+                win_dur_ms = int(round((win_end - win_start) * 1000))
+                win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs, win_dur_ms)
+                for t in win_tokens:  # offset local → global
+                    t.start_ms += int(win_start * 1000)
+                    t.end_ms += int(win_start * 1000)
+                chunk_tokens.append(stitch.ChunkTokens(
+                    win_tokens, int(win_start * 1000), int(win_end * 1000)))
+            logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
+                        span_start, span_end, len(chunk_tokens))
+            for tok in stitch.stitch(chunk_tokens,
+                                     seam_window_ms=int(_LONG_SPAN_OVERLAP_S * 1000)):
+                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
+
+        words.sort(key=lambda w: w[1])
+        return words
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"
@@ -229,21 +635,18 @@ class FasterWhisperEngine(Engine):
         # order), counted with CT2's own tokenizer so Thai token density is honoured.
         initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms else None
 
-        segments = self._transcribe_batched(audio, inp.language_hint, initial_prompt)
-
-        words = []
-        for seg in segments:
-            for w in (seg.words or []):
-                if w.word.strip():  # keep w.word verbatim (its leading space marks the word boundary)
-                    words.append((w.word, int(w.start * 1000), int(w.end * 1000)))
+        words = self._transcribe_batched(audio, inp.language_hint, initial_prompt)
 
         tokens = [
             RecognizedToken(
                 text=text, start_ms=start, end_ms=end,
-                confidence=None, script=detect_script(text),
+                confidence=conf, script=detect_script(text),
             )
-            for text, start, end in _group_words_into_cues(
-                words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms)
+            for text, start, end, conf in _group_words_into_cues(
+                words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms,
+                target_chars=self._cue_target_chars,
+                space_min_chars=self._cue_space_min_chars,
+                space_min_ms=self._cue_space_min_ms)
         ]
 
         return EngineResult(
@@ -253,7 +656,7 @@ class FasterWhisperEngine(Engine):
             # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
             # cues; word granularity is re-derived on demand from here (CutDeck Phase
             # 5 filler excision needs word-level cuts inside a cue).
-            raw={"words": [{"text": t, "start_ms": s, "end_ms": e} for t, s, e in words]},
+            raw={"words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
         )
 
     def unload(self) -> None:
@@ -263,5 +666,13 @@ class FasterWhisperEngine(Engine):
         if self._model is not None:
             del self._model
             self._model = None
+        # Undo _register_cuda_dll_dirs's PATH prepend now that this engine no
+        # longer needs it — an engine loaded afterward in this process (e.g. a
+        # NeMo-based Engine B) must not inherit a CUDA-12 cudnn64_9.dll ahead
+        # of its own on PATH. See that function's docstring for the crash this
+        # caused before the fix (CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH).
+        if self._pre_load_path is not None:
+            os.environ["PATH"] = self._pre_load_path
+            self._pre_load_path = None
         gc.collect()
         logger.info("FasterWhisper unloaded, VRAM freed")

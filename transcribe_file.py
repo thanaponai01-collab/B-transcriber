@@ -52,6 +52,10 @@ def _start_editor() -> None:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
     parser.add_argument("--no-editor", action="store_true", help="Skip opening the editor afterward")
@@ -61,9 +65,23 @@ def main() -> None:
         [sys.executable, "-m", "transcribe.pipeline.run", args.audio,
          "--config", str(CONFIG), "--db", str(DB)],
         cwd=ROOT,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
+    print(result.stdout, end="")
+    print(result.stderr, end="", file=sys.stderr)
     if result.returncode != 0:
         sys.exit(result.returncode)
+
+    job_id = None
+    for line in reversed(result.stdout.splitlines()):
+        if line.startswith("JOB_ID="):
+            job_id = line.split("=", 1)[1].strip()
+            break
+    if job_id:
+        subprocess.run(
+            [sys.executable, "scripts/export_job.py", job_id, "--db", str(DB)],
+            cwd=ROOT,
+        )
 
     if not args.no_editor:
         _start_editor()

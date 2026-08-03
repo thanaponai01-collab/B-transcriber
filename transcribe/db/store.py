@@ -45,6 +45,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "pipeline_version", "pipeline_version TEXT")
     _add("eval_run", "engine_pair", "engine_pair TEXT")
     _add("eval_run", "bias_hash", "bias_hash TEXT")
+    # A/B experiment runs never become the regression baseline
+    _add("eval_run", "is_experiment", "is_experiment INTEGER NOT NULL DEFAULT 0")
+    # metric-definition version — baselines partition by it (pre-column rows = v1)
+    _add("eval_run", "metrics_version", "metrics_version INTEGER NOT NULL DEFAULT 1")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -55,6 +59,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("correction", "reason", "reason TEXT")
     # sub-cue promotable span (5.3)
     _add("correction", "corrected_span", "corrected_span TEXT")
+
+    # job resumability (4.1, GAP-8)
+    _add("job", "job_phase", "job_phase TEXT")
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
@@ -80,6 +87,7 @@ class JobRow:
     pipeline_version: str
     created_at: str
     status: str
+    job_phase: Optional[str] = None
 
 
 @dataclass
@@ -108,6 +116,18 @@ class CorrectionRow:
     reason: Optional[str]
     created_at: str
     corrected_span: Optional[str] = None
+
+
+@dataclass
+class EngineResultRow:
+    id: int
+    job_id: int
+    engine_slot: str
+    engine_name: str
+    tokens_json: str
+    timestamps_final: bool
+    raw_words_json: Optional[str]
+    created_at: str
 
 
 @dataclass
@@ -155,6 +175,8 @@ class EvalRunRow:
     bias_hash: Optional[str]
     ran_at: str
     passed: bool
+    is_experiment: bool = False
+    metrics_version: int = 1
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -236,6 +258,33 @@ def list_jobs(conn: sqlite3.Connection) -> list[JobRow]:
     return [JobRow(**dict(r)) for r in rows]
 
 
+def update_job_phase(conn: sqlite3.Connection, job_id: int, phase: str) -> None:
+    conn.execute("UPDATE job SET job_phase = ? WHERE id = ?", (phase, job_id))
+    conn.commit()
+
+
+def find_resumable_job(
+    conn: sqlite3.Connection,
+    media_id: int,
+    engine_a: str,
+    engine_b: str,
+    pipeline_version: str,
+) -> Optional[JobRow]:
+    """The most recent 'failed' job for this exact (media, engine pair, pipeline
+    version) — a crash mid-run leaves state we can resume from (4.1, GAP-8).
+    Engine/version must match exactly: swapping an engine invalidates any
+    persisted engine_result rows, so that job is not resumable, only re-runnable
+    as a fresh job."""
+    row = conn.execute(
+        "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
+        "AND pipeline_version = ? AND status = 'failed' ORDER BY id DESC LIMIT 1",
+        (media_id, engine_a, engine_b, pipeline_version),
+    ).fetchone()
+    if row is None:
+        return None
+    return JobRow(**dict(row))
+
+
 # ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(
@@ -272,6 +321,12 @@ def get_tokens(conn: sqlite3.Connection, job_id: int) -> list[TokenRow]:
     return [TokenRow(**dict(r)) for r in rows]
 
 
+def delete_tokens(conn: sqlite3.Connection, job_id: int) -> None:
+    """Clear a job's tokens before re-writing (idempotent final write on resume, 4.1)."""
+    conn.execute("DELETE FROM token WHERE job_id = ?", (job_id,))
+    conn.commit()
+
+
 # ── correction ────────────────────────────────────────────────────────────────
 
 def create_correction(
@@ -285,6 +340,14 @@ def create_correction(
     reason: Optional[str] = None,
     corrected_span: Optional[str] = None,
 ) -> int:
+    # Latest correction wins per (job, token): a re-save of the same job must
+    # replace the earlier row, not stack a duplicate — stacked rows inflate the
+    # flywheel's occurrence counts (min_occurrences could be crossed by saving
+    # the same edit three times instead of by three independent corrections).
+    conn.execute(
+        "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
+        (job_id, token_idx),
+    )
     cur = conn.execute(
         """INSERT INTO correction
              (job_id, token_idx, raw_text, corrected_text, corrected_span, error_type, source_engine, reason)
@@ -293,6 +356,23 @@ def create_correction(
     )
     conn.commit()
     return cur.lastrowid
+
+
+def delete_correction(conn: sqlite3.Connection, job_id: int, token_idx: int) -> None:
+    """Remove the correction for one token (the user reverted it to the raw text)."""
+    conn.execute(
+        "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
+        (job_id, token_idx),
+    )
+    conn.commit()
+
+
+def update_correction_span(conn: sqlite3.Connection, correction_id: int, corrected_span: str) -> None:
+    conn.execute(
+        "UPDATE correction SET corrected_span = ? WHERE id = ?",
+        (corrected_span, correction_id),
+    )
+    conn.commit()
 
 
 def get_corrections(conn: sqlite3.Connection, job_id: int) -> list[CorrectionRow]:
@@ -336,6 +416,54 @@ def get_speech_spans(conn: sqlite3.Connection, job_id: int) -> list[SpeechSpanRo
         "SELECT * FROM speech_span WHERE job_id = ? ORDER BY idx", (job_id,)
     ).fetchall()
     return [SpeechSpanRow(**dict(r)) for r in rows]
+
+
+def delete_speech_spans(conn: sqlite3.Connection, job_id: int) -> None:
+    """Clear spans for a job before re-inserting (idempotent re-ingest on resume, 4.1)."""
+    conn.execute("DELETE FROM speech_span WHERE job_id = ?", (job_id,))
+    conn.commit()
+
+
+# ── engine_result (4.1/4.2, GAP-8) ────────────────────────────────────────────
+
+def save_engine_result(
+    conn: sqlite3.Connection,
+    job_id: int,
+    engine_slot: str,
+    engine_name: str,
+    tokens_json: str,
+    timestamps_final: bool,
+    raw_words_json: Optional[str] = None,
+) -> int:
+    cur = conn.execute(
+        """INSERT INTO engine_result (job_id, engine_slot, engine_name, tokens_json, timestamps_final, raw_words_json)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(job_id, engine_slot) DO UPDATE SET
+             engine_name = excluded.engine_name,
+             tokens_json = excluded.tokens_json,
+             timestamps_final = excluded.timestamps_final,
+             raw_words_json = excluded.raw_words_json""",
+        (job_id, engine_slot, engine_name, tokens_json, int(timestamps_final), raw_words_json),
+    )
+    conn.commit()
+    if cur.lastrowid:
+        return cur.lastrowid
+    return conn.execute(
+        "SELECT id FROM engine_result WHERE job_id = ? AND engine_slot = ?",
+        (job_id, engine_slot),
+    ).fetchone()["id"]
+
+
+def get_engine_result(conn: sqlite3.Connection, job_id: int, engine_slot: str) -> Optional[EngineResultRow]:
+    row = conn.execute(
+        "SELECT * FROM engine_result WHERE job_id = ? AND engine_slot = ?",
+        (job_id, engine_slot),
+    ).fetchone()
+    if row is None:
+        return None
+    r = dict(row)
+    r["timestamps_final"] = bool(r["timestamps_final"])
+    return EngineResultRow(**r)
 
 
 # ── cut_plan (CutDeck Layer-4 artifact, Part B) ───────────────────────────────
@@ -430,34 +558,63 @@ def create_eval_run(
     pipeline_version: Optional[str] = None,
     engine_pair: Optional[str] = None,
     bias_hash: Optional[str] = None,
+    is_experiment: bool = False,
+    metrics_version: Optional[int] = None,
 ) -> int:
+    # None → stamp the current metric definitions' version. Lazy import: the
+    # semantic owner of the version is eval/metrics.py, and the db layer must
+    # not import the eval layer at module load.
+    if metrics_version is None:
+        from transcribe.eval.metrics import METRICS_VERSION
+        metrics_version = METRICS_VERSION
     cur = conn.execute(
         "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
-        "kind, pipeline_version, engine_pair, bias_hash, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
-         kind, pipeline_version, engine_pair, bias_hash, int(passed)),
+         kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
+         int(metrics_version), int(passed)),
     )
     conn.commit()
     return cur.lastrowid
 
 
-def get_last_passing_eval(conn: sqlite3.Connection) -> Optional[EvalRunRow]:
+def _eval_row(row: sqlite3.Row) -> EvalRunRow:
+    r = dict(row)
+    r["passed"] = bool(r["passed"])
+    r["is_experiment"] = bool(r.get("is_experiment", 0))
+    return EvalRunRow(**r)
+
+
+def get_last_passing_eval(
+    conn: sqlite3.Connection,
+    kind: str = "transcribe",
+    metrics_version: Optional[int] = None,
+) -> Optional[EvalRunRow]:
+    # Filter by kind so a future CutDeck cut-quality run can never become the
+    # transcription gate's baseline (or vice versa), and exclude experiment runs
+    # (e.g. `harness --engine-b X` A/B probes) — an experiment is *judged against*
+    # the production baseline but must never become it, or a passing experiment
+    # on a different engine pair / bias index would silently shift what the next
+    # production run is compared against. Baselines also partition by
+    # metrics_version (None → current METRICS_VERSION): scores computed under
+    # different metric definitions are incomparable, so the first run after a
+    # metric change establishes a fresh baseline instead of tripping the gate
+    # against numbers a different rule produced. id tie-breaks runs that land
+    # within the same datetime('now') second.
+    if metrics_version is None:
+        from transcribe.eval.metrics import METRICS_VERSION
+        metrics_version = METRICS_VERSION
     row = conn.execute(
-        "SELECT * FROM eval_run WHERE passed = 1 ORDER BY ran_at DESC LIMIT 1"
+        "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? AND is_experiment = 0 "
+        "AND metrics_version = ? ORDER BY ran_at DESC, id DESC LIMIT 1",
+        (kind, int(metrics_version)),
     ).fetchone()
     if row is None:
         return None
-    r = dict(row)
-    r["passed"] = bool(r["passed"])
-    return EvalRunRow(**r)
+    return _eval_row(row)
 
 
 def list_eval_runs(conn: sqlite3.Connection) -> list[EvalRunRow]:
     rows = conn.execute("SELECT * FROM eval_run ORDER BY ran_at DESC").fetchall()
-    result = []
-    for row in rows:
-        r = dict(row)
-        r["passed"] = bool(r["passed"])
-        result.append(EvalRunRow(**r))
-    return result
+    return [_eval_row(row) for row in rows]

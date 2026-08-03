@@ -19,6 +19,9 @@ Place files under `goldenset/`. Each sample is a pair:
 `script` must be one of: `thai`, `latin`, `other`, `mixed`.
 
 `start_ms` is required on gold tokens — the switch-point metric is temporal.
+`end_ms` should be present too: a switch *inside* a `mixed` cue gets its
+timestamp interpolated across `[start_ms, end_ms]` (without `end_ms` it
+degrades to the cue's start time).
 
 ## Metrics
 
@@ -33,12 +36,28 @@ Each signal is measured on the unit that is actually well-defined (see
 | **`wer`** | word | Coarse, tokenizer-sensitive sanity number. **Not** a gate. |
 
 The regression gate (default tolerance 2%) trips if **any** of `cer_thai`,
-`wer_latin`, or `boundary_error_rate` worsens beyond tolerance vs the last passing run.
+`wer_latin`, or `boundary_error_rate` worsens beyond tolerance vs the last passing
+production run **of the same `METRICS_VERSION`** (`eval_run.metrics_version`).
+Scores computed under different metric definitions are incomparable, so the first
+run after a metric-definition change establishes a fresh baseline rather than
+being gated against numbers an older rule produced.
 
 ## Code-switch boundary labeling rules
 
 A **switch point** is a transition between a Thai-script word and a Latin-script
 word (or vice versa) within one utterance.
+
+Since metrics **v2**, switch points are derived **character-by-character inside
+every token** — tokens are phrase cues, so real switches usually happen *inside*
+a `mixed` cue, which the v1 token-script rule could never see (BER sat at a
+structural 0.0 with `switches=0` no matter how much code-switch gold existed).
+An intra-cue switch's timestamp is linearly interpolated across the cue's
+`[start_ms, end_ms]` span by character offset — an approximation (uniform char
+rate), but the same approximation on both sides of the comparison. Digits and
+punctuation are script-neutral: `หน้า 2 ครับ` contains no switch. The corpus
+number is a **micro-F1** (matched/ref/hyp counts summed over all samples, one F1
+at the end), so switches hallucinated on monolingual clips are penalized — a
+ref-weighted mean would have given them weight zero.
 
 - A loanword written in **Thai script** (คอมพิวเตอร์) is **Thai** — not a switch.
 - A brand or term written in **Latin script** inside Thai speech **is** a switch.

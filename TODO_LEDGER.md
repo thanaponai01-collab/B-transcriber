@@ -3,6 +3,475 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Cue timing + sub-word seam dedup + space breaks — executed 2026-07-30
+
+Suite: **216 passed** (was 214; +26 across `tests/test_cue_conform.py`,
+`tests/test_cue_space_break.py`, `tests/test_stitch_subword_coincidence.py`,
+minus the rewritten `test_cue_target_chars_config.py` capture test).
+
+Driven by a **hand-recut reference SRT** for `Short4.mp3` (46.5s, pure Thai,
+re-cut in Premiere Pro): 31 cues vs the pipeline's 22, `cer_thai 0.0448`. The
+text was already 95.5% right — what the human actually rewrote was
+segmentation and timing, which no metric in the harness measures.
+
+**1. Cue-timing conform is now unconditional (`align_force.conform_cues`).**
+The monotonic/no-overlap invariant lived *inside* `forced_align`, and
+`run.py` skips Phase 7 whenever the engine reports `timestamps_final` — which
+`faster_whisper` always does. So on the only active engine path the invariant
+was enforced nowhere, and cues 20/21 shipped as `42,740 --> 42,660`
+(overlapping) in `output/Short4.srt`. New Phase 7b runs on every path;
+`forced_align` delegates to it (word-level behaviour unchanged — gap closing
+is a cue policy and stays off there). `cue_max_close_gap_ms: 200` closes
+timestamp-noise gaps that flicker burned-in subtitles.
+
+**2. Stitch dedup now sees sub-word pieces (`stitch._coincident`).** The seam
+stutter documented in `faster_whisper.py`'s `_LONG_SPAN_SAFE_S` block was
+misdiagnosed there as an exact-text-matching problem needing edit distance.
+It was not: the duplicates matched on text fine and were lost to the **IoU
+gate**. Whisper's Thai output is sub-word — pieces run 20–80ms and combining
+marks land at `start == end`, where IoU is structurally 0.0 and no threshold
+can ever match. Measured at the 42–46s window seam: `'อะไร'` IoU 0.44, `'ก'`
+0.43, `'ก'` (both zero-length) 0.00, `'จ'` 0.33. Centre-coincidence is
+duration-scaled, so genuinely repeated Thai consonants (`แบบ`, `รักกับ` — 130ms
+apart) are still kept, and the `ci != pci` cross-chunk guard still carries the
+real safety.
+
+**3. Whisper's own spaces are cue-break candidates.** Gated on
+`cue_space_min_chars`/`cue_space_min_ms` plus STYLE_GUIDE §7 vetoes (mai yamok
+must not be orphaned — Whisper emits `' ๆ'` as its own space-prefixed piece,
+so this is the common case; numeral must stay with its classifier) and a
+runt guard (both sides of the break must be viable — an early version shipped
+a 140ms `'โอเค'` flash cue).
+
+**Measured before → after on the reference clip:**
+
+| | before | after | your SRT |
+| --- | --- | --- | --- |
+| `cer_thai` | 0.0448 | **0.0433** | — |
+| overlapping cues | **1** | **0** | 0 |
+| non-zero gaps | 6 (max 140ms) | **0** | 0 |
+| shortest cue | 0.46s | **0.56s** | 0.56s |
+| stitch dups removed | 27 | 36 | — |
+| cue-start F1 @300ms | 0.717 | 0.691 | — |
+
+Fixed in the transcript: `อะไรกก็ตาม`→`อะไรก็ตาม`, `ทรมานใจจ`→`ทรมานใจ`,
+`ไกลกลไกกล`→`ไกลไกล`.
+
+**Honest negative result on (3):** the space break is F1-neutral-to-slightly-
+negative in isolation (a grid over `space_min_chars` × `space_min_ms` was flat
+at 0.70–0.73 vs a 0.717 baseline). It breaks in linguistically correct places,
+but the greedy `cue_target_chars` fill then just relocates the arbitrary
+boundary into the following cue — net wash. **Do not tune these knobs further;
+the blocker is the greedy fill itself.** Set both to a large number to disable.
+
+**Still open, in impact order:**
+- **Replace greedy cue fill with a cost-minimising split.** `_group_words_into_cues`
+  closes a cue the instant `n_chars >= target_chars` and breaks at whatever word
+  boundary it is standing on — measured exactly: the 42-char cue
+  `เขาสามารถบอกได้ว่าไม่เป็นไรเธอมีแฟนแล้วฉัน` is *precisely* 42 codepoints and split
+  `ฉัน | จะรอ`, subject from verb. Same mechanism gave `นะคะให้ | น้อง` and
+  `พออยู่ | ด้วยแล้ว`. This is the real segmentation fix and (3) is its input signal.
+- **Cue-structure metrics in `compute_metrics` (bump `METRICS_VERSION`).** On this
+  clip `wer_latin` scored 0 Latin words and BER scored 0 switch points — two of
+  three gate signals were inert, and segmentation error 0.31 is invisible. An
+  engine swap could wreck timing on pure-Thai production content and pass clean.
+  Overlap count belongs in as a hard assertion of 0, not a rate.
+- **Mai-yamok contraction policy.** Whisper emits `ดีดี`/`ใหม่ใหม่` (and `จริงๆ`
+  correctly two cues earlier — it is inconsistent). STYLE_GUIDE §3 fixes gold on
+  attached-`ๆ` and refuses `ๆ`→expansion, but nothing does the contraction
+  direction, so `cer_thai` pays for it forever. Same class: `คนนึง`→`คนหนึ่ง` is an
+  unstated colloquial-vs-formal policy. Needs a decision, not code.
+- Bias-index candidates from this clip: `พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`.
+- Two `make_gold.py` copies exist (`tools/` and `scripts/`); both `transcribe.db`
+  and `transcriber.db` sit at the repo root but only the latter is used.
+
+## Metrics v2 — intra-cue switch points (BER un-blinded) — executed 2026-07-16
+
+Suite: **184 passed** (was 176; +8 in `tests/test_metrics_v2.py`).
+
+**The finding:** `metrics._switch_points` derived Thai↔Latin switches from the
+token-level `script` field only. Tokens are phrase cues, so every real
+code-switch sits *inside* a `mixed` cue — invisible by construction. The whole
+gold set therefore scored `switches=0` regardless of content, BER was pinned
+at a structural 0.0, and every "grow the gold set to unblock Engine B / the
+LLM reconciler" plan was chasing a gate that could never fire. (The
+code-switch clips added 2026-07-15 were already in the set — they just
+couldn't register.) Second, smaller defect: corpus BER was a ref-weighted
+mean, so hypothesis switches hallucinated on zero-switch samples carried
+weight 0 and were never penalized.
+
+**The fix (metrics v2, `metrics.METRICS_VERSION = 2`):**
+1. Switch points walk every *character* of every token; an intra-cue switch's
+   timestamp is linearly interpolated across the cue's `[start_ms, end_ms]`
+   by char offset (same approximation on both sides). Digits/punct are
+   script-neutral. Pure-script token streams behave exactly as v1.
+2. Corpus BER = `1 − micro-F1` over summed matched/ref/hyp switch counts
+   (`metrics.boundary_f1_error`; per-sample counts now on `EvalMetrics.
+   hyp_switches/matched_switches`).
+3. **Baseline partitioning:** `eval_run.metrics_version` column (additive
+   `_migrate`, pre-existing rows default v1). `get_last_passing_eval` and
+   `create_eval_run` default to the current `METRICS_VERSION` — a metric
+   change starts a fresh baseline instead of tripping the gate against
+   incomparable numbers (the old v1 baseline had BER 0.0 with zero weight; any
+   real v2 score would have "regressed" forever). Bump the version on any
+   future metric-definition change.
+
+**Proven on the real gold set (2026-07-16):** migrated `transcriber.db`
+(16 rows stamped v1), ran the production harness: `CER_thai 0.1451`
+(unchanged from the 2026-07-15 baseline — Thai scoring untouched),
+`WER_latin 1.0452`, **`switches=104 (hyp 38, matched 10)` → `BER 0.8592`**,
+passed=True as the fresh v2 baseline. The system's real code-switch gap is
+now visible and gated: Engine A finds barely a third of the reference
+switches.
+
+**First decidable Engine-B probe (same session):** `harness --engine-b
+funasr` (experiment row, baseline untouched): **BER improved 0.7882 vs
+0.8592** (hyp switches 66 vs 38, matched 18 vs 10 — the decorrelated engine
+genuinely finds switches Engine A misses) but **WER_latin regressed 1.2258
+vs 1.0452** → gate blocked, correctly. CER_thai 0.1451 unchanged. Verdict
+recorded at the time: a decorrelated Engine B is worth having for BER;
+funasr specifically is too inaccurate on Latin words.
+
+**⚠ CORRECTION (same session, after probing the LLM reconciler): the above
+verdict is WRONG — retracted, not just superseded.** Probing `--engine-b
+funasr --llm-enabled` produced metrics **byte-identical** to the plain
+funasr run above (down to hyp_switches/matched_switches), which meant the
+LLM tiebreak fired zero times. Instrumenting `align_hyp.align()` directly on
+a gold clip confirmed why: **0 of 52 slots had both an A and a B candidate**
+— faster_whisper and funasr's outputs never overlap enough to be treated as
+a disagreement at all. Inspecting funasr's raw output explained that:
+`result["text"]` carries an explicit `<|yue|>` (Cantonese) tag, and every
+"word" token is a CJK Unified Ideograph codepoint (e.g. `困` '困'), not
+Thai script. Checked SenseVoiceSmall's own model card: it documents exactly
+five supported languages — `zh, en, yue, ja, ko` — **Thai is not one of
+them**. With `language="auto"` (`engines/funasr.py`), its language-ID
+misdetects Thai speech as Cantonese and decodes Chinese-script garbage
+throughout. **The "BER improved 0.7882" and "WER_latin regressed 1.2258"
+numbers above were measuring that garbage — not a genuine Thai-code-switch
+accuracy tradeoff.** They are not evidence that a decorrelated Engine B is
+or isn't worth having; they are evidence that SenseVoiceSmall cannot
+transcribe Thai. This also retroactively explains the *older*,
+pre-2026-07-16 "byte-identical to passthrough" funasr result noted elsewhere
+in this ledger/CLAUDE.md — consistent with zero real A/B overlap having
+existed the whole time, for the same underlying reason. **funasr/
+SenseVoiceSmall is retired as a Thai-code-switch candidate** (see
+`engines/funasr.py`'s corrected docstring) — not gated pending more gold
+data, structurally incapable regardless of gold-set size. Don't re-probe it
+without a different underlying model. Tests unaffected (no test asserted the
+old, wrong conclusion — this was a documentation/interpretation error, not a
+code defect with a regression test to write).
+
+**Second probe: typhoon_rt (same session, 2026-07-16).** Installed
+`nemo_toolkit[asr]==2.7.3` cleanly on this 3.11.9 venv (the Py3.13 wheel risk
+in the code comments doesn't apply here). First attempt crashed with
+`CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH` on typhoon_rt's very first conv
+forward — traced to a real, separate bug (see "PATH-scoping bugfix" entry
+below) and fixed. Re-run after the fix: **all 5 clips transcribed cleanly**,
+but the result is a clear regression across every signal: `CER_thai 0.1601`
+(vs 0.1451 baseline), `WER_latin 1.1290` (vs 1.0452), `BER 0.8537` (vs 0.8592
+— a marginal 0.6pp gain, far short of funasr's 0.71). switches hyp=60,
+matched=12. **Verdict: typhoon_rt does not currently earn Engine-B activation
+— worse than funasr on every axis except a negligible BER edge.** Plausible
+causes not yet investigated: this specific NeMo release/checkpoint pairing,
+audio preprocessing mismatch (16kHz mono float32 assumed but not verified
+against what `typhoon-asr-realtime.nemo`'s manifest expects), or the model
+being tuned for streaming/short-utterance input rather than the ~30s+ whole-
+file spans this adapter feeds it. **Due when:** don't re-try without new
+evidence (mirrors the typhoon-whisper-turbo Engine-A precedent) — either
+diagnose why NeMo's own reference eval numbers don't reproduce here, or move
+on to a Qwen3-ASR adapter / `--llm-enabled` probe instead.
+
+**PATH-scoping bugfix (same session, real bug, not NeMo/typhoon_rt-specific):**
+`engines/faster_whisper.py`'s `_register_cuda_dll_dirs()` prepended nvidia
+pip wheels' bin dirs (incl. a CUDA-12 `cudnn64_9.dll`) onto process-wide
+`PATH` so CTranslate2 could find `cublas64_12.dll` — but never reverted it.
+Any NeMo-based engine (torch 2.13+cu130, a different CUDA generation) loaded
+afterward in the *same process* inherited that prepended cuDNN and crashed on
+its first conv forward with `CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH`.
+Confirmed via a minimal repro: calling only `_register_cuda_dll_dirs()` (zero
+CTranslate2 model loaded) was sufficient to break typhoon_rt; typhoon_rt
+worked fine standalone. **Fix:** the function now returns the pre-mutation
+PATH; `FasterWhisperEngine.load()` captures it, `unload()` restores it — the
+mutation is now load()-scoped instead of process-lifetime. This was silent
+and untested before because no test or eval run had ever loaded a CTranslate2
+engine and a NeMo engine in the same process — Engine B has been
+`passthrough` since typhoon_rt's adapter was built. Would have bitten anyone
+activating typhoon_rt in production. Tests: `tests/test_faster_whisper_
+path_scoping.py` (3 new; suite 187 green).
+
+**Third probe: whisper_multi + the LLM reconciler (same session, 2026-07-16)
+— the first genuine test bed, and a real diagnosed finding.** Unlike funasr,
+`whisper_multi` (Whisper large-v3) genuinely supports Thai, so this was the
+first candidate where the LLM tiebreak could actually be exercised on real
+disagreements.
+
+`harness --engine-b whisper_multi --llm-enabled` (Ollama serving
+`qwen2.5:3b-instruct` locally): **CER_thai regressed sharply to 0.2323**
+(vs 0.1451 baseline — a ~60% relative increase), `WER_latin 1.0903` (mild
+regression vs 1.0452), `BER 0.8616` (not better than 0.8592). An isolation
+re-run (`--engine-b whisper_multi`, no `--llm-enabled`) produced **byte-
+identical** numbers — the LLM tiebreak made zero measurable difference here
+too, same symptom as the retired funasr probe but a *different* root cause
+(whisper_multi is not broken like funasr — align_hyp genuinely produces
+overlapping A+B slots against it, 12 of 26 on a sample clip, several with
+real text differences).
+
+Instrumenting `reconcile._pick()`'s `llm_fn` directly on one clip (11 real
+disagreements) explains why: **the LLM picked Engine A (index 0) on all 11
+of 11 calls** — including cases where Engine B's text was visibly longer and
+more complete than Engine A's truncated cue. A 100% rate across diverse,
+non-trivial disagreements is not credible as genuine semantic judgment; it
+reads as a positional/first-option bias in `qwen2.5:3b-instruct` under the
+current prompt. Two compounding, real defects found along the way:
+1. **Prompt staleness bug** (`llm_reconcile.py`'s `_PROMPT_TEMPLATE`): it
+   still says *"Two Thai speech-recognition engines disagree on **one
+   word**"* — but tokens have been phrase cues since 5.4 (CLAUDE.md), so the
+   model is actually shown two full sentences while being told to expect one
+   word. Never updated when token granularity changed.
+2. **`_script_fallback` degrades to pure script-routing here for an
+   unrelated reason:** `engines/whisper_multi.py` hardcodes
+   `confidence=None` on every token (deliberate — the contract's "never fake
+   a confidence" rule, correctly followed), which means
+   `_script_fallback`'s confidence-tiebreak branch never fires against it.
+   Since most disagreements here are both-Thai-script, the script-routing
+   fallback then also trivially picks A every time. So on every reconciled
+   ("both A+B") slot, *neither* path — LLM or fallback — ever selects
+   Engine B; the only way whisper_multi's content enters the final
+   transcript at all is via the 12 unmatched "only-B" solo slots that pass
+   straight through un-reconciled, and that's what drives the CER_thai
+   regression (whisper_multi's own segmentation/accuracy on those unmatched
+   spans is worse, diluting rather than correcting Engine A's output).
+
+**Verdict: whisper_multi + LLM reconciler rejected on the current gold set —
+but unlike funasr/typhoon_rt, this is NOT evidence the architecture can't
+work.** It's evidence the *current* prompt and local model provide no
+discriminative signal, compounded by a null-confidence engine collapsing the
+fallback to a routing rule that happens to always favor A on same-script
+disagreements. **Due next (in order of cheapest-to-test):**
+(a) fix the prompt's stale "one word" framing to describe phrase-cue
+comparison: (b) test with per-call randomization of which candidate is
+presented as "A" vs "B" to separate genuine judgment from positional bias —
+if index 0 still wins ~100% after randomization, the bias is confirmed and a
+larger/better local model is needed; (c) reconsider whether `_script_fallback`
+should have a non-confidence tiebreak (e.g. length/completeness heuristic)
+for exactly this null-confidence-engine case, since the contract correctly
+forbids faking confidence but the fallback currently has no fallback *within*
+the fallback when confidence is absent on one side.
+
+**Fourth probe: prompt fix + position randomization (same session,
+2026-07-16, item (a)+(b) above executed).** `llm_reconcile.py` rewritten:
+`_PROMPT_TEMPLATE` now describes segment/phrase-level candidates (never says
+"one word"), and `make_llm_fn` randomizes per call which of (ta, tb) is shown
+as prompt slot 0 vs 1, remapping the model's answer back to ta/tb afterward.
+Tests: `tests/test_phase3_llm_reconcile.py` (+2: prompt no longer claims
+single-word, swap/no-swap mapping verified directly; suite 189 green).
+
+**Re-instrumented on the same clip:** the degenerate lock-in is confirmed
+gone — `llm_idx` now varies (7 of 11 calls picked Engine A, 4 picked Engine
+B), where before the fix it was 11 of 11 Engine A. The fix does exactly what
+it was built to do: a model with positional bias no longer manifests as
+"always trust Engine A."
+
+**But the corpus-level harness result got WORSE, not better — report this
+honestly, not as a clean win:**
+
+| Config | CER_thai | WER_latin | BER |
+|---|---|---|---|
+| baseline (passthrough) | 0.1451 | 1.0452 | 0.8592 |
+| whisper_multi, broken prompt (pre-fix), llm-enabled | 0.2323 | 1.0903 | 0.8616 |
+| whisper_multi, **fixed prompt + randomized**, llm-enabled | **0.3505** | 1.0387 | 0.8658 |
+
+CER_thai got substantially worse after the fix (0.3505 vs 0.2323), WER_latin
+improved slightly (1.0387 vs 1.0903), BER is essentially flat/marginally
+worse. **Diagnosis: this is not a regression in the fix — it's the fix
+correctly exposing that `qwen2.5:3b-instruct`'s judgment on real
+disagreements isn't good enough to beat the naive heuristic of always
+trusting the stronger engine.** Before the fix, the degenerate "always pick
+Engine A" bug was *accidentally* a decent heuristic on this gold set, because
+Engine A (faster_whisper) is empirically the stronger engine here (lowest
+CER_thai of any config tried all session, 0.1451). Once the reconciler can
+genuinely pick Engine B and does so ~36% of the time, and Engine B's picks
+are not reliably better, overall accuracy drops. This is a **model-quality
+problem, not a bias/wiring problem** — categorically different from, and now
+cleanly separated from, the bug that was fixed.
+
+**Verdict: `llm_enabled: true` stays off. The wiring, prompt framing, and
+positional-bias defect are now all fixed and tested — do not revisit those.**
+What remains is a genuine open question: is `qwen2.5:3b-instruct` too weak
+for this task, or does the prompt need few-shot examples / more context
+(surrounding tokens, not just the two candidates) to reason well? **Due
+next:** try a larger local model (`qwen2.5:7b-instruct` is already referenced
+in this file's own docstrings/tests as a plausible next step) before
+concluding the LLM-tiebreak approach itself doesn't work — the current
+result rules out the *specific* small model + minimal-context prompt tried
+here, not the architecture.
+
+**Known limitation (accepted):** intra-cue interpolation assumes uniform
+character rate; on long cues the placement error can approach
+`boundary_tol_ms` (300 ms). Both sides share the bias, so matches survive in
+practice. **Due when:** if real A/B probes show BER noise swamping signal,
+widen `boundary_tol_ms` or re-derive switch timestamps from
+`engine_result.raw_words_json` word timings instead of interpolation.
+
+**Environment finding (same session):** DeepFilterNet denoise is silently
+dead on this venv — `df.enhance` imports `torchaudio.backend`, which
+torchaudio 2.x removed, so `_apply_rolling_denoise` warns and returns the
+raw audio whenever a chunk engine activates (`denoise: true` is a no-op).
+Harmless today (the production engine is whole-file, denoise already skipped
+by design), and possibly net-positive to leave dead (INFRA-6 in the 2026-06
+audit questioned whether denoise helps at all). **Due when:** a chunk engine
+is activated for production — either pin/patch DeepFilterNet for torchaudio
+2.x, or measure a denoise-off baseline and delete the path.
+
+## Four confirmed-issue fixes — executed 2026-07-15 (after the diff-srt pass)
+
+Suite: **176 passed** (was 167; +9 new tests across three new files).
+
+1. **Eval regression-baseline partitioning (integrity).** An A/B probe
+   (`harness --engine-b X` / `--llm-enabled`) wrote a normal `eval_run`; if it
+   passed, `get_last_passing_eval` would hand it to the next production run as
+   the baseline. Fixed with an `eval_run.is_experiment` column (schema.sql +
+   idempotent `_migrate` add): `run_harness(..., experiment=True)` marks the
+   row, `get_last_passing_eval` excludes it, and the harness CLI implies the
+   flag for `--engine-b`/`--llm-enabled` (plus an explicit `--experiment`).
+   An experiment is still *judged against* the production baseline — it just
+   can never *become* it. **Design note:** the alternative fix — filtering the
+   baseline by the current run's `engine_pair`/`bias_hash` — was rejected
+   deliberately: the flywheel gate exists to compare an engine swap or bias
+   update AGAINST the previous config's baseline, so partitioning lineage by
+   those columns would hand every swap/update an empty baseline and a free
+   pass. Partition on intent (experiment vs production), not on config
+   identity. Tests: `tests/test_eval_baseline_partitioning.py` (store-level
+   exclusion + the baseline → passing-experiment → production round-trip).
+   **Migration note:** any pre-existing `transcriber.db` (the live/local DB —
+   gitignored, not shipped in the repo) predates the `is_experiment` column
+   and must run `init_db()` once (idempotent `_migrate`, additive-only, no
+   data touched) before the harness will run against it — it fails fast with
+   `sqlite3.OperationalError: no such column: is_experiment` otherwise.
+   **Confirmed on the real gold set (2026-07-15):** ran
+   `python -m transcribe.eval.harness --config transcribe/config.yaml --db
+   transcriber.db` after migrating — passed, cer_thai 0.1451 vs prior baseline
+   0.1486 (improved), wer_latin/BER unchanged. No regression from this pass's
+   four fixes. `switches=0` still holds (gold set has no code-switch samples
+   yet), so BER/Engine-B activation remain unproven either way — unchanged
+   from the pre-existing known gap.
+
+2. **Stitch seam-window dedup.** `stitch()` compared each candidate only
+   against `kept[-1]`, so an A-B-A' pattern (duplicate copies of a seam word
+   separated by an intervening token from the other chunk) kept the duplicate.
+   It now scans all recently-kept tokens whose span ends within
+   `seam_window_ms` of the candidate's start (interiority/confidence
+   tie-breaks unchanged; output re-sorted since an interior replacement can
+   nudge ordering). Call sites thread the real overlap: `run.py` passes config
+   `chunk_overlap_ms`, faster_whisper's long-span path passes its 4 s window
+   overlap. Tests: `tests/test_stitch_seam_window.py`.
+
+3. **Cue target width in config.** `_CUE_TARGET_CHARS` (42) was hardcoded
+   while its siblings `cue_gap_ms`/`cue_max_ms` were config-driven — and
+   `transcribe()` wasn't even passing it, silently always using the default.
+   Now `engines.faster_whisper.cue_target_chars` in config.yaml → constructor
+   kwarg → `_group_words_into_cues`. Named `cue_target_chars` (not bare
+   `target_chars`) to match the `cue_*` kwarg family. Tests:
+   `tests/test_cue_target_chars_config.py` (constructor override, default =
+   module constant, capture test proving the value reaches the grouping,
+   functional shorter-cues test).
+
+4. **Engine-reuse state-bleed audit — CLEAN; don't re-investigate blind.**
+   No `language_hint`/`bias_terms` bleed exists across chunks or jobs within a
+   process. Checked (2026-07-15): `registry.get_engine` returns a fresh
+   `cls(**kwargs)` per call, and nothing in `transcribe/` caches an engine
+   instance (grep `get_engine|lru_cache|_ENGINE|engine_cache` — only run.py
+   calls it); `run.py` engine instances live for exactly one `run_file` and
+   are `del`'d, `bias_terms`/`bias_weights` are re-read from the DB per job,
+   and language hints are per-call literals ("th" for A, None for B); every
+   adapter builds its per-call kwargs *inside* `transcribe()`/
+   `transcribe_batch()` (whisper_thai/whisper_multi: `generate_kwargs` +
+   `prompt_ids` fresh each call; faster_whisper: `initial_prompt` + `common`
+   dict fresh, and the OOM-halved `bs` is a local never written back to
+   `self._batch_size`; funasr: `cache={}` fresh per call — the classic FunASR
+   bleed vector — and hotword rebuilt per call; typhoon_rt holds only the
+   model); `_batch.py` retries hand the HF pipeline fresh dict wrappers
+   (fixed 2026-06-18) and never mutate `generate_kwargs`; `inject.build_prompt`
+   uses `sorted()` (copies) and fresh `BiasTerm` objects, so the *shared*
+   `bias_terms` list that rides in every chunk's `EngineInput` is never
+   mutated. Two non-bleed observations recorded for posterity: (a)
+   `language_hint` is *honored* only by faster_whisper — whisper_thai forces
+   `"th"`, whisper_multi/funasr force auto-detect (each documented/deliberate);
+   (b) whisper_* `transcribe_batch` builds its bias prompt from `inputs[0]`
+   under a documented same-job assumption. **Due when:** any caller ever
+   batches `EngineInput`s across jobs or bias sets in one `transcribe_batch`
+   call — the `inputs[0]` prompt assumption then breaks silently.
+
+## diff-srt flywheel path — executed 2026-07-15
+
+The web editor's correction capture (diff.py) only matches original vs.
+corrected tokens by `idx`, which breaks the moment a final NLE pass (Premiere
+Pro: re-time, re-cut, merge, split cues) is fed back in — there was previously
+no path for that at all, and `update_bias_index` had zero production call
+sites (only tests called it, confirmed via grep).
+
+Built: `transcribe/srt_io.py` (parse_srt relocated out of tools/make_gold.py,
+which now re-exports it); `transcribe/flywheel/align_srt.py` (connected-
+components-over-time-overlap grouping — handles merge/split/deletion/insertion
+without special-casing each; a timebase-divergence guard measured as *matched
+coverage* rather than raw min/max span, so a normal edit that adds a trailing
+title/outro card doesn't false-positive as a wrong-file mismatch); promoted
+`diff.py`'s `_extract_changed_span` to public `extract_changed_span` for reuse
+(second concrete use). `scripts/learn_from_srt.py` CLI: prints a match/mismatch
+summary before writing anything (mirrors make_gold's draft→freeze ceremony),
+requires `--yes` or an interactive confirm, then writes corrections and (unless
+`--no-promote`) calls `update_bias_index(..., run_regression_gate=True)` —
+closing the promotion gap above. 19 new tests (`test_align_srt.py`,
+`test_learn_from_srt.py`); full suite 167 green.
+
+**Known simplification, not a bug:** a merged/split group's correction row is
+owned by the group's *lowest* original `token_idx` (the `correction` table is
+keyed one row per original token; there is no schema concept of a many-token
+group). Reopening that job in the web editor will only show that one idx as
+"corrected" — the other merged-away idxs still display raw text. **Due when:**
+the web editor needs accurate per-idx corrected-state display for a job that
+went through an SRT re-import — would need either a nullable
+`group_token_idxs` JSON column (additive migration, low regret) or a separate
+join table.
+
+**Also deferred:** `update_bias_index`'s real GPU regression-gate path (run_harness
+with pipeline_fn=None) is exercised only via monkeypatch in
+`test_learn_from_srt.py` — the gate's own pass/rollback correctness is already
+proven in `test_phase5_flywheel.py`, so this wasn't re-proven end-to-end on real
+audio. **Due when:** the gold set grows enough to make a real `learn_from_srt`
+promotion worth measuring (same gate as Engine B/LLM-reconciler, see the
+2026-07-15 entry below).
+
+## IMPLEMENT_IMPROVEMENTS.md pass — executed 2026-07-14
+
+Fixed with tests (`tests/test_improvements_202607.py`, suite 116 green):
+harness scratch-DB bias-index mirroring (eval was running prompt-less);
+correction upsert per (job, token) + revert deletion (re-saves were stacking
+duplicate rows and inflating flywheel counts); editor job view merges saved
+corrections; empty corrected text never promoted as a bias term;
+`get_last_passing_eval` filters kind + id tie-break; mai-yamok spaced-repeat
+collapse; `sent_tokenize` import inside its best-effort try; exception lexicon
+expanded; dead `_config()` removed from editor server.
+
+**Environment truth (2026-07-14):** the working venv is **Python 3.11.9** —
+`funasr` and `editdistance` import fine. The "no Py3.13 wheel" blocker recorded
+below for FunASR/NeMo does not apply to this venv; Engine-B activation is
+eval-gated only. CLAUDE.md/config comments still say 3.13 — update them when
+Engine B lands.
+
+**Update (2026-07-15): all six phases executed.** Gold set live (4 clips);
+typhoon-whisper-turbo Engine A tried and reverted (lost the gate); decorrelated
+Engine B (`funasr`) wired and eval-tested but left `passthrough` (correctly
+gated — see below); LLM reconciler (`llm_reconcile.py`, local Ollama) wired and
+gated off (`llm_enabled: false`); resumability/raw-word persistence
+(`job_phase` + `engine_result` table) done; editor reason-tag/confidence/
+corrected-state UI done. `pytest tests/` → 148 passed. Full detail and
+resolution notes: IMPLEMENT_IMPROVEMENTS.md §2 (each phase now has a
+**Resolution** block). **Remaining due-when:** Engine B / LLM-reconciler
+activation is still gated on a gold set with real code-switch-heavy or
+noisy material — the current 4 clips have `switches=0`, so the gate can't yet
+prove either feature earns its runtime. Grow the gold set to make that call.
+
 ## HANDOFF_SPEED_AND_ROBUSTNESS — executed 2026-07-06
 
 Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests:

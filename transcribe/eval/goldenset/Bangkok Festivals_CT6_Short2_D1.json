@@ -1,0 +1,190 @@
+{
+  "tokens": [
+    {
+      "text": "ในเมื่อพูดถึงดนตรีแจ๊ส",
+      "script": "thai",
+      "start_ms": 0,
+      "end_ms": 2580
+    },
+    {
+      "text": "เท่ากับแซกโซโฟนไหมครับ",
+      "script": "thai",
+      "start_ms": 2580,
+      "end_ms": 4340
+    },
+    {
+      "text": "ไม่เสมอไปครับ เพราะว่าจริงๆ",
+      "script": "thai",
+      "start_ms": 4340,
+      "end_ms": 6800
+    },
+    {
+      "text": "แต่ว่าเข้าใจได้",
+      "script": "thai",
+      "start_ms": 6800,
+      "end_ms": 7900
+    },
+    {
+      "text": "ว่าทำไมคนถึงจะเชื่อมโยง",
+      "script": "thai",
+      "start_ms": 7900,
+      "end_ms": 9060
+    },
+    {
+      "text": "แซกโซโฟนกับแจ๊ส",
+      "script": "thai",
+      "start_ms": 9060,
+      "end_ms": 10500
+    },
+    {
+      "text": "เพราะว่ามันเป็นสัญลักษณ์ครับ",
+      "script": "thai",
+      "start_ms": 10500,
+      "end_ms": 12560
+    },
+    {
+      "text": "เวลาป้ายอะไรที่เกี่ยวกับงานแจ๊สต่างๆ",
+      "script": "thai",
+      "start_ms": 12560,
+      "end_ms": 15280
+    },
+    {
+      "text": "ก็จะมีแซกโซโฟน",
+      "script": "thai",
+      "start_ms": 15280,
+      "end_ms": 16620
+    },
+    {
+      "text": "ซึ่งจริงๆ แล้ว",
+      "script": "thai",
+      "start_ms": 16620,
+      "end_ms": 17320
+    },
+    {
+      "text": "ในโลกของดนตรีคลาสสิกเนี่ย",
+      "script": "thai",
+      "start_ms": 17320,
+      "end_ms": 18600
+    },
+    {
+      "text": "แซกโซโฟนเขาก็มีบทบาท",
+      "script": "thai",
+      "start_ms": 18600,
+      "end_ms": 19740
+    },
+    {
+      "text": "สำคัญพอสมควร",
+      "script": "thai",
+      "start_ms": 19740,
+      "end_ms": 20660
+    },
+    {
+      "text": "ในดนตรีคลาสสิก",
+      "script": "thai",
+      "start_ms": 20660,
+      "end_ms": 21960
+    },
+    {
+      "text": "เห็นแซกโซโฟนเท่ากับแจ๊สไหม",
+      "script": "thai",
+      "start_ms": 21960,
+      "end_ms": 23100
+    },
+    {
+      "text": "อาจจะไม่",
+      "script": "thai",
+      "start_ms": 23100,
+      "end_ms": 24160
+    },
+    {
+      "text": "แต่ว่าอะไรล่ะ ถึงจะทำให้มันเป็นแจ๊ส",
+      "script": "thai",
+      "start_ms": 24160,
+      "end_ms": 27100
+    },
+    {
+      "text": "ก็ต้องไปดูว่า",
+      "script": "thai",
+      "start_ms": 27100,
+      "end_ms": 29000
+    },
+    {
+      "text": "สไตล์ของดนตรีที่เขาเล่น",
+      "script": "thai",
+      "start_ms": 29000,
+      "end_ms": 30780
+    },
+    {
+      "text": "มันยึดโยงอยู่กับดนตรีแจ๊สประเภทไหน",
+      "script": "thai",
+      "start_ms": 30780,
+      "end_ms": 33960
+    },
+    {
+      "text": "Swing ไหม อยู่ในยุค Bebop ไหม",
+      "script": "mixed",
+      "start_ms": 33960,
+      "end_ms": 36060
+    },
+    {
+      "text": "อยู่ในยุค Hard Bop ไหม",
+      "script": "mixed",
+      "start_ms": 36060,
+      "end_ms": 37160
+    },
+    {
+      "text": "หรือว่าอยู่ในยุค",
+      "script": "thai",
+      "start_ms": 37160,
+      "end_ms": 38220
+    },
+    {
+      "text": "อะไรก็แล้วแต่",
+      "script": "thai",
+      "start_ms": 38220,
+      "end_ms": 38960
+    },
+    {
+      "text": "ที่มันอยู่ในประวัติศาสตร์",
+      "script": "thai",
+      "start_ms": 38960,
+      "end_ms": 39940
+    },
+    {
+      "text": "ของแจ๊สหรือเปล่า",
+      "script": "thai",
+      "start_ms": 39940,
+      "end_ms": 41020
+    },
+    {
+      "text": "มีการด้นสดไหม",
+      "script": "thai",
+      "start_ms": 41020,
+      "end_ms": 43420
+    },
+    {
+      "text": "เครื่องดนตรีในวงประกอบกันแล้ว",
+      "script": "thai",
+      "start_ms": 43420,
+      "end_ms": 46280
+    },
+    {
+      "text": "มันดูลงตัวกับวงดนตรี",
+      "script": "thai",
+      "start_ms": 46280,
+      "end_ms": 49740
+    },
+    {
+      "text": "ในลักษณะของดนตรีแจ๊สไหม",
+      "script": "thai",
+      "start_ms": 49740,
+      "end_ms": 52000
+    },
+    {
+      "text": "ครับ ก็อาจจะมีหลายๆ องค์ประกอบ",
+      "script": "thai",
+      "start_ms": 52000,
+      "end_ms": 53700
+    }
+  ]
+}

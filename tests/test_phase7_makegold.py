@@ -98,3 +98,63 @@ def test_round_trip_harness_records_baseline(monkeypatch):
     conn = store.connect(db)
     assert store.get_last_passing_eval(conn) is not None   # a real baseline exists now
     conn.close()
+
+
+# ── parse_srt (SRT → gold tokens, the hand-corrected-SRT shortcut) ────────────
+
+def test_parse_srt_parses_cues_with_bom_and_scripts():
+    srt = (
+        "﻿1\n00:00:00,000 --> 00:00:02,580\nสวัสดีครับ\n\n"
+        "2\n00:00:02,580 --> 00:00:04,340\nHello world\n\n"
+    )
+    toks = make_gold.parse_srt(srt)
+    assert toks == [
+        {"text": "สวัสดีครับ", "script": "thai", "start_ms": 0, "end_ms": 2580},
+        {"text": "Hello world", "script": "latin", "start_ms": 2580, "end_ms": 4340},
+    ]
+
+
+def test_parse_srt_joins_multiline_cue_text():
+    srt = "1\n00:00:01,000 --> 00:00:02,000\nline one\nline two\n\n"
+    toks = make_gold.parse_srt(srt)
+    assert toks[0]["text"] == "line one line two"
+
+
+def test_parse_srt_output_passes_validate():
+    srt = "1\n00:00:00,000 --> 00:00:01,000\nโลก\n\n2\n00:00:01,000 --> 00:00:02,000\nEarth\n\n"
+    toks = make_gold.parse_srt(srt)
+    assert make_gold.validate(toks) == []
+
+
+def test_goldenset_discovers_video_container_audio(monkeypatch):
+    """A gold sample's source clip is often a raw video export (.mp4), not
+    audio-only — the harness must not silently skip it (real bug: Bangkok
+    Festivals clip is .mp4 and was invisible to the old .wav/.mp3/.flac/.m4a list)."""
+    from transcribe.eval import harness
+
+    d = Path(tempfile.mkdtemp())
+    (d / "clip.json").write_text(
+        json.dumps({"tokens": [{"text": "hi", "script": "latin",
+                                 "start_ms": 0, "end_ms": 100}]}),
+        encoding="utf-8",
+    )
+    (d / "clip.mp4").write_bytes(b"not real video, existence is all that matters here")
+    monkeypatch.setattr(harness, "_GOLDENSET", d)
+    samples = harness._load_goldenset()
+    assert len(samples) == 1
+    assert samples[0][0] == d / "clip.mp4"
+
+
+def test_from_srt_round_trip_writes_valid_draft():
+    d = Path(tempfile.mkdtemp())
+    _synth_clip(d, stem="clip")
+    srt_path = d / "clip.srt"
+    srt_path.write_text(
+        "1\n00:00:00,000 --> 00:00:00,500\nสวัสดี\n\n"
+        "2\n00:00:00,500 --> 00:00:00,900\nโลก\n\n",
+        encoding="utf-8",
+    )
+    tokens = make_gold.parse_srt(srt_path.read_text(encoding="utf-8-sig"))
+    draft = make_gold.write_draft(str(d / "clip.wav"), tokens, goldenset=d)
+    frozen = make_gold.freeze(str(draft))
+    assert frozen.name == "clip.json"

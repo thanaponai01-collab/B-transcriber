@@ -35,6 +35,37 @@ def _iou(a: RecognizedToken, b: RecognizedToken) -> float:
     return inter / union if union > 0 else 0.0
 
 
+# IoU is the right duplicate test for word-length tokens, but Whisper's Thai
+# output is sub-word: pieces run 20-80 ms and are frequently ZERO-length (a
+# combining mark lands at start == end), where IoU is structurally 0.0 and no
+# threshold can ever match. Two windows decoding the same short syllable place
+# it 20-80 ms apart, giving IoU ~0.25-0.45 — under any sane threshold — so the
+# duplicate survived into the transcript as visible stutter ('อะไรกก็ตาม',
+# 'ทรมานใจจ', 'ไกลกลไกกล' were all this, measured on a 46s clip).
+#
+# Centre-coincidence catches those without loosening IoU for real words, because
+# it scales with the tokens' own duration: two copies of one 60ms syllable sit
+# ~20ms apart and match, while a *genuinely* repeated character in the same
+# breath ('แบบ', 'รักกับ' — Thai does this constantly) sits a full character
+# duration apart and does not. The cross-chunk guard (ci != pci) still carries
+# the real safety: repetition inside one chunk is never a stitching artifact.
+_COINCIDENT_MS = 60
+_COINCIDENT_DUR_FRAC = 0.6
+
+
+def _coincident(a: RecognizedToken, b: RecognizedToken) -> bool:
+    """True if two same-text tokens occupy essentially the same instant.
+
+    Duration-relative, so it degrades gracefully from zero-length combining
+    marks up to full words rather than needing a per-granularity threshold.
+    """
+    centre_a = (a.start_ms + a.end_ms) / 2
+    centre_b = (b.start_ms + b.end_ms) / 2
+    mean_dur = ((a.end_ms - a.start_ms) + (b.end_ms - b.start_ms)) / 2
+    tol = max(_COINCIDENT_MS, _COINCIDENT_DUR_FRAC * mean_dur)
+    return abs(centre_a - centre_b) <= tol
+
+
 def _interiority(tok: RecognizedToken, chunk_start: int, chunk_end: int) -> int:
     """Distance from a token's centre to the nearest edge of its own chunk.
 
@@ -45,12 +76,23 @@ def _interiority(tok: RecognizedToken, chunk_start: int, chunk_end: int) -> int:
     return min(center - chunk_start, chunk_end - center)
 
 
-def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5) -> list[RecognizedToken]:
+def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5,
+           seam_window_ms: int = 1000) -> list[RecognizedToken]:
     """Merge per-chunk token streams, dropping duplicates in overlap windows.
 
-    Two tokens from *different* chunks that share text and overlap by at least
-    ``iou_threshold`` are the same word seen twice; keep the copy more interior
-    to its own chunk, tie-breaking on confidence then text length.
+    Two tokens from *different* chunks that share text and either overlap by at
+    least ``iou_threshold`` or are centre-coincident (see ``_coincident`` — this
+    is what catches sub-word and zero-length Thai pieces) are the same word seen
+    twice; keep the copy more interior to its own chunk, tie-breaking on
+    confidence then text length.
+
+    A duplicate is searched for among ALL recently-kept tokens whose span ends
+    within ``seam_window_ms`` of the candidate's start — not just the single
+    most recent one — so an A-B-A' pattern (the two copies of the same word
+    separated in the sorted stream by an intervening token from the other
+    chunk) still dedupes. Pass the active chunk overlap (e.g. config
+    ``chunk_overlap_ms``) as ``seam_window_ms`` so the search covers exactly
+    the zone where a word can legitimately appear twice.
     """
     # Flatten, tagging each token with its chunk's identity and span.
     tagged: list[tuple[RecognizedToken, int, int, int]] = []
@@ -63,18 +105,35 @@ def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5) -> list[Recogn
     dropped = 0
     for cand in tagged:
         tok, ci, cs, ce = cand
-        if kept:
-            ptok, pci, pcs, pce = kept[-1]
+        # Scan recently-kept tokens newest-first; stop once a kept token ended
+        # more than seam_window_ms before the candidate starts — anything that
+        # far back can no longer overlap enough to be the same word. (Word
+        # tokens are short, so start-order ≈ end-order within a window.)
+        dup_idx = None
+        for i in range(len(kept) - 1, -1, -1):
+            ptok, pci, pcs, pce = kept[i]
+            if tok.start_ms - ptok.end_ms > seam_window_ms:
+                break
             same_word = tok.text.strip() == ptok.text.strip() and ci != pci
-            if same_word and _iou(tok, ptok) >= iou_threshold:
-                if _prefer(cand, kept[-1]):
-                    kept[-1] = cand
-                dropped += 1
-                continue
+            # Either test is sufficient: IoU for word-length tokens, centre
+            # coincidence for the sub-word/zero-length pieces IoU cannot see.
+            # Purely additive — this can only ever dedupe more, never less.
+            if same_word and (_iou(tok, ptok) >= iou_threshold
+                              or _coincident(tok, ptok)):
+                dup_idx = i
+                break
+        if dup_idx is not None:
+            if _prefer(cand, kept[dup_idx]):
+                kept[dup_idx] = cand
+            dropped += 1
+            continue
         kept.append(cand)
 
     if dropped:
         logger.info("Stitch removed %d duplicate tokens across chunk seams", dropped)
+    # An interior replacement can nudge a kept token's start past its successor's;
+    # re-sort so the output stream stays time-ordered.
+    kept.sort(key=lambda t: (t[0].start_ms, t[0].end_ms))
     return [t[0] for t in kept]
 
 
