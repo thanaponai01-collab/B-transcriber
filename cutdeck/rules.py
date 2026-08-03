@@ -47,6 +47,7 @@ from cutdeck.contracts import (
     KEEP,
     LABEL_KEEP_WORTHY,
     ROUGH_CUT_SEGMENT,
+    SOURCE_LLM,
     SOURCE_RULE,
     CutConfig,
     CutSpan,
@@ -103,11 +104,41 @@ def _silence_overlap(lo: int, hi: int, silences: list[tuple[int, int]]) -> int:
 
 # ── rule 1: silence cuts ──────────────────────────────────────────────────────
 
-def silence_cuts(silences: list[tuple[int, int]], cfg: CutConfig) -> list[_RawCut]:
-    """Silence spans longer than the threshold → cuts shrunk by the padding."""
+def _adaptive_min_silence_ms(silences: list[tuple[int, int]], cfg: CutConfig) -> int:
+    """Percentile-based silence threshold (Phase 5.2).
+
+    Replaces the fixed ``min_silence_ms`` floor with a percentile of the job's
+    own inter-speech gap distribution, linearly interpolated between ranks —
+    floored at ``min_silence_ms`` so the result can only ever be *more*
+    conservative (fewer cuts) than the fixed threshold, never more aggressive.
+    Off (returns ``cfg.min_silence_ms`` unchanged) unless ``adaptive_silence``.
+    """
+    if not cfg.adaptive_silence or not silences:
+        return cfg.min_silence_ms
+    durations = sorted(e - s for s, e in silences)
+    rank = (cfg.silence_percentile / 100) * (len(durations) - 1)
+    lo = int(rank)
+    hi = min(lo + 1, len(durations) - 1)
+    frac = rank - lo
+    pct = durations[lo] + (durations[hi] - durations[lo]) * frac
+    return max(cfg.min_silence_ms, round(pct))
+
+
+def silence_cuts(
+    silences: list[tuple[int, int]],
+    cfg: CutConfig,
+    min_silence_ms: Optional[int] = None,
+) -> list[_RawCut]:
+    """Silence spans longer than the threshold → cuts shrunk by the padding.
+
+    ``min_silence_ms`` overrides ``cfg.min_silence_ms`` when given — used by
+    ``build_cut_spans`` to thread the Phase 5.2 adaptive threshold through
+    without every caller having to know about it.
+    """
+    threshold = cfg.min_silence_ms if min_silence_ms is None else min_silence_ms
     cuts: list[_RawCut] = []
     for s, e in silences:
-        if (e - s) <= cfg.min_silence_ms:
+        if (e - s) <= threshold:
             continue  # short silence is pace, not dead air
         cut_start = s + cfg.pad_post_ms   # leave post-roll on the preceding speech
         cut_end = e - cfg.pad_pre_ms      # leave pre-roll on the following speech
@@ -233,6 +264,86 @@ def _repeat_cuts_in_words(seg_words: list[Word], cfg: CutConfig) -> list[_RawCut
     return cuts
 
 
+# ── rule 1c: token-less speech spans (Phase 5.1) ──────────────────────────────
+
+def nonspeech_cuts(
+    spans: Optional[Iterable[_Span]],
+    tokens: Optional[list],
+    words: list[Word],
+    cfg: CutConfig,
+) -> list[_RawCut]:
+    """VAD-misclassified dead air → cuts.
+
+    VAD marks breaths, lip smacks, coughs and camera noise as *speech*, so
+    they survive the silence pass as kept pace forever — the largest
+    remaining gap between "silence removal" and a real rough cut
+    (HANDOFF_CUTDECK_WORDLEVEL.md 5.1). A speech-classified span with no
+    token midpoint inside it and longer than ``min_nonspeech_ms`` is cut
+    outright, entire, no padding — there is no real content on either edge to
+    protect. Guarded twice: only spans VAD already called ``speech`` are
+    candidates (silence is already rule 1's job), and a span carrying a word
+    from the Phase 1 timeline is never touched even if no phrase-cue token
+    covers it.
+
+    Off unless ``cfg.nonspeech_enabled`` — same discipline as fillers/repeats:
+    a new cutting behaviour ships off until an eval baseline exists.
+    """
+    if not cfg.nonspeech_enabled or not spans:
+        return []
+    cuts: list[_RawCut] = []
+    for s in spans:
+        if getattr(s, "kind", None) != "speech":
+            continue
+        if (s.end_ms - s.start_ms) <= cfg.min_nonspeech_ms:
+            continue
+        probe = CutSpan(0, s.start_ms, s.end_ms, KEEP)
+        if _has_token(tokens, probe):
+            continue
+        if any(s.start_ms <= (w.start_ms + w.end_ms) / 2 < s.end_ms for w in words):
+            continue
+        cuts.append((s.start_ms, s.end_ms, "nonspeech", SOURCE_RULE, BLADE_VAD))
+    return cuts
+
+
+# ── retake marker pre-pass (Phase 6) ──────────────────────────────────────────
+
+def retake_marker_segments(segments: list[Segment], cfg: CutConfig) -> list[int]:
+    """Deterministic explicit-mistake marker detection.
+
+    Whole-phrase substring match of ``cfg.retake_markers`` against each
+    segment's text. Whether a marker phrase is present is never the LLM's
+    call (IMPLEMENT_CUTDECK.md §B.3 ``takes.py``) — only *how far back* the
+    retake it flags reaches is, and that resolution happens in
+    ``cutdeck.takes``, not here.
+    """
+    markers = [m.strip() for m in cfg.retake_markers if m and m.strip()]
+    if not markers or not segments:
+        return []
+    return [seg.id for seg in segments if any(m in seg.text for m in markers)]
+
+
+def label_cuts(labels: list[Label], segments: list[Segment]) -> list[_RawCut]:
+    """Convert Layer-3 CUT labels (``cutdeck.takes.label_takes`` — retake,
+    false-start, explicit-mistake judgements) into raw cut intervals over the
+    labelled segment's own span. These are judgment cuts, not VAD silence, so
+    they carry ``BLADE_WORD`` like filler/repeat cuts — review-UI attention
+    goes to the risky ones. Deliberately takes already-computed ``Label``s
+    rather than importing ``cutdeck.takes`` itself (which imports
+    ``retake_marker_segments`` from this module) — the caller (``plan.py``)
+    glues the two together instead of a circular import.
+    """
+    by_id = {seg.id: seg for seg in segments}
+    cuts: list[_RawCut] = []
+    for label in labels:
+        if label.action != CUT:
+            continue
+        seg = by_id.get(label.segment_id)
+        if seg is None:
+            continue
+        cuts.append((seg.start_ms, seg.end_ms, label.kind, SOURCE_LLM, BLADE_WORD))
+    return cuts
+
+
 # ── rule 1, segment-first variant (Phase 4) ───────────────────────────────────
 
 def label_segments(segments: list[Segment]) -> list[Label]:
@@ -250,7 +361,12 @@ def label_segments(segments: list[Segment]) -> list[Label]:
     ]
 
 
-def _segment_gap_cuts(segments: list[Segment], duration_ms: int, cfg: CutConfig) -> list[_RawCut]:
+def _segment_gap_cuts(
+    segments: list[Segment],
+    duration_ms: int,
+    cfg: CutConfig,
+    min_silence_ms: Optional[int] = None,
+) -> list[_RawCut]:
     """Cuts for the space *between* kept segments (Phase 4 — the segment-first
     rough cut). A kept segment is an utterance by construction; there is
     nothing to merge or dissolve because nothing subtracts an interval out of
@@ -268,17 +384,18 @@ def _segment_gap_cuts(segments: list[Segment], duration_ms: int, cfg: CutConfig)
     if not kept:
         return [(0, duration_ms, "no_speech", SOURCE_RULE, BLADE_VAD)] if duration_ms > 0 else []
 
+    threshold = cfg.min_silence_ms if min_silence_ms is None else min_silence_ms
     cuts: list[_RawCut] = []
 
     lead_gap = kept[0].start_ms
-    if lead_gap > cfg.min_silence_ms:
+    if lead_gap > threshold:
         cut_end = kept[0].start_ms - cfg.pad_pre_ms
         if cut_end > 0:
             cuts.append((0, cut_end, "silence", SOURCE_RULE, BLADE_VAD))
 
     for a, b in zip(kept, kept[1:]):
         gap = b.start_ms - a.end_ms
-        if gap <= cfg.min_silence_ms:
+        if gap <= threshold:
             continue  # short gap is pace, not dead air — segments stay one kept run
         cut_start = a.end_ms + cfg.pad_post_ms
         cut_end = b.start_ms - cfg.pad_pre_ms
@@ -286,7 +403,7 @@ def _segment_gap_cuts(segments: list[Segment], duration_ms: int, cfg: CutConfig)
             cuts.append((cut_start, cut_end, "silence", SOURCE_RULE, BLADE_VAD))
 
     trail_gap = duration_ms - kept[-1].end_ms
-    if trail_gap > cfg.min_silence_ms:
+    if trail_gap > threshold:
         cut_start = kept[-1].end_ms + cfg.pad_post_ms
         if cut_start < duration_ms:
             cuts.append((cut_start, duration_ms, "silence", SOURCE_RULE, BLADE_VAD))
@@ -496,6 +613,7 @@ def build_cut_spans(
     words: Optional[list[Word]] = None,
     segments: Optional[list[Segment]] = None,
     job_id: Optional[int] = None,
+    labels: Optional[list[Label]] = None,
 ) -> list[CutSpan]:
     """Run the full deterministic pass → contiguous keep/cut spans over the media.
 
@@ -513,20 +631,40 @@ def build_cut_spans(
     never a merge/dissolve candidate. Filler and repeat cuts (word-level) apply
     identically in both modes; only the base silence pass differs.
 
-    Pure: same (tokens, spans, duration, cfg, words, segments) → identical output.
+    Two Phase 5 wins apply on top, identically in both modes: token-less
+    "speech" spans (VAD-misclassified dead air, ``nonspeech_cuts``) and, when
+    ``cfg.adaptive_silence`` is on, a percentile-derived silence threshold
+    (``_adaptive_min_silence_ms``) in place of the fixed ``min_silence_ms``
+    floor — both default off, byte-identical output when off.
+
+    ``labels`` (Phase 6, optional): pre-computed ``cutdeck.takes.label_takes``
+    output — retake/false-start/mistake CUT judgements are folded in via
+    ``label_cuts`` exactly like filler/repeat cuts. Building the labels
+    themselves (segmentation + LLM call) is the caller's job (``plan.py``),
+    same reasoning as ``words``/``segments`` above; ``None`` degrades to no
+    judgment cuts, not a crash.
+
+    Pure: same (tokens, spans, duration, cfg, words, segments, labels) →
+    identical output.
     """
     cfg = cfg or CutConfig()
     words = words or []
     segments = segments or []
     silences = _silence_intervals(spans)
-    word_cuts = filler_cuts(words, silences, cfg, job_id) + repeat_cuts(words, segments, cfg)
+    effective_min_silence_ms = _adaptive_min_silence_ms(silences, cfg)
+    word_cuts = (
+        filler_cuts(words, silences, cfg, job_id)
+        + repeat_cuts(words, segments, cfg)
+        + nonspeech_cuts(spans, tokens, words, cfg)
+        + (label_cuts(labels, segments) if labels else [])
+    )
 
     if cfg.rough_cut_mode == ROUGH_CUT_SEGMENT:
-        raw = _segment_gap_cuts(segments, duration_ms, cfg) + word_cuts
+        raw = _segment_gap_cuts(segments, duration_ms, cfg, effective_min_silence_ms) + word_cuts
         merged = _merge_overlaps(raw, duration_ms)
         return _assemble(merged, duration_ms)
 
-    raw = silence_cuts(silences, cfg) + word_cuts
+    raw = silence_cuts(silences, cfg, effective_min_silence_ms) + word_cuts
     merged = _merge_overlaps(raw, duration_ms)
     assembled = _assemble(merged, duration_ms)
     return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens)

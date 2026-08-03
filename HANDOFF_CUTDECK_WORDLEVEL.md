@@ -324,6 +324,64 @@ A kept clip is then an utterance by construction. A sub-`min_clip_ms` keep is a 
 
 ## PHASE 5 — two cheap wins on dead air
 
+**STATUS: DONE and wired (2026-08-04).** Both wins built exactly as specified,
+both config-gated off by default (5.1 got a flag not in the original spec
+text — see note below).
+
+- `cutdeck/rules.py`: new `nonspeech_cuts(spans, tokens, words, cfg)` — for
+  every VAD `speech`-kind span with no token midpoint inside it (`_has_token`,
+  reused as specified) and no Phase 1 word inside it either, longer than
+  `cfg.min_nonspeech_ms` (default 400), emits a whole-span cut
+  (`reason="nonspeech"`, `blade=BLADE_VAD` — the boundary is a VAD speech-span
+  edge, not a word timestamp). Wired into `build_cut_spans` alongside
+  `filler_cuts`/`repeat_cuts` so it applies identically in both
+  `rough_cut_mode`s, feeding the same `_merge_overlaps`/`_assemble` (and, in
+  interval mode, `apply_min_clip_merge`) pipeline as every other cut source.
+  **Correction to this handoff's own spec:** the write-up above didn't list a
+  config flag for 5.1, but building it unconditionally regressed 7 existing
+  tests — `build_cut_spans([], spans, ...)` fixtures with real speech and no
+  tokens (the common shape in `test_cutdeck_phase1.py`/`phase4.py`) got a
+  token-less 3000ms `speech` span cut out from under them. Added
+  `cut.nonspeech_enabled` (default `false`), same discipline as
+  `fillers_enabled`/`repeats_enabled`, consistent with this handoff's own
+  closing line ("every new behaviour ships off") even though the flag list
+  above didn't originally include it.
+- `cutdeck/rules.py`: new `_adaptive_min_silence_ms(silences, cfg)` — when
+  `cfg.adaptive_silence` is on, linearly interpolates the
+  `cfg.silence_percentile`th percentile (default 60) of the job's own
+  inter-speech gap durations, floored at `cfg.min_silence_ms` so it can only
+  ever raise the bar (fewer cuts), never lower it. `silence_cuts()` and
+  `_segment_gap_cuts()` both grew an optional `min_silence_ms` override
+  parameter; `build_cut_spans` computes the effective threshold once from the
+  VAD silence list and threads it into whichever rough-cut-mode pass runs, so
+  both `interval` and `segment` modes see the same adaptive threshold. Off by
+  default — byte-identical output when `adaptive_silence` is `false` (which
+  it is, unconditionally, unless the caller's config sets it).
+- `cutdeck/contracts.py`: `CutConfig.nonspeech_enabled` (false),
+  `min_nonspeech_ms` (400), `adaptive_silence` (false), `silence_percentile`
+  (60) — all read via `from_yaml`. `transcribe/config.yaml`'s `cut:` block
+  grew the matching keys, comments included.
+
+Acceptance tests: `tests/test_cutdeck_phase5.py` (12 new) — nonspeech: off by
+default, cuts a 700ms token-less speech span when enabled, keeps a
+token-covered span, keeps a word-covered span (guard fires even without a
+phrase-cue token), leaves a 200ms span (below threshold), ignores
+`silence`-kind spans, wired into both rough-cut modes end-to-end. Adaptive:
+disabled returns the fixed threshold unchanged, uniform-300ms-gaps adaptive
+cuts ≤ fixed-mode cuts, a bimodal 200ms/800ms gap distribution interpolates a
+threshold strictly between the two modes, flag-off output is byte-identical
+to a config that doesn't mention the flag at all, and the percentile floor
+never drops below `min_silence_ms` even when the percentile itself would be
+lower. Full suite: 280 collected, 279 passed / 1 pre-existing failure
+(`test_sentence_boundary_offsets_finds_the_split`, `pycrfsuite` missing on
+this Python 3.13 shell — present before this change too, unrelated, see
+Phase 1 status above).
+
+**Not done, intentionally:** neither win has an eval baseline yet (both
+require enabling and running the harness on real footage), so both stay off
+in `config.yaml`'s shipped default — same posture as every other Phase 2/4/5
+flag in this handoff.
+
 Both use data already in the DB. No new dependencies.
 
 ### 5.1 Token-less speech spans
@@ -348,12 +406,122 @@ A fixed 250 ms floor ignores that pacing varies within and between takes.
 
 ## PHASE 6 — `cutdeck/takes.py`: repeated takes and restarted sentences
 
-The only module in this handoff needing an LLM, and deliberately last. Spec is already written — `IMPLEMENT_CUTDECK.md` §B.3 `takes.py` — and **is not superseded by this handoff**; build it as written. Notes that changed since it was authored:
+**STATUS: DONE and wired (2026-08-04).** Built as specified in
+`IMPLEMENT_CUTDECK.md` §B.3, off by default per this handoff's own closing
+line and the notes below.
+
+- `cutdeck/rules.py`: new `retake_marker_segments(segments, cfg) -> list[int]`
+  — the deterministic pre-pass. Whole-phrase substring match of
+  `cfg.retake_markers` against each segment's text; whether a marker is
+  present is never the LLM's call, only *how far back* it reaches is. New
+  `label_cuts(labels, segments) -> list[_RawCut]` converts already-computed
+  `Label`s (action=CUT) into raw cut intervals over the labelled segment's
+  span, `blade=BLADE_WORD` like filler/repeat cuts (a judgment cut, not a VAD
+  silence edge). `build_cut_spans` grew an optional `labels` parameter folded
+  into the same `word_cuts` list as filler/repeat/nonspeech — `None` (the
+  default) is byte-identical to pre-Phase-6 output, tested directly.
+- `cutdeck/takes.py` (new): `find_repeat_take_clusters` (char-Jaccard >
+  `cfg.repeat_take_jaccard_threshold`, default 0.55, within a
+  `cfg.retake_window_segments`-wide window, default 5 — non-overlapping
+  clusters), `find_false_start_pairs` (segment < `cfg.false_start_max_ms`,
+  default 2500ms, followed by a longer segment sharing ≥50% of its text as a
+  prefix), `classify_cluster` (the LLM call + select-only validation), and
+  `label_takes` (orchestrator: runs the marker pre-pass + both prefilters,
+  calls `classify_cluster` per cluster, merges into a per-segment `Label`
+  list). `HallucinatedIdError` mirrors `reconcile.ReconcilerViolation`
+  exactly — raised (not asserted, survives `python -O`) when the LLM reply
+  names an id outside the candidate set **or** leaves one uncovered; both
+  paths are tested with a mock LLM. `llm_fn` is injected as plain structured
+  data (`list[{id, text, duration_ms, gap_before_ms}]` in, `list[{id, action,
+  reason}]` out) — no timestamps ever cross into the decision space, checked
+  directly by a payload-capturing test. `label_takes` itself is a no-op (all
+  segments KEEP, `source=SOURCE_RULE`) unless **both** `llm_fn` is supplied
+  **and** `cfg.takes_llm_enabled` is true — including when a marker phrase is
+  present: false-cutting a sentence that merely echoes a retake phrase is
+  worse than missing a real retake (this handoff's prime directive), so the
+  marker pre-pass alone never cuts anything on its own.
+- `cutdeck/contracts.py`: `CutConfig` grew `retake_markers` (`()`),
+  `keep_last_take` (`True`), `takes_llm_enabled` (`False`),
+  `retake_window_segments` (5), `repeat_take_jaccard_threshold` (0.55),
+  `false_start_max_ms` (2500) — all read via `from_yaml`. `retake_markers`
+  and `keep_last_take` were already sitting in `config.yaml`'s `cut:` block
+  (from the original spec's example) but **dead** — nothing consumed them
+  before this phase; confirmed via `grep` before wiring them up. `llm_enabled`
+  under `cut:` was similarly dead config (only `reconciler.llm_enabled` was
+  ever read, a different block) and defaulted `true`, which would have
+  silently activated an unbuilt LLM classifier the moment a caller passed a
+  `llm_fn` — flipped to `false` in `config.yaml` with a comment, matching the
+  off-by-default discipline of every other flag in this handoff.
+- `cutdeck/plan.py`: `propose_for_job` grew an optional `llm_fn` parameter —
+  when given and `cfg.takes_llm_enabled`, computes `label_takes(segments,
+  cfg, llm_fn=llm_fn)` and threads the result into `build_cut_spans(...,
+  labels=...)`. No adapter wiring a real model in exists yet (no
+  `takes_llm.py`, deliberately — see below); this is the seam for one, same
+  split as `reconcile.py` (select-only, provider-agnostic) vs
+  `llm_reconcile.py` (the actual Ollama call). Omitted `llm_fn` (every
+  current caller): identical to pre-Phase-6 behaviour.
+
+**Not built, intentionally:** the Ollama/Anthropic adapter itself
+(`llm_reconcile.py`'s counterpart for `takes.py`) and the `rubric.py`
+few-shot slot the original spec mentions — both require infrastructure this
+handoff never asked for and this repo doesn't have yet (`cutdeck/flywheel/`,
+`cutdeck/eval/`, and the `cut_correction` table are all still unbuilt; §B.4's
+migration was never run). Building a prompt adapter against a `cut_correction`
+table that doesn't exist would be speculative and untestable against real
+data. `classify_cluster`'s `llm_fn` contract is stable and mirrors
+`reconcile.py`/`llm_reconcile.py` closely enough that wiring a real adapter
+in later — once `cutdeck/eval/` exists to gate it on real footage, per this
+handoff's own closing line — is a self-contained follow-up, not a redesign.
+Heed the transcriber's 2026-07-16 LLM-reconciler result (`CLAUDE.md`) when
+that adapter is built: randomize candidate slot order from day one, and gate
+activation on the eval harness, never a spot check.
+
+Acceptance tests: `tests/test_cutdeck_phase6.py` (25 new) — marker pre-pass
+detect/no-config/no-false-positive; Jaccard clustering groups/ignores;
+false-start pair detection incl. below-threshold guard; select-only
+hallucinated-id and missing-id-coverage raises; payload-has-no-timestamps
+check; `label_takes` off-by-default all-keep; marker hit stays KEEP with the
+flag off even when an `llm_fn` that would cut everything is supplied; the
+duplicate-take fixture (3 near-identical segments) keeps exactly the last;
+marker + lookback-window resolution via a mock LLM; false-start pattern
+end-to-end; `label_cuts` conversion; `build_cut_spans(labels=...)` wiring;
+`labels=None` byte-identical to omitted. Full suite: 299 collected, 298
+passed / 1 pre-existing failure (`test_sentence_boundary_offsets_finds_the_split`,
+`pycrfsuite` missing on this Python 3.13 shell — present before this change
+too, unrelated, see Phase 1 status above).
+
+Original spec notes, still accurate:
 
 - The Jaccard>0.55 prefilter operates on **segments**, which after Phase 4 are the real keep/cut atoms — the classifier now slots into a pass that already thinks in segments rather than bolting onto interval arithmetic.
 - Retake markers (`cut.retake_markers`, already in `config.yaml:189`) are a **deterministic pre-pass in `rules.py`**. The LLM only resolves *how far back* the retake reaches. Do not let it decide *whether* a marker is a marker.
 - The select-only discipline is non-negotiable: ids must be a subset of input ids, every id covered, assertion-enforced, no timecodes in the decision space, never rewrites text. Mirror `pipeline/reconcile.py`.
 - **Heed the LLM reconciler result** (`CLAUDE.md`, 2026-07-16): `qwen2.5:3b-instruct` was not good enough to beat a degenerate heuristic on the transcriber's tiebreak task, and positional bias had to be fixed before that was even measurable. Randomize candidate order in the prompt from day one, and gate activation on the eval harness — not on it looking sensible in a spot check.
+
+---
+
+## Post-Phase-6 recheck — every phase, verified against the code as it stands (2026-08-04)
+
+Requested at the end of this run: after Phase 6, re-verify every phase's claims are still true and everything is actually wired, not just individually tested. Method: re-read each phase's shipped module against the current file contents (not memory of writing it), re-run the full suite, and trace the one caller that matters — `plan.propose_for_job` — end to end.
+
+| Phase | Claim | Re-verified how | Result |
+|---|---|---|---|
+| 1 · `words.py` | `words_from_pieces`/`words_for_job` built; `_group_words_into_cues` calls into it | `cutdeck/words.py` present, imported by both `rules.py` and `transcribe/engines/faster_whisper.py` (unchanged this session) | Holds |
+| 2 · fillers/repeats/blade | `filler_cuts`/`repeat_cuts` take `list[Word]`; `CutSpan.blade` round-trips; XML crossfade on word-blade only | Read `rules.py`/`contracts.py`/`xml_export.py` in full this session; `build_cut_spans` still calls both, unconditionally-off via `cfg.fillers_enabled`/`cfg.repeats_enabled` | Holds |
+| 3 · `preview.py` | ffmpeg concat preview, approximate-labelled | `cutdeck/preview.py` present and imported nowhere else (correct — it's a leaf CLI), untouched this session | Holds |
+| 4 · segment-first | `rough_cut_mode` dispatch in `build_cut_spans`; `label_segments`/`_segment_gap_cuts` | Re-read the dispatch (`rules.py` bottom of `build_cut_spans`) — still branches on `ROUGH_CUT_SEGMENT` before falling to the interval path; `label_takes` (new, Phase 6) calls `retake_marker_segments`, not `label_segments` — the two don't collide | Holds |
+| 5 · nonspeech/adaptive | Both wired into `build_cut_spans`, off by default | `word_cuts` still includes `nonspeech_cuts(...)`; `effective_min_silence_ms` still computed once and threaded to both rough-cut modes — untouched by this session's edit to the same function (only appended `+ label_cuts(...)` to the `word_cuts` sum) | Holds |
+| 6 · `takes.py` | This session's work | New: `label_cuts`, `retake_marker_segments`, `cutdeck/takes.py`, `CutConfig` fields, `propose_for_job(llm_fn=...)` | Built and wired (see above) |
+
+**Wiring trace, `propose_for_job` (the one real caller of the whole pass):**
+`segment_tokens` → `words_for_job` → (Phase 6) `label_takes` *iff* `llm_fn` given and `cfg.takes_llm_enabled` → `build_cut_spans(tokens, spans, duration_ms, cfg, words=words, segments=segments, job_id=job_id, labels=labels)` → `build_plan`. Every phase's output feeds the same single call into `build_cut_spans`; nothing added this session bypasses it or creates a second path. Confirmed by reading `cutdeck/plan.py` post-edit in full, not just the diff.
+
+**Regression discipline honored:** `build_cut_spans(labels=None)` (every caller before this session, and every caller that never passes an `llm_fn`) is asserted byte-identical to the pre-Phase-6 call shape — `test_build_cut_spans_labels_none_is_byte_identical_to_omitted` — same pattern Phases 2/4/5 each used for their own new parameter.
+
+**Config sanity-checked, not just read:** `CutConfig.from_yaml(yaml.safe_load(open('transcribe/config.yaml')))` was actually executed this session (not just eyeballed) — confirms `retake_markers` (5 entries), `keep_last_take` (True), `takes_llm_enabled` (False — the flipped default), `retake_window_segments` (5), `repeat_take_jaccard_threshold` (0.55), `false_start_max_ms` (2500) all load without error from the real file, matching the dataclass defaults where the file doesn't override them.
+
+**Full suite, run fresh after all of the above:** `python -m pytest tests/ -q` → **299 collected, 298 passed, 1 pre-existing failure** (`test_sentence_boundary_offsets_finds_the_split`, `pycrfsuite` missing on this Python 3.13 shell — confirmed present before any Phase 1 work via `git stash` at the time, unrelated to CutDeck; every phase's status section above cites the same failure, so it has never varied across six phases of changes).
+
+**What "recheck them all" did *not* re-verify, and why that's a known, already-flagged gap:** none of Phases 2–6 have been watched against real footage or a real Premiere round-trip. That was true before this session (Phase 3's status section already flags "the real Premiere import acceptance" as still open, and every fillers/repeats/nonspeech/adaptive/takes flag ships `false` precisely because there's no eval baseline yet) and remains true now — a green test suite proves the code does what its own tests say, not that the golden set or a human editor would agree. Do not read this recheck as clearing that bar; it was never in scope for it.
 
 **Acceptance:** as specified in §B.3 — hallucinated-id assertion raises with a mock LLM; duplicate-take fixture keeps exactly the last take; eval gate still green.
 
@@ -381,6 +549,7 @@ cut:
   repeat_max_gap_ms: 600
   word_blade_crossfade_ms: 20   # 2.3 — mid-speech splice softening
   rough_cut_mode: interval      # 4 — interval | segment
+  nonspeech_enabled: false      # 5.1 — added during implementation, not in original spec (see Phase 5 status)
   min_nonspeech_ms: 400         # 5.1 — token-less speech span
   adaptive_silence: false       # 5.2
   silence_percentile: 60

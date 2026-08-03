@@ -187,8 +187,16 @@ cut:
   filler_lexicon: [เอ่อ, อ่า, อืม, เอิ่ม, um, uh]
   filler_lexicon_contextual: [แบบ, แบบว่า, ก็คือ, คือว่า, like, you know]
   retake_markers: [เดี๋ยวเอาใหม่, เอาใหม่นะ, ตัดตรงนี้, อันนี้ผิด, เมื่อกี้พูดผิด]
-  llm_enabled: true
+  llm_enabled: false       # HANDOFF_CUTDECK_WORDLEVEL.md Phase 6 (cutdeck/takes.py)
+                             # gates the retake/false-start LLM classifier; the
+                             # deterministic marker pre-pass runs regardless. Off
+                             # until an eval baseline exists, same discipline as
+                             # every other new cut behaviour above (was
+                             # unconsumed dead config before Phase 6 wired it up).
   keep_last_take: true
+  retake_window_segments: 5      # 6 — Jaccard-cluster / marker-lookback window width
+  repeat_take_jaccard_threshold: 0.55  # 6 — char-Jaccard above this = same take
+  false_start_max_ms: 2500        # 6 — false-start candidate must be shorter than this
   repeats_enabled: false    # HANDOFF_CUTDECK_WORDLEVEL.md 2.2 — stutter/duplicate-word removal, off until an eval baseline exists
   repeat_max_ngram: 4
   repeat_max_gap_ms: 600
@@ -197,6 +205,11 @@ cut:
                              # segment builds keeps outward from segments (no min-clip
                              # merge needed) but is unproven on real footage, stays
                              # opt-in until watched via cutdeck/preview.py
+  nonspeech_enabled: false  # 5.1 — off until an eval baseline exists, same discipline as fillers/repeats
+  min_nonspeech_ms: 400     # token-less "speech"-classified span longer than this
+                             # is VAD-misclassified dead air (breath/cough/noise), cut outright
+  adaptive_silence: false   # 5.2 — percentile silence threshold, off until an eval baseline exists
+  silence_percentile: 60
 segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split

@@ -31,6 +31,7 @@ from cutdeck.contracts import (
 )
 from cutdeck.rules import build_cut_spans
 from cutdeck.segment import segment_tokens
+from cutdeck.takes import LlmFn, label_takes
 from cutdeck.words import words_for_job
 
 
@@ -182,8 +183,19 @@ def _timebase_from_media(media) -> Timebase:
                     is_vfr=bool(media.is_vfr))
 
 
-def propose_for_job(conn, job_id: int, cfg: CutConfig) -> CutPlan:
-    """Read a job's tokens + VAD spans + timebase from the store and build a plan."""
+def propose_for_job(
+    conn, job_id: int, cfg: CutConfig, llm_fn: Optional[LlmFn] = None,
+) -> CutPlan:
+    """Read a job's tokens + VAD spans + timebase from the store and build a plan.
+
+    ``llm_fn`` (Phase 6, optional): when given and ``cfg.takes_llm_enabled`` is
+    on, ``cutdeck.takes.label_takes`` classifies retakes/false-starts/explicit
+    mistakes and those CUT judgements are folded into the deterministic pass.
+    No adapter wiring a real model in exists yet (see ``cutdeck/takes.py``'s
+    module docstring) — this parameter is the seam for one, same pattern as
+    ``reconcile.py``'s injected ``llm_fn``. Omitted or the flag off: no
+    judgment cuts, byte-identical to pre-Phase-6 behaviour.
+    """
     from transcribe.db import store
 
     job = store.get_job(conn, job_id)
@@ -208,8 +220,14 @@ def propose_for_job(conn, job_id: int, cfg: CutConfig) -> CutPlan:
 
     segments = segment_tokens(tokens, spans, cfg)
     words = words_for_job(conn, job_id)
+    labels = (
+        label_takes(segments, cfg, llm_fn=llm_fn)
+        if llm_fn is not None and cfg.takes_llm_enabled
+        else None
+    )
     cut_spans = build_cut_spans(tokens, spans, duration_ms, cfg,
-                                words=words, segments=segments, job_id=job_id)
+                                words=words, segments=segments, job_id=job_id,
+                                labels=labels)
     return build_plan(
         job_id=job_id,
         media_sha256=media.sha256,

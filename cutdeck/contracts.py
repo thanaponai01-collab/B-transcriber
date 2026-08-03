@@ -183,6 +183,33 @@ class CutConfig:
     # than being deleted in the same change that introduces the replacement.
     rough_cut_mode: str = ROUGH_CUT_INTERVAL
 
+    # Token-less speech spans (Phase 5.1) — VAD misclassifies breaths, lip
+    # smacks, coughs and camera noise as speech; a "speech" span with no token
+    # inside it longer than this is dead air, not content. Default off, same
+    # discipline as fillers/repeats — needs an eval baseline before it can cut
+    # real footage unattended.
+    nonspeech_enabled: bool = False
+    min_nonspeech_ms: int = 400
+
+    # Adaptive silence threshold (Phase 5.2) — off by default; when on, the
+    # fixed min_silence_ms floor is replaced by a percentile of the job's own
+    # inter-speech gap distribution, floored at min_silence_ms so it can only
+    # ever be more conservative (fewer cuts), never more aggressive.
+    adaptive_silence: bool = False
+    silence_percentile: int = 60
+
+    # Retake/false-start classifier (Phase 6, cutdeck/takes.py) — the only
+    # judgment module. Deterministic marker detection always runs (whether a
+    # phrase is a marker is never the LLM's call); the LLM step that decides
+    # keep/cut on the pre-filtered candidates stays off until an eval
+    # baseline exists, same discipline as every other new behaviour here.
+    retake_markers: tuple[str, ...] = ()
+    keep_last_take: bool = True
+    takes_llm_enabled: bool = False
+    retake_window_segments: int = 5
+    repeat_take_jaccard_threshold: float = 0.55
+    false_start_max_ms: int = 2500
+
     @classmethod
     def from_yaml(cls, cfg: dict) -> "CutConfig":
         cut = (cfg or {}).get("cut", {}) or {}
@@ -204,4 +231,14 @@ class CutConfig:
             repeat_max_gap_ms=int(cut.get("repeat_max_gap_ms", 600)),
             word_blade_crossfade_ms=int(cut.get("word_blade_crossfade_ms", 20)),
             rough_cut_mode=str(cut.get("rough_cut_mode", ROUGH_CUT_INTERVAL)),
+            nonspeech_enabled=bool(cut.get("nonspeech_enabled", False)),
+            min_nonspeech_ms=int(cut.get("min_nonspeech_ms", 400)),
+            adaptive_silence=bool(cut.get("adaptive_silence", False)),
+            silence_percentile=int(cut.get("silence_percentile", 60)),
+            retake_markers=tuple(cut.get("retake_markers", []) or []),
+            keep_last_take=bool(cut.get("keep_last_take", True)),
+            takes_llm_enabled=bool(cut.get("llm_enabled", False)),
+            retake_window_segments=int(cut.get("retake_window_segments", 5)),
+            repeat_take_jaccard_threshold=float(cut.get("repeat_take_jaccard_threshold", 0.55)),
+            false_start_max_ms=int(cut.get("false_start_max_ms", 2500)),
         )
