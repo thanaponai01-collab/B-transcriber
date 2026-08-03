@@ -238,13 +238,23 @@ def test_min_clip_does_not_fire_when_disabled():
 
 
 # ── rules.py: filler removal ──────────────────────────────────────────────────
+#
+# filler_cuts operates on the Phase 1 word timeline (cutdeck/words.py), not
+# phrase-cue tokens — see HANDOFF_CUTDECK_WORDLEVEL.md F1: tokens have been
+# multi-word phrase cues since granularity 5.4 and never `==` a filler. Calling
+# build_cut_spans with only `tokens` (the pre-Phase-2 call shape, no `words=`)
+# is the "old path" and must produce zero filler cuts plus a warning, not a
+# silent false negative — that silence is exactly what hid F1 for two months.
+# Real word-driven filler/repeat/blade acceptance lives in
+# tests/test_cutdeck_phase2.py.
 
-def test_safe_filler_cut_when_enabled():
+def test_filler_old_path_with_tokens_only_cuts_nothing_and_warns(caplog):
     cfg = CutConfig(fillers_enabled=True, filler_lexicon=("uh",), min_clip_ms=0)
     toks = [Tok(0, "hello", 0, 500), Tok(1, "uh", 600, 800), Tok(2, "world", 900, 1400)]
-    out = build_cut_spans(toks, None, 2000, cfg)
-    cuts = [(s.src_in_ms, s.src_out_ms, s.reason) for s in out if s.action == CUT]
-    assert cuts == [(600, 800, "filler")]
+    with caplog.at_level("WARNING"):
+        out = build_cut_spans(toks, None, 2000, cfg)  # no words= — old call shape
+    assert all(s.action == KEEP for s in out)
+    assert any("no word timeline" in r.message for r in caplog.records)
 
 
 def test_filler_off_by_default():
@@ -252,22 +262,6 @@ def test_filler_off_by_default():
     toks = [Tok(0, "uh", 0, 500)]
     out = build_cut_spans(toks, None, 2000, cfg)
     assert all(s.action == KEEP for s in out)
-
-
-def test_contextual_filler_only_cut_when_isolated():
-    cfg = CutConfig(fillers_enabled=True, filler_lexicon=(),
-                    filler_lexicon_contextual=("แบบ",), contextual_isolation_ms=200,
-                    min_clip_ms=0)
-    tok = Tok(0, "แบบ", 1000, 1200)
-
-    # Not isolated (no surrounding silence) → kept.
-    out = build_cut_spans([tok], None, 2000, cfg)
-    assert all(s.action == KEEP for s in out)
-
-    # Isolated by >=200ms silence on both sides → cut.
-    spans = [_silence(800, 1000), _speech(1000, 1200), _silence(1200, 1400)]
-    out = build_cut_spans([tok], spans, 2000, cfg)
-    assert any(s.action == CUT and s.reason == "filler" for s in out)
 
 
 # ── plan.py: invariant + serialization ────────────────────────────────────────

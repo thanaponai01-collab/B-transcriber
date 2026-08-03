@@ -26,7 +26,7 @@ from typing import Optional
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
-from cutdeck.contracts import KEEP, CutPlan, Timebase
+from cutdeck.contracts import BLADE_WORD, CUT, KEEP, CutPlan, Timebase
 from cutdeck.plan import load_plan
 from transcribe.timebase import ms_to_frame
 
@@ -135,9 +135,33 @@ def _link(clipitem: ET.Element, ref_id: str, mediatype: str, trackindex: int,
     ET.SubElement(link, "clipindex").text = str(clipindex)
 
 
+def _crossfade_transition(track: ET.Element, tb: Timebase, join_frame: int, dur_frames: int) -> None:
+    """A short audio-only crossfade transition centered on a word-blade join.
+
+    Word-blade edges (HANDOFF_CUTDECK_WORDLEVEL.md Phase 2.3) land inside
+    continuous speech — a hard splice there is audible in a way a VAD-blade
+    cut isn't, so those edges only get a soft audio crossfade, never video.
+    This is an approximation (no source overlap/trim, since the real Premiere
+    import round-trip is still unverified per TODO_LEDGER) — good enough for
+    the review UI to flag the edge and for a human to tighten by hand.
+    """
+    dur_frames = max(1, dur_frames)
+    ti = ET.SubElement(track, "transitionitem")
+    ET.SubElement(ti, "start").text = str(max(0, join_frame - dur_frames // 2))
+    ET.SubElement(ti, "end").text = str(join_frame + dur_frames // 2)
+    _rate(ti, tb)
+    effect = ET.SubElement(ti, "effect")
+    ET.SubElement(effect, "name").text = "Cross Fade (0dB)"
+    ET.SubElement(effect, "effectid").text = "Cross Fade (0dB)"
+    ET.SubElement(effect, "effectcategory").text = "audiotransition"
+    ET.SubElement(effect, "effecttype").text = "transition"
+    ET.SubElement(effect, "mediatype").text = "audio"
+
+
 def to_xml(plan: CutPlan, media_path: str, plan_id: int,
            sequence_name: Optional[str] = None,
-           frame_size: Optional[tuple[int, int]] = None) -> str:
+           frame_size: Optional[tuple[int, int]] = None,
+           word_blade_crossfade_ms: int = 20) -> str:
     """Render a CutPlan's KEEP spans as an FCP7 XML string.
 
     Raises ValueError on a VFR timebase (GAP-2) or a plan with no keep spans.
@@ -155,6 +179,7 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
     file_id = "file-1"
     total_src_frames = ms_to_frame(plan.duration_ms, tb)
     width, height = frame_size or probe_frame_size(media_path)
+    spans_by_idx = {s.idx: s for s in plan.spans}
 
     # Pre-compute each keep span's source + timeline frame positions.
     clips = []          # (span, src_in, src_out, tl_start, tl_end)
@@ -170,6 +195,15 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
     if not clips:
         raise ValueError("every keep span rounds to zero frames — nothing to export")
     seq_frames = tl
+
+    # Junctions between adjacent exported clips whose omitted cut was a
+    # word-blade — those joins get a crossfade, VAD-blade joins stay hard cuts.
+    crossfade_after: set[int] = set()
+    for i in range(1, len(clips)):
+        cut_before = spans_by_idx.get(clips[i][0].idx - 1)
+        if cut_before is not None and cut_before.action == CUT and cut_before.blade == BLADE_WORD:
+            crossfade_after.add(i - 1)
+    crossfade_frames = max(1, ms_to_frame(word_blade_crossfade_ms, tb))
 
     xmeml = ET.Element("xmeml", version="5")
     seq = ET.SubElement(xmeml, "sequence", id=f"cd{plan.job_id:03d}_p{plan_id:03d}")
@@ -220,6 +254,10 @@ def to_xml(plan: CutPlan, media_path: str, plan_id: int,
         for ch in range(AUDIO_CHANNELS):
             add_clip(atracks[ch], aids[ch], "audio", ch + 1)
 
+        if clip_i in crossfade_after:
+            for ch in range(AUDIO_CHANNELS):
+                _crossfade_transition(atracks[ch], tb, tl_end, crossfade_frames)
+
     body = ET.tostring(xmeml, encoding="unicode")
     return '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n' + body + "\n"
 
@@ -240,6 +278,18 @@ def _conform_vfr_enabled(config_path: Optional[str]) -> bool:
     except Exception:
         return False
     return bool(cfg.get("conform_vfr", False))
+
+
+def _word_blade_crossfade_ms(config_path: Optional[str]) -> int:
+    """Read ``cut.word_blade_crossfade_ms`` from the pipeline config. Defaults
+    to 20ms (CutConfig's default) on a missing/unreadable config."""
+    path = Path(config_path) if config_path else _DEFAULT_CONFIG
+    try:
+        import yaml
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return 20
+    return int((cfg.get("cut", {}) or {}).get("word_blade_crossfade_ms", 20))
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -283,7 +333,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             media_path, plan.timebase = conform_vfr(media.path, plan.timebase)
             print(f"conformed proxy: {media_path}")
 
-        xml = to_xml(plan, media_path, plan_id)
+        xml = to_xml(plan, media_path, plan_id,
+                     word_blade_crossfade_ms=_word_blade_crossfade_ms(args.config))
         if args.out:
             out = Path(args.out)
         else:

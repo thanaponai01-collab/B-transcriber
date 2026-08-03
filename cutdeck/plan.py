@@ -21,6 +21,7 @@ from typing import Optional
 import yaml
 
 from cutdeck.contracts import (
+    BLADE_VAD,
     PLAN_VERSION,
     CutConfig,
     CutPlan,
@@ -30,6 +31,7 @@ from cutdeck.contracts import (
 )
 from cutdeck.rules import build_cut_spans
 from cutdeck.segment import segment_tokens
+from cutdeck.words import words_for_job
 
 
 # ── assembly + validation ─────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ def to_dict(plan: CutPlan) -> dict:
                 "action": s.action,
                 "reason": s.reason,
                 "source": s.source,
+                "blade": s.blade,
                 "segment_ids": list(s.segment_ids),
             }
             for s in plan.spans
@@ -126,6 +129,7 @@ def from_dict(data: dict) -> CutPlan:
             action=s["action"],
             reason=s.get("reason"),
             source=s.get("source"),
+            blade=s.get("blade", BLADE_VAD),
             segment_ids=list(s.get("segment_ids", [])),
         )
         for s in data["spans"]
@@ -203,7 +207,9 @@ def propose_for_job(conn, job_id: int, cfg: CutConfig) -> CutPlan:
         raise ValueError(f"job {job_id} has no timeline (no duration, tokens, or spans)")
 
     segments = segment_tokens(tokens, spans, cfg)
-    cut_spans = build_cut_spans(tokens, spans, duration_ms, cfg)
+    words = words_for_job(conn, job_id)
+    cut_spans = build_cut_spans(tokens, spans, duration_ms, cfg,
+                                words=words, segments=segments, job_id=job_id)
     return build_plan(
         job_id=job_id,
         media_sha256=media.sha256,

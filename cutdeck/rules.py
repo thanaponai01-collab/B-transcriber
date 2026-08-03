@@ -26,15 +26,22 @@ inputs yield a byte-identical plan (determinism is an acceptance criterion).
 
 from __future__ import annotations
 
+import logging
 from typing import Iterable, Optional, Protocol
 
 from cutdeck.contracts import (
+    BLADE_VAD,
+    BLADE_WORD,
     CUT,
     KEEP,
     SOURCE_RULE,
     CutConfig,
     CutSpan,
+    Segment,
 )
+from cutdeck.words import Word
+
+logger = logging.getLogger(__name__)
 
 
 class _Token(Protocol):
@@ -50,8 +57,8 @@ class _Span(Protocol):
     kind: str
 
 
-# A raw cut interval before assembly: (start_ms, end_ms, reason, source).
-_RawCut = tuple[int, int, str, str]
+# A raw cut interval before assembly: (start_ms, end_ms, reason, source, blade).
+_RawCut = tuple[int, int, str, str, str]
 
 
 # ── silence detection helpers ─────────────────────────────────────────────────
@@ -94,38 +101,121 @@ def silence_cuts(silences: list[tuple[int, int]], cfg: CutConfig) -> list[_RawCu
             # Padding consumes the whole silence — nothing left to cut. Guarantees
             # the two kept clips around a cut can never overlap.
             continue
-        cuts.append((cut_start, cut_end, "silence", SOURCE_RULE))
+        cuts.append((cut_start, cut_end, "silence", SOURCE_RULE, BLADE_VAD))
     return cuts
 
 
 # ── rule 2: filler removal ────────────────────────────────────────────────────
 
 def filler_cuts(
-    tokens: list[_Token],
+    words: list[Word],
     silences: list[tuple[int, int]],
     cfg: CutConfig,
+    job_id: Optional[int] = None,
 ) -> list[_RawCut]:
-    """Whole-token filler matches → cuts. Off unless ``fillers_enabled``.
+    """Whole-word filler matches → cuts. Off unless ``fillers_enabled``.
 
-    Always-safe fillers cut unconditionally; contextual fillers only when isolated
-    by silence on both sides (cutting them mid-sentence is how tools mangle Thai).
+    Operates on the Phase 1 word timeline, not phrase-cue tokens — tokens are
+    multi-word phrase cues since granularity 5.4 and will never ``==`` a filler
+    (HANDOFF_CUTDECK_WORDLEVEL.md F1). Always-safe fillers cut unconditionally;
+    contextual fillers only when isolated by silence on both sides (cutting
+    them mid-sentence is how tools mangle Thai).
     """
     if not cfg.fillers_enabled:
+        return []
+    if not words:
+        # Silently doing nothing here is exactly what hid F1 for two months.
+        logger.warning(
+            "job %s: fillers_enabled but no word timeline available "
+            "(words_for_job returned []) — filler cuts skipped", job_id,
+        )
         return []
     safe = {w.strip() for w in cfg.filler_lexicon}
     contextual = {w.strip() for w in cfg.filler_lexicon_contextual}
     iso = cfg.contextual_isolation_ms
 
     cuts: list[_RawCut] = []
-    for t in tokens:
-        word = t.text.strip()
+    for w in words:
+        word = w.text.strip()
         if word in safe:
-            cuts.append((t.start_ms, t.end_ms, "filler", SOURCE_RULE))
+            cuts.append((w.start_ms, w.end_ms, "filler", SOURCE_RULE, BLADE_WORD))
         elif word in contextual:
-            before = _silence_overlap(t.start_ms - iso, t.start_ms, silences)
-            after = _silence_overlap(t.end_ms, t.end_ms + iso, silences)
+            before = _silence_overlap(w.start_ms - iso, w.start_ms, silences)
+            after = _silence_overlap(w.end_ms, w.end_ms + iso, silences)
             if before >= iso and after >= iso:
-                cuts.append((t.start_ms, t.end_ms, "filler", SOURCE_RULE))
+                cuts.append((w.start_ms, w.end_ms, "filler", SOURCE_RULE, BLADE_WORD))
+    return cuts
+
+
+# ── rule 2b: repeated words / stutters ────────────────────────────────────────
+
+_MAI_YAMOK = "ๆ"  # ๆ
+
+
+def _word_seq_text(ws: list[Word]) -> list[str]:
+    return [w.text.strip() for w in ws]
+
+
+def repeat_cuts(
+    words: list[Word],
+    segments: list[Segment],
+    cfg: CutConfig,
+) -> list[_RawCut]:
+    """Stutter / duplicated-word removal. Deterministic, no LLM.
+
+    Detection runs independently per segment — a repeat spanning a segment
+    boundary is a retake (Phase 6's job), not a stutter, and must never be cut
+    here. Keeps the last occurrence of a repeated n-gram, cuts the earlier ones.
+    """
+    if not cfg.repeats_enabled:
+        return []
+    cuts: list[_RawCut] = []
+    for seg in segments:
+        seg_words = [
+            w for w in words
+            if seg.start_ms <= (w.start_ms + w.end_ms) / 2 < seg.end_ms
+        ]
+        cuts.extend(_repeat_cuts_in_words(seg_words, cfg))
+    return cuts
+
+
+def _repeat_cuts_in_words(seg_words: list[Word], cfg: CutConfig) -> list[_RawCut]:
+    cuts: list[_RawCut] = []
+    n_words = len(seg_words)
+    i = 0
+    while i < n_words:
+        matched = False
+        top_n = min(cfg.repeat_max_ngram, (n_words - i) // 2)
+        for n in range(top_n, 0, -1):
+            first = seg_words[i:i + n]
+            if n == 1 and len(first[0].text.strip()) <= 1:
+                continue  # never cut a single-character "repeat" (noise, not a stutter)
+
+            occurrences = [first]
+            k = i + n
+            while k + n <= n_words:
+                cand = seg_words[k:k + n]
+                gap = cand[0].start_ms - occurrences[-1][-1].end_ms
+                if gap > cfg.repeat_max_gap_ms:
+                    break  # too far apart — deliberate emphasis or a real retake
+                if _word_seq_text(cand) != _word_seq_text(first):
+                    break
+                occurrences.append(cand)
+                k += n
+            if len(occurrences) < 2:
+                continue
+
+            after = seg_words[k] if k < n_words else None
+            if after is not None and after.text.strip() == _MAI_YAMOK:
+                continue  # เด็กๆ-style reduplication marker, not a real repeat
+
+            for occ in occurrences[:-1]:
+                cuts.append((occ[0].start_ms, occ[-1].end_ms, "repeat", SOURCE_RULE, BLADE_WORD))
+            i = k
+            matched = True
+            break
+        if not matched:
+            i += 1
     return cuts
 
 
@@ -140,22 +230,29 @@ def _union(a: Optional[str], b: Optional[str]) -> Optional[str]:
     return "+".join(sorted(parts)) if parts else None
 
 
+def _union_blade(a: str, b: str) -> str:
+    """A merged cut is a word-blade if either half is — the splice risk a
+    word-blade edge carries doesn't go away because it overlapped a VAD cut."""
+    return BLADE_WORD if BLADE_WORD in (a, b) else BLADE_VAD
+
+
 def _merge_overlaps(cuts: list[_RawCut], duration_ms: int) -> list[_RawCut]:
     """Clamp to [0, duration], drop empties, merge overlapping/abutting cuts."""
     clamped: list[_RawCut] = []
-    for s, e, reason, source in cuts:
+    for s, e, reason, source, blade in cuts:
         s2, e2 = max(0, s), min(duration_ms, e)
         if e2 > s2:
-            clamped.append((s2, e2, reason, source))
+            clamped.append((s2, e2, reason, source, blade))
     clamped.sort()
 
     merged: list[_RawCut] = []
-    for s, e, reason, source in clamped:
+    for s, e, reason, source, blade in clamped:
         if merged and s <= merged[-1][1]:
-            ps, pe, preason, psource = merged[-1]
-            merged[-1] = (ps, max(pe, e), _union(preason, reason), _union(psource, source))
+            ps, pe, preason, psource, pblade = merged[-1]
+            merged[-1] = (ps, max(pe, e), _union(preason, reason),
+                         _union(psource, source), _union_blade(pblade, blade))
         else:
-            merged.append((s, e, reason, source))
+            merged.append((s, e, reason, source, blade))
     return merged
 
 
@@ -164,10 +261,10 @@ def _assemble(cuts: list[_RawCut], duration_ms: int) -> list[CutSpan]:
     spans: list[CutSpan] = []
     pos = 0
     idx = 0
-    for s, e, reason, source in cuts:
+    for s, e, reason, source, blade in cuts:
         if s > pos:
             spans.append(CutSpan(idx, pos, s, KEEP)); idx += 1
-        spans.append(CutSpan(idx, s, e, CUT, reason=reason, source=source)); idx += 1
+        spans.append(CutSpan(idx, s, e, CUT, reason=reason, source=source, blade=blade)); idx += 1
         pos = e
     if pos < duration_ms or not spans:
         spans.append(CutSpan(idx, pos, duration_ms, KEEP))
@@ -186,12 +283,13 @@ def _coalesce(spans: list[CutSpan]) -> list[CutSpan]:
             if s.action == CUT:
                 prev.reason = _union(prev.reason, s.reason)
                 prev.source = _union(prev.source, s.source)
+                prev.blade = _union_blade(prev.blade, s.blade)
             else:
                 prev.dissolved_ms += s.dissolved_ms
         else:
             out.append(CutSpan(0, s.src_in_ms, s.src_out_ms, s.action,
                                reason=s.reason, source=s.source,
-                               dissolved_ms=s.dissolved_ms))
+                               dissolved_ms=s.dissolved_ms, blade=s.blade))
     for i, s in enumerate(out):
         s.idx = i
     return out
@@ -320,15 +418,28 @@ def build_cut_spans(
     spans: Optional[Iterable[_Span]],
     duration_ms: int,
     cfg: Optional[CutConfig] = None,
+    words: Optional[list[Word]] = None,
+    segments: Optional[list[Segment]] = None,
+    job_id: Optional[int] = None,
 ) -> list[CutSpan]:
     """Run the full deterministic pass → contiguous keep/cut spans over the media.
 
-    Pure: same (tokens, spans, duration, cfg) → identical output.
+    ``words`` (Phase 1 word timeline) and ``segments`` (utterance grouping) are
+    optional and independent of ``tokens``: fillers/repeats need real word spans,
+    not phrase-cue tokens (HANDOFF_CUTDECK_WORDLEVEL.md F1); a caller with no
+    word timeline degrades to no filler/repeat cuts (``filler_cuts`` logs a
+    warning), not a crash.
+
+    Pure: same (tokens, spans, duration, cfg, words, segments) → identical output.
     """
     cfg = cfg or CutConfig()
+    words = words or []
+    segments = segments or []
     silences = _silence_intervals(spans)
 
-    raw = silence_cuts(silences, cfg) + filler_cuts(tokens or [], silences, cfg)
+    raw = (silence_cuts(silences, cfg)
+           + filler_cuts(words, silences, cfg, job_id)
+           + repeat_cuts(words, segments, cfg))
     merged = _merge_overlaps(raw, duration_ms)
     assembled = _assemble(merged, duration_ms)
     return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens)

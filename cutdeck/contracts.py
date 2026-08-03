@@ -42,6 +42,13 @@ LABEL_KEEP_WORTHY = "keep_worthy"
 SOURCE_RULE = "rule"
 SOURCE_LLM = "llm"
 
+# Blade kinds (HANDOFF_CUTDECK_WORDLEVEL.md Phase 2.3) — where a cut boundary
+# came from. VAD-blade edges are trustworthy silence-edge boundaries; word-blade
+# edges land inside continuous speech (filler/repeat cuts) and need the
+# crossfade + review-UI attention a hard VAD cut doesn't.
+BLADE_VAD = "vad"
+BLADE_WORD = "word"
+
 
 @dataclass(frozen=True)
 class Segment:
@@ -89,6 +96,7 @@ class CutSpan:
     action: str                       # KEEP | CUT
     reason: Optional[str] = None      # 'silence', 'filler', 'min_clip_merge', ...
     source: Optional[str] = None      # SOURCE_RULE | SOURCE_LLM
+    blade: str = BLADE_VAD            # BLADE_VAD | BLADE_WORD — where the edge came from
     segment_ids: list[int] = field(default_factory=list)
     # Rules-pass bookkeeping only (not serialized, see plan.to_dict): for a KEEP
     # span, how much dead air apply_min_clip_merge has already re-admitted into
@@ -152,6 +160,15 @@ class CutConfig:
     # instead (see apply_min_clip_merge).
     max_dissolve_ms: int = 4000
 
+    # Stutter/duplicated-word removal (Phase 2.2) — default off until an eval
+    # baseline exists, same discipline as fillers.
+    repeats_enabled: bool = False
+    repeat_max_ngram: int = 4
+    repeat_max_gap_ms: int = 600
+
+    # Blade contract (Phase 2.3) — audio crossfade on mid-speech word-blade cuts.
+    word_blade_crossfade_ms: int = 20
+
     @classmethod
     def from_yaml(cls, cfg: dict) -> "CutConfig":
         cut = (cfg or {}).get("cut", {}) or {}
@@ -168,4 +185,8 @@ class CutConfig:
             contextual_isolation_ms=int(cut.get("contextual_isolation_ms", 200)),
             min_clip_ms=int(cut.get("min_clip_ms", 1200)),
             max_dissolve_ms=int(cut.get("max_dissolve_ms", 4000)),
+            repeats_enabled=bool(cut.get("repeats_enabled", False)),
+            repeat_max_ngram=int(cut.get("repeat_max_ngram", 4)),
+            repeat_max_gap_ms=int(cut.get("repeat_max_gap_ms", 600)),
+            word_blade_crossfade_ms=int(cut.get("word_blade_crossfade_ms", 20)),
         )

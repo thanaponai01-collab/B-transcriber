@@ -590,3 +590,42 @@ Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests
   Phase 3 flywheel artifact); only `cut_plan` exists. The `Label` contract type
   exists but is unused until the LLM classifier (Phase 5) produces judgement
   labels — rules currently emit cut reasons directly on spans.
+
+### HANDOFF_CUTDECK_WORDLEVEL.md (word-level cutting + rough-cut restructure)
+
+Separate phase numbering from the Part B phases above — see the handoff file
+for the full plan (Phases 0–6).
+
+- **Word-timeline Phase 1 — DONE (2026-08-03).** `cutdeck/words.py`: `Word`,
+  `words_from_pieces`, `words_for_job`, `timed_tokens` (char-timeline +
+  `pythainlp.word_tokenize` reconstruction, factored out of
+  `faster_whisper._group_words_into_cues` so there's one implementation).
+  8 tests in `tests/test_cutdeck_words.py`.
+- **Word-level cuts Phase 2 — DONE (2026-08-04).** `rules.filler_cuts` revived
+  on the Word timeline instead of dead phrase-cue-token matching (F1 fixed);
+  new `rules.repeat_cuts` (deterministic stutter/duplicate-word n-gram
+  detector, segment-bounded, no LLM); `CutSpan.blade` (`BLADE_VAD`/
+  `BLADE_WORD`) threaded through the merge/assemble/coalesce pipeline and
+  serialized in the plan JSON; `xml_export.to_xml` emits an audio-only FCP7
+  crossfade transition on word-blade junctions (VAD-blade junctions stay hard
+  cuts). All three gated off by default (`cut.repeats_enabled: false`,
+  `fillers_enabled` already false). 18 new tests in
+  `tests/test_cutdeck_phase2.py`; full suite 248 collected, 247 green (the one
+  failure is the pre-existing `pycrfsuite`-missing gap on this Python 3.13
+  shell, unrelated). **Not yet done:** the XML crossfade is a plausible
+  approximation (no source overlap/trim) pending Phase 3's real Premiere
+  import acceptance — revisit fidelity once that passes.
+- **Preview Phase 3 — DONE (2026-08-04).** `cutdeck/preview.py`: ffmpeg
+  concat-demuxer stream-copy render of a plan's KEEP spans
+  (`python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4`),
+  labelled approximate in both the output filename (`_approx` suffix) and the
+  CLI print unless `--reencode`. `render_preview`/`keep_ranges_ms` are
+  independently importable for future callers (review UI). 7 new tests in
+  `tests/test_cutdeck_preview.py`, run against the real ffmpeg on PATH (a
+  synthetic forced-keyframe `lavfi` clip, not mocked) — GOP-tolerance
+  duration match, cut-shortening, `--reencode` frame accuracy, missing-ffmpeg
+  clear-error, no-keep-spans ValueError. Full suite: 255 collected, 254
+  green / 1 pre-existing unrelated failure (see above). **Still open, per
+  the handoff:** the real Premiere XML import acceptance — Phases 4–6 (
+  segment-first rough cut, dead-air wins, takes.py) stay blocked on it and
+  remain unbuilt.

@@ -220,15 +220,19 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 
 | File | Role |
 |---|---|
-| `contracts.py` | `Segment/Label/CutSpan/CutPlan/CutConfig` + Timebase re-export |
+| `contracts.py` | `Segment/Label/CutSpan/CutPlan/CutConfig` + Timebase re-export; `CutSpan.blade` (`BLADE_VAD`/`BLADE_WORD`) marks whether an edge came from a VAD silence boundary or a word timestamp inside continuous speech |
+| `words.py` | word-timeline reconstruction (`Word`, `words_from_pieces`, `words_for_job`) from raw sub-word ASR pieces — the one implementation shared with `transcribe/engines/faster_whisper.py`'s cue grouping |
 | `segment.py` | gap/VAD utterance segmentation over the token + speech_span timeline |
-| `rules.py` | deterministic silence cuts (padding-shrunk) + config-gated filler removal + min-clip merge |
+| `rules.py` | deterministic silence cuts (padding-shrunk) + min-clip merge, plus word-level `filler_cuts` (on the Phase 1 word timeline, config-gated) and `repeat_cuts` (deterministic stutter/duplicate-word n-gram detector, segment-bounded, config-gated) |
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
-| `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); CLI `python -m cutdeck.xml_export --job-id N` |
+| `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); emits an audio-only crossfade transition on word-blade junctions; CLI `python -m cutdeck.xml_export --job-id N` |
+| `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
 
-Status: Phases 0–2 built and unit-tested; real-Premiere import acceptance on a 29.97
-file still pending. Phase 3 (cut-correction flywheel) and Phase 5 (LLM labels + filler
-excision) not started.
+Status: see `HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
+Phases 0–2 (rough cut, FCP7 export, word-level fillers/stutters/blade contract) and
+Phase 3 (`preview.py` feedback loop) are built and unit-tested; real-Premiere import
+acceptance on a 29.97 file is still pending and blocks Phases 4–6 (segment-first
+rough cut, dead-air wins, `takes.py` LLM retake resolution), which are not started.
 
 ---
 

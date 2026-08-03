@@ -103,6 +103,52 @@ def words_for_job(conn, job_id: int, engine_slot: str = "a") -> list[Word]
 
 ## PHASE 2 — word-level cuts: fillers, stutters, and the blade contract
 
+**STATUS: DONE and wired (2026-08-04).** All three mechanisms built and
+config-gated off by default, per config block below.
+
+- `cutdeck/rules.py`: `filler_cuts(words, silences, cfg, job_id=None)` now
+  takes `list[Word]` (Phase 1 timeline), not phrase-cue tokens. Calling
+  `build_cut_spans(tokens, ...)` without `words=` (the pre-Phase-2 call shape)
+  cuts nothing and logs a WARNING naming the job, instead of silently doing
+  nothing (that silence is what hid F1 for two months). New
+  `repeat_cuts(words, segments, cfg)` — deterministic n-gram (1..
+  `repeat_max_ngram`, default 4) stutter/duplicate-word detector, never
+  crosses a segment boundary, gated on `repeat_max_gap_ms` (default 600),
+  guards single-character units and `ๆ`-suffixed reduplication. Both wired
+  into `build_cut_spans` (grew `words`/`segments`/`job_id` params) and
+  `plan.propose_for_job` (now calls `words_for_job` + `segment_tokens` and
+  passes both through).
+- `cutdeck/contracts.py`: `CutSpan.blade` (`BLADE_VAD` | `BLADE_WORD`),
+  default `BLADE_VAD`. Filler/repeat cuts emit `BLADE_WORD`; silence cuts stay
+  `BLADE_VAD`. Propagated through `_merge_overlaps`/`_assemble`/`_coalesce`
+  (a merge is word-blade if either half was). Serialized in
+  `plan.to_dict`/`from_dict` (old JSON without the key defaults to
+  `BLADE_VAD`). New `CutConfig` fields: `repeats_enabled` (false),
+  `repeat_max_ngram` (4), `repeat_max_gap_ms` (600), `word_blade_crossfade_ms`
+  (20) — all read via `from_yaml`.
+- `cutdeck/xml_export.py`: `to_xml` takes `word_blade_crossfade_ms` (default
+  20ms, read from config in the CLI) and emits an FCP7 `<transitionitem>`
+  audio crossfade (`Cross Fade (0dB)`) on both audio tracks at every junction
+  between two exported keep-clips whose omitted cut had `blade=BLADE_WORD`;
+  VAD-blade junctions stay hard cuts, and the video track never gets a
+  transition. **Caveat, stated in the module docstring on the helper:** this
+  is an approximation — no source overlap/trim is applied (the real Premiere
+  XML round-trip is still unverified, see Phase 3 below), so it's a
+  plausible, testable crossfade marker for review-UI attention, not a
+  Premiere-verified audio crossfade. Revisit once Phase 3's real import
+  acceptance passes.
+
+Acceptance tests: `tests/test_cutdeck_phase2.py` (18 new — filler-on-words,
+old-path-warns, repeat n-gram/gap/segment-boundary/mai-yamok guards,
+determinism, blade round-trip incl. old-JSON default, XML crossfade
+presence/absence). `tests/test_cutdeck_phase1.py`'s old token-driven filler
+tests were updated to assert the new "old path" contract (zero cuts + warning)
+rather than removed, since that behavior is itself now an acceptance
+criterion. Full suite: 248 collected, 247 passed / 1 pre-existing failure
+(`test_sentence_boundary_offsets_finds_the_split`, `pycrfsuite` missing on
+this Python 3.13 shell — present before this change too, unrelated, see
+Phase 1 status above).
+
 Three separate mechanisms. They are not one feature and must not share a code path.
 
 ### 2.1 Revive `filler_cuts()` on the word timeline
@@ -155,17 +201,46 @@ blade: str = BLADE_VAD    # BLADE_VAD | BLADE_WORD
 
 ## PHASE 3 — `cutdeck/preview.py`, the feedback loop
 
-**Do this before Phases 4–5.** Every threshold in this system is currently being tuned blind: `IMPLEMENT_CUTDECK.md` Phase 2's real acceptance (a 29.97 file importing frame-accurate into Premiere) is **still open** per `TODO_LEDGER.md`, so nobody has watched a CutDeck rough cut on real footage. Half a day here makes the rest of the handoff verifiable instead of theoretical.
+**STATUS: DONE and wired (2026-08-04).** `cutdeck/preview.py` built: `keep_ranges_ms(plan)`
+(pure — extracts `(start_ms, end_ms)` for every KEEP span in timeline order) and
+`render_preview(plan, media_path, out_path, reencode=False, ffmpeg_bin="ffmpeg")`, which
+extracts each keep span with `ffmpeg -ss/-to -c copy` into a temp dir, then joins them via
+the concat demuxer (`-f concat -safe 0 -c copy`) — a single `shutil.copy` short-circuit
+when there's only one keep span. `--reencode` swaps `-c copy` for `libx264`/`aac` on the
+per-segment extraction, trading speed for frame-accurate cuts.
 
-**Build:** `cutdeck/preview.py` — ffmpeg concat-demuxer stream-copy render of the plan's KEEP spans, per `IMPLEMENT_CUTDECK.md` §B.3.
+- CLI: `python -m cutdeck.preview --job-id N [--plan-id N] --out preview.mp4 [--reencode] [--ffmpeg-bin ...]`
+  — mirrors `xml_export.py`'s `--plan-id`/`--job-id` store-lookup pattern exactly (same
+  `get_cut_plans_for_job` → `load_plan` → `get_job` → `get_media` chain).
+- Stream copy is keyframe-imprecise. **Labelled approximate in both places**, as specified:
+  the CLI appends `_approx` to the output filename by default (only `--reencode` keeps the
+  name clean) and the final print line says `APPROXIMATE (stream-copy, keyframe-imprecise)`
+  plus a pointer to `xml_export.py` + Premiere for the real frame-accuracy check.
+  `FfmpegNotFoundError` is checked via `shutil.which` **before** any subprocess call, so a
+  missing binary is a one-line `SystemExit` message, never a traceback.
 
-- CLI: `python -m cutdeck.preview --job-id N [--plan-id N] --out preview.mp4`
-- Stream copy is keyframe-imprecise. **Label it approximate in the CLI output and in the filename** — this is a sanity watch, never a frame-accuracy check. Frame accuracy is XML export's job and is verified in Premiere, not here.
-- Offer `--reencode` for an accurate (slow) render when a boundary is genuinely in question.
+Acceptance tests: `tests/test_cutdeck_preview.py` (7 new, all green) — run against the
+**real ffmpeg on PATH** (`/c/ffmpeg/ffmpeg-8.1.1-essentials_build`, confirmed present in
+this shell) rather than mocked, using a synthetic `lavfi testsrc`+`sine` clip with keyframes
+forced every 0.5 s so the GOP tolerance in the acceptance criteria is a real measurement, not
+an assumption:
+- `keep_ranges_ms` extracts only KEEP spans, in order.
+- All-KEEP plan reproduces source duration within one GOP (500 ms here).
+- A plan with a 2 s cut renders a file shorter by 2 s ± one GOP.
+- Missing/bogus `--ffmpeg-bin` raises `FfmpegNotFoundError` with a clear message, no traceback.
+- No-keep-spans plan raises `ValueError`.
+- Single-keep-span plan takes the `shutil.copy` path (no concat) and produces a valid file.
+- `--reencode` lands the same 2 s cut within 100 ms (frame-accurate vs the GOP-bound
+  stream-copy case), proving the two code paths are genuinely different, not just
+  differently labelled.
 
-**Acceptance:** preview of a plan whose spans are all KEEP reproduces the source duration within one GOP; a plan with cuts produces a file shorter than the source by approximately the cut total; missing ffmpeg fails with a clear message, not a traceback.
+Full suite: 255 collected, 254 passed / 1 pre-existing failure (`test_sentence_boundary_offsets_finds_the_split`,
+`pycrfsuite` missing on this Python 3.13 shell — present before this change too, unrelated,
+see Phase 1 status above).
 
-**Also still open, unchanged by this handoff:** the real Premiere import acceptance. Flag it to the user again — Phases 4–6 of the original spec (flywheel, eval gate) stay blocked until it passes.
+**Also still open, unchanged by this handoff:** the real Premiere import acceptance. Flag it
+to the user again — Phases 4–6 of the original spec (flywheel, eval gate) stay blocked until
+it passes. Phase 3 makes the *rough cut* watchable; it does nothing for the XML round-trip.
 
 ---
 
