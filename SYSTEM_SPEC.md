@@ -19,7 +19,7 @@ B-transcriber/
 ├── STYLE_GUIDE.md             # transcription style decisions (gold-authoring policy)
 ├── SYSTEM_SPEC.md             # this document
 ├── TODO_LEDGER.md             # deferred work, each entry with a due-when trigger
-├── BUILD_PLAN.md · HANDOFF_SPEED_AND_ROBUSTNESS.md · IMPLEMENT_*.md   # historical build plans
+├── docs/                       # BUILD_PLAN.md · HANDOFF_*.md · IMPLEMENT_*.md — historical build/handoff docs
 ├── requirements.txt · setup.py
 ├── transcriber.db             # SQLite store (schema in transcribe/db/schema.sql)
 ├── models/whisper-th-medium-ct2/   # CT2-converted Engine A checkpoint (local, untracked)
@@ -228,7 +228,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); emits an audio-only crossfade transition on word-blade junctions; CLI `python -m cutdeck.xml_export --job-id N` |
 | `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
 
-Status: see `HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
+Status: see `docs/HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
 Phases 0–2 (rough cut, FCP7 export, word-level fillers/stutters/blade contract),
 Phase 3 (`preview.py` feedback loop), and Phase 4 (segment-first rough cut,
 opt-in via `cut.rough_cut_mode: segment`) are built and unit-tested;

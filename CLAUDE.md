@@ -76,7 +76,7 @@ candidates below are eval-gated, not environment-blocked.
   final timestamps. Convert the model per the comment in `requirements.txt`.
   `typhoon-whisper-turbo` was tried as a replacement (2026-07) and **reverted**
   — it regressed `cer_thai` to 0.1336 vs 0.1069 on the gold set despite its
-  published benchmark; see IMPLEMENT_IMPROVEMENTS.md Phase 1.
+  published benchmark; see docs/IMPLEMENT_IMPROVEMENTS.md Phase 1.
 - **Engine A alt** (`whisper_thai`): same checkpoint via HF `transformers` — kept
   as a fallback; per-chunk, word-level, much slower on 8 GB VRAM.
 - **Engine B active config: `passthrough`** (null) — single-engine fallback,
@@ -87,7 +87,7 @@ candidates below are eval-gated, not environment-blocked.
   and the 5-clip gold set now scores `switches=104` with a live baseline of
   `BER 0.8592` (hyp emits only 38 switch points, 10 matched) — a huge, real
   code-switch gap that Engine-B / LLM-reconciler A/B probes can finally be
-  judged against. See IMPLEMENT_IMPROVEMENTS.md Phase 2 for history.
+  judged against. See docs/IMPLEMENT_IMPROVEMENTS.md Phase 2 for history.
 - **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter registered, deps import
   fine on this venv. **RETIRED as a Thai candidate (2026-07-16): the model
   itself does not support Thai** — its README documents exactly five languages
