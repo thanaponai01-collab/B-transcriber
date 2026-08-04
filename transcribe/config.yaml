@@ -108,6 +108,14 @@ engines:
     # instead of cut arbitrarily mid-utterance — see _LONG_SPAN_SAFE_S.
     vad_threshold: 0.35
     vad_min_silence_ms: 500
+  # Engine B candidate — not active (engine_b: passthrough above). LLM-decoder
+  # ASR, the code-switch-wall priority candidate per HANDOFF_CEILING_BREAK.md
+  # §6/4.1. Requires `qwen-asr` (see requirements.txt, commented out) — install
+  # before setting engine_b: qwen3_asr and probing with --experiment.
+  qwen3_asr:
+    model_id: Qwen/Qwen3-ASR-1.7B
+    max_inference_batch_size: 8
+    max_new_tokens: 256
 
 # Ingestion
 denoise: true

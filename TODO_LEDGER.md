@@ -3,6 +3,133 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Qwen3-ASR Engine B adapter — BUILT + smoke-verified against real weights, HARNESS PROBE STILL BLOCKED (HANDOFF_CEILING_BREAK §6/4.1) — 2026-08-05
+
+**Built:** `transcribe/engines/qwen3_asr.py` — `Qwen3ASREngine`, registered as
+`"qwen3_asr"` in `engines/registry.py`'s lazy-load table. Wraps the `qwen_asr`
+package's own `Qwen3ASRModel.from_pretrained(...).transcribe(...)` (not the HF
+`transformers` pipeline the other adapters share — Qwen3-ASR ships its own
+inference wrapper; usage confirmed against the live model card,
+huggingface.co/Qwen/Qwen3-ASR-1.7B). `prefers_whole_file = True`.
+`confidence` is always `None` (never faked, same discipline as every other
+adapter). Per the handoff's explicit guidance to take the smaller diff first:
+`timestamps_final=False` — no `Qwen3-ForcedAligner-0.6B` wiring yet, so the
+pipeline's existing forced-alignment pass assigns real ms values; wiring the
+aligner is a separate, later probe. `language_hint` ("th"/"en") maps to the
+full names (`"Thai"`/`"English"`) the API expects; unmapped codes pass
+through verbatim; `None` → auto-detect. Audio: reuses `inp.audio_path`
+directly, or writes a temp WAV when only a decoded array is given (the
+library wants a file path, unlike the HF-pipeline engines which accept raw
+arrays) — temp file always cleaned up in a `finally`. `transcribe_batch`
+batches by calling `transcribe()` once with a list (the library's own
+`max_inference_batch_size`, set at load time, governs internal batching) —
+deliberately does **not** reuse `engines/_batch.py`'s OOM-backoff helper,
+since that helper is coupled to the HF pipeline's per-call `batch_size` kwarg
+and retrying with a smaller external batch_size isn't actionable against
+`qwen_asr`'s internal batching; an OOM here surfaces to the caller as a real
+failure instead.
+
+**Config:** `config.yaml` gained a commented-out-by-default `engines.qwen3_asr`
+block (`model_id: Qwen/Qwen3-ASR-1.7B`, `max_inference_batch_size: 8`,
+`max_new_tokens: 256`); `engine_b` stays `passthrough` — not activated.
+`requirements.txt` gained a commented `qwen-asr>=0.1.0` line (package not
+installed in this session's venv).
+
+**New test file** `tests/test_qwen3_asr.py` (7 tests, mirrors
+`test_phase4_typhoon.py`'s pattern: `qwen_asr` is never imported, the model is
+faked via monkeypatching `eng._model`, so these run on any machine without the
+real dependency) — registration, text→token mapping with `confidence=None`/
+`timestamps_final=False`, empty-text yields no tokens, language-hint mapping,
+batch ordering, empty-batch, unload. Full suite: **329 passed** (was 322 on
+this venv; deselected `test_faster_whisper_cues.py`'s
+`test_sentence_boundary_offsets_finds_the_split` — a pre-existing,
+environment-only failure on Python 3.13 where `pycrfsuite` has no wheel, per
+CLAUDE.md/§8 housekeeping note; not caused by this change and not present on
+the project's real 3.11.9 venv).
+
+**UPDATE 2026-08-05, same day, `qwen-asr` actually installed:** `pip install
+qwen-asr` (0.0.6) succeeded on this machine's system Python 3.13 (no isolated
+project venv exists here). **Side effect to know about:** it pulled in its
+own `transformers`/`huggingface_hub` pins and *downgraded* the shared,
+system-wide install — `transformers` 5.9.0 -> 4.57.6, `huggingface_hub`
+1.16.4 -> 0.36.2 (memory record `env-and-gap5-verified.md` claimed 5.9.0
+verified; that's now stale on this machine). Full suite re-run after the
+downgrade: still 329 passed / 1 pre-existing deselect — no regression from
+the downgrade itself, but it changes what "the venv" means going forward on
+this box; flag if a future session hits a transformers-version-sensitive
+issue elsewhere.
+
+**API corrected against the real package, not just the model card.**
+Introspecting the installed `qwen_asr` (`inspect.signature`/`getsource`)
+turned up two things the model-card example didn't show, and both are now
+built into the adapter:
+1. `Qwen3ASRModel.transcribe(audio=...)` accepts an `(np.ndarray, sample_rate)`
+   tuple directly (or a list of them) — no temp-WAV round-trip needed for
+   pre-decoded audio. The adapter's original temp-file path was replaced;
+   `_audio_arg` now returns the tuple directly, `inp.audio_path` (a string)
+   still passed straight through.
+2. `transcribe()` takes a `context: str` argument — a free-text prompt hint,
+   broadcastable per-item on a batch. The adapter now wires
+   `EngineInput.bias_terms` into it via `flywheel.inject.build_prompt`, the
+   same GAP-5 budget-packing every other engine's bias injection uses. This
+   wasn't in the original build; it's a real capability match, not
+   speculative — confirmed against `Qwen3ASRModel.transcribe`'s actual
+   `inspect.getsource`.
+`tests/test_qwen3_asr.py` grew from 7 to 11 tests covering both (audio-tuple
+shape, path-passthrough, bias-terms-to-context, empty-context default). Full
+suite still green.
+
+**Smoke-verified against real weights on the RTX 3070** (not just the fake
+model in tests): `Qwen3ASRModel.from_pretrained("Qwen/Qwen3-ASR-1.7B", ...)`
+downloads (~3.4GB, cached after) and loads in ~13s warm / ~58s cold,
+**4.08GB VRAM allocated** — comfortably inside the 8GB ceiling as predicted.
+A real `Qwen3ASREngine.transcribe()` call end-to-end (load → transcribe →
+unload) against a 2s synthetic sine-tone clip returned a well-formed
+`EngineResult` (`RecognizedToken(text='คุณ', ..., confidence=None,
+script='thai')`, `raw={'language': 'Thai', ...}`, `timestamps_final=False`)
+and `unload()` freed VRAM back to ~0.009GB. The Thai word on a pure tone is
+expected LLM-ASR hallucination-on-silence, not an adapter defect — it proves
+the plumbing (audio-tuple arg, language-hint mapping, context/bias arg,
+token/EngineResult mapping, VRAM discipline) round-trips correctly against
+the real model; it says nothing about accuracy.
+
+**STILL BLOCKED — the actual harness probe (HANDOFF §4.1 steps a/b, §6
+acceptance criteria).** Ran `harness.py` for real: it printed "no audio for
+<name>.json, skipping" for all 5 gold-set entries and "goldenset is empty —
+No eval_run recorded." **The gold-set `.wav` files are gitignored
+(`transcribe/eval/goldenset/*.wav` etc.) and are not present anywhere in
+this checkout** — `find` across the whole repo turns up zero audio files.
+This blocks *any* harness probe on this machine right now, not something
+specific to Qwen3-ASR (§4's Typhoon/Pathumma probes and §5's DP cue split
+probe, both marked DONE in the handoff, must have been run on a different
+checkout/machine that had the audio — see the handoff's own note that §4 was
+"confirmed via nvidia-smi" on an RTX 4070 Ti, a different box). Next step
+needs either: the gold-set audio copied onto this machine, or this adapter
+handed to whichever machine already has it, before step (a) (`--experiment`
+probe against `eval_run.id=25`) can run. Until then this phase's verdict is
+unmeasured, same as before — "built and smoke-verified" is not "measured."
+
+**2026-08-05, follow-up: asked the user where the audio lives — deferred,
+not resolved.** Offered three options (local path to copy from / audio only
+exists on the RTX 4070 Ti box / files need re-cutting from source media);
+user chose to skip resolving it now and just record what's needed. **So:
+before attempting any harness probe on this machine, settle one of these
+first, next session** —
+1. Get a local path to copy the 5 gold-set audio files
+   (`Short1/2/3`, `Bangkok Festivals_CT6_Short2_D1`,
+   `Bangkok_Festivals_orchestra_sections`) from, and copy them into
+   `transcribe/eval/goldenset/`, matching each `.json`'s basename; **or**
+2. Confirm the RTX 4070 Ti box (the one §4's Typhoon/Pathumma probes ran on)
+   is the only place the audio exists, and run the Qwen3-ASR probe there
+   instead of here; **or**
+3. If the audio was never preserved anywhere, re-cut the gold set from
+   original source media via `tools/make_gold.py` (draft → hand-correct →
+   freeze, or `from-srt` if a hand-recut Premiere SRT exists) — this is the
+   same schedule-critical authoring task HANDOFF_CEILING_BREAK.md §3.2
+   already flags as NOT DONE for growing the gold set to 10-15 minutes, so
+   it may be worth doing both at once.
+Don't assume which of the three applies — ask again if still unclear.
+
 ## DP cue split probe — NOT ACTIVATED, close but regresses cue_BER (HANDOFF_CEILING_BREAK §5/§10.3) — executed 2026-08-04
 
 **Driven by** the handoff's §5 diagnosis: `_group_words_into_cues`'s greedy fill

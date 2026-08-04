@@ -24,6 +24,11 @@ openai-whisper>=20250625
 # CER_thai and WER_latin vs both the passthrough baseline and funasr, with
 # only a marginal BER edge. Don't re-try without new evidence; see TODO_LEDGER.
 # nemo_toolkit[asr]>=2.7.0
+# Engine B candidate (Qwen3-ASR) — LLM-decoder ASR, the code-switch-wall
+# priority candidate per HANDOFF_CEILING_BREAK.md §6/4.1. Not yet probed;
+# kept commented out until an eval run judges it. `qwen-asr` is Qwen's own
+# inference wrapper, not the transformers pipeline other adapters share.
+# qwen-asr>=0.1.0
 
 # Thai NLP
 pythainlp>=5.0.0

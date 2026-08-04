@@ -266,6 +266,40 @@ This is the highest-leverage change for the Premiere recut loop, and Phase 1.1 i
 
 ## 6. PHASE 4 — Engine B that can actually earn its runtime (code-switch wall)
 
+> **STATUS (2026-08-05): §4.1 adapter BUILT + smoke-verified against real
+> weights on GPU. Harness probe still BLOCKED — no gold-set audio on this
+> machine.**
+> `transcribe/engines/qwen3_asr.py` exists, is registered (`"qwen3_asr"` in
+> `engines/registry.py`), config-wired (`config.yaml`'s `engines.qwen3_asr`
+> block, `engine_b` still `passthrough` — not activated), and unit-tested
+> (`tests/test_qwen3_asr.py`, 11 tests, model faked — suite 329 green).
+> `qwen-asr==0.0.6` was installed for real on this machine (system Python
+> 3.13 — no project venv here; this downgraded the shared `transformers`
+> 5.9.0→4.57.6 / `huggingface_hub` 1.16.4→0.36.2, no test regression from
+> that but worth knowing). Introspecting the real package corrected two
+> things vs the model-card example: `transcribe()` takes audio as an
+> `(np.ndarray, sample_rate)` tuple directly (no temp-WAV round-trip needed)
+> and a `context: str` slot the adapter now uses for `bias_terms` via the
+> same GAP-5 `build_prompt` budget-packer every other engine uses.
+> `Qwen3ASRModel.from_pretrained("Qwen/Qwen3-ASR-1.7B", ...)` loads for real
+> on the RTX 3070 (~4.08GB VRAM, well inside the 8GB ceiling) and a full
+> `load()`→`transcribe()`→`unload()` round-trip against synthetic audio
+> returned a correctly-shaped `EngineResult` and freed VRAM cleanly.
+> **What's still blocked: the actual probe ladder.** Running `harness.py`
+> for real printed "no audio for \<name\>.json, skipping" for all 5 gold-set
+> entries — `transcribe/eval/goldenset/*.wav` are gitignored and **not
+> present anywhere in this checkout**. This blocks any harness probe here,
+> not something specific to Qwen3-ASR (§4/§5's DONE probes must have run on
+> a different machine — the handoff itself notes §4 ran on an RTX 4070 Ti,
+> confirmed via `nvidia-smi`, a different box than this RTX 3070 one). Next
+> step needs the gold-set audio on this machine (or this adapter handed to
+> whichever machine has it) before step (a) below can run. **Asked the user
+> where the audio lives (2026-08-05) — deferred, not resolved**; three
+> options recorded for next session (local copy / audio-only-on-other-box /
+> re-cut via `tools/make_gold.py`, tying into §3.2's still-NOT-DONE gold-set
+> growth). Full notes: TODO_LEDGER.md "Qwen3-ASR Engine B adapter"
+> (2026-08-05, all three entries).
+
 Every prior candidate was rejected for cause; the ledger's standing conclusions hold (**do not re-probe** SenseVoiceSmall-funasr, typhoon_rt, or plain whisper_multi without new evidence). The two candidates below are genuinely new:
 
 ### 4.1 Qwen3-ASR adapter (`engines/qwen3_asr.py`) — the priority candidate
