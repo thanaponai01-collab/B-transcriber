@@ -84,6 +84,16 @@ engines:
     # the greedy fill replaced by a cost-minimising split.
     cue_space_min_chars: 12
     cue_space_min_ms: 700
+    # HANDOFF_CEILING_BREAK §5/§10.3: "dp" replaces the greedy fill above with
+    # a cost-minimising subtitle line-break split (candidate breaks = every
+    # pythainlp word boundary, not just Whisper's sporadic spaces; STYLE_GUIDE
+    # §7 vetoes excluded outright; sentence/gap boundaries still hard splits).
+    # Kept behind this flag for one release per the handoff's A/B discipline —
+    # see TODO_LEDGER.md "DP cue split probe" for the harness verdict before
+    # changing this default.
+    cue_split_algorithm: greedy   # greedy (default, unchanged) | dp -- probed 2026-08-04,
+                                  # NOT activated: cue_BER 0.3865 vs 0.3590 baseline (regression).
+                                  # See TODO_LEDGER.md "DP cue split probe" for full numbers.
     bias_prompt_budget: 200
     batch_size: 8                                # BatchedInferencePipeline parallel batch (3.1);
                                                  # auto-halves on CUDA OOM. Raise with int8_float16 headroom.

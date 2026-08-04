@@ -49,7 +49,8 @@ def test_cue_knobs_reach_grouping(monkeypatch):
     _group_words_into_cues — a stored-but-unused kwarg would be dead config.
     **kwargs so adding a knob doesn't silently skip this check."""
     eng = get_engine("faster_whisper", device="cpu", cue_target_chars=10,
-                     cue_space_min_chars=20, cue_space_min_ms=1200)
+                     cue_space_min_chars=20, cue_space_min_ms=1200,
+                     cue_split_algorithm="dp")
 
     captured = {}
 
@@ -68,6 +69,7 @@ def test_cue_knobs_reach_grouping(monkeypatch):
     assert captured["target_chars"] == 10
     assert captured["space_min_chars"] == 20
     assert captured["space_min_ms"] == 1200
+    assert captured["algorithm"] == "dp"
     assert res.tokens and res.tokens[0].text == "สวัสดี"
 
 

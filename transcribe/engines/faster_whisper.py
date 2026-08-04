@@ -95,6 +95,33 @@ _CUE_TARGET_CHARS = 42
 _CUE_SPACE_MIN_CHARS = 12
 _CUE_SPACE_MIN_MS = 700
 
+# HANDOFF_CEILING_BREAK §5: "greedy" is the original fill above, unchanged and
+# still the production default. "dp" is the cost-minimising split
+# (_group_words_into_cues_dp) — probe it via config.yaml's
+# engines.faster_whisper.cue_split_algorithm, gated with --experiment, before
+# ever flipping this default.
+_CUE_SPLIT_ALGORITHM = "greedy"
+
+# DP cost weights (_group_words_into_cues_dp). Initial heuristics, not tuned —
+# same "principled floors, not tuned values" status as the greedy knobs above
+# until the harness has an opinion. Size cost is deliberately asymmetric:
+# quadratic once a cue exceeds target_chars (mirrors the greedy path's hard
+# "close it now" trigger — an oversized cue gets punished hard), but only
+# mildly linear when a cue undershoots (measured 2026-08-04: a symmetric
+# quadratic here made DP prefer merging toward the target from BOTH
+# directions, producing *fewer, longer* cues than the hand-recut references
+# want — cue_boundary_error_rate regressed 0.3590 -> 0.4554 vs the greedy
+# baseline on the first probe. The gold set wants more, shorter cues, i.e.
+# undershoot should be nearly free). A Whisper-emitted space is worth
+# discounting like a ~7-char improvement; overflowing target_ms by a full
+# extra second costs as much as a wildly oversized cue.
+_DP_UNDERSHOOT_WEIGHT = 0.08
+_DP_OVERSHOOT_WEIGHT = 2.0
+_DP_SPACE_DISCOUNT = 50.0
+_DP_OVERFLOW_UNIT_MS = 100
+_DP_OVERFLOW_WEIGHT = 4.0
+_DP_RUNT_PENALTY = 1_000_000.0
+
 _SR = 16000
 
 # Whisper's encoder hard-caps a single decode window at ~30s. A speech run longer
@@ -215,6 +242,34 @@ def _sentence_boundary_offsets(text: str) -> list[int]:
 
 
 def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
+                           target_chars=_CUE_TARGET_CHARS,
+                           space_min_chars=_CUE_SPACE_MIN_CHARS,
+                           space_min_ms=_CUE_SPACE_MIN_MS,
+                           algorithm=_CUE_SPLIT_ALGORITHM):
+    """Group Whisper word-pieces into subtitle-length phrase cues.
+
+    Dispatches to one of two cue-boundary strategies (HANDOFF_CEILING_BREAK
+    §5): the original greedy fill (default, unchanged — see
+    `_group_words_into_cues_greedy`) or the cost-minimising DP split
+    (`algorithm="dp"`, see `_group_words_into_cues_dp`). Kept as separate
+    functions rather than branching deep inside one, so the greedy path stays
+    provably untouched (every pre-existing test below still exercises it
+    byte-for-byte) while the DP path is probed via `--experiment` per the
+    handoff's A/B discipline. `config.yaml`'s `engines.faster_whisper.
+    cue_split_algorithm` is the switch; delete the loser once the harness
+    decides (handoff §5: "keep the greedy path behind a config flag for one
+    release for A/B, then delete").
+    """
+    if algorithm == "dp":
+        return _group_words_into_cues_dp(
+            words, gap_ms=gap_ms, target_ms=target_ms, target_chars=target_chars,
+            min_chars=space_min_chars, min_ms=space_min_ms)
+    return _group_words_into_cues_greedy(
+        words, gap_ms=gap_ms, target_ms=target_ms, target_chars=target_chars,
+        space_min_chars=space_min_chars, space_min_ms=space_min_ms)
+
+
+def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                            target_chars=_CUE_TARGET_CHARS,
                            space_min_chars=_CUE_SPACE_MIN_CHARS,
                            space_min_ms=_CUE_SPACE_MIN_MS):
@@ -359,6 +414,169 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     return cues
 
 
+def _numeral_break_veto(word_text: str) -> bool:
+    """STYLE_GUIDE §7: never split a number from its unit/classifier — a break
+    is illegal immediately after a token that ends in a digit."""
+    stripped = word_text.strip()
+    return bool(stripped) and stripped[-1].isdigit()
+
+
+def _mai_yamok_break_veto(next_word_text: str) -> bool:
+    """STYLE_GUIDE §3/§7: mai yamok (ๆ) must never be orphaned from the word
+    it repeats — a break is illegal immediately before a token starting ๆ."""
+    return next_word_text.lstrip().startswith("ๆ")
+
+
+def _dp_split_segment(timed, real_idx, seg_start, seg_end,
+                       target_ms, target_chars, min_chars, min_ms):
+    """Cost-minimising split of one hard-delimited run of real words (local
+    indices `seg_start:seg_end` into `real_idx`) into cues. Classic subtitle
+    line-breaking DP: candidates are every legal inter-word boundary pythainlp
+    found; dp[c] is the min cost to cover local words [0, c)."""
+    n_words = seg_end - seg_start
+
+    def word_text(p):
+        return timed[real_idx[seg_start + p]][0]
+
+    # Legal candidate breaks (local word index where a new cue may start).
+    # 0 and n_words (segment ends) are always legal; interior points are
+    # vetoed per STYLE_GUIDE §7 rather than costed, i.e. excluded outright —
+    # DP can never choose an illegal break because it is never a candidate.
+    candidates = [0]
+    for c in range(1, n_words):
+        if _numeral_break_veto(word_text(c - 1)) or _mai_yamok_break_veto(word_text(c)):
+            continue
+        candidates.append(c)
+    if n_words not in candidates:
+        candidates.append(n_words)
+
+    def had_whitespace_before(c) -> bool:
+        """A raw whitespace piece sits between local words c-1 and c — Whisper's
+        own breath/clause boundary signal (discounted, not required, unlike
+        the greedy path's hard minima)."""
+        if c <= 0 or c >= n_words:
+            return False
+        return real_idx[seg_start + c] - real_idx[seg_start + c - 1] > 1
+
+    def cue_text(a, c):
+        lo = real_idx[seg_start + a]
+        hi = real_idx[seg_start + c - 1]
+        return "".join(tok[0] for tok in timed[lo:hi + 1]).strip()
+
+    def cue_span(a, c):
+        lo = real_idx[seg_start + a]
+        hi = real_idx[seg_start + c - 1]
+        return len(cue_text(a, c)), timed[lo][1], timed[hi][2]
+
+    dp = {0: 0.0}
+    back = {}
+    for c in candidates:
+        if c == 0:
+            continue
+        best_cost, best_a = float("inf"), None
+        for a in candidates:
+            if a not in dp or a >= c:
+                continue
+            chars, start_ms, end_ms = cue_span(a, c)
+            span_ms = end_ms - start_ms
+            if chars > target_chars:
+                size_cost = ((chars - target_chars) ** 2) * _DP_OVERSHOOT_WEIGHT
+            else:
+                size_cost = (target_chars - chars) * _DP_UNDERSHOOT_WEIGHT
+            overflow_ms = max(0, span_ms - target_ms)
+            overflow_cost = ((overflow_ms // _DP_OVERFLOW_UNIT_MS) ** 2) * _DP_OVERFLOW_WEIGHT
+            viable = (chars >= min_chars and span_ms >= min_ms) or chars >= target_chars
+            runt_cost = 0.0 if viable else _DP_RUNT_PENALTY
+            discount = _DP_SPACE_DISCOUNT if had_whitespace_before(c) else 0.0
+            cost = dp[a] + size_cost + overflow_cost + runt_cost - discount
+            if cost < best_cost:
+                best_cost, best_a = cost, a
+        dp[c] = best_cost
+        back[c] = best_a
+
+    breaks = []
+    c = n_words
+    while c != 0:
+        a = back[c]
+        breaks.append((a, c))
+        c = a
+    breaks.reverse()
+
+    cues: list[tuple[str, int, int, float | None]] = []
+    for a, c in breaks:
+        lo = real_idx[seg_start + a]
+        hi = real_idx[seg_start + c - 1]
+        text = cue_text(a, c)
+        if not text:
+            continue
+        confs = [tok[3] for tok in timed[lo:hi + 1] if tok[3] is not None]
+        conf = sum(confs) / len(confs) if confs else None
+        cues.append((text, timed[lo][1], timed[hi][2], conf))
+    return cues
+
+
+def _group_words_into_cues_dp(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
+                              target_chars=_CUE_TARGET_CHARS,
+                              min_chars=_CUE_SPACE_MIN_CHARS, min_ms=_CUE_SPACE_MIN_MS):
+    """Cost-minimising cue split (HANDOFF_CEILING_BREAK §5): a classic
+    subtitle line-breaking DP over pythainlp's real word boundaries, replacing
+    the greedy fill's "close the instant the character budget is hit,
+    wherever that lands" rule (measured F1-neutral: `_group_words_into_cues_greedy`'s
+    docstring / config.yaml's cue_space_min_* comment).
+
+    Candidate breaks are every inter-word boundary pythainlp's tokenizer
+    found — not just Whisper's sporadic emitted spaces — so the split can
+    land at any real word boundary, not only where the acoustic model
+    happened to leave a gap. Two STYLE_GUIDE §7 vetoes (mai yamok orphaning,
+    numeral split from its classifier) are excluded from the candidate set
+    outright, i.e. infinite cost. Sentence boundaries (crfcut) and real
+    silence gaps (>= gap_ms) stay hard splits — same "a cue must never cross
+    either" invariant as the greedy path — dividing the word stream into
+    independent runs; within each run, DP picks the break set minimising
+    deviation from target_chars/target_ms, penalising overflow past target_ms
+    and cues under min_chars/min_ms (a "runt"), and discounting any point
+    Whisper itself emitted a space.
+
+    Returns list of (text, start_ms, end_ms, confidence), same contract as
+    `_group_words_into_cues_greedy`.
+    """
+    from cutdeck.words import timed_tokens
+
+    full_text, timed = timed_tokens(words)
+    if not full_text:
+        return []
+
+    boundary_offsets = _sentence_boundary_offsets(full_text)
+    real_idx = [k for k, tok in enumerate(timed) if tok[0].strip()]
+    if not real_idx:
+        return []
+
+    # Hard split points: local index p (0..len(real_idx)) BEFORE which a cue
+    # must start fresh, mirroring the greedy path's sentence/gap forcing.
+    hard_splits = {0, len(real_idx)}
+    b_idx = 0
+    for p in range(1, len(real_idx)):
+        k = real_idx[p]
+        char_pos = timed[k][4]
+        crossed = False
+        while b_idx < len(boundary_offsets) and char_pos >= boundary_offsets[b_idx]:
+            crossed = True
+            b_idx += 1
+        if crossed:
+            hard_splits.add(p)
+            continue
+        prev_k = real_idx[p - 1]
+        if timed[k][1] - timed[prev_k][2] >= gap_ms:
+            hard_splits.add(p)
+    hard_splits = sorted(hard_splits)
+
+    cues: list[tuple[str, int, int, float | None]] = []
+    for seg_start, seg_end in zip(hard_splits, hard_splits[1:]):
+        cues.extend(_dp_split_segment(timed, real_idx, seg_start, seg_end,
+                                       target_ms, target_chars, min_chars, min_ms))
+    return cues
+
+
 @register("faster_whisper")
 class FasterWhisperEngine(Engine):
     """Thai-specialist Whisper via CTranslate2."""
@@ -371,6 +589,7 @@ class FasterWhisperEngine(Engine):
                  cue_target_chars: int = _CUE_TARGET_CHARS,
                  cue_space_min_chars: int = _CUE_SPACE_MIN_CHARS,
                  cue_space_min_ms: int = _CUE_SPACE_MIN_MS,
+                 cue_split_algorithm: str = _CUE_SPLIT_ALGORITHM,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500):
         self._model_id = model_id
@@ -384,6 +603,7 @@ class FasterWhisperEngine(Engine):
         self._cue_space_min_ms = cue_space_min_ms
         self._cue_max_ms = cue_max_ms
         self._cue_target_chars = cue_target_chars
+        self._cue_split_algorithm = cue_split_algorithm
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
         # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
@@ -626,7 +846,8 @@ class FasterWhisperEngine(Engine):
                 words, gap_ms=self._cue_gap_ms, target_ms=self._cue_max_ms,
                 target_chars=self._cue_target_chars,
                 space_min_chars=self._cue_space_min_chars,
-                space_min_ms=self._cue_space_min_ms)
+                space_min_ms=self._cue_space_min_ms,
+                algorithm=self._cue_split_algorithm)
         ]
 
         return EngineResult(

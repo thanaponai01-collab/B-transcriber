@@ -3,6 +3,102 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## DP cue split probe — NOT ACTIVATED, close but regresses cue_BER (HANDOFF_CEILING_BREAK §5/§10.3) — executed 2026-08-04
+
+**Driven by** the handoff's §5 diagnosis: `_group_words_into_cues`'s greedy fill
+closes a cue "the instant `n_chars >= cue_target_chars`" and breaks wherever
+that lands, measured F1-neutral against tuning `cue_space_min_*` in isolation
+(2026-07-30 entry below) — "the blocker is the greedy fill itself."
+
+**Built** (`transcribe/engines/faster_whisper.py`): the greedy function was
+renamed to `_group_words_into_cues_greedy` (body byte-for-byte unchanged —
+every pre-existing cue test still exercises it and all still pass) and
+`_group_words_into_cues` now dispatches on a new `algorithm` param, gated by
+a new `cue_split_algorithm: greedy|dp` config knob (`engines.faster_whisper`,
+default `greedy`) threaded through the constructor and `transcribe()` exactly
+like every other 2.3 cue knob. `algorithm="dp"` runs a new
+`_group_words_into_cues_dp`: a classic subtitle line-breaking DP over
+**every pythainlp word boundary** (not just Whisper's sporadic emitted
+spaces, which is all the greedy path's space-break heuristic could see) as
+candidate breaks, with the two STYLE_GUIDE §7 vetoes (mai yamok orphaning,
+numeral split from its classifier) excluded from the candidate set outright
+— an illegal break can never be chosen, not just a costly one. Sentence
+boundaries (crfcut) and real silence gaps (>= `cue_gap_ms`) remain hard
+splits, same "a cue must never cross either" invariant as greedy, dividing
+the word stream into independent runs; within each run, DP minimises a cost
+= deviation from `cue_target_chars` (asymmetric — quadratic once over,
+mildly linear once under, see below) + a quadratic penalty for exceeding
+`cue_max_ms`, discounted wherever Whisper itself emitted a space, with a
+huge penalty for any cue under `cue_space_min_chars`/`cue_space_min_ms` (a
+"runt"). New test file `tests/test_cue_split_dp.py` (13 tests: no-char-loss,
+both §7 vetoes, sentence/gap hard splits still enforced, no runts, default
+algorithm still resolves to byte-identical greedy output, config wiring).
+Suite: **323 passed** (was 310; +13 new, +1 assertion added to
+`test_cue_target_chars_config.py`'s existing wiring test).
+
+**Probed via `harness.py --experiment`** (`cue_split_algorithm: dp` in
+config.yaml, reverted after) against the metrics v3 baseline
+(`eval_run.id=25`/`35` — re-ran the reverted config to confirm it reproduces
+`id=25` exactly, confirming the revert is clean): `cer_thai 0.1415`,
+`wer_latin 1.0452`, `boundary_error_rate 0.8169`, `cue_boundary_error_rate
+0.3590`, `cue_count_delta -20`.
+
+First attempt used a **symmetric** quadratic deviation cost
+((chars-target)²) — this badly regressed cue_BER to **0.4554**
+(`eval_run.id=28`) and worsened `cue_count_delta` to **-41**: a symmetric
+cost makes DP prefer *merging* toward the target from both directions, so it
+produced *fewer, longer* cues than the greedy fill, the opposite of what the
+hand-recut references want. Diagnosed and retuned the cost to be
+**asymmetric** (quadratic once a cue exceeds `cue_target_chars`, only a mild
+linear cost when it undershoots — undershooting should be nearly free, since
+the gold set wants more/shorter cues) and iterated the weights against the
+live harness (`_DP_UNDERSHOOT_WEIGHT`/`_DP_OVERSHOOT_WEIGHT`/
+`_DP_SPACE_DISCOUNT` in `faster_whisper.py`, comments there record the
+reasoning):
+
+| Attempt | `_DP_UNDERSHOOT_WEIGHT` | `_DP_SPACE_DISCOUNT` | `cue_BER` | `cue_count_delta` | `boundary_error_rate` | `eval_run.id` |
+|---|---|---|---|---|---|---|
+| symmetric (first) | n/a | 50 | 0.4554 | -41 | 0.8592 | 28 |
+| asymmetric, v1 | 0.4 | 50 | 0.4170 | -7 | 0.8169 | 29 |
+| asymmetric, v2 | 0.15 | 100 | 0.4137 | -5 | 0.8310 | 30 |
+| asymmetric, v3 | 0.15 | 50 (+ `_DP_OVERSHOOT_WEIGHT=2.0`) | 0.4183 | -3 | 0.8310 | 31 |
+| **asymmetric, best** | **0.08** | **50** | **0.3865** | **-3** | **0.8169** | 32 (reproduced at 34) |
+| asymmetric, v5 (worse) | 0.05 | 70 | 0.4104 | -3 | 0.8310 | 33 |
+
+**Verdict: NOT activated.** The best tuning found (`eval_run.id=32`/`34`,
+`_DP_UNDERSHOOT_WEIGHT=0.08`, `_DP_OVERSHOOT_WEIGHT=2.0`,
+`_DP_SPACE_DISCOUNT=50.0` — these are now the shipped constants, config
+default stays `greedy`) gets close but still **regresses**
+`cue_boundary_error_rate` (0.3865 vs 0.3590 baseline, +0.0275 absolute /
++7.7% relative) — past the harness's regression-tolerance gate
+(`passed=False`). Read honestly: this is not a clean loss. Two of the three
+other signals *improved* over the greedy baseline at this same setting —
+`cue_count_delta` went from -20 to **-3** (DP's cue count is far closer to
+the gold set's), and switch-point matching improved from 10/104 to
+**13/104** matched — while `cer_thai` and `wer_latin` stayed **exactly**
+identical to baseline on every single probe (0.1415/1.0452, bit-for-bit),
+which is the expected and correctly-verified invariant: cue-splitting
+changes only *where* text is cut into cues, never the text itself, so CER/WER
+cannot move. Only the specific cue-F1 metric — which scores exact boundary
+*timestamps* within `boundary_tol_ms`, not just cue count — still comes out
+behind greedy's, suggesting DP is choosing *linguistically defensible but
+differently-positioned* breaks than the specific hand-recut references
+picked, not that it's structurally worse at segmentation. `cue_split_algorithm`
+stays `greedy` in `config.yaml`; production behaviour is byte-identical to
+before this session (confirmed: reverted-config harness run `eval_run.id=35`
+reproduces `id=25` exactly on every gated metric).
+
+**What's still open, same caveat as the §4 Engine A rejections:** this is
+gated on the same 5-clip corpus §1.2 (gold-set growth) already flagged as too
+small to arbitrate margins this fine — a 0.0275 absolute cue_BER gap on 5
+clips is exactly the kind of result §1.2 exists to disambiguate from noise.
+Don't hand-tune the DP weights further without new evidence; re-probe once
+the gold set grows, or try scoring candidate breaks against `cue_BER`
+directly instead of the char/duration proxy (the proxy-vs-actual-metric gap
+is the likely reason count improved while F1 didn't). The DP code path,
+tests, and config flag are all in place and correct — this entry is a
+measured rejection, not unfinished work.
+
 ## Engine A large-v3 swap probes — REJECTED both (HANDOFF_CEILING_BREAK §4/§10.2) — executed 2026-08-04
 
 **Driven by** the handoff's §2 external evidence: the published Typhoon ASR

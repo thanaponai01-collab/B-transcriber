@@ -225,6 +225,34 @@ With the v3 baseline in place:
 
 ## 5. PHASE 3 — Cost-minimizing cue split (the user's actual pain)
 
+> **STATUS (2026-08-04): DONE — built, tested, probed; NOT ACTIVATED.** The DP
+> split is real, correctly wired behind `config.yaml`'s
+> `engines.faster_whisper.cue_split_algorithm` flag (`greedy` default |
+> `dp`), and beats greedy on two of three cue-structure signals — but still
+> regresses the specific `cue_boundary_error_rate` metric this phase exists
+> to win, so it stays off. Full numbers, the tuning sweep, and the honest
+> read on why: TODO_LEDGER.md "DP cue split probe" (2026-08-04). Summary:
+>
+> - Candidate breaks are every pythainlp word boundary (a real upgrade over
+>   greedy, which could only see Whisper's sporadic emitted spaces); the two
+>   STYLE_GUIDE §7 vetoes are excluded from the candidate set outright
+>   (illegal, not just costly); sentence boundaries and real silence gaps
+>   stay hard splits, same invariant as greedy.
+> - Best-tuned probe (`eval_run.id=32`/`34`): `cue_boundary_error_rate
+>   0.3865` vs baseline `0.3590` — a **regression**, `passed=False`.
+>   `cue_count_delta` improved from -20 to **-3** and switch-point matching
+>   from 10/104 to **13/104**; `cer_thai`/`wer_latin` were bit-identical to
+>   baseline on every single probe (correctly verifies cue-splitting can't
+>   move text accuracy — it only changes where the same text gets cut).
+> - **Not activated.** `cue_split_algorithm` stays `greedy` in production
+>   config.yaml; production output is byte-identical to before this session.
+> - **Same caveat as §4's Engine A rejections:** gated on the same 5-clip
+>   corpus §1.2 already flagged as too small for fine margins — the 0.0275
+>   absolute cue_BER gap here is exactly what that gold-set growth would
+>   disambiguate from noise. Don't hand-tune further without new evidence;
+>   re-probe once §1.2 lands, or score candidate breaks against `cue_BER`
+>   directly instead of the char/duration proxy next time (see ledger).
+
 Diagnosed precisely in TODO_LEDGER (2026-07-30): `_group_words_into_cues` closes a cue the instant `n_chars >= cue_target_chars` and breaks at whatever word boundary it stands on — measured splitting subject from verb (`ฉัน | จะรอ`), particle from clause (`นะคะให้ | น้อง`). The space-break signal (3) was built and measured F1-neutral *because* the greedy fill relocates the arbitrary boundary — "the blocker is the greedy fill itself."
 
 **Replace greedy fill with a dynamic-programming split:** over each uninterruptible word run, choose cue boundaries minimizing a cost = deviation from `cue_target_chars` + penalty for breaking inside a `pythainlp` clause (use `sent_tokenize`/token-boundary strength as the linguistic prior; the Whisper-space and gap signals become boundary-cost *discounts* instead of hard triggers) + STYLE_GUIDE §7 vetoes as infinite cost (mai yamok orphaning, numeral+classifier). Classic subtitle line-breaking DP — O(n·k), trivial at cue scale.
@@ -232,6 +260,7 @@ Diagnosed precisely in TODO_LEDGER (2026-07-30): `_group_words_into_cues` closes
 This is the highest-leverage change for the Premiere recut loop, and Phase 1.1 is what makes its win/loss measurable (cue-F1 against the hand recuts). Keep the greedy path behind a config flag for one release for A/B, then delete.
 
 **Acceptance:** cue-F1 improves on ≥2 hand-recut references; no `cer_thai` movement (this phase must not touch text); suite green.
+**Acceptance verdict:** `cer_thai` invariance held exactly (met); suite green (met, 323 passed); cue-F1 did **not** improve (not met — it's the one criterion that decides activation, so the flag stays off). See status block above.
 
 ---
 
@@ -298,7 +327,7 @@ These are decisions, not code (ledger, 2026-07-30):
 
 1. **Metrics v3 + gold-set growth** (§3) — the measurement floor; gold authoring is the schedule-critical human task. **§3.1 DONE 2026-08-04; §3.2 gold-set growth still NOT done — needs the user.**
 2. **Engine A probes: Typhoon Whisper Large-v3, Pathumma Large-v3** (§4 §2) — biggest expected CER win, near-zero code. **DONE 2026-08-04 — both REJECTED, production config unchanged. See §4 status block for numbers and why the verdict is provisional pending §1's gold-set growth.**
-3. **DP cue split** (§5) — the user's real pain, now measurable.
+3. **DP cue split** (§5) — the user's real pain, now measurable. **DONE 2026-08-04 — built, tested, probed; NOT ACTIVATED (regresses `cue_boundary_error_rate` 0.3865 vs 0.3590 baseline on the current 5-clip gold set, though it beats greedy on cue-count and switch-matching). See §5 status block / TODO_LEDGER.md for full numbers and the re-probe conditions.**
 4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall.
 5. **LLM reconciler round 3 (7B, few-shot)** — only after 4 produces a real second hypothesis.
 6. **Policy decisions** (§7) and **housekeeping** (§8) — opportunistic.
