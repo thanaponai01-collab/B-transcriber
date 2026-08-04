@@ -49,6 +49,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "is_experiment", "is_experiment INTEGER NOT NULL DEFAULT 0")
     # metric-definition version — baselines partition by it (pre-column rows = v1)
     _add("eval_run", "metrics_version", "metrics_version INTEGER NOT NULL DEFAULT 1")
+    # cue-structure signals (metrics v3)
+    _add("eval_run", "cue_boundary_error_rate", "cue_boundary_error_rate REAL NOT NULL DEFAULT 0.0")
+    _add("eval_run", "overlapping_cues", "overlapping_cues INTEGER NOT NULL DEFAULT 0")
+    _add("eval_run", "cue_count_delta", "cue_count_delta INTEGER")
+    _add("eval_run", "shortest_cue_ms", "shortest_cue_ms REAL")
+    _add("eval_run", "nonzero_gap_count", "nonzero_gap_count INTEGER")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -177,6 +183,11 @@ class EvalRunRow:
     passed: bool
     is_experiment: bool = False
     metrics_version: int = 1
+    cue_boundary_error_rate: float = 0.0
+    overlapping_cues: int = 0
+    cue_count_delta: Optional[int] = None
+    shortest_cue_ms: Optional[float] = None
+    nonzero_gap_count: Optional[int] = None
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -560,6 +571,11 @@ def create_eval_run(
     bias_hash: Optional[str] = None,
     is_experiment: bool = False,
     metrics_version: Optional[int] = None,
+    cue_boundary_error_rate: float = 0.0,
+    overlapping_cues: int = 0,
+    cue_count_delta: Optional[int] = None,
+    shortest_cue_ms: Optional[float] = None,
+    nonzero_gap_count: Optional[int] = None,
 ) -> int:
     # None → stamp the current metric definitions' version. Lazy import: the
     # semantic owner of the version is eval/metrics.py, and the db layer must
@@ -569,11 +585,14 @@ def create_eval_run(
         metrics_version = METRICS_VERSION
     cur = conn.execute(
         "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
-        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, "
+        "cue_boundary_error_rate, overlapping_cues, cue_count_delta, shortest_cue_ms, "
+        "nonzero_gap_count, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
          kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
-         int(metrics_version), int(passed)),
+         int(metrics_version), float(cue_boundary_error_rate), int(overlapping_cues),
+         cue_count_delta, shortest_cue_ms, nonzero_gap_count, int(passed)),
     )
     conn.commit()
     return cur.lastrowid

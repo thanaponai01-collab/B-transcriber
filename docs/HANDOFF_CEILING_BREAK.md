@@ -1,0 +1,312 @@
+# HANDOFF — B-transcriber: Breaking the Thai Accuracy Ceiling
+
+**For:** Claude Code, working in the B-transcriber repo
+**Hardware:** RTX 3070, 8 GB VRAM. Working venv is **Python 3.11.9** (not 3.13 — see TODO_LEDGER 2026-07-14). Windows host.
+**Prime directive:** Accuracy first. Nothing activates without the eval harness proving it. The reconciler selects, never generates.
+**Discipline:** Read `CLAUDE.md`, `SYSTEM_SPEC.md`, `TODO_LEDGER.md` before touching anything. Every phase ends with the full suite green plus new acceptance tests. Every engine/config probe runs as `--experiment` so it can never become the baseline by accident. Update `TODO_LEDGER.md` as phases complete.
+**Date of audit:** 2026-08-04. External evidence current as of the same date.
+
+---
+
+## 1. Where the ceiling actually is (measured, not guessed)
+
+The live baseline (metrics v2, 5-clip gold set, Engine A = `biodatlab/whisper-th-medium-combined` via CTranslate2, Engine B = passthrough):
+
+| Signal | Baseline | What it means |
+|---|---|---|
+| `cer_thai` | **0.1451** | 1 in 7 Thai characters wrong. On the hand-recut Short4 reference it is 0.0433 — clean-audio shorts are much better than the corpus number. |
+| `wer_latin` | **1.0452** | > 1.0 — the Latin/English stream is effectively *all* wrong or missing. Not degraded: absent. |
+| `boundary_error_rate` | **0.8592** | Engine A emits 38 switch points against 104 in the reference and only 10 match. It finds barely a third of Thai↔English switches. |
+| Segmentation / cue timing | **unmeasured** | On the user's real production loop (pure-Thai shorts, hand-recut in Premiere), `wer_latin` and BER score zero events — 2 of 3 gate metrics are inert, and the thing the human actually fixes (cue boundaries: 31 hand cues vs 22 pipeline cues on Short4) is invisible to the gate. |
+
+So the ceiling has **four independent walls**, in impact order:
+
+1. **Engine A itself is no longer near the open-weights frontier for Thai** (§2, the biggest and cheapest win).
+2. **Code-switching is unsolved** — no active second hypothesis, and every Engine-B candidate tried so far was correctly rejected (§4).
+3. **Segmentation quality is both the user's real pain and unmeasured** — the greedy `cue_target_chars` fill is the diagnosed blocker, and no gate metric sees it (§3, §5).
+4. **The gold set is 5 clips** — every one of the above decisions is gated on a sample too small and too skewed to be trusted for fine margins (§3).
+
+Everything below is organized to knock these walls down in an order where each phase makes the next one measurable.
+
+---
+
+## 2. External evidence: the 2026 Thai ASR landscape vs this repo
+
+The Typhoon ASR Real-time paper (arXiv 2601.13044, SCB10X, Jan 2026) publishes a directly relevant benchmark table (CER, canonical Na-Thalang normalization):
+
+| Model | TVSpeech (hard) | GigaSpeech2 | FLEURS-th (norm.) |
+|---|---|---|---|
+| **Typhoon Whisper Large-v3** (offline) | **6.32%** | **4.69%** | 5.69% |
+| Pathumma-Whisper Large-v3 (NECTEC) | 10.36% | 5.84% | 7.88% |
+| Typhoon ASR Realtime (already tried, rejected) | 9.99% | 6.81% | 9.68% |
+| Gemini 3 Pro | 10.95% | 12.50% | 6.91% |
+| **Biodatlab Whisper Large** | **18.96%** | **13.22%** | 15.26% |
+
+Read that last row carefully: the **large** Thonburian model scores 2–3× the CER of Typhoon/Pathumma Whisper Large-v3 — and this repo runs the Thonburian **medium**. The current Engine A lineage is simply behind the 2026 frontier, on every test set, under neutral normalization. This is not a marginal tuning question; it is the single largest accuracy lever available, and it is nearly free to try:
+
+- **Typhoon Whisper Large-v3** (`scb10x/typhoon-whisper-large-v3`) and **Pathumma-Whisper-th-large-v3** (`nectec/Pathumma-whisper-th-large-v3`) are both plain Whisper large-v3 fine-tunes → both convert with `ct2-transformers-converter` exactly like the current model → both run through the **existing `faster_whisper` adapter with zero code changes** — a CT2 conversion plus a YAML `model_id` edit.
+- VRAM: large-v3 in CT2 `int8_float16` is ~1.6 GB weights; comfortably inside 8 GB even with `BatchedInferencePipeline` (drop `batch_size` to 4–6 for the first run; the OOM auto-halving is already in place).
+- **Do not conflate with the two prior Typhoon rejections.** `typhoon-whisper-turbo` (a distilled turbo) lost the gate in 2026-07 and `typhoon_rt` (FastConformer) lost in 2026-07-16 — *Typhoon Whisper Large-v3 is a different model from both* and has never been probed in this repo.
+
+Other 2026 arrivals that matter (details in §4):
+
+- **Qwen3-ASR-1.7B / -0.6B** (Alibaba, Apache 2.0): open-weights LLM-decoder ASR, **Thai among 30 languages**, language ID, timestamps via the companion `Qwen3-ForcedAligner-0.6B`, transformers + vLLM inference. This is the architecture class (LLM decoder = semantic context) that the 2026 literature says wins code-switching — and the repo's own config comment already names "a Qwen3-ASR adapter" as the next untried Engine-B candidate.
+- **Fun-ASR-MLT-Nano-2512** (FunAudioLLM, ~800M): **Thai genuinely supported** (31 languages — unlike SenseVoiceSmall, whose 5-language card is why `funasr` was retired), **hotword biasing**, timestamps, llama.cpp/GGUF runtime down to ~484 MB, diarization via the FunASR pipeline. This satisfies the ledger's "don't re-probe without a *different underlying model*" clause for the retired `funasr` adapter, and its CPU/GGUF path sidesteps VRAM sequencing entirely.
+- **Generative error correction (GER/GenSEC)** is now a mature literature (Whispering-LLaMA, FlanEC, task-activating prompting; ICASSP 2026 sessions): an LLM rewrites/corrects ASR hypotheses from N-best lists. Note the tension: **this repo's select-only reconciler deliberately forbids generation** as its anti-hallucination guarantee. GER is *not* a license to break that — see §6 for the constrained way in.
+- Cloud engines (Gemini 3 Pro, GPT-4o-transcribe, ElevenLabs Scribe): Gemini 3 Pro loses to local Typhoon Whisper Large-v3 on 2 of 3 Thai benchmarks above, and the repo is deliberately local-only (the Ollama rule). **Not recommended** — the open-weights path is currently *ahead* for Thai, which is unusual and worth exploiting.
+
+---
+
+## 3. PHASE 1 — Make the gate see what matters (do this before any engine swap)
+
+> **STATUS (2026-08-04): §3.1 (metrics v3) DONE. §3.2 (gold-set growth) NOT DONE — needs the user.**
+>
+> **Done, verified, wired end-to-end:**
+> - `transcribe/eval/metrics.py`: `METRICS_VERSION` bumped 2→3. `EvalMetrics` gained
+>   `cue_boundary_error_rate` (F1@`boundary_tol_ms` between ref/hyp cue-start
+>   timestamps — reuses the same match-and-micro-F1 machinery as the existing
+>   switch-point BER, since a token's `start_ms` already **is** a cue boundary at
+>   5.4 granularity; no gold-schema change was needed), `overlapping_cues` (hard
+>   invariant, not a rate), and descriptive-only `cue_count_delta` /
+>   `shortest_cue_ms` / `nonzero_gap_count`.
+> - `transcribe/eval/harness.py`: aggregates all of the above across the gold set
+>   (cue-BER via corpus micro-F1, exactly like switch-point BER); added
+>   `cue_boundary_error_rate` to the regression-tolerance gate alongside
+>   `cer_thai`/`wer_latin`/`boundary_error_rate`; `overlapping_cues > 0` **hard-fails
+>   the run unconditionally**, even on a first run with no baseline to compare
+>   against (this is the "assertion of 0, not a rate" from the spec below).
+> - `transcribe/db/schema.sql` + `store.py`: `eval_run` gained the 5 matching
+>   columns (idempotent `_migrate` ALTERs, so existing DBs upgrade automatically —
+>   but note `run_harness` does **not** call `init_db` on the caller's `db_path`
+>   itself; a pre-existing `transcriber.db` needs one manual
+>   `python -c "from transcribe.db.store import init_db; init_db()"` after this
+>   change lands, same as every prior `eval_run` column addition).
+> - `transcribe/eval/README.md` updated with the new metric + invariants.
+> - New test file `tests/test_metrics_v3.py` (11 tests: cue-F1 matching/mismatch/
+>   tolerance, overlap detection, gap stats, missing-timestamp safety, harness
+>   hard-fail-with-no-baseline, store roundtrip). **Full suite: 310 passed** (was
+>   216 at the 2026-07-30 ledger entry; grew via intervening phases + these 11).
+> - Incidental fixes made in the touched files (both were merge-artifact
+>   duplicates, not new bugs): a duplicated `regressed()` function definition in
+>   `metrics.py`, and a duplicated `shutil.rmtree(scratch_dir, ...)` call in
+>   `harness.py`.
+> - **Fresh v3 baseline recorded** on the existing 5-clip gold set
+>   (`python -m transcribe.eval.harness --config transcribe/config.yaml --db
+>   transcriber.db`, `eval_run.id=25`, `metrics_version=3`, `passed=True`):
+>
+>   | Signal | v3 baseline | Note |
+>   |---|---|---|
+>   | `cer_thai` | 0.1415 | vs 0.1451 in the §1 table — within run-to-run noise (bias index / minor drift since the audit), not a regression signal since this *is* the new baseline |
+>   | `wer_latin` | 1.0452 | matches §1 exactly |
+>   | `boundary_error_rate` | 0.8169 | vs 0.8592 in §1 — same-direction drift as cer_thai |
+>   | `cue_boundary_error_rate` (**new**) | **0.3590** (F1 ≈ 64%) | first-ever measurement of this signal |
+>   | `overlapping_cues` | 0 | hard invariant clean |
+>   | `cue_count_delta` | −20 | hyp emits 20 fewer cues than gold, summed over 5 clips — pipeline under-segments vs the hand-recut references |
+>   | `shortest_cue_ms` / `nonzero_gap_count` | 320.0 / 17 | descriptive, for trend-watching once Phase 3's DP cue split lands |
+>
+>   Acceptance line-by-line: "`wer_latin` and BER both score nonzero events on
+>   ≥3 clips" — **met** (both nonzero on the corpus aggregate; the underlying
+>   5-clip corpus is the same one the §1 numbers were measured on). "cue-F1
+>   scored on ≥2 hand-recut references" — **met**: all 5 existing gold JSONs
+>   carry `start_ms` per token, and per the Premiere-recut-loop workflow
+>   (`tools/make_gold.py from-srt`) these are already hand-authored cue
+>   boundaries, not synthetic ones.
+>
+> **NOT done — the schedule-critical human task, unchanged from the original
+> spec:** growing the gold set to 10–15 minutes across the three strata (§1.2).
+> This needs new source clips (production-style pure-Thai shorts, real
+> Thai-English code-switch material, one noisy/hard clip) that don't exist in
+> this repo — an authoring task, not a code task. Tooling is ready and
+> unchanged: `python -m tools.make_gold from-srt <clip>.srt --audio <clip>.wav`
+> is the fastest path when a hand-recut Premiere SRT already exists, otherwise
+> `draft` → hand-correct `.draft.json` → `freeze` (see `tools/make_gold.py`
+> docstring). Every later phase (§4 Engine A swap, §5 DP cue split, §6 Engine B)
+> is gated on this corpus growing — the current 5-clip baseline above is real
+> and usable, but too small to arbitrate the 1–2% margins those phases will
+> produce.
+>
+> Housekeeping (§8) was explicitly out of scope for this pass and is
+> untouched — the CLAUDE.md merge-conflict marker, duplicate `make_gold.py`,
+> and stale `transcribe.db` still need their own pass.
+
+
+
+An engine swap judged by the current gate could wreck cue timing on pure-Thai production content and pass clean (ledger, 2026-07-30: "two of three gate signals were inert, and segmentation error 0.31 is invisible"). Fix the measurement floor first.
+
+### 1.1 Cue-structure metrics → metrics v3 (`transcribe/eval/metrics.py`)
+Already specified as open in TODO_LEDGER. Add to `compute_metrics`:
+- **Cue-boundary F1 @300 ms** against gold cue starts (the Short4 work already computed this ad hoc: 0.717/0.691 — promote it to a first-class metric).
+- **Overlapping-cue count as a hard assertion of 0** (not a rate — one overlap is a shipped bug).
+- Optional descriptive stats (cue count delta vs gold, shortest-cue ms, non-zero-gap count) recorded on the run for trend-watching, not gated.
+- **Bump `METRICS_VERSION` to 3** — baseline partitioning already handles the fresh start.
+
+Gold cue boundaries need to exist: extend the gold JSON schema with optional cue-start times, sourced from the hand-recut Premiere SRTs the user already produces (the `srt_io.parse_srt` + `align_srt` machinery from the flywheel path parses them today).
+
+### 1.2 Grow the gold set with intent (human-in-the-loop, tooling exists)
+5 clips cannot arbitrate 1–2% CER margins nor represent the production mix. Target **10–15 minutes** across three deliberate strata:
+1. **Production-style pure-Thai shorts** (what the user actually ships) — with hand-recut cue boundaries, feeding 1.1.
+2. **Real Thai-English code-switch material** (tech/business creator speech: "ผมอยากจะ share screen ให้ดู") — this is what un-blinds `wer_latin` and keeps BER honest.
+3. **One noisy/hard clip** (the TVSpeech lesson: hard-condition rankings differ from clean rankings).
+
+Tooling: `tools/make_gold.py` draft→freeze already works end-to-end; the hand-recut-SRT ingestion path exists. This is authoring hours, not code. **Every phase below is gated on this set, so it is the schedule-critical item.**
+
+**Acceptance for Phase 1:** metrics v3 live with tests; fresh v3 baseline recorded on the grown gold set; `wer_latin` and BER both score nonzero events on ≥3 clips; cue-F1 scored on ≥2 hand-recut references.
+
+---
+
+## 4. PHASE 2 — Engine A swap probes (the biggest single win)
+
+> **STATUS (2026-08-04): DONE — both candidates REJECTED, production config
+> unchanged.** Executed ahead of §1.2's gold-set growth (the suggested order
+> in §10 gates this phase on that human task, but the probe itself is a
+> mechanical YAML+harness exercise that doesn't require it — see the note at
+> the end of this section on why the verdict should still be treated as
+> provisional). Full numbers in TODO_LEDGER.md ("Engine A large-v3 swap
+> probes"); summary:
+>
+> - **Repo-ID correction:** `scb10x/typhoon-whisper-large-v3` (as written
+>   below) does not exist on the Hub. The real repo is
+>   `typhoon-ai/typhoon-whisper-large-v3`. `nectec/Pathumma-whisper-th-large-v3`
+>   was correct.
+> - Both converted to CT2 (`int8_float16`) with zero adapter code, as
+>   predicted. Pathumma's repo lacks `tokenizer.json` — generated one via
+>   `transformers.WhisperTokenizerFast` before probing (see ledger for why:
+>   `faster_whisper` silently falls back to the wrong-vocab `whisper-tiny`
+>   tokenizer otherwise).
+> - **Typhoon Whisper Large-v3** (`eval_run.id=26`) vs baseline
+>   (`eval_run.id=25`, `cer_thai 0.1415`, `boundary_error_rate 0.8169`,
+>   `cue_boundary_error_rate 0.3590`): `cer_thai 0.1731`, `boundary_error_rate
+>   1.0000` (0 of 104 reference switch points matched — total failure on
+>   code-switching on this gold set), `cue_boundary_error_rate 0.5926`. Worse
+>   on every gated signal.
+> - **Pathumma Whisper Large-v3** (`eval_run.id=27`): `cer_thai 0.1464`
+>   (inside the regression-tolerance abs floor — not itself disqualifying),
+>   `boundary_error_rate 0.8615`, `cue_boundary_error_rate 0.5741`. BER and
+>   cue-BER regress past the gate; harness verdict `passed=False`.
+> - **Production config.yaml: unchanged** (`engine_a: faster_whisper`,
+>   `models/whisper-th-medium-ct2`). Both CT2 conversions kept on disk
+>   (`models/typhoon-whisper-large-v3-ct2`,
+>   `models/pathumma-whisper-th-large-v3-ct2`) for a cheap re-probe once §1.2
+>   lands — no need to re-download.
+>
+> **Why this is a real result but not yet the final word:** this is now the
+> *second and third* time a published-SOTA Whisper large-v3 lineage model has
+> lost to the in-repo th-medium baseline on this specific 5-clip corpus
+> (`typhoon-whisper-turbo` was the first, 2026-07). §7's normalization-policy
+> divergence (this repo's mai-yamok/colloquial choices vs the Na-Thalang
+> convention these models were likely evaluated under upstream) is the prime
+> suspect for why published 2–3× headroom doesn't reproduce — but that's
+> unverified against a corpus of 5 clips. Treat "th-medium wins" as the
+> current best-evidence answer, not a closed question; re-run this phase once
+> §1.2's grown gold set exists, and consider auditing §7's mai-yamok policy
+> against what these models actually emit before re-probing.
+>
+> **Hardware note:** this probe actually ran on an RTX 4070 Ti, 12 GB
+> (confirmed via `nvidia-smi`) — this repo isn't tied to one machine, so
+> "RTX 3070, 8 GB" in CLAUDE.md/this doc should stay read as the conservative
+> floor to design and gate against, not a literal spec of whichever box runs
+> a given session. Doesn't change any conclusion above since the CT2
+> int8_float16 models fit comfortably within the 8 GB floor anyway.
+
+With the v3 baseline in place:
+
+1. Convert both candidates to CT2 (same command as the comment in `requirements.txt`):
+   - `models/typhoon-whisper-large-v3-ct2` from `scb10x/typhoon-whisper-large-v3`
+   - `models/pathumma-whisper-th-large-v3-ct2` from `nectec/Pathumma-whisper-th-large-v3`
+2. Probe each via YAML only (`engines.faster_whisper.model_id`, `compute_type: int8_float16`, `batch_size: 4`), harness with `--experiment`.
+3. Judge on **all** signals — `cer_thai` is the headline, but 1.1's cue metrics are exactly the regression risk of a new model's word-timestamp behavior (`_group_words_into_cues` consumes raw word timings; a large-v3 fine-tune may time sub-word pieces differently than th-medium).
+4. Winner (if any beats the gate) becomes the production baseline; keep th-medium-ct2 on disk as the fallback, mirroring the turbo precedent.
+
+**Expected outcome, stated honestly:** the published table says 2–3× CER headroom over the Biodatlab *large*; the repo runs the *medium*, so the gap should be at least that — but published benchmarks use Na-Thalang normalization and clean test sets, and `typhoon-whisper-turbo`'s published numbers also failed to reproduce here (CER 0.1336 vs 0.1069 — reverted). That precedent is exactly why this is a gated probe and not a recommendation to swap blind. If *both* large-v3 fine-tunes lose to th-medium on the grown gold set, that is a major finding about the gold set's domain (record it; suspect the mai-yamok/colloquial policy divergence of §7 first).
+
+**Also in this phase — speed guardrail:** large-v3 is ~3× the compute of medium. Record RTF alongside; the standing target from the speed handoff (≥3× realtime on the 3070) still applies. `int8_float16` is the expected mitigation.
+
+---
+
+## 5. PHASE 3 — Cost-minimizing cue split (the user's actual pain)
+
+Diagnosed precisely in TODO_LEDGER (2026-07-30): `_group_words_into_cues` closes a cue the instant `n_chars >= cue_target_chars` and breaks at whatever word boundary it stands on — measured splitting subject from verb (`ฉัน | จะรอ`), particle from clause (`นะคะให้ | น้อง`). The space-break signal (3) was built and measured F1-neutral *because* the greedy fill relocates the arbitrary boundary — "the blocker is the greedy fill itself."
+
+**Replace greedy fill with a dynamic-programming split:** over each uninterruptible word run, choose cue boundaries minimizing a cost = deviation from `cue_target_chars` + penalty for breaking inside a `pythainlp` clause (use `sent_tokenize`/token-boundary strength as the linguistic prior; the Whisper-space and gap signals become boundary-cost *discounts* instead of hard triggers) + STYLE_GUIDE §7 vetoes as infinite cost (mai yamok orphaning, numeral+classifier). Classic subtitle line-breaking DP — O(n·k), trivial at cue scale.
+
+This is the highest-leverage change for the Premiere recut loop, and Phase 1.1 is what makes its win/loss measurable (cue-F1 against the hand recuts). Keep the greedy path behind a config flag for one release for A/B, then delete.
+
+**Acceptance:** cue-F1 improves on ≥2 hand-recut references; no `cer_thai` movement (this phase must not touch text); suite green.
+
+---
+
+## 6. PHASE 4 — Engine B that can actually earn its runtime (code-switch wall)
+
+Every prior candidate was rejected for cause; the ledger's standing conclusions hold (**do not re-probe** SenseVoiceSmall-funasr, typhoon_rt, or plain whisper_multi without new evidence). The two candidates below are genuinely new:
+
+### 4.1 Qwen3-ASR adapter (`engines/qwen3_asr.py`) — the priority candidate
+- **Why it's different in kind:** LLM-decoder ASR — the decoder *is* a language model, so intra-sentential Thai↔English switching is a semantic prediction, not an acoustic-only guess. This targets exactly the two dead metrics (`wer_latin` 1.0452, BER 0.8592). Fully open (Apache 2.0), local, 1.7B → fits the 8 GB budget sequentially under the existing load→run→unload discipline.
+- Adapter contract notes: `prefers_whole_file` per its long-audio behavior (the official toolkit chunks long audio — mirror that inside the adapter); timestamps via `Qwen3-ForcedAligner-0.6B` **or** return `timestamps_final=False` and let the existing forced-align path do it (start with the latter — smaller diff); `confidence=None` (never fake it); Thai language hint honored.
+- Probe ladder, each step `--experiment` gated: (a) Engine B alone behind the reconciler; (b) if BER/`wer_latin` improve but `cer_thai` dilutes (the whisper_multi failure mode — unmatched solo-B slots), consider a **script-scoped merge policy**: B's candidates only enter slots whose audio region the reconciler judges Latin/mixed (this is select-only-compatible — it narrows *which* slots B may win, generates nothing).
+- **Stretch (measure before believing):** Qwen3-ASR-1.7B might beat the Whisper fine-tunes as *Engine A* outright. Only entertain after (a) is measured.
+
+### 4.2 Fun-ASR-MLT-Nano-2512 — the cheap decorrelated fallback
+Different underlying model from the retired SenseVoiceSmall (the retirement clause is satisfied). Two distinct attractions: **hotword biasing** (the bias index could inject into Engine B, which Whisper-prompt biasing can't reach today) and the **GGUF/CPU runtime** (an Engine B with zero VRAM contention — could even run concurrently with Engine A, though keep sequential first for simplicity). Probe only if 4.1 disappoints or as the third hypothesis later.
+
+### 4.3 LLM reconciler, next round (only after a real Engine B exists)
+The wiring, prompt framing, and positional-bias fix are **done — do not revisit**. The open question is model quality. In order: `qwen2.5:7b-instruct` (already named in the code's own docstrings), then few-shot examples + surrounding-token context in the prompt. Also still open from the ledger: `_script_fallback` needs a tiebreak *within* the fallback for null-confidence engines (length/completeness heuristic) — Qwen3-ASR will likely report `confidence=None` too, so this fires immediately.
+
+**On GER (generative correction) and the select-only rule:** the honest 2026 read is that GER gets large WER wins *by generating*, which this system's core guarantee forbids in the reconciler. The compatible shape, if ever wanted, is a **separate, config-gated post-pass** (off by default, experiment-gated like everything else) that may only *re-space/re-segment or pick among engine-attested variants* — never introduce text absent from all engines. Do not build it in this handoff; recorded here so a future session doesn't "discover" GER and bolt it on inside `reconcile.py`.
+
+**Acceptance for Phase 4:** a probe row where BER and `wer_latin` improve **and** `cer_thai` holds within tolerance → activate Engine B in config; otherwise record the rejection with numbers, same discipline as the four previous rejections.
+
+---
+
+## 7. PHASE 5 — Policy debts that silently tax CER forever
+
+These are decisions, not code (ledger, 2026-07-30):
+
+1. **Mai-yamok contraction:** Whisper emits `ดีดี`/`ใหม่ใหม่` inconsistently vs `จริงๆ`. STYLE_GUIDE fixes the gold side but nothing contracts the hypothesis side → permanent CER tax. Decide: add hypothesis-side contraction (`XX` → `Xๆ` for the closed class of true reduplications) to `normalize.py` under the same exception-lexicon guard, or accept the tax explicitly in STYLE_GUIDE. Note this is also a **cross-engine alignment risk** for Phase 2/4: Typhoon/Pathumma were trained on Na-Thalang normalization (expansion-flavored), the gold set deliberately diverges (attach, no expansion) — since the harness normalizes both sides identically this can't desync the gate, but it can *understate* a Na-Thalang-trained model's true quality. Re-check the exception lexicon covers what those models emit.
+2. **Colloquial-vs-formal:** `คนนึง` vs `คนหนึ่ง` — unstated policy, same class. Decide once, write it into STYLE_GUIDE, enforce in `normalize.py`.
+3. **Number verbalization** (Na-Thalang's other half): spoken "สิบ" vs written "10" currently scores as an error in both directions. At minimum document the gold-authoring rule; a verbalization-aware normalizer is optional and only worth it if the gold set shows real hits.
+4. **Bias-index debts:** the four candidates from Short4 (`พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`) were never added; GAP-5's residual question — does prompt biasing measurably help at all — is answerable once Phase 1.2's gold set exists. Run the harness with and without the bias prompt once and record it.
+
+---
+
+## 8. PHASE 6 — Housekeeping (small, do opportunistically)
+
+- **`CLAUDE.md` contains a stray merge-conflict marker** (`>>>>>>> d405aac…` above the "Token granularity (5.4)" section) — resolve it; the file is the first thing every session reads.
+- Two `make_gold.py` copies (`tools/` and `scripts/`) — keep one, re-export or delete the other.
+- Both `transcribe.db` and `transcriber.db` sit at repo root; only `transcriber.db` is used — remove or gitignore the stale one.
+- Docs still claim Python 3.13 in places (CLAUDE.md, config comments); the venv is 3.11.9 — fix on next touch. The 1 perpetually-failing `pycrfsuite` test only fails on the wrong (3.13) shell; note the correct invocation in README/CLAUDE.md.
+- DeepFilterNet denoise is silently dead (torchaudio 2.x removed `torchaudio.backend`) — irrelevant while the production engine is whole-file; **decide at chunk-engine activation**: pin/patch, or measure denoise-off and delete (INFRA-6 suspected it never helped).
+- Editor GAP-7 (one-tap reason UI) and the merged-group corrected-state display remain open — due when the editor front-end is next touched.
+- CutDeck: the real-Premiere XML import acceptance is still the gate blocking Phases 5–6 of that track and `segment` mode promotion — unchanged, tracked in TODO_LEDGER, out of scope here.
+
+---
+
+## 9. What NOT to do (standing rejections — evidence on file)
+
+| Idea | Status | Where the evidence lives |
+|---|---|---|
+| SenseVoiceSmall (`funasr`) for Thai | **Structurally incapable** (5-language model, misdetects Thai as Cantonese) | TODO_LEDGER 2026-07-16, `engines/funasr.py` docstring |
+| `typhoon_rt` (FastConformer) as Engine B | Rejected — regresses CER & WER_latin | TODO_LEDGER 2026-07-16 |
+| `typhoon-whisper-turbo` as Engine A | Rejected — CER 0.1336 vs 0.1069 | docs/IMPLEMENT_IMPROVEMENTS.md Phase 1 |
+| `whisper_multi` + qwen2.5:3b tiebreak | Rejected — dilution + model too weak; wiring/bias fixes done, don't redo | TODO_LEDGER 2026-07-16 (four probes) |
+| Re-tuning `cue_space_min_*` knobs | Measured flat — the greedy fill is the blocker (§5) | TODO_LEDGER 2026-07-30 |
+| Cloud ASR engines | Local-only design; open weights currently *lead* on Thai anyway (§2 table) | arXiv 2601.13044 Table 6 |
+| Generation inside the reconciler (GER) | Violates the core anti-hallucination guarantee; constrained shape only, later | §6 note |
+
+---
+
+## 10. Suggested execution order (one line each)
+
+1. **Metrics v3 + gold-set growth** (§3) — the measurement floor; gold authoring is the schedule-critical human task. **§3.1 DONE 2026-08-04; §3.2 gold-set growth still NOT done — needs the user.**
+2. **Engine A probes: Typhoon Whisper Large-v3, Pathumma Large-v3** (§4 §2) — biggest expected CER win, near-zero code. **DONE 2026-08-04 — both REJECTED, production config unchanged. See §4 status block for numbers and why the verdict is provisional pending §1's gold-set growth.**
+3. **DP cue split** (§5) — the user's real pain, now measurable.
+4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall.
+5. **LLM reconciler round 3 (7B, few-shot)** — only after 4 produces a real second hypothesis.
+6. **Policy decisions** (§7) and **housekeeping** (§8) — opportunistic.
+
+### Sources (external)
+- Typhoon ASR Real-time paper + Thai benchmark table: https://arxiv.org/html/2601.13044v1
+- Typhoon ASR release note: https://opentyphoon.ai/blog/en/typhoon-asr-realtime-release
+- Qwen3-ASR: https://github.com/QwenLM/Qwen3-ASR · https://huggingface.co/Qwen/Qwen3-ASR-1.7B
+- Pathumma-whisper-th-large-v3: https://huggingface.co/nectec/Pathumma-whisper-th-large-v3
+- Fun-ASR (MLT-Nano-2512, 31 langs incl. Thai, GGUF): https://github.com/FunAudioLLM/Fun-ASR · https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512
+- GER/GenSEC background: https://arxiv.org/pdf/2310.06434 (Whispering-LLaMA) · https://arxiv.org/pdf/2501.12979 (FlanEC) · https://arxiv.org/pdf/2508.07285 (survey)

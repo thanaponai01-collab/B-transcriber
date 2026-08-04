@@ -41,7 +41,16 @@ _LATIN_RUN = re.compile(r"[a-z0-9]+")  # applied to lowercased text
 #   v2: switch points derived character-by-character inside every token, with
 #       the timestamp linearly interpolated across the token's span; corpus
 #       BER = 1 − micro-F1 over summed matched/ref/hyp switch counts.
-METRICS_VERSION = 2
+#   v3: cue-structure signals added (HANDOFF_CEILING_BREAK §3.1) — tokens are
+#       phrase cues (5.4), so each token's start_ms IS a cue boundary. Adds
+#       cue_boundary_error_rate (1 − micro-F1 of ref vs hyp cue-start
+#       timestamps, matched the same way as switch points) as a gated signal,
+#       plus a hard structural invariant (overlapping_cues, asserted 0 — not a
+#       rate) and descriptive-only stats (cue_count_delta, shortest_cue_ms,
+#       nonzero_gap_count) for trend-watching. Existing cer_thai/wer_latin/BER
+#       definitions are unchanged; only the version bumps, so a fresh baseline
+#       starts under the standard metrics_version partitioning.
+METRICS_VERSION = 3
 
 
 @dataclass
@@ -56,18 +65,15 @@ class EvalMetrics:
     ref_switches: int           # reference switch-point count (aggregation weight)
     hyp_switches: int = 0       # hypothesis switch-point count (micro-F1 numerator base)
     matched_switches: int = 0   # ref↔hyp switch points matched within tolerance
-
-
-# ── regression gate ───────────────────────────────────────────────────────────
-
-def regressed(now: float, base: float, tol_frac: float = 1.02, abs_floor: float = 0.005) -> bool:
-    """True if `now` is worse than `base` by more than the allowed band.
-
-    Relative tolerance alone collapses to zero when base≈0 (0 * 1.02 == 0), so a
-    perfect or tiny baseline would trip the gate on any nonzero score. Floor the
-    band with an absolute slack (#6).
-    """
-    return now > max(base * tol_frac, base + abs_floor)
+    # ── cue-structure signals (v3) ──────────────────────────────────────────
+    cue_boundary_error_rate: float = 0.0  # 1 − micro-F1 of ref vs hyp cue-start timestamps
+    ref_cues: int = 0           # reference cue-start count (aggregation weight)
+    hyp_cues: int = 0           # hypothesis cue-start count (micro-F1 numerator base)
+    matched_cues: int = 0       # ref↔hyp cue starts matched within tolerance
+    overlapping_cues: int = 0   # hard invariant on the hyp alone: must be 0, not a rate
+    cue_count_delta: int = 0    # hyp cue count − ref cue count (descriptive only)
+    shortest_cue_ms: float | None = None  # shortest hyp cue duration (descriptive only)
+    nonzero_gap_count: int = 0  # positive-gap count between consecutive hyp cues (descriptive only)
 
 
 # ── regression gate ───────────────────────────────────────────────────────────
@@ -195,9 +201,11 @@ def _switch_points(tokens: list[dict]) -> list[float]:
     return points
 
 
-def _match_switch_points(ref_pts: list[float], hyp_pts: list[float], tol_ms: float) -> int:
-    """Count of reference switch points matched to distinct hypothesis switch
-    points within ±tol_ms. Greedy nearest-match, each hyp point used once."""
+def _match_points(ref_pts: list[float], hyp_pts: list[float], tol_ms: float) -> int:
+    """Count of reference timestamps matched to distinct hypothesis timestamps
+    within ±tol_ms. Greedy nearest-match, each hyp point used once. Generic
+    over any timestamp stream — used for both switch points and cue starts
+    (v3), which share the same "did it land at the right time" question."""
     used: set[int] = set()
     matched = 0
     for r in ref_pts:
@@ -233,8 +241,58 @@ def _temporal_boundary_error(
     ref_pts: list[float], hyp_pts: list[float], tol_ms: float
 ) -> tuple[float, int]:
     """(1 − F1, matched count) of ref switch points vs hyp switch points."""
-    matched = _match_switch_points(ref_pts, hyp_pts, tol_ms)
+    matched = _match_points(ref_pts, hyp_pts, tol_ms)
     return boundary_f1_error(matched, len(ref_pts), len(hyp_pts)), matched
+
+
+# ── cue structure (v3) ──────────────────────────────────────────────────────────
+#
+# Tokens ARE phrase cues (5.4 granularity), so a token's start_ms is a cue
+# boundary — no new gold-schema field is needed, the existing hand-recut SRTs
+# already carry it via srt_io.parse_srt. These functions read start_ms/end_ms
+# directly off the token dicts; tokens missing timestamps (unit fixtures) are
+# simply skipped rather than raising, so callers that don't care about cue
+# timing (e.g. plain WER tests) are unaffected.
+
+def _cue_starts(tokens: list[dict]) -> list[float]:
+    """Cue-start timestamps (ms), in order, for tokens that carry one."""
+    return [float(t["start_ms"]) for t in tokens if t.get("start_ms") is not None]
+
+
+def _cue_overlap_count(tokens: list[dict]) -> int:
+    """Count of hyp cues whose start is before the previous cue's end — a
+    shipped bug (TODO_LEDGER 2026-07-30: cues 20/21 shipped as
+    `42,740 --> 42,660`), not a rate to be tolerated. Assumes tokens are given
+    in time order, which is true of every pipeline/gold source in this repo."""
+    count = 0
+    prev_end: float | None = None
+    for t in tokens:
+        start, end = t.get("start_ms"), t.get("end_ms")
+        if start is not None and prev_end is not None and float(start) < prev_end:
+            count += 1
+        if end is not None:
+            prev_end = float(end)
+    return count
+
+
+def _cue_gap_stats(tokens: list[dict]) -> tuple[float | None, int]:
+    """(shortest cue duration ms, count of positive gaps between consecutive
+    cues). A positive gap is dead air the conform pass should have closed
+    (`cue_max_close_gap_ms`) — distinct from an overlap (_cue_overlap_count),
+    which is a negative gap and a correctness bug rather than a style debt."""
+    durations: list[float] = []
+    nonzero_gaps = 0
+    prev_end: float | None = None
+    for t in tokens:
+        start, end = t.get("start_ms"), t.get("end_ms")
+        if start is not None and end is not None:
+            durations.append(float(end) - float(start))
+        if start is not None and prev_end is not None and float(start) > prev_end:
+            nonzero_gaps += 1
+        if end is not None:
+            prev_end = float(end)
+    shortest = min(durations) if durations else None
+    return shortest, nonzero_gaps
 
 
 # ── normalization (identical treatment of ref and hyp) ─────────────────────────
@@ -281,6 +339,15 @@ def compute_metrics(
     hyp_words = [t["text"] for t in hyp_tokens]
     overall_wer = _error_rate(ref_words, hyp_words)
 
+    # Cue structure (v3): boundary F1 between ref/hyp cue-start timestamps,
+    # plus hard/descriptive invariants derived from the hyp cues alone.
+    ref_cue_pts = _cue_starts(ref_tokens)
+    hyp_cue_pts = _cue_starts(hyp_tokens)
+    cue_matched = _match_points(ref_cue_pts, hyp_cue_pts, boundary_tol_ms)
+    cue_ber = boundary_f1_error(cue_matched, len(ref_cue_pts), len(hyp_cue_pts))
+    overlapping_cues = _cue_overlap_count(hyp_tokens)
+    shortest_cue_ms, nonzero_gap_count = _cue_gap_stats(hyp_tokens)
+
     return EvalMetrics(
         cer_thai=cer_thai,
         wer_latin=wer_latin,
@@ -292,4 +359,12 @@ def compute_metrics(
         ref_switches=len(ref_pts),
         hyp_switches=len(hyp_pts),
         matched_switches=matched,
+        cue_boundary_error_rate=cue_ber,
+        ref_cues=len(ref_cue_pts),
+        hyp_cues=len(hyp_cue_pts),
+        matched_cues=cue_matched,
+        overlapping_cues=overlapping_cues,
+        cue_count_delta=len(hyp_tokens) - len(ref_tokens),
+        shortest_cue_ms=shortest_cue_ms,
+        nonzero_gap_count=nonzero_gap_count,
     )

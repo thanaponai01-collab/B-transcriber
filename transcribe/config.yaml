@@ -57,7 +57,15 @@ engine_batch_size: 4   # chunks per forward pass when an engine supports batched
 # device only. To swap to Typhoon Turbo CT2 or int8_float16, edit here — no code.
 engines:
   faster_whisper:
-    # model_id: models/whisper-th-medium-ct2   # tried models/typhoon-whisper-turbo-ct2
+    # model_id: models/whisper-th-medium-ct2 is the baseline (default, no override needed — the
+    # active checkpoint is biodatlab/whisper-th-medium-combined per CLAUDE.md). Engine A large-v3
+    # swap probes (HANDOFF_CEILING_BREAK §4/§10.2, 2026-08-04), both REJECTED on the v3 gold set
+    # vs baseline eval_run.id=25 (cer_thai 0.1415, BER 0.8169, cue_BER 0.3590):
+    #   models/typhoon-whisper-large-v3-ct2 (eval_run.id=26): cer_thai 0.1731, BER 1.0000 (hyp found
+    #     0/104 real switch points), cue_BER 0.5926 — worse on every gated signal.
+    #   models/pathumma-whisper-th-large-v3-ct2 (eval_run.id=27): cer_thai 0.1464 (within tolerance),
+    #     BER 0.8615, cue_BER 0.5741 — BER/cue_BER regressed past gate, REGRESSION verdict, passed=False.
+    # Also tried models/typhoon-whisper-turbo-ct2
     # (2026-07 gold-set eval): CER_thai 0.1336 vs 0.1069 for th-medium — turbo lost, reverted.
     compute_type: float16                        # int8_float16 frees 8GB headroom for larger batch_size
     beam_size: 5

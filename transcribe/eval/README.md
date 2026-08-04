@@ -34,13 +34,27 @@ Each signal is measured on the unit that is actually well-defined (see
 | **`wer_latin`** | word | **Primary Latin signal.** Word error rate over Latin/digit runs, **case-insensitive**. |
 | **`boundary_error_rate`** | timestamp | **Code-switch signal.** `1 − F1` of reference Thai↔Latin switch *timestamps* matched to hypothesis switches within `boundary_tol_ms` (default 300 ms). A positional metric would reward right-words/wrong-place; this does not. |
 | **`wer`** | word | Coarse, tokenizer-sensitive sanity number. **Not** a gate. |
+| **`cue_boundary_error_rate`** | timestamp | **Cue-structure signal (v3).** `1 − F1` of reference cue-start timestamps matched to hypothesis cue starts within `boundary_tol_ms` — same match rule as `boundary_error_rate`, applied to `start_ms` instead of intra-cue switch points. Tokens ARE phrase cues (5.4), so this needs no new gold field: any gold JSON with `start_ms` on its tokens already carries cue boundaries, and a hand-recut Premiere SRT run through `srt_io.parse_srt` produces exactly that. |
 
 The regression gate (default tolerance 2%) trips if **any** of `cer_thai`,
-`wer_latin`, or `boundary_error_rate` worsens beyond tolerance vs the last passing
-production run **of the same `METRICS_VERSION`** (`eval_run.metrics_version`).
-Scores computed under different metric definitions are incomparable, so the first
-run after a metric-definition change establishes a fresh baseline rather than
-being gated against numbers an older rule produced.
+`wer_latin`, `boundary_error_rate`, or `cue_boundary_error_rate` worsens beyond
+tolerance vs the last passing production run **of the same `METRICS_VERSION`**
+(`eval_run.metrics_version`). Scores computed under different metric
+definitions are incomparable, so the first run after a metric-definition
+change establishes a fresh baseline rather than being gated against numbers an
+older rule produced.
+
+## Cue-structure invariants and descriptive stats (v3)
+
+Besides `cue_boundary_error_rate`, `compute_metrics`/the harness also report:
+
+- **`overlapping_cues`** — count of hypothesis cues that start before the
+  previous cue ends. This is a **hard invariant, not a rate**: any run with
+  `overlapping_cues > 0` hard-fails unconditionally, even on the very first
+  run with no baseline to compare against (TODO_LEDGER 2026-07-30 recorded a
+  real shipped instance: cues emitted as `42,740 --> 42,660`).
+- **`cue_count_delta`**, **`shortest_cue_ms`**, **`nonzero_gap_count`** —
+  descriptive only, recorded on `eval_run` for trend-watching, never gated.
 
 ## Code-switch boundary labeling rules
 

@@ -3,6 +3,118 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Engine A large-v3 swap probes — REJECTED both (HANDOFF_CEILING_BREAK §4/§10.2) — executed 2026-08-04
+
+**Driven by** the handoff's §2 external evidence: the published Typhoon ASR
+paper table shows Typhoon Whisper Large-v3 and Pathumma-Whisper Large-v3 at
+2–3× lower CER than Biodatlab Whisper **Large** on three Thai benchmarks —
+and this repo runs the Thonburian **medium**, so the gap should be at least
+that large if the published numbers reproduce here. Both are plain Whisper
+large-v3 fine-tunes, convertible through the existing CT2 pipeline with zero
+adapter code — a `ct2-transformers-converter` run plus a `model_id` YAML edit.
+
+**Correction to the handoff doc:** its listed repo ID `scb10x/typhoon-whisper-large-v3`
+does not exist on the Hub (401/repo-not-found on lookup) — the real repo is
+`typhoon-ai/typhoon-whisper-large-v3`. `nectec/Pathumma-whisper-th-large-v3` was
+correct as written. Pathumma's repo also lacks a `tokenizer.json` (only slow
+tokenizer files) — `faster_whisper` silently falls back to the `openai/whisper-tiny`
+tokenizer (wrong vocab) if that file is absent, so a fast tokenizer was generated
+via `transformers.WhisperTokenizerFast.from_pretrained(...).backend_tokenizer.save(...)`
+and copied into the CT2 output dir (confirmed `len(tokenizer)=51866`, matching
+large-v3's Cantonese-token-expanded vocab) before probing.
+
+Both converted cleanly (`int8_float16`, ~1.5 GB each, `models/typhoon-whisper-large-v3-ct2`
+and `models/pathumma-whisper-th-large-v3-ct2`, both load fine via `faster_whisper` — this
+session happened to run on an RTX 4070 Ti, 12 GB, but that's just this machine; the repo
+targets whatever box runs it, and CLAUDE.md/handoff's "RTX 3070, 8 GB" is the conservative
+floor to gate against, not a literal spec to keep updating per-machine) and were
+probed via `harness.py --experiment` against the metrics v3 baseline
+(`eval_run.id=25`: `cer_thai 0.1415`, `boundary_error_rate 0.8169`,
+`cue_boundary_error_rate 0.3590`), `compute_type: int8_float16`, `batch_size: 4`,
+same 5-clip gold set:
+
+| Model | `eval_run.id` | `cer_thai` | `wer_latin` | `boundary_error_rate` | `cue_boundary_error_rate` | Verdict |
+|---|---|---|---|---|---|---|
+| Typhoon Whisper Large-v3 | 26 | 0.1731 | 1.0000 | **1.0000** (0/104 switches matched) | 0.5926 | REJECTED — worse on every gated signal |
+| Pathumma Whisper Large-v3 | 27 | 0.1464 (within tolerance) | 1.0129 | 0.8615 | 0.5741 | REJECTED — BER/cue_BER regression |
+
+Typhoon's BER of 1.0000 is a total failure on this gold set's Thai↔English
+switch points, not a marginal miss — the hypothesis found real switches at
+only 2 of 104 reference points and matched none of them. Pathumma is much
+closer to baseline on `cer_thai` (inside the 0.005 abs-floor band) but still
+regresses `boundary_error_rate` and `cue_boundary_error_rate` past the gate.
+
+**Read honestly, per the handoff's own instruction (§4):** this is a major
+finding about the gold set's domain, not a reason to doubt the published
+benchmarks in general. The published table uses Na-Thalang normalization and
+clean academic/TVSpeech test sets; this repo's 5-clip gold set is creator-style
+Thai-English code-switch content with a deliberately divergent normalization
+policy (§7 mai-yamok/colloquial). `typhoon-whisper-turbo`'s published numbers
+already failed to reproduce here once (2026-07, CER 0.1336 vs 0.1069) — this is
+the second and third time a published-SOTA Whisper fine-tune has lost to the
+in-repo th-medium baseline on this specific corpus. Prime suspect per §7:
+normalization-policy mismatch style-penalizing large-v3-lineage output before
+any genuine accuracy comparison happens — but that's speculative pending the
+§1.2 gold-set growth (still not done, still needs the user) to arbitrate
+whether this is a real ranking or a 5-clip artifact.
+
+**Production config: unchanged.** `engine_a` stays `faster_whisper` /
+`models/whisper-th-medium-ct2`; both large-v3 CT2 conversions are kept on disk
+(`models/typhoon-whisper-large-v3-ct2`, `models/pathumma-whisper-th-large-v3-ct2`,
+~1.5 GB each) in case the grown gold set (§1.2) or a normalization-policy fix
+(§7) changes this verdict later — don't re-download to re-probe.
+
+Suite: **310 passed**, unchanged (no source code touched, config.yaml reverted
+to baseline model_id/compute_type/batch_size after both probes — see its
+in-file comment for the permanent record of this result).
+
+## Metrics v3 — cue-structure signals (HANDOFF_CEILING_BREAK §3.1) — executed 2026-08-04
+
+Suite: **310 passed** (+11 in new `tests/test_metrics_v3.py`).
+
+**Driven by** `docs/HANDOFF_CEILING_BREAK.md` §3's "make the gate see what
+matters before any engine swap" — the 2026-07-30 entry below found cue-F1
+0.717/0.691 by hand on Short4 with no reusable code; this promotes it to a
+first-class, regression-gated metric.
+
+**The fix (metrics v3, `metrics.METRICS_VERSION = 3`):** tokens are already
+phrase cues (5.4), so a token's `start_ms` already **is** a cue boundary — no
+gold-schema change needed, the existing hand-recut-SRT gold JSONs already
+carry it via `srt_io.parse_srt`. Added to `compute_metrics`/`EvalMetrics`:
+1. `cue_boundary_error_rate` — F1@`boundary_tol_ms` between ref and hyp
+   cue-start timestamps, matched and micro-F1-aggregated the same way as the
+   existing switch-point BER (`_match_points`, generalized from the old
+   switch-only `_match_switch_points`). Joins the regression-tolerance gate.
+2. `overlapping_cues` — hard invariant, asserted 0, not a rate. The harness
+   hard-fails the run whenever this is nonzero, **unconditionally**, even on a
+   first run with no prior baseline (the real 2026-07-30 shipped instance —
+   `42,740 --> 42,660` — is what this exists to catch mechanically).
+3. Descriptive-only (recorded on `eval_run`, never gated): `cue_count_delta`,
+   `shortest_cue_ms`, `nonzero_gap_count`.
+
+`eval_run` gained the 5 matching columns (idempotent `_migrate`). Note:
+`run_harness` does not call `init_db` on the caller's `db_path` — a
+pre-existing `transcriber.db` needed one manual re-`init_db()` to pick up the
+new columns before the harness could write to it; this is the same manual
+step every prior `eval_run` column addition has required.
+
+**Proven on the real gold set (2026-08-04):** `eval_run.id=25`,
+`metrics_version=3`, `passed=True` (fresh baseline, first v3 run):
+`cer_thai 0.1415`, `wer_latin 1.0452`, `boundary_error_rate 0.8169` (both
+close to but not identical to the 2026-07-16 v2 numbers — run-to-run drift,
+not a regression signal since this run *establishes* the v3 baseline),
+**`cue_boundary_error_rate 0.3590`** (F1 ≈ 64%, first-ever measurement),
+`overlapping_cues 0`, `cue_count_delta -20` (pipeline emits 20 fewer cues than
+the hand-recut gold, summed over 5 clips — consistent with the greedy-fill
+under-splitting problem §5/Phase 3 targets), `shortest_cue_ms 320.0`,
+`nonzero_gap_count 17`.
+
+**Still open (unchanged from HANDOFF_CEILING_BREAK §1.2, not a code task):**
+growing the gold set to 10–15 minutes across three strata (production-style
+pure-Thai shorts, real code-switch material, one noisy clip) — needs new
+source clips from the user. `tools/make_gold.py from-srt` is the fastest path
+once a hand-recut Premiere SRT exists for a new clip.
+
 ## Cue timing + sub-word seam dedup + space breaks — executed 2026-07-30
 
 Suite: **216 passed** (was 214; +26 across `tests/test_cue_conform.py`,

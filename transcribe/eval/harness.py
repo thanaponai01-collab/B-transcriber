@@ -138,6 +138,9 @@ def run_harness(
     cer_num = wer_lat_num = wer_num = 0.0
     total_thai = total_latin = total_words = 0
     total_switches = total_hyp_switches = total_matched = 0
+    total_ref_cues = total_hyp_cues = total_matched_cues = 0
+    total_overlapping_cues = total_cue_count_delta = total_nonzero_gaps = 0
+    global_shortest_cue_ms: float | None = None
 
     for audio_path, ref_tokens in samples:
         hyp_tokens = pipeline_fn(audio_path, config)
@@ -152,9 +155,16 @@ def run_harness(
         total_switches     += m.ref_switches
         total_hyp_switches += m.hyp_switches
         total_matched      += m.matched_switches
-
-    if scratch_dir is not None:
-        shutil.rmtree(scratch_dir, ignore_errors=True)
+        total_ref_cues        += m.ref_cues
+        total_hyp_cues        += m.hyp_cues
+        total_matched_cues    += m.matched_cues
+        total_overlapping_cues += m.overlapping_cues
+        total_cue_count_delta  += m.cue_count_delta
+        total_nonzero_gaps     += m.nonzero_gap_count
+        if m.shortest_cue_ms is not None and (
+            global_shortest_cue_ms is None or m.shortest_cue_ms < global_shortest_cue_ms
+        ):
+            global_shortest_cue_ms = m.shortest_cue_ms
 
     if scratch_dir is not None:
         shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -171,6 +181,15 @@ def run_harness(
         ref_switches=total_switches,
         hyp_switches=total_hyp_switches,
         matched_switches=total_matched,
+        cue_boundary_error_rate=boundary_f1_error(
+            total_matched_cues, total_ref_cues, total_hyp_cues),
+        ref_cues=total_ref_cues,
+        hyp_cues=total_hyp_cues,
+        matched_cues=total_matched_cues,
+        overlapping_cues=total_overlapping_cues,
+        cue_count_delta=total_cue_count_delta,
+        shortest_cue_ms=global_shortest_cue_ms,
+        nonzero_gap_count=total_nonzero_gaps,
     )
 
     conn = store.connect(db_path)
@@ -190,9 +209,20 @@ def run_harness(
             regressions.append(
                 f"BER {agg.boundary_error_rate:.4f} vs {last.boundary_error_rate:.4f}"
             )
+        if regressed(agg.cue_boundary_error_rate, last.cue_boundary_error_rate, tol_frac, abs_floor):
+            regressions.append(
+                f"cue_BER {agg.cue_boundary_error_rate:.4f} vs {last.cue_boundary_error_rate:.4f}"
+            )
         if regressions:
             passed = False
             print("[harness] REGRESSION: " + "; ".join(regressions))
+
+    # Hard structural invariant (§3.1): an overlapping cue is a shipped bug,
+    # not a tolerance band — it fails the run unconditionally, even on the
+    # very first v3 run with no prior baseline to compare against.
+    if agg.overlapping_cues > 0:
+        passed = False
+        print(f"[harness] HARD FAIL: {agg.overlapping_cues} overlapping cue(s) in hypothesis output")
 
     store.create_eval_run(
         conn, cfg_hash, agg.wer, agg.boundary_error_rate,
@@ -201,12 +231,19 @@ def run_harness(
         engine_pair=f"{config.get('engine_a', '?')}+{config.get('engine_b', '?')}",
         bias_hash=_bias_hash(conn),
         is_experiment=experiment,
+        cue_boundary_error_rate=agg.cue_boundary_error_rate,
+        overlapping_cues=agg.overlapping_cues,
+        cue_count_delta=agg.cue_count_delta,
+        shortest_cue_ms=agg.shortest_cue_ms,
+        nonzero_gap_count=agg.nonzero_gap_count,
     )
     conn.close()
 
     print(
         f"[harness] CER_thai={agg.cer_thai:.4f}  WER_latin={agg.wer_latin:.4f}  "
         f"BER={agg.boundary_error_rate:.4f}  WER={agg.wer:.4f}  "
+        f"cue_BER={agg.cue_boundary_error_rate:.4f}  "
+        f"cue_overlaps={agg.overlapping_cues}  cue_count_delta={agg.cue_count_delta:+d}  "
         f"thai_chars={total_thai}  latin_words={total_latin}  "
         f"switches={total_switches} (hyp {total_hyp_switches}, matched {total_matched})  "
         f"passed={passed}"

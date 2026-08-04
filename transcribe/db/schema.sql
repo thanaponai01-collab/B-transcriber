@@ -138,6 +138,16 @@ CREATE TABLE IF NOT EXISTS eval_run (
     -- only reads baselines of the version it is about to write. DEFAULT 1:
     -- rows that predate the column were computed under v1 rules.
     metrics_version     INTEGER NOT NULL DEFAULT 1,
+    -- Cue-structure signals (metrics v3, HANDOFF_CEILING_BREAK §3.1). Gated:
+    -- cue_boundary_error_rate joins cer_thai/wer_latin/boundary_error_rate in
+    -- the regression check. Descriptive-only (trend-watching, not gated):
+    -- cue_count_delta, shortest_cue_ms, nonzero_gap_count. Hard invariant
+    -- (must be 0 on every passing run, not tolerance-checked): overlapping_cues.
+    cue_boundary_error_rate REAL    NOT NULL DEFAULT 0.0,
+    overlapping_cues        INTEGER NOT NULL DEFAULT 0,
+    cue_count_delta         INTEGER,
+    shortest_cue_ms         REAL,
+    nonzero_gap_count       INTEGER,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );
