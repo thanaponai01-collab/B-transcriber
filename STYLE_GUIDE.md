@@ -75,6 +75,32 @@ is a *derived view*, computed afterwards, never ground truth. Consequences:
   regressing `cer_thai` specifically on `ๆ`-bearing spans is the signal to
   build a `pythainlp`-based context-aware expander, gated by the harness.
 
+### 3a. Reduplication emitted without the ๆ mark (`ดีดี` vs `ดีๆ`) — decided, not implemented
+
+Whisper-family engines sometimes transcribe a reduplicated word as two literal
+repeated syllables (`ดีดี`, `ใหม่ใหม่`) instead of the canonical attached-mark
+form (`ดีๆ`, `ใหม่ๆ`) the gold set uses. Unlike §3's `เด็ก ๆ` → `เด็กๆ`
+collapse — which is a pure whitespace/dedup fix on a mark that's already
+present — this would mean *inserting* a mark the hypothesis never emitted,
+based on recognizing a closed class of "this repeated pair is really a mai
+yamok candidate." That is a much riskier transform: it requires a curated
+word list (built and tuned on evidence we don't have), and a wrong entry
+silently corrupts a hypothesis that was never actually reduplication (e.g. a
+genuinely repeated word for emphasis, or two adjacent short words that happen
+to be identical).
+
+**Decision: accept the CER tax for now. Do not build a hypothesis-side
+contractor speculatively.** This project's prime directive is "nothing
+activates without the eval harness proving it" — writing this transform
+without a gold set to measure it against (the harness is currently blocked
+on missing `transcribe/eval/goldenset/*.wav`, see TODO_LEDGER 2026-08-05)
+would mean shipping unverified normalization logic, which every other
+decision in this file was built specifically to avoid. **Trigger to
+revisit:** once harness access returns (§3.2 gold-set growth, or the audio
+question is resolved), grep a harness run's raw hypothesis output for
+doubled-syllable patterns against the gold set's `ๆ`-bearing spans to see
+whether this tax is actually measurable before building the contractor.
+
 ## 4. Loanwords — **[gold]**
 
 A loanword is transcribed **in the script the speaker actually produced.**
@@ -148,6 +174,28 @@ burned captions, etc.) has a policy to implement against, not improvise one.
   already depends on** (not a second, independently-tuned heuristic) — two
   segmentation policies drifting apart is exactly the kind of implicit
   divergence §4/§6 already had to call out once.
+
+## 8. Colloquial vs. formal register (`คนนึง` vs `คนหนึ่ง`) — **[gold]**
+
+Same class of decision as §2's number verbalization: two forms are both
+correct Thai, differ only in register, and picking one canonical form
+requires semantics (recognizing the pair as variants of "the same word") that
+this project's character-aligned CER deliberately doesn't attempt (§1).
+
+**Decision: transcribe the register the speaker actually used, on both
+sides.** Gold policy: write `คนนึง` when that's what was said, `คนหนึ่ง` when
+that's what was said — same rule as number verbalization in §2, applied to
+the whole class of colloquial-contraction/formal pairs (`นึง`/`หนึ่ง`,
+`เค้า`/`เขา`, `ยังไง`/`อย่างไร`, etc.), not a fixed list. No `normalize.py`
+change: normalization does not currently touch this and should not start —
+canonicalizing either direction would score a *correct*, faithfully-heard
+transcription as an error against a gold reference recorded in the other
+register, which is exactly the kind of self-inflicted CER tax §2 already
+rejected for numbers. **Trigger to revisit:** same as §2/§3a — only if a
+future harness run (once unblocked) shows a specific engine systematically
+normalizing one register to the other regardless of what was actually
+spoken, in which case that is a hypothesis-side bug report, not a case for
+a normalize.py canonicalization pass.
 
 ---
 

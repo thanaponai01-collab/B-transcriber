@@ -322,6 +322,19 @@ The wiring, prompt framing, and positional-bias fix are **done — do not revisi
 
 ## 7. PHASE 5 — Policy debts that silently tax CER forever
 
+> **STATUS (2026-08-05): items 1, 2 DECIDED (documentation-only, both
+> STYLE_GUIDE); item 3 already decided in a prior session; item 4 NOT
+> DONE — blocked on the same missing gold-set audio as §6/4.1.** Full
+> reasoning in TODO_LEDGER.md ("Housekeeping + policy debts pass",
+> 2026-08-05). Summary: mai-yamok contraction (item 1) and
+> colloquial-vs-formal register (item 2) both resolved to "transcribe as
+> spoken on both sides, no canonicalization" — the same principle §2
+> already established for number verbalization — recorded in
+> `STYLE_GUIDE.md` §3a and §8 respectively. Neither required a
+> `normalize.py` change (both match existing default behavior), so neither
+> needed a harness run to ship safely. Item 4 (bias-index debts) does
+> require a harness run and stays blocked.
+
 These are decisions, not code (ledger, 2026-07-30):
 
 1. **Mai-yamok contraction:** Whisper emits `ดีดี`/`ใหม่ใหม่` inconsistently vs `จริงๆ`. STYLE_GUIDE fixes the gold side but nothing contracts the hypothesis side → permanent CER tax. Decide: add hypothesis-side contraction (`XX` → `Xๆ` for the closed class of true reduplications) to `normalize.py` under the same exception-lexicon guard, or accept the tax explicitly in STYLE_GUIDE. Note this is also a **cross-engine alignment risk** for Phase 2/4: Typhoon/Pathumma were trained on Na-Thalang normalization (expansion-flavored), the gold set deliberately diverges (attach, no expansion) — since the harness normalizes both sides identically this can't desync the gate, but it can *understate* a Na-Thalang-trained model's true quality. Re-check the exception lexicon covers what those models emit.
@@ -333,10 +346,20 @@ These are decisions, not code (ledger, 2026-07-30):
 
 ## 8. PHASE 6 — Housekeeping (small, do opportunistically)
 
-- **`CLAUDE.md` contains a stray merge-conflict marker** (`>>>>>>> d405aac…` above the "Token granularity (5.4)" section) — resolve it; the file is the first thing every session reads.
-- Two `make_gold.py` copies (`tools/` and `scripts/`) — keep one, re-export or delete the other.
-- Both `transcribe.db` and `transcriber.db` sit at repo root; only `transcriber.db` is used — remove or gitignore the stale one.
-- Docs still claim Python 3.13 in places (CLAUDE.md, config comments); the venv is 3.11.9 — fix on next touch. The 1 perpetually-failing `pycrfsuite` test only fails on the wrong (3.13) shell; note the correct invocation in README/CLAUDE.md.
+> **STATUS (2026-08-05): first four items DONE.** Merge marker removed from
+> `CLAUDE.md`; `scripts/make_gold.py` deleted (`tools/make_gold.py` confirmed
+> as the only referenced copy); the stale-DB item turned out to be a
+> non-issue (no `transcribe.db` exists at repo root, only `transcriber.db` +
+> an unrelated `memory.db`, both already gitignored); Python-version docs
+> were already correct from a prior session, and `transcribe/README.md` now
+> has a "Running tests" section with the correct venv invocation. Full
+> detail: TODO_LEDGER.md 2026-08-05. Remaining items below are unchanged —
+> each is due at a specific future trigger, not now.
+
+- ~~**`CLAUDE.md` contains a stray merge-conflict marker** (`>>>>>>> d405aac…` above the "Token granularity (5.4)" section) — resolve it; the file is the first thing every session reads.~~ **Done.**
+- ~~Two `make_gold.py` copies (`tools/` and `scripts/`) — keep one, re-export or delete the other.~~ **Done — `scripts/make_gold.py` deleted.**
+- ~~Both `transcribe.db` and `transcriber.db` sit at repo root; only `transcriber.db` is used — remove or gitignore the stale one.~~ **Non-issue — no `transcribe.db` file exists on this machine.**
+- ~~Docs still claim Python 3.13 in places (CLAUDE.md, config comments); the venv is 3.11.9 — fix on next touch. The 1 perpetually-failing `pycrfsuite` test only fails on the wrong (3.13) shell; note the correct invocation in README/CLAUDE.md.~~ **Done — docs were already correct; invocation now documented in `transcribe/README.md`.**
 - DeepFilterNet denoise is silently dead (torchaudio 2.x removed `torchaudio.backend`) — irrelevant while the production engine is whole-file; **decide at chunk-engine activation**: pin/patch, or measure denoise-off and delete (INFRA-6 suspected it never helped).
 - Editor GAP-7 (one-tap reason UI) and the merged-group corrected-state display remain open — due when the editor front-end is next touched.
 - CutDeck: the real-Premiere XML import acceptance is still the gate blocking Phases 5–6 of that track and `segment` mode promotion — unchanged, tracked in TODO_LEDGER, out of scope here.

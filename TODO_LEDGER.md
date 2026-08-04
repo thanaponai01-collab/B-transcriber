@@ -3,6 +3,63 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Housekeeping (§8) + policy debts (§7) pass — HANDOFF_CEILING_BREAK.md — 2026-08-05
+
+**Context:** §6/4.1 (Qwen3-ASR harness probe) is still blocked on missing
+`transcribe/eval/goldenset/*.wav` on this machine — asked the user again,
+they chose to work on unblocked tracks instead (§7, §8) rather than resolve
+the audio question this session. That blocker is unchanged; see the entry
+below for full detail.
+
+**§8 housekeeping, done:**
+- `CLAUDE.md`: removed the stray `>>>>>>> d405aac...` merge-conflict marker
+  line above "Token granularity (5.4)" — no actual conflicting content on
+  either side, just an orphaned marker.
+- `scripts/make_gold.py` deleted. Confirmed it was a stale duplicate from an
+  earlier commit (`9aecc1b`, CutDeck-era) with no references anywhere in
+  code/docs/tests; `tools/make_gold.py` is the actively-used, everywhere-cited
+  version (`from-srt`, draft→freeze workflow, `transcribe/srt_io.py` imports
+  from it).
+- Stale `transcribe.db`/`transcriber.db` duplication: checked and it's a
+  non-issue — only `transcriber.db` (and an unrelated 0-byte `memory.db`)
+  exist at repo root, both gitignored/untracked. No `transcribe.db` file
+  exists to remove.
+- Python-version docs: `CLAUDE.md`, `requirements.txt`, `setup.py` already
+  correctly say 3.11.9 (a prior session already fixed this). Added a
+  "Running tests" section to `transcribe/README.md` with the
+  `.venv/Scripts/python.exe -m pytest tests/ -q` invocation and a note on why
+  a bare-3.13-shell run shows the pycrfsuite failure, since no doc previously
+  stated the correct invocation.
+- Not touched (correctly out of scope per the handoff): DeepFilterNet denoise
+  decision (due at chunk-engine activation), editor GAP-7 (due when editor
+  next touched), CutDeck Premiere-import gate (tracked separately).
+
+**§7 policy debts, decided (both are pure documentation — zero code change,
+match existing default behavior, so no harness run was needed to ship them):**
+- **Mai-yamok contraction without the mark** (`ดีดี` vs `ดีๆ`): decision
+  recorded in `STYLE_GUIDE.md` §3a — **accept the CER tax, do not build a
+  hypothesis-side contractor speculatively.** Reasoning: this project's prime
+  directive is "nothing activates without the eval harness proving it," and
+  the harness is exactly the thing currently blocked on this machine —
+  building unverified normalization logic would violate the discipline every
+  other STYLE_GUIDE decision was built to uphold. Trigger to revisit: once
+  harness access returns, measure the actual doubled-syllable rate in raw
+  hypothesis output before writing any contractor.
+- **Colloquial vs. formal register** (`คนนึง` vs `คนหนึ่ง`): decision recorded
+  in `STYLE_GUIDE.md` §8 — **transcribe the register actually spoken, on both
+  gold and hypothesis sides, no canonicalization.** Same logic as §2's
+  existing number-verbalization policy (write it as spoken, not as
+  convention prefers) applied to the general colloquial/formal pair class,
+  not a fixed list. `normalize.py` doesn't currently touch this and
+  shouldn't start.
+- **Number verbalization** (handoff item 3): already decided and documented
+  in `STYLE_GUIDE.md` §2 from a prior session — no new work needed.
+- **Bias-index debts** (handoff item 4, the four Short4 candidates + the
+  GAP-5 with/without-bias-prompt harness comparison): **not done, blocked on
+  the same missing gold-set audio as §6/4.1** — this item requires an actual
+  harness run, which the documentation-only items above deliberately avoided
+  needing. Carries forward to whichever session resolves the audio question.
+
 ## Qwen3-ASR Engine B adapter — BUILT + smoke-verified against real weights, HARNESS PROBE STILL BLOCKED (HANDOFF_CEILING_BREAK §6/4.1) — 2026-08-05
 
 **Built:** `transcribe/engines/qwen3_asr.py` — `Qwen3ASREngine`, registered as

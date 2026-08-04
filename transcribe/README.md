@@ -28,6 +28,17 @@ uvicorn transcribe.editor.server:app --host 127.0.0.1 --port 8000
 python -m transcribe.eval.harness --config transcribe/config.yaml
 ```
 
+## Running tests
+
+Use the project's **Python 3.11.9** venv, not whatever `python`/`pytest`
+resolves to on `PATH` — on a bare Python 3.13 shell, `pycrfsuite` has no wheel
+and one sentence-boundary test fails for that reason alone (unrelated to any
+code change). From the repo root:
+
+```bash
+./.venv/Scripts/python.exe -m pytest tests/ -q
+```
+
 ## Repository layout
 
 ```

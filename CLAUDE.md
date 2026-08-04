@@ -156,7 +156,6 @@ examples, surrounding-token context) before concluding the LLM-tiebreak
 model + minimal-context prompt. See TODO_LEDGER.md for full before/after
 numbers.
 
->>>>>>> d405aac70b1052994cb3a6093445d674b0e030a6
 **Token granularity (5.4):** tokens persisted to the DB are **phrase cues** (not
 words). `EngineResult.timestamps_final` (formerly `word_level_timestamps`) signals
 that a cue's timestamps are final, so the pipeline skips forced alignment + word
