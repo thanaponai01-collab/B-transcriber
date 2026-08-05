@@ -3,6 +3,136 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## HANDOFF_ONE_ENGINE Phase C step 1 — fine-tune data engine built — executed 2026-08-05
+
+**`tools/make_finetune_set.py`** (HANDOFF_ONE_ENGINE.md Section 5 item 1):
+ingests (audio, hand-recut SRT) pairs — the Premiere recut-loop artifact — and
+DB `correction` rows into a JSONL training manifest of (audio slice, corrected
+text) utterances, ready to feed a future LoRA fine-tune of the Phase B winner
+(`biodatlab/whisper-th-medium-combined`).
+
+- `from-srt <srt> --audio <path> --source <name>`: reuses `srt_io.parse_srt`
+  (the same path `make_gold.py` uses), slices audio to cue spans via
+  `pipeline.ingest.load_audio` + `soundfile`, appends to
+  `transcribe/finetune/manifest.jsonl`.
+- `from-corrections --db <path>`: joins `correction` -> `job` -> `media` ->
+  `token` to recover each correction's audio span and uses
+  `corrected_text` as the label (deletion corrections with empty text are
+  skipped — nothing to train on); a job's media whose source is on disk is
+  decoded once and reused across all of that job's corrections.
+- **Contamination guard is mechanical, not a convention**: every ingest call
+  takes an explicit declared source name and `find_contamination()` parses
+  `transcribe/eval/goldenset/SOURCES.md`'s table live and refuses (raises
+  `ContaminationError`, writes nothing) on a match — case-insensitive
+  substring match against gold-clip names and backtick-quoted source-video
+  tokens, both directions, per SOURCES.md's own "assume distinct source,
+  verify" default. `from-srt` fails closed before any decode/write;
+  `from-corrections` skips the contaminated job and keeps processing others
+  (it walks many jobs unattended, so one contaminated job must not abort the
+  rest), returning the skip count rather than raising. This is Phase A.4's
+  standing trigger ("Phase C tooling being built") discharged.
+- `stats`: reports total utterances/minutes collected so far against the
+  handoff's thresholds (`MIN_COLLECT_MINUTES=45`, `TARGET_MINUTES=60`,
+  arXiv 2604.06507 lineage) — `keep-collecting` / `usable-but-below-target` /
+  `ready`.
+- 13 new tests (`tests/test_make_finetune_set.py`): gold-sources parsing
+  against the real `SOURCES.md`, contamination match/no-match/too-short-needle
+  cases, both ingest paths (including the contaminated-job skip and the
+  empty-text-deletion skip), stats verdict boundaries. Full suite: **357
+  passed** (was 344).
+
+## HANDOFF_ONE_ENGINE Phase C step 2 — recut-archive inventory — probed 2026-08-05, 0.63 min collected
+
+**Three candidate sources probed against the real tool; three-for-three
+disqualified, one usable clip found on the fourth:**
+
+1. `SOUND FINAL mine.srt` / `SOUND FINAL.mp3` (`20260625 - Bangkok Festivals -
+   CT6`) — **refused, contaminated**: this is the exact raw interview already
+   frozen as three gold-set clips (`Short1_D5`/`Short2_D1`/`PeterWolf`).
+2. `หายไปนานเลย...Wealthy 40 - [j6IECK-D-D8].th.srt` (yt-dlp download) —
+   **refused, contaminated** (same source video as the Wealthy40 gold clip,
+   full video excluded per the hold-out rule regardless of time range) **and**
+   not a hand-recut anyway — inspected the content: rolling overlapping
+   timestamps and mid-word script-mixing garbage (`คekสำคัญ`) are the
+   signature of a raw YouTube auto-caption, not corrected supervision.
+3. `Short1/2/3 mine.srt` (`20260713 - CFD 90`) — **refused, contaminated** —
+   not a name coincidence: sha256-verified byte-identical to the gold set's
+   own `Short1`/`Short2`/`Short3` audio. `transcribe/eval/goldenset/SOURCES.md`
+   updated with this confirmed provenance (was previously "unconfirmed,
+   assume independent") and a new exclusion group for the whole
+   `20260713 - CFD 90` project folder.
+4. `Short4.mp3` (same CFD 90 folder, no gold-set counterpart) — clean.
+   Transcribed fresh via `transcribe.pipeline.run.run_file` +
+   `align_force.export_srt` (job_id=27, 24 cues) so the user could recut it;
+   user hand-corrected and returned `Short4 mine.draft.srt`. Ingested via
+   `from-srt --source CFD90_Short4_20260713`: **+24 utterances, 0.63 min** —
+   the first real (non-dry-run) manifest entries. `stats` verdict:
+   `keep-collecting` (need ~70+ clips at this rate to clear the 45 min floor).
+
+**Reading it honestly**: the existing 8-clip gold set already consumed a
+disproportionate share of the user's best-organized recut archive (an entire
+interview + an entire short-form project's first three clips). Real Phase C
+progress depends on recuts from sources *outside* Bangkok Festivals CT6,
+Wealthy40 DCA, and CFD90-Short1-3 — an ongoing collection process, not a
+one-session inventory.
+
+## HANDOFF_ONE_ENGINE Phase C step 3 — LoRA training pipeline built, wiring-proof dry run only — executed 2026-08-05
+
+**User explicitly asked to "finish phase 3" despite the 0.63 min collected
+(§ step 2) being far below the handoff's own ~45 min floor. Resolved via
+question to the user: build + wire the real training pipeline, but treat any
+run against current data as a dry run proving the mechanism only — never a
+real Phase C candidate, never pushed through the eval harness.**
+
+**`tools/finetune_lora.py`**: HF `transformers` + `peft` LoRA on the Phase B
+winner (`biodatlab/whisper-th-medium-combined`), per the handoff's recipe —
+`target_modules=[q_proj, v_proj, out_proj, fc1, fc2]`, first 3 encoder layers
+excluded from adapter injection (`build_exclude_regex`, enumerates exact
+layer indices via `peft`'s `exclude_modules` + `re.fullmatch`, verified
+against installed peft 0.19.1 source rather than assumed from memory), r=8/
+alpha=16/dropout=0.05, AdamW via `Seq2SeqTrainer`. Reads
+`transcribe/finetune/manifest.jsonl` (the step-1 data engine's output),
+decodes+resamples audio, tokenizes labels, pads with a `DataCollator` that
+masks label padding to -100.
+
+- **Data-floor guard is mechanical**: `check_data_sufficiency()` calls
+  `tools.make_finetune_set.compute_stats` and refuses to run for real
+  (raises, writes nothing) below `MIN_COLLECT_MINUTES` unless `--dry-run` is
+  passed. A dry run caps training to 2 steps and writes a `DRY_RUN.md`
+  marker beside the saved adapter so a future session can't mistake it for a
+  real candidate.
+- **Manually dry-run for real** (not just unit-tested) against the 24-
+  utterance / 0.63-min manifest from step 2: loaded the actual
+  `biodatlab/whisper-th-medium-combined` checkpoint, applied LoRA (7,077,888
+  / 770,935,808 params trainable, 0.918%), ran 2 optimizer steps
+  (`train_loss=2.539`), saved a real PEFT adapter to
+  `transcribe/finetune/lora_out/` with `DRY_RUN.md` alongside it. This is the
+  wiring proof the user asked for — the pipeline is real and runs end to
+  end; the resulting checkpoint is explicitly not evidence of anything about
+  model quality.
+- Output is a saved adapter only — `merge_and_unload()` +
+  `ct2-transformers-converter` (the rest of the handoff's "zero adapter code
+  changes" promise) is unbuilt, deferred until a real (non-dry-run) training
+  run produces an adapter worth promoting.
+- `peft>=0.19.0` and `datasets>=5.0.0` added to `requirements.txt` (both were
+  already present in this venv; not previously declared). `transcribe/finetune/data/`
+  and `transcribe/finetune/lora_out/` added to `.gitignore` (audio slices and
+  checkpoints are regenerable/user-supplied; `manifest.jsonl` stays tracked
+  as a small provenance index).
+- 10 new tests (`tests/test_finetune_lora.py`): manifest load/missing/empty,
+  the layer-freeze regex (including a double-digit-layer-count case that a
+  naive char-class range would get wrong), the data collator's label-padding
+  contract (via lightweight `BatchFeature`/`BatchEncoding` fakes — no real
+  model weights loaded in the automated suite, matching this repo's existing
+  convention for ASR-adapter tests), and both branches of the data-floor
+  guard. Full suite: **367 passed** (was 357).
+
+**Still open, unchanged**: real training waits for real data. Steps 4-5
+(synthetic code-switch augmentation, gate against `eval_run.id=47`) do not
+start until a non-dry-run training run exists, which does not start until
+`tools/make_finetune_set.py stats` clears `MIN_COLLECT_MINUTES` — collection
+is the active bottleneck, not tooling.
+
 ## HANDOFF_ONE_ENGINE Phase B — engine bake-off re-probed on the grown 8-clip corpus — executed 2026-08-05
 
 **All 3 candidates re-run against `eval_run.id=47` (the fresh Phase A CI

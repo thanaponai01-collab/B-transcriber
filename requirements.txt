@@ -49,3 +49,11 @@ pydantic>=2.0.0
 # Eval
 jiwer>=3.0.0
 rapidfuzz>=3.0.0   # C Levenshtein for eval metrics (~100× the pure-Python fallback)
+
+# Fine-tune (HANDOFF_ONE_ENGINE.md Phase C): LoRA adapters on the Phase B
+# winner (tools/finetune_lora.py) + the HF dataset wrapper the data engine
+# (tools/make_finetune_set.py) hands training examples through. Adapter
+# training only - the merge/CT2-convert step at the end of Phase C reuses
+# ctranslate2, already a transitive dep of faster-whisper above.
+peft>=0.19.0
+datasets>=5.0.0

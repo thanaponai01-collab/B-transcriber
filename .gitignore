@@ -56,6 +56,13 @@ transcribe/eval/goldenset/*.mp3
 transcribe/eval/goldenset/*.wav
 transcribe/eval/goldenset/*.flac
 
+# Fine-tune data engine output (Phase C, tools/make_finetune_set.py /
+# tools/finetune_lora.py): sliced training audio and LoRA checkpoints are
+# user-supplied/regenerated, not tracked. manifest.jsonl (the text index of
+# what's been collected) stays tracked - it's small and useful provenance.
+transcribe/finetune/data/
+transcribe/finetune/lora_out/
+
 # Environment
 .env
 .env.*
