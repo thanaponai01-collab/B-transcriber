@@ -3,6 +3,73 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## HANDOFF_ONE_ENGINE Phase A — gate CIs/RTF + contamination guard — executed 2026-08-05
+
+**§3 items 1, 2, 4 DONE; item 3 (noisy/hard gold clip) still open, needs the
+user's audio — see below.**
+
+1. **Bootstrap CIs in the harness** (`transcribe/eval/metrics.py`:
+   `bootstrap_ci`/`_resample_aggregate`/`CI_METRICS`): 95% percentile
+   bootstrap over clip-level resampling (1000 draws), one band per gated
+   metric (`cer_thai`, `wer_latin`, `boundary_error_rate`,
+   `cue_boundary_error_rate`). Stored on `eval_run` (8 new nullable `*_ci_lo`/
+   `*_ci_hi` columns, idempotent `_migrate` ALTERs — no `METRICS_VERSION`
+   bump, this is descriptive, not a metric-definition change).
+2. **Gate rule changed**: a point-estimate regression whose CI still contains
+   the baseline value is recorded in the new `eval_run.gate_unresolved`
+   column (comma-separated metric names) and printed as `UNRESOLVED`, instead
+   of hard-failing the run. Only a regression whose CI *excludes* the
+   baseline still fails. `overlapping_cues` stays a hard, CI-independent
+   invariant, unchanged.
+3. **RTF recorded** (`eval_run.rtf`, wall-clock decode time ÷ total gold-set
+   audio duration via `ingest.load_audio`) — descriptive only, `NULL` when
+   duration can't be probed (synthetic test paths), not gated until a speed
+   floor is chosen.
+4. **`transcribe/eval/goldenset/SOURCES.md`** added — reconstructs clip
+   provenance from `git log` (no gold JSON stores a source field). Confirms
+   `Short1_D5`/`Short2_D1`/`PeterWolf` are the same raw interview
+   (`SOUND FINAL.mp3`) via the `PeterWolf` commit's explicit overlap ranges;
+   every other clip is unconfirmed-but-treated-as-independent. Phase C's
+   fine-tune data engine (`tools/make_finetune_set.py`, not yet built) must
+   read this file and refuse a training candidate whose source matches a row
+   — **trigger for that enforcement: Phase C tooling being built**, tracked
+   here so it isn't silently skipped when that phase starts.
+5. **7 new tests** (`tests/test_phase_a_ci.py`): `bootstrap_ci` degeneracy on
+   1 clip, seeded reproducibility, bound ordering across all 4 metrics, empty
+   corpus; harness records CI+RTF on `eval_run`; RTF is `None` (not a crash)
+   when a clip's audio can't be duration-probed; a constructed 3-clip case
+   where the point estimate crosses the regression band but the run's own CI
+   contains the baseline — verified `passed=True` + `gate_unresolved ==
+   "cer_thai"` instead of a hard fail. Full suite: **344 passed** (was 337).
+6. **NOT done — schedule-critical, needs the user**: §3 item 3, the
+   noisy/hard-clip gold stratum (the TVSpeech-lesson stratum from
+   HANDOFF_CEILING_BREAK §1.2 item 3). No amount of code work substitutes for
+   real hard-condition audio; asked the user directly — answer: proceed
+   without it for now, tracked here as a known gap, not a blocker. Every
+   phase gated on gold-set completeness (Phase B below, and any later
+   re-probe) proceeds on the current 8-clip corpus.
+7. **Fresh CI-bearing baseline recorded**: `eval_run.id=47` (real
+   `faster_whisper`/th-medium production run, `--config transcribe/config.yaml
+   --db transcriber.db`, `passed=True`) reproduces `id=46`'s point estimates
+   exactly (`cer_thai 0.1751`, `wer_latin 0.8291`, `BER 0.5324`, `cue_BER
+   0.3904` — same config/code/audio, deterministic pipeline) and adds:
+   `cer_thai` CI `[0.0845, 0.2777]`, `wer_latin` CI `[0.4848, 1.0415]`, `BER`
+   CI `[0.2873, 0.8289]`, `cue_BER` CI `[0.2163, 0.5526]`, `rtf=0.133`
+   (~7.5× realtime — comfortably clears the speed handoff's ≥3× target).
+   **Reading the CI widths honestly: they are wide** (e.g. `wer_latin`'s
+   [0.48, 1.04] spans essentially its whole possible range) — an 8-clip
+   corpus really can't resolve fine margins yet, exactly the finding this
+   phase exists to surface. Any future probe whose point estimate wins by a
+   few percent should be read against these bands, not treated as decisive.
+   **Gotcha hit + confirmed still real**: `run_harness` does not call
+   `init_db` on the caller's `db_path` — the pre-existing `transcriber.db`
+   needed the one-time manual
+   `python -c "from transcribe.db.store import init_db; init_db()"` before
+   the new CI/RTF columns existed, exactly as CLAUDE.md's Token-granularity
+   note warns for every prior `eval_run` column addition. First harness
+   invocation crashed with `sqlite3.OperationalError: table eval_run has no
+   column named cer_thai_ci_lo` until that migration ran.
+
 ## Gold-set growth (HANDOFF_CEILING_BREAK §1.2/§3.2) — 3 clips added 2026-08-05, IN PROGRESS
 
 **Three clips landed** (commits `6543249`, `4e87034`, `9705e70`, plus a

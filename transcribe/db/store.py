@@ -55,6 +55,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "cue_count_delta", "cue_count_delta INTEGER")
     _add("eval_run", "shortest_cue_ms", "shortest_cue_ms REAL")
     _add("eval_run", "nonzero_gap_count", "nonzero_gap_count INTEGER")
+    # bootstrap CIs + RTF + unresolved-gate note (Phase A, HANDOFF_ONE_ENGINE §3.1)
+    _add("eval_run", "cer_thai_ci_lo", "cer_thai_ci_lo REAL")
+    _add("eval_run", "cer_thai_ci_hi", "cer_thai_ci_hi REAL")
+    _add("eval_run", "wer_latin_ci_lo", "wer_latin_ci_lo REAL")
+    _add("eval_run", "wer_latin_ci_hi", "wer_latin_ci_hi REAL")
+    _add("eval_run", "boundary_error_rate_ci_lo", "boundary_error_rate_ci_lo REAL")
+    _add("eval_run", "boundary_error_rate_ci_hi", "boundary_error_rate_ci_hi REAL")
+    _add("eval_run", "cue_boundary_error_rate_ci_lo", "cue_boundary_error_rate_ci_lo REAL")
+    _add("eval_run", "cue_boundary_error_rate_ci_hi", "cue_boundary_error_rate_ci_hi REAL")
+    _add("eval_run", "rtf", "rtf REAL")
+    _add("eval_run", "gate_unresolved", "gate_unresolved TEXT")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -188,6 +199,16 @@ class EvalRunRow:
     cue_count_delta: Optional[int] = None
     shortest_cue_ms: Optional[float] = None
     nonzero_gap_count: Optional[int] = None
+    cer_thai_ci_lo: Optional[float] = None
+    cer_thai_ci_hi: Optional[float] = None
+    wer_latin_ci_lo: Optional[float] = None
+    wer_latin_ci_hi: Optional[float] = None
+    boundary_error_rate_ci_lo: Optional[float] = None
+    boundary_error_rate_ci_hi: Optional[float] = None
+    cue_boundary_error_rate_ci_lo: Optional[float] = None
+    cue_boundary_error_rate_ci_hi: Optional[float] = None
+    rtf: Optional[float] = None
+    gate_unresolved: Optional[str] = None
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -576,6 +597,16 @@ def create_eval_run(
     cue_count_delta: Optional[int] = None,
     shortest_cue_ms: Optional[float] = None,
     nonzero_gap_count: Optional[int] = None,
+    cer_thai_ci_lo: Optional[float] = None,
+    cer_thai_ci_hi: Optional[float] = None,
+    wer_latin_ci_lo: Optional[float] = None,
+    wer_latin_ci_hi: Optional[float] = None,
+    boundary_error_rate_ci_lo: Optional[float] = None,
+    boundary_error_rate_ci_hi: Optional[float] = None,
+    cue_boundary_error_rate_ci_lo: Optional[float] = None,
+    cue_boundary_error_rate_ci_hi: Optional[float] = None,
+    rtf: Optional[float] = None,
+    gate_unresolved: Optional[str] = None,
 ) -> int:
     # None → stamp the current metric definitions' version. Lazy import: the
     # semantic owner of the version is eval/metrics.py, and the db layer must
@@ -587,12 +618,18 @@ def create_eval_run(
         "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
         "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, "
         "cue_boundary_error_rate, overlapping_cues, cue_count_delta, shortest_cue_ms, "
-        "nonzero_gap_count, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "nonzero_gap_count, cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi, "
+        "boundary_error_rate_ci_lo, boundary_error_rate_ci_hi, cue_boundary_error_rate_ci_lo, "
+        "cue_boundary_error_rate_ci_hi, rtf, gate_unresolved, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
          kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
          int(metrics_version), float(cue_boundary_error_rate), int(overlapping_cues),
-         cue_count_delta, shortest_cue_ms, nonzero_gap_count, int(passed)),
+         cue_count_delta, shortest_cue_ms, nonzero_gap_count,
+         cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi,
+         boundary_error_rate_ci_lo, boundary_error_rate_ci_hi,
+         cue_boundary_error_rate_ci_lo, cue_boundary_error_rate_ci_hi,
+         rtf, gate_unresolved, int(passed)),
     )
     conn.commit()
     return cur.lastrowid

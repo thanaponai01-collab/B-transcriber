@@ -23,6 +23,7 @@ before scoring, so the metric never compares against an un-normalized (moving) t
 
 from __future__ import annotations
 
+import random
 import re
 from dataclasses import dataclass
 
@@ -293,6 +294,75 @@ def _cue_gap_stats(tokens: list[dict]) -> tuple[float | None, int]:
             prev_end = float(end)
     shortest = min(durations) if durations else None
     return shortest, nonzero_gaps
+
+
+# ── bootstrap confidence intervals (HANDOFF_ONE_ENGINE §3.1) ──────────────────
+#
+# Every regression verdict to date compared two single point estimates, with
+# no way to tell a real 1% move from run-to-run resampling noise on an 8-clip
+# corpus (several standing rejections were decided by margins smaller than
+# this). Resampling clips with replacement and recomputing the corpus
+# aggregate on each draw gives each gated metric a real sampling distribution,
+# using the same aggregation rule the harness already uses for it (ratio-of-
+# sums for cer_thai/wer_latin, micro-F1 for the two boundary signals) — a CI
+# band computed any other way wouldn't mean what the point estimate means.
+# Descriptive only: doesn't change any metric's *definition*, so this does
+# not bump METRICS_VERSION.
+
+CI_METRICS = ("cer_thai", "wer_latin", "boundary_error_rate", "cue_boundary_error_rate")
+
+
+def _resample_aggregate(sample: list["EvalMetrics"], metric: str) -> float:
+    """Recompute one corpus-aggregate metric over a (possibly resampled) list
+    of per-clip EvalMetrics, mirroring harness.run_harness's aggregation rule."""
+    if metric == "cer_thai":
+        den = sum(m.thai_chars for m in sample)
+        return sum(m.cer_thai * m.thai_chars for m in sample) / den if den else 0.0
+    if metric == "wer_latin":
+        den = sum(m.latin_words for m in sample)
+        return sum(m.wer_latin * m.latin_words for m in sample) / den if den else 0.0
+    if metric == "boundary_error_rate":
+        return boundary_f1_error(
+            sum(m.matched_switches for m in sample),
+            sum(m.ref_switches for m in sample),
+            sum(m.hyp_switches for m in sample),
+        )
+    if metric == "cue_boundary_error_rate":
+        return boundary_f1_error(
+            sum(m.matched_cues for m in sample),
+            sum(m.ref_cues for m in sample),
+            sum(m.hyp_cues for m in sample),
+        )
+    raise ValueError(f"no CI aggregation rule for metric {metric!r}")
+
+
+def bootstrap_ci(
+    clip_metrics: list["EvalMetrics"],
+    metric: str,
+    n_draws: int = 1000,
+    ci: float = 0.95,
+    seed: int | None = 0,
+) -> tuple[float, float]:
+    """Percentile bootstrap CI for a corpus-level aggregate metric.
+
+    Resamples clips (not characters/words within a clip — the unit a new gold
+    clip actually adds) with replacement `n_draws` times and recomputes the
+    aggregate each draw. `seed` defaults to a fixed value so re-running the
+    harness against an unchanged hypothesis reproduces the same band (Phase A's
+    acceptance check: "a re-run of the baseline reproduces within CI"); pass
+    `seed=None` for a fresh draw each call.
+    """
+    n = len(clip_metrics)
+    if n == 0:
+        return (0.0, 0.0)
+    rng = random.Random(seed)
+    draws = sorted(
+        _resample_aggregate([clip_metrics[rng.randrange(n)] for _ in range(n)], metric)
+        for _ in range(n_draws)
+    )
+    lo = draws[int((1 - ci) / 2 * n_draws)]
+    hi = draws[min(n_draws - 1, int((1 + ci) / 2 * n_draws))]
+    return lo, hi
 
 
 # ── normalization (identical treatment of ref and hyp) ─────────────────────────

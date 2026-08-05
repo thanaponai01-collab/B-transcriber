@@ -148,6 +148,26 @@ CREATE TABLE IF NOT EXISTS eval_run (
     cue_count_delta         INTEGER,
     shortest_cue_ms         REAL,
     nonzero_gap_count       INTEGER,
+    -- Bootstrap CIs + RTF (HANDOFF_ONE_ENGINE §3.1, Phase A). Descriptive only
+    -- (no metrics_version bump — the metric *definitions* didn't change):
+    -- 95% percentile-bootstrap band per gated metric (metrics.bootstrap_ci,
+    -- clip-level resampling) plus wall-clock-decode ÷ audio-duration. NULL on
+    -- rows predating this column (old runs simply have no band recorded).
+    -- gate_unresolved: comma-separated names of gated metrics whose point
+    -- estimate crossed the regression tolerance but whose CI still contained
+    -- the baseline value — recorded instead of hard-failing the run on noise
+    -- indistinguishable from a real regression at this corpus size. NULL when
+    -- every gated metric either passed cleanly or regressed outside its CI.
+    cer_thai_ci_lo              REAL,
+    cer_thai_ci_hi              REAL,
+    wer_latin_ci_lo             REAL,
+    wer_latin_ci_hi             REAL,
+    boundary_error_rate_ci_lo   REAL,
+    boundary_error_rate_ci_hi   REAL,
+    cue_boundary_error_rate_ci_lo REAL,
+    cue_boundary_error_rate_ci_hi REAL,
+    rtf                 REAL,
+    gate_unresolved      TEXT,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );
