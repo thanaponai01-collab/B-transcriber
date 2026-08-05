@@ -43,8 +43,21 @@
 #           NOT evidence the architecture can't work — evidence the current
 #           prompt/model/fallback combination doesn't yet make it work.
 #
-#           Next untried candidate: a Qwen3-ASR adapter (see
-#           IMPLEMENT_IMPROVEMENTS.md Phase 2).
+#           qwen3_asr (Qwen3-ASR-1.7B, LLM-decoder ASR) — 2026-08-05: an
+#           initial probe was a false negative (adapter bug: one whole-clip
+#           token at a placeholder 0,0ms timestamp couldn't align against
+#           Engine A's real per-cue timestamps in align_hyp.py, so B was a
+#           silent no-op — see engines/qwen3_asr.py's docstring). Fixed via
+#           internal VAD chunking (real per-span timestamps,
+#           timestamps_final=True). Re-probed: CER_thai unchanged (0.1415,
+#           no dilution), BER improved (0.8169→0.8056), but WER_latin stayed
+#           flat (1.0452) — doesn't clear the "BER AND WER_latin both
+#           improve" activation bar. NOT a rejection like the three above:
+#           zero regression, real (if small) improvement, blocked mainly by
+#           the same _script_fallback confidence=None bias diagnosed for
+#           whisper_multi. Next lever: fix that tiebreak (§4.3 in
+#           HANDOFF_CEILING_BREAK.md), then re-probe. See TODO_LEDGER.md
+#           "Qwen3-ASR internal VAD chunking fix" for full numbers.
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
@@ -116,6 +129,13 @@ engines:
     model_id: Qwen/Qwen3-ASR-1.7B
     max_inference_batch_size: 8
     max_new_tokens: 256
+    # 2026-08-xx: capped well under faster_whisper's 25s _LONG_SPAN_SAFE_S —
+    # a real-disagreement instrumentation pass found every _script_fallback
+    # disagreement was Engine A's ~2-5s phrase cue vs one Qwen3-ASR token
+    # spanning up to 25s of multi-sentence speech, never a comparable
+    # head-to-head. See engines/qwen3_asr.py's _speech_spans_s docstring and
+    # TODO_LEDGER.md "Qwen3-ASR span-granularity fix".
+    max_span_s: 8.0
 
 # Ingestion
 denoise: true

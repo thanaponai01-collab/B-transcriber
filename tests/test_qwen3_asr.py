@@ -24,14 +24,19 @@ class _Result:
 
 
 class _FakeQwen3ASRModel:
+    """Consumes results off a queue (n per call, n=1 for a single-item call) so
+    it works correctly whether the adapter makes one batched call across many
+    spans/inputs or several independent single-item calls in sequence."""
+
     def __init__(self, results):
-        self._results = results
+        self._results = list(results)
         self.calls = []
 
     def transcribe(self, audio, context="", language=None):
         self.calls.append({"audio": audio, "context": context, "language": language})
         n = len(audio) if isinstance(audio, list) else 1
-        return self._results[:n] if isinstance(audio, list) else [self._results[0]]
+        out, self._results = self._results[:n], self._results[n:]
+        return out
 
 
 def _engine_with(results):
@@ -47,16 +52,68 @@ def test_registered():
     assert eng.prefers_whole_file is True
 
 
-def test_transcribe_maps_text_confidence_none_timestamps_not_final():
+def test_transcribe_maps_text_confidence_none_real_timestamps():
+    # 1s of silence: VAD finds no speech, falls back to one whole-clip span
+    # (0, 1000ms) — a real, derived timestamp, not the old (0, 0) placeholder.
     res = _engine_with([_Result("สวัสดีครับ ผมอยากจะ share screen ให้ดู", language="Thai")]) \
         .transcribe(EngineInput(audio=np.zeros(16000, dtype=np.float32)))
     assert len(res.tokens) == 1
     assert res.tokens[0].text == "สวัสดีครับ ผมอยากจะ share screen ให้ดู"
     assert res.tokens[0].confidence is None          # never faked
     assert res.tokens[0].script == "mixed"
-    assert res.timestamps_final is False             # forced-align path assigns real ms
+    assert res.tokens[0].start_ms == 0
+    assert res.tokens[0].end_ms == 1000
+    assert res.timestamps_final is True              # span-derived, no forced-align needed
     assert res.engine_name == "qwen3_asr"
     assert res.raw["language"] == "Thai"
+
+
+def test_transcribe_multi_span_gets_real_per_span_timestamps(monkeypatch):
+    """When VAD finds multiple speech spans, each gets its own token with a
+    real span-derived timestamp, via one batched underlying model call."""
+    import transcribe.engines.qwen3_asr as mod
+
+    monkeypatch.setattr(mod, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 1.0), (2.0, 3.5)])
+    eng = _engine_with([_Result("อันแรก"), _Result("อันที่สอง")])
+    res = eng.transcribe(EngineInput(audio=np.zeros(4 * 16000, dtype=np.float32)))
+
+    assert [t.text for t in res.tokens] == ["อันแรก", "อันที่สอง"]
+    assert (res.tokens[0].start_ms, res.tokens[0].end_ms) == (0, 1000)
+    assert (res.tokens[1].start_ms, res.tokens[1].end_ms) == (2000, 3500)
+    assert res.timestamps_final is True
+    # One batched call across both spans, not two separate calls.
+    assert len(eng._model.calls) == 1
+    assert isinstance(eng._model.calls[0]["audio"], list) and len(eng._model.calls[0]["audio"]) == 2
+
+
+def test_long_span_is_capped_at_max_span_s(monkeypatch):
+    """A single long VAD span must be chopped at max_span_s (default 8.0, NOT
+    faster_whisper's 25s _LONG_SPAN_SAFE_S) so this engine's candidates stay
+    comparable in scale to Engine A's ~2-5s phrase cues — see TODO_LEDGER.md
+    "Qwen3-ASR span-granularity fix". A 20s span must become 3 windows for
+    max_span_s=8.0 (0-8, 8-16, 16-20), not stay as one 20s blob."""
+    import transcribe.engines.qwen3_asr as mod
+
+    monkeypatch.setattr(mod, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 20.0)])
+    eng = _engine_with([_Result("หนึ่ง"), _Result("สอง"), _Result("สาม")])
+    res = eng.transcribe(EngineInput(audio=np.zeros(20 * 16000, dtype=np.float32)))
+
+    assert [(t.start_ms, t.end_ms) for t in res.tokens] == [(0, 8000), (8000, 16000), (16000, 20000)]
+
+
+def test_max_span_s_is_configurable():
+    import transcribe.engines.qwen3_asr as mod
+
+    monkeypatch_target = mod._vad_speech_spans
+    try:
+        mod._vad_speech_spans = lambda audio, th, ms: [(0.0, 20.0)]
+        eng = _engine_with([_Result("หนึ่ง")])
+        eng._max_span_s = 20.0  # >= span length -> no split
+        res = eng.transcribe(EngineInput(audio=np.zeros(20 * 16000, dtype=np.float32)))
+        assert len(res.tokens) == 1
+        assert (res.tokens[0].start_ms, res.tokens[0].end_ms) == (0, 20000)
+    finally:
+        mod._vad_speech_spans = monkeypatch_target
 
 
 def test_empty_text_yields_no_tokens():
@@ -81,7 +138,7 @@ def test_transcribe_batch_maps_each_input_in_order():
     ]
     results = eng.transcribe_batch(inputs)
     assert [r.tokens[0].text for r in results] == ["อันแรก", "อันที่สอง"]
-    assert all(r.timestamps_final is False for r in results)
+    assert all(r.timestamps_final is True for r in results)  # each delegates to transcribe()
     assert all(r.tokens[0].confidence is None for r in results)
 
 

@@ -266,9 +266,113 @@ This is the highest-leverage change for the Premiere recut loop, and Phase 1.1 i
 
 ## 6. PHASE 4 — Engine B that can actually earn its runtime (code-switch wall)
 
-> **STATUS (2026-08-05): §4.1 adapter BUILT + smoke-verified against real
-> weights on GPU. Harness probe still BLOCKED — no gold-set audio on this
-> machine.**
+> **STATUS (2026-08-05, third pass same day): §4.3's two "next lever" ideas
+> both INVESTIGATED WITH REAL EVIDENCE and REJECTED — Engine B still NOT
+> ACTIVATED.** Continuing straight from the second-pass status block below
+> (kept verbatim further down for history), on the same RTX 4070 Ti machine
+> with real gold-set audio.
+>
+> **Root cause was NOT the confidence=None bias the second pass diagnosed —
+> it was a span-granularity mismatch, found by instrumenting real
+> disagreement pairs instead of theorizing.** Every logged `_script_fallback`
+> disagreement showed Engine A's ~2-5s phrase cue matched against ONE
+> Qwen3-ASR token spanning up to 25s (the adapter inherited
+> `faster_whisper`'s `_LONG_SPAN_SAFE_S=25.0` with no override) — `align_hyp.py`
+> compares each short A cue against whichever B token's time window
+> overlaps it, so every A cue inside a long VAD segment was being compared
+> against the *same* giant multi-sentence B blob. Not a real head-to-head at
+> any confidence-tiebreak logic could act on. **Fixed:** the adapter now
+> takes a `max_span_s` param (default 8.0, `config.yaml`'s
+> `engines.qwen3_asr.max_span_s`) capping its own span splitting well under
+> Whisper's 25s ceiling, so candidates are finally scale-comparable to A's
+> cues. Re-probed: gate numbers came back **byte-identical** to the
+> pre-fix probe (`cer_thai 0.1415`, `wer_latin 1.0452`, `BER 0.8056`) —
+> the fix makes the comparison real, but doesn't change the outcome, because
+> `_script_fallback`'s null-confidence branch (`ta.confidence or 0.0` vs
+> `tb.confidence or 0.0`) makes A win literally every disagreement when
+> Qwen3-ASR reports `None`, regardless of candidate size.
+>
+> **The actual §4.3 null-confidence tiebreak was then tested for real** (an
+> env-var-gated probe branch: prefer B when A's own confidence drops below a
+> threshold) — at threshold 0.75: `cer_thai` **regressed** 0.1415→0.1614
+> (fails the gate) for a marginal `wer_latin`/BER gain. Rejected and
+> reverted — `reconcile.py` is byte-identical to before this pass. The
+> instrumented disagreement log explains why: the one flip this threshold
+> causes has Qwen3-ASR **transliterating** an English loanword ("Jazz",
+> "Symbolic") into Thai script rather than preserving it — a real,
+> observed case of Engine A's lower confidence correlating with
+> *code-switch content A still gets right*, not with A being wrong. This is
+> now a documented model-quality finding (§9), not an open reconciler
+> question — Qwen3-ASR does not clearly outperform Engine A on code-switch
+> content on this corpus, contrary to the architectural hypothesis in §4.1.
+>
+> **What shipped from this pass:** `max_span_s=8.0` (real fix, zero
+> regression, kept — needed groundwork for any future reconciler-tiebreak
+> probe to mean anything) + 2 new tests. `_script_fallback` unchanged.
+> `engine_b: passthrough` unchanged in production config. Full numbers:
+> TODO_LEDGER.md "Qwen3-ASR span-granularity fix + null-confidence tiebreak
+> investigated and REJECTED" (2026-08-05). **Next real lever, if revisited:
+> §3.2's grown gold set** — this verdict rests on one 5-clip corpus and the
+> one data point that mattered came from a single clip; no further
+> reconciler-heuristic tuning without new evidence, matching the discipline
+> that already closed DP-cue-split and the LLM reconciler.
+>
+> <details><summary>Second-pass status block (2026-08-05, superseded above — kept for history)</summary>
+>
+> **STATUS (2026-08-05, second pass same day): §4.1 adapter BUILT, a wiring
+> bug FIXED, and a real (first-ever) probe run — NOT ACTIVATED, but for a
+> new and more informative reason than any prior rejection.**
+> The RTX 4070 Ti machine used for §4/§5's probes turned out to already have
+> the gold-set audio (`transcribe/eval/goldenset/*.mp3`) — the "blocked, no
+> audio" note directly below was specific to a different (RTX 3070) machine.
+> `qwen-asr==0.0.6` installed cleanly into that machine's project `.venv`
+> with no dependency downgrades needed (its `transformers`/`huggingface_hub`
+> were already at compatible versions).
+>
+> **First probe was a false negative, not a verdict.** The adapter (as
+> originally built, see the unchanged history below) emitted ONE token per
+> file spanning the whole clip at a placeholder `start_ms=0, end_ms=0`,
+> deferring real timestamps to the forced-alignment pass. That plan doesn't
+> match the pipeline order: `align_hyp.py` (hypothesis-to-hypothesis
+> alignment, a pure temporal-window match) runs **before** reconciliation;
+> forced alignment runs **after**. A zero-duration token at t=0 can only be
+> considered against Engine A tokens in the first ~1.5s of a clip, so on any
+> real multi-cue file Engine B was a silent no-op — confirmed by the first
+> probe coming back byte-identical to the passthrough baseline on every
+> metric to 4 decimals, despite a standalone adapter call proving the model
+> itself produces a real, coherent Thai transcript.
+>
+> **Fixed:** the adapter now runs its own internal VAD (reusing
+> `engines.faster_whisper._vad_speech_spans`) and emits one token per real
+> speech span with a genuine span-derived timestamp — `timestamps_final`
+> flipped `False`→`True`. Verified on `Short1.mp3`: 4 real-timestamped
+> tokens instead of one 0–0 blob. Tests updated, suite 335 green.
+>
+> **Re-probed — first real signal ever from an Engine B candidate on this
+> gold set** (vs baseline `eval_run.id=25`): `cer_thai` **unchanged**
+> (0.1415, no dilution), `boundary_error_rate` **improved** (0.8169→0.8056),
+> `cue_boundary_error_rate` +0.0027 (inside tolerance), but `wer_latin`
+> **flat** (1.0452, no movement at all). `passed=True`, no regression — but
+> this doesn't clear the activation bar below, which needs BOTH BER and
+> `wer_latin` to improve.
+>
+> **Why `wer_latin` didn't move (diagnosed, not chased further this
+> session):** `reconcile._script_fallback` routes on Engine A's own script
+> label and Qwen3-ASR honestly reports `confidence=None` — the exact
+> structural bias §4.3 already predicted would recur ("Qwen3-ASR will
+> likely report confidence=None too, so this fires immediately"). The BER
+> gain likely comes from solo Engine-B slot insertions, not won
+> disagreements. **Distinguish this from the four standing rejections in
+> §9**: those had real regressions; this has zero regression and a small
+> real improvement, just not enough to activate — and it makes §4.3's
+> null-confidence tiebreak finally testable against a real Engine B. Full
+> numbers: TODO_LEDGER.md "Qwen3-ASR internal VAD chunking fix" (2026-08-05).
+>
+> **Production config.yaml unchanged**: `engine_b: passthrough`. Everything
+> above ran via `--engine-b qwen3_asr --experiment`.
+>
+> <details><summary>Original (now-superseded) blocked-probe note from earlier the same day</summary>
+>
 > `transcribe/engines/qwen3_asr.py` exists, is registered (`"qwen3_asr"` in
 > `engines/registry.py`), config-wired (`config.yaml`'s `engines.qwen3_asr`
 > block, `engine_b` still `passthrough` — not activated), and unit-tested
@@ -285,20 +389,14 @@ This is the highest-leverage change for the Premiere recut loop, and Phase 1.1 i
 > on the RTX 3070 (~4.08GB VRAM, well inside the 8GB ceiling) and a full
 > `load()`→`transcribe()`→`unload()` round-trip against synthetic audio
 > returned a correctly-shaped `EngineResult` and freed VRAM cleanly.
-> **What's still blocked: the actual probe ladder.** Running `harness.py`
-> for real printed "no audio for \<name\>.json, skipping" for all 5 gold-set
-> entries — `transcribe/eval/goldenset/*.wav` are gitignored and **not
-> present anywhere in this checkout**. This blocks any harness probe here,
-> not something specific to Qwen3-ASR (§4/§5's DONE probes must have run on
-> a different machine — the handoff itself notes §4 ran on an RTX 4070 Ti,
-> confirmed via `nvidia-smi`, a different box than this RTX 3070 one). Next
-> step needs the gold-set audio on this machine (or this adapter handed to
-> whichever machine has it) before step (a) below can run. **Asked the user
-> where the audio lives (2026-08-05) — deferred, not resolved**; three
-> options recorded for next session (local copy / audio-only-on-other-box /
-> re-cut via `tools/make_gold.py`, tying into §3.2's still-NOT-DONE gold-set
-> growth). Full notes: TODO_LEDGER.md "Qwen3-ASR Engine B adapter"
-> (2026-08-05, all three entries).
+> Running `harness.py` for real printed "no audio for \<name\>.json,
+> skipping" for all 5 gold-set entries on that (RTX 3070) machine — resolved
+> on the RTX 4070 Ti machine as described above, which already had the
+> audio all along.
+>
+> </details>
+>
+> </details>
 
 Every prior candidate was rejected for cause; the ledger's standing conclusions hold (**do not re-probe** SenseVoiceSmall-funasr, typhoon_rt, or plain whisper_multi without new evidence). The two candidates below are genuinely new:
 
@@ -377,6 +475,8 @@ These are decisions, not code (ledger, 2026-07-30):
 | Re-tuning `cue_space_min_*` knobs | Measured flat — the greedy fill is the blocker (§5) | TODO_LEDGER 2026-07-30 |
 | Cloud ASR engines | Local-only design; open weights currently *lead* on Thai anyway (§2 table) | arXiv 2601.13044 Table 6 |
 | Generation inside the reconciler (GER) | Violates the core anti-hallucination guarantee; constrained shape only, later | §6 note |
+| `_script_fallback` null-confidence tiebreak favoring Qwen3-ASR on low-A-confidence | Rejected — regresses `cer_thai` 0.1415→0.1614 for marginal `wer_latin`/BER gain; A's low confidence correlates with hard-but-correct code-switch content, not with A being wrong | TODO_LEDGER 2026-08-05 "Qwen3-ASR span-granularity fix" |
+| Qwen3-ASR as a code-switch improvement over Engine A (on this corpus) | Not supported by evidence — observed transliterating English loanwords into Thai script rather than preserving them | TODO_LEDGER 2026-08-05, same entry |
 
 ---
 
@@ -385,8 +485,8 @@ These are decisions, not code (ledger, 2026-07-30):
 1. **Metrics v3 + gold-set growth** (§3) — the measurement floor; gold authoring is the schedule-critical human task. **§3.1 DONE 2026-08-04; §3.2 gold-set growth still NOT done — needs the user.**
 2. **Engine A probes: Typhoon Whisper Large-v3, Pathumma Large-v3** (§4 §2) — biggest expected CER win, near-zero code. **DONE 2026-08-04 — both REJECTED, production config unchanged. See §4 status block for numbers and why the verdict is provisional pending §1's gold-set growth.**
 3. **DP cue split** (§5) — the user's real pain, now measurable. **DONE 2026-08-04 — built, tested, probed; NOT ACTIVATED (regresses `cue_boundary_error_rate` 0.3865 vs 0.3590 baseline on the current 5-clip gold set, though it beats greedy on cue-count and switch-matching). See §5 status block / TODO_LEDGER.md for full numbers and the re-probe conditions.**
-4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall.
-5. **LLM reconciler round 3 (7B, few-shot)** — only after 4 produces a real second hypothesis.
+4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall. **Adapter built, a timestamp-wiring bug fixed, a span-granularity bug fixed, and both §4.3 null-confidence tiebreak ideas tested with real harness evidence and rejected 2026-08-05 — NOT ACTIVATED. `wer_latin` stays flat not because of an unexplored reconciler bias but because trusting Qwen3-ASR more costs real `cer_thai` for only a marginal gain, and the model itself was observed transliterating code-switched English into Thai on this corpus. See §6 status block / TODO_LEDGER.md for numbers.**
+5. **LLM reconciler round 3 (7B, few-shot)** — only after 4 produces a real second hypothesis. Given §4's finding that Qwen3-ASR itself doesn't clearly beat A on code-switch content here, this is now lower-priority than §3.2's gold-set growth — a bigger/smarter reconciler can't fix a candidate-quality problem.
 6. **Policy decisions** (§7) and **housekeeping** (§8) — opportunistic.
 
 ### Sources (external)

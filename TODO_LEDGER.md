@@ -3,6 +3,173 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Qwen3-ASR span-granularity fix + null-confidence tiebreak investigated and REJECTED (HANDOFF_CEILING_BREAK §6/4.3) — executed 2026-08-05
+
+**Context:** continuing §6/4.1's "next levers" list from the entry directly
+below. This session ran on the RTX 4070 Ti machine with real gold-set audio
+and a working `qwen-asr` install, so both open levers were actually
+probeable instead of theorized.
+
+**Lever 1 diagnosed first, before touching the reconciler at all:**
+instrumented `_script_fallback` to log every real (ta, tb) disagreement pair
+from a live `--engine-b qwen3_asr --experiment` harness run. Every single
+logged pair showed Engine A's short (~2-5s, `cue_target_chars=42`) phrase
+cue matched against ONE Qwen3-ASR token spanning up to 25s — the adapter's
+`_split_long_span` call had no `max_span_s` override, so it inherited
+`faster_whisper._LONG_SPAN_SAFE_S=25.0`. `align_hyp.py` matches each short A
+cue against whichever B token's time window overlaps it, so every A cue
+inside a long VAD segment was being compared against the SAME giant
+multi-sentence B blob — not a real head-to-head, a granularity mismatch no
+reconciler tiebreak logic could see past. This is a different and more
+fundamental root cause than the "§4.3 confidence=None bias" theory the
+entry below closed with.
+
+**Fix:** added a `max_span_s` constructor param to `Qwen3ASREngine` (default
+**8.0**, vs faster_whisper's 25.0), threaded into `_speech_spans_s`'s
+`_split_long_span` call, exposed in `config.yaml`'s `engines.qwen3_asr`
+block. Re-instrumented and re-ran: candidates are now genuinely comparable
+in scale (confirmed in the log — real word-for-word and phrase-for-phrase
+disagreements, including several where A correctly kept an English loanword
+Latin, e.g. `A='กับ Jazz เพราะว่ามัน Symbolic'` vs a Thai-transliterating
+B). Added `tests/test_qwen3_asr.py::test_long_span_is_capped_at_max_span_s`
++ `test_max_span_s_is_configurable`; suite 337 green.
+
+**Re-probed with the fix** (`--engine-b qwen3_asr --experiment`): numbers
+came back **byte-identical** to the pre-fix probe in the entry below
+(`cer_thai 0.1415`, `wer_latin 1.0452`, `BER 0.8056`, `cue_BER 0.3617`,
+switches 40/14). Root cause: `_script_fallback`'s null-confidence branch
+falls through to `ca = ta.confidence or 0.0; cb = tb.confidence or 0.0`
+whenever `ta.script` is `"mixed"` (common now that A's own candidates
+correctly contain inline English words) — since Qwen3-ASR's `confidence` is
+always `None` → `cb=0.0`, and A's real confidence in the instrumented log
+ranged ~0.72-0.99, **A wins literally every head-to-head disagreement,
+regardless of candidate size.** The span-cap fix makes the comparison real
+for the first time, but doesn't change the outcome under the current
+tiebreak — confirmed, not theorized.
+
+**Lever 2, tested for real (not just reasoned about):** added a temporary
+env-var-gated branch — if `tb.confidence is None` and `ta.confidence` is
+below a threshold, prefer B (the "A is unsure enough to give B a look"
+idea named in the entry below). Probed at threshold 0.75:
+`cer_thai 0.1415→0.1614` (**regression, fails the gate**, `passed=False`),
+`wer_latin 1.0452→1.0323` (marginal improvement), `BER 0.8056→0.8000`
+(marginal improvement). **Rejected** — same trade-off class as the LLM
+reconciler's round-2 rejection (2026-07-16 entry below): trusting B more
+buys a small code-switch gain at a real Thai-accuracy cost. The
+instrumented log explains why directly: the one row this threshold flips
+(`A='กับ Jazz เพราะว่ามัน Symbolic' conf=0.723`) has B **transliterating**
+"Jazz"/"Symbolic" into Thai script instead of preserving them — Qwen3-ASR's
+lower-confidence-on-code-switch behavior in A doesn't correlate with A
+being wrong here, it correlates with content that's genuinely hard to score
+confidently but that A still gets right. Reverted immediately after
+measuring; `_script_fallback` is byte-identical to before this session
+(verified via `git diff`).
+
+**Verdict:** `max_span_s=8.0` KEPT (real fix, zero regression, needed for
+any future reconciler-tiebreak probe to mean anything) — `config.yaml`'s
+`engines.qwen3_asr.max_span_s: 8.0` and the adapter change ship together.
+`_script_fallback` UNCHANGED — both tested null-confidence tiebreak ideas
+from §4.3 ("Latin content" implied by the entry below, and the low-A-
+confidence threshold actually tested here) are now evidence-based
+rejections, not open questions. `engine_b: passthrough` unchanged in
+production config. **New standing finding for §9's rejection table:**
+Qwen3-ASR does not clearly outperform Engine A on code-switch content on
+this 5-clip corpus — it sometimes transliterates English loanwords into
+Thai script rather than preserving them, which is a model-quality
+observation, not a reconciler bug. Next real lever, if this is revisited:
+§3.2's grown gold set (this corpus is one 5-clip sample and the one
+low-confidence data point that mattered came from a single clip) — no
+further reconciler-heuristic tuning without new evidence, per the same
+discipline that closed the DP-cue-split and LLM-reconciler tracks.
+
+## Qwen3-ASR internal VAD chunking fix + first real Engine B probe — NOT ACTIVATED (HANDOFF_CEILING_BREAK §6/4.1) — executed 2026-08-05
+
+**Context:** this machine (RTX 4070 Ti, 12GB, `.venv` 3.11.9) turned out to
+already have the gold-set audio (`transcribe/eval/goldenset/*.mp3`, present
+since 2026-07-14/15 — the prior session's "blocked, no audio on this
+machine" note was specific to a *different* machine). Installed `qwen-asr`
+into the project `.venv` (dry-run showed no downgrades needed — this venv's
+`transformers`/`huggingface_hub` were already at the versions the other
+machine's system-Python install had landed on; only new additive packages:
+`qwen-asr==0.0.6`, `gradio`, `accelerate`, etc. — full suite 334 green after
+install). Ran the first-ever real harness probe with `--engine-b qwen3_asr
+--experiment`.
+
+**Bug found — the probe was initially meaningless, not a model verdict:**
+the adapter (as built in the prior session, see the entry below) emits ONE
+token per file spanning the whole clip at a placeholder `start_ms=0,
+end_ms=0`, with the intent that the pipeline's forced-alignment pass would
+fill in real timestamps later. That plan doesn't match the actual pipeline
+order in `CLAUDE.md`: `align_hyp.py` (hypothesis-to-hypothesis alignment,
+purely a temporal-window match, see its `_MATCH_PROX_MS=1500`/
+`_token_overlap_ms`) runs **before** reconciliation; forced alignment runs
+**after**. A zero-duration token at t=0 can only even be considered against
+Engine A tokens starting in the first ~1.5s of a clip. First probe run came
+back **byte-identical to the passthrough baseline on every single metric**
+(`cer_thai 0.1415`, `BER 0.8169`, `cue_BER 0.3590`, exact match to 4
+decimals) — confirmed via a standalone adapter call on `Short1.mp3` that the
+model itself produces a real, coherent Thai transcript; the bug was purely
+in how the adapter's output could never participate in `align_hyp.py`.
+
+**Fix:** gave the adapter the same contract `faster_whisper`'s already
+satisfies for a `prefers_whole_file=True` engine — do its own internal VAD
+(reused `engines.faster_whisper._vad_speech_spans`, no new dependency; long
+spans split via the existing `_split_long_span` with `overlap_s=0.0` since
+this engine has no stitcher to dedupe an overlap-induced duplicate) and emit
+one token per real speech span with a genuine span-derived `start_ms`/
+`end_ms`, so `timestamps_final=True` now instead of `False`. Verified
+directly on `Short1.mp3`: 4 tokens with real, distinct timestamps matching
+VAD segmentation, vs. the old single 0–0 blob. `transcribe_batch()` now
+delegates to `transcribe()` per input for the same fix (it's dead code in
+production — `prefers_whole_file=True` means `run.py` never calls it — kept
+for adapter-contract completeness). Updated `tests/test_qwen3_asr.py`
+(timestamps_final assertions flipped to `True`, added a monkeypatched
+multi-span test, made the fake model's `transcribe()` consume a queue
+instead of always returning index 0 so per-input sequential calls work);
+suite 335 green.
+
+**Re-probed with the fix, `eval_run` vs baseline `id=25`:**
+
+| Signal | Baseline | This probe | Delta |
+|---|---|---|---|
+| `cer_thai` | 0.1415 | 0.1415 | unchanged — no dilution |
+| `wer_latin` | 1.0452 | 1.0452 | **unchanged** — no improvement |
+| `boundary_error_rate` | 0.8169 | **0.8056** | improved |
+| `cue_boundary_error_rate` | 0.3590 | 0.3617 | +0.0027, inside `regression_abs_floor` (0.005) |
+| switches (hyp/matched) | 38 / 13 | 40 / 14 | small real movement |
+
+`passed=True` per the harness gate (no metric regressed past tolerance),
+and — critically — this is the **first time** an Engine B candidate run on
+this gold set produced numbers different from the passthrough baseline,
+confirming Engine B now genuinely participates in reconciliation. But it
+does **not** clear §6's stated activation bar ("BER and wer_latin improve
+AND cer_thai holds") — `wer_latin` is flat, not improved.
+
+**Root-cause hypothesis for the flat `wer_latin` (not chased further this
+session):** `reconcile.py`'s `_script_fallback` (lines 93–110) routes purely
+on Engine A's own `ta.script` label — if `ta.script == "thai"` it always
+picks A outright, and Qwen3-ASR honestly reports `confidence=None` (never
+faked), so the confidence-tiebreak branch degrades to always favoring
+whichever side has *a* confidence value, i.e. A. This is the exact same
+structural bias diagnosed for `whisper_multi` in the 2026-07-16 entry below,
+and HANDOFF_CEILING_BREAK.md §4.3 already named it as the expected next
+failure mode ("Qwen3-ASR will likely report confidence=None too, so this
+fires immediately"). The small BER gain most likely comes from solo
+Engine-B slot insertions (align_hyp assigning a B token no A candidate
+matched) rather than from winning real head-to-head disagreements.
+
+**Verdict: NOT ACTIVATED.** `config.yaml`'s `engine_b: passthrough` is
+unchanged — all of this was run via `--engine-b qwen3_asr --experiment`,
+never touching the production default. Distinguish this from the four prior
+Engine-B rejections (funasr/typhoon_rt/whisper_multi/re-tuned cue knobs):
+those had real regressions; this one has zero regression and a small,
+real, non-diluting improvement, just not enough to clear the bar on a
+5-clip corpus with a known reconciler bias still in the way. Next levers,
+in order: (1) §4.3's already-planned `_script_fallback` tiebreak for
+null-confidence engines (length/completeness heuristic) — now finally
+testable since a real Engine B exists — then re-probe; (2) §3.2's grown
+gold set, still not done, to tell signal from noise on a corpus this small.
+
 ## Housekeeping (§8) + policy debts (§7) pass — HANDOFF_CEILING_BREAK.md — 2026-08-05
 
 **Context:** §6/4.1 (Qwen3-ASR harness probe) is still blocked on missing

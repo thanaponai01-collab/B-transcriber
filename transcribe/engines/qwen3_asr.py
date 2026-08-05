@@ -18,11 +18,28 @@ the model's prompt), which this adapter uses for `EngineInput.bias_terms` via
 the same `flywheel.inject.build_prompt` budget-packing every other engine's
 bias injection uses — GAP-5's mechanism, this engine's own slot.
 
-Timestamps: start with `timestamps_final=False` and let the pipeline's existing
-forced-alignment path assign real ms values (the smaller diff per the handoff) —
-wiring the companion `Qwen3-ForcedAligner-0.6B` (`transcribe(..., return_time_stamps=True)`,
-requires passing `forced_aligner=` at `from_pretrained` time) is a later,
-separate probe, not part of this first cut.
+Timestamps (revised 2026-08-05, see TODO_LEDGER "Qwen3-ASR internal VAD
+chunking fix"): the original design emitted ONE whole-clip token at a
+placeholder start_ms=0/end_ms=0 and deferred real timestamps to the
+pipeline's forced-alignment pass. That's incompatible with the actual
+pipeline order in CLAUDE.md: `align_hyp.py` (hypothesis-to-hypothesis
+alignment, purely a temporal-window match — see its `_MATCH_PROX_MS`/
+`_token_overlap_ms`) runs BEFORE reconciliation, and forced alignment runs
+AFTER. A zero-duration token at t=0 can only even be considered against
+Engine A tokens starting in the first ~1.5s of a clip, so on any real
+multi-cue file this engine was a silent no-op — confirmed by a harness probe
+coming back byte-identical to the passthrough baseline on every metric.
+Fixed by giving this `prefers_whole_file=True` engine the same contract
+faster_whisper's adapter already satisfies: do its own internal VAD
+(reusing `engines.faster_whisper._vad_speech_spans`, no new dependency) and
+emit one token per real speech span with genuine span-derived start_ms/
+end_ms, so `timestamps_final=True`. A file with no detected speech (or
+audio_path-only calls, which can't be VAD'd without a decoded array) falls
+back to a single whole-clip span, matching the old shape but with a real
+(0, duration) timestamp instead of (0, 0). Wiring the companion
+`Qwen3-ForcedAligner-0.6B` for word-level timestamps remains a possible
+future upgrade, not required now that span-level timestamps make this
+engine align-able at all.
 
 confidence is never faked: this engine reports None, same discipline as every
 other adapter.
@@ -39,6 +56,7 @@ import torch
 
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.engines.base import Engine
+from transcribe.engines.faster_whisper import _split_long_span, _vad_speech_spans
 from transcribe.engines.registry import register
 from transcribe.flywheel.inject import BiasTerm, build_prompt
 
@@ -63,11 +81,17 @@ class Qwen3ASREngine(Engine):
         device: str = "cuda",
         max_inference_batch_size: int = 8,
         max_new_tokens: int = 256,
+        vad_threshold: float = 0.35,
+        vad_min_silence_ms: int = 500,
+        max_span_s: float = 8.0,
     ):
         self._model_id = model_id
         self._device = device
         self._max_inference_batch_size = max_inference_batch_size
         self._max_new_tokens = max_new_tokens
+        self._vad_threshold = vad_threshold
+        self._vad_min_silence_ms = vad_min_silence_ms
+        self._max_span_s = max_span_s
         self._model = None
 
     def load(self) -> None:
@@ -102,57 +126,111 @@ class Qwen3ASREngine(Engine):
         return build_prompt([BiasTerm(t) for t in bias_terms])
 
     def _result_to_tokens(self, text: str) -> list[RecognizedToken]:
+        """Single-token, unknown-timestamp shape — only used when there's no
+        decoded audio array to VAD (audio_path-only calls; the pipeline never
+        does this for a prefers_whole_file engine, see run.py's
+        _transcribe_with, so this is a testing/legacy path only)."""
         text = (text or "").strip()
         if not text:
             return []
-        # Whole-clip placeholder span — timestamps_final=False means align_force's
-        # forced-alignment pass replaces these with real ms values.
         return [RecognizedToken(
             text=text, start_ms=0, end_ms=0, confidence=None, script=detect_script(text),
         )]
 
+    def _speech_spans_s(self, audio) -> list[tuple[float, float]]:
+        """Real speech spans (seconds) via the same Silero VAD faster_whisper's
+        adapter uses. Falls back to one whole-clip span when VAD finds nothing
+        (silence, or a clip too short/quiet for Silero to fire) so the engine
+        still emits something. Long spans are split with NO overlap (unlike
+        faster_whisper's stitched chunks, this engine has no seam-dedupe pass,
+        so an overlap would duplicate text in the final output).
+
+        `max_span_s` (default 8.0, NOT faster_whisper's 25s `_LONG_SPAN_SAFE_S`
+        — 2026-08-xx, see TODO_LEDGER "Qwen3-ASR span-granularity fix"): a
+        real-disagreement instrumentation pass showed every single
+        _script_fallback disagreement on the gold set was Engine A's short
+        (~2-5s, cue_target_chars=42) phrase cue vs a single Qwen3-ASR token
+        spanning up to 25s / a whole multi-sentence VAD segment — never a
+        comparable head-to-head. align_hyp.py matches each short A cue against
+        whichever B token's time window overlaps it, so every A cue in a long
+        span was being compared against the SAME giant multi-sentence B blob.
+        No reconciler tiebreak logic can fix a candidate-set mismatch this
+        coarse; the fix has to be at the source — cap B's span length so its
+        tokens are close enough in scale to A's phrase cues for a real
+        head-to-head. 8.0s is a starting point (roughly 2-3x a typical A cue,
+        not 1:1 — Qwen3-ASR is an LLM-decoder model that likely benefits from
+        more context than a single short cue), tunable via config."""
+        duration_s = len(audio) / _SAMPLE_RATE
+        spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
+        if not spans:
+            spans = [(0.0, duration_s)]
+        out: list[tuple[float, float]] = []
+        for start_s, end_s in spans:
+            out.extend(_split_long_span(start_s, end_s, max_span_s=self._max_span_s, overlap_s=0.0))
+        return out
+
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"
-        results = self._model.transcribe(
-            audio=self._audio_arg(inp),
-            context=self._context_arg(inp.bias_terms),
-            language=self._language_arg(inp.language_hint),
-        )
+        context = self._context_arg(inp.bias_terms)
+        language = self._language_arg(inp.language_hint)
 
-        result = results[0]
-        text = getattr(result, "text", "") or ""
-        return EngineResult(
-            tokens=self._result_to_tokens(text),
-            engine_name="qwen3_asr",
-            timestamps_final=False,
-            raw={"language": getattr(result, "language", None), "text": text},
-        )
-
-    def transcribe_batch(self, inputs: list[EngineInput], batch_size: int = 8) -> list[EngineResult]:
-        """qwen_asr batches internally via max_inference_batch_size (set at load
-        time); there's no per-call batch_size knob to retry at on OOM the way the
-        HF-pipeline engines do, so an OOM here is a real failure, not a backoff
-        opportunity — it surfaces to the caller.
-        """
-        assert self._model is not None, "load() must be called first"
-        if not inputs:
-            return []
-
-        audios = [self._audio_arg(inp) for inp in inputs]
-        contexts = [self._context_arg(inp.bias_terms) for inp in inputs]
-        languages = [self._language_arg(inp.language_hint) for inp in inputs]
-        results = self._model.transcribe(audio=audios, context=contexts, language=languages)
-
-        out: list[EngineResult] = []
-        for r in results:
-            text = getattr(r, "text", "") or ""
-            out.append(EngineResult(
+        if inp.audio is None:
+            # No decoded array to VAD — e.g. audio_path-only calls.
+            results = self._model.transcribe(audio=self._audio_arg(inp), context=context, language=language)
+            result = results[0]
+            text = getattr(result, "text", "") or ""
+            return EngineResult(
                 tokens=self._result_to_tokens(text),
                 engine_name="qwen3_asr",
                 timestamps_final=False,
-                raw={"language": getattr(r, "language", None), "text": text},
+                raw={"language": getattr(result, "language", None), "text": text},
+            )
+
+        spans = self._speech_spans_s(inp.audio)
+        whole_clip = len(spans) == 1 and spans[0] == (0.0, len(inp.audio) / _SAMPLE_RATE)
+        slices = [inp.audio] if whole_clip else [
+            inp.audio[int(s * _SAMPLE_RATE):int(e * _SAMPLE_RATE)] for s, e in spans
+        ]
+
+        if len(slices) == 1:
+            results = self._model.transcribe(audio=(slices[0], _SAMPLE_RATE), context=context, language=language)
+        else:
+            results = self._model.transcribe(
+                audio=[(a, _SAMPLE_RATE) for a in slices],
+                context=[context] * len(slices),
+                language=[language] * len(slices),
+            )
+
+        tokens: list[RecognizedToken] = []
+        texts: list[str] = []
+        languages: list[str] = []
+        for (start_s, end_s), r in zip(spans, results):
+            text = (getattr(r, "text", "") or "").strip()
+            texts.append(text)
+            languages.append(getattr(r, "language", None))
+            if not text:
+                continue
+            tokens.append(RecognizedToken(
+                text=text, start_ms=int(start_s * 1000), end_ms=int(end_s * 1000),
+                confidence=None, script=detect_script(text),
             ))
-        return out
+        return EngineResult(
+            tokens=tokens,
+            engine_name="qwen3_asr",
+            timestamps_final=True,
+            raw={"language": languages[0] if languages else None, "text": " ".join(t for t in texts if t)},
+        )
+
+    def transcribe_batch(self, inputs: list[EngineInput], batch_size: int = 8) -> list[EngineResult]:
+        """Delegates to transcribe() per input so every call gets the same
+        internal-VAD real-timestamp treatment. qwen_asr batches internally via
+        max_inference_batch_size (set at load time) rather than a per-call
+        batch_size knob, and this engine is prefers_whole_file=True so the
+        pipeline never actually calls transcribe_batch — kept for adapter-
+        contract completeness (an OOM here is a real failure, not a backoff
+        opportunity, since there's no batch_size to retry smaller at)."""
+        assert self._model is not None, "load() must be called first"
+        return [self.transcribe(inp) for inp in inputs]
 
     def unload(self) -> None:
         if self._model is not None:

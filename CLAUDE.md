@@ -110,6 +110,24 @@ candidates below are eval-gated, not environment-blocked.
   REJECTED (2026-07-16):** regresses CER_thai and WER_latin vs baseline with
   only a marginal BER edge — worse than every other candidate on accuracy.
   Don't re-try without new evidence.
+- **`qwen3_asr`**: `Qwen/Qwen3-ASR-1.7B` — LLM-decoder ASR, the code-switch
+  priority candidate (decoder *is* a language model, so code-switching is a
+  semantic prediction, not acoustic-only). Adapter built; does its own
+  internal VAD segmentation (mirrors `faster_whisper`'s contract for
+  `prefers_whole_file=True` engines), capped at `max_span_s: 8.0` (config-
+  wired) so its candidates stay comparable in scale to Engine A's phrase
+  cues — an initial whole-clip placeholder timestamp made it a silent no-op
+  in `align_hyp.py` (fixed 2026-08-05), and an uncapped 25s span made every
+  disagreement a short-A-cue-vs-giant-multi-sentence-B-blob mismatch (fixed
+  2026-08-05, same day, second pass). Probed with real disagreement
+  instrumentation: CER_thai unchanged (no dilution), BER improved, WER_latin
+  flat. **Root cause is NOT a fixable reconciler bias** — a null-confidence
+  tiebreak favoring B on A's low-confidence cues was tested for real and
+  regressed CER_thai (0.1415→0.1614) for a marginal WER_latin/BER gain,
+  because Qwen3-ASR was observed **transliterating** code-switched English
+  loanwords into Thai script rather than preserving them. **NOT activated —
+  this is now a model-quality finding, not an open reconciler question.**
+  See TODO_LEDGER for the numbers and the instrumented disagreement log.
 - **MockEngine** (`mock`): canned tokens, no GPU required — used for all pipeline tests
 
 **LLM reconciler tiebreak (`transcribe/pipeline/llm_reconcile.py`):** on an
