@@ -186,20 +186,34 @@ forwards the matching block as kwargs — an engine/model/compute swap is a YAML
 
 ## Eval golden set format
 
-See `transcribe/eval/README.md` and `STYLE_GUIDE.md`. Three signals, each on a
+See `transcribe/eval/README.md` and `STYLE_GUIDE.md`. Four gated signals, each on a
 well-defined unit: **`cer_thai`** (character error rate over the Thai stream —
 tokenization-free, the primary Thai signal), **`wer_latin`** (case-insensitive
-word error over Latin runs), and **`boundary_error_rate`** (temporal: `1 − F1` of
-Thai↔Latin switch *timestamps* within `boundary_tol_ms`). Plain `wer` is a coarse
-sanity number, never the gate. The harness normalizes gold and hypothesis with the
-same `normalize()` before scoring, so policy changes can't desync them.
+word error over Latin runs), **`boundary_error_rate`** (temporal: `1 − F1` of
+Thai↔Latin switch *timestamps* within `boundary_tol_ms`), and **`cue_boundary_error_rate`**
+("cue_BER", v3: `1 − F1` of reference vs hypothesis cue-*start* timestamps within
+`boundary_tol_ms` — the cue-structure/subtitle-recut signal, the user's daily
+Premiere-recut pain). Plain `wer` is a coarse sanity number, never the gate. The
+harness normalizes gold and hypothesis with the same `normalize()` before scoring,
+so policy changes can't desync them.
 
-**Metrics v2 (2026-07-16, `metrics.METRICS_VERSION`):** switch points are derived
+**Metrics v3 (`metrics.METRICS_VERSION`):** switch points are derived
 character-by-character *inside* every token — tokens are phrase cues, so real
 code-switches live inside `mixed` cues, which the v1 token-script rule could never
 see (BER was structurally 0.0). Intra-cue switch timestamps are interpolated
 across the cue span; corpus BER is a micro-F1 so hallucinated switches on
-monolingual clips are penalized. `eval_run.metrics_version` partitions regression
-baselines: scores from different metric versions are never compared, so a metric
-change starts a fresh baseline instead of wedging the gate. Bump the version on
-any metric-definition change that makes old scores incomparable.
+monolingual clips are penalized. v3 added `cue_boundary_error_rate` as a fourth
+gated signal (cue-structure quality, not just code-switch timing).
+`eval_run.metrics_version` partitions regression baselines: scores from different
+metric versions are never compared, so a metric change starts a fresh baseline
+instead of wedging the gate. Bump the version on any metric-definition change that
+makes old scores incomparable.
+
+**Bootstrap CIs + RTF (HANDOFF_ONE_ENGINE Phase A, 2026-08-05):** the harness
+also reports a 95% percentile bootstrap CI (clip-level resampling, 1000 draws)
+per gated metric and records wall-clock RTF, both stored on `eval_run`
+(`*_ci_lo`/`*_ci_hi`, `rtf` — descriptive additions, no `METRICS_VERSION` bump).
+A point-estimate regression whose CI still contains the baseline is recorded as
+`gate_unresolved` (printed `UNRESOLVED`) rather than a hard fail — only a
+regression whose CI excludes the baseline fails the gate. See
+`transcribe/eval/README.md` for the full rule.
