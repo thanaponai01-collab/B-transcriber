@@ -332,21 +332,46 @@ if __name__ == "__main__":
     parser.add_argument("--llm-enabled", action="store_true",
                         help="Turn on the local-Ollama LLM reconciler tiebreak for this "
                         "run, for an A/B comparison against the script fallback (Phase 3)")
+    parser.add_argument("--self-ensemble", action="store_true",
+                        help="Turn on the N-best self-ensemble (HANDOFF_ONE_ENGINE §6, "
+                        "Phase D): pseudo-Engine-B is a second decode pass through "
+                        "Engine A's own residency at self_ensemble.temperature_b, no "
+                        "second model load. Sets engine_b to 'self_ensemble' for the "
+                        "eval_run label.")
+    parser.add_argument("--self-ensemble-temp-b", type=float, default=None,
+                        help="Override self_ensemble.temperature_b for this run "
+                        "(default from config.yaml, normally 0.2 — documented no-op unless "
+                        "beam_size_b==1, see config.yaml's self_ensemble comment). Implies "
+                        "--self-ensemble.")
+    parser.add_argument("--self-ensemble-beam-b", type=int, default=None,
+                        help="Override self_ensemble.beam_size_b for this run (default from "
+                        "config.yaml, normally 1 — the setting that actually produces a "
+                        "decorrelated second hypothesis). Implies --self-ensemble.")
     parser.add_argument("--experiment", action="store_true",
                         help="Mark this run as an A/B experiment: gated against the "
                         "production baseline but never recorded AS a baseline. Implied "
-                        "by --engine-b / --llm-enabled (those override config.yaml, so "
-                        "their runs don't describe the production config).")
+                        "by --engine-b / --llm-enabled / --self-ensemble (those override "
+                        "config.yaml, so their runs don't describe the production config).")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    self_ensemble = bool(args.self_ensemble or args.self_ensemble_temp_b is not None
+                          or args.self_ensemble_beam_b is not None)
     # Any CLI override means this run measures a config that is NOT config.yaml —
     # its result must not become the production baseline.
-    experiment = bool(args.experiment or args.engine_b or args.llm_enabled)
+    experiment = bool(args.experiment or args.engine_b or args.llm_enabled or self_ensemble)
     if args.engine_b:
         cfg["engine_b"] = args.engine_b
     if args.llm_enabled:
         cfg.setdefault("reconciler", {})["llm_enabled"] = True
+    if self_ensemble:
+        se_cfg = cfg.setdefault("self_ensemble", {})
+        se_cfg["enabled"] = True
+        if args.self_ensemble_temp_b is not None:
+            se_cfg["temperature_b"] = args.self_ensemble_temp_b
+        if args.self_ensemble_beam_b is not None:
+            se_cfg["beam_size_b"] = args.self_ensemble_beam_b
+        cfg["engine_b"] = "self_ensemble"
     if experiment:
         print("[harness] experiment run - result will not become the regression baseline")
     import sys

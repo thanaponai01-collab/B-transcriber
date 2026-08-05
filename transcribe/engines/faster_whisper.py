@@ -765,24 +765,51 @@ class FasterWhisperEngine(Engine):
                     last.start_ms, last.end_ms, tail_start_ms / 1000, len(tail_tokens))
         return merged, bs
 
-    def _transcribe_batched(self, audio, language_hint, initial_prompt) -> list[tuple[str, int, int, float | None]]:
+    def _transcribe_batched(self, audio, language_hint, initial_prompt,
+                             temperature=None, beam_size=None) -> list[tuple[str, int, int, float | None]]:
         """Decode the whole file, splitting+stitching any pause-free run too long
         for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
         the anti-hallucination knobs are all supported by the batched signature
-        (verified against fw 1.2.x)."""
+        (verified against fw 1.2.x).
+
+        temperature: None (default) omits the key entirely, so faster-whisper
+        falls through to its own cascading fallback list — production
+        behaviour, byte-identical to before this param existed. A scalar
+        pins decode to that single temperature.
+
+        IMPORTANT (found probing HANDOFF_ONE_ENGINE §6 Phase D, 2026-08-05):
+        `temperature` alone is a no-op through this batched path when beam_size
+        stays at its production value. faster-whisper's
+        BatchedInferencePipeline.generate_segment_batched always calls
+        ctranslate2's Whisper.generate(beam_size=options.beam_size, ...) — beam
+        search is deterministic search, not sampling, and CTranslate2's
+        sampling_temperature has no effect while beam_size>1 (verified against
+        installed faster-whisper 1.2.1 source: transcribe.py's
+        generate_segment_batched never reads options.best_of and always passes
+        the fixed beam_size). A temperature override only produces a genuinely
+        different decode when paired with beam_size=1 (switches CTranslate2
+        into sampling mode). See TODO_LEDGER.md "HANDOFF_ONE_ENGINE Phase D".
+
+        beam_size: None (default) uses self._beam_size (production, 5). An
+        override lets a self-ensemble second hypothesis decode at beam_size=1
+        (+ temperature>0) to get real sampling diversity from the same
+        residency, without touching the primary hypothesis's beam width.
+        """
         from transcribe.pipeline import stitch
 
         common = dict(
             language=language_hint or "th",
             task="transcribe",
             initial_prompt=initial_prompt,
-            beam_size=self._beam_size,
+            beam_size=beam_size if beam_size is not None else self._beam_size,
             word_timestamps=True,
             condition_on_previous_text=False,
             compression_ratio_threshold=2.4,
             log_prob_threshold=-1.0,
             no_speech_threshold=0.6,
         )
+        if temperature is not None:
+            common["temperature"] = temperature
         bs = self._batch_size
         words: list[tuple[str, int, int, float | None]] = []
 
@@ -826,7 +853,17 @@ class FasterWhisperEngine(Engine):
         words.sort(key=lambda w: w[1])
         return words
 
-    def transcribe(self, inp: EngineInput) -> EngineResult:
+    def transcribe(self, inp: EngineInput, temperature: float | list[float] | None = None,
+                    beam_size: int | None = None) -> EngineResult:
+        """temperature/beam_size: optional decode overrides — None preserves the
+        exact production defaults. Not part of the abstract Engine.transcribe(inp)
+        contract; existing callers (transcribe_batch, other engines) are
+        unaffected since both are keyword-only with no-op defaults. See
+        HANDOFF_ONE_ENGINE §6 (Phase D) and _transcribe_batched's docstring
+        (temperature alone is a no-op at beam_size>1 — pair it with beam_size=1
+        for real sampling diversity): this lets the pipeline call the same
+        loaded residency twice at different decode settings for a
+        self-ensemble N-best pair, with zero second model load."""
         assert self._model is not None, "load() must be called first"
         audio = self._load_array(inp)
 
@@ -835,7 +872,8 @@ class FasterWhisperEngine(Engine):
         # order), counted with CT2's own tokenizer so Thai token density is honoured.
         initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms else None
 
-        words = self._transcribe_batched(audio, inp.language_hint, initial_prompt)
+        words = self._transcribe_batched(audio, inp.language_hint, initial_prompt,
+                                          temperature=temperature, beam_size=beam_size)
 
         tokens = [
             RecognizedToken(

@@ -61,7 +61,7 @@ def test_cue_knobs_reach_grouping(monkeypatch):
     monkeypatch.setattr(fw, "_group_words_into_cues", fake_group)
     monkeypatch.setattr(
         eng, "_transcribe_batched",
-        lambda audio, hint, prompt: [("สวัสดี", 0, 500, 0.9)],
+        lambda audio, hint, prompt, temperature=None, beam_size=None: [("สวัสดี", 0, 500, 0.9)],
     )
     eng._model = object()  # satisfy the load() assertion without a GPU
 

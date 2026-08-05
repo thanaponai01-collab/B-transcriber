@@ -134,7 +134,7 @@ def _expand_to_words(tokens: list[PipelineToken]) -> list[PipelineToken]:
 
 
 def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint,
-                     batch_size, chunk_overlap_ms=750):
+                     batch_size, chunk_overlap_ms=750, temperature=None, beam_size=None):
     """Run one engine over the audio → (global-timestamped tokens, word_level, raw_words).
 
     Whole-file engines get the full track in a single call (their own VAD and
@@ -147,12 +147,21 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
     downstream, e.g. CutDeck Phase 5 filler excision, instead of discarded here.
     Only captured for whole-file engines — chunk-engine raw words would need
     per-chunk offsetting/restitching that isn't wired up yet.
+
+    temperature/beam_size (HANDOFF_ONE_ENGINE §6, Phase D): only passed to
+    engine.transcribe() when explicitly given, so engines whose transcribe(inp)
+    doesn't accept the kwargs (mock, passthrough, every non-faster_whisper
+    adapter) are unaffected.
     """
     if getattr(engine, "prefers_whole_file", False):
-        res = engine.transcribe(
-            EngineInput(audio=full_audio, bias_terms=bias_terms,
-                        bias_weights=bias_weights, language_hint=language_hint)
-        )
+        inp = EngineInput(audio=full_audio, bias_terms=bias_terms,
+                           bias_weights=bias_weights, language_hint=language_hint)
+        overrides = {}
+        if temperature is not None:
+            overrides["temperature"] = temperature
+        if beam_size is not None:
+            overrides["beam_size"] = beam_size
+        res = engine.transcribe(inp, **overrides)
         raw_words = res.raw.get("words") if isinstance(res.raw, dict) else None
         return res.tokens, res.timestamps_final, raw_words
 
@@ -194,7 +203,22 @@ def run_file(
     bias_weights = store.get_bias_term_weights(conn)
 
     engine_a_name = config["engine_a"]
-    engine_b_name = config["engine_b"]
+
+    # HANDOFF_ONE_ENGINE §6 (Phase D) — N-best self-ensemble: pseudo-Engine-B is
+    # a SECOND decode pass through Engine A's own already-loaded residency
+    # (different temperature/beam_size), not a second model. Zero extra
+    # VRAM/load cost. engine_b_name is forced to a canonical label here —
+    # independent of whatever config["engine_b"] literally says — so job/
+    # engine_result identity (and store.find_resumable_job's resume key) is
+    # coherent regardless of entry point (config.yaml edit vs harness
+    # --self-ensemble CLI flag). Getting this from harness.py's CLI-only
+    # convention instead would let a config.yaml-only activation silently
+    # mislabel engine_result rows as the wrong engine AND let a self-ensemble
+    # job cross-resume into a genuine passthrough job's cached results for the
+    # same media (found in review 2026-08-05 — see TODO_LEDGER.md).
+    self_ensemble_cfg = config.get("self_ensemble", {}) or {}
+    self_ensemble_enabled = bool(self_ensemble_cfg.get("enabled", False))
+    engine_b_name = "self_ensemble" if self_ensemble_enabled else config["engine_b"]
 
     # ── Media record ──────────────────────────────────────────────────────────
     media_id = store.create_media(conn, audio_path)
@@ -252,10 +276,22 @@ def run_file(
                 return get_engine(name, device=device)
 
         engine_a = _safe_get_engine(engine_a_name)
-        engine_b = _safe_get_engine(engine_b_name)
+        if self_ensemble_enabled:
+            if not getattr(engine_a, "prefers_whole_file", False):
+                raise ValueError(
+                    "self_ensemble.enabled requires a whole-file Engine A "
+                    f"(prefers_whole_file=True) — {engine_a_name!r} is chunk-based. "
+                    "The self-ensemble pseudo-B is a second decode pass through "
+                    "Engine A's own residency; there is no per-chunk restitch path."
+                )
+            engine_b = None  # no second model — see self_ensemble_cfg above
+        else:
+            engine_b = _safe_get_engine(engine_b_name)
 
         def _is_chunk_engine(name: str, eng) -> bool:
             # passthrough consumes nothing; whole-file engines want the raw track.
+            if eng is None:
+                return False
             return name != "passthrough" and not getattr(eng, "prefers_whole_file", False)
         chunk_engine_active = (_is_chunk_engine(engine_a_name, engine_a)
                                or _is_chunk_engine(engine_b_name, engine_b))
@@ -300,21 +336,66 @@ def run_file(
         ]
 
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
-        full_audio = engine_audio if (engine_a.prefers_whole_file or engine_b.prefers_whole_file) else None
+        full_audio = engine_audio if (engine_a.prefers_whole_file
+                                       or (engine_b is not None and engine_b.prefers_whole_file)) else None
+
+        # Self-ensemble's second hypothesis is decoded here, inside engine A's
+        # load/unload bracket, so it shares the one model residency — never a
+        # second load. Stashed for the "b" block below, which then skips
+        # loading a real engine_b entirely.
+        self_ensemble_b_tokens = None
+        self_ensemble_b_raw_words = None
 
         if skip_engine_a:
             cached_a = store.get_engine_result(conn, job_id, "a")
             logger.info("Job %d: reusing cached engine-a result (resume)", job_id)
             result_a_tokens = _tokens_from_json(cached_a.tokens_json)
             engine_a_timestamps_final = cached_a.timestamps_final
+            # Resumed exactly at engine_a_done: hypothesis A was cached but the
+            # self-ensemble's own pseudo-B pass (never separately persisted
+            # until the "b" phase below) was not — reload once to produce it.
+            # Rare (only a crash landing in this exact window hits it), but a
+            # resumed self-ensemble job must not silently emit result_b_tokens=None.
+            if self_ensemble_enabled and not skip_engine_b:
+                _log_vram("pre-engine-a-self-ensemble-resume")
+                engine_a.load()
+                temp_b = self_ensemble_cfg.get("temperature_b", 0.2)
+                beam_b = self_ensemble_cfg.get("beam_size_b", 1)
+                res_b = engine_a.transcribe(
+                    EngineInput(audio=full_audio, bias_terms=bias_terms,
+                                bias_weights=bias_weights, language_hint="th"),
+                    temperature=float(temp_b) if temp_b is not None else None,
+                    beam_size=int(beam_b) if beam_b is not None else None,
+                )
+                self_ensemble_b_tokens = res_b.tokens
+                self_ensemble_b_raw_words = res_b.raw.get("words") if isinstance(res_b.raw, dict) else None
+                engine_a.unload()
+                _log_vram("post-engine-a-self-ensemble-resume")
         else:
             _log_vram("pre-engine-a")
             engine_a.load()
             _log_vram("engine-a-loaded")
+            temp_a = self_ensemble_cfg.get("temperature_a", 0.0) if self_ensemble_enabled else None
+            beam_a = self_ensemble_cfg.get("beam_size_a") if self_ensemble_enabled else None
             result_a_tokens, engine_a_timestamps_final, raw_words_a = _transcribe_with(
                 engine_a, chunks, full_audio, bias_terms, bias_weights, "th", engine_batch_size,
                 chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)),
+                temperature=temp_a, beam_size=int(beam_a) if beam_a is not None else None,
             )
+            if self_ensemble_enabled:
+                temp_b = self_ensemble_cfg.get("temperature_b", 0.2)
+                beam_b = self_ensemble_cfg.get("beam_size_b", 1)
+                res_b = engine_a.transcribe(
+                    EngineInput(audio=full_audio, bias_terms=bias_terms,
+                                bias_weights=bias_weights, language_hint="th"),
+                    temperature=float(temp_b) if temp_b is not None else None,
+                    beam_size=int(beam_b) if beam_b is not None else None,
+                )
+                self_ensemble_b_tokens = res_b.tokens
+                self_ensemble_b_raw_words = res_b.raw.get("words") if isinstance(res_b.raw, dict) else None
+                logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
+                            "beam_size=%s) from Engine A's residency, %d tokens",
+                            temp_b, beam_b, len(res_b.tokens))
             engine_a.unload()
             _log_vram("post-engine-a")
             store.save_engine_result(
@@ -330,6 +411,14 @@ def run_file(
             cached_b = store.get_engine_result(conn, job_id, "b")
             logger.info("Job %d: reusing cached engine-b result (resume)", job_id)
             result_b_tokens = _tokens_from_json(cached_b.tokens_json)
+        elif self_ensemble_enabled:
+            result_b_tokens = self_ensemble_b_tokens
+            store.save_engine_result(
+                conn, job_id, "b", engine_b_name,
+                _tokens_to_json(result_b_tokens), engine_a_timestamps_final,
+                json.dumps(self_ensemble_b_raw_words) if self_ensemble_b_raw_words is not None else None,
+            )
+            store.update_job_phase(conn, job_id, _PHASE_ENGINE_B_DONE)
         else:
             _log_vram("pre-engine-b")
             engine_b.load()

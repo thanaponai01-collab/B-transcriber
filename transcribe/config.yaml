@@ -157,6 +157,42 @@ engines:
     # TODO_LEDGER.md "Qwen3-ASR span-granularity fix".
     max_span_s: 8.0
 
+# HANDOFF_ONE_ENGINE.md §6 (Phase D) — N-best self-ensemble: pseudo-Engine-B is
+# a SECOND decode pass through Engine A's own already-loaded residency instead
+# of a real second model. Off by default — when enabled, run.py never
+# instantiates or loads engine_b at all (see pipeline/run.py's
+# self_ensemble_enabled branch); engine_b's config.yaml value only labels the
+# job/eval_run row. Requires a whole-file Engine A (prefers_whole_file=True,
+# i.e. faster_whisper) — raises otherwise. Probe with
+# `python -m transcribe.eval.harness --self-ensemble --experiment` (never
+# activate by editing this block directly without a harness run backing it).
+#
+# PROBED 2026-08-05 (ladder step (a), "same params, temperature 0 vs 0.2"):
+# temperature ALONE is architecturally a no-op through
+# BatchedInferencePipeline — beam search (beam_size>1) is deterministic and
+# CTranslate2's sampling_temperature has no effect on it (verified against
+# faster-whisper 1.2.1 source, and confirmed empirically: byte-identical
+# hypotheses at temperature 0.0 through 1.0 on a real gold clip, and the full
+# 8-clip harness run reproduced eval_run.id=47 to the last decimal — zero
+# reconciler disagreements, zero possible metric movement). See
+# faster_whisper.py's _transcribe_batched docstring and TODO_LEDGER.md
+# "HANDOFF_ONE_ENGINE Phase D" for the full diagnosis.
+#
+# Adapted probe (still Phase D, same residency, zero second load):
+# beam_size_b=1 switches CTranslate2 into greedy decode for hypothesis B —
+# genuinely different content from the beam-5 hypothesis A (confirmed on the
+# same clip: real text differences, not just re-timed cues). temperature_b is
+# harmless but inert at beam_size=1 too (CTranslate2's sampling_topk defaults
+# to 1 there, i.e. still deterministic argmax) — kept as a documented no-op
+# rather than removed, in case a future faster-whisper version threads
+# sampling_topk through and makes it live.
+self_ensemble:
+  enabled: false
+  temperature_a: 0.0   # hypothesis 1 — production beam-5 decode, unchanged
+  beam_size_a: null     # null -> engines.faster_whisper.beam_size (production, 5)
+  temperature_b: 0.2   # documented no-op at beam_size_b=1 — see comment above
+  beam_size_b: 1        # hypothesis 2 — greedy decode, same residency
+
 # Ingestion
 denoise: true
 vad_threshold: 0.35        # Thai sentence-final particles (ครับ/ค่ะ) get cut at 0.5

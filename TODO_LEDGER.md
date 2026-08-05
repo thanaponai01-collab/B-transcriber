@@ -3,6 +3,144 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## HANDOFF_ONE_ENGINE Phase D — N-best self-ensemble built, probed, and closed — executed 2026-08-05
+
+**Repurposed the reconciler (`align_hyp.py`/`reconcile.py`) for its one honest
+single-engine use per the handoff's own framing (§6): pseudo-Engine-B as a
+second decode pass through Engine A's own already-loaded residency, zero
+second model load. Wiring is real, tested, and correct. Both probes on the
+ladder were run for real against the grown 8-clip corpus (`eval_run.id=47`
+baseline) and rejected on evidence — `self_ensemble.enabled` stays `false`,
+production config unchanged. Per the handoff's acceptance criterion ("any
+variant that improves wer_latin or BER with cer_thai held → activate;
+otherwise record and close the reconciler track entirely"): closed.**
+
+**What was built** (all gated behind `self_ensemble.enabled: false`, off by
+default):
+- `FasterWhisperEngine.transcribe()` gained optional `temperature`/`beam_size`
+  overrides, threaded through `_transcribe_batched`/`_decode` — `None` (the
+  default) omits both keys, byte-identical to pre-Phase-D behaviour. Not part
+  of the abstract `Engine.transcribe(inp)` contract; every other engine's
+  `transcribe(inp)` call site is unaffected.
+- `pipeline/run.py`: when `self_ensemble.enabled`, the pipeline never
+  instantiates or loads a real `engine_b` at all — Engine A's own residency is
+  called twice (hypothesis A at `temperature_a`/`beam_size_a`, hypothesis B at
+  `temperature_b`/`beam_size_b`) inside Engine A's existing load/unload
+  bracket, then unloaded once. Both hypotheses flow through the *unmodified*
+  `align_hyp.align` → `reconcile.reconcile` path as a genuine A/B pair — proven
+  by a fake whole-file test engine (`tests/test_self_ensemble.py`) whose two
+  disagreeing hypotheses ("hello" vs "halo") reach the reconciler and resolve
+  to one of the two candidates, never invented text. A resume mid-way (crash
+  exactly between `engine_a_done` and `engine_b_done`) reloads Engine A once
+  to redecode hypothesis B rather than emitting `result_b_tokens=None`.
+  Requires a whole-file Engine A — raises `ValueError` for a chunk engine
+  (tested), since there is no per-chunk restitch path for a second hypothesis.
+  Harness CLI: `--self-ensemble` / `--self-ensemble-temp-b` /
+  `--self-ensemble-beam-b`, mirroring the existing `--engine-b` A/B-probe
+  convention. 4 new tests (`tests/test_self_ensemble.py`), +1 existing-test
+  fix (`tests/test_cue_target_chars_config.py`'s fake `_transcribe_batched`
+  needed the new `temperature`/`beam_size` kwargs). Full suite: **371
+  passed** (was 367).
+
+  **Fresh-eyes review (`scrutinize`, isolated context, 2026-08-05) caught a
+  real bug before this closed out**: `run.py` was reading
+  `engine_b_name = config["engine_b"]` before `self_ensemble_cfg` and never
+  overriding it — only the harness CLI's `--self-ensemble` flag relabeled it
+  to `"self_ensemble"`. Toggling `self_ensemble.enabled: true` directly in
+  `config.yaml` instead (bypassing the CLI) would have silently mislabeled
+  `job.engine_b`/`engine_result.engine_name` with whatever the raw config
+  string said, AND `store.find_resumable_job` keys purely on
+  `(media_id, engine_a, engine_b, pipeline_version)` — none of which encoded
+  self-ensemble state — so a self-ensemble job and a genuine passthrough job
+  for the same media could have cross-resumed into each other's cached
+  `engine_result` rows. **Fixed**: `run.py` now derives
+  `engine_b_name = "self_ensemble"` itself whenever `self_ensemble.enabled`,
+  independent of the caller and of whatever `config["engine_b"]` literally
+  says — the harness CLI's own relabeling is now redundant but harmless.
+  Covered by a new resume-mid-phase test
+  (`test_self_ensemble_resume_mid_phase_redecodes_hypothesis_b`) that
+  deliberately sets a mismatched `engine_b: "passthrough"` in its config and
+  asserts the stored job identity is `"self_ensemble"` regardless, plus that
+  a crash landing exactly between `engine_a_done` and `engine_b_done`
+  correctly reloads Engine A once to redecode hypothesis B rather than
+  resuming with `result_b_tokens=None`. Review also confirmed: the
+  production path (`self_ensemble.enabled: false`, the default) is
+  byte-identical to pre-Phase-D behaviour; the no-generation invariant
+  (`reconcile.py`'s `ReconcilerViolation` guard) is untouched and holds; and
+  every quantitative probe number below was independently re-verified
+  against `eval_run` rows in `transcriber.db`.
+
+**Probe (a), "same params, temperature 0 vs 0.2" — REJECTED, architecturally
+inert, not a close call.** `FasterWhisperEngine` uses
+`BatchedInferencePipeline` (the ~3x-realtime VAD-batched decode path, not the
+sequential per-segment path) for speed. Read against the installed
+faster-whisper 1.2.1 source: `generate_segment_batched` always calls
+`ctranslate2.Whisper.generate(beam_size=options.beam_size, ...)` — beam search
+(`beam_size=5`, production) is deterministic search, not sampling, and
+CTranslate2's `sampling_temperature` has no effect while `beam_size>1`.
+Confirmed empirically two ways: (1) a direct hypothesis-A-vs-B comparison on a
+real gold clip (`Short1.mp3`, 36s, 14 cues) at temperature 0.0 through 1.0 —
+byte-identical token text and confidences at every temperature; (2) the full
+harness run (`--self-ensemble --experiment`, 8 clips) reproduced
+`eval_run.id=47`'s point estimates to the last decimal
+(`cer_thai=0.1751, wer_latin=0.8291, BER=0.5324, cue_BER=0.3904`) — zero
+reconciler disagreements were possible, so zero metric movement was possible.
+This is not a statistical loss, it's a proof that the probe as literally
+specified cannot produce a self-ensemble signal through this pipeline.
+
+**Adapted probe, beam_size_b=1 (greedy) vs beam_size_a=5 (production) —
+REJECTED, real diversity but every metric worse.** Since temperature alone is
+inert at `beam_size>1`, `beam_size` was added as a second override (still same
+residency, still zero second load) — CTranslate2's `generate()` does support
+`beam_size=1` greedy decode, which is genuinely different from beam-5 search
+(confirmed on the same clip: real content differences, 16 cues vs 14, not just
+re-timed boundaries; also confirmed `sampling_topk` defaults to 1 in this
+call path, so temperature is *still* inert even at beam_size=1 — greedy is
+fully deterministic, three different temperatures produced identical greedy
+output). Harness run (`--self-ensemble --experiment`, `beam_size_b=1`
+default) against the same 8-clip corpus: **every single gated metric moved
+in the wrong direction** — `cer_thai 0.2348` (vs 0.1751), `wer_latin 0.8846`
+(vs 0.8291), `BER 0.6474` (vs 0.5324), `cue_BER 0.4301` (vs 0.3904). All four
+are CI-*unresolved* (baseline still inside the 95% band, so `passed=True`,
+no hard gate failure) rather than confirmed regressions, but "unresolved" is
+not "promising" — there is no metric where the point estimate moved the right
+direction at all. Reading it honestly: greedy (`beam_size=1`) decode is a
+categorically weaker hypothesis than beam-5 search, and the reconciler
+sometimes routes to it on disagreement — the "second hypothesis" is net-harmful
+information to blend in, not a source of real agreement signal. Tuning
+`beam_size_b` toward 2-3 would only trade some of this quality loss for less
+diversity, converging back toward probe (a)'s no-op; not worth a further
+harness run without new evidence this trade has a sweet spot.
+
+**Probe (b), "beam-5 top-1 vs top-2" — NOT attempted, scoped and declined.**
+CTranslate2's `Whisper.generate()` does expose `num_hypotheses` (verified via
+its installed Python binding's docstring) for real N-best beam candidates at a
+fixed beam width — the architecturally correct way to get two comparable,
+both-beam-5-quality hypotheses. But faster-whisper's public
+`BatchedInferencePipeline`/`WhisperModel` API never threads `num_hypotheses`
+through `generate_segment_batched` — getting it would mean bypassing
+faster-whisper's transcribe() entirely and reimplementing its batched decode
++ word-timestamp cross-attention alignment (`add_word_timestamps`/
+`find_alignment`, currently only reachable via the *sequential*, non-batched
+path) directly against the raw CTranslate2 model. That is a new subsystem,
+not a probe — disproportionate given probe (a) and its adaptation both failed
+cleanly, and every prior Engine-B-shaped decorrelation idea in this repo
+(funasr, typhoon_rt, whisper_multi, qwen3_asr, both LLM-reconciler rounds) was
+also rejected. Not ruled out forever — just not worth building blind; would
+need a specific new reason to expect real-beam N-best to behave differently
+from the two failure modes just measured (no diversity vs. harmful diversity).
+
+**Probe (c), Ollama round 3 (7B, few-shot)** — moot: gated on (a)/(b)
+producing real same-scale candidates for the LLM to judge, which neither did.
+
+**Verdict: reconciler track closed per the handoff's own criterion.** The
+Engine Contract, `align_hyp.py`, `reconcile.py`, and the self-ensemble wiring
+all stay in the codebase (sound plumbing, proven correct, cheap to keep per
+§8 housekeeping) — but no further probing is planned without new evidence.
+`self_ensemble.enabled: false` in `config.yaml`, unchanged production config.
+See `docs/HANDOFF_ONE_ENGINE.md` §6/§9 for the original spec and standing
+rejections this joins.
+
 ## HANDOFF_ONE_ENGINE Phase C step 1 — fine-tune data engine built — executed 2026-08-05
 
 **`tools/make_finetune_set.py`** (HANDOFF_ONE_ENGINE.md Section 5 item 1):
