@@ -3,6 +3,64 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Bias-index debt (Short4 candidates) probed and REJECTED (HANDOFF_CEILING_BREAK §7 item 4) — executed 2026-08-05
+
+**Context:** last open item from the 2026-08-05 housekeeping pass (entry
+further below), previously "blocked on the same missing gold-set audio as
+§6/4.1" — that blocker no longer applies on this machine (RTX 4070 Ti, real
+gold-set `.mp3`s present, same machine used for the Qwen3-ASR probes above).
+
+**Setup:** none of the four candidates (`พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`,
+`คบซ้อน`) had ever accumulated correction rows in `transcriber.db` (`0` matches
+for all four against `store.get_correction_counts`), so `biasindex.
+update_bias_index`'s normal promotion-by-occurrence path could never surface
+them — they needed a direct `store.upsert_bias_term` (term_type/script via
+the existing `_classify_term` heuristic → all four classified `loanword`/
+`thai`; `added_by='manual'`, `weight=1.0`, honestly reflecting a single
+historical observation rather than a counted correction). **Only `เนี่ย`
+actually appears in the current 5-clip gold corpus** (3 occurrences, all in
+`Bangkok_Festivals_orchestra_sections.json` / `Bangkok Festivals_CT6_
+Short2_D1.json`) — the other three are specific to `Short4.mp3`, which was
+used for ad hoc cue-F1 work in an earlier session but was never frozen into
+`eval/goldenset/`. So this probe can only give a real verdict on one of the
+four terms; the other three remain formally untested.
+
+**Ran as a production gate, not `--experiment`** (matching `harness.py`'s
+own docstring: "bias promotion" is one of the changes meant to legitimately
+become the new baseline on a pass) — `python -m transcribe.eval.harness
+--config transcribe/config.yaml --db transcriber.db` with the four terms live
+in the bias index, gated against `eval_run.id=25` (`cer_thai 0.1415,
+wer_latin 1.0452, BER 0.8169, cue_BER 0.3590`):
+
+`cer_thai 0.1483` (**regression** — +0.0068 absolute / ~4.8% relative, past
+both the 2% relative band and the 0.005 absolute floor), `wer_latin 1.0516`
+(marginal regression), `BER 0.7917` (improved), `cue_BER 0.3532` (marginal
+improvement). **`passed=False`.**
+
+**Rolled back immediately**: `delete_bias_term` for all four terms,
+confirmed `store.get_bias_terms(conn) == []`. No re-run needed to restore
+the baseline — `get_last_passing_eval` filters on `passed=True`, so the
+failed probe's `eval_run` row can never become the gate's comparison target;
+`eval_run.id=25` is still the active baseline. `config.yaml` untouched (bias
+index lives in `transcriber.db`, which is gitignored — this was a pure DB
+operation, no code diff).
+
+**Reading the result honestly:** this answers GAP-5's "does prompt biasing
+measurably help at all" question with a real *no, not on this corpus* — not
+because the terms are wrong (they're real vocabulary a human corrected
+Whisper on), but because `initial_prompt` injection is a blunt instrument:
+packing in terms absent from 4 of the 5 gold clips likely perturbed decoding
+on the clips where they don't belong, and `cer_thai` (the primary Thai
+signal, weighted by character count) is dominated by exactly the material
+that got no benefit. BER/cue_BER moving the *other* direction just underlines
+that these are small, correlated-noise-scale movements on a 5-clip corpus,
+not a clean win/loss signal. **New standing finding for §9:** GAP-5 prompt
+biasing does not clear the harness gate with this term set on this corpus.
+Don't re-add these four (or reason from this result about biasing in
+general) without §3.2's grown gold set — a corpus where the terms actually
+appear across multiple clips is the minimum bar for a real read on whether
+biasing helps.
+
 ## Qwen3-ASR span-granularity fix + null-confidence tiebreak investigated and REJECTED (HANDOFF_CEILING_BREAK §6/4.3) — executed 2026-08-05
 
 **Context:** continuing §6/4.1's "next levers" list from the entry directly

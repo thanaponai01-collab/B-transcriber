@@ -421,24 +421,36 @@ The wiring, prompt framing, and positional-bias fix are **done — do not revisi
 ## 7. PHASE 5 — Policy debts that silently tax CER forever
 
 > **STATUS (2026-08-05): items 1, 2 DECIDED (documentation-only, both
-> STYLE_GUIDE); item 3 already decided in a prior session; item 4 NOT
-> DONE — blocked on the same missing gold-set audio as §6/4.1.** Full
-> reasoning in TODO_LEDGER.md ("Housekeeping + policy debts pass",
-> 2026-08-05). Summary: mai-yamok contraction (item 1) and
+> STYLE_GUIDE); item 3 already decided in a prior session; item 4 PROBED
+> and REJECTED.** Full reasoning in TODO_LEDGER.md ("Housekeeping + policy
+> debts pass", 2026-08-05, and "Bias-index debt (Short4 candidates) probed
+> and REJECTED", same date). Summary: mai-yamok contraction (item 1) and
 > colloquial-vs-formal register (item 2) both resolved to "transcribe as
 > spoken on both sides, no canonicalization" — the same principle §2
 > already established for number verbalization — recorded in
 > `STYLE_GUIDE.md` §3a and §8 respectively. Neither required a
 > `normalize.py` change (both match existing default behavior), so neither
-> needed a harness run to ship safely. Item 4 (bias-index debts) does
-> require a harness run and stays blocked.
+> needed a harness run to ship safely. Item 4 (bias-index debts) turned out
+> to be unblocked on this machine (RTX 4070 Ti, real gold-set audio present,
+> same machine §6's probes ran on) — the four candidates (`พรีเซนต์`, `เนี่ย`,
+> `ชิบเป๋ง`, `คบซ้อน`) were manually added to `transcriber.db`'s bias index
+> (they had zero correction rows, so the normal occurrence-based promotion
+> path could never surface them) and gated as a production run: `cer_thai`
+> regressed 0.1415→0.1483 (past the gate), `wer_latin` marginally regressed,
+> `BER`/`cue_BER` marginally improved. **`passed=False` — rolled back
+> immediately**, bias index restored to empty, `eval_run.id=25` still the
+> active baseline. This answers GAP-5's "does prompt biasing measurably help
+> at all" with a real *no, not on this corpus* — but honestly, only one of
+> the four terms (`เนี่ย`) actually appears in the current 5-clip gold set,
+> so this is a real but thin result; re-check once §3.2's grown gold set
+> exists rather than trusting it as the final word on prompt biasing.
 
 These are decisions, not code (ledger, 2026-07-30):
 
 1. **Mai-yamok contraction:** Whisper emits `ดีดี`/`ใหม่ใหม่` inconsistently vs `จริงๆ`. STYLE_GUIDE fixes the gold side but nothing contracts the hypothesis side → permanent CER tax. Decide: add hypothesis-side contraction (`XX` → `Xๆ` for the closed class of true reduplications) to `normalize.py` under the same exception-lexicon guard, or accept the tax explicitly in STYLE_GUIDE. Note this is also a **cross-engine alignment risk** for Phase 2/4: Typhoon/Pathumma were trained on Na-Thalang normalization (expansion-flavored), the gold set deliberately diverges (attach, no expansion) — since the harness normalizes both sides identically this can't desync the gate, but it can *understate* a Na-Thalang-trained model's true quality. Re-check the exception lexicon covers what those models emit.
 2. **Colloquial-vs-formal:** `คนนึง` vs `คนหนึ่ง` — unstated policy, same class. Decide once, write it into STYLE_GUIDE, enforce in `normalize.py`.
 3. **Number verbalization** (Na-Thalang's other half): spoken "สิบ" vs written "10" currently scores as an error in both directions. At minimum document the gold-authoring rule; a verbalization-aware normalizer is optional and only worth it if the gold set shows real hits.
-4. **Bias-index debts:** the four candidates from Short4 (`พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`) were never added; GAP-5's residual question — does prompt biasing measurably help at all — is answerable once Phase 1.2's gold set exists. Run the harness with and without the bias prompt once and record it.
+4. ~~**Bias-index debts:** the four candidates from Short4 (`พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`) were never added; GAP-5's residual question — does prompt biasing measurably help at all — is answerable once Phase 1.2's gold set exists. Run the harness with and without the bias prompt once and record it.~~ **Done 2026-08-05 — rejected.** Added, gated as a production run, `cer_thai` regressed past the gate; rolled back. See status block above / TODO_LEDGER.md.
 
 ---
 
@@ -477,6 +489,7 @@ These are decisions, not code (ledger, 2026-07-30):
 | Generation inside the reconciler (GER) | Violates the core anti-hallucination guarantee; constrained shape only, later | §6 note |
 | `_script_fallback` null-confidence tiebreak favoring Qwen3-ASR on low-A-confidence | Rejected — regresses `cer_thai` 0.1415→0.1614 for marginal `wer_latin`/BER gain; A's low confidence correlates with hard-but-correct code-switch content, not with A being wrong | TODO_LEDGER 2026-08-05 "Qwen3-ASR span-granularity fix" |
 | Qwen3-ASR as a code-switch improvement over Engine A (on this corpus) | Not supported by evidence — observed transliterating English loanwords into Thai script rather than preserving them | TODO_LEDGER 2026-08-05, same entry |
+| GAP-5 bias-prompt injection for the 4 Short4 terms (`พรีเซนต์`, `เนี่ย`, `ชิบเป๋ง`, `คบซ้อน`) | Rejected — `cer_thai` regressed 0.1415→0.1483 past the gate for a marginal BER/cue_BER gain; only 1 of 4 terms even appears in the current gold corpus, so treat as thin evidence, not a verdict on biasing generally | TODO_LEDGER 2026-08-05 "Bias-index debt (Short4 candidates) probed and REJECTED" |
 
 ---
 
@@ -487,7 +500,7 @@ These are decisions, not code (ledger, 2026-07-30):
 3. **DP cue split** (§5) — the user's real pain, now measurable. **DONE 2026-08-04 — built, tested, probed; NOT ACTIVATED (regresses `cue_boundary_error_rate` 0.3865 vs 0.3590 baseline on the current 5-clip gold set, though it beats greedy on cue-count and switch-matching). See §5 status block / TODO_LEDGER.md for full numbers and the re-probe conditions.**
 4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall. **Adapter built, a timestamp-wiring bug fixed, a span-granularity bug fixed, and both §4.3 null-confidence tiebreak ideas tested with real harness evidence and rejected 2026-08-05 — NOT ACTIVATED. `wer_latin` stays flat not because of an unexplored reconciler bias but because trusting Qwen3-ASR more costs real `cer_thai` for only a marginal gain, and the model itself was observed transliterating code-switched English into Thai on this corpus. See §6 status block / TODO_LEDGER.md for numbers.**
 5. **LLM reconciler round 3 (7B, few-shot)** — only after 4 produces a real second hypothesis. Given §4's finding that Qwen3-ASR itself doesn't clearly beat A on code-switch content here, this is now lower-priority than §3.2's gold-set growth — a bigger/smarter reconciler can't fix a candidate-quality problem.
-6. **Policy decisions** (§7) and **housekeeping** (§8) — opportunistic.
+6. **Policy decisions** (§7) and **housekeeping** (§8) — opportunistic. **§7 fully closed 2026-08-05** (items 1–3 documentation-only, item 4 probed and rejected — see §7 status block).
 
 ### Sources (external)
 - Typhoon ASR Real-time paper + Thai benchmark table: https://arxiv.org/html/2601.13044v1
