@@ -58,6 +58,17 @@
 #           whisper_multi. Next lever: fix that tiebreak (§4.3 in
 #           HANDOFF_CEILING_BREAK.md), then re-probe. See TODO_LEDGER.md
 #           "Qwen3-ASR internal VAD chunking fix" for full numbers.
+#
+#           qwen3_asr as ENGINE A (HANDOFF_ONE_ENGINE §4 item 4, 2026-08-05):
+#           tried as the sole engine on the grown 8-clip corpus, not just
+#           Engine B. REJECTED — wer_latin 0.9615, BER 0.8866, cue_BER 0.8237
+#           all CONFIRMED regressions (95% CI excludes baseline). cue_BER is
+#           the standout failure: cue_count_delta=-187 vs th-medium's +11 —
+#           its max_span_s=8.0-capped internal VAD produces far coarser cues
+#           than th-medium's phrase-cue granularity, exactly the risk the
+#           handoff itself flagged in advance ("this may disqualify it on
+#           cue_BER alone, which is itself a valid verdict"). See
+#           TODO_LEDGER.md "HANDOFF_ONE_ENGINE Phase B" for the full table.
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
@@ -80,6 +91,15 @@ engines:
     #     BER 0.8615, cue_BER 0.5741 — BER/cue_BER regressed past gate, REGRESSION verdict, passed=False.
     # Also tried models/typhoon-whisper-turbo-ct2
     # (2026-07 gold-set eval): CER_thai 0.1336 vs 0.1069 for th-medium — turbo lost, reverted.
+    # RE-PROBED on the grown 8-clip corpus + CI-aware gate (HANDOFF_ONE_ENGINE §4, 2026-08-05)
+    # vs baseline eval_run.id=47 (cer_thai 0.1751, wer_latin 0.8291, BER 0.5324, cue_BER 0.3904).
+    # Verdict UNCHANGED — th-medium still wins on every gated signal, now with real 95% CIs:
+    #   typhoon (id=48): BER 0.8792, cue_BER 0.6462 — CONFIRMED regressions (CI excludes baseline).
+    #     cer_thai 0.2468, wer_latin 0.9530 — regressed but CI-unresolved (baseline still in band).
+    #   pathumma (id=49): cue_BER 0.6245 — CONFIRMED regression. cer_thai/wer_latin/BER all
+    #     regressed but CI-unresolved. passed=False.
+    # Full table (all 4 candidates × all gated metrics × CI): TODO_LEDGER.md
+    # "HANDOFF_ONE_ENGINE Phase B" (2026-08-05). Named Phase C fine-tune base checkpoint: this one.
     compute_type: float16                        # int8_float16 frees 8GB headroom for larger batch_size
     beam_size: 5
     cue_gap_ms: 700

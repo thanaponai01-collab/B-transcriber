@@ -3,6 +3,66 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## HANDOFF_ONE_ENGINE Phase B — engine bake-off re-probed on the grown 8-clip corpus — executed 2026-08-05
+
+**All 3 candidates re-run against `eval_run.id=47` (the fresh Phase A CI
+baseline) with CI-aware verdicts (`--experiment`, never became the
+baseline). Verdict: unchanged from the 5-clip probes — production
+`faster_whisper`/th-medium still wins on every gated signal, now with a real
+statistical read instead of a bare point estimate.**
+
+| Candidate | `eval_run.id` | `cer_thai` (95% CI) | `wer_latin` (95% CI) | `BER` (95% CI) | `cue_BER` (95% CI) | `rtf` | Verdict |
+|---|---|---|---|---|---|---|---|
+| **th-medium (baseline, `id=47`)** | 47 | 0.1751 [0.0845, 0.2777] | 0.8291 [0.4848, 1.0415] | 0.5324 [0.2873, 0.8289] | 0.3904 [0.2163, 0.5526] | 0.133 | incumbent |
+| Typhoon Whisper Large-v3 | 48 | 0.2468 [0.1517, 0.3659] — *unresolved* | 0.9530 [0.8281, 1.0000] — *unresolved* | **0.8792** [0.7526, 1.0000] — **confirmed regression** | **0.6462** [0.5879, 0.6885] — **confirmed regression** | 0.350 | **REJECTED** |
+| Pathumma Whisper Large-v3 | 49 | 0.1918 [0.1371, 0.2600] — *unresolved* | 0.9188 [0.7515, 1.0000] — *unresolved* | 0.6697 [0.5229, 0.8868] — *unresolved* | **0.6245** [0.5510, 0.6846] — **confirmed regression** | 0.349 | **REJECTED** |
+| Qwen3-ASR-1.7B (as Engine A) | 50 | 0.2167 [0.1301, 0.3503] — *unresolved* | **0.9615** [0.8763, 1.0000] — **confirmed regression** | **0.8866** [0.7730, 1.0000] — **confirmed regression** | **0.8237** [0.7764, 0.8559] — **confirmed regression** | 0.321 | **REJECTED** |
+
+"Unresolved" = point estimate crossed the regression band but the run's own
+bootstrap CI still contains the baseline value (Phase A §3.1 rule) — a real
+signal, not noise-proof, just not yet distinguishable from resampling noise
+on 8 clips. "Confirmed regression" = the CI excludes the baseline too.
+
+**Reading it honestly:**
+- **Typhoon/Pathumma**: same qualitative story as the old 5-clip verdict
+  (HANDOFF_CEILING_BREAK §4) — both large-v3 fine-tunes lose on cue timing
+  (`cue_BER`) hard enough to be a *confirmed* regression even under the new
+  CI-aware gate, not just a point-estimate loss. Typhoon additionally
+  confirms a real BER loss now that the corpus has real switches to measure
+  against (old 5-clip run scored BER 1.0000 for a different reason — zero
+  switches found at all — this 8-clip run's 0.8792 is a genuine, still-bad,
+  code-switch-detection result). This is now the **third** time a
+  published-SOTA Whisper large-v3 lineage model has lost to th-medium on
+  this repo's specific corpus (turbo, Typhoon, Pathumma) — the
+  normalization-policy-divergence hypothesis (HANDOFF_CEILING_BREAK §7) is
+  still the prime suspect and still unverified, but the pattern is now
+  three-for-three across two corpus sizes.
+- **Qwen3-ASR as Engine A**: rejected exactly as the handoff's own caveat
+  predicted — "per-word timestamps would need the forced-align path... this
+  may disqualify it on cue_BER alone, which is itself a valid verdict."
+  `cue_count_delta=-187` (vs th-medium's +11): the adapter's `max_span_s=8.0`
+  span-capped internal VAD produces far coarser cues than th-medium's
+  phrase-cue granularity, and `cue_BER 0.8237` is now a *confirmed*
+  regression, not a close call. `wer_latin`/`BER` also confirmed-regress —
+  consistent with the prior Engine-B-track finding (TODO_LEDGER 2026-08-05,
+  "Qwen3-ASR span-granularity fix") that it transliterates code-switched
+  English into Thai script rather than preserving it; as a sole Engine A
+  with no th-medium candidate to fall back to, that flaw is fully exposed
+  instead of partially masked by the reconciler.
+- **`rtf` note (descriptive, not gated)**: all three candidates run at
+  ~0.32-0.35 (still ~3x realtime), vs th-medium's 0.133 (~7.5x) — the large-v3
+  models are ~2.6x slower even before considering they lose on accuracy too.
+
+**Named fine-tuning base checkpoint (Phase C, per HANDOFF_ONE_ENGINE §4 item
+5): `faster_whisper` / `biodatlab/whisper-th-medium-combined`
+(`models/whisper-th-medium-ct2`)** — the incumbent wins cleanly, so Phase C
+fine-tunes th-medium, exactly the "stated honestly" expected outcome in the
+handoff. `config.yaml`'s `engines.faster_whisper` comment block updated with
+this re-probe; production config unchanged.
+
+Acceptance met: one table, all 4 candidates × all gated metrics × CI, named
+checkpoint. See HANDOFF_ONE_ENGINE.md §4/§10 for what's next (Phase C).
+
 ## HANDOFF_ONE_ENGINE Phase A — gate CIs/RTF + contamination guard — executed 2026-08-05
 
 **§3 items 1, 2, 4 DONE; item 3 (noisy/hard gold clip) still open, needs the
