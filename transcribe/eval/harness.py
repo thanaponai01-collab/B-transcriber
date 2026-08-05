@@ -122,7 +122,7 @@ def run_harness(
         # An empty gold set scores 0.0 on every metric. Writing that as a passing
         # eval_run poisons the baseline: the gate is `new > last × 1.02`, so a
         # zero baseline makes every future real run fail forever. Refuse to write.
-        print("[harness] WARNING: goldenset is empty — add audio+json pairs to "
+        print("[harness] WARNING: goldenset is empty - add audio+json pairs to "
               "eval/goldenset/. No eval_run recorded.")
         if scratch_dir is not None:
             shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     if args.llm_enabled:
         cfg.setdefault("reconciler", {})["llm_enabled"] = True
     if experiment:
-        print("[harness] experiment run — result will not become the regression baseline")
+        print("[harness] experiment run - result will not become the regression baseline")
     import sys
     result = run_harness(cfg, Path(args.db), experiment=experiment)
     if result is None or not result.passed:

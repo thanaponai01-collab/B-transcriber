@@ -151,15 +151,15 @@ def main() -> None:
         else:
             ap.error("choose a source: --job-id (with --db) or --run")
         out = write_draft(args.audio, tokens)
-        print(f"[make_gold] wrote {out} ({len(tokens)} tokens) — hand-correct, then `freeze`.")
+        print(f"[make_gold] wrote {out} ({len(tokens)} tokens) - hand-correct, then `freeze`.")
     elif args.cmd == "from-srt":
         tokens = parse_srt(Path(args.srt).read_text(encoding="utf-8-sig"))
         out = write_draft(args.audio, tokens)
-        print(f"[make_gold] wrote {out} ({len(tokens)} tokens) from {args.srt} — "
+        print(f"[make_gold] wrote {out} ({len(tokens)} tokens) from {args.srt} - "
               f"review, then `freeze`.")
     elif args.cmd == "freeze":
         frozen = freeze(args.draft, force=args.force)
-        print(f"[make_gold] froze {frozen.name} — run_harness will now consume it.")
+        print(f"[make_gold] froze {frozen.name} - run_harness will now consume it.")
 
 
 if __name__ == "__main__":
