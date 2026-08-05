@@ -3,6 +3,81 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Gold-set growth (HANDOFF_CEILING_BREAK §1.2/§3.2) — 3 clips added 2026-08-05, IN PROGRESS
+
+**Three clips landed** (commits `6543249`, `4e87034`, `9705e70`, plus a
+cosmetic em-dash/cp1252 console fix in `3032a16`):
+
+1. **`Short1_D5`** — 12 cues from a hand-fixed Premiere SRT, 9/12 tagged
+   mixed script; the first genuinely code-switch-dense sample in the corpus.
+   `cer_thai` moved 0.1415→0.2067 and `cue_boundary_error_rate` 0.3590→0.4495
+   on the resulting 6-clip corpus vs the old 5-clip baseline — not a
+   regression, the corpus is just honestly harder now (switches 104→132).
+   `eval_run.id=42` reset to `passed=1` as the new baseline.
+2. **`PeterWolf`** — ~3.7 min segment (23:43-27:23) trimmed from a raw
+   interview to avoid overlapping `Short1_D5`/`Short2_D1` from the same
+   source; 88 cues, dense classical-music code-switch content (Prokofiev,
+   Peter and the Wolf, Disney, Composer, etc). `cue_boundary_error_rate`
+   moved 0.4495→0.4624 on the 7-clip corpus — corpus genuinely harder, same
+   production config. `eval_run.id=44` reset to `passed=1`.
+3. **Wealthy40 DCA-update clip** — first 2 min of a finance-vlog clip, heavy
+   Thai/English code-switching (DCA, AMD, Earnings). Corpus now **8 clips,
+   ~10.4 min total** (confirmed by summing gold-JSON token spans). This is
+   the clip that finally moved `wer_latin`/BER off their old near-inert
+   baseline: **`wer_latin` 1.0452→0.8291, `boundary_error_rate`
+   0.8169→0.5324** (switches 217, 83 matched, vs the old 10/104).
+   `eval_run.id=46` (`cer_thai 0.1751`, `cue_boundary_error_rate 0.3904`,
+   `passed=True`) is the current active baseline. (Note: `eval_run.id=45` in
+   between is a failed intermediate run from this same session,
+   `passed=False` — harmless, `get_last_passing_eval` skips it.)
+
+**Strata coverage vs §1.2's three-part target:** production-style pure-Thai
+shorts — have it (`Short1/2/3`, `orchestra_sections`). Real Thai-English
+code-switch material — have it now (the 3 clips above + pre-existing
+`Short2_D1`). **One noisy/hard clip — still missing.** Not done until that
+lands.
+
+**Due now, not deferred:** every phase gated on gold-set size — §4 (Engine A
+large-v3 swap), §5 (DP cue split), §6 (Qwen3-ASR Engine B), §7 item 4
+(GAP-5 bias terms) — was rejected on the old 5-clip corpus by margins the
+handoff itself flagged as too small to trust (e.g. §4's Typhoon loss was
+0.005 abs `cer_thai`; §5's DP-split loss was 0.0275 abs `cue_BER`). Re-probe
+each against `eval_run.id=46` before trusting the old verdicts further, and
+again once the noisy-clip stratum lands.
+
+## Housekeeping remainder re-checked against stated triggers — 2026-08-05
+
+Continuing the "Housekeeping pass" entry below (2026-08-05, first four items
+done). Checked the three remaining §8 items instead of forcing action on them:
+
+- **DeepFilterNet denoise** — trigger is "chunk-engine activation." Still
+  hasn't fired (`config.yaml` still runs `faster_whisper` whole-file only).
+  Confirmed `df.enhance` still fails to import in this venv
+  (`ModuleNotFoundError: No module named 'df'` — `deepfilternet>=0.5.6` sits
+  in `requirements.txt` unused). Left alone, correctly — no chunk engine to
+  motivate the pin-vs-delete decision yet.
+- **Editor GAP-7 "one-tap reason UI"** — turned out to be **already built**,
+  predating this handoff: `transcribe/editor/static/index.html`'s reason-bar
+  (click token → tag → `saveCorrections()` → `/jobs/{id}/save`) shipped in
+  commit `9a618f8` (2026-07-15). `HANDOFF_CEILING_BREAK.md` §8 called it
+  open; that was stale and is now corrected in that doc.
+- **Merged-group corrected-state display — dropped, asked the user
+  directly.** Grepped the full repo (schema.sql, store.py, editor) for any
+  `merged_group`/`group_id` concept and found none, and no spec for this
+  phrase exists anywhere in the repo or git history — it was a speculative
+  note from an earlier planning session with nothing to hang it on
+  (`diff.py`'s data model is strictly one-token-in → one-token-out by index,
+  no merge/split concept at all). Asked the user whether to define it or
+  drop it; **user confirmed: drop it, not a real need.** Closed, not due.
+- **CutDeck real-Premiere XML import acceptance** — requires an actual
+  Premiere Pro session against real footage (frame accuracy at the 60-min
+  mark, audio linked, no offline media). Not something executable inside
+  this session. Gave the user a concrete runbook (`cutdeck.plan` →
+  `cutdeck.xml_export --job-id N` → import the resulting
+  `<footage>/CutDeck/cd<job>_p<plan>.xml` into Premiere → check for an
+  offline-media warning, audio/video linking, and frame accuracy) — still
+  blocked on them running it and reporting back what Premiere does.
+
 ## Bias-index debt (Short4 candidates) probed and REJECTED (HANDOFF_CEILING_BREAK §7 item 4) — executed 2026-08-05
 
 **Context:** last open item from the 2026-08-05 housekeeping pass (entry
@@ -1171,8 +1246,11 @@ Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests
   hand-correct the `.draft.json` → `freeze` (validates schema/script/monotonic
   time, refuses to overwrite a frozen file without `--force`). End-to-end tested
   (`test_phase7_makegold`). **Human step remains:** author 10–15 min of real gold.
-- **GAP-7 editor reason UI.** Column + API + diff plumbing done; the one-tap tag
-  UI in `static/index.html` is not. **Due when:** editor front-end is next touched.
+- **GAP-7 editor reason UI. ✅ DONE (2026-07-15, commit `9a618f8`).** Column + API + diff plumbing done; the one-tap tag
+  UI in `static/index.html` shipped in the same commit (this entry was stale
+  — corrected 2026-08-05). The "merged-group corrected-state display" idea
+  formerly listed here as residual was checked with the user (2026-08-05) —
+  no spec ever existed for it and it wasn't a real need; dropped, closed.
 - **GAP-8 job resumability** — not started. **Due when:** a multi-hour file is
   run for real and a crash costs a full re-run.
 - **A.2 loudness pre-pass + editor confidence highlighting** — not started.

@@ -24,7 +24,7 @@ So the ceiling has **four independent walls**, in impact order:
 1. **Engine A itself is no longer near the open-weights frontier for Thai** (§2, the biggest and cheapest win).
 2. **Code-switching is unsolved** — no active second hypothesis, and every Engine-B candidate tried so far was correctly rejected (§4).
 3. **Segmentation quality is both the user's real pain and unmeasured** — the greedy `cue_target_chars` fill is the diagnosed blocker, and no gate metric sees it (§3, §5).
-4. **The gold set is 5 clips** — every one of the above decisions is gated on a sample too small and too skewed to be trusted for fine margins (§3).
+4. **The gold set was 5 clips at audit time; now 8 (~10.4 min), growth in progress (§3.2)** — every one of the above decisions was gated on a sample too small and too skewed to be trusted for fine margins, and is now due for re-probe against the grown corpus (§3).
 
 Everything below is organized to knock these walls down in an order where each phase makes the next one measurable.
 
@@ -59,7 +59,12 @@ Other 2026 arrivals that matter (details in §4):
 
 ## 3. PHASE 1 — Make the gate see what matters (do this before any engine swap)
 
-> **STATUS (2026-08-04): §3.1 (metrics v3) DONE. §3.2 (gold-set growth) NOT DONE — needs the user.**
+> **STATUS (2026-08-05): §3.1 (metrics v3) DONE. §3.2 (gold-set growth) IN
+> PROGRESS — 3 clips added by the user since the 2026-08-04 audit
+> (`Short1_D5`, `PeterWolf`, Wealthy40 DCA-update), corpus now 8 clips /
+> ~10.4 min, clearing the low end of the 10–15 min target. 2 of 3 strata
+> covered; the noisy/hard-clip stratum is still missing. Current baseline:
+> `eval_run.id=46`.**
 >
 > **Done, verified, wired end-to-end:**
 > - `transcribe/eval/metrics.py`: `METRICS_VERSION` bumped 2→3. `EvalMetrics` gained
@@ -112,18 +117,36 @@ Other 2026 arrivals that matter (details in §4):
 >   (`tools/make_gold.py from-srt`) these are already hand-authored cue
 >   boundaries, not synthetic ones.
 >
-> **NOT done — the schedule-critical human task, unchanged from the original
-> spec:** growing the gold set to 10–15 minutes across the three strata (§1.2).
-> This needs new source clips (production-style pure-Thai shorts, real
-> Thai-English code-switch material, one noisy/hard clip) that don't exist in
-> this repo — an authoring task, not a code task. Tooling is ready and
-> unchanged: `python -m tools.make_gold from-srt <clip>.srt --audio <clip>.wav`
-> is the fastest path when a hand-recut Premiere SRT already exists, otherwise
+> **IN PROGRESS — the schedule-critical human task:** growing the gold set to
+> 10–15 minutes across three strata (§1.2). As of 2026-08-05, three clips
+> have landed: `Short1_D5` (12 cues, 9/12 mixed script — the first genuinely
+> code-switch-dense sample), `PeterWolf` (88 cues, dense classical-music
+> code-switch content), and the Wealthy40 DCA-update clip (48 cues, finance
+> vlog with heavy Thai/English switching). Corpus is now **8 clips, ~10.4
+> minutes** — the low end of the 10–15 min target is cleared. Strata covered:
+> production-style pure-Thai shorts (`Short1/2/3`, `orchestra_sections`) and
+> real Thai-English code-switch material (the three new clips plus the
+> pre-existing `Short2_D1`). **Still missing: one noisy/hard clip** — the
+> TVSpeech-lesson stratum from §1.2 item 3. Tooling unchanged:
+> `python -m tools.make_gold from-srt <clip>.srt --audio <clip>.wav` is the
+> fastest path when a hand-recut Premiere SRT already exists, otherwise
 > `draft` → hand-correct `.draft.json` → `freeze` (see `tools/make_gold.py`
-> docstring). Every later phase (§4 Engine A swap, §5 DP cue split, §6 Engine B)
-> is gated on this corpus growing — the current 5-clip baseline above is real
-> and usable, but too small to arbitrate the 1–2% margins those phases will
-> produce.
+> docstring).
+>
+> **Baseline reset twice as the corpus grew** (`eval_run.id=42` after
+> `Short1_D5`, `id=44` after `PeterWolf`, **`id=46`** after Wealthy40 — the
+> current active baseline: `cer_thai 0.1751`, `wer_latin 0.8291`,
+> `boundary_error_rate 0.5324`, `cue_boundary_error_rate 0.3904`,
+> `passed=True`). `wer_latin` and BER are no longer near-inert (were
+> 1.0452/0.8169 on the old 5-clip baseline) now that real code-switch content
+> is in the corpus — the un-blinding this whole handoff was chasing is
+> starting to show up for real, not just via the metrics-v2/v3 machinery.
+>
+> **Every later phase (§4 Engine A swap, §5 DP cue split, §6 Engine B, §7
+> item 4 bias terms) was rejected on the old 5-clip corpus by margins this
+> handoff itself called too small to trust — those verdicts are now due for
+> re-probe against `eval_run.id=46`, and again once the noisy-clip stratum
+> lands.**
 >
 > Housekeeping (§8) was explicitly out of scope for this pass and is
 > untouched — the CLAUDE.md merge-conflict marker, duplicate `make_gold.py`,
@@ -456,22 +479,46 @@ These are decisions, not code (ledger, 2026-07-30):
 
 ## 8. PHASE 6 — Housekeeping (small, do opportunistically)
 
-> **STATUS (2026-08-05): first four items DONE.** Merge marker removed from
-> `CLAUDE.md`; `scripts/make_gold.py` deleted (`tools/make_gold.py` confirmed
-> as the only referenced copy); the stale-DB item turned out to be a
-> non-issue (no `transcribe.db` exists at repo root, only `transcriber.db` +
-> an unrelated `memory.db`, both already gitignored); Python-version docs
-> were already correct from a prior session, and `transcribe/README.md` now
-> has a "Running tests" section with the correct venv invocation. Full
-> detail: TODO_LEDGER.md 2026-08-05. Remaining items below are unchanged —
-> each is due at a specific future trigger, not now.
+> **STATUS (2026-08-05, first pass): first four items DONE.** Merge marker
+> removed from `CLAUDE.md`; `scripts/make_gold.py` deleted
+> (`tools/make_gold.py` confirmed as the only referenced copy); the stale-DB
+> item turned out to be a non-issue (no `transcribe.db` exists at repo root,
+> only `transcriber.db` + an unrelated `memory.db`, both already gitignored);
+> Python-version docs were already correct from a prior session, and
+> `transcribe/README.md` now has a "Running tests" section with the correct
+> venv invocation. Full detail: TODO_LEDGER.md 2026-08-05.
+>
+> **STATUS (2026-08-05, second pass): checked the three remaining items
+> against their stated triggers instead of forcing action.**
+> - **DeepFilterNet** — trigger is "chunk-engine activation." Config is
+>   still whole-file-only (`engine_a: faster_whisper`, `prefers_whole_file`),
+>   so `denoise` never runs in production regardless of whether `df` even
+>   imports (confirmed it doesn't: `ModuleNotFoundError: No module named
+>   'df'` — `deepfilternet>=0.5.6` is in `requirements.txt` but not
+>   installed in this venv). Trigger hasn't fired — correctly left alone,
+>   not deleted or patched.
+> - **Editor GAP-7** — the "one-tap reason UI" bullet below was **stale**.
+>   It was already built: `transcribe/editor/static/index.html` has had the
+>   reason-bar (click a token → tag it misheard/spelling/code-switch/
+>   name-term/style → persists through `saveCorrections()` to
+>   `/jobs/{id}/save`) since commit `9a618f8` (2026-07-15) — before this
+>   handoff was even written. Corrected below. The other half, **merged-group
+>   corrected-state display**, was checked with the user directly (no spec
+>   for it existed anywhere in the repo or git history, and `diff.py`'s data
+>   model has no merge/split concept to hang it on) — **user confirmed: drop
+>   it, not a real need.** Removed from §8 below.
+> - **CutDeck real-Premiere XML import acceptance** — needs an actual
+>   Premiere Pro session with real footage to verify frame accuracy at the
+>   60-min mark and confirm no offline media. Not executable from this
+>   session; still blocked on the user doing that check.
 
 - ~~**`CLAUDE.md` contains a stray merge-conflict marker** (`>>>>>>> d405aac…` above the "Token granularity (5.4)" section) — resolve it; the file is the first thing every session reads.~~ **Done.**
 - ~~Two `make_gold.py` copies (`tools/` and `scripts/`) — keep one, re-export or delete the other.~~ **Done — `scripts/make_gold.py` deleted.**
 - ~~Both `transcribe.db` and `transcriber.db` sit at repo root; only `transcriber.db` is used — remove or gitignore the stale one.~~ **Non-issue — no `transcribe.db` file exists on this machine.**
 - ~~Docs still claim Python 3.13 in places (CLAUDE.md, config comments); the venv is 3.11.9 — fix on next touch. The 1 perpetually-failing `pycrfsuite` test only fails on the wrong (3.13) shell; note the correct invocation in README/CLAUDE.md.~~ **Done — docs were already correct; invocation now documented in `transcribe/README.md`.**
-- DeepFilterNet denoise is silently dead (torchaudio 2.x removed `torchaudio.backend`) — irrelevant while the production engine is whole-file; **decide at chunk-engine activation**: pin/patch, or measure denoise-off and delete (INFRA-6 suspected it never helped).
-- Editor GAP-7 (one-tap reason UI) and the merged-group corrected-state display remain open — due when the editor front-end is next touched.
+- DeepFilterNet denoise is silently dead (torchaudio 2.x removed `torchaudio.backend`) — irrelevant while the production engine is whole-file; **decide at chunk-engine activation**: pin/patch, or measure denoise-off and delete (INFRA-6 suspected it never helped). **Still not due — re-checked 2026-08-05, trigger hasn't fired.**
+- ~~Editor GAP-7 (one-tap reason UI)~~ **already done, 2026-07-15 (`9a618f8`) — this line was stale, corrected 2026-08-05.**
+- ~~Merged-group corrected-state display~~ **dropped, 2026-08-05 — asked the user directly.** No spec for this ever existed anywhere in the repo or git history; it was a speculative note from an earlier planning session with no concept to hang it on (`diff.py`'s data model is strictly one-token-in → one-token-out by index, no merge/split at all). User confirmed: drop it, not a real need.
 - CutDeck: the real-Premiere XML import acceptance is still the gate blocking Phases 5–6 of that track and `segment` mode promotion — unchanged, tracked in TODO_LEDGER, out of scope here.
 
 ---
@@ -495,7 +542,7 @@ These are decisions, not code (ledger, 2026-07-30):
 
 ## 10. Suggested execution order (one line each)
 
-1. **Metrics v3 + gold-set growth** (§3) — the measurement floor; gold authoring is the schedule-critical human task. **§3.1 DONE 2026-08-04; §3.2 gold-set growth still NOT done — needs the user.**
+1. **Metrics v3 + gold-set growth** (§3) — the measurement floor; gold authoring is the schedule-critical human task. **§3.1 DONE 2026-08-04; §3.2 gold-set growth IN PROGRESS as of 2026-08-05 — 8 clips / ~10.4 min, 2 of 3 strata covered, noisy/hard clip still missing. See §3 status block.**
 2. **Engine A probes: Typhoon Whisper Large-v3, Pathumma Large-v3** (§4 §2) — biggest expected CER win, near-zero code. **DONE 2026-08-04 — both REJECTED, production config unchanged. See §4 status block for numbers and why the verdict is provisional pending §1's gold-set growth.**
 3. **DP cue split** (§5) — the user's real pain, now measurable. **DONE 2026-08-04 — built, tested, probed; NOT ACTIVATED (regresses `cue_boundary_error_rate` 0.3865 vs 0.3590 baseline on the current 5-clip gold set, though it beats greedy on cue-count and switch-matching). See §5 status block / TODO_LEDGER.md for full numbers and the re-probe conditions.**
 4. **Qwen3-ASR Engine B adapter + probe ladder** (§6) — the code-switch wall. **Adapter built, a timestamp-wiring bug fixed, a span-granularity bug fixed, and both §4.3 null-confidence tiebreak ideas tested with real harness evidence and rejected 2026-08-05 — NOT ACTIVATED. `wer_latin` stays flat not because of an unexplored reconciler bias but because trusting Qwen3-ASR more costs real `cer_thai` for only a marginal gain, and the model itself was observed transliterating code-switched English into Thai on this corpus. See §6 status block / TODO_LEDGER.md for numbers.**
