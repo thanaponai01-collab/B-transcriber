@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -14,8 +15,21 @@ from transcribe.db import store
 from transcribe.eval.metrics import (
     CI_METRICS, EvalMetrics, boundary_f1_error, bootstrap_ci, compute_metrics, regressed,
 )
+from transcribe.thai.atoms import default_lexicon
+from transcribe.thai.lint import find_cue_legality_violations
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
+
+
+def _safe_print(msg: str) -> None:
+    """print(), tolerant of a Windows console's non-UTF8 code page (cp1252)
+    choking on Thai text in a cue-legality violation's detail — never let a
+    console-encoding limitation crash the harness run itself."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(msg.encode(enc, errors="replace").decode(enc))
 
 # Printed/stored label for each gated metric (matches the pre-Phase-A print format).
 _GATE_LABELS = {
@@ -171,6 +185,12 @@ def run_harness(
     clip_metrics: list[EvalMetrics] = []
     total_wall_s = 0.0
     total_audio_s = 0.0
+    # Phase 3 cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): shares the
+    # splitter's own BreakLexicon so the lint can never drift from what
+    # glue_atoms actually protects.
+    lexicon = default_lexicon(config)
+    total_hyp_lint_violations = 0
+    total_ref_lint_violations = 0
 
     for audio_path, ref_tokens in samples:
         t0 = time.perf_counter()
@@ -180,6 +200,21 @@ def run_harness(
         # Pass config so reference and hypothesis are normalized identically.
         m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
         clip_metrics.append(m)
+
+        hyp_violations = find_cue_legality_violations(hyp_tokens, lexicon)
+        ref_violations = find_cue_legality_violations(ref_tokens, lexicon)
+        total_hyp_lint_violations += len(hyp_violations)
+        total_ref_lint_violations += len(ref_violations)
+        if hyp_violations:
+            detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in hyp_violations)
+            _safe_print(f"[harness] cue_legality VIOLATION {audio_path.stem}: {detail}")
+        if ref_violations:
+            # The gold recuts define taste — a violation the reference also
+            # commits means the lexicon is wrong, not the hypothesis. Printed,
+            # never hidden (§5).
+            detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in ref_violations)
+            _safe_print(f"[harness] cue_legality REFERENCE also violates (lexicon may be wrong, "
+                        f"not a hyp bug) {audio_path.stem}: {detail}")
         cer_num     += m.cer_thai * m.thai_chars
         wer_lat_num += m.wer_latin * m.latin_words
         wer_num     += m.wer * m.total_words
@@ -297,6 +332,7 @@ def run_harness(
         cue_boundary_error_rate_ci_hi=ci_bounds["cue_boundary_error_rate"][1],
         rtf=rtf,
         gate_unresolved=gate_unresolved_names,
+        cue_legality_violations=total_hyp_lint_violations,
     )
     conn.close()
 
@@ -311,6 +347,8 @@ def run_harness(
         f"WER={agg.wer:.4f}  "
         f"cue_BER={agg.cue_boundary_error_rate:.4f} {_fmt_ci('cue_boundary_error_rate')}  "
         f"cue_overlaps={agg.overlapping_cues}  cue_count_delta={agg.cue_count_delta:+d}  "
+        f"cue_legality_violations={total_hyp_lint_violations} "
+        f"(reference={total_ref_lint_violations})  "
         f"rtf={'n/a' if rtf is None else f'{rtf:.3f}'}  "
         f"thai_chars={total_thai}  latin_words={total_latin}  "
         f"switches={total_switches} (hyp {total_hyp_switches}, matched {total_matched})  "

@@ -168,6 +168,14 @@ CREATE TABLE IF NOT EXISTS eval_run (
     cue_boundary_error_rate_ci_hi REAL,
     rtf                 REAL,
     gate_unresolved      TEXT,
+    -- Cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): count of hypothesis
+    -- cues whose break the BreakLexicon says is illegal (particle-initial,
+    -- digit-final, a split classifier+demonstrative pair, a split exception-
+    -- lexicon term). Descriptive only for now (no gate, no METRICS_VERSION
+    -- bump) — gate it once a few runs show it stable at 0 on the current
+    -- lexicon, per the handoff's own instruction. NULL on rows predating
+    -- this column.
+    cue_legality_violations INTEGER,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

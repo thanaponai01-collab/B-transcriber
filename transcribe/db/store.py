@@ -66,6 +66,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("eval_run", "cue_boundary_error_rate_ci_hi", "cue_boundary_error_rate_ci_hi REAL")
     _add("eval_run", "rtf", "rtf REAL")
     _add("eval_run", "gate_unresolved", "gate_unresolved TEXT")
+    # cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5) — descriptive only
+    _add("eval_run", "cue_legality_violations", "cue_legality_violations INTEGER")
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
@@ -209,6 +211,7 @@ class EvalRunRow:
     cue_boundary_error_rate_ci_hi: Optional[float] = None
     rtf: Optional[float] = None
     gate_unresolved: Optional[str] = None
+    cue_legality_violations: Optional[int] = None
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -607,6 +610,7 @@ def create_eval_run(
     cue_boundary_error_rate_ci_hi: Optional[float] = None,
     rtf: Optional[float] = None,
     gate_unresolved: Optional[str] = None,
+    cue_legality_violations: Optional[int] = None,
 ) -> int:
     # None → stamp the current metric definitions' version. Lazy import: the
     # semantic owner of the version is eval/metrics.py, and the db layer must
@@ -620,8 +624,8 @@ def create_eval_run(
         "cue_boundary_error_rate, overlapping_cues, cue_count_delta, shortest_cue_ms, "
         "nonzero_gap_count, cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi, "
         "boundary_error_rate_ci_lo, boundary_error_rate_ci_hi, cue_boundary_error_rate_ci_lo, "
-        "cue_boundary_error_rate_ci_hi, rtf, gate_unresolved, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "cue_boundary_error_rate_ci_hi, rtf, gate_unresolved, cue_legality_violations, passed) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
          kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
          int(metrics_version), float(cue_boundary_error_rate), int(overlapping_cues),
@@ -629,7 +633,7 @@ def create_eval_run(
          cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi,
          boundary_error_rate_ci_lo, boundary_error_rate_ci_hi,
          cue_boundary_error_rate_ci_lo, cue_boundary_error_rate_ci_hi,
-         rtf, gate_unresolved, int(passed)),
+         rtf, gate_unresolved, cue_legality_violations, int(passed)),
     )
     conn.commit()
     return cur.lastrowid

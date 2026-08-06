@@ -133,6 +133,91 @@ shows over-gluing has a *confirmed*, not just unresolved, cost), and §4's
 gap 4 (เอง/ด้วย/directional verbs — parked for Phase 4 by design, genuinely
 ambiguous without POS context).
 
+## HANDOFF_THAI_BREAK_ATOMS Phase 3 — cue-legality lint built, wired into the harness, real-corpus baseline recorded — executed 2026-08-06
+
+Built the harness eyes §5 specifies: `transcribe/thai/lint.py::find_cue_legality_violations(cues, lexicon)`
+scans a time-ordered cue list for the four illegal-break shapes named in the
+handoff — `particle_initial` (a cue opens on `bind_left` material),
+`digit_final` (a cue ends on a digit whose unit/classifier landed in the next
+cue), `classifier_demonstrative_split` (a classifier ends one cue, its
+matching demonstrative/"one" opens the next), `unsplittable_term_split` (an
+exception-lexicon term's char span crosses a cue boundary) — reusing
+`BreakLexicon` directly (no restated rules) so the lint can't drift from what
+`glue_atoms` protects, per the handoff's own "same law as `db/store.py`
+owning SQL."
+
+- **Wired into `transcribe/eval/harness.py`**: runs on both hypothesis AND
+  reference cues for every clip (§5 — a reference violation means the
+  *lexicon* is wrong, not the hypothesis), prints per-clip detail whenever
+  either side is nonzero, aggregates a corpus total, and records it as
+  `eval_run.cue_legality_violations` — **descriptive only, no gate, no
+  `METRICS_VERSION` bump**, exactly as specified. New DB column
+  (`schema.sql` + `store._migrate` + `EvalRunRow` + `create_eval_run`).
+- **Windows console fix found along the way**: printing a violation's Thai
+  `detail` crashed the harness outright (`UnicodeEncodeError` — this
+  machine's console is cp1252, not UTF-8). Added `harness._safe_print`
+  (falls back to `errors="replace"` on a `UnicodeEncodeError`) so a
+  console-encoding limitation can never crash a harness run — the DB row
+  itself is unaffected (sqlite3/Python strings are already correct UTF-8;
+  only the terminal echo was lossy).
+- **Tests**: 16 unit tests in `tests/test_thai_lint.py` (one per rule ×
+  fires/doesn't-fire/disable-toggle, empty/missing-text-key robustness, the
+  §5 "reference is scanned the same way as hypothesis" contract) + 2 harness
+  wiring tests (zero-violation run records 0; a synthetic particle-initial
+  hyp cue is counted, printed, and **does not fail the run** — Phase 3 has
+  no gate). Full suite: **459 passed** (was 441).
+- **Real harness run** (`python -m transcribe.eval.harness --config
+  transcribe/config.yaml --db transcriber.db`, no `--experiment` — this is a
+  pure harness-instrumentation addition, it cannot change any gated metric):
+  `cue_legality_violations=0 (reference=4)`, `passed=True`. **Acceptance
+  met**: the hypothesis count is 0 on the real 8-clip gold set with the
+  current lexicon, exactly as the handoff predicted (Phase 1/2 already
+  proved byte-identical hypothesis output, so this was expected, not lucky).
+- **Triaged the 4 reference-side hits (§5's "printed, not hidden"
+  contradiction) — all 4 are false positives of the lint, not a lexicon
+  defect, and the glue rule itself needs no change:**
+  - `Bangkok Festivals_CT6_PeterWolf` cue 76: `'ครับ คือจริงๆ มันมีเสน่ห์มากฮะ'`
+  - `Bangkok Festivals_CT6_Short2_D1` cue 30: `'ครับ ก็อาจจะมีหลายๆ องค์ประกอบ'`
+  - `Short1` cue 8: `'ค่ะ'` (whole cue, next cue is an unrelated `'โอ้โห'` reaction)
+  - the DCA/Wealthy40 clip, cue 13: `'นะครับ'` (whole cue, a standalone
+    acknowledgment tag)
+
+  In every case the human recut used a final particle as a **discourse-
+  initial filler or a standalone interjection cue** — real, common spoken-
+  Thai patterns STYLE_GUIDE §7's rule was never meant to forbid. The rule
+  (and the `final_particle` glue behind it) targets a particle **stranded
+  from the sentence it belongs to** (the incident's own `...ไปกิน` |
+  `ครับ` shape); it says nothing about a particle legitimately *opening* new
+  content or standing alone as its own reaction. `particle_initial`'s
+  "cue's first token is `bind_left` material" heuristic can't see that
+  distinction from bare cue text alone (no adjacency info to the *source*
+  audio stream survives once a human has already hand-cut the SRT) — a
+  known, accepted limitation of a text-only reference scan, not a signal
+  that `final_particle` over-glues in production. Confirms Phase 2 batch
+  3's own finding (byte-identical hyp output) from a different angle: the
+  glue rule is not the problem; a cue-text-only lint heuristic just cannot
+  fully replicate human pragmatic judgment, and was never expected to
+  (§5 frames this exact scan as "free bug reports... triage them," not
+  "auto-correct them").
+
+**Acceptance met**: harness prints the count (hyp + reference, per-clip
+detail on nonzero); real baseline run shows hyp=0 with the Phase-1/2
+lexicon; the 4 nonzero reference cases were triaged per the handoff's own
+instruction and traced to a lint-heuristic blind spot, not a lexicon
+defect — no code change indicated.
+
+**Trigger to gate `cue_legality_violations`** (§5: "gate it only after a
+few runs show it stable at 0"): once a few more production harness runs
+(ideally after the gold set grows past 8 clips) keep confirming hyp=0, add
+it to the regression gate — a future nonzero hyp count would mean a new
+break path forgot to consult `glue_atoms`/`BreakLexicon`, exactly the class
+of defect this handoff exists to make structurally impossible to reintroduce.
+
+**Not done here (still open per the handoff):** Phase 4 (POS-conditioned
+rules — only worth probing if a future run shows over-gluing has a
+*confirmed*, not just unresolved, cost), and §4's gap 4 (เอง/ด้วย/directional
+verbs — parked for Phase 4 by design).
+
 ## Thai break-atoms — incident fixed (uncommitted), durable design handed off — 2026-08-06
 
 **Incident (user-reported, from real Premiere output):** the greedy cue
