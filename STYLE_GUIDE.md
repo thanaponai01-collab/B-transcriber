@@ -191,7 +191,10 @@ that's a defect.
   classifier + "one") is the same atomic shape and uses the same field —
   §8's register choice (which form was actually said) is a text-content
   decision this rule doesn't touch; it only refuses to split whichever one
-  was said. (`BreakLexicon.pair_bind_left`.)
+  was said. Classifier set: `คน อัน ตัว ที่ สิ่ง เรื่อง แห่ง ลูก ใบ เล่ม คัน
+  หลัง เครื่อง ชิ้น ชุด คู่ ครั้ง ที รอบ` — the original five plus
+  HANDOFF_THAI_BREAK_ATOMS.md §4 item 2's growth batch toward the common
+  spoken-Thai set. (`BreakLexicon.pair_bind_left`.)
 - **Prefer breaking at a clause or phrase boundary** (before a conjunction like
   แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
   prefer a roughly even split across lines over one long line + one short

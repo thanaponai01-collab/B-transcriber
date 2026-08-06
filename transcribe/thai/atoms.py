@@ -27,11 +27,16 @@ from cutdeck.words import TimedToken
 # STYLE_GUIDE §7: a classifier immediately followed by a demonstrative
 # (คน + นั้น = "that NOUN") functions as one atomic unit that also
 # re-specifies the noun immediately before it in spoken Thai — pythainlp
-# tokenizes the classifier and demonstrative as two separate tokens. Five
-# common classifiers seeded here, matching the pre-atoms veto exactly;
-# HANDOFF_THAI_BREAK_ATOMS.md §4 item 2 grows this toward the dozens spoken
-# Thai actually uses.
-_CLASSIFIERS = frozenset({"คน", "อัน", "ตัว", "ที่", "สิ่ง"})
+# tokenizes the classifier and demonstrative as two separate tokens. The
+# original five (คน อัน ตัว ที่ สิ่ง) matched the pre-atoms veto exactly;
+# HANDOFF_THAI_BREAK_ATOMS.md §4 item 2 grows the set toward the common
+# spoken-Thai classifiers named in the handoff (a hand list beats an
+# unshipped pythainlp-corpus-derived one — see the handoff's own Phase 4 note).
+_CLASSIFIERS = frozenset({
+    "คน", "อัน", "ตัว", "ที่", "สิ่ง",
+    "เรื่อง", "แห่ง", "ลูก", "ใบ", "เล่ม", "คัน", "หลัง", "เครื่อง",
+    "ชิ้น", "ชุด", "คู่", "ครั้ง", "ที", "รอบ",
+})
 
 # Written-register demonstratives (นั้น นี้ โน้น) plus HANDOFF §4 item 1's
 # spoken/deictic forms (นี่ นั่น โน่น นู่น นู้น) — this corpus is creator

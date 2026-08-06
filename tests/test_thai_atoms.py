@@ -171,6 +171,26 @@ def test_classifier_plus_one_form_glues_to_preceding_noun(one_form):
     assert not any(t.strip() == one_form for t in texts), f"'{one_form}' orphaned: {texts}"
 
 
+# ── glue_atoms: HANDOFF §4 item 2 — grown classifier set ────────────────────
+
+@pytest.mark.parametrize("noun,classifier", [
+    ("หนังสือ", "เล่ม"),   # book
+    ("รถ", "คัน"),         # vehicle
+    ("บ้าน", "หลัง"),      # building
+    ("เสื้อ", "ตัว"),      # already present, sanity check alongside new ones
+    ("รองเท้า", "คู่"),    # pair
+    ("นิทาน", "เรื่อง"),   # story/topic
+])
+def test_grown_classifier_glues_to_its_demonstrative_and_preceding_noun(noun, classifier):
+    """HANDOFF §4 item 2: the original 5 classifiers only covered a sliver of
+    spoken Thai's common set — เล่ม/คัน/หลัง/คู่/... etc. need the same
+    protection คน already had."""
+    atoms = _atoms_for(f"เจอ{noun}{classifier}นั้นเมื่อวาน")
+    texts = [a[0] for a in atoms]
+    assert f"{noun}{classifier}นั้น" in texts, f"pair not glued to its noun: {texts}"
+    assert not any(t.strip() == classifier for t in texts), f"classifier orphaned: {texts}"
+
+
 # ── glue_atoms: unsplittable_terms (exception lexicon) ─────────────────────
 
 def test_exception_lexicon_term_split_by_tokenizer_is_reglued():
