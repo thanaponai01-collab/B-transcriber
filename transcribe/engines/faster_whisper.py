@@ -245,7 +245,8 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                            target_chars=_CUE_TARGET_CHARS,
                            space_min_chars=_CUE_SPACE_MIN_CHARS,
                            space_min_ms=_CUE_SPACE_MIN_MS,
-                           algorithm=_CUE_SPLIT_ALGORITHM):
+                           algorithm=_CUE_SPLIT_ALGORITHM,
+                           lexicon=None):
     """Group Whisper word-pieces into subtitle-length phrase cues.
 
     Dispatches to one of two cue-boundary strategies (HANDOFF_CEILING_BREAK
@@ -259,20 +260,27 @@ def _group_words_into_cues(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
     cue_split_algorithm` is the switch; delete the loser once the harness
     decides (handoff §5: "keep the greedy path behind a config flag for one
     release for A/B, then delete").
+
+    `lexicon` (a `transcribe.thai.atoms.BreakLexicon`, HANDOFF_THAI_BREAK_ATOMS.md):
+    both paths glue break-atoms before splitting, so STYLE_GUIDE §7's
+    unsplittable units are illegal to break by construction, not by a veto
+    check at each break decision point. `None` falls back to
+    `default_lexicon({})` — the four base rules, no exception-lexicon terms.
     """
     if algorithm == "dp":
         return _group_words_into_cues_dp(
             words, gap_ms=gap_ms, target_ms=target_ms, target_chars=target_chars,
-            min_chars=space_min_chars, min_ms=space_min_ms)
+            min_chars=space_min_chars, min_ms=space_min_ms, lexicon=lexicon)
     return _group_words_into_cues_greedy(
         words, gap_ms=gap_ms, target_ms=target_ms, target_chars=target_chars,
-        space_min_chars=space_min_chars, space_min_ms=space_min_ms)
+        space_min_chars=space_min_chars, space_min_ms=space_min_ms, lexicon=lexicon)
 
 
 def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                            target_chars=_CUE_TARGET_CHARS,
                            space_min_chars=_CUE_SPACE_MIN_CHARS,
-                           space_min_ms=_CUE_SPACE_MIN_MS):
+                           space_min_ms=_CUE_SPACE_MIN_MS,
+                           lexicon=None):
     """Group Whisper word-pieces into subtitle-length phrase cues at real word boundaries.
 
     `words` is a list of (text, start_ms, end_ms, confidence) — confidence is the
@@ -281,7 +289,11 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
     carry a leading space, so they cannot be used to find word boundaries — a
     long spaceless run would never break. Instead we rebuild the full text with
     a per-character timeline, segment it with pythainlp (Latin/whitespace
-    preserved), and group whole words into cues.
+    preserved), glue the result into break-atoms (HANDOFF_THAI_BREAK_ATOMS.md —
+    STYLE_GUIDE §7's unsplittable units, e.g. `ทะเลาะกัน`, `ผู้หญิงคนนั้น`,
+    merged into one indivisible token), and group whole atoms into cues. Every
+    boundary this loop can choose is therefore legal by construction — no veto
+    check is needed at the break decision points below.
 
     A cue must never start mid-sentence: a long sentence can still be split into
     several cues (on a silence gap >= gap_ms, or once target_ms / target_chars is
@@ -289,7 +301,9 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
     boundary crfcut finds, so a cue never opens with the tail of one sentence
     fused to the head of the next. Sentence detection on raw ASR output (no
     punctuation, colloquial speech) is inherently imperfect — treat it as a
-    heuristic that reduces mid-sentence cue starts, not a guarantee.
+    heuristic that reduces mid-sentence cue starts, not a guarantee. A boundary
+    crfcut places inside an atom is snapped outward to the atom's start
+    (`snap_boundary_offsets`) rather than treated as license to split it.
 
     A space Whisper itself emitted inside Thai is a third break signal (see
     _CUE_SPACE_MIN_CHARS): it marks a breath/clause boundary the acoustic model
@@ -298,24 +312,28 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
     space_min_ms, so short interjections stay whole.
 
     Returns list of (text, start_ms, end_ms, confidence) — confidence is the mean
-    of the constituent word-pieces' probabilities, or None if none carried one.
+    of the constituent atoms' probabilities, or None if none carried one.
     """
     from cutdeck.words import timed_tokens
+    from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
     # 1-3. per-character timeline -> real word boundaries -> mapped time spans.
     # Shared with cutdeck/words.py (CutDeck Phase 1) so there is exactly one
     # implementation of Thai word-timeline reconstruction, not two.
-    full_text, timed = timed_tokens(words)
+    full_text, raw_timed = timed_tokens(words)
     if not full_text:
         return []
 
+    # 3.5. glue bound units into atoms before any break decision runs.
+    timed = glue_atoms(raw_timed, lexicon or default_lexicon({}))
+
     # sentence-start offsets in the same char coordinates as `timed` below.
-    boundary_offsets = _sentence_boundary_offsets(full_text)
+    boundary_offsets = snap_boundary_offsets(_sentence_boundary_offsets(full_text), timed)
     boundary_idx = 0
 
-    # 4. greedy group whole words into cues. Whitespace tokens are buffered and only
-    # kept once a real word follows in the same cue, so a cue never starts or ends on
-    # whitespace (a trailing space carries the next word's timing and would corrupt
+    # 4. greedy group whole atoms into cues. Whitespace atoms are buffered and only
+    # kept once a real atom follows in the same cue, so a cue never starts or ends on
+    # whitespace (a trailing space carries the next atom's timing and would corrupt
     # the cue's end time and the gap check).
     cues: list[tuple[str, int, int, float | None]] = []
     cur: list[tuple[str, int, int, float | None]] = []
@@ -333,23 +351,6 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
         if not cur:
             return 0, 0
         return len("".join(x[0] for x in cur).strip()), cur[-1][2] - cur[0][1]
-
-    def _may_break_at_space(i: int) -> bool:
-        """STYLE_GUIDE §7 unsplittable units — a space is not always a legal
-        break point even when the size minima are met.
-
-        Whisper writes mai yamok as a separate ' ๆ' piece, so the naive rule
-        would orphan it from the word it repeats on almost every ๆ in the
-        corpus (§3/§7: `เด็กๆ` must never be separated). Likewise a numeral must
-        stay with its unit/classifier (`100 บาท`, `3 คน`).
-        """
-        nxt = next((x[0] for x in timed[i + 1:] if x[0].strip()), "")
-        if nxt.lstrip().startswith("ๆ"):
-            return False
-        prev = "".join(x[0] for x in cur).strip()
-        if prev and prev[-1].isdigit():
-            return False
-        return True
 
     def _remainder_stands_alone(i: int) -> bool:
         """Would the text AFTER this space form a viable cue on its own?
@@ -381,10 +382,10 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
                 continue
             n_chars, span = _cue_so_far()
             if (n_chars >= space_min_chars and span >= space_min_ms
-                    and _may_break_at_space(i) and _remainder_stands_alone(i)):
+                    and _remainder_stands_alone(i)):
                 # Break on Whisper's own breath boundary. The whitespace itself is
                 # dropped: a cue must not end on a space (it carries the *next*
-                # word's timing, which would corrupt the cue end and the gap check).
+                # atom's timing, which would corrupt the cue end and the gap check).
                 _close()
                 cur = []
                 pending_ws = []
@@ -402,7 +403,8 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
             gap = s - cur[-1][2]
             span = e - cur[0][1]
             n_chars = len("".join(x[0] for x in cur).strip())
-            if new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars:
+            wants_break = new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars
+            if wants_break:
                 _close()
                 cur = []
         if cur:
@@ -414,41 +416,19 @@ def _group_words_into_cues_greedy(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARG
     return cues
 
 
-def _numeral_break_veto(word_text: str) -> bool:
-    """STYLE_GUIDE §7: never split a number from its unit/classifier — a break
-    is illegal immediately after a token that ends in a digit."""
-    stripped = word_text.strip()
-    return bool(stripped) and stripped[-1].isdigit()
-
-
-def _mai_yamok_break_veto(next_word_text: str) -> bool:
-    """STYLE_GUIDE §3/§7: mai yamok (ๆ) must never be orphaned from the word
-    it repeats — a break is illegal immediately before a token starting ๆ."""
-    return next_word_text.lstrip().startswith("ๆ")
-
-
 def _dp_split_segment(timed, real_idx, seg_start, seg_end,
                        target_ms, target_chars, min_chars, min_ms):
-    """Cost-minimising split of one hard-delimited run of real words (local
+    """Cost-minimising split of one hard-delimited run of real atoms (local
     indices `seg_start:seg_end` into `real_idx`) into cues. Classic subtitle
-    line-breaking DP: candidates are every legal inter-word boundary pythainlp
-    found; dp[c] is the min cost to cover local words [0, c)."""
+    line-breaking DP: candidates are every inter-atom boundary — `timed` has
+    already been through `glue_atoms` (HANDOFF_THAI_BREAK_ATOMS.md), so every
+    such boundary is legal by construction and none need be excluded here;
+    dp[c] is the min cost to cover local atoms [0, c)."""
     n_words = seg_end - seg_start
 
-    def word_text(p):
-        return timed[real_idx[seg_start + p]][0]
-
-    # Legal candidate breaks (local word index where a new cue may start).
-    # 0 and n_words (segment ends) are always legal; interior points are
-    # vetoed per STYLE_GUIDE §7 rather than costed, i.e. excluded outright —
-    # DP can never choose an illegal break because it is never a candidate.
-    candidates = [0]
-    for c in range(1, n_words):
-        if _numeral_break_veto(word_text(c - 1)) or _mai_yamok_break_veto(word_text(c)):
-            continue
-        candidates.append(c)
-    if n_words not in candidates:
-        candidates.append(n_words)
+    # Legal candidate breaks (local atom index where a new cue may start) —
+    # every inter-atom boundary, since an atom can never be split.
+    candidates = list(range(n_words + 1))
 
     def had_whitespace_before(c) -> bool:
         """A raw whitespace piece sits between local words c-1 and c — Whisper's
@@ -517,36 +497,37 @@ def _dp_split_segment(timed, real_idx, seg_start, seg_end,
 
 def _group_words_into_cues_dp(words, gap_ms=_CUE_GAP_MS, target_ms=_CUE_TARGET_MS,
                               target_chars=_CUE_TARGET_CHARS,
-                              min_chars=_CUE_SPACE_MIN_CHARS, min_ms=_CUE_SPACE_MIN_MS):
+                              min_chars=_CUE_SPACE_MIN_CHARS, min_ms=_CUE_SPACE_MIN_MS,
+                              lexicon=None):
     """Cost-minimising cue split (HANDOFF_CEILING_BREAK §5): a classic
     subtitle line-breaking DP over pythainlp's real word boundaries, replacing
     the greedy fill's "close the instant the character budget is hit,
     wherever that lands" rule (measured F1-neutral: `_group_words_into_cues_greedy`'s
     docstring / config.yaml's cue_space_min_* comment).
 
-    Candidate breaks are every inter-word boundary pythainlp's tokenizer
-    found — not just Whisper's sporadic emitted spaces — so the split can
-    land at any real word boundary, not only where the acoustic model
-    happened to leave a gap. Two STYLE_GUIDE §7 vetoes (mai yamok orphaning,
-    numeral split from its classifier) are excluded from the candidate set
-    outright, i.e. infinite cost. Sentence boundaries (crfcut) and real
-    silence gaps (>= gap_ms) stay hard splits — same "a cue must never cross
-    either" invariant as the greedy path — dividing the word stream into
-    independent runs; within each run, DP picks the break set minimising
-    deviation from target_chars/target_ms, penalising overflow past target_ms
-    and cues under min_chars/min_ms (a "runt"), and discounting any point
-    Whisper itself emitted a space.
+    Candidate breaks are every inter-atom boundary — `words` is glued into
+    break-atoms first (HANDOFF_THAI_BREAK_ATOMS.md: STYLE_GUIDE §7's
+    unsplittable units, e.g. mai yamok orphaning, a numeral split from its
+    classifier, are unrepresentable once glued, not excluded per-candidate).
+    Sentence boundaries (crfcut) and real silence gaps (>= gap_ms) stay hard
+    splits — same "a cue must never cross either" invariant as the greedy
+    path — dividing the atom stream into independent runs; within each run,
+    DP picks the break set minimising deviation from target_chars/target_ms,
+    penalising overflow past target_ms and cues under min_chars/min_ms (a
+    "runt"), and discounting any point Whisper itself emitted a space.
 
     Returns list of (text, start_ms, end_ms, confidence), same contract as
     `_group_words_into_cues_greedy`.
     """
     from cutdeck.words import timed_tokens
+    from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
-    full_text, timed = timed_tokens(words)
+    full_text, raw_timed = timed_tokens(words)
     if not full_text:
         return []
+    timed = glue_atoms(raw_timed, lexicon or default_lexicon({}))
 
-    boundary_offsets = _sentence_boundary_offsets(full_text)
+    boundary_offsets = snap_boundary_offsets(_sentence_boundary_offsets(full_text), timed)
     real_idx = [k for k, tok in enumerate(timed) if tok[0].strip()]
     if not real_idx:
         return []
@@ -591,7 +572,8 @@ class FasterWhisperEngine(Engine):
                  cue_space_min_ms: int = _CUE_SPACE_MIN_MS,
                  cue_split_algorithm: str = _CUE_SPLIT_ALGORITHM,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
-                 vad_threshold: float = 0.35, vad_min_silence_ms: int = 500):
+                 vad_threshold: float = 0.35, vad_min_silence_ms: int = 500,
+                 config: dict | None = None):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -606,6 +588,13 @@ class FasterWhisperEngine(Engine):
         self._cue_split_algorithm = cue_split_algorithm
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
+        # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon consumed by cue
+        # splitting (both algorithms). `config` is the full pipeline config
+        # (not the engines.faster_whisper sub-block) so `thai_atoms` and
+        # `normalization.exception_lexicon` are both visible — built once
+        # here, pure/cheap, no model/GPU involved.
+        from transcribe.thai.atoms import default_lexicon
+        self._lexicon = default_lexicon(config)
         # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
         # never runs on this audio — we run our own Silero VAD pass in
         # _transcribe_batched (via _vad_speech_spans) using these thresholds, instead
@@ -885,7 +874,8 @@ class FasterWhisperEngine(Engine):
                 target_chars=self._cue_target_chars,
                 space_min_chars=self._cue_space_min_chars,
                 space_min_ms=self._cue_space_min_ms,
-                algorithm=self._cue_split_algorithm)
+                algorithm=self._cue_split_algorithm,
+                lexicon=self._lexicon)
         ]
 
         return EngineResult(

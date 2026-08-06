@@ -77,25 +77,56 @@ def load_audio(path: str) -> tuple[np.ndarray, int]:
         return _load_audio_av(path)
 
 
+def _stream_start_offset_sec(first_pts: int, time_base, container_start_us: int) -> float:
+    """Seconds between the container's global t=0 and the audio stream's first
+    decoded frame. MP4/AAC audio commonly starts with a small nonzero PTS
+    relative to the video's presentation clock (encoder priming samples, an
+    edit-list offset) — positive here means the audio stream starts *after*
+    the container's t=0, which is the common case."""
+    first_pts_sec = float(first_pts * time_base)
+    return first_pts_sec - (container_start_us / 1_000_000.0)
+
+
+def _align_audio_start(audio: np.ndarray, sr: int, offset_sec: float) -> np.ndarray:
+    """Pad (or trim) so sample 0 lines up with the container's global t=0.
+
+    Left uncorrected, every downstream ms timestamp derived from this array
+    carries the same small constant offset vs. the video's actual clock — a
+    systematic sync drift, not a growing one."""
+    n = int(round(abs(offset_sec) * sr))
+    if n == 0:
+        return audio
+    if offset_sec > 0:
+        return np.concatenate([np.zeros(n, dtype=audio.dtype), audio])
+    return audio[n:]
+
+
 def _load_audio_av(path: str) -> tuple[np.ndarray, int]:
     """Decode any audio/video container via PyAV, resample to 16kHz mono."""
     import av
-    import fractions
     chunks: list[np.ndarray] = []
+    offset_sec = 0.0
     with av.open(path) as container:
         stream = next((s for s in container.streams if s.type == "audio"), None)
         if stream is None:
             raise ValueError(f"No audio stream found in {path}")
         native_sr = stream.codec_context.sample_rate
+        container_start_us = container.start_time or 0
+        first_pts = None
         for frame in container.decode(stream):
+            if first_pts is None and frame.pts is not None:
+                first_pts = frame.pts
             # Convert to float32 ndarray, shape (channels, samples)
             arr = frame.to_ndarray().astype(np.float32)
             if arr.ndim == 2:
                 arr = arr.mean(axis=0)  # mix to mono
             chunks.append(arr)
+        if first_pts is not None:
+            offset_sec = _stream_start_offset_sec(first_pts, stream.time_base, container_start_us)
     if not chunks:
         raise ValueError(f"No audio frames decoded from {path}")
     audio = np.concatenate(chunks)
+    audio = _align_audio_start(audio, native_sr, offset_sec)
     # Resample to target SR if needed
     if native_sr != _TARGET_SR:
         import librosa

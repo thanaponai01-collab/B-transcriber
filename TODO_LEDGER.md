@@ -3,6 +3,106 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## HANDOFF_THAI_BREAK_ATOMS Phase 1 — atoms layer built, vetoes deleted, harness green — executed 2026-08-06
+
+**Built the inversion the handoff below specifies: `transcribe/thai/atoms.py`**
+(`BreakLexicon`, `default_lexicon(config)`, `glue_atoms`, `snap_boundary_offsets`)
+merges STYLE_GUIDE §7's four unsplittable units into indivisible break-atoms
+*before* either cue splitter runs, so a break inside one is unrepresentable
+rather than checked-and-vetoed at each break decision point.
+
+- **Both splitters rewired** (`_group_words_into_cues_greedy`/`_dp` in
+  `transcribe/engines/faster_whisper.py`): call `timed_tokens` → `glue_atoms`
+  → operate on atoms. `_dp_split_segment`'s candidate-filtering loop is gone
+  entirely — every inter-atom boundary is legal by construction, so
+  `candidates = list(range(n_words + 1))` replaces the four-veto exclusion
+  check. The greedy path's `_may_break_at_space` lost all four veto calls
+  (digit/mai-yamok/reciprocal/classifier-demonstrative) down to just the
+  pre-existing size-minima + `_remainder_stands_alone` checks — a break the
+  loop can now propose is always already legal.
+- **All four veto functions deleted** (`_numeral_break_veto`,
+  `_mai_yamok_break_veto`, `_reciprocal_particle_break_veto`,
+  `_classifier_demonstrative_break_veto`, plus `_next_real_word_texts`,
+  `_CLASSIFIERS`, `_DEMONSTRATIVES`) — their linguistics moved into
+  `atoms.py`'s `default_lexicon`/`BreakLexicon` docstrings and comments.
+  Confirmed zero remaining call sites (`grep -rn "_break_veto"` → no matches).
+- **Sentence-boundary snapping** (§2.3 item 1): `snap_boundary_offsets` moves
+  a crfcut boundary that lands inside an atom's char span outward to the
+  atom's start, so a sentence "boundary" crfcut finds mid-atom can't force an
+  illegal split. Gap-within-an-atom (§2.3 item 2) and counters-count-atoms
+  (§2.3 item 3) needed no new code — both fall out for free once a merged
+  atom is a single `TimedToken` entry the loop can't see inside.
+- **Config extension points wired**: `config.yaml`'s new `thai_atoms:` block
+  (`extra_bind_left`, `extra_pairs`, `disable`) plus `unsplittable_terms`
+  seeded from the existing `normalization.exception_lexicon` — read by
+  `default_lexicon(config)`. `FasterWhisperEngine.__init__` gained a
+  `config: dict | None = None` param (builds `self._lexicon` once, no
+  GPU/model cost); `pipeline/run.py`'s `_safe_get_engine` threads the full
+  config to `faster_whisper` specifically (not the other engines, to avoid
+  disturbing their existing kwarg-fallback behavior).
+- **Tests**: every pre-existing test in `test_faster_whisper_cues.py`,
+  `test_cue_split_dp.py`, `test_cue_target_chars_config.py`,
+  `test_cue_space_break.py` passes unchanged (47 tests, the incident's own
+  fixtures). New `tests/test_thai_atoms.py` (29 tests): glue semantics per
+  rule (space-absorbed `ๆ`, digit+unit across whitespace and fused, the
+  classifier+demonstrative+noun triple, an exception-lexicon term pythainlp
+  splits — `COVID-19` → `COVID-`/`19`), merged-atom timing/confidence/char_pos,
+  verbatim-text (§2.3 item 5), `snap_boundary_offsets`, the gap-inside-atom
+  invariant (§2.3 item 2), CutDeck's `words_from_pieces` staying word-level
+  (§2.3 item 4, a regression guard, not a change), and **the property test**:
+  across 8 fixture sentences × `target_chars` 5..60 × both algorithms, no cue
+  boundary ever falls strictly inside an atom's `[start_ms, end_ms)` span —
+  the invariant the old scattered-veto design could never state cleanly. Full
+  suite: **409 passed** (was 380).
+- **Harness gate, run for real** (this machine has the model/gold-set
+  audio/GPU): `python -m transcribe.eval.harness --config transcribe/config.yaml
+  --db transcriber.db --experiment` against baseline `eval_run.id=46`
+  (`cer_thai 0.1751`, `wer_latin 0.8291`, `BER 0.5324`, `cue_BER 0.3904`).
+  Result: `cer_thai 0.1751` (byte-identical), `wer_latin 0.8291`
+  (byte-identical), `BER 0.5324` (byte-identical), `cue_BER 0.3925` (+0.0021,
+  comfortably inside the run's own CI `[0.2243, 0.5492]`, which contains the
+  baseline), `cue_overlaps=0`, `cue_count_delta=+13`, `passed=True`. Exactly
+  the handoff's own prediction ("unchanged-to-slightly-improved... behaviour
+  deltas should be edge cases") — the port changed nothing measurable except
+  a handful of atom-boundary edge cases in cue counting.
+
+**Acceptance met**: suite green, property test in place, zero veto call
+sites remain in any splitter, harness run recorded against the real baseline.
+
+**Deferred (unchanged from the handoff)**: Phase 2 (grow the lexicon —
+spoken demonstratives นี่/นั่น/โน่น, classifiers beyond 5 entries, final
+particles), Phase 3 (cue-legality lint in the harness, reusing the same
+`BreakLexicon`), Phase 4 (POS-conditioned rules, evidence-gated). See
+`docs/HANDOFF_THAI_BREAK_ATOMS.md` for the full spec.
+
+## Thai break-atoms — incident fixed (uncommitted), durable design handed off — 2026-08-06
+
+**Incident (user-reported, from real Premiere output):** the greedy cue
+splitter's length/gap-forced break consulted no protection rule and severed
+bound Thai units — `ทะเลาะ | กัน` (verb + bound reciprocal particle) and
+`ผู้หญิง | คนนั้น` (noun + classifier+demonstrative). Root cause: break-legality
+was only enforced on the optional whitespace-break path, never on the forced
+path.
+
+**Fixed in this working tree (spot fix):** four veto functions in
+`engines/faster_whisper.py` (`_numeral_break_veto`, `_mai_yamok_break_veto`,
+`_reciprocal_particle_break_veto`, `_classifier_demonstrative_break_veto`) now
+checked on all three break paths (greedy space, greedy forced, DP candidates);
+regression tests in `tests/test_faster_whisper_cues.py`; rules recorded in
+STYLE_GUIDE §7. Full suite 380 green 2026-08-06.
+
+**Deferred (the durable fix):** `docs/HANDOFF_THAI_BREAK_ATOMS.md` — invert
+veto-at-break-time into atoms-by-construction: a `glue_atoms` pass next to
+`cutdeck/words.py::timed_tokens` driven by a declarative `BreakLexicon`
+(data, config-extensible), consumed by every splitter so illegal breaks
+become unrepresentable; then grow the lexicon (missing spoken demonstratives
+นี่/นั่น/โน่น, classifier list beyond 5 entries, final particles นะ/ครับ/สิ…),
+add a cue-legality lint to the harness, and optionally probe POS-conditioned
+rules. **Trigger:** next session touching cue splitting, the CutDeck two-line
+caption wrapper (STYLE_GUIDE §7 forbids building it without this), or the
+next user report of a severed unit — whichever comes first. Judge every step
+by cue_BER under the CI rule.
+
 ## HANDOFF_ONE_ENGINE Phase D — N-best self-ensemble built, probed, and closed — executed 2026-08-05
 
 **Repurposed the reconciler (`align_hyp.py`/`reconcile.py`) for its one honest

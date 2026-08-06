@@ -90,3 +90,48 @@ def test_group_words_forces_break_at_sentence_boundary_even_without_gap():
     assert cues[0][0] == "ผมชื่อสมชายทำงานที่กรุงเทพ"
     assert cues[1][0] == "วันนี้อากาศดีมากเหมาะกับการเดินเล่น"
     assert cues[0][2] <= cues[1][1]  # first cue ends at/before the second starts
+
+
+# ── STYLE_GUIDE §7 unsplittable-pair vetoes on the length-forced break ────────
+# Real bug (2026-08-06 user report, screenshot of a long-file export): the
+# length/gap/sentence-forced break in the greedy path (unlike the optional
+# whitespace break) was never checked against ANY veto, so it could — and
+# did — land inside a reciprocal-particle verb or a classifier+demonstrative
+# noun phrase, producing cues that read as unfinished sentences.
+
+def _char_pieces(text, start=0, step=100):
+    words = []
+    t = start
+    for ch in text:
+        words.append((ch, t, t + step, 0.9))
+        t += step
+    return words
+
+
+def test_reciprocal_particle_not_orphaned_from_verb():
+    # "ทะเลาะกัน" = "argue with each other" — กัน is a bound particle, not a
+    # free word. target_chars=9 lands the naive break exactly between
+    # ทะเลาะ (ends the budget) and กัน (the next real word).
+    text = "เราทะเลาะกันเมื่อวาน"
+    cues = group(_char_pieces(text), gap_ms=5000, target_ms=100_000, target_chars=9)
+    assert "".join(c[0] for c in cues) == text
+    for c in cues:
+        assert not c[0].endswith("ทะเลาะ"), f"split before กัน in {cues!r}"
+        assert not c[0].startswith("กัน"), f"กัน orphaned as cue start in {cues!r}"
+    assert cues[0][0] == "เราทะเลาะกัน"
+    assert cues[1][0] == "เมื่อวาน"
+
+
+def test_classifier_demonstrative_not_split_from_its_noun_or_itself():
+    # "ผู้หญิงคนนั้น" = "that woman" — pythainlp splits it into ผู้หญิง / คน /
+    # นั้น. target_chars=10 lands the naive break exactly before คน (the
+    # observed real-output split: "...ผู้หญิง" | "คนนั้น...").
+    text = "เจอผู้หญิงคนนั้นเมื่อวาน"
+    cues = group(_char_pieces(text), gap_ms=5000, target_ms=100_000, target_chars=10)
+    assert "".join(c[0] for c in cues) == text
+    for c in cues:
+        assert not c[0].endswith("ผู้หญิง"), f"split before คนนั้น in {cues!r}"
+        assert not c[0].endswith("คน"), f"split inside คนนั้น in {cues!r}"
+        assert not c[0].startswith("คน") or c[0].startswith("คนนั้น"), f"คน orphaned from นั้น in {cues!r}"
+    assert cues[0][0] == "เจอผู้หญิงคนนั้น"
+    assert cues[1][0] == "เมื่อวาน"

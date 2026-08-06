@@ -148,22 +148,39 @@ def drop_tokens_over_silence(
     tokens: list[PipelineToken],
     silence_spans: list[tuple[int, int]],
     overlap: float = 0.8,
+    max_confidence: float | None = None,
 ) -> list[PipelineToken]:
     """Phase 6b — drop tokens that sit mostly inside VAD silence (GAP-3).
 
     A token whose span overlaps silence by >= ``overlap`` of its own duration is
-    almost certainly a Whisper hallucination over dead air — a stronger signal
-    than the >3x repeat rule. A token straddling a boundary (e.g. 50% overlap) is
-    kept. Re-indexes survivors so idx stays contiguous.
+    a hallucination *candidate* — a stronger signal than the >3x repeat rule.
+    A token straddling a boundary (e.g. 50% overlap) is kept.
+
+    ``silence_spans`` come from ingest's own Silero VAD pass, which is a
+    *different* VAD implementation than the one whole-file engines (e.g.
+    faster_whisper) run internally before decoding — the two can legitimately
+    disagree on the same audio. If a token was transcribed with real
+    confidence, that means the engine's own VAD judged the span speech and
+    decoded it — ingest's independent VAD disagreeing is not by itself
+    hallucination evidence, and dropping it would silently delete real words.
+    When ``max_confidence`` is set, a silence-overlapping token is only
+    dropped if its confidence is also <= that threshold (or unknown — a
+    hallucinated token's confidence isn't always reported). Re-indexes
+    survivors so idx stays contiguous.
     """
     if not silence_spans or not tokens:
         return tokens
     kept: list[PipelineToken] = []
     for tok in tokens:
         duration = max(1, tok.end_ms - tok.start_ms)
-        if _silence_overlap_ms(tok, silence_spans) / duration >= overlap:
+        over_silence = _silence_overlap_ms(tok, silence_spans) / duration >= overlap
+        if not over_silence:
+            kept.append(tok)
             continue
-        kept.append(tok)
+        if (max_confidence is not None and tok.confidence is not None
+                and tok.confidence > max_confidence):
+            kept.append(tok)
+            continue
     for new_idx, tok in enumerate(kept):
         tok.idx = new_idx
     return kept

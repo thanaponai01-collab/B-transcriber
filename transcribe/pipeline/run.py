@@ -269,6 +269,13 @@ def run_file(
 
         def _safe_get_engine(name: str):
             kw = {"device": device, **engines_cfg.get(name, {})}
+            if name == "faster_whisper":
+                # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon needs the
+                # full pipeline config (thai_atoms + normalization.exception_lexicon),
+                # not just this engine's own config["engines"]["faster_whisper"]
+                # sub-block — threaded only to this engine so other engines'
+                # kwarg sets (and their own TypeError fallback below) are untouched.
+                kw.setdefault("config", config)
             try:
                 return get_engine(name, **kw)
             except TypeError:
@@ -471,9 +478,11 @@ def run_file(
         pipeline_tokens = _filter_hallucinations(pipeline_tokens)
         if config.get("drop_tokens_over_silence", True):
             before = len(pipeline_tokens)
+            max_conf_cfg = config.get("silence_drop_max_confidence", 0.5)
             pipeline_tokens = normalize.drop_tokens_over_silence(
                 pipeline_tokens, silence_spans,
                 overlap=float(config.get("silence_overlap", 0.8)),
+                max_confidence=(float(max_conf_cfg) if max_conf_cfg is not None else None),
             )
             if len(pipeline_tokens) != before:
                 logger.info(

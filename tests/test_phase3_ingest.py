@@ -155,3 +155,80 @@ def test_pipeline_decodes_audio_once(monkeypatch):
     pipeline_run.run_file(path, cfg, db)
 
     assert calls["n"] == 1, f"expected 1 decode, got {calls['n']}"
+
+
+# ── mp4/AV container start-time alignment (sync drift fix) ────────────────────
+
+def test_stream_start_offset_sec_positive_when_audio_starts_after_container():
+    from fractions import Fraction
+    # first frame pts=20992 @ 1/44100 tb ≈ 0.476s, container t=0 → audio starts late.
+    off = ingest._stream_start_offset_sec(20992, Fraction(1, 44100), container_start_us=0)
+    assert abs(off - 0.4760) < 1e-3
+
+
+def test_stream_start_offset_sec_zero_when_aligned():
+    from fractions import Fraction
+    off = ingest._stream_start_offset_sec(0, Fraction(1, 44100), container_start_us=0)
+    assert off == 0.0
+
+
+def test_align_audio_start_pads_leading_silence_for_positive_offset():
+    sr = 16000
+    audio = np.ones(sr, dtype=np.float32)  # 1s of signal
+    aligned = ingest._align_audio_start(audio, sr, offset_sec=0.5)
+    assert len(aligned) == sr + sr // 2
+    assert np.all(aligned[: sr // 2] == 0.0)
+    assert np.all(aligned[sr // 2 :] == 1.0)
+
+
+def test_align_audio_start_trims_for_negative_offset():
+    sr = 16000
+    audio = np.ones(sr, dtype=np.float32)
+    aligned = ingest._align_audio_start(audio, sr, offset_sec=-0.25)
+    assert len(aligned) == sr - sr // 4
+
+
+def test_align_audio_start_noop_for_zero_offset():
+    sr = 16000
+    audio = np.ones(sr, dtype=np.float32)
+    aligned = ingest._align_audio_start(audio, sr, offset_sec=0.0)
+    assert aligned is audio
+
+
+def _mp4_with_offset_audio(out_path: str, offset_s: float = 0.5) -> None:
+    """A real mp4 fixture where the audio stream's decoded PTS starts
+    `offset_s` after the container's t=0 (mirrors AAC encoder-priming/edit-list
+    desync seen on real footage) — built with ffmpeg lavfi sources, no
+    external media needed."""
+    import shutil
+    import subprocess
+
+    if shutil.which("ffmpeg") is None:
+        import pytest
+        pytest.skip("ffmpeg not on PATH")
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-f", "lavfi", "-i", "testsrc=duration=3:size=64x64:rate=5",
+        "-itsoffset", str(offset_s),
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=2.5",
+        "-map", "0:v", "-map", "1:a", "-shortest",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", out_path,
+    ]
+    subprocess.run(cmd, check=True)
+
+
+def test_load_audio_av_aligns_late_starting_audio_stream(tmp_path):
+    out = str(tmp_path / "offset.mp4")
+    _mp4_with_offset_audio(out, offset_s=0.5)
+
+    audio, sr = ingest._load_audio_av(out)
+    assert sr == ingest._TARGET_SR
+
+    # The leading ~0.5s (encoder priming rounds it slightly) must be the
+    # padded silence, not sine-tone signal — RMS near zero.
+    lead = audio[: int(0.3 * sr)]
+    assert np.sqrt(np.mean(lead ** 2)) < 1e-4
+
+    # Well past the offset, the actual sine tone must be present.
+    body = audio[int(0.7 * sr): int(1.2 * sr)]
+    assert np.sqrt(np.mean(body ** 2)) > 0.01

@@ -219,6 +219,12 @@ conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources befor
 # Hallucination filtering (GAP-3): drop tokens that sit mostly inside VAD silence
 drop_tokens_over_silence: true
 silence_overlap: 0.8        # fraction of a token's span inside silence to drop it
+# Ingest's Silero VAD and a whole-file engine's own internal VAD are different
+# implementations and can disagree; only drop a silence-overlapping token when
+# its own confidence is also <= this (or unknown) -- otherwise the engine
+# genuinely heard and transcribed real speech there. Set null to restore the
+# old overlap-only behavior.
+silence_drop_max_confidence: 0.5
 
 # Subtitle cue timing (Phase 7b, align_force.conform_cues) — enforced on EVERY
 # path, including the timestamps_final one that skips forced alignment. Cues are
@@ -259,6 +265,17 @@ normalization:
     - Zoom
     - WiFi
     - Premiere Pro
+
+# Cue break-atom lexicon (HANDOFF_THAI_BREAK_ATOMS.md, STYLE_GUIDE §7) — grows
+# the four seeded rules (mai yamok, reciprocal particle กัน, numeral+unit,
+# classifier+demonstrative) from observed Premiere-recut pain without a code
+# change. unsplittable_terms is NOT set here — it's the exception_lexicon
+# above, one list, not two to keep in sync.
+thai_atoms:
+  extra_bind_left: []      # extra tokens that glue to the atom before them
+  extra_pairs: []           # extra [classifier, demonstrative] pairs, e.g. [เรื่อง, นี้]
+  disable: []               # rule names to turn off: mai_yamok, reciprocal_particle,
+                             # numeral_unit, classifier_demonstrative
 
 # Eval regression gate: reject if a metric worsens by more than this fraction,
 # OR by more than regression_abs_floor in absolute terms — whichever band is

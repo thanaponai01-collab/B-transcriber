@@ -183,7 +183,6 @@ def export_srt_endpoint(job_id: int):
         text = corrections.get(t.idx, t.text)
         token_dicts.append({"text": text, "start_ms": t.start_ms, "end_ms": t.end_ms})
 
-    buf = io.StringIO()
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".srt", delete=False, mode="w", encoding="utf-8") as f:
         tmp = f.name

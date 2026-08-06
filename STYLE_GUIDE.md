@@ -143,13 +143,21 @@ cleanup passes, which run after boundary spacing in `normalize()`. No entry
 currently listed contains an internal Thai↔Latin transition, so this only
 matters for a future term shaped that way.
 
-## 7. Line breaks in multi-line captions — **[gold]**, **[code]** once implemented
+## 7. Line breaks in multi-line captions — **[gold]**, **[code]** for cue breaks
 
-Not yet enforced by any code today — `align_force.py`'s `export_srt`/`export_vtt`
-write one line per phrase-cue and never split a cue across display lines, and
-CutDeck captions burn-in (`TODO_LEDGER.md`) hasn't been built yet. Recorded here
-now so whichever feature ships the first line-wrapper (two-line SRT formatting,
-burned captions, etc.) has a policy to implement against, not improvise one.
+Enforced today for cue breaks (`_group_words_into_cues_greedy`/`_dp` in
+`transcribe/engines/faster_whisper.py`) via `transcribe/thai/atoms.py`'s
+`glue_atoms`/`BreakLexicon` (HANDOFF_THAI_BREAK_ATOMS.md): every unsplittable
+unit below is merged into one indivisible break-atom *before* either splitter
+runs, so a break inside one is unrepresentable rather than checked-and-vetoed.
+`align_force.py`'s `export_srt`/`export_vtt` still write one line per
+phrase-cue and never split a cue across display lines, and CutDeck captions
+burn-in (`TODO_LEDGER.md`) hasn't been built yet — whichever feature ships the
+first two-line wrapper must call `glue_atoms` too (HANDOFF_THAI_BREAK_ATOMS.md
+§7: "do not build the CutDeck two-line wrapper without atoms"), not improvise
+a second, independently-tuned heuristic. Each bullet names the `BreakLexicon`
+field that implements it — if a bullet and the field it names disagree,
+that's a defect.
 
 - **Never break inside a word.** Because Thai has no orthographic word
   boundaries (§1), "word" here is not free — a line-wrapper must call a real
@@ -161,11 +169,23 @@ burned captions, etc.) has a policy to implement against, not improvise one.
 - **Treat `normalization.exception_lexicon` terms (§6) as unsplittable units**
   — the same list that protects `COVID-19`/`GPT-4` from mid-token normalization
   must also block a line-wrapper from breaking inside them.
+  (`BreakLexicon.unsplittable_terms`, seeded from this same config list.)
 - **Never separate mai yamok (§3) from the word it repeats** — `เด็กๆ` must
-  stay on one line.
+  stay on one line. (`BreakLexicon.bind_left` — `"ๆ"`.)
 - **Never split a number from its unit or classifier** (`100 บาท`, `3 คน`) —
   keep the numeral and its following word together even if that pushes the
-  break point earlier.
+  break point earlier. (`BreakLexicon.bind_right_digit`.)
+- **Never orphan a reciprocal/collective particle from its verb** —
+  `ทะเลาะกัน` ("argue with each other"), `คุยกัน` ("talk together"): `กัน`
+  immediately after a verb is a bound particle, not a free word, and reads
+  as an unfinished sentence when stranded at the start of a line/cue.
+  (`BreakLexicon.bind_left` — `"กัน"`.)
+- **Never split a classifier from its demonstrative, or the pair from the
+  noun it modifies** — `ผู้หญิงคนนั้น` ("that woman"): pythainlp segments this
+  as `ผู้หญิง` / `คน` / `นั้น`, but `คน...นั้น` functions as one atomic
+  "that NOUN" unit. Neither the internal boundary (`คน` | `นั้น`) nor the
+  boundary right before it (`ผู้หญิง` | `คนนั้น`) is a legal break.
+  (`BreakLexicon.pair_bind_left`.)
 - **Prefer breaking at a clause or phrase boundary** (before a conjunction like
   แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
   prefer a roughly even split across lines over one long line + one short

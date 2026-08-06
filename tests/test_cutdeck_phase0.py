@@ -145,6 +145,34 @@ def test_drop_tokens_over_silence():
     assert [t.idx for t in kept] == [0, 1]
 
 
+def test_drop_tokens_over_silence_confidence_gate_rescues_disagreeing_vad():
+    """Two VAD implementations (ingest's Silero pass vs. an engine's own
+    internal VAD) can disagree on the same audio. A token the engine
+    transcribed with real confidence must survive even if it overlaps
+    ingest's silence span — that disagreement isn't hallucination evidence."""
+    from transcribe.contracts import PipelineToken
+    from transcribe.pipeline.normalize import drop_tokens_over_silence
+
+    def tok(idx, s, e, confidence):
+        return PipelineToken(idx=idx, text="x", start_ms=s, end_ms=e,
+                             script="latin", confidence=confidence, source_engine="a")
+
+    silence = [(1000, 2000)]
+    tokens = [
+        tok(0, 1100, 1900, confidence=0.95),  # engine was confident — keep
+        tok(1, 1100, 1900, confidence=0.1),   # engine unsure too — drop (real hallucination signal)
+        tok(2, 1100, 1900, confidence=None),  # unknown confidence — old overlap-only behavior, drop
+    ]
+    kept = drop_tokens_over_silence(tokens, silence, overlap=0.8, max_confidence=0.5)
+    kept_confidences = [round(t.confidence, 2) if t.confidence is not None else None
+                         for t in kept]
+    assert 0.95 in kept_confidences
+    assert 0.1 not in kept_confidences
+    assert None not in kept_confidences
+    assert len(kept) == 1
+    assert kept[0].idx == 0  # re-contiguized
+
+
 # ── GAP-4: chunk stitch ───────────────────────────────────────────────────────
 
 def test_stitch_dedupes_seam_and_keeps_interior_copy():
