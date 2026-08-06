@@ -3,6 +3,60 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## OPEN — recurring mid-word truncation / dropped-content bug in Engine A output — reported 2026-08-06, NOT YET INVESTIGATED
+
+**User-reported, from real production output**: `F:\Me\Works\20260807 - โหน(หลัง)กระแส 155\5. EXPORTS\Audio_test.srt`
+(13-min episode, `biodatlab/whisper-th-medium-combined` via `faster_whisper`,
+production config) compared against the user's own Premiere hand-recut of the
+first ~3 min (`hon trim 3 mins mine.srt`, ground truth for that span).
+
+**Two related but distinct defects found, both content-loss, not just accuracy:**
+
+1. **A ~4s window of real speech produced zero output.** Between
+   `01:57.04` and `02:01.18` the hand-recut has two full utterances
+   (`-ห้ามบุกรุก -ใช่ค่ะ` and `เมย์จ่ายไปทั้งหมด 380,000`, including a specific
+   monetary figure); Audio_test.srt has nothing there at all — the cue before
+   ends at `01:57.04`, the next cue starts at `02:01.18`. Not a wording error;
+   the engine never emitted text for that audio.
+2. **Systemic mid-word truncation, ~13 occurrences across the 13-min file**
+   (roughly one per minute), always at a point where a chunk/batch boundary
+   would plausibly fall:
+   - Orphan 1-4-character fragment cues — the stray head or tail of a word,
+     stranded as its own cue, immediately abutting (0.0s gap) the cue before
+     it, but followed by a 1-8s gap before the next real cue (i.e. real
+     speech in between was never decoded):
+     `น` (97.12-97.24), `กับ` (165.72-166.10), `ยื` (180.82-184.20),
+     `มั` (263.28-266.93), `ไค` (552.50-557.82), `ได้` (643.37-643.65),
+     `เงิน` (703.72-710.90).
+   - Cues that end mid-word with nothing recovering the rest:
+     `ทยอยจ่าย 15 ธันว` (should continue "ธันวาคม…", 4.1s gap after),
+     `แล้วอยากให้ผมมาร` (2.6s gap after),
+     `คุณโอนเข้าที่บ` (likely "…บัญชี", 1.9s gap after),
+     `ตำรวจเขาก็รับแจ้งคว` (likely "…ความ", 4.5s gap after),
+     `แล้วเขาทำ` (cut off clean, 5.9s gap after).
+
+**Hypothesis, not yet verified**: `ingest.py`'s VAD chunking (or
+`BatchedInferencePipeline`'s internal batch splitting, since Engine A is
+`prefers_whole_file=True`) is cutting mid-word rather than at a silence
+boundary, and whatever falls on the far side of that cut — from a fragment
+up to several seconds of following speech — is never stitched back in.
+
+**Next step (not started)**: pull `EngineResult.raw["words"]` for this job
+from the DB and check whether the audio in these gaps was even handed to the
+engine, or inspect `ingest.py`'s VAD chunk boundaries directly against these
+timestamps, to confirm chunk-boundary truncation vs. some other cause before
+attempting a fix.
+
+**Secondary finding from the same comparison (lower priority, vocabulary
+accuracy not content loss)**: recurring term-level substitution errors in the
+first 3 min — `ธรณีสงฆ์`→`ตรณีสงฆ์`/`โดรณีสงฆ์` (3x), `ฉ้อโกง`→`ชอบโกง` (recurs
+later in the file too), `โฉนด`→`ฉนด`, `น็อคดาวน์`→`นกดาว`, the show's own name
+`โหนกระแส`→`โหนกัน`/hallucinated `เปรต` insertion, `ผู้เสียหาย`→`จะหาย`, plus
+digit errors (`480,000`→`400,000`, `950,000`→`900,000`, a dropped `650,000`).
+Candidates for `normalization.exception_lexicon` / bias terms once the
+content-loss bug above is understood — accuracy tuning is secondary to fixing
+outright dropped content.
+
 ## HANDOFF_THAI_BREAK_ATOMS Phase 1 — atoms layer built, vetoes deleted, harness green — executed 2026-08-06
 
 **Built the inversion the handoff below specifies: `transcribe/thai/atoms.py`**
