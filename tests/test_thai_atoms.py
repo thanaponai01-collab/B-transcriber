@@ -154,6 +154,30 @@ def test_pos_condition_reciprocal_disabled_still_over_glues_after_a_pronoun():
     assert "เขากัน" in texts, f"default behaviour should be unchanged: {texts}"
 
 
+def test_pos_conditioned_reciprocal_strands_gan_after_a_demonstrative_real_corpus_case():
+    """Real sentence from Short2.json (gold-set reference, already in the
+    corpus): 'ทำแบบนี้กันทั้งนั้น' ("[everyone] does it like this") — กัน
+    marks the whole verb phrase ทำแบบนี้ as collective, but immediately
+    follows the demonstrative แบบนี้ (POS-tagged DDAC), not the verb ทำ
+    itself. This is the confirmed negative result that keeps
+    pos_condition_reciprocal at false (see config.yaml/TODO_LEDGER): a
+    single-token lookback strands กัน on real, unremarkable creator speech —
+    reproducing the exact stranded-particle defect this handoff exists to
+    prevent. Default (off) must keep gluing it; do not re-enable the flag
+    without this test also passing."""
+    default_atoms = _atoms_for("ทำแบบนี้กันทั้งนั้น")
+    default_texts = [a[0] for a in default_atoms]
+    assert "แบบนี้กัน" in default_texts, f"default should glue: {default_texts}"
+
+    pos_lexicon = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    pos_atoms = _atoms_for("ทำแบบนี้กันทั้งนั้น", lexicon=pos_lexicon)
+    pos_texts = [a[0] for a in pos_atoms]
+    assert any(t.strip() == "กัน" for t in pos_texts), (
+        f"documents the known false-negative: pos-conditioning strands กัน "
+        f"here instead of gluing it — got {pos_texts}"
+    )
+
+
 # ── glue_atoms: numeral + unit/classifier ───────────────────────────────────
 
 def test_digit_final_token_glues_to_its_unit_across_whitespace():

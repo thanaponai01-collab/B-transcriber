@@ -218,7 +218,7 @@ rules — only worth probing if a future run shows over-gluing has a
 *confirmed*, not just unresolved, cost), and §4's gap 4 (เอง/ด้วย/directional
 verbs — parked for Phase 4 by design).
 
-## HANDOFF_THAI_BREAK_ATOMS Phase 4 — POS-conditioned กัน probe built and run; gate override was explicit, result is inconclusive — executed 2026-08-06
+## HANDOFF_THAI_BREAK_ATOMS Phase 4 — POS-conditioned กัน probe built, run, and rejected on a confirmed real-corpus regression — executed 2026-08-06
 
 **§6's own trigger had not fired.** Before starting, checked both disjuncts
 against this ledger: Phase 2 batch 3's `boundary_error_rate`/`cue_BER`
@@ -262,32 +262,54 @@ argues against it):
   production baseline `eval_run.id=57` (`cer_thai 0.1751`, `wer_latin 0.8291`,
   `BER 0.5493`, `cue_BER 0.4043`, `rtf 0.1961`): **byte-identical** on all
   four gated metrics, `rtf 0.198` (within run-to-run noise), `passed=True`.
-  **This is not evidence the probe works or doesn't** — checked the gold
-  set's reference transcripts directly (`grep`-equivalent over all 8 JSON
-  files) and **กัน occurs zero times anywhere in this corpus**, reciprocal or
-  otherwise. The flag was never exercised by the run; a byte-identical result
-  was the only possible outcome regardless of whether the POS-conditioning
-  logic is correct.
+  **Originally logged here as "not evidence either way — the gold set has
+  zero กัน occurrences." That claim was wrong** (see the correction below,
+  same day) — the check behind it had a bug, not the corpus.
 
-**Decision: flag reverted to `false` (config.yaml) after the experiment.**
-Per the prime directive ("nothing activates without the eval harness
-proving it"), zero exercised occurrences is zero evidence, not a pass — the
-handoff's own §6 discipline ("probe-then-decide... keep or kill") only
-supports "kill the default flip," not "keep it," on this result. The code,
-config toggle, and tests stay in the tree (opt-in, off by default, zero cost
-when disabled) since they're correct and proven-on-fixtures — just unproven
-on real corpus evidence, same epistemic status as before the probe, not
-worse.
+**CORRECTION (same day, 2026-08-06):** the "zero occurrences" check iterated
+gold JSON assuming a bare list; the real format is `{"tokens": [...]}` (a
+dict — see `transcribe/eval/README.md`), so `isinstance(data, list)` was
+`False` on every one of the 8 files and the scan silently matched nothing on
+all of them, not just this corpus. Re-checked correctly (iterate
+`data["tokens"]`): กัน **does** occur in the real reference transcripts —
+`เหมือนกัน`/`ด้วยกัน`/`ต่างกัน` are single fused pythainlp tokens (never reach
+the glue rule at all), and the standalone-token occurrences (`คบกัน`,
+`คุยกัน`, `ประกอบกัน`, `อัปเดตพอร์ตกัน`, `ใกล้ๆกัน`) are almost all
+verb-preceded — glue identically whether the flag is on or off, which is why
+the harness run was still byte-identical even with the bug fixed (a
+different, better-founded route to the same non-signal).
 
-**What would actually test this:** a gold-set clip (or a fixture added to
-the existing 8) containing a non-reciprocal กัน (e.g. "block/prevent" or
-"in order to/so that" senses) with a human reference recut — until one
-exists, this probe cannot be confirmed OR rejected by the harness, only by
-code-level unit tests (which already pass). Do not re-run `--experiment` on
-the current gold set expecting a different answer; the corpus itself is the
-blocker, matching this handoff's `ceiling-break-handoff` memory's standing
-note that gold-set growth (5→8 clips, still no clip exercising this token)
-is the live open thread gating this class of re-probe.
+**But one real sentence is a confirmed negative result, not a null one:**
+`Short2.json`'s reference contains `ทำแบบนี้กันทั้งนั้น` ("[everyone] does it
+like this") — กัน here marks the verb phrase `ทำแบบนี้` as collective, but
+its immediate predecessor token is the demonstrative `แบบนี้`
+(`pythainlp.tag.pos_tag` → `DDAC`), not the verb `ทำ` itself. Fed straight
+through `glue_atoms`: default (`false`) correctly produces the atom
+`แบบนี้กัน`; `pos_condition_reciprocal=true` strands `กัน` as its own atom —
+**reproducing, on real unremarkable creator speech already in the gold set,
+the exact stranded-particle defect this whole handoff exists to prevent.**
+Locked in as `test_pos_conditioned_reciprocal_strands_gan_after_a_demonstrative_real_corpus_case`
+in `test_thai_atoms.py`.
+
+**Decision (unchanged: flag stays `false`), but the reasoning is now
+stronger.** This is no longer "insufficient evidence" — it's a confirmed
+design flaw: a single-token POS lookback is too narrow for ordinary
+VERB+OBJECT+กัน / VERB+DEMONSTRATIVE+กัน constructions, which are at least as
+common in real speech as the "กัน = block" homograph the probe was built to
+catch. **Do not re-enable `pos_condition_reciprocal` without first widening
+the check** (e.g. "is there a verb tag anywhere in this clause," not just
+"is the immediately preceding token a verb") and re-running this exact
+fixture. The code, toggle, and tests stay in the tree — correct as an
+opt-in, off-by-default building block, just not safe to flip on as designed.
+
+**Gold-set growth for the actual gap that remains:** the "กัน = block"
+homograph itself (§6's original motivating case) still doesn't occur
+anywhere in the current 8 clips — that part of the original (wrong) finding
+happens to still be true, just for a narrower reason. Testing it for real
+needs a clip with that sense in it; per `SOURCES.md`'s contamination-guard
+discipline, that has to be a real audio+human-transcript pair from the
+user's own footage, not a fabricated one — flagged back to the user rather
+than invented.
 
 ## Thai break-atoms — incident fixed (uncommitted), durable design handed off — 2026-08-06
 

@@ -283,15 +283,22 @@ thai_atoms:
     # pythainlp.tag.pos_tag (perceptron, ORCHID tagset) tags as a verb — กัน
     # is also "to block" outside the reciprocal sense, and this removes that
     # over-glue at the cost of a per-file CPU POS-tagging pass.
-    # PROBED 2026-08-06 (explicit override of the handoff's own evidence gate
-    # — neither §6 trigger had fired). Harness --experiment vs production
-    # baseline eval_run.id=57: byte-identical on all four gated metrics
-    # (cer_thai/wer_latin/BER/cue_BER) and rtf (0.198 vs 0.196, within noise).
-    # NOT evidence of correctness OR of no benefit: the 8-clip gold set
-    # contains zero occurrences of กัน at all (reference transcripts checked
-    # directly), so this flag was never exercised by the run. Stays false —
-    # unproven, not disproven. See TODO_LEDGER for the full record and what
-    # would actually test it (a fixture clip with a non-reciprocal กัน).
+    # PROBED 2026-08-06, then RE-PROBED same day after a bug in the first
+    # probe's corpus check was found and fixed (see TODO_LEDGER — the first
+    # check assumed gold JSON was a bare list, it's actually {"tokens": [...]},
+    # so "zero กัน occurrences" was a false negative from that bug, not a real
+    # finding). Correct check: the real corpus's กัน occurrences are almost
+    # all "VERB + กัน" (คบกัน, คุยกัน, ประกอบกัน — glue identically either way)
+    # EXCEPT one real sentence in Short2.json, "ทำแบบนี้กันทั้งนั้น", where กัน
+    # follows the demonstrative แบบนี้ (tagged DDAC, not verb) rather than the
+    # verb ทำ itself. Fed through glue_atoms directly: default (false) glues
+    # แบบนี้กัน correctly; pos_condition_reciprocal=true strands กัน as its own
+    # atom — reproducing the exact incident class this handoff exists to
+    # prevent, on real creator speech already in the gold set. **Stays false
+    # on confirmed negative evidence, not just absence of evidence** — a
+    # single-token lookback is too narrow for common VERB+OBJECT+กัน /
+    # VERB+DEMONSTRATIVE+กัน constructions. Do not re-enable without widening
+    # the POS check past the immediate predecessor. See TODO_LEDGER.
 
 # Eval regression gate: reject if a metric worsens by more than this fraction,
 # OR by more than regression_abs_floor in absolute terms — whichever band is
