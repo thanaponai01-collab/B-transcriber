@@ -75,6 +75,64 @@ particles), Phase 3 (cue-legality lint in the harness, reusing the same
 `BreakLexicon`), Phase 4 (POS-conditioned rules, evidence-gated). See
 `docs/HANDOFF_THAI_BREAK_ATOMS.md` for the full spec.
 
+## HANDOFF_THAI_BREAK_ATOMS Phase 2 — lexicon grown in three batches — executed 2026-08-06
+
+Grew `transcribe/thai/atoms.py`'s default lexicon per §4's three concrete
+gaps (gap 4, ambiguous post-verbals like เอง/ด้วย/directional
+ไป/มา/ขึ้น/ลง, stays explicitly parked for Phase 4's POS-conditioning per
+the handoff — not attempted here). Baseline throughout: `eval_run.id=46`
+(`cer_thai 0.1751`, `wer_latin 0.8291`, `BER 0.5324`, `cue_BER 0.3904`).
+
+- **Batch 1 (§4 item 1, commit `488ae3d`) — demonstratives grown to spoken/
+  deictic forms + คนนึง/คนหนึ่ง.** `_DEMONSTRATIVES` gained นี่ นั่น โน่น
+  นู่น นู้น alongside the written-register นั้น/นี้/โน้น; a new
+  `_NUMERAL_ONE_FORMS = {นึง, หนึ่ง}` folds into the same `pair_bind_left`
+  mechanism (คนนึง/คนหนึ่ง = "a/one NOUN", same atomic shape — STYLE_GUIDE §8's
+  register choice is untouched, this only stops either spelling from being
+  split). 7 new tests. Harness `--experiment`: **byte-identical** to baseline
+  on all four gated metrics (`cue_BER 0.3925`, matching the Phase-1 port run
+  exactly) — this 8-clip gold set doesn't currently exercise these forms, so
+  it's a clean non-regression, not evidence of improvement yet.
+- **Batch 2 (§4 item 2, commit `3062e2c`) — classifiers grown from 5 to 19.**
+  Added เรื่อง แห่ง ลูก ใบ เล่ม คัน หลัง เครื่อง ชิ้น ชุด คู่ ครั้ง ที รอบ
+  (the handoff's named set — a hand list beats an unshipped pythainlp-corpus
+  derivation, per the handoff's own Phase 4 note). 6 new parametrized tests.
+  Harness `--experiment`: again **byte-identical** to baseline — same
+  "protection installed, not yet exercised by this corpus" story as batch 1.
+- **Batch 3 (§4 item 3, commit `f8e5020`) — final/polite particles as
+  `bind_left`.** New rule category `final_particle` (17 particles: นะ ครับ
+  ค่ะ คะ สิ เลย ล่ะ แหละ หรอก เถอะ จ้ะ อ่ะ มั้ย ไหม เหรอ หรอ ป่ะ), own
+  disable toggle, highest homograph risk of the three (เลย is also "at
+  all"/"past"/a place name) — accepted per §2.4. **This batch actually moved
+  the needle, and not for the better**: `cer_thai`/`wer_latin` unchanged, but
+  `boundary_error_rate` moved `0.5324→0.5493` and `cue_BER` moved
+  `0.3904→0.4043`. Both stayed `UNRESOLVED` under the CI-aware gate (both
+  point estimates fall inside the baseline's own 95% bootstrap CI on this
+  8-clip corpus — `gate_unresolved: boundary_error_rate,cue_boundary_error_rate`
+  on `eval_run.id=56`), so the run is a formal pass, not a confirmed
+  regression. Plausible mechanism, not confirmed: gluing เลย mid-utterance
+  (e.g. ก็เลย "so") as well as utterance-finally shifts a handful of atom
+  boundaries enough to push interpolated switch/cue-start timestamps outside
+  the match tolerance elsewhere in the transcript — the accepted cosmetic
+  cost of over-gluing (§2.4), not a text change or a bug (property test and
+  full suite both stayed green: 441 passed).
+
+**Trigger to revisit:** if a future production (non-experiment) harness run
+on a grown gold set shows `boundary_error_rate` or `cue_boundary_error_rate`
+as a **confirmed** regression (CI excludes baseline) and batch 3 is still in
+the diff between the last-good baseline and that run, narrow
+`final_particle`'s set (เลย is the prime suspect given its homograph load) or
+gate it behind `disable` pending real Premiere-recut evidence — do not
+silently revert the whole batch without checking which particle is actually
+responsible first.
+
+**Not done here (still open per the handoff):** Phase 3 (cue-legality lint
+in the harness, reusing `BreakLexicon` so lint and splitter can't drift
+apart), Phase 4 (POS-conditioned rules — only worth probing if a future run
+shows over-gluing has a *confirmed*, not just unresolved, cost), and §4's
+gap 4 (เอง/ด้วย/directional verbs — parked for Phase 4 by design, genuinely
+ambiguous without POS context).
+
 ## Thai break-atoms — incident fixed (uncommitted), durable design handed off — 2026-08-06
 
 **Incident (user-reported, from real Premiere output):** the greedy cue
