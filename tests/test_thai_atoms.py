@@ -38,13 +38,23 @@ def _atoms_for(text: str, lexicon=None, start=0, step=100):
 
 # ── default_lexicon ─────────────────────────────────────────────────────────
 
-def test_default_lexicon_seeds_exactly_the_four_ported_rules():
+def test_default_lexicon_seeds_the_ported_and_grown_rules():
+    """Phase 1 ported มai_yamok/กัน exactly; Phase 2 (HANDOFF §4) grows
+    bind_left with the final-particle batch on top — this test tracks the
+    current shipped default, not a frozen Phase-1 snapshot."""
     lex = default_lexicon({})
-    assert lex.bind_left == frozenset({"ๆ", "กัน"})
+    assert {"ๆ", "กัน"} <= lex.bind_left
+    assert "ครับ" in lex.bind_left and "ค่ะ" in lex.bind_left  # final_particle batch
     assert lex.bind_right_digit is True
     assert ("คน", "นั้น") in lex.pair_bind_left
     assert ("ตัว", "นี้") in lex.pair_bind_left
     assert lex.unsplittable_terms == frozenset()
+
+
+def test_final_particle_rule_can_be_disabled():
+    lex = default_lexicon({"thai_atoms": {"disable": ["final_particle"]}})
+    assert "ครับ" not in lex.bind_left
+    assert {"ๆ", "กัน"} <= lex.bind_left  # other default rules unaffected
 
 
 def test_default_lexicon_reads_exception_lexicon_as_unsplittable_terms():
@@ -54,9 +64,10 @@ def test_default_lexicon_reads_exception_lexicon_as_unsplittable_terms():
 
 
 def test_default_lexicon_disable_and_extra_bind_left():
-    config = {"thai_atoms": {"disable": ["reciprocal_particle"], "extra_bind_left": ["นะ"]}}
+    config = {"thai_atoms": {"disable": ["reciprocal_particle", "final_particle"],
+                              "extra_bind_left": ["นะ"]}}
     lex = default_lexicon(config)
-    assert lex.bind_left == frozenset({"ๆ", "นะ"})  # กัน dropped, นะ added
+    assert lex.bind_left == frozenset({"ๆ", "นะ"})  # กัน + final_particle batch dropped, นะ added back
 
 
 def test_default_lexicon_disable_classifier_demonstrative_and_extra_pairs():
@@ -105,9 +116,12 @@ def test_reciprocal_particle_glues_to_preceding_verb():
 # ── glue_atoms: numeral + unit/classifier ───────────────────────────────────
 
 def test_digit_final_token_glues_to_its_unit_across_whitespace():
+    """ครับ is also a default final_particle (batch 3) and glues onto บาท in
+    turn, so the merged atom legitimately grows to '100 บาทครับ' — assert by
+    substring, not exact text, to isolate the digit-unit rule under test."""
     atoms = _atoms_for("ราคาทั้งหมดอยู่ที่ 100 บาทครับ")
     texts = [a[0] for a in atoms]
-    assert "100 บาท" in texts, f"numeral split from its unit: {texts}"
+    assert any("100 บาท" in t for t in texts), f"numeral split from its unit: {texts}"
 
 
 def test_digit_final_token_glues_to_its_classifier_with_no_space():
@@ -191,16 +205,39 @@ def test_grown_classifier_glues_to_its_demonstrative_and_preceding_noun(noun, cl
     assert not any(t.strip() == classifier for t in texts), f"classifier orphaned: {texts}"
 
 
+# ── glue_atoms: HANDOFF §4 item 3 — final/polite particles ─────────────────
+
+@pytest.mark.parametrize("particle", [
+    "นะ", "ครับ", "ค่ะ", "คะ", "สิ", "เลย", "ล่ะ", "แหละ", "หรอก", "เถอะ",
+    "จ้ะ", "อ่ะ", "มั้ย", "ไหม", "เหรอ", "หรอ", "ป่ะ",
+])
+def test_final_particle_glues_to_preceding_word(particle):
+    """Utterance-final particles are never sentence-initial in Thai —
+    stranded at a cue start they read exactly as broken as a stranded กัน
+    did (HANDOFF §4 item 3)."""
+    atoms = _atoms_for(f"ไปกิน{particle}")
+    texts = [a[0] for a in atoms]
+    assert f"กิน{particle}" in texts, f"particle not glued to preceding word: {texts}"
+    assert not any(t.strip() == particle for t in texts), f"particle orphaned: {texts}"
+
+
+def test_final_particle_rule_disabled_leaves_particle_unglued():
+    lexicon = default_lexicon({"thai_atoms": {"disable": ["final_particle"]}})
+    atoms = _atoms_for("ไปกินครับ", lexicon=lexicon)
+    texts = [a[0] for a in atoms]
+    assert "กิน" in texts and "ครับ" in texts, f"disabled rule still glued: {texts}"
+
+
 # ── glue_atoms: unsplittable_terms (exception lexicon) ─────────────────────
 
 def test_exception_lexicon_term_split_by_tokenizer_is_reglued():
     """pythainlp splits 'COVID-19' into 'COVID-' + '19' — the exact case this
-    rule exists for (STYLE_GUIDE §6). numeral_unit disabled so this test
-    isolates the unsplittable_terms rule alone from the (separately tested)
-    digit-glue rule, which would otherwise also glue '19' to 'ครับ' and
-    obscure which rule did the work."""
+    rule exists for (STYLE_GUIDE §6). numeral_unit and final_particle both
+    disabled so this test isolates the unsplittable_terms rule alone from
+    the (separately tested) digit-glue and final-particle rules, which would
+    otherwise also glue '19' to 'ครับ' and obscure which rule did the work."""
     lexicon = default_lexicon({"normalization": {"exception_lexicon": ["COVID-19"]},
-                                "thai_atoms": {"disable": ["numeral_unit"]}})
+                                "thai_atoms": {"disable": ["numeral_unit", "final_particle"]}})
     atoms = _atoms_for("เขาเป็นCOVID-19ครับ", lexicon=lexicon)
     texts = [a[0] for a in atoms]
     assert "COVID-19" in texts, f"exception term not reglued: {texts}"
@@ -214,7 +251,7 @@ def test_exception_lexicon_term_already_one_token_is_a_no_op():
 
 
 def test_no_unsplittable_terms_configured_is_a_no_op():
-    lexicon = default_lexicon({"thai_atoms": {"disable": ["numeral_unit"]}})
+    lexicon = default_lexicon({"thai_atoms": {"disable": ["numeral_unit", "final_particle"]}})
     atoms = _atoms_for("เขาเป็นCOVID-19ครับ", lexicon=lexicon)
     texts = [a[0] for a in atoms]
     assert "COVID-" in texts and "19" in texts  # left as pythainlp split it

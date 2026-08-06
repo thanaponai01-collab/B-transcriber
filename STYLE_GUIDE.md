@@ -195,6 +195,14 @@ that's a defect.
   หลัง เครื่อง ชิ้น ชุด คู่ ครั้ง ที รอบ` — the original five plus
   HANDOFF_THAI_BREAK_ATOMS.md §4 item 2's growth batch toward the common
   spoken-Thai set. (`BreakLexicon.pair_bind_left`.)
+- **Never strand an utterance-final/polite particle at a cue start** — Thai
+  final particles (`นะ ครับ ค่ะ คะ สิ เลย ล่ะ แหละ หรอก เถอะ จ้ะ อ่ะ มั้ย
+  ไหม เหรอ หรอ ป่ะ`) are never sentence-initial; stranded at a line/cue start
+  they read exactly as broken as a stranded `กัน` did. Highest homograph
+  risk of this section's rules (`เลย` is also "at all"/"past"/a place name),
+  accepted per this section's over-gluing-is-safe rationale: a cosmetic
+  early break beats a stranded particle. (`BreakLexicon.bind_left`, rule
+  `final_particle` — HANDOFF_THAI_BREAK_ATOMS.md §4 item 3.)
 - **Prefer breaking at a clause or phrase boundary** (before a conjunction like
   แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
   prefer a roughly even split across lines over one long line + one short

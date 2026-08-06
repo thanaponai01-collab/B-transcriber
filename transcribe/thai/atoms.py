@@ -54,10 +54,22 @@ _NUMERAL_ONE_FORMS = frozenset({"นึง", "หนึ่ง"})
 _PAIR_RIGHT = _DEMONSTRATIVES | _NUMERAL_ONE_FORMS
 _DEFAULT_PAIRS = frozenset((c, d) for c in _CLASSIFIERS for d in _PAIR_RIGHT)
 
+# HANDOFF §4 item 3: utterance-final/polite particles are never sentence-
+# initial in Thai — stranded at a cue's start they read exactly as broken as
+# a stranded กัน did. Highest homograph risk of the Phase 2 batches (e.g.
+# เลย is also "at all"/"past"/a place name) — accepted per §2.4: an
+# over-glue moves a break a few characters earlier (cosmetic), an under-glue
+# strands the particle (the exact defect the user hand-fixes in Premiere).
+_FINAL_PARTICLES = frozenset({
+    "นะ", "ครับ", "ค่ะ", "คะ", "สิ", "เลย", "ล่ะ", "แหละ", "หรอก", "เถอะ",
+    "จ้ะ", "อ่ะ", "มั้ย", "ไหม", "เหรอ", "หรอ", "ป่ะ",
+})
+
 RULE_MAI_YAMOK = "mai_yamok"
 RULE_RECIPROCAL_PARTICLE = "reciprocal_particle"
 RULE_NUMERAL_UNIT = "numeral_unit"
 RULE_CLASSIFIER_DEMONSTRATIVE = "classifier_demonstrative"
+RULE_FINAL_PARTICLE = "final_particle"
 
 
 @dataclass(frozen=True)
@@ -89,16 +101,17 @@ class BreakLexicon:
 
 
 def default_lexicon(config: dict | None = None) -> BreakLexicon:
-    """STYLE_GUIDE §7's four rule *categories* (Phase 1 ported them from the
-    pre-2026-08-06 veto functions; HANDOFF_THAI_BREAK_ATOMS.md §4 grows their
-    coverage in batches — each batch stays gated on the same four toggle
-    names, it just widens what each toggle's set contains) — plus the config
-    extension points HANDOFF_THAI_BREAK_ATOMS.md §2.2 specifies: a
-    `thai_atoms:` block with `extra_bind_left`, `extra_pairs`, `disable:
-    [rule-name]`, so the lexicon grows from observed Premiere pain without a
-    code change. `unsplittable_terms` is seeded from
-    `normalization.exception_lexicon` (STYLE_GUIDE §6), not from `thai_atoms`
-    — one lexicon, not a second list to keep in sync.
+    """STYLE_GUIDE §7's rule *categories* — Phase 1 ported the original four
+    from the pre-2026-08-06 veto functions; HANDOFF_THAI_BREAK_ATOMS.md §4
+    grows their coverage in batches (each batch stays gated on its own toggle
+    name, it just widens what that toggle's set contains) and item 3 added a
+    fifth category (`final_particle`) — plus the config extension points
+    HANDOFF_THAI_BREAK_ATOMS.md §2.2 specifies: a `thai_atoms:` block with
+    `extra_bind_left`, `extra_pairs`, `disable: [rule-name]`, so the lexicon
+    grows from observed Premiere pain without a code change.
+    `unsplittable_terms` is seeded from `normalization.exception_lexicon`
+    (STYLE_GUIDE §6), not from `thai_atoms` — one lexicon, not a second list
+    to keep in sync.
     """
     config = config or {}
     atoms_cfg = config.get("thai_atoms", {}) or {}
@@ -109,6 +122,8 @@ def default_lexicon(config: dict | None = None) -> BreakLexicon:
         bind_left.add("ๆ")
     if RULE_RECIPROCAL_PARTICLE not in disabled:
         bind_left.add("กัน")
+    if RULE_FINAL_PARTICLE not in disabled:
+        bind_left.update(_FINAL_PARTICLES)
     bind_left.update(atoms_cfg.get("extra_bind_left", []) or [])
 
     pair_bind_left = set()

@@ -275,7 +275,7 @@ thai_atoms:
   extra_bind_left: []      # extra tokens that glue to the atom before them
   extra_pairs: []           # extra [classifier, demonstrative] pairs, e.g. [เรื่อง, นี้]
   disable: []               # rule names to turn off: mai_yamok, reciprocal_particle,
-                             # numeral_unit, classifier_demonstrative
+                             # numeral_unit, classifier_demonstrative, final_particle
 
 # Eval regression gate: reject if a metric worsens by more than this fraction,
 # OR by more than regression_abs_floor in absolute terms — whichever band is
