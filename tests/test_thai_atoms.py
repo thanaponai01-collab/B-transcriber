@@ -142,6 +142,35 @@ def test_classifier_demonstrative_pair_alone_still_glues_with_no_preceding_token
     assert "คนนั้น" in texts, f"pair not glued: {texts}"
 
 
+# ── glue_atoms: HANDOFF §4 item 1 — spoken deictic forms ───────────────────
+
+@pytest.mark.parametrize("deictic", ["นี่", "นั่น", "โน่น", "นู่น", "นู้น"])
+def test_classifier_spoken_deictic_form_glues_same_as_written_demonstrative(deictic):
+    """Spoken Thai (this corpus is creator speech) uses นี่/นั่น/โน่น/นู่น/นู้น
+    far more than the written-register นี้/นั้น/โน้น the pre-Phase-2 lexicon
+    only had — same atomic shape, same glue behaviour."""
+    atoms = _atoms_for(f"เจอผู้หญิงคน{deictic}เมื่อวาน")
+    texts = [a[0] for a in atoms]
+    assert f"ผู้หญิงคน{deictic}" in texts, f"deictic pair not glued: {texts}"
+    assert not any(t.strip() == "คน" for t in texts), f"classifier orphaned: {texts}"
+    assert not any(t.strip() == deictic for t in texts), f"deictic orphaned: {texts}"
+
+
+# ── glue_atoms: HANDOFF §4 item 1 — คนนึง / คนหนึ่ง (classifier + "one") ────
+
+@pytest.mark.parametrize("one_form", ["นึง", "หนึ่ง"])
+def test_classifier_plus_one_form_glues_to_preceding_noun(one_form):
+    """คนนึง/คนหนึ่ง ('a/one NOUN') is the same atomic shape as
+    classifier+demonstrative — STYLE_GUIDE §8 keeps both registers verbatim
+    on the text side; this only tests that neither gets split at the cue
+    level."""
+    atoms = _atoms_for(f"เจอผู้หญิงคน{one_form}เมื่อวาน")
+    texts = [a[0] for a in atoms]
+    assert f"ผู้หญิงคน{one_form}" in texts, f"pair not glued to its noun: {texts}"
+    assert not any(t.strip() == "คน" for t in texts), f"classifier orphaned: {texts}"
+    assert not any(t.strip() == one_form for t in texts), f"'{one_form}' orphaned: {texts}"
+
+
 # ── glue_atoms: unsplittable_terms (exception lexicon) ─────────────────────
 
 def test_exception_lexicon_term_split_by_tokenizer_is_reglued():
@@ -274,6 +303,9 @@ _FIXTURES = [
     "มีแมว3ตัวที่บ้าน",
     "เขาเป็นCOVID-19ครับ",
     "เจอผู้หญิงคนนั้นเมื่อวานตอน100บาทกับเด็กๆที่ทะเลาะกัน",
+    "เจอผู้หญิงคนนี่เมื่อวาน",
+    "เจอผู้หญิงคนนึงเมื่อวาน",
+    "เจอผู้หญิงคนหนึ่งเมื่อวาน",
 ]
 
 

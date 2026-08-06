@@ -32,8 +32,22 @@ from cutdeck.words import TimedToken
 # HANDOFF_THAI_BREAK_ATOMS.md §4 item 2 grows this toward the dozens spoken
 # Thai actually uses.
 _CLASSIFIERS = frozenset({"คน", "อัน", "ตัว", "ที่", "สิ่ง"})
-_DEMONSTRATIVES = frozenset({"นั้น", "นี้", "โน้น"})
-_DEFAULT_PAIRS = frozenset((c, d) for c in _CLASSIFIERS for d in _DEMONSTRATIVES)
+
+# Written-register demonstratives (นั้น นี้ โน้น) plus HANDOFF §4 item 1's
+# spoken/deictic forms (นี่ นั่น โน่น นู่น นู้น) — this corpus is creator
+# speech, and the deictic forms are the ones that actually occur in it.
+_DEMONSTRATIVES = frozenset({"นั้น", "นี้", "โน้น", "นี่", "นั่น", "โน่น", "นู่น", "นู้น"})
+
+# HANDOFF §4 item 1: คนนึง/คนหนึ่ง (classifier + "one") is the same atomic
+# shape as classifier+demonstrative — pythainlp splits คน|นึง / คน|หนึ่ง, but
+# the pair means "a/one NOUN" and re-specifies the preceding noun exactly
+# like คนนั้น does. STYLE_GUIDE §8 already keeps both the colloquial (นึง) and
+# formal (หนึ่ง) register verbatim on the text side; gluing here only refuses
+# to split whichever one was actually said, it doesn't pick between them.
+_NUMERAL_ONE_FORMS = frozenset({"นึง", "หนึ่ง"})
+
+_PAIR_RIGHT = _DEMONSTRATIVES | _NUMERAL_ONE_FORMS
+_DEFAULT_PAIRS = frozenset((c, d) for c in _CLASSIFIERS for d in _PAIR_RIGHT)
 
 RULE_MAI_YAMOK = "mai_yamok"
 RULE_RECIPROCAL_PARTICLE = "reciprocal_particle"
@@ -53,9 +67,11 @@ class BreakLexicon:
         BEFORE it (mai yamok's ๆ, the reciprocal particle กัน).
     bind_right_digit: a token ending in a digit glues to whatever follows it
         (its unit/classifier — "100 บาท", "3 คน").
-    pair_bind_left: (classifier, demonstrative) pairs — glue the two
+    pair_bind_left: (classifier, demonstrative-or-"one") pairs — glue the two
         together AND glue the result to the token immediately before them
-        (the noun being re-specified).
+        (the noun being re-specified). "Demonstrative-or-one" because
+        classifier+นึง/หนึ่ง ("a/one NOUN") is the same atomic shape as
+        classifier+demonstrative (HANDOFF §4 item 1) and uses this same field.
     unsplittable_terms: multi-token spans that must come out as one atom —
         seeded from config.yaml's normalization.exception_lexicon (STYLE_GUIDE
         §6: brands, COVID-19, mixed-script proper nouns).
@@ -68,8 +84,10 @@ class BreakLexicon:
 
 
 def default_lexicon(config: dict | None = None) -> BreakLexicon:
-    """STYLE_GUIDE §7's four rules, exactly as ported from the pre-2026-08-06
-    veto functions (Phase 1 is a port, not a growth step) — plus the config
+    """STYLE_GUIDE §7's four rule *categories* (Phase 1 ported them from the
+    pre-2026-08-06 veto functions; HANDOFF_THAI_BREAK_ATOMS.md §4 grows their
+    coverage in batches — each batch stays gated on the same four toggle
+    names, it just widens what each toggle's set contains) — plus the config
     extension points HANDOFF_THAI_BREAK_ATOMS.md §2.2 specifies: a
     `thai_atoms:` block with `extra_bind_left`, `extra_pairs`, `disable:
     [rule-name]`, so the lexicon grows from observed Premiere pain without a

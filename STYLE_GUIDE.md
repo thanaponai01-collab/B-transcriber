@@ -184,8 +184,14 @@ that's a defect.
   noun it modifies** — `ผู้หญิงคนนั้น` ("that woman"): pythainlp segments this
   as `ผู้หญิง` / `คน` / `นั้น`, but `คน...นั้น` functions as one atomic
   "that NOUN" unit. Neither the internal boundary (`คน` | `นั้น`) nor the
-  boundary right before it (`ผู้หญิง` | `คนนั้น`) is a legal break.
-  (`BreakLexicon.pair_bind_left`.)
+  boundary right before it (`ผู้หญิง` | `คนนั้น`) is a legal break. Covers
+  both written (`นั้น นี้ โน้น`) and spoken/deictic (`นี่ นั่น โน่น นู่น
+  นู้น`) demonstrative forms — this corpus is creator speech, so the deictic
+  forms are the ones that actually occur. `คนนึง`/`คนหนึ่ง` ("a/one NOUN",
+  classifier + "one") is the same atomic shape and uses the same field —
+  §8's register choice (which form was actually said) is a text-content
+  decision this rule doesn't touch; it only refuses to split whichever one
+  was said. (`BreakLexicon.pair_bind_left`.)
 - **Prefer breaking at a clause or phrase boundary** (before a conjunction like
   แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
   prefer a roughly even split across lines over one long line + one short
