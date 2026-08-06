@@ -81,7 +81,7 @@ class BreakLexicon:
     lexicon (Phase 2) never means adding a new call site.
 
     bind_left: a token whose stripped text is in this set glues to the atom
-        BEFORE it (mai yamok's ๆ, the reciprocal particle กัน).
+        BEFORE it UNCONDITIONALLY (mai yamok's ๆ, final particles).
     bind_right_digit: a token ending in a digit glues to whatever follows it
         (its unit/classifier — "100 บาท", "3 คน").
     pair_bind_left: (classifier, demonstrative-or-"one") pairs — glue the two
@@ -92,12 +92,19 @@ class BreakLexicon:
     unsplittable_terms: multi-token spans that must come out as one atom —
         seeded from config.yaml's normalization.exception_lexicon (STYLE_GUIDE
         §6: brands, COVID-19, mixed-script proper nouns).
+    pos_conditioned_bind_left: like bind_left, but the glue only fires when
+        the nearest preceding real token is POS-tagged as a verb (HANDOFF §6
+        Phase 4 probe — กัน is also "to block" outside the reciprocal sense;
+        gluing it unconditionally, as bind_left does, over-glues that
+        homograph. Empty by default: this is an opt-in probe, not a default
+        behaviour change — see `thai_atoms.pos_condition_reciprocal`).
     """
 
     bind_left: frozenset[str] = field(default_factory=frozenset)
     bind_right_digit: bool = False
     pair_bind_left: frozenset[tuple[str, str]] = field(default_factory=frozenset)
     unsplittable_terms: frozenset[str] = field(default_factory=frozenset)
+    pos_conditioned_bind_left: frozenset[str] = field(default_factory=frozenset)
 
 
 def default_lexicon(config: dict | None = None) -> BreakLexicon:
@@ -116,15 +123,24 @@ def default_lexicon(config: dict | None = None) -> BreakLexicon:
     config = config or {}
     atoms_cfg = config.get("thai_atoms", {}) or {}
     disabled = set(atoms_cfg.get("disable", []) or [])
+    # HANDOFF §6 Phase 4 probe, opt-in and off by default: instead of gluing
+    # กัน unconditionally, only glue it after a POS-tagged verb (see
+    # `pos_conditioned_bind_left`'s docstring for why — the reciprocal sense
+    # is not the only sense of กัน).
+    pos_condition_reciprocal = bool(atoms_cfg.get("pos_condition_reciprocal", False))
 
     bind_left = set()
     if RULE_MAI_YAMOK not in disabled:
         bind_left.add("ๆ")
-    if RULE_RECIPROCAL_PARTICLE not in disabled:
+    if RULE_RECIPROCAL_PARTICLE not in disabled and not pos_condition_reciprocal:
         bind_left.add("กัน")
     if RULE_FINAL_PARTICLE not in disabled:
         bind_left.update(_FINAL_PARTICLES)
     bind_left.update(atoms_cfg.get("extra_bind_left", []) or [])
+
+    pos_conditioned_bind_left = set()
+    if RULE_RECIPROCAL_PARTICLE not in disabled and pos_condition_reciprocal:
+        pos_conditioned_bind_left.add("กัน")
 
     pair_bind_left = set()
     if RULE_CLASSIFIER_DEMONSTRATIVE not in disabled:
@@ -138,7 +154,33 @@ def default_lexicon(config: dict | None = None) -> BreakLexicon:
         bind_right_digit=RULE_NUMERAL_UNIT not in disabled,
         pair_bind_left=frozenset(pair_bind_left),
         unsplittable_terms=frozenset(unsplittable_terms),
+        pos_conditioned_bind_left=frozenset(pos_conditioned_bind_left),
     )
+
+
+def pos_tag_texts(tokens: list[str]) -> list[str]:
+    """Thin wrapper around `pythainlp.tag.pos_tag` (perceptron, ORCHID tagset)
+    so both `glue_atoms` and `transcribe/thai/lint.py`'s particle_initial
+    check make the exact same tag-classification call — one knowledge source
+    for "does this tag count as a verb", same law `BreakLexicon` follows for
+    the glue rules themselves. Lazy import: a model-file load, only paid when
+    a pos-conditioned rule is actually configured/checked (HANDOFF §6: "cost
+    it — POS tagging runs per file on CPU").
+    """
+    if not tokens:
+        return []
+    from pythainlp.tag import pos_tag
+
+    return [tag for _, tag in pos_tag(tokens)]
+
+
+def is_verb_tag(tag: str) -> bool:
+    """ORCHID verb tags are VACT/VSTA/VATT/VACT-prefixed — HANDOFF §6's
+    probe claim ("กัน binds only after a VERB-tagged token") is unproven on
+    unpunctuated ASR output until a harness run says otherwise; this is the
+    single place that claim is encoded so the probe can be judged, tuned, or
+    killed in one spot."""
+    return tag.startswith("V")
 
 
 def _merge_range(glue_prev: list[bool], a: int, b: int) -> None:
@@ -191,6 +233,19 @@ def glue_atoms(timed: list[TimedToken], lexicon: BreakLexicon) -> list[TimedToke
     for i, s in enumerate(stripped):
         if s and s in lexicon.bind_left:
             _glue_left(glue_prev, stripped, i)
+
+    # pos_conditioned_bind_left (HANDOFF §6 Phase 4 probe): same glue-left
+    # shape as bind_left, but only when the nearest preceding REAL token's
+    # POS tag is verb-like. Tags every real token in this segment once (not
+    # pairwise) so the tagger sees full local context, not a 2-word window.
+    if lexicon.pos_conditioned_bind_left:
+        real_positions = [i for i, s in enumerate(stripped) if s]
+        tags = pos_tag_texts([stripped[i] for i in real_positions])
+        for k, i in enumerate(real_positions):
+            if k == 0:
+                continue
+            if stripped[i] in lexicon.pos_conditioned_bind_left and is_verb_tag(tags[k - 1]):
+                _glue_left(glue_prev, stripped, i)
 
     # bind_right_digit: a digit-final real token glues to whatever follows
     # it (its unit/classifier), absorbing any whitespace between them.

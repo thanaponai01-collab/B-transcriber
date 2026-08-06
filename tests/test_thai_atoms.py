@@ -113,6 +113,47 @@ def test_reciprocal_particle_glues_to_preceding_verb():
     assert not any(t.strip() == "กัน" for t in texts), f"กัน orphaned: {texts}"
 
 
+# ── glue_atoms: pos_conditioned_bind_left (HANDOFF §6 Phase 4 probe) ───────
+
+def test_default_lexicon_pos_condition_reciprocal_off_by_default():
+    lex = default_lexicon({})
+    assert "กัน" in lex.bind_left
+    assert lex.pos_conditioned_bind_left == frozenset()
+
+
+def test_default_lexicon_pos_condition_reciprocal_moves_gan_out_of_bind_left():
+    lex = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    assert "กัน" not in lex.bind_left
+    assert lex.pos_conditioned_bind_left == frozenset({"กัน"})
+
+
+def test_pos_conditioned_reciprocal_still_glues_after_a_verb():
+    lexicon = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    atoms = _atoms_for("เราทะเลาะกันเมื่อวาน", lexicon=lexicon)
+    texts = [a[0] for a in atoms]
+    assert "ทะเลาะกัน" in texts, f"verb-preceded กัน should still glue: {texts}"
+
+
+def test_pos_conditioned_reciprocal_does_not_glue_after_a_pronoun():
+    """กัน is also 'to block' outside the reciprocal sense — bind_left glues
+    it unconditionally (accepted over-glue, §2.4); the POS-conditioned probe
+    exists specifically to stop this over-glue when nothing verb-like
+    precedes it."""
+    lexicon = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    atoms = _atoms_for("เขากันไม่ให้เข้ามา", lexicon=lexicon)
+    texts = [a[0] for a in atoms]
+    assert "เขากัน" not in texts, f"pronoun-preceded กัน should not glue: {texts}"
+    assert any(t.strip() == "กัน" for t in texts), f"กัน should stand alone: {texts}"
+
+
+def test_pos_condition_reciprocal_disabled_still_over_glues_after_a_pronoun():
+    """Default (off) behaviour is unchanged by adding the probe — bind_left's
+    unconditional glue still fires regardless of what precedes กัน."""
+    atoms = _atoms_for("เขากันไม่ให้เข้ามา")
+    texts = [a[0] for a in atoms]
+    assert "เขากัน" in texts, f"default behaviour should be unchanged: {texts}"
+
+
 # ── glue_atoms: numeral + unit/classifier ───────────────────────────────────
 
 def test_digit_final_token_glues_to_its_unit_across_whitespace():

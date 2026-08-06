@@ -218,6 +218,77 @@ rules — only worth probing if a future run shows over-gluing has a
 *confirmed*, not just unresolved, cost), and §4's gap 4 (เอง/ด้วย/directional
 verbs — parked for Phase 4 by design).
 
+## HANDOFF_THAI_BREAK_ATOMS Phase 4 — POS-conditioned กัน probe built and run; gate override was explicit, result is inconclusive — executed 2026-08-06
+
+**§6's own trigger had not fired.** Before starting, checked both disjuncts
+against this ledger: Phase 2 batch 3's `boundary_error_rate`/`cue_BER`
+regression stayed `UNRESOLVED` (CI contains baseline), never *confirmed*, and
+Phase 3's lint found `cue_legality_violations=0` on hypothesis output — no
+live gap-4 particle pain either. Per §6 ("only if...") and Phase 2/3's own
+"not worth probing" notes above, Phase 4 was not due. **Executed anyway on
+explicit user instruction to override the gate**, not on new evidence.
+
+**Built exactly the probe §6 names for กัน** (the auto-derive-classifiers-
+from-corpora half of §6 was not attempted — out of scope for one probe, and
+Phase 2's own "a hand list beats an unshipped derivation" finding already
+argues against it):
+
+- `transcribe/thai/atoms.py`: `BreakLexicon` gained `pos_conditioned_bind_left`
+  (a `bind_left`-shaped set whose glue only fires when the nearest preceding
+  REAL token's `pythainlp.tag.pos_tag` (perceptron, ORCHID tagset) result
+  starts with `V`). New `pos_tag_texts()`/`is_verb_tag()` helpers — one
+  classification function, so `glue_atoms` and the lint can't restate it
+  differently and drift (the same law the lexicon itself follows). New
+  `thai_atoms.pos_condition_reciprocal` config toggle (default `false`):
+  when `true`, `default_lexicon` moves `กัน` out of unconditional `bind_left`
+  and into `pos_conditioned_bind_left` instead of adding a second rule —
+  gluing behaviour for every other rule (mai yamok, classifiers, final
+  particles) is untouched.
+- `transcribe/thai/lint.py`'s `particle_initial` check extended to also fire
+  for `pos_conditioned_bind_left` material, using the *same* `is_verb_tag`
+  classification over the two adjacent cues' edge tokens — necessarily a
+  narrower context window than `glue_atoms` sees (a whole segment's real
+  tokens at once), a documented limitation in the same spirit as Phase 3's
+  own particle-initial blind spots, not a new kind of drift.
+- **Verified the mechanism actually discriminates the homograph it targets**
+  (not just wired-but-inert): `เราทะเลาะกันเมื่อวาน` (reciprocal, ทะเลาะ tags
+  `VACT`) still glues `ทะเลาะกัน` under the flag; `เขากันไม่ให้เข้ามา` (กัน =
+  "block", เขา tags `PPRS`, a pronoun) does NOT glue under the flag but DOES
+  glue (over-glues, `เขากัน`) with the flag off — the exact before/after §6
+  predicts. 7 new tests in `test_thai_atoms.py`, 2 new in `test_thai_lint.py`
+  covering both the glue and lint side of this. Full suite: **466 passed**
+  (was 459).
+- **Harness `--experiment` run, flag temporarily set to `true`**, vs
+  production baseline `eval_run.id=57` (`cer_thai 0.1751`, `wer_latin 0.8291`,
+  `BER 0.5493`, `cue_BER 0.4043`, `rtf 0.1961`): **byte-identical** on all
+  four gated metrics, `rtf 0.198` (within run-to-run noise), `passed=True`.
+  **This is not evidence the probe works or doesn't** — checked the gold
+  set's reference transcripts directly (`grep`-equivalent over all 8 JSON
+  files) and **กัน occurs zero times anywhere in this corpus**, reciprocal or
+  otherwise. The flag was never exercised by the run; a byte-identical result
+  was the only possible outcome regardless of whether the POS-conditioning
+  logic is correct.
+
+**Decision: flag reverted to `false` (config.yaml) after the experiment.**
+Per the prime directive ("nothing activates without the eval harness
+proving it"), zero exercised occurrences is zero evidence, not a pass — the
+handoff's own §6 discipline ("probe-then-decide... keep or kill") only
+supports "kill the default flip," not "keep it," on this result. The code,
+config toggle, and tests stay in the tree (opt-in, off by default, zero cost
+when disabled) since they're correct and proven-on-fixtures — just unproven
+on real corpus evidence, same epistemic status as before the probe, not
+worse.
+
+**What would actually test this:** a gold-set clip (or a fixture added to
+the existing 8) containing a non-reciprocal กัน (e.g. "block/prevent" or
+"in order to/so that" senses) with a human reference recut — until one
+exists, this probe cannot be confirmed OR rejected by the harness, only by
+code-level unit tests (which already pass). Do not re-run `--experiment` on
+the current gold set expecting a different answer; the corpus itself is the
+blocker, matching this handoff's `ceiling-break-handoff` memory's standing
+note that gold-set growth (5→8 clips, still no clip exercising this token)
+is the live open thread gating this class of re-probe.
+
 ## Thai break-atoms — incident fixed (uncommitted), durable design handed off — 2026-08-06
 
 **Incident (user-reported, from real Premiere output):** the greedy cue

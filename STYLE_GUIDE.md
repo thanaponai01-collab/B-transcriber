@@ -179,7 +179,13 @@ that's a defect.
   `ทะเลาะกัน` ("argue with each other"), `คุยกัน` ("talk together"): `กัน`
   immediately after a verb is a bound particle, not a free word, and reads
   as an unfinished sentence when stranded at the start of a line/cue.
-  (`BreakLexicon.bind_left` — `"กัน"`.)
+  (`BreakLexicon.bind_left` — `"กัน"`, unconditional by default.) A
+  POS-conditioned alternative exists behind `thai_atoms.pos_condition_reciprocal`
+  (`BreakLexicon.pos_conditioned_bind_left` — only glues after a
+  verb-tagged token, since `กัน` is also "to block" outside the reciprocal
+  sense) — **off by default, unproven on this corpus** (HANDOFF_THAI_BREAK_ATOMS.md
+  §6 Phase 4: probed 2026-08-06, the 8-clip gold set contains zero `กัน`
+  occurrences to test it against; see TODO_LEDGER).
 - **Never split a classifier from its demonstrative, or the pair from the
   noun it modifies** — `ผู้หญิงคนนั้น` ("that woman"): pythainlp segments this
   as `ผู้หญิง` / `คน` / `นั้น`, but `คน...นั้น` functions as one atomic

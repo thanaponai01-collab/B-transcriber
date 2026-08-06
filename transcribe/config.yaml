@@ -276,6 +276,22 @@ thai_atoms:
   extra_pairs: []           # extra [classifier, demonstrative] pairs, e.g. [เรื่อง, นี้]
   disable: []               # rule names to turn off: mai_yamok, reciprocal_particle,
                              # numeral_unit, classifier_demonstrative, final_particle
+  pos_condition_reciprocal: false
+    # HANDOFF_THAI_BREAK_ATOMS.md §6 Phase 4 probe. Default (false): กัน glues
+    # to whatever precedes it unconditionally (bind_left, §2.4's "over-gluing
+    # is the safe failure direction"). true: กัน only glues after a token
+    # pythainlp.tag.pos_tag (perceptron, ORCHID tagset) tags as a verb — กัน
+    # is also "to block" outside the reciprocal sense, and this removes that
+    # over-glue at the cost of a per-file CPU POS-tagging pass.
+    # PROBED 2026-08-06 (explicit override of the handoff's own evidence gate
+    # — neither §6 trigger had fired). Harness --experiment vs production
+    # baseline eval_run.id=57: byte-identical on all four gated metrics
+    # (cer_thai/wer_latin/BER/cue_BER) and rtf (0.198 vs 0.196, within noise).
+    # NOT evidence of correctness OR of no benefit: the 8-clip gold set
+    # contains zero occurrences of กัน at all (reference transcripts checked
+    # directly), so this flag was never exercised by the run. Stays false —
+    # unproven, not disproven. See TODO_LEDGER for the full record and what
+    # would actually test it (a fixture clip with a non-reciprocal กัน).
 
 # Eval regression gate: reject if a metric worsens by more than this fraction,
 # OR by more than regression_abs_floor in absolute terms — whichever band is

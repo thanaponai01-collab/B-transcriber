@@ -74,6 +74,25 @@ def test_particle_initial_rule_respects_disabled_final_particle():
     assert not any(v.rule == RULE_PARTICLE_INITIAL for v in violations)
 
 
+# ── particle_initial: pos_conditioned_bind_left (HANDOFF §6 Phase 4 probe) ──
+
+def test_particle_initial_flagged_for_pos_conditioned_gan_after_a_verb():
+    lexicon = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    cues = _cues("เราทะเลาะ", "กันเมื่อวาน")  # verb stranded from its กัน
+    violations = find_cue_legality_violations(cues, lexicon)
+    assert any(v.rule == RULE_PARTICLE_INITIAL and v.index == 1 for v in violations)
+
+
+def test_particle_initial_not_flagged_for_pos_conditioned_gan_after_a_pronoun():
+    """กัน opening a new cue after a pronoun-ending cue is not a stranded
+    reciprocal particle — the same POS condition glue_atoms uses to decide
+    not to glue it also means the lint must not flag it."""
+    lexicon = default_lexicon({"thai_atoms": {"pos_condition_reciprocal": True}})
+    cues = _cues("เขา", "กันไม่ให้เข้ามา")
+    violations = find_cue_legality_violations(cues, lexicon)
+    assert not any(v.rule == RULE_PARTICLE_INITIAL for v in violations)
+
+
 # ── digit_final ──────────────────────────────────────────────────────────────
 
 def test_digit_final_flagged_when_unit_lands_in_next_cue():
