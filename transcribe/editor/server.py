@@ -172,7 +172,7 @@ def save_corrections(job_id: int, req: SaveRequest):
 
 
 @app.get("/jobs/{job_id}/export/srt")
-def export_srt_endpoint(job_id: int):
+def export_srt_endpoint(job_id: int, fps: float | None = None):
     conn = _conn()
     tokens = store.get_tokens(conn, job_id)
     corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
@@ -186,7 +186,7 @@ def export_srt_endpoint(job_id: int):
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".srt", delete=False, mode="w", encoding="utf-8") as f:
         tmp = f.name
-    export_srt(token_dicts, tmp)
+    export_srt(token_dicts, tmp, fps=fps)
     content = Path(tmp).read_text(encoding="utf-8")
     os.unlink(tmp)
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8",
@@ -194,7 +194,7 @@ def export_srt_endpoint(job_id: int):
 
 
 @app.get("/jobs/{job_id}/export/vtt")
-def export_vtt_endpoint(job_id: int):
+def export_vtt_endpoint(job_id: int, fps: float | None = None):
     conn = _conn()
     tokens = store.get_tokens(conn, job_id)
     corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
@@ -208,7 +208,7 @@ def export_vtt_endpoint(job_id: int):
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".vtt", delete=False, mode="w", encoding="utf-8") as f:
         tmp = f.name
-    export_vtt(token_dicts, tmp)
+    export_vtt(token_dicts, tmp, fps=fps)
     content = Path(tmp).read_text(encoding="utf-8")
     os.unlink(tmp)
     return PlainTextResponse(content, media_type="text/vtt; charset=utf-8",

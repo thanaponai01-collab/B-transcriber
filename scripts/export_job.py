@@ -21,6 +21,10 @@ def main() -> None:
     parser.add_argument("job_id", type=int)
     parser.add_argument("name", nargs="?", default=None, help="output filename stem (default: derived from source media)")
     parser.add_argument("--db", default=str(ROOT / "transcriber.db"))
+    parser.add_argument("--fps", type=float, default=None,
+                         help="target sequence frame rate (e.g. 23.976, 25, 29.97); "
+                              "quantizes cue boundaries to frame ticks so Premiere import "
+                              "doesn't re-round them. Varies per clip, so pass it explicitly.")
     args = parser.parse_args()
 
     conn = connect(Path(args.db))
@@ -39,9 +43,10 @@ def main() -> None:
     rows = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms} for t in tokens]
     srt_path = OUTPUT_DIR / f"{stem}.srt"
     vtt_path = OUTPUT_DIR / f"{stem}.vtt"
-    export_srt(rows, str(srt_path))
-    export_vtt(rows, str(vtt_path))
-    print(f"Exported {len(rows)} tokens to {srt_path} / {vtt_path.name}")
+    export_srt(rows, str(srt_path), fps=args.fps)
+    export_vtt(rows, str(vtt_path), fps=args.fps)
+    suffix = f" (quantized to {args.fps} fps)" if args.fps else ""
+    print(f"Exported {len(rows)} tokens to {srt_path} / {vtt_path.name}{suffix}")
 
 
 if __name__ == "__main__":

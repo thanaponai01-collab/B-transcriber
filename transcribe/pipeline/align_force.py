@@ -186,8 +186,40 @@ def forced_align(
     return tokens
 
 
-def export_srt(tokens: list[dict], path: str) -> None:
-    """Export token list (dicts with text/start_ms/end_ms) to SRT."""
+def _quantize_ms(ms: int, fps: float) -> int:
+    """Round a millisecond timestamp to the nearest frame boundary at fps."""
+    frame_ms = 1000.0 / fps
+    return round(round(ms / frame_ms) * frame_ms)
+
+
+def _quantize_tokens(tokens: list[dict], fps: float) -> list[dict]:
+    """Snap start/end timestamps to frame boundaries.
+
+    Editors (e.g. Premiere) round millisecond timecodes to the sequence's
+    own frame boundaries on import; if that rounding happens per-cue at
+    import time instead of once here, cue starts drift off the intended
+    frame, which is what forces the manual recut. Quantizing here makes
+    the boundary the editor will show explicit and reproducible.
+    """
+    frame_ms = 1000.0 / fps
+    out = []
+    for tok in tokens:
+        start = _quantize_ms(tok["start_ms"], fps)
+        end = _quantize_ms(tok["end_ms"], fps)
+        if end <= start:
+            end = start + round(frame_ms)
+        out.append({**tok, "start_ms": start, "end_ms": end})
+    return out
+
+
+def export_srt(tokens: list[dict], path: str, fps: float | None = None) -> None:
+    """Export token list (dicts with text/start_ms/end_ms) to SRT.
+
+    fps: if given, quantizes cue boundaries to the target sequence's frame
+    rate before formatting (varies per clip, so must be passed per call).
+    """
+    if fps:
+        tokens = _quantize_tokens(tokens, fps)
 
     def ms_to_srt(ms: int) -> str:
         h = ms // 3_600_000
@@ -207,8 +239,14 @@ def export_srt(tokens: list[dict], path: str) -> None:
         f.write("\n".join(lines))
 
 
-def export_vtt(tokens: list[dict], path: str) -> None:
-    """Export token list to WebVTT."""
+def export_vtt(tokens: list[dict], path: str, fps: float | None = None) -> None:
+    """Export token list to WebVTT.
+
+    fps: if given, quantizes cue boundaries to the target sequence's frame
+    rate before formatting (varies per clip, so must be passed per call).
+    """
+    if fps:
+        tokens = _quantize_tokens(tokens, fps)
 
     def ms_to_vtt(ms: int) -> str:
         h = ms // 3_600_000
