@@ -4,18 +4,88 @@
 xml_export.to_xml() still hard-refuses a VFR timebase (unchanged, tested in
 test_cutdeck_xml_export.py). These tests cover the new opt-in conform path:
 transcribe.timebase.conform_vfr() and cutdeck.xml_export's config gate.
+
+2026-08-10 (TODO_LEDGER.md GAP-2 follow-up): the unit-level pieces above were
+already correct in isolation, but nothing exercised cutdeck.xml_export.main()
+end-to-end -- which is the only way this code actually runs in production.
+That gap hid a real bug: cutdeck/plan.py's CutPlan JSON round-trip (to_dict/
+from_dict, what save_plan/load_plan use) silently dropped Timebase.is_vfr,
+so a real VFR source's plan came back is_vfr=False the instant it was saved
+and reloaded from the DB -- exactly what main() always does. Both the
+refusal path and the conform path were therefore dead code in the real CLI
+flow despite passing every existing unit test. Fixed in cutdeck/plan.py;
+the tests below drive main() through the real DB round-trip so this class of
+bug can't hide again.
 """
 
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from transcribe.timebase import Timebase, conform_vfr
+from cutdeck import xml_export
+from cutdeck.contracts import CutPlan, CutSpan, KEEP, Timebase
+from cutdeck.plan import save_plan
+from transcribe.timebase import conform_vfr
 
 
 VFR_TB = Timebase(fps_num=30000, fps_den=1001, duration_ms=5000, is_vfr=True)
 CFR_TB = Timebase(fps_num=30000, fps_den=1001, duration_ms=5000, is_vfr=False)
+
+
+def _seed_vfr_plan(tmp_path):
+    """A minimal job/media/plan fixture with a real (VFR) Timebase, saved
+    through the same store round-trip main() reads back."""
+    from transcribe.db import store
+
+    media_path = tmp_path / "clip.mp4"
+    media_path.write_bytes(b"fake video bytes")
+
+    db = tmp_path / "test.db"
+    store.init_db(db)
+    conn = store.connect(db)
+    media_id = store.create_media(conn, str(media_path))
+    store.set_media_timebase(conn, media_id, VFR_TB.fps_num, VFR_TB.fps_den, is_vfr=True)
+    job_id = store.create_job(conn, media_id, "faster_whisper", "passthrough", "1.0")
+
+    spans = [CutSpan(idx=0, src_in_ms=0, src_out_ms=VFR_TB.duration_ms, action=KEEP)]
+    plan = CutPlan(job_id=job_id, media_sha256="x" * 64, timebase=VFR_TB, spans=spans)
+    plan_id = save_plan(conn, plan)
+    conn.close()
+    return db, plan_id, media_path
+
+
+def test_main_refuses_persisted_vfr_plan_without_conform_flag(tmp_path):
+    """The bug this closes: before the is_vfr round-trip fix, this exact flow
+    -- save a VFR plan, reload it via main() -- silently exported instead of
+    refusing, because the reloaded plan always reported is_vfr=False."""
+    db, plan_id, _media_path = _seed_vfr_plan(tmp_path)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("engine_a: faster_whisper\n", encoding="utf-8")  # conform_vfr unset -> False
+
+    with pytest.raises(ValueError, match="VFR"):
+        xml_export.main(["--plan-id", str(plan_id), "--db", str(db), "--config", str(cfg),
+                          "--out", str(tmp_path / "out.xml")])
+
+
+def test_main_conforms_and_exports_persisted_vfr_plan_when_enabled(tmp_path):
+    db, plan_id, media_path = _seed_vfr_plan(tmp_path)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("conform_vfr: true\n", encoding="utf-8")
+    proxy_path = tmp_path / "clip.cfr_proxy.mp4"
+    proxy_path.write_bytes(b"fake proxy bytes")
+    out = tmp_path / "out.xml"
+
+    with patch("transcribe.timebase.conform_vfr", return_value=(str(proxy_path), CFR_TB)) as mock_conform:
+        xml_export.main(["--plan-id", str(plan_id), "--db", str(db), "--config", str(cfg),
+                          "--out", str(out)])
+
+    mock_conform.assert_called_once()
+    assert mock_conform.call_args[0][0] == str(media_path)  # conformed the ORIGINAL vfr source
+    assert out.exists()
+    xml_text = out.read_text(encoding="utf-8")
+    assert "clip.cfr_proxy.mp4" in xml_text  # exported against the proxy, not the vfr original
 
 
 def test_conform_vfr_invokes_ffmpeg_and_reprobes(tmp_path):

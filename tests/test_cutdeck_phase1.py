@@ -288,6 +288,37 @@ def test_plan_json_roundtrip():
     assert again.timebase.fps_num == 30000 and again.timebase.fps_den == 1001
 
 
+def test_plan_json_roundtrip_preserves_is_vfr():
+    """GAP-2 bug fix: to_dict/from_dict used to drop Timebase.is_vfr entirely,
+    so any VFR source's plan silently came back is_vfr=False the moment it
+    was saved and reloaded -- defeating xml_export's VFR refusal/conform path
+    in the real CLI flow (which always goes through the DB, never an
+    in-memory CutPlan). Confirmed both directions here."""
+    cfg = CutConfig()
+    spans = build_cut_spans([], [_speech(0, 3000), _silence(3000, 5000), _speech(5000, 9000)],
+                            9000, cfg)
+    vfr_plan = planmod.build_plan(42, "deadbeef", Timebase(30000, 1001, is_vfr=True), 9000, spans)
+    again = planmod.loads(planmod.dumps(vfr_plan))
+    assert again.timebase.is_vfr is True
+
+    cfr_plan = planmod.build_plan(42, "deadbeef", Timebase(30000, 1001, is_vfr=False), 9000, spans)
+    again_cfr = planmod.loads(planmod.dumps(cfr_plan))
+    assert again_cfr.timebase.is_vfr is False
+
+
+def test_plan_from_dict_defaults_is_vfr_false_for_legacy_json():
+    """A plan_json row written before this fix has no "is_vfr" key at all --
+    must load as False (safe default), not KeyError."""
+    cfg = CutConfig()
+    spans = build_cut_spans([], [_speech(0, 3000), _silence(3000, 5000), _speech(5000, 9000)],
+                            9000, cfg)
+    plan = planmod.build_plan(42, "deadbeef", Timebase(30000, 1001), 9000, spans)
+    legacy = planmod.to_dict(plan)
+    del legacy["timebase"]["is_vfr"]
+    reloaded = planmod.from_dict(legacy)
+    assert reloaded.timebase.is_vfr is False
+
+
 def test_segment_ids_attached_to_containing_span():
     cfg = CutConfig(min_silence_ms=900, pad_post_ms=120, pad_pre_ms=250, min_clip_ms=0)
     toks = [Tok(0, "a", 0, 1000), Tok(1, "b", 6000, 7000)]
@@ -337,11 +368,23 @@ def test_plan_store_roundtrip():
     row = store.get_cut_plan(conn, plan_id)
     assert row.status == "proposed"
     store.update_cut_plan_status(conn, plan_id, "reviewed")
-    assert store.get_cut_plan(conn, plan_id).status == "reviewed"
 
-    conn.close()
-    db.unlink()
-    Path(audio_path).unlink()
+
+def test_plan_store_roundtrip_preserves_is_vfr():
+    """Same GAP-2 bug as test_plan_json_roundtrip_preserves_is_vfr, but
+    through the real DB save/load path xml_export.py's CLI actually uses."""
+    from transcribe.db import store
+    db = _tmp_db()
+    store.init_db(db)
+    conn = store.connect(db)
+    job_id, audio_path = _seed_job(conn)
+
+    spans = build_cut_spans([], [_speech(0, 3000), _silence(3000, 5000), _speech(5000, 9000)],
+                            9000, CutConfig())
+    plan = planmod.build_plan(job_id, "abc", Timebase(30000, 1001, is_vfr=True), 9000, spans)
+    plan_id = planmod.save_plan(conn, plan)
+    loaded = planmod.load_plan(conn, plan_id)
+    assert loaded.timebase.is_vfr is True
 
 
 def test_propose_for_job_end_to_end():

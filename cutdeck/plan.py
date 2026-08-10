@@ -103,7 +103,11 @@ def to_dict(plan: CutPlan) -> dict:
         "plan_version": plan.plan_version,
         "job_id": plan.job_id,
         "media_sha256": plan.media_sha256,
-        "timebase": {"fps_num": plan.timebase.fps_num, "fps_den": plan.timebase.fps_den},
+        "timebase": {
+            "fps_num": plan.timebase.fps_num,
+            "fps_den": plan.timebase.fps_den,
+            "is_vfr": plan.timebase.is_vfr,
+        },
         "spans": [
             {
                 "idx": s.idx,
@@ -138,7 +142,8 @@ def from_dict(data: dict) -> CutPlan:
     return CutPlan(
         job_id=data["job_id"],
         media_sha256=data["media_sha256"],
-        timebase=Timebase(fps_num=tb["fps_num"], fps_den=tb["fps_den"]),
+        timebase=Timebase(fps_num=tb["fps_num"], fps_den=tb["fps_den"],
+                          is_vfr=bool(tb.get("is_vfr", False))),
         spans=spans,
         plan_version=data.get("plan_version", PLAN_VERSION),
     )

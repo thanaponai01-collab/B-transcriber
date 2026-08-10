@@ -2139,10 +2139,37 @@ Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests
   accepts `prompt_ids`; transcribe ran clean with and without bias terms.
   Residual: whether bias terms measurably *improve* accuracy is an eval question,
   not a wiring one — settle it once the gold set has real bias-sensitive samples.
-- **GAP-2 VFR conform.** `is_vfr` is probed and persisted; `ingest.conform_vfr`
-  config flag exists but no CFR-proxy transcode is implemented, and XML export
-  does not yet refuse to run against a VFR original. **Due when:** `xml_export.py`
-  (CutDeck Phase 2) is built.
+- **GAP-2 VFR conform — this entry was STALE, re-checked and fixed
+  2026-08-10.** The claim above ("no CFR-proxy transcode is implemented...
+  XML export does not yet refuse") was already false by the time it was
+  checked: `transcribe/timebase.py::conform_vfr` (real ffmpeg `-vsync cfr`
+  transcode + re-probe) and `cutdeck/xml_export.py`'s VFR refusal +
+  config-gated conform-and-substitute wiring were both built in commit
+  `3ed175f` ("Phase 4 robustness") with their own test file
+  (`tests/test_vfr_conform.py`) — this ledger entry just never got updated
+  to reflect it. **But re-checking it for real (not just re-reading the
+  code) surfaced a genuine live bug the existing unit tests never caught**:
+  `cutdeck/plan.py`'s `CutPlan` JSON round-trip (`to_dict`/`from_dict`, what
+  `save_plan`/`load_plan` use) never serialized `Timebase.is_vfr` at all — so
+  a real VFR source's plan came back `is_vfr=False` the instant it was saved
+  to the `cut_plan` table and reloaded, which is *exactly* what
+  `xml_export.py`'s CLI (`main()`) always does (`propose_for_job` correctly
+  sets `is_vfr` from the media row via `_timebase_from_media`, but nothing
+  downstream of a save+reload ever saw it). Both the refusal check and the
+  conform path were dead code on the only path that matters in production;
+  every existing test exercised `to_xml()`/`conform_vfr()`/
+  `_conform_vfr_enabled()` directly with a hand-built `Timebase`, never
+  through the real DB round-trip, so this was invisible. **Fixed**:
+  `to_dict`/`from_dict` now round-trip `is_vfr` (`from_dict` defaults it to
+  `False` for legacy `plan_json` rows with no `is_vfr` key, so old DB rows
+  don't crash). 5 new tests: JSON-level round-trip for both `True`/`False`,
+  legacy-row default, a DB-store-level round-trip, and two `main()`-level
+  integration tests (`tests/test_vfr_conform.py`) that save a real VFR plan
+  to a real temp DB and drive the actual CLI — one proving it now correctly
+  refuses without the config flag (the exact case that used to silently
+  export instead), one proving it calls `conform_vfr` and exports against
+  the conformed proxy path when `conform_vfr: true`. Full suite: **483
+  passed** (was 478).
 - **GAP-6 gold-set promote CLI. ✅ DONE (2026-07-06).** `tools/make_gold.py`:
   `draft` (from a corrected editor job via `--job-id`, or `--run` the pipeline) →
   hand-correct the `.draft.json` → `freeze` (validates schema/script/monotonic
