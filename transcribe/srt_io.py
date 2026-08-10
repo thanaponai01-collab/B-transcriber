@@ -44,6 +44,10 @@ def parse_srt(text: str) -> list[dict]:
         start_ms = _srt_ts_to_ms(*m.group(1, 2, 3, 4))
         end_ms = _srt_ts_to_ms(*m.group(5, 6, 7, 8))
         cue_text = " ".join(content_lines).strip()
+        # NLE exports (e.g. Premiere) can carry <font color=...> markup for
+        # on-screen styling — strip it so it never lands in a correction or
+        # gold-set row as if it were transcript text.
+        cue_text = re.sub(r"<[^>]+>", "", cue_text).strip()
         if not cue_text:
             continue
         tokens.append({
