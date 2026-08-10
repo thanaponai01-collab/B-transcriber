@@ -3,7 +3,7 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
-## OPEN — recurring mid-word truncation / dropped-content bug in Engine A output — reported 2026-08-06, NOT YET INVESTIGATED
+## Mid-word truncation / dropped-content bug — ROOT-CAUSED AND FIXED (VAD-span-seam cause), one residual mechanism still open — 2026-08-10
 
 **User-reported, from real production output**: `F:\Me\Works\20260807 - โหน(หลัง)กระแส 155\5. EXPORTS\Audio_test.srt`
 (13-min episode, `biodatlab/whisper-th-medium-combined` via `faster_whisper`,
@@ -46,6 +46,123 @@ from the DB and check whether the audio in these gaps was even handed to the
 engine, or inspect `ingest.py`'s VAD chunk boundaries directly against these
 timestamps, to confirm chunk-boundary truncation vs. some other cause before
 attempting a fix.
+
+**RESOLVED (2026-08-10): root-caused directly against the real incident audio
+(the file above still on disk), not just theorized. `ingest.py`'s VAD was a
+red herring** — Engine A is `prefers_whole_file=True`, so `ingest.py`'s VAD
+never touches this audio at all (per its own docstring); the real chunking
+lives entirely inside `engines/faster_whisper.py`'s own `_vad_speech_spans` +
+`_split_long_span` + `_recover_truncated_tail` machinery.
+
+**Root cause, confirmed by direct redecode:** `faster_whisper.vad.
+get_speech_timestamps` (the installed faster-whisper 1.2.1's own Silero
+wrapper, read from source, not assumed) pads every detected speech chunk by
+`speech_pad_ms` (400ms) on each side, and — critically — when the *real*
+silence between two adjacent chunks is under `2*speech_pad_ms` (800ms), it
+splits that silence evenly onto both chunks instead of leaving it as a gap.
+The practical effect: **any real pause shorter than ~800ms between two VAD-
+detected speech chunks is reported as an exact zero-width gap**, indistin-
+guishable in the returned timestamps from "one continuous run of speech."
+Verified against this file's own audio: `_vad_speech_spans` returns span#1
+`[14.320-120.864]` and span#2 `[120.864-185.680]` touching at exactly
+120.864s with zero reported gap. `_transcribe_batched` treated these as two
+*fully independent* decode jobs — `_split_long_span`'s 4s window-to-window
+overlap + `stitch.py` dedup only ever applied *inside* one span, never
+*across* the seam between two spans. Direct proof: redecoding audio
+110.0-127.0s as a single window (bypassing the span split entirely)
+recovered the complete, correct utterance —
+`ห้ามบุกรุก ใช่ค่ะ เมย์จ่ายไปทั้งหมด 380,000 บาท เขาคืนยอด 145,000...` —
+matching the user's own hand-recut ground truth word-for-word in substance.
+In the actual production run, this exact utterance was **entirely absent**
+(cue ends `01:57.04`, next cue starts `02:01.18`, nothing between). Two more
+of the reported orphan fragments (`ยื` at 180.82s, `ไค` at 552.50s) were
+redecoded the same way and also recovered full coherent sentences instead of
+the multi-second garbled/stretched artifact production emitted.
+
+**Two-part fix, both in `transcribe/engines/faster_whisper.py`:**
+1. **`_merge_contiguous_spans`** (new function): merges any two consecutive
+   VAD spans whose reported gap is <= 50ms (float-rounding tolerance around
+   the "0" the padding-merge produces) into one span *before* `_split_long_
+   span` ever runs, closing the seam structurally rather than patching
+   around it. A genuine pause (>= ~800ms real silence, which is the only
+   case that can produce a *nonzero* reported gap given the padding-merge
+   math above) is left untouched. Wired into `_transcribe_batched` right
+   after `_vad_speech_spans`.
+2. **`_recover_truncated_tail`'s stretch-detection loosened**: it used to
+   also require the suspicious (>=1500ms-duration) last word to land within
+   `_TRUNCATION_STRETCH_TOL_MS` (500ms) of the window's own end before
+   attempting recovery — modeling only "stretched all the way to the
+   boundary." Confirmed on this same real audio that this was too strict:
+   the `ยื`/`ไค` fragments both had 1.3-3.9s of real, coherent, un-decoded
+   speech trailing the suspicious word *before* the window's actual end —
+   short of the old tolerance, so recovery never even attempted them. The
+   gate is now just "is the last word's own duration suspicious" (existing
+   `_TRUNCATION_TAIL_MS` check) plus the existing "is there >= 0.5s of real
+   tail audio to redecode" check — both already-justified signals, no new
+   tunable constant. `_TRUNCATION_STRETCH_TOL_MS` deleted; `win_dur_ms` param
+   dropped from `_recover_truncated_tail` (no longer used by the check).
+
+**Tests**: `tests/test_vad_span_merge.py` (new, 5 tests: exact-zero merge,
+near-zero/float-rounding merge, a genuine pause preserved, a chain of 3+
+touching spans, empty/single-span no-ops). `tests/
+test_faster_whisper_truncation_recovery.py` updated for the new signature and
+gate: added `test_recovers_when_suspicious_word_ends_well_short_of_window_end`
+(the case that used to be silently skipped, now recovers) and `test_no_
+recovery_when_tail_audio_too_short` (the boundary-proximity gate is gone, but
+the pre-existing too-little-audio-to-redecode guard still correctly no-ops).
+Full suite: **478 passed** (was 478 before too — same count, one test
+replaced/renamed, one added net of the deleted-signature updates).
+
+**Real-corpus harness gate** (`python -m transcribe.eval.harness --config
+transcribe/config.yaml --db transcriber.db`, production run, not
+`--experiment` — a genuine bug fix is meant to become the new baseline on a
+pass, matching this repo's own harness convention): baseline `eval_run.id=58`
+(`cer_thai 0.1751, wer_latin 0.8291, BER 0.5493, cue_BER 0.4043`) →
+new `eval_run.id=59` (`cer_thai 0.1795 [0.0861,0.2833]`,
+`wer_latin 0.8547 [0.5259,1.0797]` — printed `UNRESOLVED`, CI still contains
+baseline, `BER 0.5568 [0.3305,0.8187]`, `cue_BER 0.4057 [0.2484,0.5538]`,
+`cue_overlaps=0`, `cue_count_delta=+12`, `rtf=0.203`, **`passed=True`, no
+confirmed regression on any gated metric**). All four point estimates moved
+slightly worse (more/smaller cues from the now-different window boundaries
+shift a few match points), but none crossed into confirmed-regression territory
+— expected and acceptable for a fix whose entire purpose is recovering
+previously-missing content the 8-clip gold set doesn't happen to contain.
+`eval_run.id=59` is now the active passing baseline.
+
+**End-to-end re-verified against the real incident file** (fresh pipeline
+run, scratch DB, same config): the 4-second dropped utterance now transcribes
+as `[116640–117660ms] ห้ามบุกรุก ห้ามบุกรุก`, `[118360–120900ms]
+ใชสามแสนแปด`, `[120900–124880ms] เขาคืนยอดหนึ่งแสนสี่หมื่นห้าพันบาทมา
+แล้วก็` — complete and correctly timed, matching the hand-recut ground
+truth. 3 of the 4 investigated orphan fragments (`กับ`, `ยื`, `ไค`) now
+transcribe as full coherent sentences with no truncation artifact; a fourth,
+previously-unexamined region (`มั` at 263.28s) also resolved as a side effect
+of a merge elsewhere shifting that span from the `normal` (<=25s, never
+tail-recovered at all) path into the `long` (merge+split+recover) path.
+
+**Not fixed, two residual issues found during this same re-verification —
+different mechanisms, tracked separately, not blocking this fix:**
+- **`น` at 97.12s is unchanged** — still a stray 120ms fragment followed by a
+  ~1.08s gap. Its duration (120ms) is far under `_TRUNCATION_TAIL_MS`
+  (1500ms), so it was never eligible for `_recover_truncated_tail`'s
+  detection at all — this looks like a `stitch.py` seam-dedup miss at an
+  internal `_split_long_span` window boundary (a different mechanism from
+  root causes A/B above), or possibly a genuinely hard-to-hear word.
+  **Trigger to revisit:** next time a user report or gold-clip audit turns
+  up another short (<1500ms) isolated fragment at a window seam — worth a
+  dedicated `stitch.py` investigation at that point, not worth chasing on
+  one instance alone.
+- **`ได้` at 643.37s is unchanged, but on inspection this was never content
+  loss** — the surrounding text (`...ก็ยังไม่` / `ได้` / `เหมือนกันเลยครับ...`)
+  is fully correct and complete; `ได้` is just an ordinary short word the
+  greedy cue-splitter (`_group_words_into_cues_greedy`) isolated into its
+  own one-word cue. A cosmetic cue-segmentation artifact, unrelated to this
+  incident — not touched here.
+
+**Secondary finding (unchanged, still open, still lower priority)** — the
+vocabulary/substitution-error list below this entry — is a distinct accuracy
+question from the content-loss bug just fixed; not addressed by this fix and
+not attempted here.
 
 **Secondary finding from the same comparison (lower priority, vocabulary
 accuracy not content loss)**: recurring term-level substitution errors in the

@@ -155,16 +155,26 @@ _LONG_SPAN_OVERLAP_S = 4.0
 
 # Truncated-tail recovery: faster-whisper occasionally stops generating well
 # before a window's audio actually ends (early EOS on a hard passage), then
-# stretches the *last* word's end-timestamp out to the window boundary to
+# stretches the *last* word's end-timestamp out toward the window boundary to
 # fill the gap — so several real seconds of dropped speech show up as one
 # absurdly long "word" instead of an obvious hole. _TRUNCATION_TAIL_MS is how
-# long a single word's span has to be to count as suspicious;
-# _TRUNCATION_STRETCH_TOL_MS is how close its end has to land to the window's
-# own end to count as "stretched to fill". _TRUNCATION_LOOKBACK_MS bounds how
-# far back _find_safe_cut searches for a genuine inter-token pause to cut on.
-# See _recover_truncated_tail.
+# long a single word's span has to be to count as suspicious.
+# _TRUNCATION_LOOKBACK_MS bounds how far back _find_safe_cut searches for a
+# genuine inter-token pause to cut on. See _recover_truncated_tail.
+#
+# Update (2026-08-10, TODO_LEDGER.md incident investigation): this used to
+# also require the suspicious word's end to land within 500ms of the
+# window's own end ("stretched all the way to the boundary") before
+# attempting recovery. Confirmed on real production audio that this was too
+# strict — several genuine content-loss cases had a suspicious word ending
+# 1.5-4s *short* of the window boundary (the model produced a stray fragment
+# then simply stopped, without reaching for the boundary at all), and were
+# silently skipped. Redecoding the same passage as a differently-windowed
+# clip recovered real, coherent speech at every one of those spots. The
+# recovery attempt is now gated only on the word's own suspicious duration
+# plus there being meaningful leftover audio to redecode (checked below via
+# the tail-audio length) — not on how close it lands to the window edge.
 _TRUNCATION_TAIL_MS = 1500
-_TRUNCATION_STRETCH_TOL_MS = 500
 _TRUNCATION_LOOKBACK_MS = 2500
 
 
@@ -193,6 +203,42 @@ def _vad_speech_spans(audio, threshold: float, min_silence_ms: int) -> list[tupl
     opts = VadOptions(threshold=threshold, min_silence_duration_ms=min_silence_ms)
     ts = get_speech_timestamps(audio, opts)
     return [(t["start"] / _SR, t["end"] / _SR) for t in ts]
+
+
+def _merge_contiguous_spans(spans: list[tuple[float, float]],
+                             max_gap_s: float = 0.05) -> list[tuple[float, float]]:
+    """Merge adjacent VAD spans separated by a (near-)zero reported gap.
+
+    Root cause of a 2026-08-06 production incident (TODO_LEDGER.md, "recurring
+    mid-word truncation / dropped-content bug"): faster_whisper.vad's own
+    get_speech_timestamps pads each speech chunk by speech_pad_ms (400ms) on
+    both sides, and when the real silence between two consecutive chunks is
+    under 2*speech_pad_ms (800ms) it splits that silence evenly onto both
+    sides instead — so the *reported* gap between the two returned spans is
+    exactly 0 for ANY real pause shorter than ~800ms (a routine breath or
+    clause boundary in conversational speech), indistinguishable in the
+    output from "no pause at all". `_transcribe_batched` used to treat every
+    VAD span as a fully independent decode: `_split_long_span`'s overlap+
+    stitch only reconciles windows *inside* one span, so a zero-gap pair of
+    spans got a hard, unrecovered seam right where real speech continued.
+    Confirmed on the real incident audio: redecoding straight across one such
+    seam (as a single window) recovered a ~4s utterance that was completely
+    missing from production output. Merging first means the seam disappears
+    before windowing ever happens, and the existing overlap+stitch +
+    _recover_truncated_tail machinery covers it like any other internal
+    boundary. A genuine pause (>=~800ms real silence) still reports a nonzero
+    gap here and is left as a separate span, unchanged.
+    """
+    if not spans:
+        return spans
+    merged = [spans[0]]
+    for start, end in spans[1:]:
+        prev_start, prev_end = merged[-1]
+        if start - prev_end <= max_gap_s:
+            merged[-1] = (prev_start, end)
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def _split_long_span(start_s: float, end_s: float,
@@ -713,22 +759,24 @@ class FasterWhisperEngine(Engine):
                 best_i, best_gap = i, gap
         return best_i
 
-    def _recover_truncated_tail(self, tokens, sub_audio, common, bs, win_dur_ms):
+    def _recover_truncated_tail(self, tokens, sub_audio, common, bs):
         """Detect and recover content dropped by an early-EOS decode within one
-        long-span window (see _TRUNCATION_TAIL_MS above for the failure mode).
-        One-shot: redecodes standalone from the nearest safe cut point (see
-        _find_safe_cut) to the window's end (a much shorter, easier decode)
-        and concatenates — no overlap-and-dedup splice, since Thai's lack of
-        clean word boundaries makes stitch.py's exact-text dedup miss the
-        resulting near-duplicates (verified empirically while building this:
-        a fixed-offset cut reproduced a stray syllable on both sides no
-        matter how the offset was tuned). No recursion — if the redecode
-        hits the same issue, its result is kept as-is."""
+        long-span window (see _TRUNCATION_TAIL_MS above for the failure mode,
+        and its 2026-08-10 update for why this no longer requires the
+        suspicious word to reach the window's own end). One-shot: redecodes
+        standalone from the nearest safe cut point (see _find_safe_cut) to the
+        window's end (a much shorter, easier decode) and concatenates — no
+        overlap-and-dedup splice, since Thai's lack of clean word boundaries
+        makes stitch.py's exact-text dedup miss the resulting near-duplicates
+        (verified empirically while building this: a fixed-offset cut
+        reproduced a stray syllable on both sides no matter how the offset
+        was tuned). No recursion — if the redecode hits the same issue, its
+        result is kept as-is."""
         if not tokens:
             return tokens, bs
         last = tokens[-1]
         dur = last.end_ms - last.start_ms
-        if dur < _TRUNCATION_TAIL_MS or win_dur_ms - last.end_ms > _TRUNCATION_STRETCH_TOL_MS:
+        if dur < _TRUNCATION_TAIL_MS:
             return tokens, bs
 
         cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
@@ -803,6 +851,7 @@ class FasterWhisperEngine(Engine):
         words: list[tuple[str, int, int, float | None]] = []
 
         spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
+        spans = _merge_contiguous_spans(spans)
         normal = [(s, e) for s, e in spans if e - s <= _LONG_SPAN_SAFE_S]
         long_spans = [(s, e) for s, e in spans if e - s > _LONG_SPAN_SAFE_S]
 
@@ -826,8 +875,7 @@ class FasterWhisperEngine(Engine):
                 sub_audio = audio[int(win_start * _SR):int(win_end * _SR)]
                 segments, bs = self._decode(sub_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
-                win_dur_ms = int(round((win_end - win_start) * 1000))
-                win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs, win_dur_ms)
+                win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs)
                 for t in win_tokens:  # offset local → global
                     t.start_ms += int(win_start * 1000)
                     t.end_ms += int(win_start * 1000)

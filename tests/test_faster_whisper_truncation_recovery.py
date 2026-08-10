@@ -85,7 +85,7 @@ def test_recovers_dropped_tail_and_cuts_at_real_gap():
         return [_FakeSegment([_FakeWord(" recovered", 0.0, 1.0)])], bs
 
     eng._decode = fake_decode
-    merged, bs = eng._recover_truncated_tail(tokens, sub_audio, {}, 8, win_dur_ms)
+    merged, bs = eng._recover_truncated_tail(tokens, sub_audio, {}, 8)
 
     assert bs == 8
     # kept only "มา" — the cut lands at the real 1700ms gap, not at "เขา"'s
@@ -101,21 +101,38 @@ def test_recovers_dropped_tail_and_cuts_at_real_gap():
     assert captured["len"] == len(sub_audio) - int(2000 / 1000 * _SR)
 
 
+def test_recovers_when_suspicious_word_ends_well_short_of_window_end():
+    """2026-08-10 fix (TODO_LEDGER.md incident investigation): a suspicious
+    word no longer has to be stretched all the way to the window's own end
+    to trigger recovery. Confirmed on real production audio that requiring
+    that silently skipped genuine content loss where the model produced a
+    stray fragment and then simply stopped, well short of the window
+    boundary, with real speech still sitting undecoded in the rest of the
+    window's audio."""
+    eng = FasterWhisperEngine()
+    win_dur_ms = 9000
+    tokens = [
+        _tok("มา", 0, 300),
+        _tok("เขา", 2000, 2300),
+        _tok("อง", 2300, 4000),  # suspicious (>=1500ms) but ends 5s short of win_dur_ms
+    ]
+    sub_audio = np.zeros(int(win_dur_ms / 1000 * _SR), dtype=np.float32)
+
+    def fake_decode(audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        return [_FakeSegment([_FakeWord(" recovered", 0.0, 1.0)])], bs
+
+    eng._decode = fake_decode
+    merged, bs = eng._recover_truncated_tail(tokens, sub_audio, {}, 8)
+
+    assert bs == 8
+    assert [t.text for t in merged] == ["มา", " recovered"]
+
+
 def test_no_recovery_when_last_word_duration_is_normal():
     eng = FasterWhisperEngine()
     tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2300)]
     eng._decode = lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not redecode"))
-    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(_SR), {}, 8, 2300)
-    assert merged is tokens
-    assert bs == 8
-
-
-def test_no_recovery_when_suspicious_word_does_not_reach_window_end():
-    eng = FasterWhisperEngine()
-    win_dur_ms = 9000
-    tokens = [_tok("มา", 0, 300), _tok("อง", 2300, 5000)]  # ends well short of win_dur_ms
-    eng._decode = lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not redecode"))
-    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(win_dur_ms / 1000 * _SR)), {}, 8, win_dur_ms)
+    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(_SR), {}, 8)
     assert merged is tokens
     assert bs == 8
 
@@ -127,13 +144,31 @@ def test_no_recovery_when_no_safe_cut_available():
     # to compare and returns None -> bail out rather than guess a boundary.
     tokens = [_tok("มา", 0, 300), _tok("อง", 300, win_dur_ms)]
     eng._decode = lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not redecode"))
-    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(win_dur_ms / 1000 * _SR)), {}, 8, win_dur_ms)
+    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(win_dur_ms / 1000 * _SR)), {}, 8)
+    assert merged is tokens
+    assert bs == 8
+
+
+def test_no_recovery_when_tail_audio_too_short():
+    """The safe-cut point (tokens_before's own largest gap, ahead of the
+    suspicious word) lands close enough to sub_audio's own end that there's
+    under 0.5s of real leftover audio to redecode -- still correctly a no-op
+    even though the boundary-proximity gate itself is gone."""
+    eng = FasterWhisperEngine()
+    tokens = [
+        _tok("มา", 0, 300),
+        _tok("เขา", 2000, 2300),   # safe cut lands at this token's own start
+        _tok("อง", 2300, 4000),    # suspicious (>=1500ms)
+    ]
+    sub_audio = np.zeros(int(2.3 * _SR), dtype=np.float32)  # only 300ms left after the cut
+    eng._decode = lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not redecode"))
+    merged, bs = eng._recover_truncated_tail(tokens, sub_audio, {}, 8)
     assert merged is tokens
     assert bs == 8
 
 
 def test_empty_tokens_returns_unchanged():
     eng = FasterWhisperEngine()
-    merged, bs = eng._recover_truncated_tail([], np.zeros(_SR), {}, 8, 9000)
+    merged, bs = eng._recover_truncated_tail([], np.zeros(_SR), {}, 8)
     assert merged == []
     assert bs == 8
