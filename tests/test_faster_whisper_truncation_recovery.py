@@ -172,3 +172,42 @@ def test_empty_tokens_returns_unchanged():
     merged, bs = eng._recover_truncated_tail([], np.zeros(_SR), {}, 8)
     assert merged == []
     assert bs == 8
+
+
+# ── failure mode (B): normal-looking last word, real audio left undecoded ──
+
+def test_recovers_trailing_gap_after_normal_last_word():
+    """2026-08-10 incident (production job, 45.6s long-span clip): faster-
+    whisper stopped generating with an ordinary-duration last word while real
+    speech still sat undecoded in the rest of the window -- mode (A)'s
+    stretched-word check can't see this since no word looks anomalous."""
+    eng = FasterWhisperEngine()
+    win_dur_ms = 9000
+    tokens = [
+        _tok("มา", 0, 300),
+        _tok("เขา", 2000, 2180),  # ordinary 180ms duration, not suspicious
+    ]
+    sub_audio = np.zeros(int(win_dur_ms / 1000 * _SR), dtype=np.float32)
+
+    def fake_decode(audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        return [_FakeSegment([_FakeWord(" recovered", 0.0, 1.0)])], bs
+
+    eng._decode = fake_decode
+    merged, bs = eng._recover_truncated_tail(tokens, sub_audio, {}, 8)
+
+    assert bs == 8
+    # both original tokens kept -- the last word was never suspect -- plus
+    # the redecoded tail appended after it
+    assert [t.text for t in merged] == ["มา", "เขา", " recovered"]
+    assert merged[-1].start_ms == 2180
+    assert merged[-1].end_ms == 3180
+
+
+def test_no_trailing_gap_recovery_when_window_ends_close_to_last_word():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2300)]
+    eng._decode = lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not redecode"))
+    # window ends only 200ms after the last word -- well under the threshold
+    merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(2.5 * _SR)), {}, 8)
+    assert merged is tokens
+    assert bs == 8

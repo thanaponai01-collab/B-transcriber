@@ -761,29 +761,52 @@ class FasterWhisperEngine(Engine):
 
     def _recover_truncated_tail(self, tokens, sub_audio, common, bs):
         """Detect and recover content dropped by an early-EOS decode within one
-        long-span window (see _TRUNCATION_TAIL_MS above for the failure mode,
-        and its 2026-08-10 update for why this no longer requires the
-        suspicious word to reach the window's own end). One-shot: redecodes
-        standalone from the nearest safe cut point (see _find_safe_cut) to the
-        window's end (a much shorter, easier decode) and concatenates — no
-        overlap-and-dedup splice, since Thai's lack of clean word boundaries
-        makes stitch.py's exact-text dedup miss the resulting near-duplicates
-        (verified empirically while building this: a fixed-offset cut
-        reproduced a stray syllable on both sides no matter how the offset
-        was tuned). No recursion — if the redecode hits the same issue, its
-        result is kept as-is."""
+        long-span window. Two independent failure modes, both early-EOS, that
+        look nothing alike on the wire:
+
+        (A) faster-whisper stretches the *last* word's own timestamp out to
+        (near) the window's end to paper over the gap — see _TRUNCATION_TAIL_MS
+        above, and its 2026-08-10 update for why this no longer requires the
+        suspicious word to reach the window's own end.
+
+        (B) 2026-08-10 incident (this update): faster-whisper just stops, with
+        a totally normal-duration last word, leaving real undecoded audio
+        sitting after it — confirmed on production audio (job with a 45.6s
+        long-span clip): window 1's last word ended at 17.58s with an ordinary
+        180ms duration while its own window ran to 25s, silently dropping ~3.4s
+        of real speech that (A)'s stretched-word check can never see, since
+        there's no anomalous word to trigger on.
+
+        Both redecode standalone (a much shorter, easier decode) and
+        concatenate — no overlap-and-dedup splice, since Thai's lack of clean
+        word boundaries makes stitch.py's exact-text dedup miss the resulting
+        near-duplicates (verified empirically while building the original (A)
+        fix: a fixed-offset cut reproduced a stray syllable on both sides no
+        matter how the offset was tuned). No recursion — if the redecode hits
+        the same issue, its result is kept as-is."""
         if not tokens:
             return tokens, bs
         last = tokens[-1]
+        win_dur_ms = len(sub_audio) / _SR * 1000
         dur = last.end_ms - last.start_ms
-        if dur < _TRUNCATION_TAIL_MS:
+        trailing_gap_ms = win_dur_ms - last.end_ms
+
+        if dur >= _TRUNCATION_TAIL_MS:
+            # (A) the last word itself is the suspect — discard it too and
+            # redecode from a genuine inter-token pause before it.
+            cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
+            if cut_i is None:
+                return tokens, bs
+            kept = tokens[:cut_i + 1]
+            tail_start_ms = tokens[cut_i + 1].start_ms
+        elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
+            # (B) the last word is trustworthy — keep it, redecode only the
+            # real leftover audio after it.
+            kept = tokens
+            tail_start_ms = last.end_ms
+        else:
             return tokens, bs
 
-        cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
-        if cut_i is None:
-            return tokens, bs
-        kept = tokens[:cut_i + 1]
-        tail_start_ms = tokens[cut_i + 1].start_ms
         tail_audio = sub_audio[int(tail_start_ms / 1000 * _SR):]
         if len(tail_audio) < _SR * 0.5:
             return tokens, bs
@@ -797,9 +820,9 @@ class FasterWhisperEngine(Engine):
             t.end_ms += tail_start_ms
 
         merged = kept + tail_tokens
-        logger.info("Recovered truncated tail: suspect word spanned %d-%dms, "
-                    "redecoded from %.2fs -> %d token(s)",
-                    last.start_ms, last.end_ms, tail_start_ms / 1000, len(tail_tokens))
+        logger.info("Recovered truncated tail: redecoded from %.2fs -> %d token(s) "
+                    "(window ends %.2fs, last kept word ended %.2fs)",
+                    tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000, last.end_ms / 1000)
         return merged, bs
 
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
