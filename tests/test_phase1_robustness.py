@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
     "ababab",        # 2-char unit ×3 — under the ≤2-char threshold of 5
 ])
 def test_collapse_loops_preserves_real_text(text):
-    from transcribe.pipeline.run import _collapse_loops
+    from transcribe.pipeline.refine import _collapse_loops
     assert _collapse_loops(text) == text
 
 
@@ -33,12 +33,12 @@ def test_collapse_loops_preserves_real_text(text):
     ("wwwww", "w"),                    # 1-char unit ×5 → over the 5 threshold
 ])
 def test_collapse_loops_kills_real_loops(looped, collapsed):
-    from transcribe.pipeline.run import _collapse_loops
+    from transcribe.pipeline.refine import _collapse_loops
     assert _collapse_loops(looped) == collapsed
 
 
 def test_collapse_loops_logs_at_info(caplog):
-    from transcribe.pipeline.run import _collapse_loops
+    from transcribe.pipeline.refine import _collapse_loops
     import logging
     with caplog.at_level(logging.INFO):
         _collapse_loops("ฮือฮือฮือฮือฮือ")

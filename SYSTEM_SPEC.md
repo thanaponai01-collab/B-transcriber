@@ -114,6 +114,19 @@ audio
 CLI: `python -m transcribe.pipeline.run audio.wav --config transcribe/config.yaml`.
 `PIPELINE_VERSION = "1.0.0"`.
 
+Behind that one entry point, three **internal** seams (private to
+`transcribe/pipeline/`, absent from its `__init__` exports — `run_file`'s own
+interface is unchanged and is what every caller depends on):
+`plan.py` decides everything pure (engine names incl. the canonical
+`self_ensemble` label, which phases a resumed job skips, self-ensemble validity,
+whether ingest must cut chunks) as a function of config plus one resume phase, with
+no engine instantiated; `engine_run.py` owns the load → decode → unload → `del` →
+`empty_cache` → persist → advance-phase bracket once, for both the real-Engine-B
+and self-ensemble-pseudo-B cases; `refine.py` is the post-decode token pipeline
+(align → reconcile → normalize → filter → silence drop → conditional word
+expansion → conditional forced alignment → cue conform), taking its aligner as an
+injected dependency.
+
 **Two reconciler invariants:** it *selects, never generates* (exception-enforced), and
 agreeing tokens skip the LLM entirely — only disagreements invoke it.
 

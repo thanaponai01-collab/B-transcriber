@@ -147,8 +147,9 @@ class Qwen3ASREngine(Engine):
     def _result_to_tokens(self, text: str) -> list[RecognizedToken]:
         """Single-token, unknown-timestamp shape — only used when there's no
         decoded audio array to VAD (audio_path-only calls; the pipeline never
-        does this for a prefers_whole_file engine, see run.py's
-        _transcribe_with, so this is a testing/legacy path only)."""
+        does this for a prefers_whole_file engine, see
+        pipeline/engine_run.py's _transcribe_with, so this is a
+        testing/legacy path only)."""
         text = (text or "").strip()
         if not text:
             return []

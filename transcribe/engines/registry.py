@@ -49,5 +49,20 @@ def _lazy_load(name: str) -> None:
     importlib.import_module(loaders[name])
 
 
+def prefers_whole_file(name: str) -> bool:
+    """Whether an engine is whole-file — answered WITHOUT instantiating it.
+
+    `prefers_whole_file` is a class attribute on `Engine`, so a capability
+    question (does this engine want the full track? is it a chunk engine?) never
+    needs a constructed engine, which would mean a model directory, a device and
+    the engine's own config block. That lets the pipeline decide its plan — which
+    engines to run, whether ingest must cut chunks, whether self-ensemble is even
+    valid — as a pure function of config.
+    """
+    if name not in _REGISTRY:
+        _lazy_load(name)
+    return bool(getattr(_REGISTRY[name], "prefers_whole_file", False))
+
+
 def list_engines() -> list[str]:
     return list(_REGISTRY.keys())
