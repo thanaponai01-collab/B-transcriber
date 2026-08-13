@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 
+from transcribe.audio import Window, WindowPolicy, speech_windows
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.cues import (
     CUE_GAP_MS,
@@ -98,8 +99,8 @@ _SR = 16000
 # split "aggressively" mid-utterance with no overlap — decode quality collapses
 # right at that seam (observed: several seconds of garbled/missing text at the
 # cut). Any span longer than _LONG_SPAN_SAFE_S gets split into our own overlapping
-# windows instead (see _split_long_span), decoded separately, and stitched back
-# together — the same seam-recovery trick chunk engines get from
+# windows instead (transcribe/audio/windows.py), decoded separately, and stitched
+# back together — the same seam-recovery trick chunk engines get from
 # config.yaml's chunk_overlap_ms, applied here to this whole-file engine's rare
 # long-pause-free-run case.
 # Tuning note: shrinking _LONG_SPAN_SAFE_S (e.g. to 15-20s) recovers a decode-
@@ -158,78 +159,6 @@ def _is_cuda_oom(e: Exception) -> bool:
     return "out of memory" in str(e).lower()
 
 
-def _vad_speech_spans(audio, threshold: float, min_silence_ms: int) -> list[tuple[float, float]]:
-    """Real speech spans (in seconds) with NO max-duration cap.
-
-    We deliberately don't use faster-whisper's vad_filter=True path for this —
-    its internal VadOptions defaults max_speech_duration_s to the encoder's
-    chunk_length and splits long runs "aggressively" at that boundary if no
-    silence is nearby. Detecting spans uncapped lets the caller decide how to
-    split anything too long, with overlap, instead of an arbitrary hard cut.
-    """
-    from faster_whisper.vad import VadOptions, get_speech_timestamps
-
-    opts = VadOptions(threshold=threshold, min_silence_duration_ms=min_silence_ms)
-    ts = get_speech_timestamps(audio, opts)
-    return [(t["start"] / _SR, t["end"] / _SR) for t in ts]
-
-
-def _merge_contiguous_spans(spans: list[tuple[float, float]],
-                             max_gap_s: float = 0.05) -> list[tuple[float, float]]:
-    """Merge adjacent VAD spans separated by a (near-)zero reported gap.
-
-    Root cause of a 2026-08-06 production incident (TODO_LEDGER.md, "recurring
-    mid-word truncation / dropped-content bug"): faster_whisper.vad's own
-    get_speech_timestamps pads each speech chunk by speech_pad_ms (400ms) on
-    both sides, and when the real silence between two consecutive chunks is
-    under 2*speech_pad_ms (800ms) it splits that silence evenly onto both
-    sides instead — so the *reported* gap between the two returned spans is
-    exactly 0 for ANY real pause shorter than ~800ms (a routine breath or
-    clause boundary in conversational speech), indistinguishable in the
-    output from "no pause at all". `_transcribe_batched` used to treat every
-    VAD span as a fully independent decode: `_split_long_span`'s overlap+
-    stitch only reconciles windows *inside* one span, so a zero-gap pair of
-    spans got a hard, unrecovered seam right where real speech continued.
-    Confirmed on the real incident audio: redecoding straight across one such
-    seam (as a single window) recovered a ~4s utterance that was completely
-    missing from production output. Merging first means the seam disappears
-    before windowing ever happens, and the existing overlap+stitch +
-    _recover_truncated_tail machinery covers it like any other internal
-    boundary. A genuine pause (>=~800ms real silence) still reports a nonzero
-    gap here and is left as a separate span, unchanged.
-    """
-    if not spans:
-        return spans
-    merged = [spans[0]]
-    for start, end in spans[1:]:
-        prev_start, prev_end = merged[-1]
-        if start - prev_end <= max_gap_s:
-            merged[-1] = (prev_start, end)
-        else:
-            merged.append((start, end))
-    return merged
-
-
-def _split_long_span(start_s: float, end_s: float,
-                      max_span_s: float = _LONG_SPAN_SAFE_S,
-                      overlap_s: float = _LONG_SPAN_OVERLAP_S) -> list[tuple[float, float]]:
-    """Chop a speech span longer than max_span_s into overlapping sub-windows,
-    each safely under Whisper's ~30s encoder limit. Returns [(start_s, end_s)]
-    unchanged if the span is already short enough."""
-    if end_s - start_s <= max_span_s:
-        return [(start_s, end_s)]
-    stride = max_span_s - overlap_s
-    windows = []
-    pos = start_s
-    while True:
-        win_end = min(pos + max_span_s, end_s)
-        windows.append((pos, win_end))
-        if win_end >= end_s:
-            break
-        pos += stride
-    return windows
-
-
 @register("faster_whisper")
 class FasterWhisperEngine(Engine):
     """Thai-specialist Whisper via CTranslate2."""
@@ -271,15 +200,28 @@ class FasterWhisperEngine(Engine):
             lexicon=default_lexicon(config),
         )
         # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
-        # never runs on this audio — we run our own Silero VAD pass in
-        # _transcribe_batched (via _vad_speech_spans) using these thresholds, instead
-        # of letting faster-whisper fall back to its defaults (threshold=0.5,
+        # never runs on this audio — we window it ourselves via the shared
+        # transcribe/audio/ seam using these thresholds, instead of letting
+        # faster-whisper fall back to its defaults (threshold=0.5,
         # min_silence_duration_ms=2000), which clip soft Thai sentence-final
         # particles (ครับ/ค่ะ) exactly like ingest.vad_threshold's docstring warns
         # about. Defaulting these to match config.yaml's tuned ingest values keeps
         # both VAD paths consistent.
-        self._vad_threshold = vad_threshold
-        self._vad_min_silence_ms = vad_min_silence_ms
+        #
+        # ingest.py's VAD is deliberately NOT behind this seam (investigated for
+        # issue #4): it runs a different Silero (the `silero-vad` pip package, not
+        # faster_whisper's vendored copy) at different settings (threshold 0.5,
+        # min_silence 300ms, plus a min_speech floor), then sub-splits on raw RMS
+        # energy, and its output is a persisted master timeline of BOTH speech and
+        # silence rather than decodable windows. Sharing an implementation would
+        # mean changing one of the two engines' detection behaviour — a probe, not
+        # a refactor. See transcribe/audio/windows.py's module docstring.
+        self._window_policy = WindowPolicy(
+            vad_threshold=vad_threshold,
+            vad_min_silence_ms=vad_min_silence_ms,
+            max_span_s=_LONG_SPAN_SAFE_S,
+            overlap_s=_LONG_SPAN_OVERLAP_S,
+        )
         self._model = None
         self._pipeline = None
         self._pre_load_path: str | None = None
@@ -502,41 +444,48 @@ class FasterWhisperEngine(Engine):
         bs = self._batch_size
         words: list[tuple[str, int, int, float | None]] = []
 
-        spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
-        spans = _merge_contiguous_spans(spans)
-        normal = [(s, e) for s, e in spans if e - s <= _LONG_SPAN_SAFE_S]
-        long_spans = [(s, e) for s, e in spans if e - s > _LONG_SPAN_SAFE_S]
+        # Windows sharing a span_index are overlapping pieces of one continuous
+        # speech run; a span short enough to decode whole yields exactly one
+        # window. So a one-window run is a normal span, and a multi-window run is
+        # a long pause-free span that needs decode-per-window plus a stitch.
+        runs: list[list[Window]] = []
+        for w in speech_windows(audio, self._window_policy):
+            if runs and runs[-1][0].span_index == w.span_index:
+                runs[-1].append(w)
+            else:
+                runs.append([w])
+        normal = [run[0] for run in runs if len(run) == 1]
+        long_runs = [run for run in runs if len(run) > 1]
 
         if normal:
             # One batched call for every normal-length span (own VAD spans, already
             # each under the encoder cap, so no arbitrary internal re-split happens).
-            clip = [{"start": s, "end": e} for s, e in normal]
+            clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
             for tok in self._words_of(segments):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
-        elif not long_spans:
+        elif not long_runs:
             # No speech spans detected at all (rare) — fall back to faster-whisper's
             # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
             for tok in self._words_of(segments):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
-        for span_start, span_end in long_spans:
+        for run in long_runs:
             chunk_tokens = []
-            for win_start, win_end in _split_long_span(span_start, span_end):
-                sub_audio = audio[int(win_start * _SR):int(win_end * _SR)]
+            for win in run:
+                sub_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
                 segments, bs = self._decode(sub_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
                 win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs)
                 for t in win_tokens:  # offset local → global
-                    t.start_ms += int(win_start * 1000)
-                    t.end_ms += int(win_start * 1000)
-                chunk_tokens.append(stitch.ChunkTokens(
-                    win_tokens, int(win_start * 1000), int(win_end * 1000)))
+                    t.start_ms += win.start_ms
+                    t.end_ms += win.start_ms
+                chunk_tokens.append(stitch.ChunkTokens(win_tokens, win.start_ms, win.end_ms))
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
-                        span_start, span_end, len(chunk_tokens))
+                        run[0].start_s, run[-1].end_s, len(chunk_tokens))
             for tok in stitch.stitch(chunk_tokens,
-                                     seam_window_ms=int(_LONG_SPAN_OVERLAP_S * 1000)):
+                                     seam_window_ms=int(self._window_policy.overlap_s * 1000)):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])

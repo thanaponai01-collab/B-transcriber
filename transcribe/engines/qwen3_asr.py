@@ -31,7 +31,8 @@ multi-cue file this engine was a silent no-op — confirmed by a harness probe
 coming back byte-identical to the passthrough baseline on every metric.
 Fixed by giving this `prefers_whole_file=True` engine the same contract
 faster_whisper's adapter already satisfies: do its own internal VAD
-(reusing `engines.faster_whisper._vad_speech_spans`, no new dependency) and
+(via the shared `transcribe.audio.speech_windows` seam, no new dependency
+and no reach into another adapter) and
 emit one token per real speech span with genuine span-derived start_ms/
 end_ms, so `timestamps_final=True`. A file with no detected speech (or
 audio_path-only calls, which can't be VAD'd without a decoded array) falls
@@ -54,9 +55,9 @@ import logging
 
 import torch
 
+from transcribe.audio import WindowPolicy, speech_windows
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.engines.base import Engine
-from transcribe.engines.faster_whisper import _split_long_span, _vad_speech_spans
 from transcribe.engines.registry import register
 from transcribe.flywheel.inject import BiasTerm, build_prompt
 
@@ -89,9 +90,27 @@ class Qwen3ASREngine(Engine):
         self._device = device
         self._max_inference_batch_size = max_inference_batch_size
         self._max_new_tokens = max_new_tokens
-        self._vad_threshold = vad_threshold
-        self._vad_min_silence_ms = vad_min_silence_ms
-        self._max_span_s = max_span_s
+        # Deliberately NOT faster-whisper's policy — see _speech_spans_s for the
+        # max_span_s reasoning, and note two further differences that are
+        # decisions, not oversights:
+        #   overlap_s=0.0        — this engine has no seam-dedupe pass, so an
+        #                          overlap would duplicate text in the output.
+        #   merge_max_gap_s=None — no zero-gap span merge. Preserves the exact
+        #                          behaviour this adapter has always had (it only
+        #                          ever imported two of faster-whisper's three
+        #                          windowing steps). Enabling it is a behaviour
+        #                          change that must be harness-probed on its own,
+        #                          not smuggled in under a refactor.
+        # `None` is not `0.0`: a reported gap of exactly 0.0 is the common case
+        # the merge exists to catch, so 0.0 would still merge. See WindowPolicy.
+        self._window_policy = WindowPolicy(
+            vad_threshold=vad_threshold,
+            vad_min_silence_ms=vad_min_silence_ms,
+            merge_max_gap_s=None,
+            max_span_s=max_span_s,
+            overlap_s=0.0,
+            whole_clip_on_silence=True,
+        )
         self._model = None
 
     def load(self) -> None:
@@ -138,12 +157,11 @@ class Qwen3ASREngine(Engine):
         )]
 
     def _speech_spans_s(self, audio) -> list[tuple[float, float]]:
-        """Real speech spans (seconds) via the same Silero VAD faster_whisper's
-        adapter uses. Falls back to one whole-clip span when VAD finds nothing
-        (silence, or a clip too short/quiet for Silero to fire) so the engine
-        still emits something. Long spans are split with NO overlap (unlike
-        faster_whisper's stitched chunks, this engine has no seam-dedupe pass,
-        so an overlap would duplicate text in the final output).
+        """Real speech spans (seconds) via the shared windowing seam
+        (`transcribe.audio.speech_windows`). Falls back to one whole-clip span
+        when VAD finds nothing (silence, or a clip too short/quiet for Silero to
+        fire) so the engine still emits something — that is
+        `whole_clip_on_silence` on this engine's policy.
 
         `max_span_s` (default 8.0, NOT faster_whisper's 25s `_LONG_SPAN_SAFE_S`
         — 2026-08-xx, see TODO_LEDGER "Qwen3-ASR span-granularity fix"): a
@@ -160,14 +178,7 @@ class Qwen3ASREngine(Engine):
         head-to-head. 8.0s is a starting point (roughly 2-3x a typical A cue,
         not 1:1 — Qwen3-ASR is an LLM-decoder model that likely benefits from
         more context than a single short cue), tunable via config."""
-        duration_s = len(audio) / _SAMPLE_RATE
-        spans = _vad_speech_spans(audio, self._vad_threshold, self._vad_min_silence_ms)
-        if not spans:
-            spans = [(0.0, duration_s)]
-        out: list[tuple[float, float]] = []
-        for start_s, end_s in spans:
-            out.extend(_split_long_span(start_s, end_s, max_span_s=self._max_span_s, overlap_s=0.0))
-        return out
+        return [(w.start_s, w.end_s) for w in speech_windows(audio, self._window_policy)]
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"

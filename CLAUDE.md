@@ -48,6 +48,8 @@ audio → ingest.py (denoise + VAD → chunks)
 
 **The Engine Contract (`contracts.py`) is the most important boundary.** Every ASR model is accessed only through `EngineInput → EngineResult`. No code outside `engines/` may import a concrete model or reference model-specific logic. The pipeline consumes only the contract types.
 
+**No engine adapter may import another engine adapter** — that is the same boundary read in the other direction. Concerns two adapters share live in their own modules, never in whichever adapter grew them first: shared audio preparation (VAD span detection, the zero-gap merge, over-long window splitting) is `transcribe/audio/`, and subtitle cue segmentation is `transcribe/cues/`. Both are importable without torch or CTranslate2. If a new adapter needs something a rival adapter already has, lift it into one of these rather than reaching for the private.
+
 **The reconciler selects, never generates.** It picks a candidate word from Engine A or B. An assertion enforces that every output token's text exists in the slot's candidate set — this prevents hallucination. Agreeing tokens skip the LLM entirely; only disagreements invoke it.
 
 **VRAM discipline (RTX 3070, 8GB ceiling):** engines load → run → `unload()` → `del` → `torch.cuda.empty_cache()` sequentially. Never load two models simultaneously.

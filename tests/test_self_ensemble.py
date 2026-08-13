@@ -52,10 +52,12 @@ def test_transcribe_threads_temperature_override_into_decode():
         return [_FakeSegment([_FakeWord(" hello", 0.0, 1.0)])], bs
 
     eng._decode = fake_decode
-    eng._vad_speech_spans = None  # unused; _transcribe_batched calls the module function
 
-    orig_vad = fw._vad_speech_spans
-    fw._vad_speech_spans = lambda audio, threshold, min_silence_ms: [(0.0, 1.0)]
+    # Windowing lives behind transcribe/audio/; stub Silero there, not on the
+    # adapter, which no longer owns a VAD function to stub.
+    import transcribe.audio.windows as windows
+    orig_vad = windows._vad_speech_spans
+    windows._vad_speech_spans = lambda audio, threshold, min_silence_ms: [(0.0, 1.0)]
     try:
         audio = np.zeros(fw._SR, dtype=np.float32)
         inp = EngineInput(audio=audio)
@@ -64,7 +66,7 @@ def test_transcribe_threads_temperature_override_into_decode():
         eng.transcribe(inp, temperature=0.0)                  # beam_size still defaults to self._beam_size (5)
         eng.transcribe(inp, temperature=0.2, beam_size=1)      # self-ensemble hypothesis B (greedy)
     finally:
-        fw._vad_speech_spans = orig_vad
+        windows._vad_speech_spans = orig_vad
 
     assert captured == [(None, eng._beam_size), (0.0, eng._beam_size), (0.2, 1)], (
         "temperature=None must omit the key (production default preserved); "

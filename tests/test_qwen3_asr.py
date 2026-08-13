@@ -39,9 +39,9 @@ class _FakeQwen3ASRModel:
         return out
 
 
-def _engine_with(results):
+def _engine_with(results, **kwargs):
     from transcribe.engines.qwen3_asr import Qwen3ASREngine
-    eng = Qwen3ASREngine(device="cpu")
+    eng = Qwen3ASREngine(device="cpu", **kwargs)
     eng._model = _FakeQwen3ASRModel(results)  # bypass load()
     return eng
 
@@ -71,9 +71,10 @@ def test_transcribe_maps_text_confidence_none_real_timestamps():
 def test_transcribe_multi_span_gets_real_per_span_timestamps(monkeypatch):
     """When VAD finds multiple speech spans, each gets its own token with a
     real span-derived timestamp, via one batched underlying model call."""
-    import transcribe.engines.qwen3_asr as mod
+    import transcribe.audio.windows as windows
 
-    monkeypatch.setattr(mod, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 1.0), (2.0, 3.5)])
+    monkeypatch.setattr(windows, "_vad_speech_spans",
+                        lambda audio, th, ms: [(0.0, 1.0), (2.0, 3.5)])
     eng = _engine_with([_Result("อันแรก"), _Result("อันที่สอง")])
     res = eng.transcribe(EngineInput(audio=np.zeros(4 * 16000, dtype=np.float32)))
 
@@ -92,28 +93,23 @@ def test_long_span_is_capped_at_max_span_s(monkeypatch):
     comparable in scale to Engine A's ~2-5s phrase cues — see TODO_LEDGER.md
     "Qwen3-ASR span-granularity fix". A 20s span must become 3 windows for
     max_span_s=8.0 (0-8, 8-16, 16-20), not stay as one 20s blob."""
-    import transcribe.engines.qwen3_asr as mod
+    import transcribe.audio.windows as windows
 
-    monkeypatch.setattr(mod, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 20.0)])
+    monkeypatch.setattr(windows, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 20.0)])
     eng = _engine_with([_Result("หนึ่ง"), _Result("สอง"), _Result("สาม")])
     res = eng.transcribe(EngineInput(audio=np.zeros(20 * 16000, dtype=np.float32)))
 
     assert [(t.start_ms, t.end_ms) for t in res.tokens] == [(0, 8000), (8000, 16000), (16000, 20000)]
 
 
-def test_max_span_s_is_configurable():
-    import transcribe.engines.qwen3_asr as mod
+def test_max_span_s_is_configurable(monkeypatch):
+    import transcribe.audio.windows as windows
 
-    monkeypatch_target = mod._vad_speech_spans
-    try:
-        mod._vad_speech_spans = lambda audio, th, ms: [(0.0, 20.0)]
-        eng = _engine_with([_Result("หนึ่ง")])
-        eng._max_span_s = 20.0  # >= span length -> no split
-        res = eng.transcribe(EngineInput(audio=np.zeros(20 * 16000, dtype=np.float32)))
-        assert len(res.tokens) == 1
-        assert (res.tokens[0].start_ms, res.tokens[0].end_ms) == (0, 20000)
-    finally:
-        mod._vad_speech_spans = monkeypatch_target
+    monkeypatch.setattr(windows, "_vad_speech_spans", lambda audio, th, ms: [(0.0, 20.0)])
+    eng = _engine_with([_Result("หนึ่ง")], max_span_s=20.0)  # >= span length -> no split
+    res = eng.transcribe(EngineInput(audio=np.zeros(20 * 16000, dtype=np.float32)))
+    assert len(res.tokens) == 1
+    assert (res.tokens[0].start_ms, res.tokens[0].end_ms) == (0, 20000)
 
 
 def test_empty_text_yields_no_tokens():
