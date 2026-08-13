@@ -217,3 +217,17 @@ A point-estimate regression whose CI still contains the baseline is recorded as
 `gate_unresolved` (printed `UNRESOLVED`) rather than a hard fail — only a
 regression whose CI excludes the baseline fails the gate. See
 `transcribe/eval/README.md` for the full rule.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`thanaponai01-collab/B-transcriber`), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
