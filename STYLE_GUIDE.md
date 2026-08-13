@@ -145,8 +145,8 @@ matters for a future term shaped that way.
 
 ## 7. Line breaks in multi-line captions — **[gold]**, **[code]** for cue breaks
 
-Enforced today for cue breaks (`_group_words_into_cues_greedy`/`_dp` in
-`transcribe/engines/faster_whisper.py`) via `transcribe/thai/atoms.py`'s
+Enforced today for cue breaks (`_split_greedy`/`_split_dp` behind
+`split_cues` in `transcribe/cues/`) via `transcribe/thai/atoms.py`'s
 `glue_atoms`/`BreakLexicon` (HANDOFF_THAI_BREAK_ATOMS.md): every unsplittable
 unit below is merged into one indivisible break-atom *before* either splitter
 runs, so a break inside one is unrepresentable rather than checked-and-vetoed.

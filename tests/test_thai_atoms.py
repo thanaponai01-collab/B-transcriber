@@ -18,8 +18,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from cutdeck.words import timed_tokens, words_from_pieces
-from transcribe.engines.faster_whisper import _group_words_into_cues
+from transcribe.cues import CuePolicy, split_cues
 from transcribe.thai.atoms import BreakLexicon, default_lexicon, glue_atoms, snap_boundary_offsets
+
+
+def _group_words_into_cues(words, **policy_kwargs):
+    """Cue splitting through its public interface, with the keyword-override
+    shape this file's property tests are written against."""
+    return split_cues(words, CuePolicy(**policy_kwargs))
 
 
 def _char_pieces(text: str, start: int = 0, step: int = 100):

@@ -85,6 +85,9 @@ audio
  │
  ├─[Engine A]       whole-file or per-chunk transcribe; per-chunk output goes through
  ├─[Engine B]       [stitch.py] seam-window dedup. Sequential; VRAM freed between engines.
+ │                  A whole-file engine turns its word pieces into subtitle-grade
+ │                  phrase cues via [cues/] split_cues(words, CuePolicy) — shared,
+ │                  engine-agnostic, and the owner of cue_boundary_error_rate.
  │                  Each engine's token list is persisted to engine_result (job_phase
  │                  checkpoints: ingested → engine_a_done → engine_b_done → reconciled →
  │                  written) so a re-run of a failed job reuses cached GPU work.

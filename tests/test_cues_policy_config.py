@@ -1,12 +1,13 @@
-"""Cue target width is config-driven (engines.faster_whisper.cue_target_chars).
+"""Cue tuning is config-driven (engines.faster_whisper.cue_*), and the whole
+tuning surface is one CuePolicy.
 
-_CUE_TARGET_CHARS was hardcoded next to cue_gap_ms/cue_max_ms, which ARE
+_CUE_TARGET_CHARS was once hardcoded next to cue_gap_ms/cue_max_ms, which ARE
 config-driven. Same 2.3 discipline: a subtitle-line-width change is a YAML
 edit, never a code edit. Mirrors the test_phase2_config.py override pattern
-(constructor kwargs) plus a capture test proving the value reaches
-_group_words_into_cues.
+(constructor kwargs) plus a wiring test proving the assembled policy reaches
+the splitter.
 
-Run: python -m pytest tests/test_cue_target_chars_config.py -v
+Run: python -m pytest tests/test_cues_policy_config.py -v
 """
 
 import sys
@@ -18,47 +19,55 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import transcribe.engines.faster_whisper as fw
 from transcribe.contracts import EngineInput
+from transcribe.cues import (
+    CUE_SPACE_MIN_CHARS,
+    CUE_SPACE_MIN_MS,
+    CUE_TARGET_CHARS,
+    CuePolicy,
+    split_cues,
+)
 from transcribe.engines.registry import get_engine
 
 
 def test_constructor_accepts_cue_target_chars_override():
     eng = get_engine("faster_whisper", device="cpu", cue_target_chars=28)
-    assert eng._cue_target_chars == 28
+    assert eng._cue_policy.target_chars == 28
 
 
 def test_constructor_default_matches_module_constant():
     eng = get_engine("faster_whisper", device="cpu")
-    assert eng._cue_target_chars == fw._CUE_TARGET_CHARS == 42
+    assert eng._cue_policy.target_chars == CUE_TARGET_CHARS == 42
 
 
 def test_constructor_accepts_space_break_overrides():
     eng = get_engine("faster_whisper", device="cpu",
                      cue_space_min_chars=20, cue_space_min_ms=1200)
-    assert eng._cue_space_min_chars == 20
-    assert eng._cue_space_min_ms == 1200
+    assert eng._cue_policy.space_min_chars == 20
+    assert eng._cue_policy.space_min_ms == 1200
 
 
 def test_space_break_defaults_match_module_constants():
     eng = get_engine("faster_whisper", device="cpu")
-    assert eng._cue_space_min_chars == fw._CUE_SPACE_MIN_CHARS
-    assert eng._cue_space_min_ms == fw._CUE_SPACE_MIN_MS
+    assert eng._cue_policy.space_min_chars == CUE_SPACE_MIN_CHARS
+    assert eng._cue_policy.space_min_ms == CUE_SPACE_MIN_MS
 
 
-def test_cue_knobs_reach_grouping(monkeypatch):
-    """transcribe() must pass every configured cue knob into
-    _group_words_into_cues — a stored-but-unused kwarg would be dead config.
-    **kwargs so adding a knob doesn't silently skip this check."""
+def test_cue_knobs_reach_the_splitter(monkeypatch):
+    """transcribe() must hand the *configured* policy to split_cues — a
+    stored-but-unused kwarg would be dead config. This is the one wiring check
+    here; every other assertion in this file is on returned cues or on the
+    policy value itself."""
     eng = get_engine("faster_whisper", device="cpu", cue_target_chars=10,
                      cue_space_min_chars=20, cue_space_min_ms=1200,
                      cue_split_algorithm="dp")
 
-    captured = {}
+    seen = {}
 
-    def fake_group(words, **kwargs):
-        captured.update(kwargs)
+    def fake_split(words, policy):
+        seen["policy"] = policy
         return [("สวัสดี", 0, 500, 0.9)]
 
-    monkeypatch.setattr(fw, "_group_words_into_cues", fake_group)
+    monkeypatch.setattr(fw, "split_cues", fake_split)
     monkeypatch.setattr(
         eng, "_transcribe_batched",
         lambda audio, hint, prompt, temperature=None, beam_size=None: [("สวัสดี", 0, 500, 0.9)],
@@ -66,19 +75,22 @@ def test_cue_knobs_reach_grouping(monkeypatch):
     eng._model = object()  # satisfy the load() assertion without a GPU
 
     res = eng.transcribe(EngineInput(audio=np.zeros(1600, dtype=np.float32)))
-    assert captured["target_chars"] == 10
-    assert captured["space_min_chars"] == 20
-    assert captured["space_min_ms"] == 1200
-    assert captured["algorithm"] == "dp"
+    policy = seen["policy"]
+    assert policy.target_chars == 10
+    assert policy.space_min_chars == 20
+    assert policy.space_min_ms == 1200
+    assert policy.algorithm == "dp"
+    assert policy.lexicon is not None, "the break-atom lexicon must ride in the policy"
     assert res.tokens and res.tokens[0].text == "สวัสดี"
 
 
 def test_smaller_target_chars_produces_shorter_cues():
-    """Functional: shrinking the width really closes cues earlier."""
+    """Functional: shrinking the width really closes cues earlier — a policy
+    field change, observed through the returned cues alone."""
     # Continuous Latin words, no gaps/sentence breaks, well under target_ms.
     words = [(f"word{i} ", i * 300, i * 300 + 250, 0.9) for i in range(8)]
-    wide = fw._group_words_into_cues(words, gap_ms=700, target_ms=60000, target_chars=200)
-    narrow = fw._group_words_into_cues(words, gap_ms=700, target_ms=60000, target_chars=12)
+    wide = split_cues(words, CuePolicy(gap_ms=700, target_ms=60000, target_chars=200))
+    narrow = split_cues(words, CuePolicy(gap_ms=700, target_ms=60000, target_chars=12))
     assert len(narrow) > len(wide)
     assert all(len(text) <= 12 + len("word0 ") for text, *_ in narrow), (
         "a cue may overshoot by at most the word that closed it"

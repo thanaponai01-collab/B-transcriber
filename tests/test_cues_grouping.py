@@ -1,9 +1,13 @@
-"""Phrase-cue grouping for the faster-whisper adapter."""
+"""Phrase-cue grouping (transcribe/cues/)."""
 
-from transcribe.engines.faster_whisper import (
-    _group_words_into_cues as group,
-    _sentence_boundary_offsets,
-)
+from transcribe.cues import CuePolicy, split_cues
+from transcribe.cues.split import _sentence_boundary_offsets
+
+
+def group(words, **policy_kwargs):
+    """Call the public splitter with a policy built from keyword overrides —
+    keeps every assertion below stated in the same terms it always was."""
+    return split_cues(words, CuePolicy(**policy_kwargs))
 
 
 def test_splits_on_gap_and_preserves_text():
@@ -62,7 +66,6 @@ def test_sentence_boundary_offsets_finds_the_split():
 
 def test_sentence_boundary_offsets_degrades_to_empty_on_failure(monkeypatch):
     import pythainlp.tokenize as pt
-    from transcribe.engines.faster_whisper import _sentence_boundary_offsets
 
     def boom(*a, **k):
         raise RuntimeError("model unavailable")

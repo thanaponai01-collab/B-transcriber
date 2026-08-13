@@ -8,8 +8,8 @@ reconstructs the full text, then ``pythainlp.word_tokenize`` finds real word
 boundaries, and each resulting token is mapped back to a time span via the
 timeline.
 
-This is the one implementation of that reconstruction. ``transcribe.engines.
-faster_whisper._group_words_into_cues`` calls :func:`timed_tokens` for its own
+This is the one implementation of that reconstruction.
+``transcribe.cues.split_cues`` calls :func:`timed_tokens` for its own
 steps 1-3 rather than duplicating this logic (see HANDOFF F1/F2 — two
 implementations of Thai word-timeline reconstruction is exactly the kind of
 drift that produced the dead filler rule).

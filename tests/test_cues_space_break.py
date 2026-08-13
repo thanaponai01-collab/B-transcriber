@@ -1,4 +1,4 @@
-"""Whisper's own spaces as cue-break candidates (_group_words_into_cues).
+"""Whisper's own spaces as cue-break candidates (transcribe.cues.split_cues).
 
 Thai has no orthographic spaces, so any space Whisper emits inside Thai is a
 breath/clause boundary the acoustic model heard — a free segmentation signal
@@ -9,7 +9,7 @@ and violate STYLE_GUIDE §7 unsplittable units — Whisper writes mai yamok as a
 separate ' ๆ' piece, so a naive rule orphans it from the word it repeats on
 almost every ๆ in the corpus.
 
-Run: python -m pytest tests/test_cue_space_break.py -v
+Run: python -m pytest tests/test_cues_space_break.py -v
 """
 
 import sys
@@ -19,8 +19,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import transcribe.engines.faster_whisper as fw
-from transcribe.engines.faster_whisper import _group_words_into_cues as group
+import transcribe.cues.split as cues_split
+from transcribe.cues import CuePolicy, split_cues
+
+
+def group(words, **policy_kwargs):
+    return split_cues(words, CuePolicy(**policy_kwargs))
 
 
 @pytest.fixture(autouse=True)
@@ -32,9 +36,9 @@ def _no_sentence_forcing(monkeypatch):
     assertion below would pass whether the space-break logic worked or not.
     (Caught the hard way — an early version of the runt test passed because
     crfcut, not the space rule, was doing the splitting.) Sentence forcing has
-    its own coverage in test_faster_whisper_cues.py.
+    its own coverage in test_cues_grouping.py.
     """
-    monkeypatch.setattr(fw, "_sentence_boundary_offsets", lambda text: [])
+    monkeypatch.setattr(cues_split, "_sentence_boundary_offsets", lambda text: [])
 
 
 def _pieces(text: str, ms_per_char: int = 100, start: int = 0):

@@ -36,6 +36,7 @@ python -m pytest tests/test_smoke.py::test_reconciler_no_generation -v
 ```
 audio → ingest.py (denoise + VAD → chunks)
       → Engine A (faster_whisper) → EngineResult   # sequential, not parallel
+        └─ cues/ (split_cues: word pieces + CuePolicy → phrase cues)
       → Engine B (passthrough, none active) → EngineResult   # VRAM freed between engines
       → align_hyp.py (hypothesis-to-hypothesis alignment → AlignSlots)
       → reconcile.py (select-only → (RecognizedToken, source_engine) pairs; llm_fn hook

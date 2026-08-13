@@ -127,17 +127,17 @@ def test_words_for_job_roundtrips_through_store():
     Path(audio_path).unlink()
 
 
-# ── regression: _group_words_into_cues shares timed_tokens() and must still ──
-# produce byte-identical cue output. test_cue_conform.py / test_cue_space_break.py /
-# test_cue_target_chars_config.py / test_faster_whisper_cues.py already cover this
+# ── regression: split_cues shares timed_tokens() and must still ─────────────
+# produce byte-identical cue output. test_cue_conform.py / test_cues_space_break.py /
+# test_cues_policy_config.py / test_cues_grouping.py already cover this
 # directly; this test pins the specific job-29 F2 fragment shape through the
 # real cue-grouping entry point as a belt-and-suspenders check.
 
 def test_group_words_into_cues_still_works_after_refactor():
-    from transcribe.engines.faster_whisper import _group_words_into_cues
+    from transcribe.cues import split_cues
 
     words = [("เท", 1520, 2120, 0.9), ("ส", 2120, 2420, 0.8)]
-    cues = _group_words_into_cues(words)
+    cues = split_cues(words)
     assert len(cues) == 1
     text, start, end, conf = cues[0]
     assert text == "เทส" and start == 1520 and end == 2420

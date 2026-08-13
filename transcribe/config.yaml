@@ -106,7 +106,7 @@ engines:
     cue_max_ms: 4000
     cue_target_chars: 42   # cue closes once it holds this many chars (subtitle-line
                            # sizing, same family as cue_gap_ms/cue_max_ms — see
-                           # _group_words_into_cues; STYLE_GUIDE line-break policy)
+                           # transcribe/cues/; STYLE_GUIDE line-break policy)
     # A space Whisper emitted inside Thai marks a breath/clause boundary, so it is
     # a cue-break candidate — but only once the cue can stand alone as a subtitle,
     # else "โอเค โอเค" shatters into one-word cues. Both minima must be met, and

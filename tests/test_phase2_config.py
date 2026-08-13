@@ -86,5 +86,6 @@ def test_faster_whisper_construct_from_config_without_gpu():
     assert eng._model_id == "models/some-other-ct2"
     assert eng._compute_type == "int8_float16"
     assert eng._beam_size == 3
-    assert eng._cue_gap_ms == 500
+    assert eng._cue_policy.gap_ms == 500
+    assert eng._cue_policy.target_ms == 6000
     assert eng._bias_prompt_budget == 120

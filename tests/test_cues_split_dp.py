@@ -1,14 +1,14 @@
 """DP cue split (HANDOFF_CEILING_BREAK §5, algorithm="dp").
 
-The greedy path (`_group_words_into_cues_greedy`, tested in
-test_faster_whisper_cues.py / test_cue_space_break.py) is untouched and stays
+The greedy path (`transcribe.cues.split._split_greedy`, tested in
+test_cues_grouping.py / test_cues_space_break.py) is untouched and stays
 the production default — these tests exercise only the new cost-minimising
 split, verifying it upholds the same STYLE_GUIDE §7 invariants and hard
 boundaries the greedy path guarantees, via a genuinely different algorithm
 (candidate breaks at every pythainlp word boundary, not just Whisper's
 sporadic spaces).
 
-Run: python -m pytest tests/test_cue_split_dp.py -v
+Run: python -m pytest tests/test_cues_split_dp.py -v
 """
 
 import sys
@@ -16,9 +16,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import transcribe.engines.faster_whisper as fw
-from transcribe.engines.faster_whisper import _group_words_into_cues as group
+from transcribe.cues import CUE_SPLIT_ALGORITHM, CuePolicy, split_cues
+from transcribe.cues.split import _split_greedy
 from transcribe.engines.registry import get_engine
+
+
+def group(words, **policy_kwargs):
+    return split_cues(words, CuePolicy(**policy_kwargs))
 
 
 def _pieces(text: str, ms_per_char: int = 100, start: int = 0):
@@ -128,16 +132,16 @@ def test_default_algorithm_is_still_greedy():
     don't pass `algorithm` — this is the whole point of gating the swap."""
     words = [(f"word{i} ", i * 300, i * 300 + 250, 0.9) for i in range(8)]
     default = group(words, gap_ms=700, target_ms=60000, target_chars=200)
-    greedy = fw._group_words_into_cues_greedy(words, gap_ms=700, target_ms=60000,
-                                                target_chars=200)
+    greedy = _split_greedy(words, CuePolicy(gap_ms=700, target_ms=60000,
+                                            target_chars=200))
     assert default == greedy
 
 
 def test_engine_constructor_accepts_cue_split_algorithm_override():
     eng = get_engine("faster_whisper", device="cpu", cue_split_algorithm="dp")
-    assert eng._cue_split_algorithm == "dp"
+    assert eng._cue_policy.algorithm == "dp"
 
 
 def test_engine_constructor_default_is_greedy():
     eng = get_engine("faster_whisper", device="cpu")
-    assert eng._cue_split_algorithm == "greedy" == fw._CUE_SPLIT_ALGORITHM
+    assert eng._cue_policy.algorithm == "greedy" == CUE_SPLIT_ALGORITHM
