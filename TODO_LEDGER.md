@@ -3,6 +3,46 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Structural debt carried through the 2026-08-13 architecture refactors (issues #3-#6)
+
+The four behaviour-preserving refactors (cue splitter → `transcribe/cues/`,
+speech windowing → `transcribe/audio/`, eval metric plumbing, `run_file` seams)
+were gated on byte-identical behaviour, so pre-existing structural flags moved
+with the code rather than being fixed. Running the structural reporter over the
+changed files leaves 24 flags. None is an unaccounted new defect, but three
+deserve a trigger:
+
+1. **`cues/split.py::_split_greedy` — complexity 31, 123 lines.** Moved verbatim
+   out of `engines/faster_whisper.py`; it was equally tangled there, just harder
+   to find. It is now in a module named for what it does, which is the whole
+   point of issue #3. **Trigger:** the next change to a cue-break *rule* (not a
+   constant) — split the whitespace-break decision, the sentence-forcing and the
+   length/gap fill into named steps first, then make the change. Do not
+   restructure it speculatively: `cue_boundary_error_rate` is the user's daily
+   pain and this function's exact behaviour is currently the baseline.
+
+2. **`cues/split.py::_dp_split_segment` — complexity 17, 77 lines.** Same
+   provenance. **Trigger:** HANDOFF_CEILING_BREAK §5 says to delete the losing
+   algorithm after one release of A/B. If the DP re-probe (HANDOFF_ONE_ENGINE
+   §1, due once the gold set grows) loses again, this whole function goes and
+   the flag with it. Do not refactor a function that is a candidate for deletion.
+
+3. **`pipeline/refine.py::refine` (97 lines) and `pipeline/run.py::run_file`
+   (165 lines, down from 383).** Both are flagged on *length only* — neither is
+   flagged for complexity, because both are flat sequences of named pipeline
+   phases with no nesting. That shape is deliberate: CLAUDE.md's documented batch
+   flow should be readable at a glance in the code, and breaking either into
+   sub-functions would hide the phase order it exists to show. **Trigger:** if
+   either grows a second level of conditional nesting, or if a phase is added
+   that is not a single call, extract that phase.
+
+Also flagged and deliberately *not* debt: the duplicated field lists in
+`db/store.py` (`EvalRunRow` read shape vs `EvalRun` write record) are the
+tradeoff issue #6 explicitly chose and documented — `EvalRunRow` carries
+database-assigned `id`/`ran_at` that a writer must not supply. A test asserts
+every `EvalRun` field is persisted, so the two cannot drift silently.
+
+
 ## Mid-word truncation / dropped-content bug — ROOT-CAUSED AND FIXED (VAD-span-seam cause), one residual mechanism still open — 2026-08-10
 
 **User-reported, from real production output**: `F:\Me\Works\20260807 - โหน(หลัง)กระแส 155\5. EXPORTS\Audio_test.srt`
