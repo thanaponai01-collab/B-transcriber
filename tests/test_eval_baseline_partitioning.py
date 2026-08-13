@@ -34,11 +34,14 @@ def _tmp_db():
 def test_experiment_run_is_never_the_baseline():
     db = _tmp_db()
     conn = store.connect(db)
-    store.create_eval_run(conn, "prod", 0.5, 0.5, True, cer_thai=0.10, wer_latin=0.10,
-                          engine_pair="faster_whisper+passthrough")
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="prod", wer=0.5, boundary_error_rate=0.5, passed=True,
+        cer_thai=0.10, wer_latin=0.10, engine_pair="faster_whisper+passthrough"))
     # A later, better-scoring experiment on a different engine pair passes...
-    store.create_eval_run(conn, "exp", 0.0, 0.0, True, cer_thai=0.0, wer_latin=0.0,
-                          engine_pair="faster_whisper+funasr", is_experiment=True)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="exp", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.0, wer_latin=0.0,
+        engine_pair="faster_whisper+funasr", is_experiment=True))
     last = store.get_last_passing_eval(conn)
     # ...but the baseline is still the production run.
     assert last is not None

@@ -13,7 +13,7 @@ from typing import NamedTuple
 
 from transcribe.db import store
 from transcribe.eval.metrics import (
-    CI_METRICS, EvalMetrics, boundary_f1_error, bootstrap_ci, compute_metrics, regressed,
+    CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics, regressed,
 )
 from transcribe.thai.atoms import default_lexicon
 from transcribe.thai.lint import find_cue_legality_violations
@@ -171,17 +171,8 @@ def run_harness(
 
     tol = float(config.get("boundary_tol_ms", 300.0))
 
-    # Numerators are weighted by the reference size of each signal so per-sample
-    # rates aggregate into a corpus-level rate. BER instead aggregates by
-    # micro-F1 (summed matched/ref/hyp switch counts, one F1 at the end) — a
-    # ref-weighted mean would zero out samples with no reference switches, so
-    # switches hallucinated on monolingual clips would never be penalized.
-    cer_num = wer_lat_num = wer_num = 0.0
-    total_thai = total_latin = total_words = 0
-    total_switches = total_hyp_switches = total_matched = 0
-    total_ref_cues = total_hyp_cues = total_matched_cues = 0
-    total_overlapping_cues = total_cue_count_delta = total_nonzero_gaps = 0
-    global_shortest_cue_ms: float | None = None
+    # Corpus aggregation is EvalMetrics.aggregate's job — each metric's weighting
+    # rule lives next to its definition, so the two cannot silently disagree.
     clip_metrics: list[EvalMetrics] = []
     total_wall_s = 0.0
     total_audio_s = 0.0
@@ -215,51 +206,11 @@ def run_harness(
             detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in ref_violations)
             _safe_print(f"[harness] cue_legality REFERENCE also violates (lexicon may be wrong, "
                         f"not a hyp bug) {audio_path.stem}: {detail}")
-        cer_num     += m.cer_thai * m.thai_chars
-        wer_lat_num += m.wer_latin * m.latin_words
-        wer_num     += m.wer * m.total_words
-        total_thai     += m.thai_chars
-        total_latin    += m.latin_words
-        total_words    += m.total_words
-        total_switches     += m.ref_switches
-        total_hyp_switches += m.hyp_switches
-        total_matched      += m.matched_switches
-        total_ref_cues        += m.ref_cues
-        total_hyp_cues        += m.hyp_cues
-        total_matched_cues    += m.matched_cues
-        total_overlapping_cues += m.overlapping_cues
-        total_cue_count_delta  += m.cue_count_delta
-        total_nonzero_gaps     += m.nonzero_gap_count
-        if m.shortest_cue_ms is not None and (
-            global_shortest_cue_ms is None or m.shortest_cue_ms < global_shortest_cue_ms
-        ):
-            global_shortest_cue_ms = m.shortest_cue_ms
 
     if scratch_dir is not None:
         shutil.rmtree(scratch_dir, ignore_errors=True)
 
-    agg = EvalMetrics(
-        cer_thai=cer_num / total_thai if total_thai else 0.0,
-        wer_latin=wer_lat_num / total_latin if total_latin else 0.0,
-        boundary_error_rate=boundary_f1_error(
-            total_matched, total_switches, total_hyp_switches),
-        wer=wer_num / total_words if total_words else 0.0,
-        thai_chars=total_thai,
-        latin_words=total_latin,
-        total_words=total_words,
-        ref_switches=total_switches,
-        hyp_switches=total_hyp_switches,
-        matched_switches=total_matched,
-        cue_boundary_error_rate=boundary_f1_error(
-            total_matched_cues, total_ref_cues, total_hyp_cues),
-        ref_cues=total_ref_cues,
-        hyp_cues=total_hyp_cues,
-        matched_cues=total_matched_cues,
-        overlapping_cues=total_overlapping_cues,
-        cue_count_delta=total_cue_count_delta,
-        shortest_cue_ms=global_shortest_cue_ms,
-        nonzero_gap_count=total_nonzero_gaps,
-    )
+    agg = EvalMetrics.aggregate(clip_metrics)
 
     conn = store.connect(db_path)
     cfg_hash = _config_hash(config)
@@ -312,9 +263,13 @@ def run_harness(
 
     gate_unresolved_names = ",".join(unresolved_names) or None
 
-    store.create_eval_run(
-        conn, cfg_hash, agg.wer, agg.boundary_error_rate,
-        passed, cer_thai=agg.cer_thai, wer_latin=agg.wer_latin,
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash=cfg_hash,
+        wer=agg.wer,
+        boundary_error_rate=agg.boundary_error_rate,
+        passed=passed,
+        cer_thai=agg.cer_thai,
+        wer_latin=agg.wer_latin,
         pipeline_version=_pipeline_version(),
         engine_pair=f"{config.get('engine_a', '?')}+{config.get('engine_b', '?')}",
         bias_hash=_bias_hash(conn),
@@ -333,7 +288,7 @@ def run_harness(
         rtf=rtf,
         gate_unresolved=gate_unresolved_names,
         cue_legality_violations=total_hyp_lint_violations,
-    )
+    ))
     conn.close()
 
     def _fmt_ci(name: str) -> str:
@@ -350,8 +305,8 @@ def run_harness(
         f"cue_legality_violations={total_hyp_lint_violations} "
         f"(reference={total_ref_lint_violations})  "
         f"rtf={'n/a' if rtf is None else f'{rtf:.3f}'}  "
-        f"thai_chars={total_thai}  latin_words={total_latin}  "
-        f"switches={total_switches} (hyp {total_hyp_switches}, matched {total_matched})  "
+        f"thai_chars={agg.thai_chars}  latin_words={agg.latin_words}  "
+        f"switches={agg.ref_switches} (hyp {agg.hyp_switches}, matched {agg.matched_switches})  "
         f"passed={passed}"
     )
     return HarnessResult(metrics=agg, passed=passed, baseline=last,

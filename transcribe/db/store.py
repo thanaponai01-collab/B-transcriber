@@ -214,6 +214,54 @@ class EvalRunRow:
     cue_legality_violations: Optional[int] = None
 
 
+@dataclass
+class EvalRun:
+    """What a caller writes: `EvalRunRow` minus the database-assigned fields.
+
+    `EvalRunRow` is the read shape and carries `id` and `ran_at`, which the
+    database assigns; making those optional to reuse one class would muddy the
+    semantics of both directions. The small duplication buys a write record where
+    every field is one the caller actually supplies.
+
+    This exists because `create_eval_run` was twenty-eight positional-friendly
+    parameters over a single INSERT: three parallel sequences (column list,
+    placeholder count, values tuple) kept in agreement by hand, with nothing
+    stopping two same-typed arguments — say a pair of CI bounds — from being
+    transposed into plausible-looking wrong columns.
+
+    `metrics_version=None` means "stamp the current metric definitions' version".
+    """
+
+    config_hash: str
+    wer: float
+    boundary_error_rate: float
+    passed: bool
+    cer_thai: float = 1.0
+    wer_latin: float = 1.0
+    kind: str = "transcribe"
+    pipeline_version: Optional[str] = None
+    engine_pair: Optional[str] = None
+    bias_hash: Optional[str] = None
+    is_experiment: bool = False
+    metrics_version: Optional[int] = None
+    cue_boundary_error_rate: float = 0.0
+    overlapping_cues: int = 0
+    cue_count_delta: Optional[int] = None
+    shortest_cue_ms: Optional[float] = None
+    nonzero_gap_count: Optional[int] = None
+    cer_thai_ci_lo: Optional[float] = None
+    cer_thai_ci_hi: Optional[float] = None
+    wer_latin_ci_lo: Optional[float] = None
+    wer_latin_ci_hi: Optional[float] = None
+    boundary_error_rate_ci_lo: Optional[float] = None
+    boundary_error_rate_ci_hi: Optional[float] = None
+    cue_boundary_error_rate_ci_lo: Optional[float] = None
+    cue_boundary_error_rate_ci_hi: Optional[float] = None
+    rtf: Optional[float] = None
+    gate_unresolved: Optional[str] = None
+    cue_legality_violations: Optional[int] = None
+
+
 # ── media ─────────────────────────────────────────────────────────────────────
 
 def sha256_of_file(path: str) -> str:
@@ -581,59 +629,51 @@ def delete_bias_term(conn: sqlite3.Connection, term: str) -> None:
 
 # ── eval_run ──────────────────────────────────────────────────────────────────
 
-def create_eval_run(
-    conn: sqlite3.Connection,
-    config_hash: str,
-    wer: float,
-    boundary_error_rate: float,
-    passed: bool,
-    cer_thai: float = 1.0,
-    wer_latin: float = 1.0,
-    kind: str = "transcribe",
-    pipeline_version: Optional[str] = None,
-    engine_pair: Optional[str] = None,
-    bias_hash: Optional[str] = None,
-    is_experiment: bool = False,
-    metrics_version: Optional[int] = None,
-    cue_boundary_error_rate: float = 0.0,
-    overlapping_cues: int = 0,
-    cue_count_delta: Optional[int] = None,
-    shortest_cue_ms: Optional[float] = None,
-    nonzero_gap_count: Optional[int] = None,
-    cer_thai_ci_lo: Optional[float] = None,
-    cer_thai_ci_hi: Optional[float] = None,
-    wer_latin_ci_lo: Optional[float] = None,
-    wer_latin_ci_hi: Optional[float] = None,
-    boundary_error_rate_ci_lo: Optional[float] = None,
-    boundary_error_rate_ci_hi: Optional[float] = None,
-    cue_boundary_error_rate_ci_lo: Optional[float] = None,
-    cue_boundary_error_rate_ci_hi: Optional[float] = None,
-    rtf: Optional[float] = None,
-    gate_unresolved: Optional[str] = None,
-    cue_legality_violations: Optional[int] = None,
-) -> int:
-    # None → stamp the current metric definitions' version. Lazy import: the
-    # semantic owner of the version is eval/metrics.py, and the db layer must
-    # not import the eval layer at module load.
+# The one source the INSERT's column list, placeholder count and values tuple
+# all derive from — they used to be three hand-maintained parallel sequences of
+# 28 entries. Names are explicit rather than taken from dataclass field order,
+# so a field reorder can never silently re-map values onto different columns.
+_EVAL_RUN_COLUMNS = (
+    "config_hash", "wer", "boundary_error_rate", "cer_thai", "wer_latin",
+    "kind", "pipeline_version", "engine_pair", "bias_hash", "is_experiment",
+    "metrics_version", "cue_boundary_error_rate", "overlapping_cues",
+    "cue_count_delta", "shortest_cue_ms", "nonzero_gap_count",
+    "cer_thai_ci_lo", "cer_thai_ci_hi", "wer_latin_ci_lo", "wer_latin_ci_hi",
+    "boundary_error_rate_ci_lo", "boundary_error_rate_ci_hi",
+    "cue_boundary_error_rate_ci_lo", "cue_boundary_error_rate_ci_hi",
+    "rtf", "gate_unresolved", "cue_legality_violations", "passed",
+)
+
+# Columns whose stored type is narrower than what a caller may hand in.
+_EVAL_RUN_COERCE = {
+    "is_experiment": int, "passed": int, "metrics_version": int,
+    "cue_boundary_error_rate": float, "overlapping_cues": int,
+}
+
+
+def create_eval_run(conn: sqlite3.Connection, run: EvalRun) -> int:
+    """Persist one eval run. Takes the whole record, so adding a metric is a
+    field on `EvalRun` plus a name in `_EVAL_RUN_COLUMNS` — not an edit to a
+    column list, a placeholder count and a values tuple in three parallel
+    positions."""
+    metrics_version = run.metrics_version
     if metrics_version is None:
+        # None → stamp the current metric definitions' version. Lazy import: the
+        # semantic owner of the version is eval/metrics.py, and the db layer must
+        # not import the eval layer at module load.
         from transcribe.eval.metrics import METRICS_VERSION
         metrics_version = METRICS_VERSION
+
+    values = []
+    for column in _EVAL_RUN_COLUMNS:
+        value = metrics_version if column == "metrics_version" else getattr(run, column)
+        coerce = _EVAL_RUN_COERCE.get(column)
+        values.append(coerce(value) if coerce is not None else value)
+
     cur = conn.execute(
-        "INSERT INTO eval_run (config_hash, wer, boundary_error_rate, cer_thai, wer_latin, "
-        "kind, pipeline_version, engine_pair, bias_hash, is_experiment, metrics_version, "
-        "cue_boundary_error_rate, overlapping_cues, cue_count_delta, shortest_cue_ms, "
-        "nonzero_gap_count, cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi, "
-        "boundary_error_rate_ci_lo, boundary_error_rate_ci_hi, cue_boundary_error_rate_ci_lo, "
-        "cue_boundary_error_rate_ci_hi, rtf, gate_unresolved, cue_legality_violations, passed) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (config_hash, wer, boundary_error_rate, cer_thai, wer_latin,
-         kind, pipeline_version, engine_pair, bias_hash, int(is_experiment),
-         int(metrics_version), float(cue_boundary_error_rate), int(overlapping_cues),
-         cue_count_delta, shortest_cue_ms, nonzero_gap_count,
-         cer_thai_ci_lo, cer_thai_ci_hi, wer_latin_ci_lo, wer_latin_ci_hi,
-         boundary_error_rate_ci_lo, boundary_error_rate_ci_hi,
-         cue_boundary_error_rate_ci_lo, cue_boundary_error_rate_ci_hi,
-         rtf, gate_unresolved, cue_legality_violations, int(passed)),
+        f"INSERT INTO eval_run ({', '.join(_EVAL_RUN_COLUMNS)}) "
+        f"VALUES ({', '.join('?' * len(_EVAL_RUN_COLUMNS))})",
+        tuple(values),
     )
     conn.commit()
     return cur.lastrowid

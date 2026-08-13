@@ -132,11 +132,14 @@ def test_old_metrics_version_rows_are_not_current_baselines():
     db = _tmp_db()
     conn = store.connect(db)
     # A passing v1-era row (e.g. migrated from a pre-column DB).
-    store.create_eval_run(conn, "old", 0.0, 0.0, True, cer_thai=0.0, wer_latin=0.0,
-                          metrics_version=1)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="old", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.0, wer_latin=0.0, metrics_version=1))
     assert store.get_last_passing_eval(conn) is None or METRICS_VERSION == 1
     # A current-version row becomes the baseline.
-    store.create_eval_run(conn, "new", 0.1, 0.1, True, cer_thai=0.10, wer_latin=0.10)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="new", wer=0.1, boundary_error_rate=0.1, passed=True,
+        cer_thai=0.10, wer_latin=0.10))
     last = store.get_last_passing_eval(conn)
     assert last is not None
     assert last.config_hash == "new"
@@ -155,8 +158,9 @@ def test_harness_first_run_after_metric_change_passes(monkeypatch):
 
     db = _tmp_db()
     conn = store.connect(db)
-    store.create_eval_run(conn, "v1-perfect", 0.0, 0.0, True,
-                          cer_thai=0.0, wer_latin=0.0, metrics_version=1)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="v1-perfect", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.0, wer_latin=0.0, metrics_version=1))
     conn.close()
 
     ref = [{"text": "ผมใช้ Windows ครับ", "script": "mixed", "start_ms": 0, "end_ms": 1500}]

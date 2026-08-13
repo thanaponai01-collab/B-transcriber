@@ -159,7 +159,9 @@ def test_regression_inside_bootstrap_ci_is_recorded_unresolved_not_failed(monkey
 
     db = _tmp_db()
     conn = store.connect(db)
-    store.create_eval_run(conn, "baseline", 0.0, 0.0, True, cer_thai=0.10, wer_latin=0.0)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="baseline", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.10, wer_latin=0.0))
     conn.close()
 
     result = harness.run_harness(

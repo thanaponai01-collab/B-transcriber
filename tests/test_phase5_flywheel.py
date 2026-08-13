@@ -30,7 +30,9 @@ def test_harness_blocks_regression_vs_prior_baseline(monkeypatch):
     db = _tmp_db()
     conn = store.connect(db)
     # A good passing baseline: low Thai CER.
-    store.create_eval_run(conn, "cfg", 0.0, 0.0, True, cer_thai=0.05, wer_latin=0.0)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.05, wer_latin=0.0))
     conn.close()
 
     ref = [{"text": "สวัสดีครับ", "script": "thai", "start_ms": 0}]

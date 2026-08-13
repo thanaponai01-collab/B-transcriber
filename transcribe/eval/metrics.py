@@ -76,6 +76,62 @@ class EvalMetrics:
     shortest_cue_ms: float | None = None  # shortest hyp cue duration (descriptive only)
     nonzero_gap_count: int = 0  # positive-gap count between consecutive hyp cues (descriptive only)
 
+    @classmethod
+    def aggregate(cls, clips: "list[EvalMetrics]") -> "EvalMetrics":
+        """Corpus-level metrics from per-clip metrics.
+
+        How a metric aggregates is a property of that metric, so the rule lives
+        next to the definition rather than as hand-rolled accumulators in the
+        harness. Four different rules apply here and the differences are not
+        incidental:
+
+        * `cer_thai` / `wer_latin` / `wer` — reference-weighted means. Each is a
+          rate over a stream (Thai characters, Latin words, tokens), so a long
+          clip must count for more than a short one.
+        * `boundary_error_rate` / `cue_boundary_error_rate` — micro-F1 over the
+          summed matched/ref/hyp counts, one F1 at the end. **Not** a weighted
+          mean: a ref-weighted mean zeroes out clips with no reference switches,
+          so switches hallucinated on a monolingual clip would never be
+          penalized (metrics v2).
+        * `shortest_cue_ms` — a global minimum, skipping None, so a single
+          flash-frame cue anywhere in the corpus is still caught.
+        * count fields — plain sums, since they are the weights themselves.
+
+        An empty clip list aggregates to all-zeros rather than raising; the
+        empty-gold-set refusal is the harness's job and happens before this.
+        """
+        def _sum(field: str) -> int:
+            return sum(getattr(m, field) for m in clips)
+
+        def _weighted(rate: str, weight: str) -> float:
+            total = _sum(weight)
+            return sum(getattr(m, rate) * getattr(m, weight) for m in clips) / total if total else 0.0
+
+        shortest = [m.shortest_cue_ms for m in clips if m.shortest_cue_ms is not None]
+
+        return cls(
+            cer_thai=_weighted("cer_thai", "thai_chars"),
+            wer_latin=_weighted("wer_latin", "latin_words"),
+            boundary_error_rate=boundary_f1_error(
+                _sum("matched_switches"), _sum("ref_switches"), _sum("hyp_switches")),
+            wer=_weighted("wer", "total_words"),
+            thai_chars=_sum("thai_chars"),
+            latin_words=_sum("latin_words"),
+            total_words=_sum("total_words"),
+            ref_switches=_sum("ref_switches"),
+            hyp_switches=_sum("hyp_switches"),
+            matched_switches=_sum("matched_switches"),
+            cue_boundary_error_rate=boundary_f1_error(
+                _sum("matched_cues"), _sum("ref_cues"), _sum("hyp_cues")),
+            ref_cues=_sum("ref_cues"),
+            hyp_cues=_sum("hyp_cues"),
+            matched_cues=_sum("matched_cues"),
+            overlapping_cues=_sum("overlapping_cues"),
+            cue_count_delta=_sum("cue_count_delta"),
+            shortest_cue_ms=min(shortest) if shortest else None,
+            nonzero_gap_count=_sum("nonzero_gap_count"),
+        )
+
 
 # ── regression gate ───────────────────────────────────────────────────────────
 

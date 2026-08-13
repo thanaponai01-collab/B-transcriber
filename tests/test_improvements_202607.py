@@ -161,10 +161,13 @@ def test_mai_yamok_collapses_spaced_repeats():
 def test_last_passing_eval_ignores_other_kinds():
     db = _tmp_db()
     conn = store.connect(db)
-    store.create_eval_run(conn, "cfg", 0.5, 0.5, True, cer_thai=0.10, wer_latin=0.10)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.5, boundary_error_rate=0.5, passed=True,
+        cer_thai=0.10, wer_latin=0.10))
     # A later CutDeck-style run must not become the transcription baseline.
-    store.create_eval_run(conn, "cfg", 0.0, 0.0, True, cer_thai=0.0, wer_latin=0.0,
-                          kind="cut")
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.0, boundary_error_rate=0.0, passed=True,
+        cer_thai=0.0, wer_latin=0.0, kind="cut"))
     last = store.get_last_passing_eval(conn)
     assert last is not None
     assert last.kind == "transcribe"
@@ -177,8 +180,12 @@ def test_last_passing_eval_tiebreaks_same_second_by_id():
     conn = store.connect(db)
     # Two passing runs in the same datetime('now') second: the later insert
     # (higher id) must win.
-    store.create_eval_run(conn, "cfg", 0.5, 0.5, True, cer_thai=0.20, wer_latin=0.20)
-    store.create_eval_run(conn, "cfg", 0.5, 0.5, True, cer_thai=0.10, wer_latin=0.10)
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.5, boundary_error_rate=0.5, passed=True,
+        cer_thai=0.20, wer_latin=0.20))
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.5, boundary_error_rate=0.5, passed=True,
+        cer_thai=0.10, wer_latin=0.10))
     last = store.get_last_passing_eval(conn)
     assert abs(last.cer_thai - 0.10) < 1e-9
     conn.close()

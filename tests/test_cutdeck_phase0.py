@@ -263,12 +263,12 @@ def test_eval_run_attribution_columns():
     db = _tmp_db()
     store.init_db(db)
     conn = store.connect(db)
-    store.create_eval_run(
-        conn, "cfg", 0.1, 0.2, True,
+    store.create_eval_run(conn, store.EvalRun(
+        config_hash="cfg", wer=0.1, boundary_error_rate=0.2, passed=True,
         cer_thai=0.05, wer_latin=0.08,
         kind="transcribe", pipeline_version="1.0.0",
         engine_pair="whisper_thai+whisper_multi", bias_hash="deadbeef",
-    )
+    ))
     last = store.get_last_passing_eval(conn)
     assert last.pipeline_version == "1.0.0"
     assert last.engine_pair == "whisper_thai+whisper_multi"

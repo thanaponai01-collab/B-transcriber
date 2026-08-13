@@ -83,7 +83,8 @@ def test_db_init_and_crud():
     assert "YouTube" in terms
 
     # Eval run
-    er_id = store.create_eval_run(conn, "abc123", 0.15, 0.22, True)
+    er_id = store.create_eval_run(conn, store.EvalRun(
+        config_hash="abc123", wer=0.15, boundary_error_rate=0.22, passed=True))
     assert er_id > 0
     last = store.get_last_passing_eval(conn)
     assert last is not None
