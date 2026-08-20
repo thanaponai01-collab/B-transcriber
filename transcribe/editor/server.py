@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from transcribe.db import store
 from transcribe.flywheel.diff import diff_corrections
-from transcribe.pipeline.align_force import export_srt, export_vtt
+from transcribe.subtitles import write_subtitles
 
 _HERE = Path(__file__).parent
 _DB_PATH = Path("transcriber.db")
@@ -183,12 +183,7 @@ def export_srt_endpoint(job_id: int, fps: float | None = None):
         text = corrections.get(t.idx, t.text)
         token_dicts.append({"text": text, "start_ms": t.start_ms, "end_ms": t.end_ms})
 
-    import tempfile, os
-    with tempfile.NamedTemporaryFile(suffix=".srt", delete=False, mode="w", encoding="utf-8") as f:
-        tmp = f.name
-    export_srt(token_dicts, tmp, fps=fps)
-    content = Path(tmp).read_text(encoding="utf-8")
-    os.unlink(tmp)
+    content = write_subtitles(token_dicts, "srt", fps=fps)
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8",
                              headers={"Content-Disposition": f"attachment; filename=job{job_id}.srt"})
 
@@ -205,12 +200,7 @@ def export_vtt_endpoint(job_id: int, fps: float | None = None):
         text = corrections.get(t.idx, t.text)
         token_dicts.append({"text": text, "start_ms": t.start_ms, "end_ms": t.end_ms})
 
-    import tempfile, os
-    with tempfile.NamedTemporaryFile(suffix=".vtt", delete=False, mode="w", encoding="utf-8") as f:
-        tmp = f.name
-    export_vtt(token_dicts, tmp, fps=fps)
-    content = Path(tmp).read_text(encoding="utf-8")
-    os.unlink(tmp)
+    content = write_subtitles(token_dicts, "vtt", fps=fps)
     return PlainTextResponse(content, media_type="text/vtt; charset=utf-8",
                              headers={"Content-Disposition": f"attachment; filename=job{job_id}.vtt"})
 

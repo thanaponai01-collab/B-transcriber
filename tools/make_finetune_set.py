@@ -36,7 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from transcribe.srt_io import parse_srt
+from transcribe.subtitles import read_subtitles
 
 _ROOT = Path(__file__).resolve().parents[1]
 _GOLD_SOURCES = _ROOT / "transcribe" / "eval" / "goldenset" / "SOURCES.md"
@@ -180,7 +180,7 @@ def ingest_srt(
     require_clean(source_name)
     from transcribe.pipeline.ingest import load_audio
 
-    cues = parse_srt(Path(srt_path).read_text(encoding="utf-8-sig"))
+    cues = read_subtitles(Path(srt_path).read_text(encoding="utf-8-sig"), "srt")
     audio, sr = load_audio(audio_path)
 
     stem = Path(srt_path).stem

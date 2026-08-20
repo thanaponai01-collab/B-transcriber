@@ -306,10 +306,10 @@ def _temporal_boundary_error(
 #
 # Tokens ARE phrase cues (5.4 granularity), so a token's start_ms is a cue
 # boundary — no new gold-schema field is needed, the existing hand-recut SRTs
-# already carry it via srt_io.parse_srt. These functions read start_ms/end_ms
-# directly off the token dicts; tokens missing timestamps (unit fixtures) are
-# simply skipped rather than raising, so callers that don't care about cue
-# timing (e.g. plain WER tests) are unaffected.
+# already carry it via transcribe.subtitles.read_subtitles. These functions
+# read start_ms/end_ms directly off the token dicts; tokens missing timestamps
+# (unit fixtures) are simply skipped rather than raising, so callers that
+# don't care about cue timing (e.g. plain WER tests) are unaffected.
 
 def _cue_starts(tokens: list[dict]) -> list[float]:
     """Cue-start timestamps (ms), in order, for tokens that carry one."""

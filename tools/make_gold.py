@@ -28,7 +28,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from transcribe.contracts import detect_script
-from transcribe.srt_io import parse_srt  # re-exported: moved here from this module
+from transcribe.subtitles import read_subtitles
+
+
+def parse_srt(text: str) -> list[dict]:  # re-exported: moved here from this module
+    return read_subtitles(text, "srt")
+
 
 _GOLDENSET = Path(__file__).resolve().parents[1] / "transcribe" / "eval" / "goldenset"
 _VALID_SCRIPTS = {"thai", "latin", "other", "mixed"}

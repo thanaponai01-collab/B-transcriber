@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 
 from transcribe.db.store import connect, get_tokens, get_job, get_media
-from transcribe.pipeline.align_force import export_srt, export_vtt
+from transcribe.subtitles import write_subtitles
 
 ROOT = Path(__file__).resolve().parent.parent
 FALLBACK_OUTPUT_DIR = ROOT / "output"
@@ -50,12 +50,12 @@ def main() -> None:
 
     rows = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms} for t in tokens]
     srt_path = out_dir / f"{stem}.srt"
-    export_srt(rows, str(srt_path), fps=args.fps)
+    srt_path.write_text(write_subtitles(rows, "srt", fps=args.fps), encoding="utf-8")
     suffix = f" (quantized to {args.fps} fps)" if args.fps else ""
 
     if args.vtt:
         vtt_path = out_dir / f"{stem}.vtt"
-        export_vtt(rows, str(vtt_path), fps=args.fps)
+        vtt_path.write_text(write_subtitles(rows, "vtt", fps=args.fps), encoding="utf-8")
         print(f"Exported {len(rows)} tokens to {srt_path} / {vtt_path.name}{suffix}")
     else:
         print(f"Exported {len(rows)} tokens to {srt_path}{suffix}")

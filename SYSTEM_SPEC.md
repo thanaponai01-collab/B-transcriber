@@ -107,7 +107,7 @@ audio
  └─[align_force.py] ONLY when timestamps_final is False: word expansion + CTC forced
                     alignment (torchaudio MMS_FA, LinearFallbackAligner on failure).
                     faster-whisper cues skip this entirely.
-        → tokens written to DB (job + token rows) · export_srt / export_vtt
+        → tokens written to DB (job + token rows) · [subtitles/] write_subtitles
 ```
 
 `run.py` entry: `run_file(audio_path, config, db_path) → list[token dict]`.

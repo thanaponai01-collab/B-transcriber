@@ -146,7 +146,7 @@ def _plurality_source_engine(group_original: list[dict]) -> str:
 
 def align_tokens_to_cues(original_tokens: list[dict], final_cues: list[dict]) -> AlignmentResult:
     """Align an ASR job's original tokens against a hand-corrected final cue
-    list (e.g. parsed from an NLE-exported .srt via transcribe.srt_io.parse_srt)
+    list (e.g. parsed from an NLE-exported .srt via transcribe.subtitles.read_subtitles)
     and produce the CorrectionPairs a Premiere-style re-timed/re-cut pass implies.
 
     original_tokens: [{idx, text, start_ms, end_ms, source_engine}, ...]

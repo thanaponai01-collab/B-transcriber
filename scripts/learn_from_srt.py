@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 from transcribe.db import store
 from transcribe.flywheel import biasindex
 from transcribe.flywheel.align_srt import TimebaseMismatch, align_tokens_to_cues, write_corrections
-from transcribe.srt_io import parse_srt
+from transcribe.subtitles import read_subtitles
 
 _MAX_SAMPLE_DIFFS = 5
 _MAX_UNMATCHED_PREVIEW = 5
@@ -73,7 +73,7 @@ def main() -> None:
          "source_engine": t.source_engine}
         for t in tokens
     ]
-    final_cues = parse_srt(Path(args.srt_path).read_text(encoding="utf-8-sig"))
+    final_cues = read_subtitles(Path(args.srt_path).read_text(encoding="utf-8-sig"), "srt")
     if not final_cues:
         conn.close()
         raise SystemExit(f"No cues parsed from {args.srt_path}")

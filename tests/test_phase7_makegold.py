@@ -101,24 +101,10 @@ def test_round_trip_harness_records_baseline(monkeypatch):
 
 
 # ── parse_srt (SRT → gold tokens, the hand-corrected-SRT shortcut) ────────────
-
-def test_parse_srt_parses_cues_with_bom_and_scripts():
-    srt = (
-        "﻿1\n00:00:00,000 --> 00:00:02,580\nสวัสดีครับ\n\n"
-        "2\n00:00:02,580 --> 00:00:04,340\nHello world\n\n"
-    )
-    toks = make_gold.parse_srt(srt)
-    assert toks == [
-        {"text": "สวัสดีครับ", "script": "thai", "start_ms": 0, "end_ms": 2580},
-        {"text": "Hello world", "script": "latin", "start_ms": 2580, "end_ms": 4340},
-    ]
-
-
-def test_parse_srt_joins_multiline_cue_text():
-    srt = "1\n00:00:01,000 --> 00:00:02,000\nline one\nline two\n\n"
-    toks = make_gold.parse_srt(srt)
-    assert toks[0]["text"] == "line one line two"
-
+# BOM handling and multiline-cue joining are pure parsing behaviour, now
+# covered directly against transcribe.subtitles.read_subtitles in
+# tests/test_subtitles.py. What stays here is specific to make_gold's own
+# contract (validate(), the from-srt CLI path).
 
 def test_parse_srt_output_passes_validate():
     srt = "1\n00:00:00,000 --> 00:00:01,000\nโลก\n\n2\n00:00:01,000 --> 00:00:02,000\nEarth\n\n"
