@@ -13,6 +13,7 @@ the baseline value.
 Run: python -m pytest tests/test_phase_a_ci.py -v
 """
 
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -83,6 +84,39 @@ def test_bootstrap_ci_bounds_are_ordered_and_span_all_metrics():
 
 def test_bootstrap_ci_empty_corpus_is_zero_zero():
     assert bootstrap_ci([], "cer_thai") == (0.0, 0.0)
+
+
+def test_bootstrap_ci_binds_to_aggregate_not_a_second_copy_of_its_rules():
+    """The seam this ticket creates (#9): bootstrap_ci's per-draw aggregation
+    must BE EvalMetrics.aggregate, not a parallel reimplementation of its
+    rules. Weights are deliberately unequal (900 vs 100 thai_chars, 50 vs 5
+    latin_words, 8 vs 0 ref_cues) so a plain-mean bug would diverge from the
+    reference-weighted rule, and one clip has ref_switches=0/ref_cues=0 with
+    nonzero hyp counts so a regression to weighted-mean boundary scoring
+    (which zeroes out that clip's hallucinated switches/cues) would also be
+    caught. For each gated metric and several seeds, a single-draw
+    (n_draws=1) bootstrap must equal exactly getattr(EvalMetrics.aggregate(...),
+    metric) computed over the SAME resampled clip list — reconstructed here
+    with the identical seeded-rng procedure bootstrap_ci uses internally, so
+    this test fails if the two ever measure different quantities."""
+    clips = [
+        EvalMetrics(cer_thai=0.05, wer_latin=0.10, boundary_error_rate=0.0, wer=0.0,
+                    thai_chars=900, latin_words=50, total_words=100,
+                    ref_switches=10, hyp_switches=10, matched_switches=10,
+                    ref_cues=8, hyp_cues=8, matched_cues=8),
+        EvalMetrics(cer_thai=0.80, wer_latin=0.90, boundary_error_rate=0.0, wer=0.0,
+                    thai_chars=100, latin_words=5, total_words=10,
+                    ref_switches=0, hyp_switches=6, matched_switches=0,   # hallucinated, zero ref
+                    ref_cues=0, hyp_cues=3, matched_cues=0),              # hallucinated, zero ref
+    ]
+    n = len(clips)
+    for metric in CI_METRICS:
+        for seed in (0, 1, 7):
+            rng = random.Random(seed)
+            sample = [clips[rng.randrange(n)] for _ in range(n)]
+            expected = getattr(EvalMetrics.aggregate(sample), metric)
+            lo, hi = bootstrap_ci(clips, metric, n_draws=1, seed=seed)
+            assert lo == hi == expected, metric
 
 
 # ── harness: CI/RTF columns land on eval_run ──────────────────────────────────

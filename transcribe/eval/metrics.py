@@ -368,30 +368,6 @@ def _cue_gap_stats(tokens: list[dict]) -> tuple[float | None, int]:
 CI_METRICS = ("cer_thai", "wer_latin", "boundary_error_rate", "cue_boundary_error_rate")
 
 
-def _resample_aggregate(sample: list["EvalMetrics"], metric: str) -> float:
-    """Recompute one corpus-aggregate metric over a (possibly resampled) list
-    of per-clip EvalMetrics, mirroring harness.run_harness's aggregation rule."""
-    if metric == "cer_thai":
-        den = sum(m.thai_chars for m in sample)
-        return sum(m.cer_thai * m.thai_chars for m in sample) / den if den else 0.0
-    if metric == "wer_latin":
-        den = sum(m.latin_words for m in sample)
-        return sum(m.wer_latin * m.latin_words for m in sample) / den if den else 0.0
-    if metric == "boundary_error_rate":
-        return boundary_f1_error(
-            sum(m.matched_switches for m in sample),
-            sum(m.ref_switches for m in sample),
-            sum(m.hyp_switches for m in sample),
-        )
-    if metric == "cue_boundary_error_rate":
-        return boundary_f1_error(
-            sum(m.matched_cues for m in sample),
-            sum(m.ref_cues for m in sample),
-            sum(m.hyp_cues for m in sample),
-        )
-    raise ValueError(f"no CI aggregation rule for metric {metric!r}")
-
-
 def bootstrap_ci(
     clip_metrics: list["EvalMetrics"],
     metric: str,
@@ -403,8 +379,10 @@ def bootstrap_ci(
 
     Resamples clips (not characters/words within a clip — the unit a new gold
     clip actually adds) with replacement `n_draws` times and recomputes the
-    aggregate each draw. `seed` defaults to a fixed value so re-running the
-    harness against an unchanged hypothesis reproduces the same band (Phase A's
+    corpus aggregate each draw via `EvalMetrics.aggregate` — the same rule the
+    point estimate is computed by, so the two can never measure different
+    quantities. `seed` defaults to a fixed value so re-running the harness
+    against an unchanged hypothesis reproduces the same band (Phase A's
     acceptance check: "a re-run of the baseline reproduces within CI"); pass
     `seed=None` for a fresh draw each call.
     """
@@ -413,7 +391,7 @@ def bootstrap_ci(
         return (0.0, 0.0)
     rng = random.Random(seed)
     draws = sorted(
-        _resample_aggregate([clip_metrics[rng.randrange(n)] for _ in range(n)], metric)
+        getattr(EvalMetrics.aggregate([clip_metrics[rng.randrange(n)] for _ in range(n)]), metric)
         for _ in range(n_draws)
     )
     lo = draws[int((1 - ci) / 2 * n_draws)]
