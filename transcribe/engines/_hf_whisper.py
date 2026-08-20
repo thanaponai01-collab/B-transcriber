@@ -75,14 +75,6 @@ class HFWhisperEngine(Engine):
         )
         logger.info("%s loaded on %s", self._log_label, self._device)
 
-    def _load_array(self, inp: EngineInput):
-        """Use the pre-decoded array when given one (skips a disk round-trip)."""
-        if inp.audio is not None:
-            return inp.audio
-        import librosa
-        audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
-        return audio
-
     def _result_to_tokens(self, result: dict) -> tuple[list[RecognizedToken], list[dict]]:
         tokens: list[RecognizedToken] = []
         raw_chunks = result.get("chunks", [])
@@ -176,7 +168,7 @@ class HFWhisperEngine(Engine):
             ))
         return out
 
-    def unload(self) -> None:
+    def _release(self) -> None:
         if self._pipe is not None:
             del self._pipe
             self._pipe = None
@@ -186,6 +178,4 @@ class HFWhisperEngine(Engine):
         if self._processor is not None:
             del self._processor
             self._processor = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         logger.info("%s unloaded, VRAM freed", self._log_label)

@@ -13,7 +13,6 @@ compression/log-prob/no-speech thresholds drop garbage segments outright.
 
 from __future__ import annotations
 
-import gc
 import logging
 import os
 import sys
@@ -261,13 +260,6 @@ class FasterWhisperEngine(Engine):
             budget_tokens=self._bias_prompt_budget,
             count_tokens=self._ct2_token_counter(),  # None → inject's approx fallback
         )
-
-    def _load_array(self, inp: EngineInput):
-        if inp.audio is not None:
-            return inp.audio
-        import librosa
-        audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
-        return audio
 
     def _decode(self, audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
         """One BatchedInferencePipeline.transcribe call, halving batch_size on CUDA
@@ -531,7 +523,7 @@ class FasterWhisperEngine(Engine):
             raw={"words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
         )
 
-    def unload(self) -> None:
+    def _release(self) -> None:
         if self._pipeline is not None:
             del self._pipeline
             self._pipeline = None
@@ -543,8 +535,9 @@ class FasterWhisperEngine(Engine):
         # NeMo-based Engine B) must not inherit a CUDA-12 cudnn64_9.dll ahead
         # of its own on PATH. See that function's docstring for the crash this
         # caused before the fix (CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH).
+        # This restore is this engine's own obligation, not the shared
+        # teardown ritual's — it stays here rather than moving to base.py.
         if self._pre_load_path is not None:
             os.environ["PATH"] = self._pre_load_path
             self._pre_load_path = None
-        gc.collect()
         logger.info("FasterWhisper unloaded, VRAM freed")

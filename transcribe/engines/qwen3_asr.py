@@ -128,7 +128,12 @@ class Qwen3ASREngine(Engine):
         logger.info("Qwen3-ASR loaded on %s", self._device)
 
     def _audio_arg(self, inp: EngineInput):
-        """qwen_asr accepts a path string or an (array, sample_rate) tuple directly."""
+        """qwen_asr accepts a path string or an (array, sample_rate) tuple directly.
+
+        Deliberately not reconciled onto Engine._load_array (issue #11): that
+        helper always returns a decoded array, forcing a disk read even when
+        qwen_asr could take audio_path verbatim — a genuinely different
+        contract, not a copy that drifted."""
         if inp.audio_path is not None:
             return inp.audio_path
         return (inp.audio, _SAMPLE_RATE)
@@ -244,10 +249,8 @@ class Qwen3ASREngine(Engine):
         assert self._model is not None, "load() must be called first"
         return [self.transcribe(inp) for inp in inputs]
 
-    def unload(self) -> None:
+    def _release(self) -> None:
         if self._model is not None:
             del self._model
             self._model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         logger.info("Qwen3-ASR unloaded, VRAM freed")

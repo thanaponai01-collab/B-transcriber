@@ -38,5 +38,5 @@ class MockEngine(Engine):
             raw={"mock": True, "audio_path": inp.audio_path},
         )
 
-    def unload(self) -> None:
+    def _release(self) -> None:
         self._loaded = False

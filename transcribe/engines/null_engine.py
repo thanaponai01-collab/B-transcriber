@@ -22,5 +22,5 @@ class NullEngine(Engine):
     def transcribe(self, inp: EngineInput) -> EngineResult:
         return EngineResult(tokens=[], engine_name="null", raw={})
 
-    def unload(self) -> None:
-        pass
+    # unload() and _release() are inherited as-is: this engine holds nothing
+    # to release, so the base ritual's default no-op _release() is correct.

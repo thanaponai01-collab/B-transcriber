@@ -22,7 +22,6 @@ single normalization authority and runs after reconciliation — no compensation
 
 from __future__ import annotations
 
-import gc
 import logging
 
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
@@ -75,24 +74,10 @@ class TyphoonRTEngine(Engine):
             raw={},
         )
 
-    def _load_array(self, inp: EngineInput):
-        if inp.audio is not None:
-            return inp.audio
-        import librosa
-        audio, _ = librosa.load(inp.audio_path, sr=16000, mono=True)
-        return audio
-
-    def unload(self) -> None:
+    def _release(self) -> None:
         if self._model is not None:
             del self._model
             self._model = None
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
-        gc.collect()
         logger.info("Typhoon RT unloaded, VRAM freed")
 
 

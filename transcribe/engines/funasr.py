@@ -33,8 +33,6 @@ from __future__ import annotations
 
 import logging
 
-import torch
-
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.engines.base import Engine
 from transcribe.engines.registry import register
@@ -145,10 +143,8 @@ class FunASREngine(Engine):
 
         return EngineResult(tokens=tokens, engine_name="funasr", raw={"result": raw_list})
 
-    def unload(self) -> None:
+    def _release(self) -> None:
         if self._model is not None:
             del self._model
             self._model = None
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         logger.info("FunASR unloaded, VRAM freed")
