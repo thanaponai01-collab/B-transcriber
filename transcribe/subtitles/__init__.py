@@ -21,6 +21,7 @@ import re
 from typing import Literal
 
 from transcribe.contracts import detect_script
+from transcribe.timebase import Timebase, frame_to_ms, ms_to_frame
 
 Format = Literal["srt", "vtt"]
 
@@ -39,9 +40,15 @@ def _srt_ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
 
 
 def _quantize_ms(ms: int, fps: float) -> int:
-    """Round a millisecond timestamp to the nearest frame boundary at fps."""
-    frame_ms = 1000.0 / fps
-    return round(round(ms / frame_ms) * frame_ms)
+    """Round a millisecond timestamp to the nearest frame boundary at fps.
+
+    fps is still accepted as a human decimal (this is the CLI/editor-facing
+    boundary) but is converted to an exact (fps_num, fps_den) pair via
+    ``Timebase.from_decimal_fps`` before any arithmetic — no ``1000.0 / fps``
+    float division here. See issue #12.
+    """
+    tb = Timebase.from_decimal_fps(fps)
+    return round(frame_to_ms(ms_to_frame(ms, tb), tb))
 
 
 def _quantize_tokens(tokens: list[dict], fps: float) -> list[dict]:
@@ -53,13 +60,13 @@ def _quantize_tokens(tokens: list[dict], fps: float) -> list[dict]:
     frame, which is what forces the manual recut. Quantizing here makes
     the boundary the editor will show explicit and reproducible.
     """
-    frame_ms = 1000.0 / fps
+    one_frame_ms = round(frame_to_ms(1, Timebase.from_decimal_fps(fps)))
     out = []
     for tok in tokens:
         start = _quantize_ms(tok["start_ms"], fps)
         end = _quantize_ms(tok["end_ms"], fps)
         if end <= start:
-            end = start + round(frame_ms)
+            end = start + one_frame_ms
         out.append({**tok, "start_ms": start, "end_ms": end})
     return out
 

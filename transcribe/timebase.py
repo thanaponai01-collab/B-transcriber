@@ -8,6 +8,13 @@ module does *exact integer math on the rational rate only*.
 Grep-able rule enforced by tests: a decimal NTSC fps literal must never appear in
 the codebase. Rates are always carried as the integer pair ``(fps_num, fps_den)``
 — NTSC 30 is 30000/1001, NTSC 24 is 24000/1001, PAL 25 is 25/1.
+
+The one deliberate exception is ``_DECIMAL_NTSC_RATES`` below: humans (CLI
+flags, UI fields) only ever type a decimal fps, so somewhere has to hold the
+mapping from that decimal to its exact rational rate. ``Timebase.from_decimal_fps()``
+is that single controlled boundary — decimal fps is allowed to exist as input
+to it, and nowhere else, and it is converted to an exact ``(fps_num, fps_den)``
+pair before touching any arithmetic. See issue #12.
 """
 
 from __future__ import annotations
@@ -54,6 +61,41 @@ class Timebase:
     @property
     def fps_fraction(self) -> Fraction:
         return Fraction(self.fps_num, self.fps_den)
+
+    @classmethod
+    def from_decimal_fps(cls, fps: float) -> "Timebase":
+        """Build a Timebase from a human-entered decimal fps (CLI args, UI fields).
+
+        Whole numbers map directly (25.0 -> 25/1). Known NTSC drop-frame
+        decimals map to their exact rational rate via ``_DECIMAL_NTSC_RATES``
+        — never ``Fraction(fps)`` on the float itself, since that would let
+        the float's own rounding error into a "rational" rate. Raises on any
+        other decimal rather than guessing, so an unrecognized rate fails
+        loudly instead of silently drifting.
+        """
+        if fps == int(fps):
+            return cls(fps_num=int(fps), fps_den=1)
+        for decimal, (num, den) in _DECIMAL_NTSC_RATES.items():
+            if abs(fps - decimal) < _DECIMAL_FPS_TOLERANCE:
+                return cls(fps_num=num, fps_den=den)
+        raise ValueError(
+            f"Unrecognized decimal fps {fps!r} — not a whole number and not a "
+            f"known NTSC drop-frame rate ({sorted(_DECIMAL_NTSC_RATES)}). Construct "
+            f"Timebase(fps_num=..., fps_den=...) explicitly instead."
+        )
+
+
+# Decimal NTSC fps -> exact (fps_num, fps_den). The only literals of this
+# form permitted in transcribe/ — see the module docstring and issue #12.
+# Limited to rates this codebase actually names (config.yaml, CLAUDE.md,
+# export_job.py's --fps help text) rather than every broadcast NTSC rate —
+# add an entry here, with a test, before a caller needs it.
+_DECIMAL_NTSC_RATES: dict[float, tuple[int, int]] = {
+    23.976: (24000, 1001),
+    29.97: (30000, 1001),
+    59.94: (60000, 1001),
+}
+_DECIMAL_FPS_TOLERANCE = 1e-6
 
 
 def ms_to_frame(ms: float, tb: Timebase) -> int:

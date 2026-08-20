@@ -66,15 +66,64 @@ def test_timebase_rejects_bad_rate():
 
 
 def test_no_decimal_ntsc_fps_literal_in_codebase():
-    """GAP-1 grep rule: no decimal NTSC fps literal anywhere in transcribe/."""
+    """GAP-1 grep rule: no decimal NTSC fps literal anywhere in transcribe/,
+    except timebase.py's own ``_DECIMAL_NTSC_RATES`` lookup.
+
+    That lookup (added for issue #12) is the single controlled boundary
+    where a human decimal fps is accepted and converted to an exact
+    (fps_num, fps_den) pair — see ``Timebase.from_decimal_fps`` and the
+    module docstring. Every other internal frame-math path (including
+    transcribe/subtitles's cue quantizer) must route through it rather than
+    holding its own decimal literal.
+
+    This rule only scans transcribe/ — it does not cover scripts/ or
+    tests/. That's a deliberate exception, not a blind spot, for two
+    different reasons:
+
+    - scripts/export_job.py's `29.97`/`23.976` appear only in argparse
+      --help text illustrating valid CLI values ("e.g. 23.976, 25, 29.97")
+      — no arithmetic in that file ever touches fps; the flag's value is
+      passed straight through to write_subtitles, which converts it via
+      from_decimal_fps before it does anything. There is nothing to
+      "fix" there — it is documentation of the human-facing input, not
+      a second frame-math authority.
+    - tests/ (e.g. test_subtitles.py, from_decimal_fps tests below)
+      exercise that human-decimal boundary directly, so a decimal literal
+      is the actual input under test, not internal math. Banning it would
+      just force each call site to hardcode a rational pair and re-derive
+      the decimal in a comment, with no drift-safety benefit.
+    """
     pkg = Path(__file__).parent.parent / "transcribe"
     offenders = []
     pattern = re.compile(r"\b(29\.97|23\.976|59\.94|29\.976)\b")
     for py in pkg.rglob("*.py"):
+        if py.name == "timebase.py":
+            continue
         for i, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
             if pattern.search(line):
                 offenders.append(f"{py.name}:{i}: {line.strip()}")
     assert not offenders, "Decimal fps literal found:\n" + "\n".join(offenders)
+
+
+def test_timebase_from_decimal_fps_whole_numbers():
+    from transcribe.timebase import Timebase
+    assert Timebase.from_decimal_fps(25.0) == Timebase(fps_num=25, fps_den=1)
+    assert Timebase.from_decimal_fps(30.0) == Timebase(fps_num=30, fps_den=1)
+    assert Timebase.from_decimal_fps(24.0) == Timebase(fps_num=24, fps_den=1)
+
+
+def test_timebase_from_decimal_fps_known_ntsc_rates():
+    from transcribe.timebase import Timebase
+    assert Timebase.from_decimal_fps(29.97) == Timebase(fps_num=30000, fps_den=1001)
+    assert Timebase.from_decimal_fps(23.976) == Timebase(fps_num=24000, fps_den=1001)
+    assert Timebase.from_decimal_fps(59.94) == Timebase(fps_num=60000, fps_den=1001)
+
+
+def test_timebase_from_decimal_fps_rejects_unrecognized_rate():
+    import pytest
+    from transcribe.timebase import Timebase
+    with pytest.raises(ValueError):
+        Timebase.from_decimal_fps(33.33)
 
 
 # ── GAP-3: VAD span timeline + persistence ────────────────────────────────────

@@ -46,6 +46,27 @@ def test_quantize_tokens_never_collapses_a_cue():
     assert out[0]["end_ms"] > out[0]["start_ms"]
 
 
+def test_quantize_ms_matches_old_float_math_frame_index():
+    # Pin: routing _quantize_ms through transcribe.timebase's exact rational
+    # math (issue #12) must land on the same frame index as the old
+    # `1000.0 / fps` float approach, at the standard NTSC decimal rates —
+    # the sizing check in CLAUDE.md puts the drift at ~0.6ms over ten
+    # minutes, comfortably sub-frame, so frame identity should hold exactly
+    # even though the millisecond value itself may shift by ~1ms. Reproduces
+    # the pre-#12 formula inline (not by calling the new code) so this is an
+    # independent oracle, and separately bounds that sub-ms shift directly
+    # rather than only checking frame-index parity.
+    for fps in (23.976, 29.97, 59.94):
+        frame_ms = 1000.0 / fps
+        for ms in (0, 1, 999, 1001, 12345, 999_999):
+            old_ms = round(round(ms / frame_ms) * frame_ms)
+            new_ms = _quantize_ms(ms, fps)
+            assert abs(new_ms - old_ms) <= 2, (fps, ms, old_ms, new_ms)
+            old_frame_index = round(old_ms / frame_ms)
+            new_frame_index = round(new_ms / frame_ms)
+            assert new_frame_index == old_frame_index, (fps, ms)
+
+
 def test_write_subtitles_without_fps_is_unquantized_passthrough():
     tokens = [{"text": "hello", "start_ms": 1001, "end_ms": 2003}]
     content = write_subtitles(tokens, "srt")
