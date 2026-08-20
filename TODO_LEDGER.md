@@ -2309,3 +2309,72 @@ for the full plan (Phases 0–6).
   watched on real footage via `cutdeck/preview.py`, then the old `interval`
   path + `apply_min_clip_merge` become a deletion candidate in a follow-up
   commit (not done here, per the handoff's own instruction).
+
+## Stitch fuzzy seam-text dedup (issue #8) — DONE (2026-08-20), scope is
+## deliberately narrow and `_FUZZY_FRAGMENT_MAX_MS` recalibration needs real data
+
+`transcribe/pipeline/stitch.py`'s duplicate detection only fired on exact
+text match, so when two overlapping faster_whisper decode windows tokenized
+the same Thai run at *different sub-word split points* (not just different
+boundaries of the same text — see the pre-existing `_coincident` fix above,
+2026-07-30), neither fragment deduped and both survived into the transcript
+as a doubled-syllable stutter (`ผู้หญิง` → `ผหู้หญิญิง`). New
+`_fuzzy_same_word()` supplements the exact-text gate: containment or a
+boundary-anchored suffix/prefix overlap (`_MIN_FUZZY_OVERLAP = 2` chars),
+gated by `_FUZZY_FRAGMENT_MAX_MS = 80` so at least one side must be as brief
+as a genuine sub-word ASR piece — still behind the existing `ci != pci`
+cross-chunk guard and `_iou`/`_coincident` temporal check. 9 tests in
+`tests/test_stitch_fuzzy_seam_text.py`; full suite 554 green.
+
+**Four independent correctness-gate rounds, four real defects found and
+fixed in the same session** — the design's scar tissue is documented in both
+the module comment above `_fuzzy_same_word` and the test file's docstring:
+
+- Round 1 (generic SequenceMatcher ratio) false-merged distinct 2-char Thai
+  particles sharing one character (`มา`/`นา` etc. — ratio 0.5,
+  indistinguishable from a real split-point match).
+- Round 2 (anchored overlap, no duration check) false-merged real,
+  unrelated, correctly-decoded words sharing a 2+ char boundary morpheme
+  (`หมา`/`มานะ`, `ขนม`/`นมสด`, `ตลาด`/`ลาดยาง`).
+- Round 3 (`_FUZZY_FRAGMENT_MAX_MS = 150`) fixed that but was itself too
+  tight, and — worse — was reasoned from a **misread citation**: raising it
+  to 250ms to cover a "missed" ~200ms split-point duplicate was justified by
+  pointing at this file's own cited `อะไร` (160ms) measurement, but that
+  figure is the duration of an EXACT-text token from the pre-existing
+  `_coincident` mechanism, not evidence about fuzzy-matched fragment
+  durations. This codebase has never had a real measured example of a fuzzy
+  split-point duplicate's duration.
+- Round 4 confirmed the consequence of that misread: at 250ms, the round-2
+  false-merge class was live across essentially the *entire* 0-250ms range
+  for the documented dangerous word pairs — ordinary short-word speech, not
+  a rare edge, directly contradicting the "narrowed to a brief/clipped
+  residual" framing this ledger's previous version used.
+
+**Resolution: stop inventing thresholds, reuse the one number this file
+already has evidence for.** `_FUZZY_FRAGMENT_MAX_MS` is now 80ms —
+`_COINCIDENT_MS`'s own established range for genuine sub-word ASR pieces
+(20-80ms, cited from real clip measurements in the comment above
+`_COINCIDENT_MS`). This is a real, deliberate narrowing of scope, not a
+tuning compromise: a differently-split duplicate whose pieces both run
+longer than 80ms (`test_longer_split_point_duplicate_is_a_disclosed_gap_not_a_bug`
+documents this explicitly) will NOT be deduped by this path and may still
+ship as a stutter. That is accepted: a missed cosmetic stutter (the user
+already hand-recuts exported SRTs in Premiere) is cheaper than this path
+silently dropping a real spoken word, which is what every wider value tried
+here did to ordinary Thai word pairs. The round-2 false-merge class still
+has a residual at this narrower cap too (a genuinely brisk <=80ms rendering
+of a short real word can still collide — `test_fuzzy_same_word_helper`'s
+last assertion documents this) but 80ms is genuinely brief for a 2-4
+character word, not ordinary pace, unlike 150-250ms.
+
+**Trigger:** `stitch()` logs every fuzzy dedup (`logger.debug`, texts +
+durations) specifically so this stops being guesswork. Once a real job with
+a long pause-free multi-window span (e.g. re-running job 35 / `Short1.mp3`
+from issue #8, or any clip that logs `Long pause-split span decoded as N
+overlapping window(s)`) has been processed with `logger.debug` enabled, pull
+the `"Fuzzy seam dedup:"` log lines and use the real duration distribution
+to (a) decide whether `_FUZZY_FRAGMENT_MAX_MS` should move at all, and (b)
+check whether the round-2 residual has fired on real speech. **Do not tune
+this threshold again from a synthetic example** — every prior round's
+mistake, including the 250ms misread, came from reasoning about one
+constructed example instead of a real distribution.
