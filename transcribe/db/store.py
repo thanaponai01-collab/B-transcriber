@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,61 @@ from typing import Optional
 
 _SCHEMA = Path(__file__).parent / "schema.sql"
 _DEFAULT_DB = Path(__file__).parent.parent.parent / "transcriber.db"
+
+# Table-level constraint clauses (not columns) that can appear inside a
+# CREATE TABLE's parens, plus the marker for a PRIMARY KEY column — neither
+# is valid in an ALTER TABLE ... ADD COLUMN statement.
+_NOT_A_COLUMN = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
+
+
+def _schema_columns(table: str) -> list[tuple[str, str]]:
+    """(name, full DDL fragment) for every real column of `table`, parsed out
+    of schema.sql's own CREATE TABLE block.
+
+    schema.sql is CLAUDE.md's single source of truth for the schema, and stays
+    hand-written. This reads it — instead of a second hand-typed column list —
+    so `_migrate`'s ALTER TABLE additions can never disagree with the CREATE
+    TABLE they exist to backfill on a pre-existing database (issue #15).
+    """
+    text = _SCHEMA.read_text(encoding="utf-8")
+    match = re.search(
+        rf"CREATE TABLE IF NOT EXISTS {re.escape(table)}\s*\((.*?)\n\);",
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise ValueError(f"no CREATE TABLE block for {table!r} in schema.sql")
+
+    # Drop `-- comment` text (both full-line and trailing) before splitting.
+    body = "\n".join(line.split("--", 1)[0] for line in match.group(1).splitlines())
+
+    # Split on top-level commas only — CHECK(...) and datetime('now') contain
+    # commas/parens of their own that must not be split on.
+    fragments: list[str] = []
+    depth = 0
+    current = ""
+    for ch in body:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            fragments.append(current)
+            current = ""
+        else:
+            current += ch
+    fragments.append(current)
+
+    columns = []
+    for frag in fragments:
+        frag = " ".join(frag.split())
+        if not frag:
+            continue
+        name = frag.split(" ", 1)[0]
+        if name.upper() in _NOT_A_COLUMN or "PRIMARY KEY" in frag.upper():
+            continue  # table-level constraint, or the PK column (always present)
+        columns.append((name, frag))
+    return columns
 
 
 def connect(db_path: Path = _DEFAULT_DB) -> sqlite3.Connection:
@@ -38,36 +94,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
-    # eval_run signals + attribution (A.2)
-    _add("eval_run", "cer_thai", "cer_thai REAL NOT NULL DEFAULT 1.0")
-    _add("eval_run", "wer_latin", "wer_latin REAL NOT NULL DEFAULT 1.0")
-    _add("eval_run", "kind", "kind TEXT NOT NULL DEFAULT 'transcribe'")
-    _add("eval_run", "pipeline_version", "pipeline_version TEXT")
-    _add("eval_run", "engine_pair", "engine_pair TEXT")
-    _add("eval_run", "bias_hash", "bias_hash TEXT")
-    # A/B experiment runs never become the regression baseline
-    _add("eval_run", "is_experiment", "is_experiment INTEGER NOT NULL DEFAULT 0")
-    # metric-definition version — baselines partition by it (pre-column rows = v1)
-    _add("eval_run", "metrics_version", "metrics_version INTEGER NOT NULL DEFAULT 1")
-    # cue-structure signals (metrics v3)
-    _add("eval_run", "cue_boundary_error_rate", "cue_boundary_error_rate REAL NOT NULL DEFAULT 0.0")
-    _add("eval_run", "overlapping_cues", "overlapping_cues INTEGER NOT NULL DEFAULT 0")
-    _add("eval_run", "cue_count_delta", "cue_count_delta INTEGER")
-    _add("eval_run", "shortest_cue_ms", "shortest_cue_ms REAL")
-    _add("eval_run", "nonzero_gap_count", "nonzero_gap_count INTEGER")
-    # bootstrap CIs + RTF + unresolved-gate note (Phase A, HANDOFF_ONE_ENGINE §3.1)
-    _add("eval_run", "cer_thai_ci_lo", "cer_thai_ci_lo REAL")
-    _add("eval_run", "cer_thai_ci_hi", "cer_thai_ci_hi REAL")
-    _add("eval_run", "wer_latin_ci_lo", "wer_latin_ci_lo REAL")
-    _add("eval_run", "wer_latin_ci_hi", "wer_latin_ci_hi REAL")
-    _add("eval_run", "boundary_error_rate_ci_lo", "boundary_error_rate_ci_lo REAL")
-    _add("eval_run", "boundary_error_rate_ci_hi", "boundary_error_rate_ci_hi REAL")
-    _add("eval_run", "cue_boundary_error_rate_ci_lo", "cue_boundary_error_rate_ci_lo REAL")
-    _add("eval_run", "cue_boundary_error_rate_ci_hi", "cue_boundary_error_rate_ci_hi REAL")
-    _add("eval_run", "rtf", "rtf REAL")
-    _add("eval_run", "gate_unresolved", "gate_unresolved TEXT")
-    # cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5) — descriptive only
-    _add("eval_run", "cue_legality_violations", "cue_legality_violations INTEGER")
+    # eval_run: every column's name/type/nullability/default is declared once,
+    # in schema.sql — backfill whichever ones a pre-existing database is still
+    # missing without re-typing any of them a second time here (issue #15).
+    for _name, _ddl in _schema_columns("eval_run"):
+        _add("eval_run", _name, _ddl)
 
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
