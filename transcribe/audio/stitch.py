@@ -5,7 +5,12 @@ truncates) words wherever chunks overlap — and chunks *should* overlap ~0.5–
 so words are not lost at the boundaries. This module merges per-chunk token
 streams back into one, removing the duplicates the overlap introduces.
 
-Runs after each engine, before align_hyp. Pure timestamp/text logic — no model,
+The other half of `windows.py`'s `WindowPolicy.overlap_s`: that field decides
+how much consecutive windows share, this module removes what the sharing
+duplicates. Moved here from `transcribe/pipeline/` (issue #13) so the pair
+lives in one module instead of on opposite sides of the Engine Contract —
+see `decode.py`'s `decode_windows`, which composes the two directly. Runs
+after each engine, before align_hyp. Pure timestamp/text logic — no model,
 no GPU — so the seam behaviour is unit-testable with MockEngine.
 """
 

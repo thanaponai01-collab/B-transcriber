@@ -24,10 +24,10 @@ import logging
 
 import torch
 
+from transcribe.audio import decode_windows
 from transcribe.contracts import EngineInput, RecognizedToken
 from transcribe.db import store
 from transcribe.engines.registry import get_engine
-from transcribe.pipeline import stitch
 from transcribe.pipeline.plan import PHASE_ENGINE_A_DONE, PHASE_ENGINE_B_DONE, JobPlan
 
 logger = logging.getLogger(__name__)
@@ -239,17 +239,19 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
         for c in chunks
     ]
     results = engine.transcribe_batch(inputs, batch_size=batch_size)
-    timestamps_final = False
-    chunk_tokens: list[stitch.ChunkTokens] = []
-    for c, r in zip(chunks, results):
-        timestamps_final = timestamps_final or r.timestamps_final
-        for tok in r.tokens:  # offset to global position
-            tok.start_ms += c.start_ms
-            tok.end_ms += c.start_ms
-        chunk_tokens.append(stitch.ChunkTokens(r.tokens, c.start_ms, c.end_ms))
-    # GAP-4: stitch drops duplicate words from any chunk-overlap windows. The
-    # seam search window matches the overlap ingest actually materialized.
-    return stitch.stitch(chunk_tokens, seam_window_ms=chunk_overlap_ms), timestamps_final, None
+    timestamps_final = any(r.timestamps_final for r in results)
+    results_iter = iter(results)
+
+    def decode_fn(_chunk_audio):
+        return next(results_iter).tokens
+
+    # GAP-4 / issue #13: decode_windows drops duplicate words from any
+    # chunk-overlap windows. The seam search window matches the overlap
+    # ingest actually materialized. `chunks` (pipeline.ingest.AudioChunk)
+    # already has the .audio/.start_ms/.end_ms shape decode_windows wants —
+    # decode already happened above in one batched call, so decode_fn just
+    # hands back each chunk's precomputed (still chunk-local) tokens in order.
+    return decode_windows(chunks, decode_fn, seam_window_ms=chunk_overlap_ms), timestamps_final, None
 
 
 def _tokens_to_json(tokens: list[RecognizedToken]) -> str:

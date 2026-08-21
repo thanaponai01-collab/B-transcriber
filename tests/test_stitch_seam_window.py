@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from transcribe.contracts import RecognizedToken
-from transcribe.pipeline.stitch import ChunkTokens, stitch
+from transcribe.audio.stitch import ChunkTokens, stitch
 
 
 def test_intervening_token_does_not_hide_a_seam_duplicate():

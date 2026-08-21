@@ -226,7 +226,7 @@ def test_drop_tokens_over_silence_confidence_gate_rescues_disagreeing_vad():
 
 def test_stitch_dedupes_seam_and_keeps_interior_copy():
     from transcribe.contracts import RecognizedToken
-    from transcribe.pipeline.stitch import ChunkTokens, stitch
+    from transcribe.audio.stitch import ChunkTokens, stitch
 
     chunk0 = ChunkTokens(
         start_ms=0, end_ms=1000,

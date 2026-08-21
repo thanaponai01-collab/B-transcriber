@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from transcribe.audio import Window, WindowPolicy, speech_windows
+from transcribe.audio import AudioWindow, Window, WindowPolicy, decode_windows, speech_windows
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.cues import (
     CUE_GAP_MS,
@@ -418,8 +418,6 @@ class FasterWhisperEngine(Engine):
         (+ temperature>0) to get real sampling diversity from the same
         residency, without touching the primary hypothesis's beam width.
         """
-        from transcribe.pipeline import stitch
-
         common = dict(
             language=language_hint or "th",
             task="transcribe",
@@ -464,20 +462,22 @@ class FasterWhisperEngine(Engine):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         for run in long_runs:
-            chunk_tokens = []
-            for win in run:
-                sub_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
-                segments, bs = self._decode(sub_audio, None, False, common, bs)
+            def decode_fn(win_audio):
+                nonlocal bs
+                segments, bs = self._decode(win_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
-                win_tokens, bs = self._recover_truncated_tail(win_tokens, sub_audio, common, bs)
-                for t in win_tokens:  # offset local → global
-                    t.start_ms += win.start_ms
-                    t.end_ms += win.start_ms
-                chunk_tokens.append(stitch.ChunkTokens(win_tokens, win.start_ms, win.end_ms))
+                win_tokens, bs = self._recover_truncated_tail(win_tokens, win_audio, common, bs)
+                return win_tokens
+
+            run_windows = [
+                AudioWindow(audio[int(win.start_s * _SR):int(win.end_s * _SR)],
+                            win.start_ms, win.end_ms)
+                for win in run
+            ]
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
-                        run[0].start_s, run[-1].end_s, len(chunk_tokens))
-            for tok in stitch.stitch(chunk_tokens,
-                                     seam_window_ms=int(self._window_policy.overlap_s * 1000)):
+                        run[0].start_s, run[-1].end_s, len(run_windows))
+            for tok in decode_windows(run_windows, decode_fn,
+                                       seam_window_ms=int(self._window_policy.overlap_s * 1000)):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])

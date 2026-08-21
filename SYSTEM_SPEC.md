@@ -84,7 +84,8 @@ audio
  │                  (chunk_overlap_ms) when a chunk engine needs them
  │
  ├─[Engine A]       whole-file or per-chunk transcribe; per-chunk output goes through
- ├─[Engine B]       [stitch.py] seam-window dedup. Sequential; VRAM freed between engines.
+ ├─[Engine B]       [audio/decode.py, audio/stitch.py] seam-window dedup. Sequential;
+ │                  VRAM freed between engines.
  │                  A whole-file engine turns its word pieces into subtitle-grade
  │                  phrase cues via [cues/] split_cues(words, CuePolicy) — shared,
  │                  engine-agnostic, and the owner of cue_boundary_error_rate.

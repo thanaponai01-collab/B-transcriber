@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from transcribe.contracts import RecognizedToken
-from transcribe.pipeline.stitch import ChunkTokens, _coincident, _iou, stitch
+from transcribe.audio.stitch import ChunkTokens, _coincident, _iou, stitch
 
 
 def _t(text, s, e, conf=0.9):
