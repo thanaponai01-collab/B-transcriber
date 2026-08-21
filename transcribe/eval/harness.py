@@ -12,9 +12,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 from transcribe.db import store
-from transcribe.eval.metrics import (
-    CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics, regressed,
-)
+from transcribe.eval.gate import decide
+from transcribe.eval.metrics import CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics
 from transcribe.thai.atoms import default_lexicon
 from transcribe.thai.lint import find_cue_legality_violations
 
@@ -30,14 +29,6 @@ def _safe_print(msg: str) -> None:
     except UnicodeEncodeError:
         enc = sys.stdout.encoding or "utf-8"
         print(msg.encode(enc, errors="replace").decode(enc))
-
-# Printed/stored label for each gated metric (matches the pre-Phase-A print format).
-_GATE_LABELS = {
-    "cer_thai": "CER_thai",
-    "wer_latin": "WER_latin",
-    "boundary_error_rate": "BER",
-    "cue_boundary_error_rate": "cue_BER",
-}
 
 
 class HarnessResult(NamedTuple):
@@ -224,44 +215,21 @@ def run_harness(
     tol_frac = 1.0 + float(config.get("regression_tolerance", 0.02))
     abs_floor = float(config.get("regression_abs_floor", 0.005))
     last = store.get_last_passing_eval(conn)
-    passed = True
-    regressions: list[str] = []
-    unresolved: list[str] = []
-    unresolved_names: list[str] = []
-    if last is not None:
-        for name in CI_METRICS:
-            now, base = getattr(agg, name), getattr(last, name)
-            if not regressed(now, base, tol_frac, abs_floor):
-                continue
-            label = _GATE_LABELS[name]
-            ci_lo, ci_hi = ci_bounds[name]
-            if ci_lo <= base <= ci_hi:
-                # Point estimate crossed the tolerance band, but this run's
-                # own bootstrap CI still contains the baseline value — not
-                # distinguishable from run-to-run resampling noise at this
-                # corpus size. Record it; don't hard-fail on it (§3.1 rule 1).
-                unresolved.append(
-                    f"{label} {now:.4f} vs {base:.4f} (baseline within 95% CI "
-                    f"[{ci_lo:.4f}, {ci_hi:.4f}] - unresolved, needs more data)"
-                )
-                unresolved_names.append(name)
-            else:
-                passed = False
-                regressions.append(f"{label} {now:.4f} vs {base:.4f}")
-        if regressions:
-            print("[harness] REGRESSION: " + "; ".join(regressions))
-        if unresolved:
-            print("[harness] UNRESOLVED (within CI, not a confirmed regression): "
-                  + "; ".join(unresolved))
+    verdict = decide(agg, last, ci_bounds, tol_frac, abs_floor)
+    passed = verdict.passed
+    if verdict.regressions:
+        print("[harness] REGRESSION: " + "; ".join(verdict.regressions))
+    if verdict.unresolved:
+        print("[harness] UNRESOLVED (within CI, not a confirmed regression): "
+              + "; ".join(verdict.unresolved))
 
     # Hard structural invariant (§3.1): an overlapping cue is a shipped bug,
     # not a tolerance band — it fails the run unconditionally, even on the
     # very first v3 run with no prior baseline to compare against.
     if agg.overlapping_cues > 0:
-        passed = False
         print(f"[harness] HARD FAIL: {agg.overlapping_cues} overlapping cue(s) in hypothesis output")
 
-    gate_unresolved_names = ",".join(unresolved_names) or None
+    gate_unresolved_names = verdict.gate_unresolved
 
     store.create_eval_run(conn, store.EvalRun(
         config_hash=cfg_hash,
@@ -310,7 +278,7 @@ def run_harness(
         f"passed={passed}"
     )
     return HarnessResult(metrics=agg, passed=passed, baseline=last,
-                          rtf=rtf, ci=ci_bounds, unresolved=unresolved or None)
+                          rtf=rtf, ci=ci_bounds, unresolved=verdict.unresolved or None)
 
 
 if __name__ == "__main__":
