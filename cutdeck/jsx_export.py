@@ -32,7 +32,12 @@ sequence, which is exactly the failure mode this handoff exists to prevent.
 
 from __future__ import annotations
 
+import argparse
+from pathlib import Path
+from typing import Optional
+
 from cutdeck.contracts import CUT, CutPlan
+from cutdeck.plan import load_plan
 from transcribe.timebase import ms_to_frame
 
 # Embedded in a comment ahead of each generated cut block so tests (and a human
@@ -163,3 +168,72 @@ def to_jsx(plan: CutPlan, *, require_sync_lock: bool = True) -> str:
 
     lines.append("})();")
     return "\n".join(lines) + "\n"
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+#
+# Writes the .jsx next to the source media, mirroring xml_export.py's output
+# convention (docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md's manual live-test runbook:
+# generate here, then run the file through Premiere's Scripts panel or the
+# ExtendScript debugger against a throwaway test project — no CEP/evalScript
+# bridge exists yet, see TODO_LEDGER.md's Phase 3 entry).
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Export a CutDeck plan to in-place ExtendScript (.jsx) for a live Premiere sequence."
+    )
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--plan-id", type=int, help="cut_plan row to export")
+    g.add_argument("--job-id", type=int, help="export the latest plan for this job")
+    ap.add_argument("--out", default=None,
+                     help="output .jsx path (default: <footage folder>/CutDeck/"
+                          "cd<job>_p<plan>.jsx, next to the source media)")
+    ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
+    ap.add_argument("--no-sync-lock-gate", action="store_true",
+                     help="omit the sync-lock confirm() gate (require_sync_lock=False). "
+                          "Do not use until Phase 0 (docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md) "
+                          "has confirmed ripple-delete's sync-lock behavior on a real "
+                          "Premiere project — see TODO_LEDGER.md.")
+    args = ap.parse_args(argv)
+
+    from transcribe.db import store
+
+    conn = store.connect(Path(args.db)) if args.db else store.connect()
+    try:
+        if args.plan_id is not None:
+            plan_id = args.plan_id
+        else:
+            plans = store.get_cut_plans_for_job(conn, args.job_id)
+            if not plans:
+                raise SystemExit(f"no cut_plan rows for job {args.job_id}")
+            plan_id = plans[0].id
+
+        plan = load_plan(conn, plan_id)
+        if plan is None:
+            raise SystemExit(f"cut_plan {plan_id} not found")
+        media = store.get_media(conn, store.get_job(conn, plan.job_id).media_id)
+        if media is None:
+            raise SystemExit(f"media for job {plan.job_id} not found")
+
+        jsx = to_jsx(plan, require_sync_lock=not args.no_sync_lock_gate)
+        if args.out:
+            out = Path(args.out)
+        else:
+            out_dir = Path(media.path).parent / "CutDeck"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / f"cd{plan.job_id:03d}_p{plan_id:03d}.jsx"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(jsx, encoding="utf-8")
+        cut_spans = sum(1 for s in plan.spans if s.action == CUT)
+        print(f"wrote {out} ({cut_spans} cut spans)")
+        print("run this against a THROWAWAY test project only — Phase 3 (docs/"
+              "HANDOFF_CUTDECK_LIVE_SEQUENCE.md) is still unverified against a "
+              "real Premiere instance. See TODO_LEDGER.md.")
+    finally:
+        conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
