@@ -29,12 +29,29 @@ Built and tested (all GPU-free, no live Premiere dependency):
 
 **Still open, both explicitly human-only per the handoff — do not skip silently:**
 
-- **Phase 0 (sync-lock probe)** — not run. Nobody has confirmed on a real
-  Premiere project whether ripple-delete honors sync lock automatically, or
-  whether a track without it fails silently vs. visibly. `to_jsx()` defaults
-  `require_sync_lock=True` conservatively (an editor-confirmation `confirm()`
-  dialog gates every edit) precisely because this is still unknown — do not
-  relax that default until Phase 0's finding is recorded here.
+- **Phase 0 (sync-lock probe) — partially run, 2026-08-24, inconclusive for
+  the open question.** Human test on a throwaway duplicate sequence, via
+  Premiere's **UI-driven** ripple-delete (right-click / Shift+Delete):
+  (1) sync lock ON on all tracks → razor + ripple-delete shifted every track
+  together, no gap, as expected. (2) sync lock turned OFF on one track only,
+  same operation elsewhere → that track **still shifted with the rest**,
+  same as case (1) — sync lock being off made no observed difference via the
+  UI path. **Caveat, do not over-read this:** `jsx_export.py`'s generated
+  script does not call Premiere's UI ripple-delete — it calls the QE
+  (Quality Engineering) DOM directly (`qeTrack.razor()` +
+  `item.remove(true, true)` per track, see `cutSpan()`). UI-level
+  ripple-delete and QE-level scripted razor/remove are different code paths;
+  Premiere's UI may honor/ignore sync lock differently than a QE script does.
+  This result suggests sync lock's effect on ripple-delete may be weaker or
+  absent even at the UI level, which if anything argues for keeping
+  `to_jsx()`'s current conservative behavior — `require_sync_lock=True`'s
+  `confirm()` gate, plus `cutSpan()` cutting every unlocked/unmuted track
+  independently rather than relying on rippling to propagate. Do **not**
+  relax either of those based on this result alone. What's still unconfirmed
+  and blocks Phase 3: whether the QE-level `item.remove(true, true)` call
+  itself ripples other tracks on its own (independent of sync lock), which
+  would matter for the "does `cutSpan()`'s per-track loop double-cut"
+  question below — only a live QE-script test (Phase 3) can answer that.
 - **Phase 3 (execution bridge + live round trip)** — not built. `jsx_export.py`'s
   razor/ripple-delete calls target Premiere's QE (Quality Engineering) DOM,
   the standard community pattern for this operation, but the exact method
@@ -54,6 +71,37 @@ Built and tested (all GPU-free, no live Premiere dependency):
   on a throwaway test project, and (c) the editor has personally verified
   multicam sync/effects survive on real footage. Trigger: whenever CutDeck's
   in-place mode is actually about to be used.
+
+**Live-test infra finding, 2026-08-24 — UXP cannot host this feature; do not
+retry a UXP plugin without new evidence.** While setting up a Phase 3 manual
+test session, confirmed the user's Premiere Pro build has dropped the classic
+`File > Scripts` menu entirely (Adobe moved to UXP-based extensibility;
+ExtendScript itself is still supported underneath, just through Sept 2026,
+and only reachable via a CEP panel or an external debugger attach — not a
+built-in menu). This raised the question of porting `jsx_export.py` off
+classic ExtendScript/QE DOM onto Premiere's newer `require("premierepro")`
+UXP API instead. **Investigated and ruled out:** per Adobe's own UXP API
+reference (`SequenceEditor` class — `createCloneTrackItemAction`,
+`createInsertProjectItemAction`, `createOverwriteItemAction`,
+`createRemoveItemsAction`, `insertMogrtFrom*`, `getInstalledMogrtPath` are
+the full method list) and confirmed live on Adobe's developer forums as of
+mid-2026, **the UXP `premierepro` API has no split/razor action of any
+kind** — razor/blade exists only in the legacy QE DOM, which is
+ExtendScript-only. `createRemoveItemsAction` can ripple-delete an entire
+existing `TrackItem`, but nothing in UXP can divide one continuous clip into
+two at an arbitrary mid-clip time, which is the operation `jsx_export.py`'s
+`cutSpan()` fundamentally depends on (razor in, razor out, then remove the
+middle). This is a hard capability wall, not a translation/API-naming
+problem — a UXP plugin cannot implement this feature at all today. **Do not
+spend time porting `jsx_export.py` to UXP or building a UXP plugin for it
+unless Adobe ships a split/razor action in a future UXP release** (check
+https://developer.adobe.com/premiere-pro/uxp/changelog/ first). The correct
+route to actually exercise `jsx_export.py`'s existing output against a live
+Premiere instance is attaching a classic ExtendScript debugger (e.g. the
+"ExtendScript Debugger" VS Code/Cursor extension, `adobe.extendscript-debug`,
+sideloaded via `.vsix` since it's not indexed in Cursor's default
+marketplace) directly to the running Premiere process — this was in progress
+(debugger installed, session not yet launched) when this session ended.
 
 ## Structural debt carried through the 2026-08-13 architecture refactors (issues #3-#6)
 
