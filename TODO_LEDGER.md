@@ -3,6 +3,58 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
+
+Built and tested (all GPU-free, no live Premiere dependency):
+
+- **Phase 1** — `cutdeck/jsx_export.py` (`to_jsx`): pure CutPlan -> ExtendScript
+  generation. CUT spans processed in descending `src_in_ms` order; frame math
+  goes through `transcribe.timebase.ms_to_frame` only. VFR refuses (GAP-2, same
+  as `xml_export.to_xml`). No hardcoded `TICKS_PER_FRAME` — the generated JSX
+  reads the sequence's own `seq.timebase` at runtime instead, sidestepping the
+  "confirm the constant against a real Premiere Time object" risk entirely.
+  `tests/test_cutdeck_jsx_export.py`, 5 tests.
+- **Phase 2** — `cutdeck/sequence_mixdown.py` (`plan_from_mixdown`): thin
+  wrapper routing a sequence's own audio mixdown through the existing
+  `ingest()` -> `build_cut_spans(tokens=[], ...)` -> `build_plan()` path, no new
+  pipeline code. `cfg.fillers_enabled`/`repeats_enabled` degrade to
+  silence-only with a logged warning (chosen over a `--transcribe` flag — no
+  ASR wiring exists in this path and none should, per the handoff). No
+  `engines.*` import anywhere in the call path (asserted by test).
+  `tests/test_cutdeck_sequence_mixdown.py`, 4 tests.
+- **Phase 4** — `cutdeck/export_mode.py` + `config.yaml`'s new `cutdeck.mode`
+  key (`new_sequence` | `in_place`, defaults `new_sequence`). Unrecognized mode
+  raises rather than silently picking an exporter.
+  `tests/test_cutdeck_mode_selection.py`, 5 tests.
+
+**Still open, both explicitly human-only per the handoff — do not skip silently:**
+
+- **Phase 0 (sync-lock probe)** — not run. Nobody has confirmed on a real
+  Premiere project whether ripple-delete honors sync lock automatically, or
+  whether a track without it fails silently vs. visibly. `to_jsx()` defaults
+  `require_sync_lock=True` conservatively (an editor-confirmation `confirm()`
+  dialog gates every edit) precisely because this is still unknown — do not
+  relax that default until Phase 0's finding is recorded here.
+- **Phase 3 (execution bridge + live round trip)** — not built. `jsx_export.py`'s
+  razor/ripple-delete calls target Premiere's QE (Quality Engineering) DOM,
+  the standard community pattern for this operation, but the exact method
+  names/signatures (`track.razor()`, `item.remove(true, true)`,
+  `qeSeq.getItemAtTime()`) are **unverified against a real Premiere instance**
+  — there is no CEP panel / MCP `evalScript()` bridge in this repo to test
+  against, and building one plus the round-trip test both require live
+  Premiere + real footage, which this session had no access to. One specific
+  open question flagged inline in `jsx_export.py`'s `cutSpan()`: it cuts every
+  unlocked track independently (conservative — doesn't assume sync lock
+  propagates through a QE-level scripted edit) rather than cutting once and
+  trusting sync lock to ripple the rest; if Phase 0/3 confirm QE ripples DO
+  propagate across sync-locked tracks, that loop double-cuts and must change.
+  Do not trust
+  `jsx_export.py`'s output on footage that matters until: (a) the bridge
+  exists, (b) the round-trip test in the handoff's Phase 3 acceptance passes
+  on a throwaway test project, and (c) the editor has personally verified
+  multicam sync/effects survive on real footage. Trigger: whenever CutDeck's
+  in-place mode is actually about to be used.
+
 ## Structural debt carried through the 2026-08-13 architecture refactors (issues #3-#6)
 
 The four behaviour-preserving refactors (cue splitter → `transcribe/cues/`,
