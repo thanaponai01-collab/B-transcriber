@@ -1,5 +1,30 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 11): ROOT CAUSE FOUND — retrying the original clone+trim design with the fix
+
+Round 10's live run: `createSetEndAction` alone committed cleanly, **and the
+out-point moved with it automatically** — `AFTER` showed
+`end=24.000s out=24.000s` from a single call, with no
+`createSetOutPointAction` anywhere. **Premiere derives the media bound from
+the sequence-time bound on its own.** Every crash since round 7 happened
+because this file was staging `createSetEndAction` *and*
+`createSetOutPointAction` together, which conflict internally — that
+"belt and suspenders" call was the bug, not a safety net. The fix: never
+call `createSetOutPointAction`/`createSetInPointAction` alongside
+`createSetEndAction`/`createSetStartAction` — the single call is sufficient.
+This also answers, for real, the question flagged since round 1's file
+header: "whether `createSetStartAction`/`createSetEndAction` alone were
+enough" — yes.
+
+This round retries round 7's original scenario — clone (to the temp offset)
++ trim the original, together in one transaction — with the fix applied:
+only `createSetEndAction`, no out-point call. **Untested — this is what the
+next live run needs to report.** If it commits cleanly, the
+single-transaction clone+trim split design (which looked dead after round
+7) is back alive — round 7's crash was this bug, not a fundamental
+clone+trim incompatibility. The `ANALYSIS` log line spells out exactly what
+a clean result should look like for both items.
+
 ## UPDATE (2026-08-25, round 10): round 8's clone-poisoning theory is dead — trim itself crashes, even with zero clone history; isolating which trim call is the trigger
 
 Round 9's live run (both V1 and A1): `BEFORE` showed exactly 1 item, the

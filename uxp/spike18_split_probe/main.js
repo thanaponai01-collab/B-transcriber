@@ -377,45 +377,64 @@ async function runSpike(kind) {
     // was staged too -- so both trim actions staged fine; the native commit
     // is what fails.
     //
-    // ROUND 10 (2026-08-25): isolates the one remaining untested variable --
-    // whether createSetEndAction (sequence-time bound) and
-    // createSetOutPointAction (media in/out bound) staged TOGETHER on the
-    // same item is what crashes, vs. either one alone. This file's own
-    // earlier open-questions list already named this: "whether
-    // createSetStartAction/createSetEndAction alone were enough, or
-    // createSetInPointAction/createSetOutPointAction were also required."
-    // This round stages ONLY createSetEndAction -- no createSetOutPointAction
-    // call at all -- to test the simplest possible trim in isolation.
+    // ROUND 10 result (2026-08-25): ROOT CAUSE FOUND. createSetEndAction
+    // ALONE (no createSetOutPointAction) committed cleanly, AND the
+    // out-point moved right along with it with no explicit call at all --
+    // AFTER showed end=24.000s out=24.000s from a single createSetEndAction.
+    // Premiere derives the media bound from the sequence-time bound
+    // automatically. Every crash since round 7 happened because this file
+    // was staging createSetEndAction and createSetOutPointAction TOGETHER,
+    // which conflict internally -- calling both is not "extra safety", it's
+    // the bug. The fix: never call createSetOutPointAction/
+    // createSetInPointAction alongside createSetEndAction/
+    // createSetStartAction; the single call is sufficient and correct.
+    //
+    // ROUND 11 (2026-08-25): retries round 7's exact original scenario --
+    // clone (to the temp offset, proven safe since round 5) + trim the
+    // original, together in ONE transaction -- with the fix applied: only
+    // createSetEndAction for the trim, no createSetOutPointAction call at
+    // all. If this commits cleanly, the single-transaction split design is
+    // back alive (it looked dead after round 7, but round 7's crash was
+    // this bug, not a fundamental clone+trim incompatibility).
     const cutAbsSec = headInfo.startSec + bSec;
-    const cutMediaSec = headInfo.inSec + bSec;
-    log(`trimming original's end to cut point B (createSetEndAction ONLY, no ` +
-        `createSetOutPointAction, no clone): absolute=${cutAbsSec.toFixed(3)}s ` +
-        `(media out-point would be ${cutMediaSec.toFixed(3)}s but is NOT being set this round)`);
+    log(`clone (offset +${PROBE_OFFSET_SEC}s) + trim original's end to ${cutAbsSec.toFixed(3)}s ` +
+        `(createSetEndAction only, no createSetOutPointAction -- the round 10 fix), one transaction`);
 
     project.lockedAccess(() => {
       txResult = project.executeTransaction((compoundAction) => {
+        cloneResult = sequenceEditor.createCloneTrackItemAction(
+          freshHeadItem,
+          fromSeconds(PROBE_OFFSET_SEC),
+          0, // videoTrackVerticalOffset -- zero: same track
+          0, // audioTrackVerticalOffset -- zero: same track
+          false, // alignToVideo
+          false // isInsert -- overwrite, onto empty space (confirmed working in round 5)
+        );
+        log(`clone call returned: ${describe(cloneResult)}`);
+        if (!compoundAction.addAction(cloneResult)) {
+          throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
+        }
+
         const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
         if (!compoundAction.addAction(trimEndAction)) {
           throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
         }
-      }, `CutDeck spike18: createSetEndAction-only control (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
+      }, `CutDeck spike18: clone+trim (fixed, createSetEndAction only) (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
     });
-    log(`createSetEndAction-only executeTransaction returned: ${describe(txResult)}`);
+    log(`executeTransaction returned: ${describe(txResult)}`);
 
-    const afterItems = await logTrackItems(track, "AFTER createSetEndAction-only");
-    if (afterItems.length >= 1) {
-      log("ANALYSIS: if this committed with no crash, compare item[0]'s end above " +
-          `against the trim target (absolute=${cutAbsSec.toFixed(3)}s) -- did it apply, ` +
-          "and did the out-point move along with it on its own (Premiere auto-adjusting " +
-          "media bounds from the sequence-time bound) or stay unchanged? A clean commit " +
-          "here means createSetOutPointAction (or staging both together) is the crash " +
-          "trigger. A crash here instead means createSetEndAction alone is already broken, " +
-          "which points further out -- maybe at cutAbsSec's value, or at trimming this " +
-          "specific item/track at all.");
+    const afterItems = await logTrackItems(track, "AFTER clone+trim (fixed)");
+    if (afterItems.length >= 2) {
+      log("ANALYSIS: if this committed cleanly, item[0] (the trimmed original) should " +
+          `show end=out=${cutAbsSec.toFixed(3)}s (out auto-derived, per round 10), and ` +
+          "item[1] (the clone at the temp offset) should show the FULL original duration " +
+          `(${(headInfo.endSec - headInfo.startSec).toFixed(3)}s) since it was cloned from ` +
+          "the pre-trim state. If both hold, the single-transaction clone+trim split design " +
+          "is confirmed working -- next round would reposition the clone (createSetStartAction " +
+          "only, same fix applied) from the temp offset to its real final position.");
     }
-    log("Diagnostic finished -- do NOT click again on this clip yet. Record whether " +
-        "this crashed or committed cleanly on issue #18, then press Ctrl+Z to undo " +
-        "before trying anything else.");
+    log("Diagnostic finished -- do NOT click again on this clip yet. Record the result " +
+        "on issue #18, then press Ctrl+Z to undo before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
