@@ -457,6 +457,22 @@ async function runSpike(kind) {
     // too: mid-transaction state isn't queryable this way, and the
     // clone-based split design is a dead end as scoped -- record that and
     // stop, per issue #18's own instructions.
+    //
+    // ROUND 14 result (2026-08-25): mid-transaction query found 1 item, not
+    // 2 -- aborted on the guard below. NOT proof that staged state is
+    // invisible mid-transaction, though: round 4/5 already showed a
+    // same-track, zero-offset, isInsert=false clone is a no-op (produces no
+    // second item, staged or committed), and this result is fully
+    // consistent with that recurring rather than a new phenomenon. Combined
+    // with round 13's proof that timeOffset=0 is the ONLY offset for which
+    // a single createSetInPointAction call can close the (start - in) gap,
+    // this rules out every offset value for the "clone + one in-point-fix
+    // call" recipe -- not just the temp-offset variant. DEAD END, per
+    // issue #18's own "say so and stop" instruction -- see the round-14
+    // result entry in README.md and the closing comment on issue #18. The
+    // one unexplored lever is isInsert=true (ripples the timeline instead
+    // of overwriting in place -- a different design, not a round-15 patch),
+    // deliberately not attempted here.
     log(`clone (offset 0, on top of the original) + trim original's end to ` +
         `${cutAbsSec.toFixed(3)}s + fix the clone's in-point to ${cutMediaSec.toFixed(3)}s -- ` +
         `all staged in ONE transaction (no temp park, no separate reposition step)`);

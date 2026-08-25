@@ -1,6 +1,46 @@
 # CutDeck spike #18 — split probe
 
-## UPDATE (2026-08-25, round 14): round 13 proved the temp-offset-reposition design mathematically impossible — trying a zero-offset clone with a mid-transaction fix instead
+## UPDATE (2026-08-25, round 14 result): DEAD END CONFIRMED — wider than expected, stopping per this issue's own instructions
+
+Round 14's live run: `mid-transaction query: 1 item(s) visible (1 before this
+transaction opened)` — the clone never showed up, so the transaction aborted
+on the "expected 2 items" guard before it ever got to test the in-point fix.
+
+The code's own error message blamed "staged state isn't visible
+mid-transaction," but that's not the best-supported reading. **Round 4/5
+(below) already established that a same-track, zero-offset, `isInsert=false`
+clone is a no-op** — it produces no second item at all, staged or committed.
+This result (1 item before, 1 item after staging) is fully consistent with
+that recurring, not with a new "visibility" phenomenon. The
+mid-transaction-visibility question round 14 was built to answer is still
+genuinely untested.
+
+That distinction widens the dead end rather than narrowing it. Round 13
+proved `(start − in)` is invariant under `createSetStartAction`/
+`createSetInPointAction` — a clone's gap can only ever be closed by a
+*single* `createSetInPointAction` call, and only if the clone was created
+with `timeOffset=0` (for a clone at offset `OFF`, one in-point-fix call to
+target `T` lands `start` at `OFF + T`; hitting the required `start = T`
+forces `OFF = 0`, for any `T`). Round 4/5 shows `timeOffset=0` on
+`isInsert=false` never produces a clone in the first place. Combined, these
+rule out **every** offset value for the "clone + one in-point-fix call"
+recipe, not just the 3600s temp-offset round 13 tested.
+
+**Stopping here, per this issue's own acceptance text** ("if clone+trim
+doesn't compose into a clean split at all, say so here and stop"). Recorded
+on issue #18. The one unexplored lever is `isInsert=true` — flagged since
+round 5 as a materially different design (it ripples the rest of the
+timeline instead of overwriting in place), not a round-15 patch to this
+recipe. Left as an open question for whoever picks this back up, not
+attempted here.
+
+**For #17: same-track `isInsert=false` clone-and-trim cannot produce a
+correct split via any sequence of `createSetStartAction`/`createSetEndAction`/
+`createSetInPointAction`/`createSetOutPointAction` calls** — proven
+mathematically (rounds 12–14) and confirmed live (rounds 4, 13, 14).
+`isInsert=true` is untested and changes the shape of the whole approach.
+
+## UPDATE (2026-08-25, round 14 code): round 13 proved the temp-offset-reposition design mathematically impossible — trying a zero-offset clone with a mid-transaction fix instead
 
 Round 13's live run: the tail came back `start=3640.800s` — not the target
 `40.800s`, off by exactly `3600` (the round 5-13 temp park offset). `in`,
