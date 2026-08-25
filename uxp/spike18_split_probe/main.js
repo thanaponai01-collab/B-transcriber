@@ -174,19 +174,6 @@ async function logTrackItems(track, label) {
   return items;
 }
 
-// Finds the item in `items` whose start time is within `tolSec` of
-// `targetSec`, without the extra logging readTimes()/logTrackItems() would
-// produce (those were already logged once for this same set). Used to
-// re-find the clone after a commit, since createCloneTrackItemAction's
-// return value is never chainable (confirmed rounds 4-11).
-async function findItemNearStart(items, targetSec, tolSec) {
-  for (const it of items) {
-    const s = await callOrProp(it, "getStartTime", "startTime", "candidate");
-    if (Math.abs(toSeconds(s, "candidate.start") - targetSec) < tolSec) return it;
-  }
-  return null;
-}
-
 /**
  * Stages one split inside an already-open compound action.
  *
@@ -343,16 +330,16 @@ async function runSpike(kind) {
 
     await logTrackItems(track, "BEFORE");
 
-    let cloneResult = null; // unused as of round 9 (no clone this round) -- kept for the round 5-8 history in the comments above
-    let txResult = null;
-
     // ROUND 5 (confirmed, 2026-08-25): a same-track, nonzero-timeOffset,
     // isInsert=false clone onto empty track space produces a real, correctly
     // -shaped second item (full duration, same in/out as the original, just
-    // shifted +PROBE_OFFSET_SEC in sequence time). Live-confirmed with a
-    // clean single-click before/after (1 item -> 2 items).
-    const PROBE_OFFSET_SEC = 3600;
-
+    // shifted in sequence time by whatever offset was passed -- rounds 5-13
+    // used a 3600s temp park spot, referred to below as PROBE_OFFSET_SEC.
+    // Live-confirmed with a clean single-click before/after (1 item -> 2
+    // items). Round 14 (below) stops using a temp offset at all, so the
+    // constant itself is gone from the code -- kept only as a name in this
+    // history for continuity with the round 11-13 comments.
+    //
     // ROUND 7 result (2026-08-25): clone + trim-of-original staged together
     // in ONE transaction threw "A nullptr was dereferenced" from inside
     // executeTransaction itself -- no JS-level exception, no frame pointing
@@ -410,35 +397,9 @@ async function runSpike(kind) {
     // back alive (it looked dead after round 7, but round 7's crash was
     // this bug, not a fundamental clone+trim incompatibility).
     const cutAbsSec = headInfo.startSec + bSec;
-    log(`clone (offset +${PROBE_OFFSET_SEC}s) + trim original's end to ${cutAbsSec.toFixed(3)}s ` +
-        `(createSetEndAction only, no createSetOutPointAction -- the round 10 fix), one transaction`);
+    const cutMediaSec = headInfo.inSec + bSec;
 
-    project.lockedAccess(() => {
-      txResult = project.executeTransaction((compoundAction) => {
-        cloneResult = sequenceEditor.createCloneTrackItemAction(
-          freshHeadItem,
-          fromSeconds(PROBE_OFFSET_SEC),
-          0, // videoTrackVerticalOffset -- zero: same track
-          0, // audioTrackVerticalOffset -- zero: same track
-          false, // alignToVideo
-          false // isInsert -- overwrite, onto empty space (confirmed working in round 5)
-        );
-        log(`clone call returned: ${describe(cloneResult)}`);
-        if (!compoundAction.addAction(cloneResult)) {
-          throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
-        }
-
-        const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
-        if (!compoundAction.addAction(trimEndAction)) {
-          throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
-        }
-      }, `CutDeck spike18: clone+trim (fixed, createSetEndAction only) (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
-    });
-    log(`executeTransaction returned: ${describe(txResult)}`);
-
-    const afterItems = await logTrackItems(track, "AFTER clone+trim (fixed)");
-
-    // ROUND 11 result (2026-08-25): CONFIRMED clean on a real, non-degenerate
+    // ROUND 11 result (2026-08-25, prior click): CONFIRMED clean on a real, non-degenerate
     // cut (in/out marked at 57.080s/135.960s, well inside the 2950.120s
     // clip). item[0] (trimmed original) read back end=out=135.960s exactly
     // as predicted. item[1] (clone at the temp offset) read back the FULL
@@ -447,89 +408,132 @@ async function runSpike(kind) {
     // commit. The single-transaction clone+trim split design is confirmed
     // working end to end for the head/trim half.
     //
-    // ROUND 12 (2026-08-25): the other half -- repositioning the clone from
-    // its temp offset to its real final position (right after the trimmed
-    // head, at cutAbsSec) so it becomes the tail. Round 10 showed
-    // createSetEndAction alone auto-derives the out-point -- but that test's
-    // clip had start=0=in, so "out snaps to match the new end" and "out
-    // shifts by the same delta as end" were indistinguishable. This clone
-    // sits at start=3600s, in=0.000s (start != in) -- a case where those two
-    // theories predict genuinely different results, so this is a real test,
-    // not a repeat. Uses createSetStartAction ONLY (no createSetInPointAction
-    // -- same fix as round 10/11) on the clone found via findItemNearStart(),
-    // since its return value still isn't chainable regardless of offset.
-    const cloneItem = await findItemNearStart(afterItems, PROBE_OFFSET_SEC, 1.0);
-    if (!cloneItem) {
-      throw new Error(`could not find the clone near start=${PROBE_OFFSET_SEC}s among AFTER items -- aborting before attempting reposition.`);
-    }
-    const cutMediaSec = headInfo.inSec + bSec;
-    log(`repositioning the clone via createSetStartAction ONLY (no createSetInPointAction) ` +
-        `from start=${PROBE_OFFSET_SEC.toFixed(3)}s to start=${cutAbsSec.toFixed(3)}s. For a ` +
-        `correct split, its in-point needs to land on ${cutMediaSec.toFixed(3)}s (continuing ` +
-        `exactly where the head's trim cut off) -- compare against that, not against 0 or ` +
-        `${cutAbsSec.toFixed(3)}s, when reading the result below.`);
-
-    let repositionTxResult = null;
-    project.lockedAccess(() => {
-      repositionTxResult = project.executeTransaction((compoundAction) => {
-        const setStartAction = cloneItem.createSetStartAction(fromSeconds(cutAbsSec));
-        if (!compoundAction.addAction(setStartAction)) {
-          throw new Error("compoundAction.addAction(setStartAction) returned false -- aborting.");
-        }
-      }, `CutDeck spike18: reposition clone via createSetStartAction only (${kind})`);
-    });
-    log(`reposition executeTransaction returned: ${describe(repositionTxResult)}`);
-
-    const repositionedItems = await logTrackItems(track, "AFTER reposition (createSetStartAction only)");
-
-    // ROUND 12 result (2026-08-25): DISAMBIGUATED. In-point came back
-    // negative (-3559.200s = 0 + (40.800 - 3600.000) exactly) -- proving
+    // ROUND 12 result (2026-08-25): DISAMBIGUATED. Repositioned the clone
+    // via createSetStartAction ALONE, to cutAbsSec=40.800s. In-point came
+    // back negative (-3559.200s = 0 + (40.800 - 3600.000) exactly) --
     // createSetStartAction auto-derives in-point via the same delta-shift
-    // rule createSetEndAction used for out-point (round 10), now genuinely
-    // confirmed since this clip's start != in. But the delta is computed
-    // from wherever the clone CURRENTLY sits (the arbitrary 3600s temp
-    // offset), not from its true original position -- so moving start back
-    // from a temp park spot drags in-point along by that same huge, wrong
-    // delta. start itself landed correctly at 40.800s; only in-point is
-    // broken. Confirms the temp-offset-then-reposition trick needs a SECOND,
-    // separate correction.
+    // rule createSetEndAction used for out-point (round 10). start itself
+    // landed correctly at 40.800s; only in-point was broken. Looked like it
+    // just needed one more, separate correction.
     //
-    // ROUND 13 (2026-08-25): fixes the in-point on its own, via
-    // createSetInPointAction ALONE, in its own separate transaction --
-    // keeping it split from createSetStartAction the same way round 10/11
-    // had to split createSetEndAction from createSetOutPointAction (the two
-    // pairs are structurally symmetric; likely to conflict the same way if
-    // combined, untested but not worth risking another crash to confirm
-    // when the safe pattern is already proven).
-    const tailItem = await findItemNearStart(repositionedItems, cutAbsSec, 1.0);
-    if (!tailItem) {
-      throw new Error(`could not find the repositioned tail near start=${cutAbsSec.toFixed(3)}s -- aborting before in-point fix.`);
-    }
-    log(`correcting in-point to ${cutMediaSec.toFixed(3)}s via createSetInPointAction ALONE ` +
-        `(separate transaction from the createSetStartAction that just ran)`);
+    // ROUND 13 result (2026-08-25): that correction -- createSetInPointAction
+    // ALONE, in its own transaction -- did NOT converge. The tail came back
+    // start=3640.800s (not 40.800s), off by exactly PROBE_OFFSET_SEC (3600).
+    // The two live data points prove this isn't an ordering bug:
+    //   round 12: 40.800 - (-3559.200) = 3600   (was 3600 - 0 = 3600 before)
+    //   round 13: 3640.800 - 40.800    = 3600   (was 40.800 - (-3559.200) before)
+    // (start - in) is an INVARIANT of both createSetStartAction and
+    // createSetInPointAction -- each call only translates the pair together
+    // by a chosen delta; neither can ever change their difference. That
+    // difference gets fixed at exactly PROBE_OFFSET_SEC the moment the clone
+    // is created (timeOffset moves start+end together, leaving in/out
+    // untouched) and no sequence of these two actions, any order, any count,
+    // can ever bring it back to 0 -- which a plain split of this untouched
+    // clip requires (its own start=in=0 shows the correct tail needs
+    // start=in=cutMediaSec too). The temp-offset-park-then-reposition design
+    // (rounds 11-13) is a proven dead end, not a call-order bug -- see
+    // README.md for the full writeup and issue #18 for the record.
+    //
+    // ROUND 14 (2026-08-25): the only way to avoid the gap is to never let
+    // it open -- clone with timeOffset=0 (landing on the still-full-length
+    // original) instead of parking at PROBE_OFFSET_SEC, so the clone starts
+    // with (start - in) = 0, same as the pristine original. From there a
+    // SINGLE createSetInPointAction call derives the matching start as a
+    // side effect and lands exactly on target (the same delta-shift rule,
+    // just applied from a zero gap instead of a 3600s one).
+    //
+    // The known blocker: createCloneTrackItemAction's return is not
+    // chainable (confirmed rounds 4 and 11), which is *why* rounds 11-13
+    // split clone and in-point-fix across separate transactions in the first
+    // place -- and a zero-offset clone left sitting between two committed
+    // transactions would overlap the still-full original for real (round 5:
+    // same-track clones need empty destination space). So this round tests
+    // something no prior round tried: querying the track from *inside* the
+    // still-open transaction, after staging the clone and the head trim but
+    // before commit, to see whether a fresh, chainable reference to the
+    // clone is visible pre-commit. If it is, the in-point fix can be staged
+    // in the SAME transaction, so the overlap never exists as committed
+    // geometry. If the query comes back short, that's the honest answer
+    // too: mid-transaction state isn't queryable this way, and the
+    // clone-based split design is a dead end as scoped -- record that and
+    // stop, per issue #18's own instructions.
+    log(`clone (offset 0, on top of the original) + trim original's end to ` +
+        `${cutAbsSec.toFixed(3)}s + fix the clone's in-point to ${cutMediaSec.toFixed(3)}s -- ` +
+        `all staged in ONE transaction (no temp park, no separate reposition step)`);
 
-    let inPointTxResult = null;
+    let round14TxResult = null;
     project.lockedAccess(() => {
-      inPointTxResult = project.executeTransaction((compoundAction) => {
-        const setInAction = tailItem.createSetInPointAction(fromSeconds(cutMediaSec));
+      round14TxResult = project.executeTransaction((compoundAction) => {
+        const cloneResult14 = sequenceEditor.createCloneTrackItemAction(
+          freshHeadItem,
+          fromSeconds(0), // timeOffset -- zero this round, deliberately (see ROUND 14 comment above)
+          0,
+          0,
+          false,
+          false // isInsert -- overwrite; lands directly on the still-full original for now
+        );
+        log(`clone call returned: ${describe(cloneResult14)}`);
+        if (!compoundAction.addAction(cloneResult14)) {
+          throw new Error("compoundAction.addAction(cloneResult14) returned false -- aborting.");
+        }
+
+        const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
+        if (!compoundAction.addAction(trimEndAction)) {
+          throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
+        }
+
+        // The untested question this round exists to answer: is a fresh,
+        // chainable item visible from a track query made *inside* the still-
+        // open transaction, before it commits? No prior round tried this --
+        // every earlier re-query happened after commit. A read-only query
+        // should be safe to attempt even if the answer turns out to be "no."
+        let liveItems;
+        try {
+          liveItems = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
+        } catch (e) {
+          throw new Error(`track.getTrackItems() threw inside the open transaction: ` +
+              `${e && e.message ? e.message : e} -- mid-transaction query not viable, aborting.`);
+        }
+        log(`mid-transaction query: ${liveItems ? liveItems.length : 0} item(s) visible ` +
+            `(1 before this transaction opened)`);
+        if (!liveItems || liveItems.length < 2) {
+          throw new Error(`expected 2 items mid-transaction, found ${liveItems ? liveItems.length : 0} ` +
+              `-- staged-but-uncommitted state is not visible via getTrackItems(). Aborting; the ` +
+              `zero-offset-clone-plus-mid-transaction-fix approach does not work as tried.`);
+        }
+
+        // Identify the clone by reference: it's whichever item in the query
+        // is NOT freshHeadItem (the one item we already hold a handle to).
+        // If every item fails that check (e.g. UXP hands back a fresh
+        // wrapper object per call, making !== unreliable), fall back to the
+        // last array entry and say so plainly rather than guessing silently.
+        let tailCandidate = liveItems.find((it) => it !== freshHeadItem);
+        let pickedBy = "reference inequality vs freshHeadItem";
+        if (!tailCandidate) {
+          tailCandidate = liveItems[liveItems.length - 1];
+          pickedBy = "fallback: last array entry (reference-equality check found nothing distinct)";
+        }
+        log(`picked mid-transaction clone candidate by: ${pickedBy}`);
+
+        const setInAction = tailCandidate.createSetInPointAction(fromSeconds(cutMediaSec));
         if (!compoundAction.addAction(setInAction)) {
           throw new Error("compoundAction.addAction(setInAction) returned false -- aborting.");
         }
-      }, `CutDeck spike18: fix tail in-point via createSetInPointAction only (${kind})`);
+      }, `CutDeck spike18: round14 single-transaction clone(offset0)+trim+inpoint-fix (${kind})`);
     });
-    log(`in-point fix executeTransaction returned: ${describe(inPointTxResult)}`);
+    log(`round 14 executeTransaction returned: ${describe(round14TxResult)}`);
 
-    await logTrackItems(track, "AFTER in-point fix");
-    log(`ANALYSIS: the tail item should now read start=${cutAbsSec.toFixed(3)}s ` +
-        `in=${cutMediaSec.toFixed(3)}s end=6550.120s out=2950.120s -- i.e. a correct tail piece, ` +
-        "continuing exactly where the head's trim cut off, with its original end/out untouched. " +
-        "If all four values match, the full split recipe (clone to temp offset, trim original's " +
-        "end, reposition clone's start, fix clone's in-point -- 3 transactions total) is proven " +
-        "end to end for a single cut. Next: apply the same recipe a second time (at the marked IN " +
-        "point) to peel off the head and produce the real 3-piece head/disabled-middle/tail split.");
-    log("Diagnostic finished -- do NOT click again on this clip yet. Record the final values " +
-        "on issue #18, then press Ctrl+Z (three times -- once per transaction) to undo before " +
-        "trying anything else.");
+    await logTrackItems(track, "AFTER round 14 (single-transaction attempt)");
+    log(`ANALYSIS: if round 14 committed, the tail item should now read ` +
+        `start=${cutAbsSec.toFixed(3)}s in=${cutMediaSec.toFixed(3)}s ` +
+        `end=${headInfo.endSec.toFixed(3)}s out=${headInfo.outSec.toFixed(3)}s -- note end/out are ` +
+        `the TRUE original values this time, not an offset placeholder, since there was never a ` +
+        `temp park spot to leave behind. If executeTransaction threw instead (see the error above), ` +
+        `that is the answer too: record which step failed (clone, mid-transaction query, or the ` +
+        `in-point fix) on issue #18 -- if it's the mid-transaction query, the clone-based split ` +
+        `design is a dead end as scoped, per the issue's own "say so and stop" instruction.`);
+    log("Diagnostic finished. Record the result on issue #18, then Ctrl+Z (once per transaction " +
+        "that actually committed, per the log above) to undo before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);

@@ -1,5 +1,60 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 14): round 13 proved the temp-offset-reposition design mathematically impossible — trying a zero-offset clone with a mid-transaction fix instead
+
+Round 13's live run: the tail came back `start=3640.800s` — not the target
+`40.800s`, off by exactly `3600` (the round 5-13 temp park offset). `in`,
+`end`, `out` all landed correctly; only `start` was wrong. Lining this up
+against round 12's result proves it isn't a call-order bug:
+
+```
+round 12: 40.800 - (-3559.200) = 3600   (was 3600 - 0 = 3600 before the call)
+round 13: 3640.800 - 40.800    = 3600   (was 40.800 - (-3559.200) before the call)
+```
+
+`(start − in)` is an **invariant** of both `createSetStartAction` and
+`createSetInPointAction` — each call only translates the pair together by a
+chosen delta; neither can ever change their difference. That difference gets
+fixed at exactly the clone's `timeOffset` the moment it's created (`timeOffset`
+moves `start`+`end` together, leaving `in`/`out` untouched), and no sequence
+of these two actions — any order, any count — can ever bring it back to `0`,
+which a plain split of this untouched clip requires (the original's own
+`start=in=0` shows the correct tail needs `start=in=cutMediaSec` too). **The
+temp-offset-park-then-reposition design (rounds 11–13) is a proven dead end,
+not a fixable ordering bug.**
+
+The only way to avoid the gap is to never let it open: clone with
+`timeOffset=0` (landing on the still-full-length original) so the clone
+starts with `start − in = 0`, same as the pristine original. From there a
+single `createSetInPointAction` call derives the matching `start` as a side
+effect and lands exactly on target — same delta-shift rule, just starting
+from a zero gap instead of a 3600s one.
+
+The catch: `createCloneTrackItemAction`'s return isn't chainable (confirmed
+rounds 4 and 11) — that's *why* rounds 11–13 had to split the clone and the
+in-point fix across separate transactions in the first place, and a
+zero-offset clone left sitting between two *committed* transactions would
+overlap the still-full original for real (round 5: same-track clones need
+empty destination space). Round 14 tests something no prior round tried:
+querying the track from **inside** the still-open transaction — after
+staging the clone and the head trim but before commit — to see whether a
+fresh, chainable reference to the clone is visible pre-commit. If it is, the
+in-point fix can be staged in the same transaction, so the overlap never
+exists as committed geometry. **Untested — this is what the next live run
+needs to report.** Two outcomes:
+
+- **Mid-transaction query finds 2 items and the in-point fix stages/commits
+  cleanly** — the tail should read back the true final values (`start`,
+  `in` both `40.800s`, `end`/`out` the *original* untouched values, no offset
+  placeholder this time). If so, the single-transaction clone-based split
+  design is alive again, just via zero-offset + in-callback requery instead
+  of temp-offset + reposition.
+- **The mid-transaction query comes back short (fewer than 2 items), or the
+  transaction throws** — that's the honest answer too, per issue #18's own
+  instructions: the clone-based split design is a dead end as scoped, and
+  that should be recorded and the approach reconsidered rather than patched
+  further.
+
 ## UPDATE (2026-08-25, round 13): in-point auto-derive disambiguated (and it's wrong for our use) — fixing it as a separate, isolated correction
 
 Round 12's live run: `in` came back **negative**, `-3559.200s` — exactly
