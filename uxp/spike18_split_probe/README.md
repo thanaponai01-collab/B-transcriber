@@ -1,5 +1,32 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 7): testing clone+trim composed in one transaction
+
+Round 5 re-confirmed with a clean single-click before/after (1 item → 2
+items, clone correctly full-duration at the offset position). Round 6's
+clipboard permission fix is still awaiting its own live confirmation.
+
+This round tests the question that's been open since this file's very first
+commit: **does clone+trim actually compose into a clean split when done
+together, and does the order matter?** Every prior round either cloned alone
+(rounds 4–6) or tried to trim the *clone's* return value (round 3 — doesn't
+work, it's not chainable). Neither ever tested trimming the *original*
+(`freshHeadItem` — a real, valid, chainable reference, unrelated to the
+clone-chainability problem) in the same transaction as the clone.
+
+`main.js` now stages, in one transaction: clone the original onto the
+`PROBE_OFFSET_SEC` temp position (as before), then trim the original's end/
+out-point back to the sequence's marked **out** point (`bSec`) — not the in
+point (`aSec`), which is `0` for this test sequence and would trim the head
+to a degenerate zero-length item. **Untested — this is what the next live
+run needs to report.** The log's new `ANALYSIS` line spells out exactly what
+to compare: does item[0] show the trim applied, and does item[1]'s duration
+match the original's *full* length (clone captured pre-trim state) or the
+*trimmed* length (clone captured post-trim state)? Whichever it is answers
+the ordering question directly, live, instead of guessing from the type
+defs — decides whether the real plugin should clone-then-trim or
+trim-then-clone.
+
 ## UPDATE (2026-08-25, round 6): nonzero-offset clone confirmed working; copy-log needs its own manifest permission
 
 **Round 5 succeeded.** A live run's log showed the track already holding 2

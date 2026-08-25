@@ -333,49 +333,77 @@ async function runSpike(kind) {
     let cloneResult = null;
     let txResult = null;
 
-    // ROUND 5 (2026-08-25): round 4's live run showed executeTransaction
-    // returning true (committed, no throw) but the track still had exactly
-    // 1 item, byte-identical to before (same start/end/in/out). A zero-
-    // offset, same-track, isInsert=false clone is a no-op -- "overwrite"
-    // really does mean the clone replaces the original in place rather than
-    // coexisting with it. One variable changed from round 4: a large,
-    // deliberately out-of-clip-range timeOffset (1 hour past the clip's own
-    // start) so the clone lands on empty track space with nothing to
-    // overwrite. This only tests whether a nonzero-offset clone produces a
-    // genuine second item at all -- not yet where the real split's tail
-    // needs to end up; that's a later round once an item reference can be
-    // obtained post-commit.
+    // ROUND 5 (confirmed, 2026-08-25): a same-track, nonzero-timeOffset,
+    // isInsert=false clone onto empty track space produces a real, correctly
+    // -shaped second item (full duration, same in/out as the original, just
+    // shifted +PROBE_OFFSET_SEC in sequence time). Live-confirmed with a
+    // clean single-click before/after (1 item -> 2 items).
     const PROBE_OFFSET_SEC = 3600;
+
+    // ROUND 7 (2026-08-25): the open question since this file's very first
+    // commit -- does clone+trim compose into a clean split, and does order
+    // matter -- has never actually been tested, because every round so far
+    // either cloned alone or (round 3) tried to trim the CLONE (impossible;
+    // its return value isn't chainable). This round trims the ORIGINAL
+    // (freshHeadItem -- a real, valid, chainable reference; unrelated to the
+    // clone-chainability problem) to the sequence's marked OUT point (bSec)
+    // in the SAME transaction as the clone, and checks which state the
+    // clone captures. Cuts at bSec, not aSec: aSec is 0 for this test
+    // sequence (in-point at the clip's own start), which would trim the
+    // head to a degenerate zero-length item and not exercise anything.
+    const cutAbsSec = headInfo.startSec + bSec;
+    const cutMediaSec = headInfo.inSec + bSec;
+    log(`trimming original's end to cut point B: absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s`);
 
     project.lockedAccess(() => {
       // executeTransaction's type signature returns `boolean` synchronously,
       // not `Promise<boolean>` (confirmed against premierepro.d.ts).
       txResult = project.executeTransaction((compoundAction) => {
+        // Clone first, trim second -- arbitrary within one commit; this
+        // round's whole point is whether that order (or any order) matters.
         cloneResult = sequenceEditor.createCloneTrackItemAction(
           freshHeadItem,
-          fromSeconds(PROBE_OFFSET_SEC), // timeOffset -- nonzero, lands well past the clip's own end
+          fromSeconds(PROBE_OFFSET_SEC),
           0, // videoTrackVerticalOffset -- zero: same track
           0, // audioTrackVerticalOffset -- zero: same track
           false, // alignToVideo
-          false // isInsert -- false (overwrite), now onto empty space instead of the original's own span
+          false // isInsert -- overwrite, onto empty space (confirmed working in round 5)
         );
         log(`clone call returned: ${describe(cloneResult)}`);
         if (!compoundAction.addAction(cloneResult)) {
           throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
         }
-      }, `CutDeck spike18: clone-only probe (${kind}), offset +${PROBE_OFFSET_SEC}s`);
+
+        const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
+        if (!compoundAction.addAction(trimEndAction)) {
+          throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
+        }
+        if (typeof freshHeadItem.createSetOutPointAction === "function") {
+          const trimOutAction = freshHeadItem.createSetOutPointAction(fromSeconds(cutMediaSec));
+          if (!compoundAction.addAction(trimOutAction)) {
+            throw new Error("compoundAction.addAction(trimOutAction) returned false -- aborting.");
+          }
+        } else {
+          log("WARNING: freshHeadItem has no createSetOutPointAction -- out-point left unset.");
+        }
+      }, `CutDeck spike18: clone+trim-original probe (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
     });
 
     log(`executeTransaction returned: ${describe(txResult)}`);
 
-    const afterItems = await logTrackItems(track, "AFTER clone");
-    log(`item count: before vs after -- see logs above. ` +
-        (afterItems.length > 1
-          ? "More than one item now -- inspect their start/end above to see where the clone landed relative to the original."
-          : "Still one item -- either the clone was rejected, or it overwrote the original in place (same span, no duplicate)."));
+    const afterItems = await logTrackItems(track, "AFTER clone+trim");
+    if (afterItems.length >= 2) {
+      log("ANALYSIS: compare item[0]'s end/out above against the trim target " +
+          `(absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s) -- did the trim apply? ` +
+          "Then compare item[1]'s duration (end-start) against the FULL original " +
+          `duration (${(headInfo.endSec - headInfo.startSec).toFixed(3)}s) vs the TRIMMED ` +
+          `duration (${bSec.toFixed(3)}s) -- whichever it matches tells us whether the clone ` +
+          "captured the original's pre-trim or post-trim state, i.e. whether clone-before-trim " +
+          "or trim-before-clone is the order that actually matters here.");
+    }
     log("Diagnostic finished -- do NOT click again on this clip yet. Record the " +
-        "before/after item list on issue #18, then press Ctrl+Z to undo before " +
-        "trying anything else.");
+        "before/after item list and the ANALYSIS answer on issue #18, then press " +
+        "Ctrl+Z to undo before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
