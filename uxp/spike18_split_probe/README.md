@@ -1,5 +1,33 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 13): in-point auto-derive disambiguated (and it's wrong for our use) — fixing it as a separate, isolated correction
+
+Round 12's live run: `in` came back **negative**, `-3559.200s` — exactly
+`0 + (40.800 - 3600.000)`, the delta-shift formula. This genuinely
+disambiguates round 10's ambiguous case: `createSetStartAction` auto-derives
+the in-point via the same delta-shift rule `createSetEndAction` used for the
+out-point. But the delta is computed from wherever the item *currently*
+sits — the arbitrary 3600s temp parking offset — not from its true original
+position. So moving `start` back from that temp spot drags `in` along by the
+same huge, wrong delta. `start` itself landed exactly right, at `40.800s`;
+only `in` came out broken. This confirms the temp-offset-then-reposition
+trick needs a second, separate correction — it can't be a one-call fix.
+
+This round adds that correction: `createSetInPointAction` **alone**, in its
+own separate transaction (kept split from `createSetStartAction`, mirroring
+how round 10/11 had to split `createSetEndAction` from
+`createSetOutPointAction` — the two pairs are structurally symmetric and
+likely to conflict the same way combined; not worth risking a third crash to
+confirm when the safe two-transaction pattern is already proven). **Untested
+— this is what the next live run needs to report.** If the tail item reads
+back `start=<cutAbsSec> in=<cutMediaSec> end=6550.120s out=2950.120s`, the
+full recipe — clone to temp offset, trim original's end, reposition clone's
+start, fix clone's in-point, four operations across three transactions — is
+proven end to end for a single cut. The next step after that is applying the
+same recipe a second time at the marked **in** point, to peel off the head
+and finally produce the real 3-piece head/disabled-middle/tail split this
+spike exists to prove out.
+
 ## UPDATE (2026-08-25, round 12): clone+trim confirmed on a real cut; now repositioning the clone into the tail
 
 Round 11's first attempt accidentally re-used a stale in/out mark (the

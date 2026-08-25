@@ -480,16 +480,56 @@ async function runSpike(kind) {
     });
     log(`reposition executeTransaction returned: ${describe(repositionTxResult)}`);
 
-    await logTrackItems(track, "AFTER reposition (createSetStartAction only)");
-    log(`ANALYSIS: the repositioned item's in-point above -- does it match ${cutMediaSec.toFixed(3)}s ` +
-        "(correct: createSetStartAction is a real trim-the-head operation, in-point tracks the " +
-        "same delta the way out-point did) or did it stay 0.000s (createSetStartAction is a pure " +
-        "reposition/slip with no media-bound side effect, and createSetInPointAction would still " +
-        "be needed -- a combination not yet tested and which may hit the same conflict round 10 " +
-        "found for the end/out pair) or something else entirely (crash, a clamped/wrong value)?");
-    log("Diagnostic finished -- do NOT click again on this clip yet. Record the in-point result " +
-        "on issue #18, then press Ctrl+Z (twice -- once per transaction) to undo before trying " +
-        "anything else.");
+    const repositionedItems = await logTrackItems(track, "AFTER reposition (createSetStartAction only)");
+
+    // ROUND 12 result (2026-08-25): DISAMBIGUATED. In-point came back
+    // negative (-3559.200s = 0 + (40.800 - 3600.000) exactly) -- proving
+    // createSetStartAction auto-derives in-point via the same delta-shift
+    // rule createSetEndAction used for out-point (round 10), now genuinely
+    // confirmed since this clip's start != in. But the delta is computed
+    // from wherever the clone CURRENTLY sits (the arbitrary 3600s temp
+    // offset), not from its true original position -- so moving start back
+    // from a temp park spot drags in-point along by that same huge, wrong
+    // delta. start itself landed correctly at 40.800s; only in-point is
+    // broken. Confirms the temp-offset-then-reposition trick needs a SECOND,
+    // separate correction.
+    //
+    // ROUND 13 (2026-08-25): fixes the in-point on its own, via
+    // createSetInPointAction ALONE, in its own separate transaction --
+    // keeping it split from createSetStartAction the same way round 10/11
+    // had to split createSetEndAction from createSetOutPointAction (the two
+    // pairs are structurally symmetric; likely to conflict the same way if
+    // combined, untested but not worth risking another crash to confirm
+    // when the safe pattern is already proven).
+    const tailItem = await findItemNearStart(repositionedItems, cutAbsSec, 1.0);
+    if (!tailItem) {
+      throw new Error(`could not find the repositioned tail near start=${cutAbsSec.toFixed(3)}s -- aborting before in-point fix.`);
+    }
+    log(`correcting in-point to ${cutMediaSec.toFixed(3)}s via createSetInPointAction ALONE ` +
+        `(separate transaction from the createSetStartAction that just ran)`);
+
+    let inPointTxResult = null;
+    project.lockedAccess(() => {
+      inPointTxResult = project.executeTransaction((compoundAction) => {
+        const setInAction = tailItem.createSetInPointAction(fromSeconds(cutMediaSec));
+        if (!compoundAction.addAction(setInAction)) {
+          throw new Error("compoundAction.addAction(setInAction) returned false -- aborting.");
+        }
+      }, `CutDeck spike18: fix tail in-point via createSetInPointAction only (${kind})`);
+    });
+    log(`in-point fix executeTransaction returned: ${describe(inPointTxResult)}`);
+
+    await logTrackItems(track, "AFTER in-point fix");
+    log(`ANALYSIS: the tail item should now read start=${cutAbsSec.toFixed(3)}s ` +
+        `in=${cutMediaSec.toFixed(3)}s end=6550.120s out=2950.120s -- i.e. a correct tail piece, ` +
+        "continuing exactly where the head's trim cut off, with its original end/out untouched. " +
+        "If all four values match, the full split recipe (clone to temp offset, trim original's " +
+        "end, reposition clone's start, fix clone's in-point -- 3 transactions total) is proven " +
+        "end to end for a single cut. Next: apply the same recipe a second time (at the marked IN " +
+        "point) to peel off the head and produce the real 3-piece head/disabled-middle/tail split.");
+    log("Diagnostic finished -- do NOT click again on this clip yet. Record the final values " +
+        "on issue #18, then press Ctrl+Z (three times -- once per transaction) to undo before " +
+        "trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
