@@ -23,6 +23,11 @@
  * never wired into cutdeck/mark_export.py or bridge.py. It also assumes
  * speed=1 on the target clip; it does not check for speed changes or VFR
  * (out of scope for a one-button spike against a known test clip).
+ *
+ * Cut points A and B are read from the sequence's own marked in/out points
+ * (Sequence.getInPoint()/getOutPoint() -- the ones set with I/O on the
+ * timeline), not typed in by hand: the spike must only ever touch the work
+ * area the editor marked, matching the real plugin's eventual behaviour.
  */
 
 let ppro;
@@ -94,6 +99,21 @@ async function readTimes(item, label) {
   };
   log(`${label}: start=${result.startSec.toFixed(3)}s end=${result.endSec.toFixed(3)}s ` +
       `in=${result.inSec.toFixed(3)}s out=${result.outSec.toFixed(3)}s`);
+  return result;
+}
+
+// Reads the sequence's work-area in/out points (the ones set with I/O on
+// the timeline, via Sequence.getInPoint()/getOutPoint()) -- unverified
+// against a live host, same as everything else in this file. Falls back to
+// the bare property the same way readTimes() does.
+async function readSequenceInOut(sequence) {
+  const inPoint = await callOrProp(sequence, "getInPoint", "inPoint", "sequence");
+  const outPoint = await callOrProp(sequence, "getOutPoint", "outPoint", "sequence");
+  const result = {
+    inSec: toSeconds(inPoint, "sequence.inPoint"),
+    outSec: toSeconds(outPoint, "sequence.outPoint"),
+  };
+  log(`sequence in/out: in=${result.inSec.toFixed(3)}s out=${result.outSec.toFixed(3)}s`);
   return result;
 }
 
@@ -197,12 +217,6 @@ function stageSplit(compoundAction, headItem, headInfo, offsetSec, label) {
 }
 
 async function runSpike(kind) {
-  const aSec = parseFloat(document.getElementById("timeA").value);
-  const bSec = parseFloat(document.getElementById("timeB").value);
-  if (!(aSec >= 0) || !(bSec > aSec)) {
-    log("ERROR: need 0 <= A < B (in seconds from clip start).");
-    return;
-  }
   if (!ppro) {
     log("ERROR: require('premierepro') failed -- not running inside a Premiere UXP host?");
     return;
@@ -214,9 +228,26 @@ async function runSpike(kind) {
     const sequence = await project.getActiveSequence();
     if (!sequence) throw new Error("no active sequence");
 
+    const inOut = await readSequenceInOut(sequence);
+
     const { item: headItem } = await getFirstItem(sequence, kind);
     log(`found first ${kind} clip:`);
     const headInfo = await readTimes(headItem, "original clip");
+
+    // Cut points come from the sequence's marked in/out, not typed times --
+    // the whole point is that this spike (and the real plugin it feeds)
+    // never touches anything outside the work area the editor marked.
+    // Expressed as offsets from the clip's own start, same units stageSplit()
+    // already expects.
+    const aSec = inOut.inSec - headInfo.startSec;
+    const bSec = inOut.outSec - headInfo.startSec;
+    if (!(aSec >= 0) || !(bSec > aSec) || bSec > headInfo.endSec - headInfo.startSec) {
+      log(`ERROR: sequence in/out (${inOut.inSec.toFixed(3)}s-${inOut.outSec.toFixed(3)}s) ` +
+          `does not fall inside this clip's span (${headInfo.startSec.toFixed(3)}s-` +
+          `${headInfo.endSec.toFixed(3)}s). Mark an in/out point that lands entirely ` +
+          `within the target clip and try again.`);
+      return;
+    }
 
     let splitAInfo = null;
     let splitBInfo = null;

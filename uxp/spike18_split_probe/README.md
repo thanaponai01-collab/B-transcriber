@@ -109,22 +109,29 @@ UXP Developer Tool too) and note the finding on #17, since it changes what
 
 Open a **throwaway copy** of a project (per this repo's existing convention
 for anything that mutates a live sequence — see `docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`
-Phase 0). Put a clip on V1 at least 5–6 seconds long — long enough that the
-default A=2s/B=4s cut points land inside it — and a clip on A1 for the
-second button. Adjust the A/B fields in the panel if your clip is shorter.
+Phase 0). Put a clip on V1 and a clip on A1, each long enough to mark an
+in/out point inside it. **Mark an in point and an out point on the timeline
+(I / O) that fall entirely within the target clip's span** before clicking —
+the spike reads the sequence's work-area in/out via
+`Sequence.getInPoint()`/`getOutPoint()` and refuses with a clear error if
+they don't land inside the clip.
 
 ## What the two buttons do
 
 Issue #18 specifies "one button" and "two hardcoded times." This has two
-buttons and the times are editable number inputs instead — deliberately:
-acceptance requires repeating the probe on an audio track, which a single
-hardcoded-track button can't do without a code edit and plugin reload
-between runs, and editable fields avoid the same reload cycle just to try a
-different A/B on a differently-sized test clip. Both buttons run the same
-logic (`runSpike("video")` / `runSpike("audio")` in
-`main.js`) against the first item on V1 / A1 of the active sequence:
+buttons instead of one — deliberately: acceptance requires repeating the
+probe on an audio track, which a single hardcoded-track button can't do
+without a code edit and plugin reload between runs. The two "hardcoded
+times" are the sequence's own marked in/out points rather than numbers baked
+into the code — deliberately too, so the spike (and the real plugin it
+feeds) only ever touches the work area the editor marked, never the whole
+clip. Both buttons run the same logic (`runSpike("video")` /
+`runSpike("audio")` in `main.js`) against the first item on V1 / A1 of the
+active sequence:
 
-1. Read the clip's current start/end/in-point/out-point.
+1. Read the sequence's marked in/out points (`Sequence.getInPoint()`/
+   `getOutPoint()`) and the clip's current start/end/in-point/out-point;
+   refuse if the in/out doesn't land entirely inside the clip.
 2. Inside **one** `project.executeTransaction(...)`:
    - Clone the clip in place, *before touching it* (`createCloneTrackItemAction`,
      zero offset, `isInsert=false`) — so the clone inherits the original's
@@ -178,6 +185,12 @@ itself a real, useful answer to record on the issue.
 
 ## Other places the code is guessing
 
+- **`Sequence.getInPoint()`/`getOutPoint()`** as the way to read the
+  timeline's marked work-area in/out (`readSequenceInOut()` in `main.js`) —
+  unverified against a live host, same as everything else here. If this
+  throws or returns something `toSeconds()` can't read, the log dumps the
+  object's real shape the same way it does for TickTime and track-item
+  getters below.
 - **`.seconds` on TickTime values** (`toSeconds()` in `main.js`). If this
   throws, the log line right before it dumps every enumerable property the
   object actually has — use that to fix the accessor name.

@@ -46,19 +46,12 @@
 <body>
   <p>
     Issue #18 spike. Operates on <b>the first clip on V1</b> of the active
-    sequence. Splits it at A, splits the resulting tail at B, disables the
-    middle piece. See <code>README.md</code> in this folder for what to watch
-    for and how to record the result.
+    sequence, cut at <b>the sequence's marked in/out points</b> (set with I/O
+    on the timeline) -- mark an in/out that lands entirely inside the target
+    clip before clicking. Splits at the in point, splits the resulting tail
+    at the out point, disables the middle piece. See <code>README.md</code>
+    in this folder for what to watch for and how to record the result.
   </p>
-
-  <label>
-    Cut point A (seconds from clip start)
-    <input type="number" id="timeA" value="2" step="0.1" min="0" />
-  </label>
-  <label>
-    Cut point B (seconds from clip start, must be &gt; A)
-    <input type="number" id="timeB" value="4" step="0.1" min="0" />
-  </label>
 
   <button id="runVideo">Split V1 clip 1 (video)</button>
   <button id="runAudio">Split A1 clip 1 (audio) — for the audio-track check</button>
