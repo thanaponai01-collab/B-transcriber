@@ -28,6 +28,19 @@
  * (`ppro.SequenceEditor.getEditor(sequence)`), not a `ppro.TrackItem`
  * static -- there is no such export at all.
  *
+ * All executeTransaction() calls run inside project.lockedAccess() --
+ * confirmed as the required pattern (2026-08-25) by diffing against Adobe's
+ * own official sample (AdobeDocs/uxp-premiere-pro-samples,
+ * sample-panels/premiere-api/src/sequenceEditor.ts) and an independent
+ * third-party UXP Premiere plugin (leancoderkavy/premiere-pro-mcp, which
+ * enforces it via a dedicated eslint rule,
+ * @adobe/premierepro/prefer-locked-access-wrapper) -- both call
+ * executeTransaction only from inside lockedAccess(), never bare, which
+ * this file was doing until now. Neither source ever chains a further
+ * create*Action call off createCloneTrackItemAction()'s return value either
+ * -- independent corroboration (not just the type signature) that the
+ * duck-type "happy path" below is expected to lose to the fallback branch.
+ *
  * All frame math here is plain JS seconds arithmetic (offset-from-clip-start
  * in, offset-from-clip-start out), not transcribe/timebase.py's tick-exact
  * rounding -- this file is throwaway spike code with no Python dependency,
@@ -270,54 +283,64 @@ async function runSpike(kind) {
     const sequenceEditor = ppro.SequenceEditor.getEditor(sequence);
     if (!sequenceEditor) throw new Error("SequenceEditor.getEditor(sequence) returned nothing");
 
-    // Re-fetch the item right before use, as late as possible before
-    // entering the transaction. The first live run threw "The script object
-    // is no longer valid" from inside createCloneTrackItemAction when handed
-    // `headItem` as originally fetched (by then several awaits -- readTimes(),
-    // the sequenceEditor lookup -- had elapsed since it was obtained). This is
-    // the lowest-risk fix to try first: minimize the gap between fetch and
-    // use rather than restructuring executeTransaction's callback to be async
-    // (untested, and its type signature is declared synchronous-void). If
-    // this *still* throws the same error, that would show staleness isn't a
-    // matter of elapsed time at all, but something entering the transaction
-    // itself invalidates -- meaning the item would need to be re-fetched from
-    // inside the callback, which requires knowing whether an async callback
-    // is tolerated here (untested; see README).
+    // Re-fetch the item right before use (kept from the prior fix) -- did
+    // NOT clear "The script object is no longer valid" on its own (see
+    // README round 2/3). The actual missing piece, found by diffing against
+    // Adobe's own official sample (sequenceEditor.ts in
+    // AdobeDocs/uxp-premiere-pro-samples) and an independent third-party UXP
+    // Premiere plugin (leancoderkavy/premiere-pro-mcp, which enforces this
+    // via a dedicated eslint rule, @adobe/premierepro/prefer-locked-access-
+    // wrapper): every executeTransaction call in both sources, with no
+    // exception, runs inside project.lockedAccess(() => {...}), never bare.
+    // lockedAccess's own doc text -- "project state will not change during
+    // the execution of callback function" -- is exactly the guarantee a
+    // stale-script-object error would indicate is missing. This file was
+    // calling executeTransaction directly. Fetching freshHeadItem still has
+    // to happen out here (it's async; lockedAccess's callback, like
+    // executeTransaction's, is typed synchronous-void) -- the fix is the
+    // lockedAccess wrapper itself, not moving the fetch again.
     const { item: freshHeadItem } = await getFirstItem(sequence, kind);
 
     let splitAInfo = null;
     let splitBInfo = null;
+    let txResult = null;
 
-    const txResult = await project.executeTransaction((compoundAction) => {
-      splitAInfo = stageSplit(compoundAction, sequenceEditor, freshHeadItem, headInfo, aSec, "A");
-      if (!splitAInfo || !splitAInfo.tailItem) {
-        throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
-          'before B/disable so this transaction commits nothing rather than a half-cut state.');
-      }
+    project.lockedAccess(() => {
+      // executeTransaction's type signature returns `boolean` synchronously,
+      // not `Promise<boolean>` (confirmed against premierepro.d.ts) -- no
+      // `await` here (previously present; harmless on a non-Promise value,
+      // but inaccurate).
+      txResult = project.executeTransaction((compoundAction) => {
+        splitAInfo = stageSplit(compoundAction, sequenceEditor, freshHeadItem, headInfo, aSec, "A");
+        if (!splitAInfo || !splitAInfo.tailItem) {
+          throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
+            'before B/disable so this transaction commits nothing rather than a half-cut state.');
+        }
 
-      // headInfo for the second split is the tail-of-A's own current state,
-      // expressed the same way (start/in as read before ANY split ran --
-      // computed here since we can't re-read from Premiere mid-transaction).
-      const tailAInfo = {
-        startSec: splitAInfo.cutAbsSec,
-        endSec: splitAInfo.tailEndSec,
-        inSec: splitAInfo.cutMediaSec,
-        outSec: splitAInfo.tailOutSec,
-      };
-      splitBInfo = stageSplit(compoundAction, sequenceEditor, splitAInfo.tailItem, tailAInfo, bSec - aSec, "B");
-      if (!splitBInfo || !splitBInfo.tailItem) {
-        throw new Error('split "B" did not produce a chainable tail item -- aborting.');
-      }
+        // headInfo for the second split is the tail-of-A's own current state,
+        // expressed the same way (start/in as read before ANY split ran --
+        // computed here since we can't re-read from Premiere mid-transaction).
+        const tailAInfo = {
+          startSec: splitAInfo.cutAbsSec,
+          endSec: splitAInfo.tailEndSec,
+          inSec: splitAInfo.cutMediaSec,
+          outSec: splitAInfo.tailOutSec,
+        };
+        splitBInfo = stageSplit(compoundAction, sequenceEditor, splitAInfo.tailItem, tailAInfo, bSec - aSec, "B");
+        if (!splitBInfo || !splitBInfo.tailItem) {
+          throw new Error('split "B" did not produce a chainable tail item -- aborting.');
+        }
 
-      // The "middle" piece is what tailA (splitAInfo.tailItem) became after
-      // split B trimmed it down to [A, B] -- disable that object directly.
-      const middleItem = splitAInfo.tailItem;
-      if (typeof middleItem.createSetDisabledAction !== "function") {
-        throw new Error("middle item has no createSetDisabledAction -- aborting.");
-      }
-      compoundAction.addAction(middleItem.createSetDisabledAction(true));
-      log("staged: disable middle piece [A, B]");
-    }, `CutDeck spike18: split ${kind} clip at ${aSec}s/${bSec}s`);
+        // The "middle" piece is what tailA (splitAInfo.tailItem) became after
+        // split B trimmed it down to [A, B] -- disable that object directly.
+        const middleItem = splitAInfo.tailItem;
+        if (typeof middleItem.createSetDisabledAction !== "function") {
+          throw new Error("middle item has no createSetDisabledAction -- aborting.");
+        }
+        compoundAction.addAction(middleItem.createSetDisabledAction(true));
+        log("staged: disable middle piece [A, B]");
+      }, `CutDeck spike18: split ${kind} clip at ${aSec}s/${bSec}s`);
+    });
 
     log(`executeTransaction returned: ${describe(txResult)}`);
     log("Transaction attempt finished. Check the sequence now, and press " +

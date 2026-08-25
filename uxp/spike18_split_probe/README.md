@@ -1,5 +1,46 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 3): found the missing `lockedAccess()` wrapper
+
+Round 2's re-fetch-before-use fix did **not** clear `"The script object is no
+longer valid"` — same error, same stack, on a freshly re-fetched item with no
+further awaits before the transaction call. That confirms round 2's own
+fallback hypothesis: staleness isn't about elapsed time.
+
+Diffed against two real sources instead of guessing again: Adobe's own
+official sample (`AdobeDocs/uxp-premiere-pro-samples`,
+`sample-panels/premiere-api/src/sequenceEditor.ts`) and an independent
+third-party UXP Premiere plugin (`leancoderkavy/premiere-pro-mcp`, which
+enforces the pattern via a dedicated eslint rule,
+`@adobe/premierepro/prefer-locked-access-wrapper`). **Every single
+`executeTransaction` call in both sources, with no exception, runs inside
+`project.lockedAccess(() => {...})`.** This file was calling
+`executeTransaction` bare. `lockedAccess`'s own doc text — "project state
+will not change during the execution of callback function" — is exactly the
+guarantee a stale-script-object error would indicate is missing.
+
+Fixed in `main.js`: `executeTransaction` now runs inside
+`project.lockedAccess(() => {...})`. Also dropped the incorrect `await` on
+`executeTransaction`'s return — its type signature is synchronous `boolean`,
+not `Promise<boolean>`; the `await` was harmless (a no-op on a non-Promise
+value) but wrong. **Untested — this is the next thing a live run needs to
+confirm.**
+
+Both sources also never chain a further `create*Action` call off
+`createCloneTrackItemAction()`'s return value — only ever
+`compoundAction.addAction(cloneAction)`. This corroborates (independently of
+the type signature alone) that `stageSplit()`'s duck-type "happy path" is
+expected to lose to the fallback WARNING/abort branch. If the `lockedAccess`
+fix clears the crash and the next run lands in that fallback, **that is the
+expected result, not a new mystery** — see "The one thing to watch first"
+below for what to do next in that case (the two-transaction redesign).
+
+Separately, still unexplained and still worth checking independently of the
+above: the audio clip on audio track 0 is still reading back as
+`start=0.000s end=2950.120s` (~49 min) against a visible ~24s clip on the
+timeline. Confirm what's actually on audio track 0 before trusting a split
+against it.
+
 **Throwaway.** Answers one question for issue #18: does clone+trim compose
 into a clean split in UXP, and in what order? Not wired into `cutdeck/`,
 `bridge.py`, or `mark_export.py` — those already exist for the real
