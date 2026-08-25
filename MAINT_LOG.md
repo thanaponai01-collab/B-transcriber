@@ -112,3 +112,59 @@ mistake, including the 250ms misread, came from reasoning about one
 constructed example instead of a real distribution.
 
 `MAINT MAINT-001: resolved(Fix, proven)`
+
+---
+
+## MAINT-002 | 2026-08-25 | Fix | UXP spike18 panel loaded but never painted (issue #18)
+
+**Symptom:** `uxp/spike18_split_probe/` loaded into Premiere Pro (v26.3.2.2
+Debug) via UXP Developer Tool with zero console errors, but the panel body
+never rendered — confirmed via DevTools that the DOM was fully populated and
+layout computed a real (non-zero) box model, and that even a zero-dependency
+test page (`<body style="background:red">` + inline `<h1>`, no CSS/JS)
+painted nothing.
+
+**Root cause (proven — via a live control test the director ran):** that
+evidence chain only proved the plugin's HTML/CSS/JS weren't the cause; it
+was initially misread as proof the *host* was at fault (documented, then
+superseded, in the spike's own `README.md`). The actual test that
+disambiguates — Adobe's own official sample panel
+(github.com/AdobeDocs/uxp-premiere-pro-samples) on the identical install —
+rendered fine, ruling the host out. Diffing `manifest.json` against Adobe's
+two current live sample manifests found real schema divergences:
+`preferredDockPosition: "floating"` is not a field in the current schema
+(zero hits searching the whole sample repo); the real fields are
+`preferredFloatingSize`/`preferredDockedSize`. `manifestVersion` was the
+string `"5"` instead of the real bare number `5` — apparently accepted by a
+laxer/legacy parser that skipped real validation, which is consistent with
+a plugin that loads but never paints. Fixing `manifestVersion` to the real
+number turned on strict validation, which then correctly rejected the
+plugin outright (`Expected atleast a single entry in the icons list`) —
+confirming the diagnosis rather than being a new problem: both real Adobe
+samples declare populated `icons` arrays (top-level and per-entrypoint)
+that this manifest never had.
+
+**Treatment:** `manifest.json` — `manifestVersion` back to the bare number
+`5`; `preferredDockPosition` replaced with `preferredFloatingSize` +
+`preferredDockedSize`; added a populated top-level `icons` array and an
+entrypoint `icons` array, both pointing at a new placeholder
+`icons/icon.svg`. Confirmed live: panel now loads and paints.
+
+**Blast radius:** `uxp/spike18_split_probe/manifest.json` and a new
+`icons/icon.svg` only — throwaway spike scope, nothing wired into
+`cutdeck/`, `bridge.py`, or `mark_export.py`. Two earlier same-day commits
+(`a1668d4` manifest host-id fix, `06a52c9` CSS flex-sizing fix) were real,
+independently-correct fixes that did not resolve this symptom — this was a
+third, distinct manifest defect, not a redo of either.
+
+**Strengthened-by:** nothing automated (a UXP panel has no test harness in
+this repo) — evidence is the live reload the director ran, confirming both
+load (no more validation error) and paint.
+
+**Follow-ups:** `icons/icon.svg` is a throwaway placeholder — replace with a
+real icon before this graduates past spike status. The split-logic
+questions issue #18 exists to answer (clone/trim call order, single-
+transaction undo behavior) are now unblocked but still fully untested — see
+`uxp/spike18_split_probe/README.md`.
+
+`MAINT MAINT-002: resolved(Fix, proven)`

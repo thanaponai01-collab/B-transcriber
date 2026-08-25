@@ -3,7 +3,7 @@
   "name": "CutDeck Spike #18 - Split Probe",
   "version": "1.0.0",
   "main": "index.html",
-  "manifestVersion": "5",
+  "manifestVersion": 5,
   "host": {
     "app": "premierepro",
     "minVersion": "24.0.0"
@@ -17,8 +17,27 @@
       },
       "main": "index.html",
       "minimumSize": { "width": 360, "height": 480 },
-      "preferredDockPosition": "floating"
+      "preferredFloatingSize": { "width": 360, "height": 480 },
+      "preferredDockedSize": { "width": 360, "height": 480 },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/icon.svg",
+          "scale": [1, 2],
+          "theme": ["darkest", "dark", "medium", "lightest", "light"]
+        }
+      ]
     }
   ],
-  "icons": []
+  "icons": [
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/icon.svg",
+      "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium", "lightest", "light", "all"],
+      "species": ["pluginList"]
+    }
+  ]
 }

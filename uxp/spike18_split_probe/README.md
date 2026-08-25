@@ -7,41 +7,55 @@ mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
 code. Delete this folder once #18 is closed, unless its answer says the
 approach works and #22 wants to start from it.
 
-## BLOCKED (2026-08-25): panel content never paints on this install
+## RESOLVED (2026-08-25): manifest used two fields that don't exist in the real schema
 
-Loaded successfully (dev mode, developer mode enabled, correct manifest),
-and the panel opens with no console errors. But nothing in it ever renders
-— confirmed this is **not our code**:
+Earlier same-day note (superseded below) concluded this was an unfixable
+host-side compositing bug, based on: DOM fully populated, layout computed
+correctly, DevTools' own hover-highlight overlay rendering correctly, and
+even a zero-dependency test page (`<body style="background:red">`, no CSS
+file, no JS) rendering nothing. That evidence was real, but the conclusion
+drawn from it wasn't — Adobe's own official sample panel
+(github.com/AdobeDocs/uxp-premiere-pro-samples) was tried on this exact
+install per this file's own suggested next step, **and it rendered fine.**
+Same Premiere build, same GPU, same machine. That rules the host out and
+puts the cause back in this plugin.
 
-- DOM is fully populated (verified in DevTools Elements tab — every
-  element from `index.html` is present).
-- Layout computes correctly (Computed tab showed a real box model: correct
-  padding/margin/width for a button element).
-- DevTools' own hover-highlight overlay (drawn independently of the page,
-  directly by the browser engine) renders in the correct position when
-  hovering a DOM node.
-- A zero-dependency test page (`<body style="background:red">` + inline
-  blue `<h1>`, no CSS file, no JS) **still rendered nothing.**
+Diffing `manifest.json` against both of Adobe's current sample manifests
+(`sample-panels/premiere-api/public/manifest.json`,
+`sample-panels/metadata-handler/manifest.json`, fetched live from the repo)
+found two real divergences:
 
-That combination — DOM/layout/DevTools-overlay all working, but the page's
-own content layer never composited to screen, even with zero CSS/JS
-involved — points to a **host-side panel-compositing bug** in this
-Premiere Pro install (title bar reads "Premiere Pro v26.3.2.2 **(Debug)**"
-— a debug build, which may be relevant). Not something fixable from inside
-the plugin.
+- **`preferredDockPosition: "floating"` is not a field in the current UXP
+  Premiere manifest schema.** A code search across the entire sample repo
+  for that string returns zero hits. Both real samples instead declare
+  `preferredFloatingSize` and `preferredDockedSize` (explicit `{width,
+  height}` objects). This file had invented a field name rather than
+  reading a real schema.
+- **`manifestVersion` should be the bare number `5`, not the string `"5"`.**
+  Both real samples use the number. This directly contradicts commit
+  `a1668d4`'s claim (sourced from recollection, not verified against a real
+  manifest) that it "must be" a string — that claim was wrong. (That same
+  commit's `host.app: "premierepro"` fix was correct and independently
+  confirmed: `metadata-handler`'s manifest uses the array form of `host`
+  ours had removed, and `premiere-api`'s uses the object form ours already
+  had — both are apparently accepted, so the array-vs-object change wasn't
+  the load-bearing part of that fix; the app-id string was.)
 
-**Before spending more time on the split logic itself, resolve this:**
-- Check for a Premiere Pro update (a non-Debug build may not have this).
-- Try Adobe's own official minimal UXP sample panel
-  (github.com/AdobeDocs/uxp-premiere-pro-samples) on this same install —
-  if it *also* renders blank, this is an Adobe-side bug worth reporting
-  (community.adobe.com has an active bug-reports section for exactly this
-  category of issue — several UXP-in-Premiere-Pro load/render bugs are
-  already tracked there).
-- Try toggling the Mercury Playback Engine renderer setting
-  (GPU vs. Software Only) in Premiere's Preferences — panel compositing
-  bugs are sometimes GPU-driver-related.
-- A full machine restart (not just Premiere) is cheap to try first.
+`manifest.json` now matches the real schema on both points.
+
+**Update:** fixing `manifestVersion` to the real number `5` turned on real
+schema validation — UDT then rejected the plugin outright with `Expected
+atleast a single entry in the icons list` (this is progress, not a setback:
+it confirms the schema-divergence diagnosis, since the string `"5"` had
+apparently been hitting a laxer/legacy parser that let a malformed manifest
+through silently, which is consistent with the panel loading-but-blank
+symptom this whole thread started from). Added `icons/icon.svg` (a
+throwaway placeholder) and populated both the top-level `icons` array and
+the entrypoint's `icons` array, matching the shape both real Adobe samples
+use. **Reload the plugin and confirm it now loads at all, then confirm the
+panel paints** — GPU toggle, restart, and Premiere update are no longer the
+leading hypotheses; they were reasonable when the host looked like the only
+suspect, but the sample-panel control test moved the suspicion back here.
 
 The split-logic questions this spike exists to answer (clone/trim call
 order, single-transaction undo behavior, etc.) are **still fully open** —
