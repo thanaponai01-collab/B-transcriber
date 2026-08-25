@@ -7,6 +7,58 @@ mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
 code. Delete this folder once #18 is closed, unless its answer says the
 approach works and #22 wants to start from it.
 
+## UPDATE (2026-08-25): panel paints, but first live run hit wrong API names
+
+The manifest fix below got the panel loading and painting for real (confirmed
+live). First click of **Split V1 clip 1** got as far as reading the
+sequence's in/out (`in=0.000s out=24.000s`, correct for the test clip) and
+then failed immediately in `getFirstItem()`:
+
+```
+FAILED: neither getTrackItemCount() nor .trackItemCount exists on audio track 0
+FAILED: neither getTrackItemCount() nor .trackItemCount exists on video track 0
+```
+
+Before re-testing, diffed the whole file against Adobe's actual
+`premierepro.d.ts` (`github.com/adobe/premierepro-types`, fetched fresh
+rather than working from memory again — recollection was already wrong once,
+for the manifest fields below) and found three more guesses that would have
+failed the same way, one at a time, each costing another live round-trip:
+
+- **`Track.getTrackItemCount()` / `.getTrackItem(0)` don't exist at all.**
+  The real API is `track.getTrackItems(Constants.TrackItemType.CLIP, false)`,
+  which returns the whole array directly. This is the bug the log above
+  actually hit. Fixed in `getFirstItem()`.
+- **`TrackItem.getStart()` / `.getEnd()` don't exist either** — this would
+  have been the very next failure once the item-access bug was fixed. Real
+  names are `getStartTime()` / `getEndTime()`. Fixed in `readTimes()`.
+- **`createCloneTrackItemAction` is not a `ppro.TrackItem` static** — no such
+  export exists at all. It lives on `SequenceEditor`, obtained via
+  `ppro.SequenceEditor.getEditor(sequence)`. Fixed in `stageSplit()` /
+  `runSpike()` (now threads a `sequenceEditor` argument through).
+- The types declare `createCloneTrackItemAction` as returning bare `Action`
+  (an opaque `{}` type, no methods) — a real hint that the "chainable
+  TrackItem" happy path was optimistic, but **not proof**: this same file's
+  manifest schema fields (below) were also copied from memory and were
+  wrong, so doc-vs-runtime mismatches are an established risk here, not a
+  hypothetical one. The duck-type check in `stageSplit()` is left in place
+  rather than replaced with an assumption — the next live run is still what
+  actually answers this.
+
+`Sequence.getInPoint()`/`getOutPoint()` (added for the in/out-point scoping
+change) and `TickTime.seconds` / `TickTime.createWithSeconds()` were both
+checked against the same source and are confirmed correct as already
+written. `callOrProp()` also now logs the object's actual shape on failure
+(via `describe()`) instead of just naming the two guesses that failed —
+`toSeconds()` already did this; the track/sequence getters didn't yet, which
+is why the failure above named the guesses but not what was actually on the
+track object.
+
+**Split-logic questions (clone/trim call order, single-transaction undo
+behavior, whether the clone hands back a chainable item) are still fully
+open** — the fixes above just get the next live run to the point where it
+can actually test them.
+
 ## RESOLVED (2026-08-25): manifest used two fields that don't exist in the real schema
 
 Earlier same-day note (superseded below) concluded this was an unfixable
@@ -185,20 +237,21 @@ itself a real, useful answer to record on the issue.
 
 ## Other places the code is guessing
 
-- **`Sequence.getInPoint()`/`getOutPoint()`** as the way to read the
-  timeline's marked work-area in/out (`readSequenceInOut()` in `main.js`) —
-  unverified against a live host, same as everything else here. If this
-  throws or returns something `toSeconds()` can't read, the log dumps the
-  object's real shape the same way it does for TickTime and track-item
-  getters below.
-- **`.seconds` on TickTime values** (`toSeconds()` in `main.js`). If this
-  throws, the log line right before it dumps every enumerable property the
-  object actually has — use that to fix the accessor name.
-- **`TickTime.createWithSeconds(n)`** as the way to build a time to pass
-  into `createSetStartAction` etc. — unverified against a live host.
-- **`getTrackItemCount()`/`getTrackItem(0)`** as the track's item-access
-  API — falls back to bare `.trackItemCount` if the getter doesn't exist,
-  but only for the count, not for item access.
+Confirmed correct against Adobe's `premierepro.d.ts` (see the 2026-08-25
+update above) and no longer flagged here: `Sequence.getInPoint()`/
+`getOutPoint()`, `TickTime.seconds` / `TickTime.createWithSeconds(n)`,
+`Track.getTrackItems(trackItemType, includeEmptyTrackItems)`,
+`TrackItem.getStartTime()`/`getEndTime()`/`getInPoint()`/`getOutPoint()`,
+`SequenceEditor.getEditor(sequence).createCloneTrackItemAction(...)`. Every
+`callOrProp()` call still dumps the object's actual shape via `describe()`
+if a name turns out wrong anyway — the type defs are a strong hint, not a
+guarantee, per this same file's own manifest-schema lesson above.
+
+Still genuinely open:
+
+- **Whether `createCloneTrackItemAction`'s returned `Action` is ever
+  chainable at runtime**, despite the types declaring it opaque — the duck-
+  type check in `stageSplit()` is the thing that answers this for real.
 - Everything assumes the clip has **speed 1.0 and is not reversed** — no
   check for either, unlike the real mark-and-apply plugin's `live_clip.py`
   which refuses both. Fine for a spike against a known test clip; not fine

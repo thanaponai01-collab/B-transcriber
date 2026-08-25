@@ -17,6 +17,17 @@
  * commits. This file checks which one it got (duck-typing the return value)
  * and logs the answer loudly instead of assuming. See README.md.
  *
+ * Adobe's premierepro-types (github.com/adobe/premierepro-types) types
+ * createCloneTrackItemAction() as returning bare `Action` (an opaque `{}`
+ * type with no methods) -- a documented hint that the fallback branch below
+ * is the one to expect, not proof: this project has hit real doc/runtime
+ * mismatches before (the manifest schema fields it initially copied from
+ * memory were wrong too), so the duck-type check stays live rather than
+ * being replaced with an assumption. That same source is also where
+ * createCloneTrackItemAction() itself was found to live on `SequenceEditor`
+ * (`ppro.SequenceEditor.getEditor(sequence)`), not a `ppro.TrackItem`
+ * static -- there is no such export at all.
+ *
  * All frame math here is plain JS seconds arithmetic (offset-from-clip-start
  * in, offset-from-clip-start out), not transcribe/timebase.py's tick-exact
  * rounding -- this file is throwaway spike code with no Python dependency,
@@ -81,14 +92,15 @@ function fromSeconds(seconds) {
 async function callOrProp(obj, methodName, propName, label) {
   if (typeof obj[methodName] === "function") return await obj[methodName]();
   if (obj[propName] !== undefined) return obj[propName];
-  throw new Error(`neither ${methodName}() nor .${propName} exists on ${label}`);
+  log(`WARNING: neither ${methodName}() nor .${propName} exists on ${label}: ${describe(obj)}`);
+  throw new Error(`neither ${methodName}() nor .${propName} exists on ${label} -- see log above for its actual shape`);
 }
 
 // Reads start/end/inPoint/outPoint via callOrProp, trying the getter
 // spelling first (matches the rest of issue #17's documented API).
 async function readTimes(item, label) {
-  const start = await callOrProp(item, "getStart", "start", label);
-  const end = await callOrProp(item, "getEnd", "end", label);
+  const start = await callOrProp(item, "getStartTime", "startTime", label);
+  const end = await callOrProp(item, "getEndTime", "endTime", label);
   const inPoint = await callOrProp(item, "getInPoint", "inPoint", label);
   const outPoint = await callOrProp(item, "getOutPoint", "outPoint", label);
   const result = {
@@ -122,11 +134,12 @@ async function getFirstItem(sequence, kind) {
   const track =
     kind === "video" ? await sequence.getVideoTrack(0) : await sequence.getAudioTrack(0);
   if (!track) throw new Error(`sequence has no ${kind} track 0`);
-  const count = await callOrProp(track, "getTrackItemCount", "trackItemCount", `${kind} track 0`);
-  if (!count || count < 1) throw new Error(`${kind} track 0 has no clips`);
-  const item = await track.getTrackItem(0);
-  if (!item) throw new Error(`${kind} track 0, item 0 came back empty`);
-  return { track, item };
+  // Track has no item-count/item-by-index API (confirmed against Adobe's
+  // premierepro-types after the first live run failed here) -- getTrackItems()
+  // returns the whole array in one call.
+  const items = await track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
+  if (!items || items.length < 1) throw new Error(`${kind} track 0 has no clips`);
+  return { track, item: items[0] };
 }
 
 /**
@@ -142,11 +155,16 @@ async function getFirstItem(sequence, kind) {
  * Returns the tail item handle if the clone call handed one back, else null
  * (caller must abort the transaction in that case -- there's nothing to
  * chain the second split or the disable action onto).
+ *
+ * sequenceEditor is `ppro.SequenceEditor.getEditor(sequence)` -- clone lives
+ * there, not on a `ppro.TrackItem` static (that namespace doesn't exist;
+ * confirmed against Adobe's premierepro-types after the original guess had
+ * never been reached by a live run).
  */
-function stageSplit(compoundAction, headItem, headInfo, offsetSec, label) {
+function stageSplit(compoundAction, sequenceEditor, headItem, headInfo, offsetSec, label) {
   log(`--- staging split "${label}" at +${offsetSec}s from clip start ---`);
 
-  const cloneResult = ppro.TrackItem.createCloneTrackItemAction(
+  const cloneResult = sequenceEditor.createCloneTrackItemAction(
     headItem,
     fromSeconds(0), // timeOffset -- zero: clone lands exactly on top of headItem
     0, // videoTrackVerticalOffset
@@ -249,11 +267,14 @@ async function runSpike(kind) {
       return;
     }
 
+    const sequenceEditor = ppro.SequenceEditor.getEditor(sequence);
+    if (!sequenceEditor) throw new Error("SequenceEditor.getEditor(sequence) returned nothing");
+
     let splitAInfo = null;
     let splitBInfo = null;
 
     const txResult = await project.executeTransaction((compoundAction) => {
-      splitAInfo = stageSplit(compoundAction, headItem, headInfo, aSec, "A");
+      splitAInfo = stageSplit(compoundAction, sequenceEditor, headItem, headInfo, aSec, "A");
       if (!splitAInfo || !splitAInfo.tailItem) {
         throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
           'before B/disable so this transaction commits nothing rather than a half-cut state.');
@@ -268,7 +289,7 @@ async function runSpike(kind) {
         inSec: splitAInfo.cutMediaSec,
         outSec: splitAInfo.tailOutSec,
       };
-      splitBInfo = stageSplit(compoundAction, splitAInfo.tailItem, tailAInfo, bSec - aSec, "B");
+      splitBInfo = stageSplit(compoundAction, sequenceEditor, splitAInfo.tailItem, tailAInfo, bSec - aSec, "B");
       if (!splitBInfo || !splitBInfo.tailItem) {
         throw new Error('split "B" did not produce a chainable tail item -- aborting.');
       }
