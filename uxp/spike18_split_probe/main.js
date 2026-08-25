@@ -1,11 +1,19 @@
 /*
  * CutDeck spike #18 -- split probe.
  *
- * Best-effort implementation of the split recipe issue #18 itself proposes:
- * "trim the original's end back to the cut point first, then clone, then
- * correct the clone's in-point and start." The one genuinely unknown step is
- * what createCloneTrackItemAction() hands back -- a chainable TrackItem, or
- * just an Action descriptor with no item reference until the transaction
+ * Best-effort implementation of a split, staged as: clone the *untouched*
+ * item first, then trim the original's end back to the cut point, then
+ * correct the clone's start/in-point forward to the same cut point. Issue
+ * #18 phrases the recipe as "trim first, then clone, then correct the
+ * clone" -- this file clones first instead, deliberately, so the clone
+ * inherits the original's untouched end/out-point (the tail must keep the
+ * original's real end; cloning after trimming would hand the tail a
+ * pre-truncated one that then needs correcting right back). Record on the
+ * issue whether trim-then-clone also works and which order Premiere prefers.
+ *
+ * The one genuinely unknown step either way is what
+ * createCloneTrackItemAction() hands back -- a chainable TrackItem, or just
+ * an Action descriptor with no item reference until the transaction
  * commits. This file checks which one it got (duck-typing the return value)
  * and logs the answer loudly instead of assuming. See README.md.
  *
@@ -62,20 +70,22 @@ function fromSeconds(seconds) {
   return ppro.TickTime.createWithSeconds(seconds);
 }
 
-// Reads whichever of getStart()/start, getEnd()/end, getInPoint()/inPoint,
-// getOutPoint()/outPoint the live object actually has, trying the getter
-// spelling first (matches the rest of issue #17's documented API) and
-// falling back to a bare property.
+// Calls obj[methodName]() if it exists, else reads the bare obj[propName],
+// else throws -- the "unverified getter spelling" shape this file needs
+// everywhere it touches a live Premiere object.
+async function callOrProp(obj, methodName, propName, label) {
+  if (typeof obj[methodName] === "function") return await obj[methodName]();
+  if (obj[propName] !== undefined) return obj[propName];
+  throw new Error(`neither ${methodName}() nor .${propName} exists on ${label}`);
+}
+
+// Reads start/end/inPoint/outPoint via callOrProp, trying the getter
+// spelling first (matches the rest of issue #17's documented API).
 async function readTimes(item, label) {
-  async function readOne(getterName, propName) {
-    if (typeof item[getterName] === "function") return await item[getterName]();
-    if (item[propName] !== undefined) return item[propName];
-    throw new Error(`neither ${getterName}() nor .${propName} exists on ${label}`);
-  }
-  const start = await readOne("getStart", "start");
-  const end = await readOne("getEnd", "end");
-  const inPoint = await readOne("getInPoint", "inPoint");
-  const outPoint = await readOne("getOutPoint", "outPoint");
+  const start = await callOrProp(item, "getStart", "start", label);
+  const end = await callOrProp(item, "getEnd", "end", label);
+  const inPoint = await callOrProp(item, "getInPoint", "inPoint", label);
+  const outPoint = await callOrProp(item, "getOutPoint", "outPoint", label);
   const result = {
     startSec: toSeconds(start, `${label}.start`),
     endSec: toSeconds(end, `${label}.end`),
@@ -92,7 +102,7 @@ async function getFirstItem(sequence, kind) {
   const track =
     kind === "video" ? await sequence.getVideoTrack(0) : await sequence.getAudioTrack(0);
   if (!track) throw new Error(`sequence has no ${kind} track 0`);
-  const count = await (track.getTrackItemCount ? track.getTrackItemCount() : track.trackItemCount);
+  const count = await callOrProp(track, "getTrackItemCount", "trackItemCount", `${kind} track 0`);
   if (!count || count < 1) throw new Error(`${kind} track 0 has no clips`);
   const item = await track.getTrackItem(0);
   if (!item) throw new Error(`${kind} track 0, item 0 came back empty`);
@@ -129,7 +139,17 @@ function stageSplit(compoundAction, headItem, headInfo, offsetSec, label) {
   let tailItem = null;
   if (cloneResult && typeof cloneResult.createSetStartAction === "function") {
     // Looks like a TrackItem-shaped handle we can chain further create*Action
-    // calls onto directly.
+    // calls onto directly. Still unclear whether the clone mutation itself
+    // needs staging via addAction() or is registered implicitly by virtue of
+    // executing inside the transaction callback -- try staging it too; if
+    // it's not a valid Action, addAction() should throw and that's fine,
+    // it just means the clone was already implicit.
+    try {
+      compoundAction.addAction(cloneResult);
+      log("clone result also accepted by compoundAction.addAction() -- treating it as needing explicit staging.");
+    } catch (e) {
+      log(`compoundAction.addAction(cloneResult) threw (expected if the clone is implicit): ${e}`);
+    }
     tailItem = cloneResult;
   } else if (cloneResult) {
     // Looks like a bare Action descriptor instead -- stage it, but we have
@@ -201,7 +221,7 @@ async function runSpike(kind) {
     let splitAInfo = null;
     let splitBInfo = null;
 
-    const ok = await project.executeTransaction((compoundAction) => {
+    const txResult = await project.executeTransaction((compoundAction) => {
       splitAInfo = stageSplit(compoundAction, headItem, headInfo, aSec, "A");
       if (!splitAInfo || !splitAInfo.tailItem) {
         throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
@@ -232,7 +252,7 @@ async function runSpike(kind) {
       log("staged: disable middle piece [A, B]");
     }, `CutDeck spike18: split ${kind} clip at ${aSec}s/${bSec}s`);
 
-    log(`executeTransaction returned: ${describe(ok)}`);
+    log(`executeTransaction returned: ${describe(txResult)}`);
     log("Transaction attempt finished. Check the sequence now, and press " +
         "Ctrl+Z once to see if it reverses everything in one step.");
   } catch (e) {

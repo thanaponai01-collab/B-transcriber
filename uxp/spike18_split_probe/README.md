@@ -28,13 +28,20 @@ second button. Adjust the A/B fields in the panel if your clip is shorter.
 
 ## What the two buttons do
 
-Both run the same logic (`runSpike("video")` / `runSpike("audio")` in
+Issue #18 specifies "one button" and "two hardcoded times." This has two
+buttons and the times are editable number inputs instead — deliberately:
+acceptance requires repeating the probe on an audio track, which a single
+hardcoded-track button can't do without a code edit and plugin reload
+between runs, and editable fields avoid the same reload cycle just to try a
+different A/B on a differently-sized test clip. Both buttons run the same
+logic (`runSpike("video")` / `runSpike("audio")` in
 `main.js`) against the first item on V1 / A1 of the active sequence:
 
 1. Read the clip's current start/end/in-point/out-point.
 2. Inside **one** `project.executeTransaction(...)`:
-   - Clone the clip in place (`createCloneTrackItemAction`, zero offset,
-     `isInsert=false`).
+   - Clone the clip in place, *before touching it* (`createCloneTrackItemAction`,
+     zero offset, `isInsert=false`) — so the clone inherits the original's
+     untouched end/out-point.
    - Trim the original's end + out-point back to cut point A (the head).
    - Trim the clone's start + in-point forward to cut point A (the tail).
    - Repeat the clone+trim step on the tail, at cut point B, producing the
@@ -42,9 +49,15 @@ Both run the same logic (`runSpike("video")` / `runSpike("audio")` in
    - `createSetDisabledAction(true)` on the middle piece.
 3. Log the transaction's return value.
 
-This is **one hypothesis**, not a known-working recipe — it's the order
-issue #18 itself proposes ("trim the original's end back to the cut point
-first, then clone, then correct the clone's in-point and start"). The one
+This is **one hypothesis**, not a known-working recipe. It deliberately
+does **not** match issue #18's literal phrasing ("trim the original's end
+back to the cut point first, then clone, then correct the clone's in-point
+and start") — cloning after trimming would hand the clone an already-
+truncated end/out-point, which the issue's phrasing doesn't mention
+correcting back. Cloning first sidesteps that: the clone only ever needs
+its start/in-point corrected, never its end/out-point. **Record on the
+issue whether trim-then-clone (the literal order #18 describes) also works,
+and which order Premiere actually prefers** — that's still open. The other
 real unknown is what `createCloneTrackItemAction` hands back.
 
 ## The one thing to watch first: the clone's return value
@@ -53,8 +66,12 @@ real unknown is what `createCloneTrackItemAction` hands back.
 outcomes:
 
 - **It duck-types as a TrackItem** (has a `createSetStartAction` method) —
-  the code chains straight off it, exactly as written. This is the happy
-  path the rest of the script assumes.
+  the code chains straight off it. It also tries `compoundAction.addAction()`
+  on it in case the clone mutation itself still needs explicit staging (the
+  log line before the trim steps says whether that call was accepted or
+  threw — a throw there is expected and harmless if the clone is already
+  implicit once `createCloneTrackItemAction` is called inside the
+  transaction). This is the happy path the rest of the script assumes.
 - **It doesn't** (looks like a bare Action descriptor, or something else) —
   the script logs a `WARNING`, stages just the clone action with no further
   chaining, and the whole transaction throws deliberately (see
