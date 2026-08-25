@@ -7,6 +7,41 @@ mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
 code. Delete this folder once #18 is closed, unless its answer says the
 approach works and #22 wants to start from it.
 
+## UPDATE (2026-08-25, round 2): clone throws "script object is no longer valid"
+
+With the API-name fixes above in place, **Split A1 clip 1** got further: the
+sequence in/out and the clip's own start/end/in/out all read correctly, and
+`stageSplit()` began staging split "A" -- then `createCloneTrackItemAction`
+threw:
+
+```
+FAILED: The script object is no longer valid.
+Error: The script object is no longer valid.
+    at ... e.SequenceEditor.createCloneTrackItemAction (...)
+    at stageSplit (main.js:167:38)
+```
+
+The `headItem` reference handed to the clone call was fetched several
+`await`s earlier (`readTimes()`, the `sequenceEditor` lookup) before the
+transaction opened. Lowest-risk fix tried: re-fetch the item fresh,
+immediately before entering `executeTransaction`, so the gap between fetch
+and use is as small as possible -- rather than restructuring the
+transaction callback to be `async` (untested whether that's even tolerated;
+the type signature declares it synchronous-void). **Still unverified.** If
+this *also* throws the same error, that would show the staleness isn't
+about elapsed time at all, but something `executeTransaction` itself
+invalidates on entry -- meaning items would need to be re-fetched from
+*inside* the callback, which raises the async-callback question above for
+real.
+
+**Separately worth checking, not yet explained:** the audio clip found on
+audio track 0 read back as `start=0.000s end=2950.120s` (~49 minutes) --
+far longer than the ~24s clip visible on the timeline in the screenshot.
+Either audio track index 0 isn't the track carrying the visible clip, or
+something else is off. Confirm what's actually on audio track 0 before
+trusting a split against it once the staleness error clears, or the spike
+will cut the wrong asset even if the clone/trim logic is otherwise correct.
+
 ## UPDATE (2026-08-25): panel paints, but first live run hit wrong API names
 
 The manifest fix below got the panel loading and painting for real (confirmed

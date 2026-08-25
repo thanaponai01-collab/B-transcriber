@@ -270,11 +270,26 @@ async function runSpike(kind) {
     const sequenceEditor = ppro.SequenceEditor.getEditor(sequence);
     if (!sequenceEditor) throw new Error("SequenceEditor.getEditor(sequence) returned nothing");
 
+    // Re-fetch the item right before use, as late as possible before
+    // entering the transaction. The first live run threw "The script object
+    // is no longer valid" from inside createCloneTrackItemAction when handed
+    // `headItem` as originally fetched (by then several awaits -- readTimes(),
+    // the sequenceEditor lookup -- had elapsed since it was obtained). This is
+    // the lowest-risk fix to try first: minimize the gap between fetch and
+    // use rather than restructuring executeTransaction's callback to be async
+    // (untested, and its type signature is declared synchronous-void). If
+    // this *still* throws the same error, that would show staleness isn't a
+    // matter of elapsed time at all, but something entering the transaction
+    // itself invalidates -- meaning the item would need to be re-fetched from
+    // inside the callback, which requires knowing whether an async callback
+    // is tolerated here (untested; see README).
+    const { item: freshHeadItem } = await getFirstItem(sequence, kind);
+
     let splitAInfo = null;
     let splitBInfo = null;
 
     const txResult = await project.executeTransaction((compoundAction) => {
-      splitAInfo = stageSplit(compoundAction, sequenceEditor, headItem, headInfo, aSec, "A");
+      splitAInfo = stageSplit(compoundAction, sequenceEditor, freshHeadItem, headInfo, aSec, "A");
       if (!splitAInfo || !splitAInfo.tailItem) {
         throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
           'before B/disable so this transaction commits nothing rather than a half-cut state.');
