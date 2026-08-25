@@ -3,13 +3,11 @@
   "name": "CutDeck Spike #18 - Split Probe",
   "version": "1.0.0",
   "main": "index.html",
-  "manifestVersion": 5,
-  "host": [
-    {
-      "app": "PPRO",
-      "minVersion": "24.0.0"
-    }
-  ],
+  "manifestVersion": "5",
+  "host": {
+    "app": "premierepro",
+    "minVersion": "24.0.0"
+  },
   "entrypoints": [
     {
       "type": "panel",
