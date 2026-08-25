@@ -1,5 +1,30 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 9): round 8's bigger finding — a committed clone crashes a later, unrelated trim; testing trim with no clone at all
+
+Round 8's live run (both V1 and A1, independently): transaction 1 (clone
+alone) committed cleanly both times. Transaction 2 — a **freshly re-fetched
+item, pure trim, zero clone actions anywhere in it**, in its own separate
+transaction — still threw the identical `A nullptr was dereferenced` from
+inside `executeTransaction`. So round 8's own hypothesis (simultaneous
+staging is what's broken) is wrong, or at least incomplete: a *committed*
+clone appears to poison the track such that even a later, completely
+unrelated transaction touching it crashes the same way.
+
+But there's a control this project hasn't run yet: **every trim attempt so
+far (round 7, round 8) happened with a clone earlier in the same session.**
+Nobody has tried a trim with no clone anywhere in its history. If that also
+crashes, the clone-poisoning theory is wrong and trim itself is broken here
+regardless of clone — a very different, bigger finding. If it commits
+cleanly, round 8's finding stands.
+
+This round removes the clone entirely — `main.js` now stages only a trim of
+the untouched original, no `createCloneTrackItemAction` call anywhere.
+**Untested — this is what the next live run needs to report**, and it needs
+to run on a genuinely clean clip (undo any leftover clones from round 7/8
+first). The `ANALYSIS` log line spells out what a clean commit vs. a crash
+each mean.
+
 ## UPDATE (2026-08-25, round 8): round 7 crashed natively; testing two separate transactions instead of one
 
 Round 7's live run: the clone staged fine (`clone call returned: [object

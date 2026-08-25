@@ -328,9 +328,9 @@ async function runSpike(kind) {
     // Re-fetch right before use, kept from round 2/3's fix.
     const { item: freshHeadItem } = await getFirstItem(sequence, kind);
 
-    await logTrackItems(track, "BEFORE clone");
+    await logTrackItems(track, "BEFORE");
 
-    let cloneResult = null;
+    let cloneResult = null; // unused as of round 9 (no clone this round) -- kept for the round 5-8 history in the comments above
     let txResult = null;
 
     // ROUND 5 (confirmed, 2026-08-25): a same-track, nonzero-timeOffset,
@@ -355,73 +355,61 @@ async function runSpike(kind) {
     // crashed; order inside one transaction was never actually the
     // variable that changed here).
     //
-    // ROUND 8 (2026-08-25): tests whether it's simultaneity specifically
-    // that's broken, by doing the same two operations as two SEPARATE
-    // transactions instead of one compound: commit the clone by itself
-    // first (already proven safe standalone), then commit the trim of the
-    // original by itself second. If this also throws, the finding gets
-    // bigger -- clone leaves the project in a state a *later*, unrelated
-    // transaction can't tolerate either, not just simultaneous staging.
+    // ROUND 8 result (2026-08-25): two SEPARATE transactions instead of one
+    // compound -- clone alone, commit, THEN (in a brand new transaction,
+    // with a freshly re-fetched item reference) trim alone. Transaction 1
+    // committed cleanly both times (video and audio, run independently).
+    // Transaction 2 -- pure trim, NO clone action anywhere in it -- still
+    // threw the identical "A nullptr was dereferenced" from inside
+    // executeTransaction, on both tracks. So it isn't simultaneous staging
+    // that's broken; a committed clone appears to poison the track for a
+    // later, unrelated transaction too.
+    //
+    // ROUND 9 (2026-08-25): the missing control. Every trim attempt so far
+    // (round 7, round 8) happened with a clone earlier in the same session.
+    // This round removes the clone entirely -- no createCloneTrackItemAction
+    // call anywhere -- and stages ONLY a trim of the untouched original, to
+    // find out whether trim itself is what's broken here regardless of any
+    // clone history, or whether it really is clone-then-trim (even across
+    // transactions) that's the trigger. Cheapest, highest-value next test:
+    // if this crashes too, the clone theory is wrong and trim itself needs
+    // investigating; if this commits cleanly, round 8's finding stands and
+    // clone leaving the project poisoned for later transactions is real.
     const cutAbsSec = headInfo.startSec + bSec;
     const cutMediaSec = headInfo.inSec + bSec;
+    log(`trimming original's end to cut point B (no clone in this round at all): ` +
+        `absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s`);
 
     project.lockedAccess(() => {
       txResult = project.executeTransaction((compoundAction) => {
-        cloneResult = sequenceEditor.createCloneTrackItemAction(
-          freshHeadItem,
-          fromSeconds(PROBE_OFFSET_SEC),
-          0, // videoTrackVerticalOffset -- zero: same track
-          0, // audioTrackVerticalOffset -- zero: same track
-          false, // alignToVideo
-          false // isInsert -- overwrite, onto empty space (confirmed working in round 5)
-        );
-        log(`clone call returned: ${describe(cloneResult)}`);
-        if (!compoundAction.addAction(cloneResult)) {
-          throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
-        }
-      }, `CutDeck spike18: clone-only, transaction 1 of 2 (${kind})`);
-    });
-    log(`transaction 1 (clone only) executeTransaction returned: ${describe(txResult)}`);
-    await logTrackItems(track, "AFTER transaction 1 (clone only)");
-
-    // Re-fetch right before the second transaction -- same discipline as
-    // before every prior transaction in this file, and doubly warranted
-    // here since this is specifically testing whether crossing a
-    // transaction boundary after a clone leaves things in a bad state.
-    const { item: headItemForTrim } = await getFirstItem(sequence, kind);
-    log(`trimming original's end to cut point B: absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s`);
-
-    let trimTxResult = null;
-    project.lockedAccess(() => {
-      trimTxResult = project.executeTransaction((compoundAction) => {
-        const trimEndAction = headItemForTrim.createSetEndAction(fromSeconds(cutAbsSec));
+        const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
         if (!compoundAction.addAction(trimEndAction)) {
           throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
         }
-        if (typeof headItemForTrim.createSetOutPointAction === "function") {
-          const trimOutAction = headItemForTrim.createSetOutPointAction(fromSeconds(cutMediaSec));
+        if (typeof freshHeadItem.createSetOutPointAction === "function") {
+          const trimOutAction = freshHeadItem.createSetOutPointAction(fromSeconds(cutMediaSec));
           if (!compoundAction.addAction(trimOutAction)) {
             throw new Error("compoundAction.addAction(trimOutAction) returned false -- aborting.");
           }
         } else {
-          log("WARNING: headItemForTrim has no createSetOutPointAction -- out-point left unset.");
+          log("WARNING: freshHeadItem has no createSetOutPointAction -- out-point left unset.");
         }
-      }, `CutDeck spike18: trim-original-only, transaction 2 of 2 (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
+      }, `CutDeck spike18: trim-only control, no clone (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
     });
-    log(`transaction 2 (trim only) executeTransaction returned: ${describe(trimTxResult)}`);
+    log(`trim-only executeTransaction returned: ${describe(txResult)}`);
 
-    const afterItems = await logTrackItems(track, "AFTER transaction 2 (trim only)");
-    if (afterItems.length >= 2) {
-      log("ANALYSIS: if both transactions committed with no crash, compare item[0]'s " +
-          `end/out above against the trim target (absolute=${cutAbsSec.toFixed(3)}s ` +
-          `media=${cutMediaSec.toFixed(3)}s), and item[1]'s duration against the FULL ` +
-          `original duration (${(headInfo.endSec - headInfo.startSec).toFixed(3)}s) -- ` +
-          "since the clone committed BEFORE the trim this time, it should be unambiguous " +
-          "that item[1] captured the pre-trim (full) state.");
+    const afterItems = await logTrackItems(track, "AFTER trim-only (no clone)");
+    if (afterItems.length >= 1) {
+      log("ANALYSIS: if this committed with no crash, compare item[0]'s end/out above " +
+          `against the trim target (absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s) ` +
+          "-- did the trim apply? A clean commit here means trim itself is fine and round " +
+          "8's finding (clone poisons later transactions) stands. A crash here instead " +
+          "means trim itself is broken regardless of clone history, which changes the " +
+          "finding completely.");
     }
     log("Diagnostic finished -- do NOT click again on this clip yet. Record whether " +
-        "transaction 2 crashed (same as round 7) or committed cleanly on issue #18, " +
-        "then press Ctrl+Z twice (once per transaction) to undo before trying anything else.");
+        "this crashed or committed cleanly on issue #18, then press Ctrl+Z to undo " +
+        "before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
