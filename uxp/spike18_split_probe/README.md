@@ -7,16 +7,48 @@ mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
 code. Delete this folder once #18 is closed, unless its answer says the
 approach works and #22 wants to start from it.
 
-## Load it
+## Load it (dev mode — the default, matches issue #18)
 
-UXP Developer Tool → **Add Plugin** → point at this folder's `manifest.json`
-(not a `.ccx`; see #17 on the cold-start permission bug with packaged
-installs). Load, then open the panel from Premiere's plugin panel list.
+UXP Developer Tool → **Add Plugin** → point at this folder's `manifest.json`.
+Load, then open the panel from Premiere's plugin panel list.
 
 Open the browser DevTools console for the plugin too (UXP Developer Tool →
 the plugin's row → the `</>` / "Debug" icon) — `main.js` logs everything to
 both the on-panel log box and `console.log`, but the console is where you'll
 see full object dumps if a line gets truncated on-panel.
+
+## Install it as a `.ccx` instead (optional, for convenience)
+
+Issue #18 says load via UXP Developer Tool, not a `.ccx` install — the
+reason is #17's documented cold-start bug: an *installed* plugin's
+`ws://127.0.0.1` **network permission** isn't honored on cold start. This
+spike declares no network permission at all (no `requiredPermissions`, no
+WebSocket), so that specific bug may simply not apply here — but that's
+untested, not confirmed. If it does misbehave, that itself is useful signal
+for #17/#22 (the real plugin *does* need the WebSocket).
+
+To package it:
+
+1. UXP Developer Tool → **Add Plugin** on this folder, if not already added.
+2. Click the plugin's **⋮** menu → **Package**. First time only: UDT prompts
+   to generate a self-signed certificate — any placeholder name/org/email is
+   fine, this is for local install, not Marketplace distribution.
+3. UDT writes a `<name>.ccx` next to this folder (or wherever you point it).
+   Double-click it — this hands off to Creative Cloud Desktop's installer
+   (must be running). Confirm the install prompt.
+4. **Fully quit and reopen Premiere Pro** (not just close/reopen the
+   project) so it re-scans installed plugins.
+5. Check **Window → Extensions** (or **Plugins**, depending on version) for
+   "CutDeck Spike #18" — it should now open without UXP Developer Tool
+   running at all.
+
+If the panel doesn't appear, or throws immediately on open, or you see
+anything resembling `"Permission denied to the url ... Manifest entry not
+found"`: that's #17's cold-start bug showing up even without a declared
+network permission. Fall back to the dev-mode load above (still fully
+intact — installing the `.ccx` doesn't remove the ability to load it via
+UXP Developer Tool too) and note the finding on #17, since it changes what
+#22's real plugin needs to work around.
 
 ## Before clicking anything
 
