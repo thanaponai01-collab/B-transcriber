@@ -1,5 +1,32 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 5): zero-offset clone confirmed to be a no-op — testing a nonzero offset next
+
+Round 4's live run: `executeTransaction returned: true` (committed, no
+throw), but `logTrackItems()` showed **exactly 1 item both before and after,
+byte-identical** (`start=0.000s end=2950.120s in=0.000s out=2950.120s`,
+`disabled=false` both times). A same-track, zero-time-offset,
+`isInsert=false` (overwrite) clone is confirmed to be a no-op — "overwrite"
+means the clone replaces the original in place rather than coexisting with
+it, at least in this degenerate 100%-identical-span case. Rules out the
+zero-offset case entirely for building a split.
+
+One variable changed for this round: `main.js` now clones with a large
+nonzero `timeOffset` (`PROBE_OFFSET_SEC = 3600`, i.e. 1 hour past the clip's
+own start) so the clone lands on empty track space with nothing to
+overwrite — same track, same `isInsert=false`, everything else unchanged.
+**Untested — this is what the next live run needs to report.** This only
+tests whether a nonzero-offset clone produces a genuine second item at all,
+not yet where a real split's tail needs to land — that positioning logic is
+a later round, once there's a confirmed way to get an item reference to the
+new clone after commit (still via re-querying the track by position, since
+the return value stays non-chainable regardless of offset).
+
+If this also produces only 1 item, `isInsert=false` may not be usable for
+producing a duplicate at all, and `isInsert=true` (which ripples/shifts the
+timeline, per its own doc text) would need trying next — a bigger design
+question, since the whole appeal of "clone in place" was avoiding ripple.
+
 ## UPDATE (2026-08-25, round 4): lockedAccess fix confirmed live; now probing what clone actually produces
 
 Round 3's `lockedAccess` fix worked — `"The script object is no longer

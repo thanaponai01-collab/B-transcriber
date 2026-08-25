@@ -333,23 +333,37 @@ async function runSpike(kind) {
     let cloneResult = null;
     let txResult = null;
 
+    // ROUND 5 (2026-08-25): round 4's live run showed executeTransaction
+    // returning true (committed, no throw) but the track still had exactly
+    // 1 item, byte-identical to before (same start/end/in/out). A zero-
+    // offset, same-track, isInsert=false clone is a no-op -- "overwrite"
+    // really does mean the clone replaces the original in place rather than
+    // coexisting with it. One variable changed from round 4: a large,
+    // deliberately out-of-clip-range timeOffset (1 hour past the clip's own
+    // start) so the clone lands on empty track space with nothing to
+    // overwrite. This only tests whether a nonzero-offset clone produces a
+    // genuine second item at all -- not yet where the real split's tail
+    // needs to end up; that's a later round once an item reference can be
+    // obtained post-commit.
+    const PROBE_OFFSET_SEC = 3600;
+
     project.lockedAccess(() => {
       // executeTransaction's type signature returns `boolean` synchronously,
       // not `Promise<boolean>` (confirmed against premierepro.d.ts).
       txResult = project.executeTransaction((compoundAction) => {
         cloneResult = sequenceEditor.createCloneTrackItemAction(
           freshHeadItem,
-          fromSeconds(0), // timeOffset -- zero: same position as the original
+          fromSeconds(PROBE_OFFSET_SEC), // timeOffset -- nonzero, lands well past the clip's own end
           0, // videoTrackVerticalOffset -- zero: same track
           0, // audioTrackVerticalOffset -- zero: same track
           false, // alignToVideo
-          false // isInsert -- false (overwrite): the unverified case
+          false // isInsert -- false (overwrite), now onto empty space instead of the original's own span
         );
         log(`clone call returned: ${describe(cloneResult)}`);
         if (!compoundAction.addAction(cloneResult)) {
           throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
         }
-      }, `CutDeck spike18: clone-only probe (${kind})`);
+      }, `CutDeck spike18: clone-only probe (${kind}), offset +${PROBE_OFFSET_SEC}s`);
     });
 
     log(`executeTransaction returned: ${describe(txResult)}`);
