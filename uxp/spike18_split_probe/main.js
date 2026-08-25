@@ -382,5 +382,27 @@ async function runSpike(kind) {
   }
 }
 
+// Dual-fallback pattern (navigator.clipboard first, uxp module's clipboard
+// second) confirmed against a real live Premiere UXP plugin
+// (rtwoo/soundscape-generator, aisoundscapes_premiere_plugin/main.js) rather
+// than assumed -- this file has been burned by unverified API guesses
+// before.
+async function copyLog() {
+  const text = logEl.textContent;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else if (require("uxp").clipboard) {
+      require("uxp").clipboard.copyText(text);
+    } else {
+      throw new Error("no clipboard API available (neither navigator.clipboard nor uxp.clipboard)");
+    }
+    log("--- log copied to clipboard ---");
+  } catch (e) {
+    log(`FAILED to copy log: ${e && e.message ? e.message : e}`);
+  }
+}
+
 document.getElementById("runVideo").addEventListener("click", () => runSpike("video"));
 document.getElementById("runAudio").addEventListener("click", () => runSpike("audio"));
+document.getElementById("copyLog").addEventListener("click", copyLog);
