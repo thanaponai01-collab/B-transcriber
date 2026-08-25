@@ -1,5 +1,34 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 12): clone+trim confirmed on a real cut; now repositioning the clone into the tail
+
+Round 11's first attempt accidentally re-used a stale in/out mark (the
+clip's own end had gotten stuck at 24s from an earlier round). Re-run with a
+genuine in/out mark inside the full clip (`57.080s`–`135.960s`) gave a
+clean, fully confirmed result: `item[0]` (trimmed original) read back
+`end=out=135.960s` exactly as predicted, and `item[1]` (the clone at the
+temp offset) read back the **full pre-trim duration** (`2950.120s`) —
+confirming the clone captured the original's untouched state even with the
+trim happening in the same commit. **The single-transaction clone+trim
+split design is confirmed working** for the head/trim half.
+
+This round does the other half: repositioning the clone from its temp
+parking spot to its real final position, right after the trimmed head, so
+it becomes the tail. This needs its own real test, not an assumption from
+round 10 — round 10's `createSetEndAction` test happened to have `start=0`
+*and* `in=0` on that clip, so "the bound snaps to match the new value" and
+"the bound shifts by the same delta" were indistinguishable outcomes. This
+clone sits at `start=3600s, in=0.000s` (start ≠ in) — a case where those two
+theories genuinely diverge, so it's a real test. `main.js` now finds the
+clone via a new `findItemNearStart()` helper (its return value still isn't
+chainable, so it has to be re-queried regardless of offset) and calls
+`createSetStartAction` **only** (no `createSetInPointAction` — same fix as
+round 10/11) to move it to `cutAbsSec`. **Untested — this is what the next
+live run needs to report.** The correct answer for a real split is: the
+in-point should land on `cutMediaSec` (continuing exactly where the head's
+trim cut off), not stay at `0` and not snap to `cutAbsSec`'s own value — the
+log's `ANALYSIS` line spells out what each possible result would mean.
+
 ## UPDATE (2026-08-25, round 11): ROOT CAUSE FOUND — retrying the original clone+trim design with the fix
 
 Round 10's live run: `createSetEndAction` alone committed cleanly, **and the
