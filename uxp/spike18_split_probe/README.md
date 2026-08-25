@@ -1,5 +1,39 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 6): nonzero-offset clone confirmed working; copy-log needs its own manifest permission
+
+**Round 5 succeeded.** A live run's log showed the track already holding 2
+items before that particular click even started: `[0]` the original
+(`start=0.000s end=2950.120s`) and `[1]` a real duplicate at
+`start=3600.000s end=6550.120s in=0.000s out=2950.120s` — correct duration,
+correct in/out (full copy of the original's source range, just shifted
++3600s in sequence time). That `[1]` was produced by an *earlier* click of
+the same round-5 build; the click that generated the log ran again with the
+destination already occupied, so its own before/after pair was another
+no-op overwrite (expected, consistent with round 4/5 — overwriting existing
+content is still a no-op either way). **The real finding: a same-track,
+nonzero-`timeOffset`, `isInsert=false` clone onto genuinely empty track
+space produces a distinct, correctly-shaped second item.** The two-
+transaction redesign (commit clone+head-trim, re-query the track for the
+new item by its known predicted position, commit a second transaction to
+finish the tail + disable) is now unblocked — no longer guessing on top of
+an unverified clone geometry.
+
+Also this round: added a "Copy log to clipboard" button (dual-fallback:
+`navigator.clipboard.writeText` first, `require("uxp").clipboard.copyText`
+second — pattern confirmed against a real live Premiere UXP plugin,
+`rtwoo/soundscape-generator`). First live click failed with a genuine,
+informative error: `Clipboard access not supported for 3P plugins with
+manifest version upto 4. Valid manifest entry required from manifest
+version 5.` We're already on `manifestVersion: 5` (round 1 fix) — clipboard
+needs its own explicit `requiredPermissions` entry too. Confirmed against
+the same official Adobe sample used for the earlier manifest fixes
+(`sample-panels/premiere-api/public/manifest.json`):
+`"requiredPermissions": { "clipboard": "readAndWrite" }`. Added to
+`manifest.json`. **Untested** — manifest changes typically need a full
+plugin reload (remove + re-add in UXP Developer Tool, not just a panel
+refresh) to take effect; confirm the copy button works on the next round.
+
 ## UPDATE (2026-08-25, round 5): zero-offset clone confirmed to be a no-op — testing a nonzero offset next
 
 Round 4's live run: `executeTransaction returned: true` (committed, no
