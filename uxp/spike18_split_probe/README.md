@@ -1,5 +1,40 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 8): round 7 crashed natively; testing two separate transactions instead of one
+
+Round 7's live run: the clone staged fine (`clone call returned: [object
+Action]...`, no JS error), then `executeTransaction` itself threw `A nullptr
+was dereferenced` — no exception frame inside the callback, meaning our
+staging code (clone, then the two trim actions) ran to completion without a
+JS-level error, and the native commit choked when actually applying the
+combination. This is a real crash, not a guess-gone-wrong: clone alone
+(rounds 5–6, live-confirmed twice) and trim alone (proven safe in a real
+production plugin, `leancoderkavy/premiere-pro-mcp`, which stages
+`createSetStartAction`/`createSetEndAction`/etc. routinely) are each
+individually fine. The suspect is specifically **combining a clone with
+another structural edit inside one compound transaction** — not trim in
+general, and the JS-level clone-then-trim staging order inside that one
+callback was never actually the tested variable (it stayed constant; only
+"together" vs "separate" changes between round 7 and this round).
+
+This round: same two operations, split into two separate transactions —
+commit the clone alone first (transaction 1, reusing the already-proven
+round 5/6 code unchanged), then commit the trim of the original alone
+second (transaction 2, re-fetching a fresh item reference right before it,
+same discipline as every prior transaction in this file). **Untested — this
+is what the next live run needs to report.** Two outcomes:
+
+- **Both commit cleanly** — the nullptr crash is specifically about
+  simultaneity, and the real plugin's split recipe needs two transactions
+  per split (one undo step each, not one shared undo step across the whole
+  split — a real design change from the original "single transaction, single
+  undo" goal, worth flagging on #18 if confirmed).
+- **Transaction 2 also crashes** — the finding gets bigger: a clone leaves
+  the project in a state that even an unrelated *later* transaction can't
+  tolerate, which would point at something needing to happen between the
+  two transactions (a save? a redraw? re-reading sequence state some other
+  way?) rather than just "don't combine them."
+
 ## UPDATE (2026-08-25, round 7): testing clone+trim composed in one transaction
 
 Round 5 re-confirmed with a clean single-click before/after (1 item → 2
