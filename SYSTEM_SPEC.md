@@ -244,6 +244,16 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
 | `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); emits an audio-only crossfade transition on word-blade junctions; CLI `python -m cutdeck.xml_export --job-id N` |
 | `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
+| `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded as the in-place timestamp source by `live_clip.py` (issue #17/#20), kept in place but unused by that feature |
+| `mark_export.py` | CutPlan → JSON **mark plan** (frame numbers + idx/reason per CUT region) for the UXP Mark/Apply plugin (issue #17/#19); `cutdeck.mode: mark` in `export_mode.py`; refuses VFR, no ordering requirement (nothing ripples during Mark) |
+| `live_clip.py` | `ClipDescriptor` + `plan_from_live_clip` — builds a sequence-time `CutPlan` from a live clip's original media file (no mixdown render); refuses non-unit speed or reversed clips (`LiveClipRefused`); supersedes `sequence_mixdown.py` for this feature (issue #17/#20) |
+| `bridge.py` | `handle_message(req) -> dict` (pure — the primary test seam) + a loopback-only `websockets` server wrapping it; hello/plan/error protocol, structured refusals never exceptions on the wire, never probes a timebase (issue #17/#21); CLI `python -m cutdeck.bridge --port 7890` |
+
+The retired ExtendScript/QE-DOM `in_place` mode (`jsx_export.py`, razor + reverse-
+chronological ripple-delete) has been removed — see `TODO_LEDGER.md` for why and
+`docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`'s superseded-banner for the corrected history.
+`mark` (split + disable, then one atomic ripple-delete of everything still disabled via
+a UXP plugin) replaces it.
 
 Status: see `docs/HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
 Phases 0–2 (rough cut, FCP7 export, word-level fillers/stutters/blade contract),

@@ -1,15 +1,16 @@
 """export_mode.py — cutdeck.mode config selection (Phase 4,
-docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
+docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md; ``mark`` added by issue #17/#19).
 
-Distinguishes the two exporters CutDeck can hand a CutPlan to:
+Distinguishes the exporters CutDeck can hand a CutPlan to:
 
-  * ``new_sequence`` -- ``cutdeck.xml_export.to_xml``, the existing "build a
-    fresh FCP7 sequence for the editor to import" path.
-  * ``in_place``     -- ``cutdeck.jsx_export.to_jsx``, this handoff's "razor +
-    ripple-delete an already-assembled live sequence" path.
+  * ``new_sequence`` -- ``cutdeck.xml_export.to_xml``, "build a fresh FCP7
+    sequence for the editor to import".
+  * ``mark``         -- ``cutdeck.mark_export.to_mark_plan``, "split + disable
+    CUT regions on the editor's own live sequence via the UXP Mark/Apply
+    plugin" (issue #17). Supersedes the retired ExtendScript ``in_place`` mode.
 
-They stay two separate modules with different risk profiles (see both modules'
-docstrings) — this file only picks between them so callers don't have to guess
+They stay separate modules with different risk profiles (see each module's
+docstring) — this file only picks between them so callers don't have to guess
 from context.
 """
 
@@ -18,8 +19,8 @@ from __future__ import annotations
 from typing import Callable
 
 MODE_NEW_SEQUENCE = "new_sequence"
-MODE_IN_PLACE = "in_place"
-VALID_MODES = (MODE_NEW_SEQUENCE, MODE_IN_PLACE)
+MODE_MARK = "mark"
+VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK)
 
 
 def exporter_for_mode(mode: str) -> Callable:
@@ -32,9 +33,9 @@ def exporter_for_mode(mode: str) -> Callable:
     if mode == MODE_NEW_SEQUENCE:
         from cutdeck.xml_export import to_xml
         return to_xml
-    if mode == MODE_IN_PLACE:
-        from cutdeck.jsx_export import to_jsx
-        return to_jsx
+    if mode == MODE_MARK:
+        from cutdeck.mark_export import to_mark_plan
+        return to_mark_plan
     raise ValueError(f"unrecognized cutdeck.mode {mode!r} — must be one of {VALID_MODES}")
 
 
@@ -43,6 +44,6 @@ def mode_from_config(cfg: dict) -> str:
 
     Defaults to ``new_sequence`` — the existing, already-proven export path —
     on a missing key, so an unconfigured project never silently switches to
-    the riskier in-place mode.
+    mark-and-apply on a live sequence unasked.
     """
     return str(((cfg or {}).get("cutdeck", {}) or {}).get("mode", MODE_NEW_SEQUENCE))

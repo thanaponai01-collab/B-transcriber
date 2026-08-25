@@ -356,15 +356,14 @@ segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split
 
-# docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md Phase 4 — which exporter consumes a
-# CutPlan. 'new_sequence' (default): xml_export.py builds a fresh FCP7 sequence
-# for the editor to import — the proven, lower-risk path. 'in_place':
-# jsx_export.py razors + ripple-deletes CUT spans directly in an already-
-# assembled live sequence (multicam workflow) — more dangerous, since it edits
-# a project in place instead of writing a file the editor chooses to import.
-# See cutdeck/export_mode.py.
+# which exporter consumes a CutPlan. 'new_sequence' (default): xml_export.py
+# builds a fresh FCP7 sequence for the editor to import — the proven,
+# lower-risk path. 'mark': mark_export.py turns the plan into a mark plan the
+# UXP Mark/Apply plugin (issue #17) uses to split + disable CUT regions on
+# the editor's own live sequence, in place, without deleting anything until
+# the editor hits Apply. See cutdeck/export_mode.py.
 cutdeck:
-  mode: new_sequence  # new_sequence | in_place
+  mode: new_sequence  # new_sequence | mark
 
 # Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
 # model served by `ollama serve`, never an external API. Off by default —

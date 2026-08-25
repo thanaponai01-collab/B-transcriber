@@ -1,6 +1,13 @@
 """sequence_mixdown.py — sequence-mixdown ingest path (Phase 2,
 docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
 
+**Superseded as the in-place timestamp source by ``cutdeck/live_clip.py``**
+(issue #17/#20), which reads the clip's original media file directly instead
+of requiring a rendered mixdown export — no render wait, full-quality audio,
+and it sidesteps the fabricated-25fps timebase trap this module documents
+below. This module stays in place for now; it is not the path the UXP
+Mark/Apply feature uses.
+
 A thin wrapper, not new pipeline code:
 
     export mixdown (dialogue tracks) from a live sequence   [human/CEP step]
@@ -77,8 +84,8 @@ def plan_from_mixdown(
             "is usually audio-only, so probe() silently falls back to a fabricated "
             "25fps timebase when it finds no video stream. Pass the live sequence's "
             "own Timebase explicitly (or --fps on the CLI) unless it really is "
-            "25fps — a wrong timebase here mis-times every razor cut jsx_export.py "
-            "later computes from this plan.",
+            "25fps — a wrong timebase here mis-times every cut computed from "
+            "this plan.",
             job_id, mixdown_path,
         )
 
@@ -115,8 +122,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                           "probe fps from — probing it directly silently falls back to a "
                           "fabricated 25fps timebase (transcribe.timebase.probe's "
                           "no-video-stream default). Required unless the sequence really "
-                          "is 25fps, since a wrong timebase here mis-times every razor cut "
-                          "jsx_export.py later computes from this plan.")
+                          "is 25fps, since a wrong timebase here mis-times every cut "
+                          "computed from this plan.")
     ap.add_argument("--config", default=str(_DEFAULT_CONFIG))
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
     ap.add_argument("--dry-run", action="store_true", help="print plan, do not persist")

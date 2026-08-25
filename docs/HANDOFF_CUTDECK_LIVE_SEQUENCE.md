@@ -1,5 +1,20 @@
 # HANDOFF — CutDeck: in-place live-sequence cutting (single-clip + multicam)
 
+**Superseded (2026-08-25, issue #17/#23).** The ExtendScript/QE-DOM design below
+(`cutdeck/jsx_export.py`, razor + reverse-chronological ripple-delete) has been
+retired and removed — see issue #17's spec for why (no launcher in Premiere 2026,
+ExtendScript withdrawn September 2026, silent QE no-ops confirmed on 26.3) and
+`TODO_LEDGER.md` for the corrected findings. The replacement is a UXP **mark-and-apply**
+plugin (split + disable, then one ripple-delete of everything still disabled).
+**This document's multicam framing was also wrong and is corrected here rather than
+rewritten wholesale, to keep the historical record legible:** the claim below that
+in-place cutting "is what makes multicam workable" does not hold — the editor's real
+project (`20260217 - ATIME DO DEE.prproj`, inspected directly) contains **zero**
+multicam clips across 28 sequences. The real target is a single clip, or a stack of
+already-synced raw clips assembled by hand; multicam is out of scope for issue #17.
+Everything else below (Phases 0–4) describes the retired design and is kept for
+historical context only — do not build against it.
+
 **For:** Claude Code, working in `Transcriber_v2` (repo: `B-transcriber`).
 **Hardware:** RTX 3070, 8 GB VRAM. Windows host.
 **Prime directive:** same as every CutDeck handoff — a false cut is worse than a missed
@@ -20,10 +35,15 @@ That mode stays as-is — it's the right shape for "cut a fresh clip into a roug
 
 This handoff adds a second, deliberately separate mode: **cut an already-assembled
 Premiere sequence in place** — razor + reverse-chronological ripple-delete, executed live
-via generated ExtendScript, instead of building a new sequence for re-import. This is what
-makes multicam workable: an editor syncs N camera angles into a sequence once, by hand or
-via Premiere's own multicam tools; CutDeck never touches angle assignment, sync, or
-effects — it only removes dead air from the existing vertical stack.
+via generated ExtendScript, instead of building a new sequence for re-import.
+
+**Corrected 2026-08-25 (issue #23):** the paragraph originally here justified this mode
+with multicam ("an editor syncs N camera angles into a sequence... this is what makes
+multicam workable"). That justification was never checked against the editor's real
+projects and turned out to be wrong — `20260217 - ATIME DO DEE.prproj` has zero multicam
+clips across 28 sequences. The real target this mode serves is a single clip already
+placed on the timeline, or a stack of already-synced raw clips assembled by hand — not
+multicam sync/effects, which CutDeck was never going to touch either way.
 
 **Naming, on purpose:** `xml_export.py` = *new-sequence* mode. This handoff's module,
 `cutdeck/jsx_export.py`, = *in-place* mode. Both consume the same `CutPlan` type. Don't

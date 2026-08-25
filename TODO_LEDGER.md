@@ -3,7 +3,72 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
-## CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
+## CutDeck mark-and-apply live-sequence cutting (issue #17) — supersedes the section below — 2026-08-25
+
+**The ExtendScript/QE-DOM design in the section immediately below this one is retired.**
+`cutdeck/jsx_export.py` and its test were deleted (issue #23); `cutdeck.mode`'s `in_place`
+value is gone (unrecognized values still raise loudly, per `export_mode.py`'s existing
+discipline). Replaced by a **UXP mark-and-apply** plugin: split every track at every cut
+boundary and *disable* the region rather than deleting it (`cutdeck/mark_export.py`,
+issue #19); one later Apply pass collects everything still disabled and ripple-deletes it
+in one atomic `executeTransaction`. See issue #17's spec for the full design and issues
+#18–#23 for the build breakdown.
+
+**Corrections to the findings below, each wrong and each recorded here with its reason so
+a future session cannot re-derive the wrong conclusion from these notes alone:**
+
+- **"The UXP `premierepro` API has no split/razor action of any kind... a hard capability
+  wall, not a translation/API-naming problem."** True for a single call, **false as a
+  capability claim**. A split composes from primitives UXP does expose, all verified
+  against Adobe's published type definitions (`adobe/premierepro-types`,
+  `src/premierepro.d.ts`): `createCloneTrackItemAction` (duplicate) +
+  `createSetStartAction`/`createSetEndAction` (trim sequence-time bounds) +
+  `createSetInPointAction`/`createSetOutPointAction` (trim source-media bounds). Mark
+  never needs the composed "split" as a single operation anyway — it disables the region
+  between two boundary splits rather than removing anything, via
+  `createSetDisabledAction`, which exists directly on both `VideoClipTrackItem` and
+  `AudioClipTrackItem`.
+- **"ExtendScript debugging via VS Code/Cursor's extension is the only viable live-test
+  route."** Superseded, and unsound on 26.3 regardless of tooling — see the 26.3 QE
+  silent-no-op hazard below.
+- **Phase 0's unresolved sync-lock question (partial probe, inconclusive).** Does not need
+  answering for the new design. Mark moves nothing — every split lands at an absolute,
+  unchanging sequence timestamp, so there is nothing for sync lock to protect against
+  during Mark. Apply's single `createRemoveItemsAction(sel, ripple=true, MediaType.ANY)`
+  ripples every disabled item, video and audio together, in one call — there is no
+  per-track loop for sync lock's behavior to matter to.
+- **Phase 2's mixdown ingest path** (export a sequence mixdown, probe its timebase, ingest
+  it). Superseded by `cutdeck/live_clip.py` (issue #20): the plugin sends a clip
+  descriptor (media path, start time, in/out points, the sequence's own timebase) and
+  Python reads the **original media file** directly — no render wait, full-quality audio,
+  reuses existing media-sha256 job caching, and never triggers the fabricated-25fps-on-
+  audio-only-probe trap `sequence_mixdown.py` documents.
+- **The multicam justification** ("this is what makes multicam workable") in
+  `docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`. Contradicted by the editor's real project
+  (`20260217 - ATIME DO DEE.prproj`, inspected directly): **zero** multicam clips across
+  28 sequences. The real target is a single clip, or a stack of already-synced raw clips
+  assembled by hand. Corrected in that document directly (issue #23); multicam and nested/
+  layered edits are both explicitly out of scope for issue #17.
+
+**New hazards discovered building this, recorded so they aren't rediscovered the hard
+way:**
+
+- **Premiere 26.3 silently ignores QE structural edits on some installations**
+  (`ripple_delete`, `razor`/`split`) — per the `leancoderkavy/premiere-pro-mcp` project.
+  This is *why* the ExtendScript/QE-DOM path was removed rather than merely deprecated: a
+  module that reports success and does nothing is the exact failure mode CutDeck's "a
+  false cut is worse than a missed one" directive exists to prevent.
+- **Premiere 26.2 cold-start WebSocket permission bug:** an *installed* UXP plugin can
+  fail with `"Permission denied to the url ws://127.0.0.1:<port>. Manifest entry not
+  found."` even with `"domains": "all"` in the manifest, until UXP Developer Tool has
+  loaded a dev build in the same session. Root cause is timing, not a missing permission —
+  a reconnect loop is a day-one requirement for the plugin (issue #22), not later
+  hardening. Load via UXP Developer Tool rather than a `.ccx` install until this is
+  understood.
+
+---
+
+## [RETIRED, corrected above] CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
 
 Built and tested (all GPU-free, no live Premiere dependency):
 
