@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: sans-serif;
+      font-size: 12px;
+      margin: 8px;
+      background: #2f2f2f;
+      color: #ddd;
+    }
+    label { display: block; margin-top: 8px; }
+    input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 2px;
+    }
+    button {
+      margin-top: 12px;
+      width: 100%;
+      padding: 8px;
+      font-weight: bold;
+    }
+    #log {
+      margin-top: 12px;
+      background: #111;
+      color: #9cdcfe;
+      padding: 6px;
+      height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      border: 1px solid #444;
+    }
+  </style>
+</head>
+<body>
+  <p>
+    Issue #18 spike. Operates on <b>the first clip on V1</b> of the active
+    sequence. Splits it at A, splits the resulting tail at B, disables the
+    middle piece. See <code>README.md</code> in this folder for what to watch
+    for and how to record the result.
+  </p>
+
+  <label>
+    Cut point A (seconds from clip start)
+    <input type="number" id="timeA" value="2" step="0.1" min="0" />
+  </label>
+  <label>
+    Cut point B (seconds from clip start, must be &gt; A)
+    <input type="number" id="timeB" value="4" step="0.1" min="0" />
+  </label>
+
+  <button id="runVideo">Split V1 clip 1 (video)</button>
+  <button id="runAudio">Split A1 clip 1 (audio) — for the audio-track check</button>
+
+  <div id="log"></div>
+
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "id": "com.cutdeck.spike18",
+  "name": "CutDeck Spike #18 - Split Probe",
+  "version": "1.0.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": [
+    {
+      "app": "PPRO",
+      "minVersion": "24.0.0"
+    }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "spike18.panel",
+      "label": {
+        "default": "CutDeck Spike #18"
+      },
+      "main": "index.html",
+      "minimumSize": { "width": 360, "height": 480 },
+      "preferredDockPosition": "floating"
+    }
+  ],
+  "icons": []
+}
