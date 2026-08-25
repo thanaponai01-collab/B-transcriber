@@ -365,20 +365,32 @@ async function runSpike(kind) {
     // that's broken; a committed clone appears to poison the track for a
     // later, unrelated transaction too.
     //
-    // ROUND 9 (2026-08-25): the missing control. Every trim attempt so far
-    // (round 7, round 8) happened with a clone earlier in the same session.
-    // This round removes the clone entirely -- no createCloneTrackItemAction
-    // call anywhere -- and stages ONLY a trim of the untouched original, to
-    // find out whether trim itself is what's broken here regardless of any
-    // clone history, or whether it really is clone-then-trim (even across
-    // transactions) that's the trigger. Cheapest, highest-value next test:
-    // if this crashes too, the clone theory is wrong and trim itself needs
-    // investigating; if this commits cleanly, round 8's finding stands and
-    // clone leaving the project poisoned for later transactions is real.
+    // ROUND 9 result (2026-08-25): the missing control -- trim with NO clone
+    // anywhere in the session, on a confirmed-clean clip (BEFORE showed
+    // exactly 1 item, matching the untouched original). Still threw the
+    // identical "A nullptr was dereferenced" on both tracks. Round 8's
+    // clone-poisoning theory is dead: the crash comes from the trim itself,
+    // independent of any clone history. Everything staged without a JS
+    // error before the crash -- createSetEndAction returned a valid action,
+    // addAction accepted it (no "returned false" from our own guard),
+    // createSetOutPointAction exists (no WARNING about a missing method) and
+    // was staged too -- so both trim actions staged fine; the native commit
+    // is what fails.
+    //
+    // ROUND 10 (2026-08-25): isolates the one remaining untested variable --
+    // whether createSetEndAction (sequence-time bound) and
+    // createSetOutPointAction (media in/out bound) staged TOGETHER on the
+    // same item is what crashes, vs. either one alone. This file's own
+    // earlier open-questions list already named this: "whether
+    // createSetStartAction/createSetEndAction alone were enough, or
+    // createSetInPointAction/createSetOutPointAction were also required."
+    // This round stages ONLY createSetEndAction -- no createSetOutPointAction
+    // call at all -- to test the simplest possible trim in isolation.
     const cutAbsSec = headInfo.startSec + bSec;
     const cutMediaSec = headInfo.inSec + bSec;
-    log(`trimming original's end to cut point B (no clone in this round at all): ` +
-        `absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s`);
+    log(`trimming original's end to cut point B (createSetEndAction ONLY, no ` +
+        `createSetOutPointAction, no clone): absolute=${cutAbsSec.toFixed(3)}s ` +
+        `(media out-point would be ${cutMediaSec.toFixed(3)}s but is NOT being set this round)`);
 
     project.lockedAccess(() => {
       txResult = project.executeTransaction((compoundAction) => {
@@ -386,26 +398,20 @@ async function runSpike(kind) {
         if (!compoundAction.addAction(trimEndAction)) {
           throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
         }
-        if (typeof freshHeadItem.createSetOutPointAction === "function") {
-          const trimOutAction = freshHeadItem.createSetOutPointAction(fromSeconds(cutMediaSec));
-          if (!compoundAction.addAction(trimOutAction)) {
-            throw new Error("compoundAction.addAction(trimOutAction) returned false -- aborting.");
-          }
-        } else {
-          log("WARNING: freshHeadItem has no createSetOutPointAction -- out-point left unset.");
-        }
-      }, `CutDeck spike18: trim-only control, no clone (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
+      }, `CutDeck spike18: createSetEndAction-only control (${kind}), cut at ${cutAbsSec.toFixed(3)}s`);
     });
-    log(`trim-only executeTransaction returned: ${describe(txResult)}`);
+    log(`createSetEndAction-only executeTransaction returned: ${describe(txResult)}`);
 
-    const afterItems = await logTrackItems(track, "AFTER trim-only (no clone)");
+    const afterItems = await logTrackItems(track, "AFTER createSetEndAction-only");
     if (afterItems.length >= 1) {
-      log("ANALYSIS: if this committed with no crash, compare item[0]'s end/out above " +
-          `against the trim target (absolute=${cutAbsSec.toFixed(3)}s media=${cutMediaSec.toFixed(3)}s) ` +
-          "-- did the trim apply? A clean commit here means trim itself is fine and round " +
-          "8's finding (clone poisons later transactions) stands. A crash here instead " +
-          "means trim itself is broken regardless of clone history, which changes the " +
-          "finding completely.");
+      log("ANALYSIS: if this committed with no crash, compare item[0]'s end above " +
+          `against the trim target (absolute=${cutAbsSec.toFixed(3)}s) -- did it apply, ` +
+          "and did the out-point move along with it on its own (Premiere auto-adjusting " +
+          "media bounds from the sequence-time bound) or stay unchanged? A clean commit " +
+          "here means createSetOutPointAction (or staging both together) is the crash " +
+          "trigger. A crash here instead means createSetEndAction alone is already broken, " +
+          "which points further out -- maybe at cutAbsSec's value, or at trimming this " +
+          "specific item/track at all.");
     }
     log("Diagnostic finished -- do NOT click again on this clip yet. Record whether " +
         "this crashed or committed cleanly on issue #18, then press Ctrl+Z to undo " +

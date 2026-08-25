@@ -1,5 +1,37 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 10): round 8's clone-poisoning theory is dead — trim itself crashes, even with zero clone history; isolating which trim call is the trigger
+
+Round 9's live run (both V1 and A1): `BEFORE` showed exactly 1 item, the
+untouched original — confirmed clean, no clone anywhere in the session. The
+trim still threw the identical `A nullptr was dereferenced`. **Round 8's
+clone-poisoning theory is wrong.** The crash comes from the trim itself,
+independent of any clone history. Everything staged without a JS error
+first — `createSetEndAction` returned a valid action, `addAction` accepted
+it, `createSetOutPointAction` exists and was staged too — so both trim
+actions land fine; only the native commit fails.
+
+The one remaining untested variable, named in this file's own open-questions
+list since round 1 ("whether `createSetStartAction`/`createSetEndAction`
+alone were enough, or `createSetInPointAction`/`createSetOutPointAction`
+were also required"): does staging **both** the sequence-time bound
+(`createSetEndAction`) and the media bound (`createSetOutPointAction`) on
+the same item in one commit crash, versus either alone? This round stages
+**only** `createSetEndAction` — no out-point call at all. **Untested — this
+is what the next live run needs to report.** Two outcomes:
+
+- **Commits cleanly** — `createSetOutPointAction`, or specifically staging
+  both together, is the crash trigger. Worth checking on that same run
+  whether the out-point moved on its own (Premiere auto-deriving the media
+  bound from the sequence-time bound) — if so, a real split may not even
+  need to call `createSetOutPointAction` separately at all.
+- **Still crashes** — `createSetEndAction` alone is already broken, which
+  rules out the "these two conflict" theory and points further out: the
+  `cutAbsSec` value, or trimming this specific item/track/host build at all.
+  Would need an even smaller isolation next (e.g. a call that's supposed to
+  be a total no-op, or trying `createSetStartAction` instead) or escalating
+  to Adobe/community with a minimal repro.
+
 ## UPDATE (2026-08-25, round 9): round 8's bigger finding — a committed clone crashes a later, unrelated trim; testing trim with no clone at all
 
 Round 8's live run (both V1 and A1, independently): transaction 1 (clone
