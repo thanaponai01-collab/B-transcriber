@@ -110,9 +110,13 @@ def run_file(
             # track, so denoising here burns ~1.8k file writes/hr and desyncs the
             # silence timeline from the audio the engine actually hears (3.2).
             denoise=config.get("denoise", True) and job_plan.chunk_engine_active,
-            vad_threshold=float(config.get("vad_threshold", 0.5)),
+            # Fallbacks must match config.yaml's values (0.35/500). The old
+            # fallbacks here were 0.5/300, which clip Thai sentence-final
+            # particles — see config.yaml's vad_threshold comment.
+            # tests/test_pipeline_run_config_fallbacks.py pins these.
+            vad_threshold=float(config.get("vad_threshold", 0.35)),
             vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
-            vad_min_silence_ms=int(config.get("vad_min_silence_ms", 300)),
+            vad_min_silence_ms=int(config.get("vad_min_silence_ms", 500)),
             rms_gate_enabled=bool(config.get("rms_gate_enabled", True)),
             rms_gate_floor_db=(float(config["rms_gate_floor_db"])
                                if config.get("rms_gate_floor_db") is not None else None),
