@@ -7,6 +7,47 @@ mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
 code. Delete this folder once #18 is closed, unless its answer says the
 approach works and #22 wants to start from it.
 
+## BLOCKED (2026-08-25): panel content never paints on this install
+
+Loaded successfully (dev mode, developer mode enabled, correct manifest),
+and the panel opens with no console errors. But nothing in it ever renders
+— confirmed this is **not our code**:
+
+- DOM is fully populated (verified in DevTools Elements tab — every
+  element from `index.html` is present).
+- Layout computes correctly (Computed tab showed a real box model: correct
+  padding/margin/width for a button element).
+- DevTools' own hover-highlight overlay (drawn independently of the page,
+  directly by the browser engine) renders in the correct position when
+  hovering a DOM node.
+- A zero-dependency test page (`<body style="background:red">` + inline
+  blue `<h1>`, no CSS file, no JS) **still rendered nothing.**
+
+That combination — DOM/layout/DevTools-overlay all working, but the page's
+own content layer never composited to screen, even with zero CSS/JS
+involved — points to a **host-side panel-compositing bug** in this
+Premiere Pro install (title bar reads "Premiere Pro v26.3.2.2 **(Debug)**"
+— a debug build, which may be relevant). Not something fixable from inside
+the plugin.
+
+**Before spending more time on the split logic itself, resolve this:**
+- Check for a Premiere Pro update (a non-Debug build may not have this).
+- Try Adobe's own official minimal UXP sample panel
+  (github.com/AdobeDocs/uxp-premiere-pro-samples) on this same install —
+  if it *also* renders blank, this is an Adobe-side bug worth reporting
+  (community.adobe.com has an active bug-reports section for exactly this
+  category of issue — several UXP-in-Premiere-Pro load/render bugs are
+  already tracked there).
+- Try toggling the Mercury Playback Engine renderer setting
+  (GPU vs. Software Only) in Premiere's Preferences — panel compositing
+  bugs are sometimes GPU-driver-related.
+- A full machine restart (not just Premiere) is cheap to try first.
+
+The split-logic questions this spike exists to answer (clone/trim call
+order, single-transaction undo behavior, etc.) are **still fully open** —
+none of them could be tested because the panel never became visible enough
+to click a button.
+
 ## Load it (dev mode — the default, matches issue #18)
 
 UXP Developer Tool → **Add Plugin** → point at this folder's `manifest.json`.
