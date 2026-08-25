@@ -149,10 +149,29 @@ async function getFirstItem(sequence, kind) {
   if (!track) throw new Error(`sequence has no ${kind} track 0`);
   // Track has no item-count/item-by-index API (confirmed against Adobe's
   // premierepro-types after the first live run failed here) -- getTrackItems()
-  // returns the whole array in one call.
+  // returns the whole array in one call. Also confirmed (2026-08-25, diffing
+  // the same source): declared synchronous (returns the array directly, not
+  // a Promise) on both VideoTrack and AudioTrack -- the `await` here is a
+  // harmless no-op on an already-resolved value, kept only for uniformity
+  // with the rest of this file's async call sites.
   const items = await track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
   if (!items || items.length < 1) throw new Error(`${kind} track 0 has no clips`);
   return { track, item: items[0] };
+}
+
+// Diagnostic-only: lists every clip item currently on `track`, logging
+// start/end/in/out/disabled for each. No mutation. Used to observe what a
+// clone actually produced, rather than assuming.
+async function logTrackItems(track, label) {
+  const items = await track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
+  log(`${label}: ${items.length} clip item(s) on track`);
+  for (let i = 0; i < items.length; i++) {
+    const info = await readTimes(items[i], `${label}[${i}]`);
+    const disabled = typeof items[i].isDisabled === "function" ? await items[i].isDisabled() : "?";
+    log(`  [${i}] start=${info.startSec.toFixed(3)}s end=${info.endSec.toFixed(3)}s ` +
+        `in=${info.inSec.toFixed(3)}s out=${info.outSec.toFixed(3)}s disabled=${disabled}`);
+  }
+  return items;
 }
 
 /**
@@ -261,7 +280,7 @@ async function runSpike(kind) {
 
     const inOut = await readSequenceInOut(sequence);
 
-    const { item: headItem } = await getFirstItem(sequence, kind);
+    const { track, item: headItem } = await getFirstItem(sequence, kind);
     log(`found first ${kind} clip:`);
     const headInfo = await readTimes(headItem, "original clip");
 
@@ -283,68 +302,66 @@ async function runSpike(kind) {
     const sequenceEditor = ppro.SequenceEditor.getEditor(sequence);
     if (!sequenceEditor) throw new Error("SequenceEditor.getEditor(sequence) returned nothing");
 
-    // Re-fetch the item right before use (kept from the prior fix) -- did
-    // NOT clear "The script object is no longer valid" on its own (see
-    // README round 2/3). The actual missing piece, found by diffing against
-    // Adobe's own official sample (sequenceEditor.ts in
-    // AdobeDocs/uxp-premiere-pro-samples) and an independent third-party UXP
-    // Premiere plugin (leancoderkavy/premiere-pro-mcp, which enforces this
-    // via a dedicated eslint rule, @adobe/premierepro/prefer-locked-access-
-    // wrapper): every executeTransaction call in both sources, with no
-    // exception, runs inside project.lockedAccess(() => {...}), never bare.
-    // lockedAccess's own doc text -- "project state will not change during
-    // the execution of callback function" -- is exactly the guarantee a
-    // stale-script-object error would indicate is missing. This file was
-    // calling executeTransaction directly. Fetching freshHeadItem still has
-    // to happen out here (it's async; lockedAccess's callback, like
-    // executeTransaction's, is typed synchronous-void) -- the fix is the
-    // lockedAccess wrapper itself, not moving the fetch again.
+    // ROUND 4 (2026-08-25): the full clone+trim split (round 3's stageSplit
+    // path, still defined above but unused below for now) is confirmed dead
+    // as designed -- round 3's live run got past the "script object is no
+    // longer valid" crash (fixed by the lockedAccess wrap) and hit the
+    // predicted fallback: createCloneTrackItemAction() succeeds but returns
+    // a bare, non-chainable Action (ownKeys=[] protoMethods=[]), so there is
+    // no item reference to trim/disable inside the same transaction. The
+    // code correctly aborted with nothing committed -- safe, but a dead end
+    // for a single-transaction design.
+    //
+    // What's still unknown, and the only thing this round tests: what does
+    // a same-track, zero-time-offset, isInsert=false (overwrite) clone
+    // actually produce once it's allowed to commit? Nobody has verified
+    // this -- Adobe's own sample only clones to a *different* track with a
+    // nonzero time offset and isInsert=true. Guessing the two-transaction
+    // redesign (commit clone+head-trim, re-query the track for the new
+    // item, commit a second transaction to finish it) on top of that
+    // unknown would risk building on a wrong assumption about clone's
+    // geometry. So this round stages ONLY the clone (no trims) inside one
+    // transaction, commits it for real, then re-lists the track's items
+    // right after with logTrackItems() -- diagnostic only, answers the
+    // actual open question before any more split logic gets written.
+    //
+    // Re-fetch right before use, kept from round 2/3's fix.
     const { item: freshHeadItem } = await getFirstItem(sequence, kind);
 
-    let splitAInfo = null;
-    let splitBInfo = null;
+    await logTrackItems(track, "BEFORE clone");
+
+    let cloneResult = null;
     let txResult = null;
 
     project.lockedAccess(() => {
       // executeTransaction's type signature returns `boolean` synchronously,
-      // not `Promise<boolean>` (confirmed against premierepro.d.ts) -- no
-      // `await` here (previously present; harmless on a non-Promise value,
-      // but inaccurate).
+      // not `Promise<boolean>` (confirmed against premierepro.d.ts).
       txResult = project.executeTransaction((compoundAction) => {
-        splitAInfo = stageSplit(compoundAction, sequenceEditor, freshHeadItem, headInfo, aSec, "A");
-        if (!splitAInfo || !splitAInfo.tailItem) {
-          throw new Error('split "A" did not produce a chainable tail item -- aborting ' +
-            'before B/disable so this transaction commits nothing rather than a half-cut state.');
+        cloneResult = sequenceEditor.createCloneTrackItemAction(
+          freshHeadItem,
+          fromSeconds(0), // timeOffset -- zero: same position as the original
+          0, // videoTrackVerticalOffset -- zero: same track
+          0, // audioTrackVerticalOffset -- zero: same track
+          false, // alignToVideo
+          false // isInsert -- false (overwrite): the unverified case
+        );
+        log(`clone call returned: ${describe(cloneResult)}`);
+        if (!compoundAction.addAction(cloneResult)) {
+          throw new Error("compoundAction.addAction(cloneResult) returned false -- aborting, nothing should commit.");
         }
-
-        // headInfo for the second split is the tail-of-A's own current state,
-        // expressed the same way (start/in as read before ANY split ran --
-        // computed here since we can't re-read from Premiere mid-transaction).
-        const tailAInfo = {
-          startSec: splitAInfo.cutAbsSec,
-          endSec: splitAInfo.tailEndSec,
-          inSec: splitAInfo.cutMediaSec,
-          outSec: splitAInfo.tailOutSec,
-        };
-        splitBInfo = stageSplit(compoundAction, sequenceEditor, splitAInfo.tailItem, tailAInfo, bSec - aSec, "B");
-        if (!splitBInfo || !splitBInfo.tailItem) {
-          throw new Error('split "B" did not produce a chainable tail item -- aborting.');
-        }
-
-        // The "middle" piece is what tailA (splitAInfo.tailItem) became after
-        // split B trimmed it down to [A, B] -- disable that object directly.
-        const middleItem = splitAInfo.tailItem;
-        if (typeof middleItem.createSetDisabledAction !== "function") {
-          throw new Error("middle item has no createSetDisabledAction -- aborting.");
-        }
-        compoundAction.addAction(middleItem.createSetDisabledAction(true));
-        log("staged: disable middle piece [A, B]");
-      }, `CutDeck spike18: split ${kind} clip at ${aSec}s/${bSec}s`);
+      }, `CutDeck spike18: clone-only probe (${kind})`);
     });
 
     log(`executeTransaction returned: ${describe(txResult)}`);
-    log("Transaction attempt finished. Check the sequence now, and press " +
-        "Ctrl+Z once to see if it reverses everything in one step.");
+
+    const afterItems = await logTrackItems(track, "AFTER clone");
+    log(`item count: before vs after -- see logs above. ` +
+        (afterItems.length > 1
+          ? "More than one item now -- inspect their start/end above to see where the clone landed relative to the original."
+          : "Still one item -- either the clone was rejected, or it overwrote the original in place (same span, no duplicate)."));
+    log("Diagnostic finished -- do NOT click again on this clip yet. Record the " +
+        "before/after item list on issue #18, then press Ctrl+Z to undo before " +
+        "trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);

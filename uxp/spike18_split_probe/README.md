@@ -1,5 +1,47 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-25, round 4): lockedAccess fix confirmed live; now probing what clone actually produces
+
+Round 3's `lockedAccess` fix worked — `"The script object is no longer
+valid"` is gone. The live run got all the way to `createCloneTrackItemAction`,
+which succeeded and returned `[object Action] ownKeys=[] protoMethods=[]` —
+confirming, live, what the type signature and both reference sources already
+predicted: the clone is not chainable. `stageSplit()` correctly logged the
+WARNING and aborted before staging anything else, so nothing committed —
+the safe outcome. (Also resolved in passing: the audio clip really is a
+~50-minute source file, matching the timeline in the test screenshot — not
+a wrong-track bug as previously flagged.)
+
+The one-transaction clone+trim design is confirmed dead: there's no item
+reference to chain a trim onto. The obvious next move is a two-transaction
+redesign (commit clone + head-trim, re-query the track for the new item by
+position, commit a second transaction to finish the tail + disable). **Not
+done yet** — that would build on a real unknown: nobody has verified what a
+**same-track, zero-time-offset, `isInsert=false` (overwrite)** clone actually
+produces. Adobe's own sample only demonstrates cloning to a *different*
+track, with a nonzero time offset, `isInsert=true`. Guessing the redesign on
+top of that gap risks another wrong-assumption round-trip.
+
+So this round is diagnostic only: `main.js` now stages *just* the clone (no
+trims) inside one transaction, commits it for real, and calls the new
+`logTrackItems()` helper before and after to log every item's start/end/
+in/out. **Untested — this is what the next live run needs to report.** Do
+not click twice on the same clip before recording the result — inspect the
+before/after item list, record it on issue #18, then `Ctrl+Z` before trying
+anything else. Three possible outcomes, all informative:
+
+- **Item count goes 1 → 2**, and the second item's start/end differ from the
+  first only in track position (or reveal some geometry) — the clone
+  actually duplicated in place. The redesign can proceed knowing where to
+  look for the new item after commit.
+- **Item count stays 1** — `isInsert=false` at zero offset either overwrote
+  the original in place (a no-op duplicate) or was silently rejected. Would
+  mean the clone needs a nonzero `timeOffset` (matching Adobe's own sample)
+  even for a same-track split, with the clone moved back afterward.
+- **The commit itself throws or `executeTransaction` returns `false`** —
+  same-track same-position overwrite may be an invalid edit outright, ruling
+  out `isInsert=false` for this use case entirely.
+
 ## UPDATE (2026-08-25, round 3): found the missing `lockedAccess()` wrapper
 
 Round 2's re-fetch-before-use fix did **not** clear `"The script object is no
