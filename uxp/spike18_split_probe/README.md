@@ -1,5 +1,73 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-26, round 18 code): round 17 proves same-transaction cleanup is dead; testing a same-transaction CASCADE of two inserts instead
+
+**Round 17 live result (two clicks, both negative, cleanly conclusive):**
+mid-transaction `getTrackItems()` never reflected the staged clone at all —
+click 1 (2 pre-existing items) saw 2 mid-transaction (no increase); click 2
+(clean 1-item state) saw 1 mid-transaction (no increase, not even partial).
+This settles what round 14 could only suggest (its clone was later shown to
+be a no-op, confounding that result): **mid-transaction structural state is
+never visible via `getTrackItems()` in this API, full stop, independent of
+whether the clone actually does anything on commit.**
+
+Before spending another live click guessing at a workaround, checked real
+production code: neither Adobe's own official sample
+(`AdobeDocs/uxp-premiere-pro-samples/sample-panels/premiere-api/src/sequenceEditor.ts`)
+nor the mature third-party plugin this spike already relies on twice
+(`leancoderkavy/premiere-pro-mcp`) ever references an item created earlier in
+the *same* transaction — every clone/remove call in both operates on a
+pre-existing, explicitly-held reference (the user's live timeline selection,
+or an argument supplied from outside). No undo-grouping API surfaced in
+either. This corroborates round 17's result rather than just adding a third
+data point: **cleaning up round 16's leftover clone genuinely requires a
+second, separately-committed transaction — a structural limit of the API,
+not a spike-specific mistake.**
+
+Taken back to the user as a real design fork (not an agent decision): accept
+two undo steps **per Mark click as a whole** (not per split) by batching all
+of a Mark's splits into one transaction and all of its byproduct cleanups
+into a second, versus digging further, versus reconsidering the primitive
+entirely. **Chose: batch to two undo steps total per click**, pending live
+proof that batching actually works.
+
+**The subtlety that needs testing before assuming it does:** a *second* cut
+boundary's target content is itself the tail produced by the *first* cut —
+exactly the kind of "reference to a same-transaction byproduct" round 17 just
+proved unreachable. Chaining n dependent inserts naively would hit the same
+wall n-1 times. The escape: **don't reference the byproduct at all** — clone
+the same pristine, already-held original reference (`freshHeadItem`) a
+*second* time, targeting where the marked-out point now sits after the first
+insert's ripple (`bSec + D`, `D` = the original's full duration, since
+everything at/after the first cut shifted forward by exactly `D`). If
+Premiere's own internal engine resolves the second collision against the
+state left by the first — both being part of one native commit, never routed
+through our JS — this could produce the entire head/middle/tail breakdown
+from two calls that both source the *original* reference, with zero
+dependency chaining at the JS level. Worked out on paper before testing
+(assuming it holds, both `A` and `B+D` land inside their respective target
+items' spans, not at boundaries — round 15's edge-collision auto-relocate
+would apply otherwise):
+
+```
+[0] head:        [0, A)         in=[0, A)     -- KEEP, enabled
+[1] byproduct1:  [A, A+D)       in=[0, D)     -- unwanted, remove later
+[2] middle:      [A+D, B+D)     in=[A, B)     -- the ACTUAL silence span, disable
+[3] byproduct2:  [B+D, B+2D)    in=[0, D)     -- unwanted, remove later
+[4] tail:        [B+2D, 3D-A)   in=[B, D)     -- KEEP, enabled
+```
+
+**Untested — this is what the next live run needs to report.** `main.js`
+now stages both clone-insert calls (target `aSec`, then `bSec + D`, both
+sourced from `freshHeadItem`) in one transaction, with no mid-transaction
+query and no removal attempt yet — removal is a later round, only once this
+5-piece cascade is confirmed live. If the predicted 5-piece breakdown shows
+up exactly, transaction 1 of the two-transaction batch design is proven for
+a 2-cut-boundary case (the real 1-boundary-per-Mark-region minimum) and the
+next round tests the removal half. If it doesn't cascade correctly (e.g. the
+second insert's target resolves against pre-ripple state, or throws), that's
+the honest answer too — record it and reconsider.
+
 ## UPDATE (2026-08-26, round 17 code): round 16 found a REAL native split+ripple — testing whether the leftover clone can be ripple-deleted in the SAME transaction
 
 **Round 16 live result: a genuine, correct split, for free.** Cloning with

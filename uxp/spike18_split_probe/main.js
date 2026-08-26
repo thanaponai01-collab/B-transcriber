@@ -136,7 +136,11 @@ async function callOrProp(obj, methodName, propName, label) {
 // isn't valid there. Every getter this file has called so far has turned out
 // to be synchronous in practice regardless of the `await` used elsewhere
 // (round 4/5's note on getTrackItems), so this isn't a new assumption, just
-// the correct calling convention for a sync context.
+// the correct calling convention for a sync context. Added for round 17's
+// mid-transaction candidate identification; unused as of round 18 (which
+// doesn't query mid-transaction at all), kept for the round that tests
+// removal, which will likely need it again if that removal ever needs to
+// happen from inside an open transaction.
 function callOrPropSync(obj, methodName, propName, label) {
   if (typeof obj[methodName] === "function") return obj[methodName]();
   if (obj[propName] !== undefined) return obj[propName];
@@ -605,101 +609,120 @@ async function runSpike(kind) {
     // in-point; the real tail's in-point is aSec, nonzero, so this
     // disambiguates the two new items unambiguously) -- in the SAME
     // transaction.
-    let cloneResult16Description = null;
-    let round17TxResult = null;
-    let midTxItemCount = null;
-    let removeStagedOk = null;
+    // ROUND 17 RESULT (2026-08-26, two live clicks): DEAD END, cleanly
+    // conclusive. Mid-transaction getTrackItems() never reflected the staged
+    // clone at all -- click 1 (2 pre-existing items) saw 2 mid-transaction
+    // (no increase); click 2 (clean 1-item state) saw 1 mid-transaction (no
+    // increase, not even partial). This settles what round 14 could only
+    // suggest (its clone was later shown to be a no-op, confounding that
+    // result): mid-transaction structural state is NEVER visible via
+    // getTrackItems() in this API, independent of whether the clone actually
+    // does anything on commit. Corroborated against real production code
+    // (Adobe's own official sample, sequenceEditor.ts, and
+    // leancoderkavy/premiere-pro-mcp): neither ever references an item
+    // created earlier in the same transaction -- every clone/remove call in
+    // both operates on a pre-existing, explicitly-held reference (the user's
+    // live selection, or an argument from outside). No undo-grouping API
+    // surfaced in either. Cleaning up round 16's leftover clone genuinely
+    // needs a second, separately-committed transaction -- a structural limit
+    // of the API, not a spike mistake.
+    //
+    // Taken back to the user as a real design fork (not an agent decision):
+    // accept two undo steps per Mark CLICK as a whole (not per split) by
+    // batching all of a Mark's inserts into one transaction and all of its
+    // byproduct cleanups into a second. Chosen, pending live proof batching
+    // actually works.
+    //
+    // ROUND 18 (issue #24, 2026-08-26): the subtlety that has to be tested
+    // before assuming the batch works -- a SECOND cut boundary's target
+    // content is itself the tail produced by the FIRST cut, exactly the kind
+    // of same-transaction-byproduct reference round 17 just proved
+    // unreachable. Naively chaining N dependent inserts would hit that same
+    // wall N-1 times. The escape: don't reference the byproduct at all --
+    // clone the SAME pristine, already-held freshHeadItem a second time,
+    // targeting where the marked-out point now sits after the first insert's
+    // ripple (bSec + D, D = the original's full duration, since everything
+    // at/after the first cut shifts forward by exactly D). If Premiere's own
+    // internal engine resolves the second collision against the state left
+    // by the first -- both part of one native commit, never routed through
+    // our JS -- this produces the whole head/middle/tail breakdown from two
+    // calls that both source the ORIGINAL reference, no dependency chaining
+    // at the JS level, no mid-transaction query needed at all.
+    //
+    // Predicted result if the cascade resolves correctly (worked out on
+    // paper, assuming both aSec and bSec+D land inside their target items'
+    // spans, not at boundaries -- round 15's edge-collision auto-relocate
+    // would apply otherwise):
+    //   [0] head:       [0, aSec)         in=[0, aSec)   -- KEEP, enabled
+    //   [1] byproduct1: [aSec, aSec+D)    in=[0, D)      -- unwanted, remove later
+    //   [2] middle:     [aSec+D, bSec+D)  in=[aSec, bSec) -- the ACTUAL silence span, disable
+    //   [3] byproduct2: [bSec+D, bSec+2D) in=[0, D)      -- unwanted, remove later
+    //   [4] tail:       [bSec+2D, ...)    in=[bSec, D)   -- KEEP, enabled
+    // No removal attempted yet -- that's a later round, only once this
+    // 5-piece cascade is confirmed live.
+    const D = headInfo.endSec - headInfo.startSec;
+    const secondTargetOffset = bSec + D;
+    log(`ROUND 18: staging TWO clone-inserts from the SAME freshHeadItem reference in one ` +
+        `transaction -- target 1 at aSec=${aSec.toFixed(3)}s (offset ${aSec.toFixed(3)}s), ` +
+        `target 2 at bSec+D=${(bSec + D).toFixed(3)}s (offset ${secondTargetOffset.toFixed(3)}s, ` +
+        `D=${D.toFixed(3)}s is the original's full duration).`);
+
+    let cloneResult18aDescription = null;
+    let cloneResult18bDescription = null;
+    let round18TxResult = null;
     project.lockedAccess(() => {
-      round17TxResult = project.executeTransaction((compoundAction) => {
-        const cloneResult16 = sequenceEditor.createCloneTrackItemAction(
+      round18TxResult = project.executeTransaction((compoundAction) => {
+        const clone18a = sequenceEditor.createCloneTrackItemAction(
           freshHeadItem,
-          fromSeconds(aSec), // timeOffset -- the marked IN point, a real mid-clip cut point (confirmed working, round 16)
-          0, // videoTrackVerticalOffset
-          0, // audioTrackVerticalOffset
+          fromSeconds(aSec), // timeOffset -- targets absolute aSec, confirmed working in round 16
+          0,
+          0,
           false, // alignToVideo -- still untested; still open per issue #24
-          true // isInsert -- unchanged from round 15/16
+          true // isInsert
         );
-        cloneResult16Description = describe(cloneResult16);
-        log(`clone call returned: ${cloneResult16Description}`);
-        if (!compoundAction.addAction(cloneResult16)) {
-          throw new Error("compoundAction.addAction(cloneResult16) returned false -- aborting.");
+        cloneResult18aDescription = describe(clone18a);
+        log(`clone 1 (target ${aSec.toFixed(3)}s) call returned: ${cloneResult18aDescription}`);
+        if (!compoundAction.addAction(clone18a)) {
+          throw new Error("compoundAction.addAction(clone18a) returned false -- aborting.");
         }
 
-        let midItems;
-        try {
-          midItems = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
-        } catch (e) {
-          throw new Error(`track.getTrackItems() threw inside the open transaction: ` +
-              `${e && e.message ? e.message : e} -- mid-transaction query not viable, aborting.`);
-        }
-        midTxItemCount = midItems ? midItems.length : 0;
-        log(`mid-transaction query: ${midTxItemCount} item(s) visible (1 before this transaction opened)`);
-        if (!midItems || midItems.length < 3) {
-          throw new Error(`expected 3 items mid-transaction (head, inserted clone, rippled tail), ` +
-              `found ${midTxItemCount} -- staged-but-uncommitted state is not fully visible via ` +
-              `getTrackItems(). Aborting; the same-transaction ripple-delete approach does not work ` +
-              `as tried -- a two-transaction recipe would be needed instead, which conflicts with ` +
-              `#22's one-undo-step requirement. Record on issue #24.`);
-        }
-
-        // Identify the inserted clone: NOT the reference we already hold
-        // (freshHeadItem, the head), AND its own in-point reads ~0 -- the
-        // inserted clone always inherits the source's own in-point verbatim
-        // (round 16: item[1] had in=0.000), while the real tail's in-point
-        // is aSec (nonzero, round 16: item[2] had in=50.880). This
-        // disambiguates the two new items without relying on array order,
-        // which round 14 already found unreliable to assume.
-        const EPS = 0.01;
-        const candidates = [];
-        for (let i = 0; i < midItems.length; i++) {
-          if (midItems[i] === freshHeadItem) continue;
-          const inPt = callOrPropSync(midItems[i], "getInPoint", "inPoint", `midItems[${i}]`);
-          const inSec = toSeconds(inPt, `midItems[${i}].inPoint`);
-          log(`  mid-tx candidate [${i}]: in=${inSec.toFixed(3)}s (reference !== freshHeadItem)`);
-          candidates.push({ item: midItems[i], inSec });
-        }
-        const insertedClone = candidates.find((c) => Math.abs(c.inSec) < EPS);
-        if (!insertedClone) {
-          throw new Error(`could not identify the inserted clone among ${candidates.length} ` +
-              `non-head candidate(s) by in-point ~0 -- see the candidate log above. Aborting.`);
-        }
-        log(`picked the inserted clone by in-point ~0 (in=${insertedClone.inSec.toFixed(3)}s)`);
-
-        const selection = ppro.TrackItemSelection.createEmptySelection();
-        selection.addItem(insertedClone.item);
-        const removeAction = sequenceEditor.createRemoveItemsAction(
-          selection,
-          true, // ripple -- must close the gap the inserted clone leaves behind
-          ppro.Constants.MediaType.ANY // ANY -- keeps video+audio ripple together, per #17's own rule
+        const clone18b = sequenceEditor.createCloneTrackItemAction(
+          freshHeadItem, // SAME reference as clone 1 -- deliberately not the round-16 byproduct or tail, which we cannot reference here (round 17)
+          fromSeconds(secondTargetOffset), // timeOffset -- targets absolute bSec+D, the ripple-adjusted position of the marked OUT point
+          0,
+          0,
+          false,
+          true // isInsert
         );
-        removeStagedOk = compoundAction.addAction(removeAction);
-        log(`compoundAction.addAction(removeAction) returned: ${removeStagedOk}`);
-        if (!removeStagedOk) {
-          throw new Error("compoundAction.addAction(removeAction) returned false -- aborting.");
+        cloneResult18bDescription = describe(clone18b);
+        log(`clone 2 (target ${(bSec + D).toFixed(3)}s) call returned: ${cloneResult18bDescription}`);
+        if (!compoundAction.addAction(clone18b)) {
+          throw new Error("compoundAction.addAction(clone18b) returned false -- aborting.");
         }
-      }, `CutDeck spike18/24: round17 same-transaction insert+ripple-delete split (${kind})`);
+      }, `CutDeck spike18/24: round18 same-transaction cascading double-insert (${kind})`);
     });
-    log(`round 17 executeTransaction returned: ${describe(round17TxResult)}`);
+    log(`round 18 executeTransaction returned: ${describe(round18TxResult)}`);
 
     log("AFTER (full track state):");
-    await logTrackItems(track, "AFTER round 17 (insert+ripple-delete, single transaction)");
+    const afterItems = await logTrackItems(track, "AFTER round 18 (cascading double-insert)");
 
-    log(`ANALYSIS -- compare BEFORE vs AFTER above, and record on issue #24:\n` +
-        `  (1) Did executeTransaction commit (true) or throw? If it threw, which step -- the mid-` +
-        `transaction query (proves getTrackItems() can't see staged items even for a real clone), ` +
-        `candidate identification, or the remove action itself?\n` +
-        `  (2) mid-transaction query saw ${midTxItemCount === null ? "(not reached)" : midTxItemCount} ` +
-        `item(s) -- 3 expected if visible.\n` +
-        `  (3) If it committed: does the track now show exactly 2 items -- head [0, ${aSec.toFixed(3)}s) ` +
-        `and tail starting at ${aSec.toFixed(3)}s with in=${aSec.toFixed(3)}s, out=${headInfo.outSec.toFixed(3)}s -- ` +
-        `i.e. the clean split this whole spike exists to prove, no leftover middle clone?\n` +
-        `  (4) Ctrl+Z -- does ONE undo step restore the original single untouched item?\n` +
-        `If this committed cleanly with a correct 2-item result: this is the real recipe for #17/#22 -- ` +
-        `record the exact call sequence here for #22 to build from. If the mid-transaction query failed ` +
-        `(item 2 above), the recipe needs two transactions, which conflicts with #22's one-undo-step ` +
-        `rule -- a real design problem for a human to weigh on #17, not something to route around quietly.`);
-    log("Diagnostic finished (round 17, issue #24). Record the result, then Ctrl+Z (once, if it " +
-        "committed as a single transaction) before trying anything else.");
+    log(`ANALYSIS -- compare AFTER above (${afterItems.length} item(s)) against the 5-piece ` +
+        `prediction in the ROUND 18 comment above, and record on issue #24:\n` +
+        `  (1) Did executeTransaction commit (true) or throw?\n` +
+        `  (2) Item count: 5 predicted. If different, the cascade didn't resolve as predicted -- ` +
+        `record the actual breakdown.\n` +
+        `  (3) Does item[2] (predicted middle) read in=${aSec.toFixed(3)}s out=${bSec.toFixed(3)}s -- ` +
+        `i.e. exactly the real silence span, correctly formed, with no trim calls needed?\n` +
+        `  (4) Does item[0] (head) still read in=[0,${aSec.toFixed(3)}s) and item[4]/last item (tail) ` +
+        `read in=[${bSec.toFixed(3)}s,${headInfo.outSec.toFixed(3)}s) -- confirming both ends of the ` +
+        `original are intact and correctly split?\n` +
+        `If the 5-piece breakdown matches: transaction 1 of the two-transaction batch design is proven ` +
+        `for a 2-cut-boundary case -- the next round tests removing both byproducts in a SECOND, ` +
+        `separately-committed transaction (using a fresh post-commit query, proven reliable, not a ` +
+        `mid-transaction one). If it doesn't match, record the actual breakdown and reconsider -- do ` +
+        `not layer a removal round on top of an unconfirmed cascade.`);
+    log("Diagnostic finished (round 18, issue #24). Record the result, then Ctrl+Z (once, if it " +
+        "committed) before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
