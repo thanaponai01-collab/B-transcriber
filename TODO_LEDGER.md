@@ -3,6 +3,91 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## Thai-path encoding at both process boundaries — FIXED (2026-08-26), see MAINT-003/004
+
+Two defects on the same axis, both fixed this session. Neither changes any
+bytes written to disk; both changed what the operator is *told*.
+
+- **MAINT-003 — every CLI exited 1 after fully succeeding.** `print()` of a
+  media-derived path raised `UnicodeEncodeError` on a redirected Windows stdout
+  (cp1252). The XML/SRT was already written and the DB already committed, so
+  this was a **false failure report**, not a cosmetic print bug. New
+  `transcribe/console.py` owns `safe_print`; `harness._safe_print` (which met
+  this wall first, in 2026-07) now delegates to it instead of duplicating it.
+  Applied at 8 call sites across `cutdeck/xml_export`, `scripts/export_job`,
+  `cutdeck/preview`, `cutdeck/plan`, `cutdeck/sequence_mixdown`.
+- **MAINT-004 — ffprobe/ffmpeg stderr was destroyed on Thai paths.**
+  `subprocess.run(text=True)` decodes with the locale codec; `ก` is `E0 B8 81`
+  and 0x81 is undefined in cp1252, so the reader thread died and `.stderr`
+  became `None`. Fixed with explicit `encoding="utf-8", errors="replace"` at
+  the four shipping call sites. **stdout was never affected**, so no frame rate
+  or frame size was ever silently wrong — verified directly against a real
+  29.97 file on a Thai path.
+
+**Trigger — the one residual:** `cutdeck/plan.py` and
+`cutdeck/sequence_mixdown.py`'s `--dry-run` JSON prints are covered as a
+*latent* instance, not a reproduced one. `dumps()` is `ensure_ascii=False` by
+design, but every span `reason` in `cutdeck/rules.py` is currently ASCII
+vocabulary (`silence`, `filler`, `min_clip_merge`), so no Thai reaches that
+stream today. **Due if any rule ever embeds a matched word in a reason** (e.g.
+a filler cut labelled with the filler it matched) — at that point the latent
+coverage becomes live and should get a real test.
+
+## CutDeck real-Premiere XML import acceptance — still OPEN, but the click is now diagnostic (2026-08-26)
+
+**Unchanged in substance: this still requires a human in Premiere and cannot be
+executed from a shell.** Open since 2026-06-19. What changed is the cost of
+answering it.
+
+Previously the runbook was "export a job, import it, see if it works" — one
+click yielding one bit. But the export rests on at least six independent
+unverified assumptions (Windows `file://localhost/C%3A/` pathurl form; the
+integer-timebase + ntsc rate mapping; the stereo audio link layout; the
+`samplecharacteristics` frame size; the single-`<file>`-listing id-stub de-dupe;
+the approximated word-blade crossfade `transitionitem`), and a single red result
+cannot say which one broke. That is the same evidentiary shape that produced
+eighteen confident wrong rounds on the clone route (#18/#24).
+
+**New: `scripts/xml_import_ladder.py`.** Emits a cumulative ladder — each rung
+adds exactly one assumption to the rung below, so the *first* rung that fails
+names its own cause — plus a generated `RUNBOOK.md` carrying the expected
+observation and the specific diagnosis for each rung.
+
+    python scripts/xml_import_ladder.py --job-id 29
+
+Every rung is produced by the **real `to_xml`** and then reduced by deleting
+named elements; the top rung is unmodified exporter output. A hand-written
+minimal XML that imports would prove something about that file, not about this
+exporter — so a green ladder is evidence about the shipping code path.
+
+Two defects were found in the ladder itself by generating it against a real
+2-second clip rather than by reading it: fixed-offset spans overran short media
+(a rung would then fail because it pointed past the end of the file — a failure
+about the ladder, not the exporter), and rung 4 silently degenerated to a single
+clip because `to_xml` drops spans that round to zero frames. Both are now pinned
+by `tests/test_xml_import_ladder.py` (69 tests, every rung × five media lengths
+from 2 s to 60 min).
+
+**Trigger — this is still the thing that could change the shape of everything
+downstream.** Run the ladder against real footage and report per-rung results.
+Blocked on it: the word-blade crossfade's fidelity (currently a documented
+approximation with no source overlap/trim), CutDeck Phases 5-6, and whether
+`segment` rough-cut mode can come off opt-in.
+
+**Note:** the ladder says nothing about the `assemble` route
+(`cutdeck/assemble_export.py`), whose primitives have still never executed once.
+That needs its own live probe — deliberately not built here.
+
+## Two stale claims corrected while investigating the above (2026-08-26)
+
+- `export_mode.mode_from_config`'s docstring called `new_sequence` "the
+  existing, already-proven export path". The ledger says its real acceptance has
+  been open since 2026-06-19. The docstring now claims only what is true: it is
+  the *safest* default (never touches a live sequence), not a proven one.
+- `config.yaml`'s `cutdeck.mode` comment read `new_sequence | mark` — stale
+  since #25 added `assemble` and parked `mark`. Now lists all three with their
+  real status.
+
 ## CutDeck live-sequence cutting — RESOLVED by dropping the split entirely (issue #25) — 2026-08-26
 
 **Supersedes both sections below.** The razor question is closed: **CutDeck does not need

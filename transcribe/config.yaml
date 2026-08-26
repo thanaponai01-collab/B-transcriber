@@ -363,7 +363,14 @@ segment:
 # the editor's own live sequence, in place, without deleting anything until
 # the editor hits Apply. See cutdeck/export_mode.py.
 cutdeck:
-  mode: new_sequence  # new_sequence | mark
+  # new_sequence | mark | assemble
+  #   new_sequence — write an FCP7 XML for the editor to import. Safest default
+  #                  (never touches a live sequence); real-import acceptance
+  #                  still OPEN, see TODO_LEDGER.
+  #   mark         — PARKED: depends on the split primitive abandoned in #24.
+  #   assemble     — place every span into a new sequence, disable the CUT ones
+  #                  (#25). No primitive in it has executed live yet.
+  mode: new_sequence
 
 # Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
 # model served by `ollama serve`, never an external API. Off by default —

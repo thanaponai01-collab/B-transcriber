@@ -33,6 +33,7 @@ from cutdeck.rules import build_cut_spans
 from cutdeck.segment import segment_tokens
 from cutdeck.takes import LlmFn, label_takes
 from cutdeck.words import words_for_job
+from transcribe.console import safe_print
 
 
 # ── assembly + validation ─────────────────────────────────────────────────────
@@ -262,7 +263,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         n_cut = sum(1 for s in plan.spans if s.action == "cut")
         cut_ms = sum(s.duration_ms for s in plan.spans if s.action == "cut")
         if args.dry_run:
-            print(dumps(plan))
+            # dumps() is ensure_ascii=False by design (Thai stays readable in the
+            # DB), so this stream can carry Thai the moment any span reason does.
+            safe_print(dumps(plan))
         else:
             plan_id = save_plan(conn, plan)
             print(f"saved cut_plan id={plan_id}")

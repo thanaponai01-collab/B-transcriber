@@ -25,6 +25,7 @@ from typing import Optional
 
 from cutdeck.contracts import KEEP, CutPlan
 from cutdeck.plan import load_plan
+from transcribe.console import safe_print
 
 
 class FfmpegNotFoundError(RuntimeError):
@@ -46,7 +47,12 @@ def _check_ffmpeg(ffmpeg_bin: str) -> None:
 
 
 def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    # encoding/errors explicit — see cutdeck/xml_export.probe_frame_size. Without
+    # them, a Thai media path in ffmpeg's stderr makes `proc.stderr` None, so the
+    # raise below reported "ffmpeg failed: None" on exactly the footage this
+    # project always has.
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg failed ({cmd}):\n{proc.stderr}")
 
@@ -165,9 +171,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         n_keep = len(keep_ranges_ms(plan))
         label = "frame-accurate re-encode" if args.reencode else "APPROXIMATE (stream-copy, keyframe-imprecise)"
-        print(f"wrote {result} ({n_keep} keep clips, {label}) — "
-              "sanity watch only, not a frame-accuracy check; use xml_export.py + "
-              "Premiere for that.")
+        safe_print(f"wrote {result} ({n_keep} keep clips, {label}) — "
+                   "sanity watch only, not a frame-accuracy check; use xml_export.py + "
+                   "Premiere for that.")
     finally:
         conn.close()
     return 0

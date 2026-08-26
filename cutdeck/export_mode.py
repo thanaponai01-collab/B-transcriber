@@ -51,8 +51,12 @@ def exporter_for_mode(mode: str) -> Callable:
 def mode_from_config(cfg: dict) -> str:
     """Read ``cutdeck.mode`` from a parsed ``config.yaml`` dict.
 
-    Defaults to ``new_sequence`` — the existing, already-proven export path —
-    on a missing key, so an unconfigured project never silently switches to
-    mark-and-apply on a live sequence unasked.
+    Defaults to ``new_sequence`` on a missing key, so an unconfigured project
+    never silently touches the editor's live sequence unasked. That is the only
+    claim being made for the default: ``new_sequence`` is the *safest* mode, not
+    a proven one. Its real acceptance — a clean import into Premiere on real
+    footage — has been open since 2026-06-19 (TODO_LEDGER, "CutDeck
+    real-Premiere XML import acceptance"); an earlier version of this docstring
+    called it "already-proven", which the ledger contradicts.
     """
     return str(((cfg or {}).get("cutdeck", {}) or {}).get("mode", MODE_NEW_SEQUENCE))

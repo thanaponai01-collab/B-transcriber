@@ -28,6 +28,7 @@ from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import BLADE_WORD, CUT, KEEP, CutPlan, Timebase
 from cutdeck.plan import load_plan
+from transcribe.console import safe_print
 from transcribe.timebase import ms_to_frame
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,12 @@ def probe_frame_size(media_path: str) -> tuple[int, int]:
     try:
         cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
                "-show_entries", "stream=width,height", "-of", "json", media_path]
-        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        # encoding/errors explicit: ffprobe emits UTF-8, but text=True would decode
+        # it with the locale codec (cp1252 here). Thai 'ก' is E0 B8 81 and 0x81 is
+        # undefined in cp1252, so a Thai path in ffprobe's stderr kills the reader
+        # thread and turns .stderr into None — destroying the error message.
+        out = subprocess.run(cmd, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", check=True).stdout
         streams = json.loads(out).get("streams", [])
         if streams and streams[0].get("width") and streams[0].get("height"):
             return int(streams[0]["width"]), int(streams[0]["height"])
@@ -329,9 +335,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         source_dir = Path(media.path).parent
         if plan.timebase.is_vfr and _conform_vfr_enabled(args.config):
             from transcribe.timebase import conform_vfr
-            print(f"source is VFR — conforming a CFR proxy (fps {plan.timebase.fps_num}/{plan.timebase.fps_den})...")
+            safe_print(f"source is VFR — conforming a CFR proxy (fps {plan.timebase.fps_num}/{plan.timebase.fps_den})...")
             media_path, plan.timebase = conform_vfr(media.path, plan.timebase)
-            print(f"conformed proxy: {media_path}")
+            safe_print(f"conformed proxy: {media_path}")
 
         xml = to_xml(plan, media_path, plan_id,
                      word_blade_crossfade_ms=_word_blade_crossfade_ms(args.config))
@@ -344,7 +350,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(xml, encoding="utf-8")
         store.update_cut_plan_status(conn, plan_id, "exported")
-        print(f"wrote {out} ({sum(1 for s in plan.spans if s.action == KEEP)} keep clips)")
+        # safe_print, not print: `out` is under the source footage folder, which
+        # on this project is always Thai. A crash here would report failure for
+        # an export that already wrote the file and committed `exported` above.
+        safe_print(f"wrote {out} ({sum(1 for s in plan.spans if s.action == KEEP)} keep clips)")
     finally:
         conn.close()
     return 0

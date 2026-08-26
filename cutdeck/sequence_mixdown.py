@@ -37,6 +37,7 @@ from typing import Optional
 from cutdeck.contracts import CutConfig, CutPlan
 from cutdeck.plan import build_plan
 from cutdeck.rules import build_cut_spans
+from transcribe.console import safe_print
 from transcribe.pipeline.ingest import ingest
 from transcribe.timebase import Timebase, probe
 
@@ -141,7 +142,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     cut_ms = sum(s.duration_ms for s in plan.spans if s.action == "cut")
 
     if args.dry_run:
-        print(planmod.dumps(plan))
+        # ensure_ascii=False (see plan.dumps) — same latent Thai path as plan.py.
+        safe_print(planmod.dumps(plan))
     else:
         conn = store.connect(Path(args.db)) if args.db else store.connect()
         try:
