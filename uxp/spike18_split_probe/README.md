@@ -1,5 +1,46 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-26, round 15 code): testing isInsert=true geometry — issue #24
+
+**#18 is closed.** Its dead end (below) was proven mathematically and confirmed
+live: same-track `isInsert=false` clone+trim can never produce a correct
+split, for any offset. This spike folder is now being extended for a
+**separate, follow-on issue, #24**, per #18's own closing comment that
+`isInsert=true` is "a human decision for whoever revisits #17, not a
+continuation of this spike."
+
+**Worked out before the first live click, not something to re-derive live:**
+round 13's invariant math — `(start − in)` preserved under a single
+`createSetStartAction`/`createSetInPointAction` call — is a property of those
+trim actions themselves, independent of how the item was created. A naive
+"insert-clone, then one `createSetStartAction` call to reposition" recipe
+would hit the identical dead end, with the ripple shift standing in for
+`timeOffset`. **Not testing that.** What's actually unknown, and untouched by
+every round of #18, is more basic: does `isInsert=true` ripple the track at
+all, by how much, and is its clone chainable?
+
+`main.js`'s `runSpike()` now stages a **diagnostic-only round 15**: clone the
+target item with `isInsert=true`, `timeOffset=0` (matching round 4's own
+`isInsert=false` baseline exactly, so `isInsert` is the only variable that
+changed), no trims, in one transaction — same shape as round 4/5's original
+`isInsert=false` geometry probe. Logs the **full track item list**, not just
+the target item, before and after, because whether the rest of the track
+ripples (and by how much) is the question this round exists to answer.
+**Untested — this is what the next live run needs to report**, on issue #24:
+
+- Did item count go from 1 → 2, or is `timeOffset=0` a no-op under
+  `isInsert=true` too (like it was for `isInsert=false` at round 4)?
+- If it inserted, did the original item's start shift? By how much — does it
+  match the clone's own duration (the classic ripple-insert amount)? Did
+  anything else on the track (or other tracks) shift?
+- Is the returned clone chainable this time (has `createSetStartAction`), or
+  still a bare `Action` like `isInsert=false`'s clone (rounds 4, 11)?
+
+If `isInsert=true` also turns out to have no viable path to a real split
+(e.g. the ripple can't be locally contained, or introduces its own
+uncloseable invariant), **say so on #24 and stop**, per the same discipline
+#18 used — see #24's own acceptance criteria.
+
 ## UPDATE (2026-08-25, round 14 result): DEAD END CONFIRMED — wider than expected, stopping per this issue's own instructions
 
 Round 14's live run: `mid-transaction query: 1 item(s) visible (1 before this
@@ -440,12 +481,12 @@ above: the audio clip on audio track 0 is still reading back as
 timeline. Confirm what's actually on audio track 0 before trusting a split
 against it.
 
-**Throwaway.** Answers one question for issue #18: does clone+trim compose
-into a clean split in UXP, and in what order? Not wired into `cutdeck/`,
-`bridge.py`, or `mark_export.py` — those already exist for the real
-mark-and-apply plugin (#19–#22) and depend on this spike's answer, not its
-code. Delete this folder once #18 is closed, unless its answer says the
-approach works and #22 wants to start from it.
+**Throwaway.** Answered issue #18's question (clone+trim via `isInsert=false`
+is a dead end) and is now answering issue #24's (`isInsert=true` geometry).
+Not wired into `cutdeck/`, `bridge.py`, or `mark_export.py` — those already
+exist for the real mark-and-apply plugin (#19–#22) and depend on this spike's
+answer, not its code. Delete this folder once #24 is closed, unless its
+answer says a split recipe works and #22 wants to start from it.
 
 ## UPDATE (2026-08-25, round 2): clone throws "script object is no longer valid"
 
@@ -645,6 +686,14 @@ they don't land inside the clip.
 
 ## What the two buttons do
 
+**As of round 15 (issue #24), both buttons run the diagnostic-only isInsert=true
+probe described in the top update, not the multi-step split narrated below.**
+The steps below describe the original round-3 design intent; `runSpike()`'s
+actual body has been rewritten every round since (see the inline history in
+`main.js`) and no longer matches this narrative — kept here for background on
+why the file is shaped the way it is, not as a description of current
+behavior.
+
 Issue #18 specifies "one button" and "two hardcoded times." This has two
 buttons instead of one — deliberately: acceptance requires repeating the
 probe on an audio track, which a single hardcoded-track button can't do
@@ -736,10 +785,29 @@ If a call throws with a message like `"X is not a function"`, that's the
 fastest signal something above is wrong — the log right above the error
 will have the object's real method list from `describe()`.
 
-## Recording the result
+## Recording the result (round 15, issue #24)
 
-Copy the answers to these straight into issue #18 when done (its own
-acceptance list, repeated here for convenience):
+This round is diagnostic only — it does not attempt a full split, so #18's
+old three-item/Ctrl+Z acceptance checklist below doesn't apply yet. Record on
+**issue #24** instead:
+
+- [ ] Item count before vs. after — did `isInsert=true` at `timeOffset=0`
+      actually insert, or was it a no-op like `isInsert=false` at round 4?
+- [ ] If it inserted: did the original item's start shift, and by how much?
+      Does the shift match the clone's own duration? Did anything else on the
+      track (or other tracks) move?
+- [ ] Whether the clone's return value is chainable this time (`describe()`'s
+      output for it — the log prints this explicitly).
+- [ ] Whether `executeTransaction` threw, and if so, at which line.
+- [ ] `Ctrl+Z` behavior on whatever committed, even though this round isn't a
+      full split yet.
+
+Once round 15's geometry is understood, the **next** round (not written yet —
+depends on this one's answer) can attempt an actual split recipe built on
+real data instead of a guess. If `isInsert=true` turns out to have no viable
+path to a split at all, say so on #24 and stop, per its own acceptance
+criteria — the checklist below is #18's original one, kept for reference only
+now that a working recipe (if #24 finds one) would need to satisfy it too:
 
 - [ ] One clip becomes three items with edit points at A and B, frame-accurate.
 - [ ] The middle item reads back `isDisabled() === true` and appears greyed out.
@@ -749,17 +817,3 @@ acceptance list, repeated here for convenience):
 - [ ] **Ctrl+Z reverses the entire operation in one step.**
 - [ ] Repeat on the audio track — `createSetDisabledAction` mutes an
       `AudioClipTrackItem` as expected.
-- The exact working call order + parameter values that actually worked
-  (especially `timeOffset`, `isInsert`, `alignToVideo`), if different from
-  what's in `main.js`.
-- Whether `createSetStartAction`/`createSetEndAction` alone were enough, or
-  `createSetInPointAction`/`createSetOutPointAction` were also required.
-- Any intermediate state Premiere rejected (an exception, or a silently
-  wrong result caught by the acceptance checks above).
-- Whether one transaction really produced one undo step.
-- Rough per-split timing, to extrapolate to the ~200–400 span × N track
-  scale in #17.
-
-If clone+trim doesn't compose into a clean split at all, say so on the
-issue and stop there — per #18's own instructions, that invalidates #17's
-approach rather than something to work around quietly.

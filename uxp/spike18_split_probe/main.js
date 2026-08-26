@@ -1,6 +1,28 @@
 /*
  * CutDeck spike #18 -- split probe.
  *
+ * ROUND 15 (issue #24, 2026-08-26): #18 closed having PROVEN (not just left
+ * open) that same-track isInsert=false clone+trim can never produce a
+ * correct split -- (start - in) is an invariant of createSetStartAction/
+ * createSetInPointAction, permanently fixed at the clone's timeOffset the
+ * instant it's created, and no sequence of trim calls can close that gap
+ * back to zero (round 13's algebra, confirmed live rounds 4/13/14). That
+ * math is a property of the trim actions themselves, independent of how the
+ * item was created -- so isInsert=true would hit the identical dead end if
+ * the next thing tried were "insert-clone, then one createSetStartAction
+ * call to reposition." Not testing that. Filed as its own issue (#24)
+ * rather than continuing #18, per #18's own closing comment.
+ *
+ * What #18 never tested at all, and what round 15 (below, in runSpike())
+ * actually probes: basic isInsert=true geometry. Does timeOffset=0 ripple
+ * the rest of the track (unlike isInsert=false's confirmed no-op at
+ * round 4)? Is the returned clone chainable this time? By how much does
+ * anything downstream shift? One variable changed from round 4's own
+ * baseline (isInsert: false -> true), clone only, no trims -- same
+ * diagnostic-first discipline every round in this file has used since
+ * round 4. See the ROUND 15 comment block inside runSpike() and
+ * README.md for the full reasoning and how to record the result on #24.
+ *
  * Best-effort implementation of a split, staged as: clone the *untouched*
  * item first, then trim the original's end back to the cut point, then
  * correct the clone's start/in-point forward to the same cut point. Issue
@@ -396,9 +418,11 @@ async function runSpike(kind) {
     // all. If this commits cleanly, the single-transaction split design is
     // back alive (it looked dead after round 7, but round 7's crash was
     // this bug, not a fundamental clone+trim incompatibility).
-    const cutAbsSec = headInfo.startSec + bSec;
-    const cutMediaSec = headInfo.inSec + bSec;
-
+    //
+    // (cutAbsSec/cutMediaSec, used by rounds 11-14's trim/reposition calls,
+    // are gone from this scope as of round 15 -- round 15 is clone-only,
+    // diagnostic, no trims. See the ROUND 15 block below.)
+    //
     // ROUND 11 result (2026-08-25, prior click): CONFIRMED clean on a real, non-degenerate
     // cut (in/out marked at 57.080s/135.960s, well inside the 2950.120s
     // clip). item[0] (trimmed original) read back end=out=135.960s exactly
@@ -473,83 +497,64 @@ async function runSpike(kind) {
     // one unexplored lever is isInsert=true (ripples the timeline instead
     // of overwriting in place -- a different design, not a round-15 patch),
     // deliberately not attempted here.
-    log(`clone (offset 0, on top of the original) + trim original's end to ` +
-        `${cutAbsSec.toFixed(3)}s + fix the clone's in-point to ${cutMediaSec.toFixed(3)}s -- ` +
-        `all staged in ONE transaction (no temp park, no separate reposition step)`);
+    //
+    // ROUND 15 (issue #24, 2026-08-26): first live test of isInsert=true
+    // anywhere in this project. Diagnostic only -- clone alone, no trims --
+    // mirroring round 4's own approach to isInsert=false exactly, with
+    // isInsert as the one variable changed. timeOffset=0 (same value round 4
+    // used) so any difference in outcome is attributable to isInsert alone,
+    // not a second changed variable.
+    //
+    // Logs the FULL track item list before and after, not just the target
+    // item -- round 4/5 never needed this (isInsert=false doesn't ripple by
+    // definition), but whether isInsert=true ripples the rest of the track,
+    // and by how much, is the central open question this round exists to
+    // answer. See the file-header comment and README.md for why a full
+    // split recipe is deliberately NOT attempted yet from this round's
+    // result alone.
+    log("BEFORE (full track state):");
+    await logTrackItems(track, "BEFORE round 15");
 
-    let round14TxResult = null;
+    let round15TxResult = null;
+    let cloneResult15Description = null;
     project.lockedAccess(() => {
-      round14TxResult = project.executeTransaction((compoundAction) => {
-        const cloneResult14 = sequenceEditor.createCloneTrackItemAction(
+      round15TxResult = project.executeTransaction((compoundAction) => {
+        const cloneResult15 = sequenceEditor.createCloneTrackItemAction(
           freshHeadItem,
-          fromSeconds(0), // timeOffset -- zero this round, deliberately (see ROUND 14 comment above)
-          0,
-          0,
-          false,
-          false // isInsert -- overwrite; lands directly on the still-full original for now
+          fromSeconds(0), // timeOffset -- zero, matching round 4's isInsert=false baseline exactly
+          0, // videoTrackVerticalOffset
+          0, // audioTrackVerticalOffset
+          false, // alignToVideo -- untested this round; still open per issue #24
+          true // isInsert -- THE variable under test this round
         );
-        log(`clone call returned: ${describe(cloneResult14)}`);
-        if (!compoundAction.addAction(cloneResult14)) {
-          throw new Error("compoundAction.addAction(cloneResult14) returned false -- aborting.");
+        cloneResult15Description = describe(cloneResult15);
+        log(`clone call returned: ${cloneResult15Description}`);
+        if (!compoundAction.addAction(cloneResult15)) {
+          throw new Error("compoundAction.addAction(cloneResult15) returned false -- aborting.");
         }
-
-        const trimEndAction = freshHeadItem.createSetEndAction(fromSeconds(cutAbsSec));
-        if (!compoundAction.addAction(trimEndAction)) {
-          throw new Error("compoundAction.addAction(trimEndAction) returned false -- aborting.");
-        }
-
-        // The untested question this round exists to answer: is a fresh,
-        // chainable item visible from a track query made *inside* the still-
-        // open transaction, before it commits? No prior round tried this --
-        // every earlier re-query happened after commit. A read-only query
-        // should be safe to attempt even if the answer turns out to be "no."
-        let liveItems;
-        try {
-          liveItems = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
-        } catch (e) {
-          throw new Error(`track.getTrackItems() threw inside the open transaction: ` +
-              `${e && e.message ? e.message : e} -- mid-transaction query not viable, aborting.`);
-        }
-        log(`mid-transaction query: ${liveItems ? liveItems.length : 0} item(s) visible ` +
-            `(1 before this transaction opened)`);
-        if (!liveItems || liveItems.length < 2) {
-          throw new Error(`expected 2 items mid-transaction, found ${liveItems ? liveItems.length : 0} ` +
-              `-- staged-but-uncommitted state is not visible via getTrackItems(). Aborting; the ` +
-              `zero-offset-clone-plus-mid-transaction-fix approach does not work as tried.`);
-        }
-
-        // Identify the clone by reference: it's whichever item in the query
-        // is NOT freshHeadItem (the one item we already hold a handle to).
-        // If every item fails that check (e.g. UXP hands back a fresh
-        // wrapper object per call, making !== unreliable), fall back to the
-        // last array entry and say so plainly rather than guessing silently.
-        let tailCandidate = liveItems.find((it) => it !== freshHeadItem);
-        let pickedBy = "reference inequality vs freshHeadItem";
-        if (!tailCandidate) {
-          tailCandidate = liveItems[liveItems.length - 1];
-          pickedBy = "fallback: last array entry (reference-equality check found nothing distinct)";
-        }
-        log(`picked mid-transaction clone candidate by: ${pickedBy}`);
-
-        const setInAction = tailCandidate.createSetInPointAction(fromSeconds(cutMediaSec));
-        if (!compoundAction.addAction(setInAction)) {
-          throw new Error("compoundAction.addAction(setInAction) returned false -- aborting.");
-        }
-      }, `CutDeck spike18: round14 single-transaction clone(offset0)+trim+inpoint-fix (${kind})`);
+      }, `CutDeck spike18/24: round15 isInsert=true geometry probe, timeOffset=0 (${kind})`);
     });
-    log(`round 14 executeTransaction returned: ${describe(round14TxResult)}`);
+    log(`round 15 executeTransaction returned: ${describe(round15TxResult)}`);
 
-    await logTrackItems(track, "AFTER round 14 (single-transaction attempt)");
-    log(`ANALYSIS: if round 14 committed, the tail item should now read ` +
-        `start=${cutAbsSec.toFixed(3)}s in=${cutMediaSec.toFixed(3)}s ` +
-        `end=${headInfo.endSec.toFixed(3)}s out=${headInfo.outSec.toFixed(3)}s -- note end/out are ` +
-        `the TRUE original values this time, not an offset placeholder, since there was never a ` +
-        `temp park spot to leave behind. If executeTransaction threw instead (see the error above), ` +
-        `that is the answer too: record which step failed (clone, mid-transaction query, or the ` +
-        `in-point fix) on issue #18 -- if it's the mid-transaction query, the clone-based split ` +
-        `design is a dead end as scoped, per the issue's own "say so and stop" instruction.`);
-    log("Diagnostic finished. Record the result on issue #18, then Ctrl+Z (once per transaction " +
-        "that actually committed, per the log above) to undo before trying anything else.");
+    log("AFTER (full track state):");
+    await logTrackItems(track, "AFTER round 15 (isInsert=true, timeOffset=0)");
+
+    log(`ANALYSIS -- compare BEFORE vs AFTER above, and record on issue #24:\n` +
+        `  (1) Item count: did isInsert=true at timeOffset=0 actually insert a second item, ` +
+        `or is it a no-op like isInsert=false was at round 4?\n` +
+        `  (2) Ripple: if it inserted, did the original item's start shift? By how much -- does ` +
+        `it match the clone's own duration (the classic ripple-insert amount)? Did anything else ` +
+        `on the track shift too?\n` +
+        `  (3) Chainability: clone call returned "${cloneResult15Description}" -- does it expose ` +
+        `createSetStartAction (chainable) or is it still a bare non-chainable Action like ` +
+        `isInsert=false's clone (rounds 4, 11)?\n` +
+        `Do NOT proceed to a full split recipe from this result alone -- per issue #24, a naive ` +
+        `single-createSetStartAction reposition of whatever this round produces would hit the same ` +
+        `(start-in) invariant dead end #18 already proved at round 13, regardless of what's found ` +
+        `here. A real recipe needs a NEXT round informed by this one's answer, not a guess layered ` +
+        `on top of it.`);
+    log("Diagnostic finished (round 15, issue #24). Record the result, then Ctrl+Z (once, if the " +
+        "transaction committed) before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);
