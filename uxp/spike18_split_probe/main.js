@@ -512,49 +512,87 @@ async function runSpike(kind) {
     // answer. See the file-header comment and README.md for why a full
     // split recipe is deliberately NOT attempted yet from this round's
     // result alone.
-    log("BEFORE (full track state):");
-    await logTrackItems(track, "BEFORE round 15");
+    // ROUND 15 RESULT (2026-08-26, two live clicks): timeOffset=0 under
+    // isInsert=true did NOT ripple anything. Click 1 (track had 1 item,
+    // [0, 2950.120)): clone landed at start=2950.120 -- the FIRST item's own
+    // end, not overlapping it despite targeting 0+0=0 which fully collides
+    // with that item's span. The original was byte-identical before/after
+    // (no shift). Click 2 (track now had 2 items, clone from click 1
+    // included): cloning freshHeadItem (still item[0], the untouched
+    // original) again, same timeOffset=0, landed the new clone at
+    // start=5900.240 -- past BOTH existing items, not at 2950.120 where
+    // click 1's clone sits. Two consistent data points rule out "always
+    // clone.start = source.end + timeOffset" (that would predict 2950.120
+    // again) in favor of: same-track isInsert=true, when its computed target
+    // collides with existing content, auto-relocates to the first free slot
+    // past EVERYTHING currently on the track -- it does not push/ripple the
+    // colliding item(s) out of the way. This directly contradicts #17's
+    // working assumption that isInsert=true "ripples/shifts the rest of the
+    // timeline." Chainability is unchanged from isInsert=false: still a bare
+    // `[object Action] ownKeys=[] protoMethods=[]` both times.
+    //
+    // ROUND 16 (issue #24, 2026-08-26): both round-15 clicks targeted
+    // position 0+0=0 -- the very front of occupied space, which collides
+    // with an item's full span from its first frame. Untested: does the
+    // same auto-relocate-to-track-end behavior hold when the collision is
+    // with the MIDDLE of an item instead of its boundary -- i.e., a real cut
+    // point? If Premiere's insert logic always wins by relocating regardless
+    // of where inside occupied space the target lands, this round should
+    // again land the clone past all existing items (same as round 15 click
+    // 2). If instead colliding mid-item triggers different behavior --
+    // actually splitting the collided item and shifting only what comes
+    // after the collision point -- that would be the real ripple-insert
+    // behavior a split needs, and genuinely new information. One variable
+    // changed from round 15: timeOffset is now aSec (the sequence's own
+    // marked IN point, offset from the clip's start) instead of 0 --
+    // deliberately a real, meaningful cut point rather than another
+    // arbitrary probe value, so a positive result here is immediately usable
+    // for a real recipe, not just diagnostic.
+    log(`BEFORE (full track state) -- expect 1 item if you undid round 15's clicks; if not, that's ` +
+        `fine too, just note the starting item count when reading AFTER below:`);
+    await logTrackItems(track, "BEFORE round 16");
 
-    let round15TxResult = null;
-    let cloneResult15Description = null;
+    let round16TxResult = null;
+    let cloneResult16Description = null;
     project.lockedAccess(() => {
-      round15TxResult = project.executeTransaction((compoundAction) => {
-        const cloneResult15 = sequenceEditor.createCloneTrackItemAction(
+      round16TxResult = project.executeTransaction((compoundAction) => {
+        const cloneResult16 = sequenceEditor.createCloneTrackItemAction(
           freshHeadItem,
-          fromSeconds(0), // timeOffset -- zero, matching round 4's isInsert=false baseline exactly
+          fromSeconds(aSec), // timeOffset -- the marked IN point this time, a real mid-clip cut point (was 0 in round 15)
           0, // videoTrackVerticalOffset
           0, // audioTrackVerticalOffset
-          false, // alignToVideo -- untested this round; still open per issue #24
-          true // isInsert -- THE variable under test this round
+          false, // alignToVideo -- still untested; still open per issue #24
+          true // isInsert -- unchanged from round 15
         );
-        cloneResult15Description = describe(cloneResult15);
-        log(`clone call returned: ${cloneResult15Description}`);
-        if (!compoundAction.addAction(cloneResult15)) {
-          throw new Error("compoundAction.addAction(cloneResult15) returned false -- aborting.");
+        cloneResult16Description = describe(cloneResult16);
+        log(`clone call returned: ${cloneResult16Description}`);
+        if (!compoundAction.addAction(cloneResult16)) {
+          throw new Error("compoundAction.addAction(cloneResult16) returned false -- aborting.");
         }
-      }, `CutDeck spike18/24: round15 isInsert=true geometry probe, timeOffset=0 (${kind})`);
+      }, `CutDeck spike18/24: round16 isInsert=true mid-clip collision probe, timeOffset=${aSec.toFixed(3)}s (${kind})`);
     });
-    log(`round 15 executeTransaction returned: ${describe(round15TxResult)}`);
+    log(`round 16 executeTransaction returned: ${describe(round16TxResult)}`);
 
     log("AFTER (full track state):");
-    await logTrackItems(track, "AFTER round 15 (isInsert=true, timeOffset=0)");
+    await logTrackItems(track, "AFTER round 16 (isInsert=true, timeOffset=aSec)");
 
     log(`ANALYSIS -- compare BEFORE vs AFTER above, and record on issue #24:\n` +
-        `  (1) Item count: did isInsert=true at timeOffset=0 actually insert a second item, ` +
-        `or is it a no-op like isInsert=false was at round 4?\n` +
-        `  (2) Ripple: if it inserted, did the original item's start shift? By how much -- does ` +
-        `it match the clone's own duration (the classic ripple-insert amount)? Did anything else ` +
-        `on the track shift too?\n` +
-        `  (3) Chainability: clone call returned "${cloneResult15Description}" -- does it expose ` +
-        `createSetStartAction (chainable) or is it still a bare non-chainable Action like ` +
-        `isInsert=false's clone (rounds 4, 11)?\n` +
-        `Do NOT proceed to a full split recipe from this result alone -- per issue #24, a naive ` +
-        `single-createSetStartAction reposition of whatever this round produces would hit the same ` +
-        `(start-in) invariant dead end #18 already proved at round 13, regardless of what's found ` +
-        `here. A real recipe needs a NEXT round informed by this one's answer, not a guess layered ` +
-        `on top of it.`);
-    log("Diagnostic finished (round 15, issue #24). Record the result, then Ctrl+Z (once, if the " +
-        "transaction committed) before trying anything else.");
+        `  (1) Did the FIRST item (index 0, the original) get split at ${aSec.toFixed(3)}s, or ` +
+        `is it still one untouched piece?\n` +
+        `  (2) Where did the new clone land -- exactly at start=${aSec.toFixed(3)}s (a real ` +
+        `insert-at-target), or past all existing items again like both round 15 clicks (continuing ` +
+        `the auto-relocate pattern)?\n` +
+        `  (3) If something shifted, what moved and by how much -- does it match a genuine ` +
+        `ripple (only content AFTER the collision point moves, by the clone's duration), or ` +
+        `something else?\n` +
+        `  (4) Chainability: clone call returned "${cloneResult16Description}" -- same bare Action ` +
+        `pattern as rounds 4/11/15, or different this time?\n` +
+        `If this round also shows auto-relocate-to-track-end (no real insert-at-collision, no ` +
+        `ripple), that closes off isInsert=true as a same-track split primitive the same way #18 ` +
+        `closed off isInsert=false -- record that on #24 and stop, per its own acceptance criteria, ` +
+        `rather than trying further timeOffset values on the same closed door.`);
+    log("Diagnostic finished (round 16, issue #24). Record the result, then Ctrl+Z (once per " +
+        "transaction that committed this session) before trying anything else.");
   } catch (e) {
     log(`FAILED: ${e && e.message ? e.message : e}`);
     if (e && e.stack) log(e.stack);

@@ -1,5 +1,42 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-26, round 16 code): round 15 shows isInsert=true does NOT ripple — testing a mid-clip collision next
+
+**Round 15 live result (two clicks):** `timeOffset=0` under `isInsert=true`
+did not ripple anything. Click 1 (track had 1 item, `[0, 2950.120)`): the
+clone landed at `start=2950.120s` — the item's own end — while the original
+stayed byte-identical, even though the requested target (`0 + 0 = 0`) fully
+overlaps the original's span. Click 2 (same button, same source item, track
+now already had 2 items): the new clone landed at `start=5900.240s` — past
+**both** existing items, not at `2950.120s` where click 1's clone sits. Two
+consistent data points rule out "clone lands at `source.end + timeOffset`" in
+favor of: **a colliding same-track `isInsert=true` target auto-relocates to
+the first free slot past everything currently on the track — it does not
+push or ripple the colliding item(s) out of the way.** This directly
+contradicts #17's working assumption that `isInsert=true` "ripples/shifts the
+rest of the timeline." Chainability is unaffected: the clone is still a bare
+`[object Action] ownKeys=[] protoMethods=[]`, both clicks, same as
+`isInsert=false`.
+
+**Round 16 (untested):** both round 15 clicks collided with the very front
+of occupied space (target `0` sits at an item's first frame). Untested:
+does the same auto-relocate-to-track-end behavior hold when the collision is
+with the **middle** of an item — a real cut point — instead of its boundary?
+One variable changed: `timeOffset` is now `aSec` (the sequence's own marked
+**in** point, a real, meaningful mid-clip target) instead of `0`. Two
+possible outcomes:
+
+- **Same auto-relocate pattern** (clone lands past all existing items again,
+  original item unsplit) — closes off `isInsert=true` as a same-track split
+  primitive the same way #18 closed off `isInsert=false`, for a different
+  reason (collision avoidance rather than an invariant that can't be closed).
+  Both values of `isInsert` would then be dead ends, which would mean
+  `createCloneTrackItemAction` cannot place new content into occupied
+  same-track space at all, under any parameter combination tried so far.
+- **Genuine insert-and-shift** (the original item gets split at `aSec`, the
+  clone lands exactly at `aSec`, and only what comes after the collision
+  point moves) — real, new, usable information toward an actual recipe.
+
 ## UPDATE (2026-08-26, round 15 code): testing isInsert=true geometry — issue #24
 
 **#18 is closed.** Its dead end (below) was proven mathematically and confirmed
