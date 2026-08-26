@@ -3,6 +3,31 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## CutDeck mark-and-apply live-sequence cutting (issue #17) — split recipe disproven, design reopened — 2026-08-26
+
+**Correction to the 2026-08-25 section immediately below: the specific split recipe it
+describes as proven-by-type-definitions is not proven — it was live-tested (issue #18,
+rounds 1–14) and found to be a mathematical dead end.** `createCloneTrackItemAction(...,
+isInsert=false)` on the same track is a no-op when `timeOffset=0` (rounds 4–5: it never
+produces a second item), and for any nonzero `timeOffset` the pair `(start − in)` is an
+invariant of `createSetStartAction`/`createSetInPointAction` that gets permanently fixed
+at the clone's `timeOffset` the instant it's created — no sequence of
+`createSetStartAction`/`createSetEndAction`/`createSetInPointAction`/`createSetOutPointAction`
+calls, in any order or count, can close that gap back to the `start = in` a clean split
+requires (proven algebraically and confirmed live at rounds 4, 13, 14; full history in
+`uxp/spike18_split_probe/README.md`). **Same-track `isInsert=false` clone+trim cannot
+implement a split, full stop** — this is narrower than "the wrong call order" and cannot
+be fixed by re-ordering the same four calls.
+
+`isInsert=true` (which ripples/shifts the rest of the timeline on clone, a materially
+different shape than the in-place overwrite this design assumed) is untested and is an
+open **human design decision** for issue #17, not an agent continuation of #18 — #18's own
+acceptance criteria ("if clone+trim doesn't compose into a clean split, say so and stop")
+was satisfied by reporting this dead end, and it closed on that basis. **Issue #22 (the
+UXP Mark/Apply panel) is blocked pending that decision** — its Mark button is specified
+against the now-disproven recipe. Do not build #22 against the recipe in the section below
+until #17 is corrected with a replacement split design.
+
 ## CutDeck mark-and-apply live-sequence cutting (issue #17) — supersedes the section below — 2026-08-25
 
 **The ExtendScript/QE-DOM design in the section immediately below this one is retired.**
