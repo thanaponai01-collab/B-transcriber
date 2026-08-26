@@ -1,5 +1,69 @@
 # CutDeck spike #18 — split probe
 
+## UPDATE (2026-08-26, round 17 code): round 16 found a REAL native split+ripple — testing whether the leftover clone can be ripple-deleted in the SAME transaction
+
+**Round 16 live result: a genuine, correct split, for free.** Cloning with
+`isInsert=true` at `timeOffset=aSec` (a real mid-clip target, not a boundary)
+produced three items where there was one:
+
+```
+[0] start=0.000s    end=50.880s   in=0.000s   out=50.880s     -- head, correctly trimmed
+[1] start=50.880s   end=3001.000s in=0.000s   out=2950.120s   -- the inserted clone (full dup, unwanted)
+[2] start=3001.000s end=5900.240s in=50.880s  out=2950.120s   -- the ORIGINAL's tail, correctly continuing
+```
+
+This directly contradicts round 15's finding, for a *different* collision
+case: round 15 always targeted the very front of occupied space (an item's
+own first frame) and got auto-relocate-with-no-ripple both times. Targeting
+the **middle** of an item instead gets Premiere's real native insert-edit
+behavior: the collided item splits at the target, the head stays put and
+gets correctly trimmed (`end`/`out` both land on `aSec`, matching round 10's
+already-confirmed auto-derive), and everything from the target onward ripples
+later by exactly the inserted clone's duration — **including automatically
+producing a correct tail** (`item[2]`'s `in=50.880` continues exactly where
+the head left off; no invariant problem at all, unlike every `isInsert=false`
+attempt in #18). The only unwanted artifact is `item[1]`, the full-duration
+clone itself, sitting between head and tail.
+
+**The obvious next move: ripple-delete `item[1]`.** If
+`createRemoveItemsAction(selection, ripple=true, MediaType.ANY)` can remove
+it, the tail (`item[2]`) should shift back by exactly `item[1]`'s duration,
+landing directly adjacent to the head — a clean split, both pieces already
+correctly formed, no trim calls needed on either one.
+
+**The one thing that decides whether this recipe is usable for #22 at all:**
+can the ripple-delete be staged in the **same** transaction as the clone?
+#22 requires Mark to be exactly one undo step no matter how many splits it
+makes. If closing the gap needs a second, separately-committed transaction,
+this recipe produces two undo steps *per split* — unusable at the ~200–400
+span × N track scale #17 describes. Round 14 tried querying mid-transaction
+state once before and found it invisible (1 item where 2 were expected) —
+but that was for a clone confirmed to be a **no-op** (round 4/5's
+`isInsert=false` case), so it never actually tested mid-transaction
+visibility for a clone that does something. Round 16 changes that: this is
+the first isInsert=true clone confirmed live to genuinely create new items.
+**Round 17 re-tests the mid-transaction query with a case known to actually
+work**, and — if items are visible — stages the ripple-delete of the
+inserted clone in the same transaction as the clone itself.
+
+**Untested — this is what the next live run needs to report.** Three
+outcomes:
+
+- **Mid-transaction query sees the new items, ripple-delete stages and
+  commits cleanly, tail lands adjacent to head with correct in/out** — a
+  real, usable, single-transaction split recipe exists. This would be the
+  actual answer #17/#22 have been looking for.
+- **Mid-transaction query comes back short again** (repeating round 14's
+  result, this time for a genuinely real clone) — proves mid-transaction
+  state is never visible via `getTrackItems()` in this API, full stop,
+  regardless of clone success. The recipe would then need two committed
+  transactions per split, which conflicts with #22's one-undo-step rule —
+  a real design problem to flag on #17, not a coding detail to work around
+  quietly.
+- **`createRemoveItemsAction` doesn't exist where guessed, or throws** —
+  same "log the real shape, don't assume" discipline as every prior new API
+  call in this file.
+
 ## UPDATE (2026-08-26, round 16 code): round 15 shows isInsert=true does NOT ripple — testing a mid-clip collision next
 
 **Round 15 live result (two clicks):** `timeOffset=0` under `isInsert=true`
