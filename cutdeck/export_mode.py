@@ -8,6 +8,11 @@ Distinguishes the exporters CutDeck can hand a CutPlan to:
   * ``mark``         -- ``cutdeck.mark_export.to_mark_plan``, "split + disable
     CUT regions on the editor's own live sequence via the UXP Mark/Apply
     plugin" (issue #17). Supersedes the retired ExtendScript ``in_place`` mode.
+    **Parked** — the split primitive it depends on was abandoned on evidence
+    (see ``mark_export.py``'s docstring and ``assemble_export.py``'s).
+  * ``assemble``     -- ``cutdeck.assemble_export.to_assemble_plan``, "place
+    every span into a new sequence and disable the CUT ones". The route that
+    replaced ``mark`` after issue #24, needing no split primitive at all.
 
 They stay separate modules with different risk profiles (see each module's
 docstring) — this file only picks between them so callers don't have to guess
@@ -20,7 +25,8 @@ from typing import Callable
 
 MODE_NEW_SEQUENCE = "new_sequence"
 MODE_MARK = "mark"
-VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK)
+MODE_ASSEMBLE = "assemble"
+VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_ASSEMBLE)
 
 
 def exporter_for_mode(mode: str) -> Callable:
@@ -36,6 +42,9 @@ def exporter_for_mode(mode: str) -> Callable:
     if mode == MODE_MARK:
         from cutdeck.mark_export import to_mark_plan
         return to_mark_plan
+    if mode == MODE_ASSEMBLE:
+        from cutdeck.assemble_export import to_assemble_plan
+        return to_assemble_plan
     raise ValueError(f"unrecognized cutdeck.mode {mode!r} — must be one of {VALID_MODES}")
 
 

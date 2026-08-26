@@ -1,6 +1,21 @@
 """mark_export.py — CutPlan → mark plan (JSON) for the UXP Mark/Apply plugin
 (issue #17/#19: CutDeck mark-and-apply cutting on a live Premiere sequence).
 
+**PARKED (2026-08-26).** Nothing consumes this module. It assumes the plugin
+can split the editor's live sequence at every cut boundary, and that split
+primitive was abandoned on evidence after issues #18 and #24 — see
+``assemble_export.py``'s docstring for the full reasoning and the span-count
+arithmetic that settled it. ``cutdeck.export_mode.MODE_ASSEMBLE`` is the live
+route.
+
+Deliberately **not deleted yet.** This module is correct and tested, and the
+assemble route has not yet cut real footage — retiring a proven module to make
+room for an unproven one inverts the discipline issue #23 used when it retired
+``jsx_export.py`` (which was removed only *after* it was shown unreachable).
+Delete this, its tests, and ``MODE_MARK`` once assemble has passed its live
+acceptance on a throwaway. If in-place marking is ever revived, it will need a
+split primitive that does not exist today, not this file.
+
 Pure, deterministic, no Premiere dependency. This module owns only *where* a
 split/disable must happen — the UXP plugin owns *how* a split is performed
 (clone + trim, see the plugin design in issue #22). Deliberately not JSX and

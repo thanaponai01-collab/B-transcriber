@@ -3,7 +3,69 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
-## CutDeck mark-and-apply live-sequence cutting (issue #17) — split recipe disproven, design reopened — 2026-08-26
+## CutDeck live-sequence cutting — RESOLVED by dropping the split entirely (issue #25) — 2026-08-26
+
+**Supersedes both sections below.** The razor question is closed: **CutDeck does not need
+a split primitive.** `CutSpan`'s own contract already guarantees spans *"tile the whole
+media duration with no gaps and no overlaps"*, so the pieces of a split exist as data
+before Premiere is involved. Rather than cutting a clip apart, **place the pieces** — a
+three-point edit, via two primitives that were in `adobe/premierepro-types` `main` the
+whole time and appear nowhere in #17, #18, #22, or #24:
+
+    ClipProjectItem.createSetInOutPointsAction(inPoint, outPoint)
+    SequenceEditor.createOverwriteItemAction(projectItem, time, vIdx, aIdx)
+
+Every span (KEEP *and* CUT) is placed back to back into a new sequence and the CUT ones
+disabled via `createSetDisabledAction(true)`. The result is byte-for-byte what "razor
+every boundary and grey out the silences" would have produced. Apply is unchanged from
+#17's design: one `createRemoveItemsAction(sel, ripple=true, MediaType.ANY)`.
+
+**Why `isInsert=true` was closed even though it works.** #24 round 16 found a genuine
+native split — head correctly trimmed, tail correctly continuing, correct ripple. But it
+leaves a *full-duration* duplicate per boundary, and round 17 proved cleanup needs a
+second, separately-committed transaction (mid-transaction structural state is never
+visible via `getTrackItems()`). Measured against this repo's own `transcriber.db` rather
+than #17's estimate: job 28 is **443 placements / 221 disabled** (38.6 min @ 59.94), job
+24 is **382 / 191** (32.0 min @ 25). At 221 boundaries the intermediate timeline runs to
+hundreds of hours before cleanup — disqualifying on arithmetic. Round 18's staged
+cascading double-insert was **deliberately not clicked**; recorded so a future session
+does not re-derive the question and spend the click.
+
+**Design decisions settled (full rationale on #25):** in-place downgraded to nice-to-have
+(build into a new sequence; undo is `Project.deleteSequence`, so #22's one-undo-step rule
+no longer binds); **the sequence is the sole timebase authority and the media file's frame
+rate is never consulted, for any source type**; entry point is the active sequence's first
+track item via `getProjectItem()`; `dest = src_in - in_point`, absolute per span, no
+cumulative sum; **one rounding per boundary** into a shared frame array so one-frame
+gaps/overlaps are structurally impossible; transport is a `request.json`/`plan.json`
+file exchange rather than the WebSocket, removing the Premiere 26.2 cold-start permission
+bug from the critical path (`bridge.handle_message` unchanged, only `serve()` shelved);
+panel is Build/Apply/Discard; single clip in v1.
+
+**Data findings worth keeping.** Every `.mp3` row in `media` reads `25/1` — `probe()`'s
+fabricated audio-only fallback — while CFD 92 is really 29.97. The fabrication `bridge.py`
+refuses in theory is already present in real data, and `createSequenceFromMedia` cannot
+fix it because an audio-only source has no frame rate to inherit. Separately: `cut_plan`
+is **empty** — CutDeck has never persisted a plan on real footage, on any path.
+
+**Built:** `cutdeck/assemble_export.py` (pure, deterministic),
+`tests/test_cutdeck_assemble_export.py` (14 tests, suite 667 green), `MODE_ASSEMBLE` in
+`export_mode.py`. `mark_export.py` is **parked, not deleted** — it is correct and tested
+and the assemble route has not yet cut real footage; retiring a proven module for an
+unproven one inverts the discipline #23 used on `jsx_export.py`. Delete it, its tests, and
+`MODE_MARK` once assemble passes live acceptance.
+
+**Trigger / still open (human):** `uxp/spike_assemble_probe/` — one click, three unknowns
+at N=3 (does `createSetSettingsAction` really carry the timebase; do interleaved
+`setInOut`/`overwrite` produce three *different* ranges in one transaction, or does the
+shared `ClipProjectItem` collapse them; does `createRemoveItemsAction(ripple=true)` close
+the gap exactly). **Not one primitive in this design has executed once in this project** —
+it rests on published type definitions, the same evidentiary footing that produced 18
+rounds of confident wrong assumptions on the clone route. Also still unspent, and the
+cheapest experiment on the board: **manually import the FCP7 XML `xml_export.py` already
+emits**, which is the only thing that can falsify the premise that a plugin is needed at all.
+
+## [SUPERSEDED by #25 above] CutDeck mark-and-apply live-sequence cutting (issue #17) — split recipe disproven, design reopened — 2026-08-26
 
 **Correction to the 2026-08-25 section immediately below: the specific split recipe it
 describes as proven-by-type-definitions is not proven — it was live-tested (issue #18,
