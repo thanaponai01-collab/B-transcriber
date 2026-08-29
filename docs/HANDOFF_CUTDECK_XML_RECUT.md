@@ -14,18 +14,28 @@ and `TODO_LEDGER.md` first. Update `TODO_LEDGER.md` as phases land.
 
 `HANDOFF_CUTDECK_LIVE_SEQUENCE.md` set out to cut an already-assembled Premiere sequence
 **in place**, via generated ExtendScript driving the QE DOM (`cutdeck/jsx_export.py`). That
-route is blocked, and not by a bug:
+route was retired (issue #23) and replaced by a **UXP mark-and-apply** plugin
+(`cutdeck/mark_export.py` + `cutdeck/live_clip.py`, issue #17/#19/#20) — split composes
+from UXP primitives that do exist (`createCloneTrackItemAction` + the trim actions), so
+**the "UXP has no split/razor action" claim once made about this is false and already
+corrected in `TODO_LEDGER.md`'s issue #17 section**; an earlier draft of this handoff
+repeated the retired claim, which was a re-derivation error, not new evidence — do not
+cite it again.
 
-- Premiere's newer UXP `premierepro` API **has no split/razor action of any kind** — a hard
-  capability wall confirmed against Adobe's own API reference (2026-08-24, see `TODO_LEDGER.md`).
-- Classic ExtendScript, the only place razor exists (QE DOM), is supported only **through
-  September 2026**, and the user's Premiere build has already dropped the `File > Scripts`
-  menu — reaching it needs a CEP panel or an external debugger attach.
-- Phase 0's sync-lock probe came back **inconclusive** for the QE code path, and Phase 3's
-  live round trip was never run.
+The reason a second, independent mode is still worth building is different, and current:
 
-So the in-place mode is being built on a dying API, gated behind an unrun live test, to
-solve a problem a **pure file transformation** solves with no Premiere dependency at all.
+- The mark-and-apply **plugin itself is blocked by a host bug**, not a capability gap: the
+  UXP panel loads with a correct DOM (confirmed in DevTools) but **nothing paints on
+  screen** in Premiere 26.3.2.2 — a panel-compositing bug, isolated via DevTools' own
+  hover-highlight overlay rendering correctly in the right place throughout (see
+  `uxp/spike18_split_probe/README.md`, 2026-08-25). Unresolved as of this writing.
+- Classic ExtendScript/QE DOM (`jsx_export.py`'s original route) is supported only
+  **through September 2026** and the user's Premiere build has already dropped the
+  `File > Scripts` menu — a dying path regardless of the panel bug.
+
+So this handoff is not a workaround for a missing UXP capability — it is a **second, fully
+independent mode** that keeps working even if the panel-compositing bug is never fixed,
+because it has no live-Premiere or plugin-panel dependency at all.
 
 **This handoff is that transformation.** The editor exports their synced sequence as FCP7
 XML; CutDeck rewrites it; the editor imports the result as a *new* sequence. The original

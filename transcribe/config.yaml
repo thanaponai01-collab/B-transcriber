@@ -363,7 +363,7 @@ segment:
 # the editor's own live sequence, in place, without deleting anything until
 # the editor hits Apply. See cutdeck/export_mode.py.
 cutdeck:
-  mode: new_sequence  # new_sequence | mark
+  mode: new_sequence  # new_sequence | mark | recut_sequence
 
 # Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
 # model served by `ollama serve`, never an external API. Off by default —

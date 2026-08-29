@@ -3,6 +3,141 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
+## CutDeck XML recut, `recut_sequence` mode (docs/HANDOFF_CUTDECK_XML_RECUT.md) — Phases 0-4 built, Phase 5 still human-only — 2026-08-29
+
+**Correction to the handoff doc itself, done in the same session:** its "Why
+this handoff exists" section repeated the retired "UXP has no split/razor
+action" claim that issue #17's section above already corrects as false. The
+handoff's real justification is current and different — the mark-and-apply
+UXP panel is blocked by a host **panel-compositing bug** (nothing paints on
+screen in Premiere 26.3.2.2, confirmed via DevTools, see
+`uxp/spike18_split_probe/README.md`), not a split-capability gap. Fixed
+in-place in the handoff doc; this mode is a second independent path with no
+live-Premiere dependency at all, not a workaround for a UXP limitation.
+
+- **Phase 0 (fixture) — DONE, 2026-08-29.** Real Premiere FCP7 export
+  captured from the user's own project (`20260829 14-20-04.xml`): 1
+  sequence, 32948 frames @ CFR 30fps, V1-V3 stacked angle clips + several
+  stereo audio tracks (angle audio channels), no filters/transitions/nested
+  sequences. Scrubbed via `scripts/scrub_fcpxml.py` (3 distinct source paths
+  + 4 names neutralized, all numerics untouched) and committed as
+  `tests/fixtures/cutdeck_recut_sample_scrubbed.xml`. This is the full
+  ~18-minute sequence, not a hand-trimmed 30-60s clip as the handoff's ideal
+  fixture describes — used here as a structural smoke fixture (parses and
+  recuts without crashing, checked in
+  `test_real_captured_fixture_recuts_without_crashing`), not for exact
+  frame-level acceptance. A trimmed 30-60s fixture with a hand-verified
+  ground-truth cut is still open if tighter frame-accuracy acceptance is
+  ever needed.
+- **Phase 2 (`cutdeck/xml_recut.py`, the transform) — DONE.** Surgical
+  ElementTree rewrite, not model-and-regenerate. Handles all four cases from
+  the handoff's table: a clip wholly after a cut shifts left; a clip
+  straddling one or two cut edges is razored into 1-3 pieces (the common
+  case — a full-length clip with a cut in the middle — splits into two,
+  keeping the original id on piece 0 and cloning derived ids for later
+  pieces); a clip wholly inside a cut is dropped; every track (locked,
+  disabled, or not) shifts identically, no exemptions. Markers shift or, if
+  inside a cut, are dropped and counted. Refuses (raises `XmlRecutRefusal`,
+  naming the clip/timecode) on any `<transitionitem>`, nested `<sequence>`
+  clip, or a `<filter>`-carrying clip a cut boundary lands inside — **known
+  gap, not yet covered:** speed/time-remap clips have no dedicated check
+  (none seen in the one real fixture so far; add one with a test before
+  trusting this on footage that uses it). VFR refuses (GAP-2). **Links are
+  dropped wholesale, not rewritten** — a split clip's cloned ids invalidate
+  any `<linkclipref>` pointing at the original single id, and the handoff
+  explicitly sanctions shipping an unlinked-but-correct sequence over a
+  subtly wrong linked one; sync is guaranteed by the per-track frame shift
+  regardless of links. 13 tests in `tests/test_cutdeck_xml_recut.py`
+  (synthetic minimal xmeml for precise unit assertions + the real Phase-0
+  fixture for a structural smoke test).
+- **Phase 3 (CLI + duration guard) — DONE.** `python -m cutdeck.xml_recut
+  sequence.xml mixdown.wav [--dry-run] [--job-id] [--config] [--db]`. Routes
+  the mixdown through the existing, unmodified `sequence_mixdown.
+  plan_from_mixdown` → `ingest()` path (no ASR import reachable, asserted by
+  test) using the **XML's own sequence rate**, not a guessed/fabricated one.
+  Hard-refuses (`DurationMismatch`) unless the mixdown's duration matches
+  the XML's declared sequence duration within one frame — the "nastiest
+  silent failure" the handoff calls out (an in/out-range or work-area
+  mixdown export would land every cut at the wrong time, uniformly).
+  `--dry-run` writes nothing. Output: `<input>_cut.xml` beside the source;
+  sequence `<name>` gets ` — CutDeck` appended. 4 tests in
+  `tests/test_cutdeck_xml_recut_cli.py`.
+- **Phase 4 (mode registration) — DONE.** `cutdeck/export_mode.py` gains
+  `MODE_RECUT_SEQUENCE = "recut_sequence"` → `xml_recut.recut`; its
+  docstring states the signature is `(source_xml, plan) -> (xml, report)`,
+  not interchangeable with the other two exporters' `(plan, media_path,
+  ...)` shape. `config.yaml`'s `cutdeck.mode` comment updated to list all
+  three values. `tests/test_cutdeck_mode_selection.py` extended, one new
+  test.
+- **Phase 5 (human gate) — IN PROGRESS, 2026-08-29. Two real bugs found and
+  fixed via a live round trip on the user's own 18-minute sequence** (the
+  actual fixture this session captured, not a synthetic one) — exactly what
+  Phase 5 exists to catch, since neither was visible from the unit tests
+  alone:
+  1. **Duplicate full `<file>` listings.** `_clone_clipitem`'s deepcopy
+     duplicated whatever `<file>` child the split clip carried; when that
+     clip happened to be the one holding the source's ONE full listing
+     (`<pathurl>`, `<media>`, ...) — the common case, since that's whichever
+     clipitem for a source appears first and gets cut/split like everything
+     else — every split piece got its own full copy (122 duplicate `file-1`
+     listings observed on the real 123-cut run). Premiere resolved *video*
+     fine against the duplicates but the sequence imported with **video
+     playing and every audio track completely silent**. Fixed by
+     `_dedupe_file_listings()`: a document-order pass collapsing every
+     listing after the first full one per file id back to an empty stub —
+     the FCP7 invariant the original document already held before cloning
+     broke it.
+  2. **Stale `<pproTicksIn>`/`<pproTicksOut>`.** Even after fix 1, audio was
+     *still* silent. Root cause: Premiere's audio engine reads these two
+     high-precision tick fields (a fixed 254016000000 ticks/sec, confirmed
+     against the real fixture's own `pproTicksOut` value) for playback
+     precision, separately from the frame-based `<in>`/`<out>` this
+     transform was already updating on every trim. Leaving ticks untouched
+     left them describing the clip's *original, untrimmed* source range —
+     video played from the correct frame (frame math was always right);
+     audio played from wherever the stale ticks pointed, which is exactly
+     "plausible but silently wrong," the thing this whole handoff is
+     designed to prevent. Fixed: `_frame_to_ticks()` recomputes both fields
+     from the same trimmed frame numbers on every split/trim, via exact
+     `Fraction` math (no float touches a tick value, same discipline as
+     `transcribe/timebase.py`).
+  Both are covered by regression tests
+  (`test_split_clone_does_not_duplicate_the_full_file_listing`,
+  `test_trim_updates_ppro_ticks_not_just_frame_in_out`) plus consistency
+  checks folded into the real-fixture smoke test. **Confirmed working,
+  2026-08-29: the editor re-imported the ticks-fixed file and audio now
+  plays correctly** — Phase 5 human gate passed for the core transform.
+
+- **`cutdeck/xml_audio_extract.py` — DONE, 2026-08-29, same session, prompted
+  by the editor asking why a manual mixdown export is needed when the XML
+  already names the source audio.** Builds the sequence-timeline mixdown WAV
+  directly from the XML's own clipitems + source media via ffmpeg —
+  `plan_from_mixdown`'s VAD input, without a Premiere export step. Reads a
+  chosen reference audio track (default: first track with clips; a
+  multi-mic sequence needs `--audio-track` to say which one carries
+  dialogue), resolves each clip's source file via the same
+  first-full-listing convention `_dedupe_file_listings` relies on, extracts
+  each segment with `-ss`/`-to` (preferring `pproTicksIn`/`pproTicksOut` for
+  sub-frame precision, matching xml_recut's own tick-precision fix above),
+  and pastes into a silence buffer at the clip's timeline position. Disabled
+  clips are skipped (silence), matching a real Premiere render. Explicitly
+  trades fidelity for convenience: it reads only what the XML states, so any
+  gain/EQ/pan/crossfade the real Premiere mix applies is invisible to it —
+  fine for this project's real sequences (no effects, confirmed Phase 0),
+  not a substitute for a manual export on a heavily mixed sequence.
+  `cutdeck/xml_recut.py`'s CLI now takes `mixdown_wav` as optional: omit it
+  and the CLI auto-extracts to a temp file instead. **Verified against the
+  real 18-minute fixture**: auto-extracted run produced the same 123 cut
+  spans (749098ms vs the manual mixdown's 749130ms — the small delta is
+  track-A1-only vs Premiere's full mix, expected) and passed the same
+  file-listing/ticks structural checks as the manually-mixed run. 4 tests in
+  `tests/test_cutdeck_xml_audio_extract.py`, real ffmpeg on PATH (not
+  mocked), same discipline as `tests/test_cutdeck_preview.py`. Not yet
+  independently re-verified with a live Premiere import (the manually-mixed
+  run already passed that gate on the same source XML and cut plan shape;
+  the auto-extracted plan is structurally equivalent, but hasn't itself been
+  through Phase 5).
+
 ## CutDeck mark-and-apply live-sequence cutting (issue #17) — supersedes the section below — 2026-08-25
 
 **The ExtendScript/QE-DOM design in the section immediately below this one is retired.**
