@@ -450,6 +450,13 @@ def main(argv: list[str] | None = None) -> int:
                                              / "transcribe" / "config.yaml"))
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, write nothing")
+    ap.add_argument("--asr", action="store_true",
+                     help="run the full ASR pipeline (Engine A) on the mixdown first and "
+                          "use its real tokens to protect short speech islands in the "
+                          "min-clip merge, instead of guessing blind from silence alone. "
+                          "Slower (a real transcription pass over the whole mixdown) but "
+                          "the merge no longer has to choose between re-admitting silence "
+                          "or risking a dropped word — see plan_from_mixdown's tokens arg.")
     args = ap.parse_args(argv)
 
     src = Path(args.sequence_xml)
@@ -461,7 +468,25 @@ def main(argv: list[str] | None = None) -> int:
     tb = _sequence_timebase(sequence)
     seq_frames = int(_text(sequence, "duration", "0"))
 
-    cfg = CutConfig.from_yaml(yaml.safe_load(Path(args.config).read_text(encoding="utf-8")))
+    raw_config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    cfg = CutConfig.from_yaml(raw_config)
+
+    # Mirror transcribe/pipeline/run.py's ingest_kwargs construction exactly —
+    # without this, ingest() silently falls back to its own hardcoded defaults
+    # (vad_threshold=0.5, vad_min_silence_ms=300, ...) instead of config.yaml's
+    # tuned values, so the recut CLI's silence detection quietly diverges from
+    # the rest of the pipeline (2026-08-29 bug: leftover silence in recut output).
+    ingest_kwargs = dict(
+        denoise=raw_config.get("denoise", True),
+        vad_threshold=float(raw_config.get("vad_threshold", 0.35)),
+        vad_min_speech_ms=int(raw_config.get("vad_min_speech_ms", 250)),
+        vad_min_silence_ms=int(raw_config.get("vad_min_silence_ms", 500)),
+        rms_gate_enabled=bool(raw_config.get("rms_gate_enabled", True)),
+        rms_gate_floor_db=(float(raw_config["rms_gate_floor_db"])
+                            if raw_config.get("rms_gate_floor_db") is not None else None),
+        rms_gate_floor_percentile=float(raw_config.get("rms_gate_floor_percentile", 10.0)),
+        rms_gate_min_gap_ms=int(raw_config.get("rms_gate_min_gap_ms", 300)),
+    )
 
     extracted_tmp = None
     mixdown_wav = args.mixdown_wav
@@ -474,10 +499,34 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         from transcribe.pipeline.ingest import ingest
-        mixdown_result = ingest(mixdown_wav, materialize_chunks=False)
+        mixdown_result = ingest(mixdown_wav, materialize_chunks=False, **ingest_kwargs)
         _check_duration_guard(seq_frames, mixdown_result.duration_ms, tb)
 
-        plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb)
+        tokens = None
+        if args.asr:
+            from types import SimpleNamespace
+
+            from transcribe.db import store
+            from transcribe.pipeline.run import run_file
+
+            print("--asr: running the full ASR pipeline on the mixdown "
+                  "(this transcribes the whole mixdown — slower than silence-only)...")
+            db_path = Path(args.db) if args.db else store._DEFAULT_DB
+            token_dicts = run_file(mixdown_wav, raw_config, db_path)
+            print(f"--asr: got {len(token_dicts)} tokens")
+            # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
+            # dicts run_file returns aren't attribute-accessible, so wrap them
+            # rather than re-deriving the job id run_file already resolved
+            # internally (duplicating its resumable-job lookup would be another
+            # place that lookup could drift out of sync).
+            tokens = [
+                SimpleNamespace(idx=i, text=t["text"],
+                                 start_ms=t["start_ms"], end_ms=t["end_ms"])
+                for i, t in enumerate(token_dicts)
+            ]
+
+        plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb,
+                                  tokens=tokens, **ingest_kwargs)
     finally:
         if extracted_tmp is not None:
             Path(extracted_tmp.name).unlink(missing_ok=True)

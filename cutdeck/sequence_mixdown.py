@@ -48,6 +48,7 @@ def plan_from_mixdown(
     job_id: int,
     cfg: CutConfig,
     timebase: Optional[Timebase] = None,
+    tokens: Optional[list] = None,
     **ingest_kwargs,
 ) -> CutPlan:
     """Build a silence-removal ``CutPlan`` from a sequence's own audio mixdown.
@@ -62,6 +63,16 @@ def plan_from_mixdown(
     degrades to silence-only removal with a logged warning rather than crashing
     or silently guessing a word timeline. Run the full ASR pipeline on the
     mixdown first (a separate job) if word-level cuts are actually needed.
+
+    ``tokens`` (optional, phrase-cue tokens with ``.start_ms``/``.end_ms`` — e.g.
+    ``transcribe.db.store.TokenRow`` rows from a completed ASR job on this same
+    mixdown): with no transcript, ``build_cut_spans``'s min-clip merge
+    (``rules.apply_min_clip_merge``) can never tell a short real utterance
+    from noise, so it re-admits adjacent silence into the kept timeline rather
+    than risk dropping real speech (2026-08-29 real-footage finding — see
+    ``docs/HANDOFF_CUTDECK_XML_RECUT.md``). Passing real tokens lets it protect
+    short speech islands by standing them alone instead of dissolving a
+    neighbouring cut, so less silence survives into the recut output.
     """
     if cfg.fillers_enabled or cfg.repeats_enabled:
         logger.warning(
@@ -90,7 +101,7 @@ def plan_from_mixdown(
         )
 
     cut_spans = build_cut_spans(
-        tokens=[], spans=result.spans, duration_ms=duration_ms, cfg=cfg,
+        tokens=tokens or [], spans=result.spans, duration_ms=duration_ms, cfg=cfg,
     )
 
     from transcribe.db import store
