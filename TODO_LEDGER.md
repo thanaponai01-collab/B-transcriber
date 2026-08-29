@@ -3,7 +3,66 @@
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
-## CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
+## CutDeck XML recut — multi-layer sync (HANDOFF_CUTDECK_XML_RECUT.md) — design settled, Phase 1 built — 2026-08-29
+
+**The in-place mode below is superseded.** Design session 2026-08-29 pivoted
+multi-layer (multicam) cutting away from editing a live Premiere sequence via
+ExtendScript, and onto a pure file transformation: the editor exports their
+synced sequence as FCP7 XML, `cutdeck/xml_recut.py` rewrites it, the editor
+imports the result as a *new* sequence. The original project is never touched.
+Rationale: the in-place route is built on an API Adobe kills in Sept 2026, has
+no UXP successor that can razor (see the 2026-08-24 finding below), and is
+gated behind a live test that still has not run. See
+`docs/HANDOFF_CUTDECK_XML_RECUT.md` for the full phased plan.
+
+**Why this preserves sync:** a cut is a global time-domain shift, not a
+per-clip edit — every clip, gap, marker, and locked/muted/disabled track after
+a cut point moves left by the same frame count, so cross-track offsets are
+invariant *by construction*. No dependence on Premiere's sync-lock semantics,
+which Phase 0 could never pin down.
+
+**Decisions locked in this session (do not re-litigate without new evidence):**
+surgical tree rewrite, never model-and-regenerate (regeneration silently drops
+every element nobody modelled); the source XML's own `<rate>` is authoritative
+over the CutPlan's possibly-fabricated 25fps mixdown timebase, and a mismatch
+hard-refuses; all tracks cut unconditionally (the *opposite* of
+`jsx_export.py`'s skip-locked loop, deliberately); strict refusal on any
+unrecognised structure under a cut boundary, naming clip + timecode; links
+rewritten but first to be sacrificed; markers shift, and ones inside a cut are
+dropped *and counted*. Silence-only is phase one of two — word-level
+filler/repeat cuts are deferred, not foreclosed.
+
+**Built 2026-08-29:**
+- **Phase 1** — `scripts/scrub_fcpxml.py`: sanitizes a real Premiere export
+  (pathurls, sequence/file names) so a fixture is committable to this public
+  repo; every numeric element, id, and `<clipitem><name>` round-trip key is
+  left byte-identical, since that structure *is* the fixture's value.
+  `tests/test_scrub_fcpxml.py`, 7 tests.
+
+**Open, blocking, human-only:**
+- **Phase 0 (the fixture) — not done, and no parser may be written until it
+  is.** Needs a real 30–60s Premiere FCP7 XML export of a 3+ angle stack with
+  ≥2 clear silence gaps, plus its full-sequence audio mixdown; scrubbed, then
+  committed to `tests/fixtures/`. Every prior guessed-structure shortcut in
+  this project (`TICKS_PER_FRAME`, the UXP capability assumption,
+  `store.get_last_passing_eval()`'s filter gap) cost a session. A parser
+  written against imagined xmeml would ship with passing tests, which is
+  worse, not better. Trigger: immediately — this gates Phases 2–5.
+- **Phase 5 (real-footage verification) — not done.** The editor personally
+  imports one generated XML into Premiere and scrubs the cut points on a real
+  3-angle stack. Phases 2–3 prove the sync invariant and the frame arithmetic;
+  neither proves Premiere reads the file the way we think it does. Until this
+  runs, the mode is **believed correct, not correct**. Trigger: before the
+  recut mode touches anything that matters.
+
+## CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — SUPERSEDED 2026-08-29, see above — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
+
+**Superseded by the XML recut mode above. Leave the code in the tree; do not
+invest further.** `jsx_export.py` and its tests stay because deleting them
+costs a git-archaeology trip if Adobe ever ships a UXP split/razor action —
+but the in-place path remains unverified against a live Premiere and will not
+be pursued. If you are here to make ExtendScript work, stop and read
+`docs/HANDOFF_CUTDECK_XML_RECUT.md` first.
 
 Built and tested (all GPU-free, no live Premiere dependency):
 

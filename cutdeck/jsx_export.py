@@ -1,4 +1,17 @@
-"""jsx_export.py — CutPlan → ExtendScript (.jsx) that razors + ripple-deletes CUT
+"""SUPERSEDED 2026-08-29 — do not invest further; see docs/HANDOFF_CUTDECK_XML_RECUT.md.
+
+Cutting an already-assembled (multi-layer / multicam) sequence is now done by
+``cutdeck/xml_recut.py``: the editor exports the sequence as FCP7 XML, CutDeck
+rewrites it, the editor imports a new sequence. This module's in-place route is
+built on classic ExtendScript's QE DOM, which Adobe supports only through
+Sept 2026 and whose UXP successor has **no split/razor action of any kind**
+(confirmed 2026-08-24, TODO_LEDGER.md). It was never verified against a live
+Premiere and will not be. The code and its tests stay in the tree only so the
+work is recoverable if Adobe ever ships a UXP razor — not because this path is
+supported. If you are here to make ExtendScript work: read the recut handoff
+first.
+
+jsx_export.py — CutPlan → ExtendScript (.jsx) that razors + ripple-deletes CUT
 spans from an *already-assembled* Premiere sequence in place (IMPLEMENT_CUTDECK.md
 §B.7 exception — this is the 'in-place' mode; xml_export.py remains the
 'new-sequence' mode; do not merge them. See
