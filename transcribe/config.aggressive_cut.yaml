@@ -1,0 +1,131 @@
+boundary_tol_ms: 300
+chunk_overlap_ms: 750
+conform_vfr: false
+cue_max_close_gap_ms: 200
+cut:
+  adaptive_silence: false
+  false_start_max_ms: 2500
+  filler_lexicon:
+  - เอ่อ
+  - อ่า
+  - อืม
+  - เอิ่ม
+  - um
+  - uh
+  filler_lexicon_contextual:
+  - แบบ
+  - แบบว่า
+  - ก็คือ
+  - คือว่า
+  - like
+  - you know
+  fillers_enabled: false
+  keep_last_take: true
+  llm_enabled: false
+  max_dissolve_ms: 300
+  min_clip_ms: 500
+  min_nonspeech_ms: 400
+  min_silence_ms: 120
+  nonspeech_enabled: false
+  pad_post_ms: 15
+  pad_pre_ms: 30
+  repeat_max_gap_ms: 600
+  repeat_max_ngram: 4
+  repeat_take_jaccard_threshold: 0.55
+  repeats_enabled: false
+  retake_markers:
+  - เดี๋ยวเอาใหม่
+  - เอาใหม่นะ
+  - ตัดตรงนี้
+  - อันนี้ผิด
+  - เมื่อกี้พูดผิด
+  retake_window_segments: 5
+  rough_cut_mode: interval
+  silence_percentile: 60
+  word_blade_crossfade_ms: 20
+cutdeck:
+  mode: new_sequence
+denoise: true
+drop_tokens_over_silence: true
+engine_a: faster_whisper
+engine_b: passthrough
+engine_batch_size: 4
+engines:
+  faster_whisper:
+    batch_size: 8
+    beam_size: 5
+    bias_prompt_budget: 200
+    compute_type: float16
+    cue_gap_ms: 700
+    cue_max_ms: 4000
+    cue_space_min_chars: 12
+    cue_space_min_ms: 700
+    cue_split_algorithm: greedy
+    cue_target_chars: 42
+    vad_min_silence_ms: 500
+    vad_threshold: 0.35
+  qwen3_asr:
+    max_inference_batch_size: 8
+    max_new_tokens: 256
+    max_span_s: 8.0
+    model_id: Qwen/Qwen3-ASR-1.7B
+flywheel:
+  bias_prompt_budget: 200
+  min_occurrences: 3
+  stale_engine_weight: 0.2
+normalization:
+  exception_lexicon:
+  - COVID-19
+  - iPhone
+  - iPad
+  - YouTube
+  - LINE OA
+  - LINE
+  - TikTok
+  - Facebook
+  - Instagram
+  - ChatGPT
+  - GPT-4
+  - AI
+  - API
+  - Shopee
+  - Lazada
+  - Grab
+  - Netflix
+  - Google
+  - Zoom
+  - WiFi
+  - Premiere Pro
+  mai_yamok_attach: true
+  thai_digits: true
+reconciler:
+  llm_enabled: false
+  ollama:
+    host: http://localhost:11434
+    model: qwen2.5:3b-instruct
+    timeout_s: 30
+regression_abs_floor: 0.005
+regression_tolerance: 0.02
+rms_gate_enabled: true
+rms_gate_floor_db: null
+rms_gate_floor_percentile: 10.0
+rms_gate_min_gap_ms: 150
+segment:
+  gap_ms: 700
+  vad_silence_ms: 500
+self_ensemble:
+  beam_size_a: null
+  beam_size_b: 1
+  enabled: false
+  temperature_a: 0.0
+  temperature_b: 0.2
+silence_drop_max_confidence: 0.5
+silence_overlap: 0.8
+thai_atoms:
+  disable: []
+  extra_bind_left: []
+  extra_pairs: []
+  pos_condition_reciprocal: false
+vad_min_silence_ms: 300
+vad_min_speech_ms: 250
+vad_threshold: 0.35
