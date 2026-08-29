@@ -419,6 +419,15 @@ def frame_to_ms_int(frame: int, tb: Timebase) -> int:
     return int(round(frame_to_ms(frame, tb)))
 
 
+def _deep_update(base: dict, overlay: dict) -> None:
+    """Recursively apply ``overlay``'s keys onto ``base``, in place."""
+    for key, value in (overlay or {}).items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_update(base[key], value)
+        else:
+            base[key] = value
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     import tempfile
@@ -448,6 +457,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--job-id", type=int, default=0)
     ap.add_argument("--config", default=str(Path(__file__).resolve().parent.parent
                                              / "transcribe" / "config.yaml"))
+    ap.add_argument("--overlay", default=None,
+                     help="YAML file of config keys to override on top of --config (e.g. "
+                          "transcribe/config.aggressive_cut.yaml's tuned silence-removal "
+                          "thresholds) — only the keys present in the overlay are changed, "
+                          "everything else still comes from --config.")
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, write nothing")
     ap.add_argument("--asr", action="store_true",
@@ -469,6 +483,8 @@ def main(argv: list[str] | None = None) -> int:
     seq_frames = int(_text(sequence, "duration", "0"))
 
     raw_config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    if args.overlay:
+        _deep_update(raw_config, yaml.safe_load(Path(args.overlay).read_text(encoding="utf-8")))
     cfg = CutConfig.from_yaml(raw_config)
 
     # Mirror transcribe/pipeline/run.py's ingest_kwargs construction exactly —
