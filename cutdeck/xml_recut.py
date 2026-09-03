@@ -530,6 +530,19 @@ def main(argv: list[str] | None = None) -> int:
             db_path = Path(args.db) if args.db else store._DEFAULT_DB
             token_dicts = run_file(mixdown_wav, raw_config, db_path)
             print(f"--asr: got {len(token_dicts)} tokens")
+
+            # run_file() resolves/creates its own job_id internally and never
+            # returns it — look it up by media path so the plan we save below
+            # references the job the tokens actually belong to, not args.job_id's
+            # default of 0 (which doesn't exist -> cut_plan FK violation).
+            asr_conn = store.connect(db_path)
+            try:
+                media_id = store.create_media(asr_conn, mixdown_wav)
+                job_row = store.get_latest_job_for_media(asr_conn, media_id)
+            finally:
+                asr_conn.close()
+            if job_row is not None:
+                args.job_id = job_row.id
             # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
             # dicts run_file returns aren't attribute-accessible, so wrap them
             # rather than re-deriving the job id run_file already resolved

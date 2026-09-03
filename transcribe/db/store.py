@@ -399,6 +399,19 @@ def find_resumable_job(
     return JobRow(**dict(row))
 
 
+def get_latest_job_for_media(conn: sqlite3.Connection, media_id: int) -> Optional[JobRow]:
+    """Most recently created job for this media, regardless of status — for
+    callers that ran run_file() in-process and only have the media path, not
+    the job_id run_file resolved/created internally."""
+    row = conn.execute(
+        "SELECT * FROM job WHERE media_id = ? ORDER BY id DESC LIMIT 1",
+        (media_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return JobRow(**dict(row))
+
+
 # ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(
