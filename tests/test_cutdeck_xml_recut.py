@@ -249,6 +249,59 @@ def test_transitionitem_raises_and_names_it():
         recut(xml, _plan(spans))
 
 
+def test_static_filter_splits_without_refusing():
+    """A filter with no <keyframe> (e.g. Premiere's default Basic Motion with
+    a fixed scale) renders identically before and after a split, so it's safe."""
+    xml = _synthetic_xml().replace(
+        "<file id=\"file-1\"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>",
+        """<file id="file-1"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>
+                        <filter>
+                            <effect>
+                                <name>Basic Motion</name>
+                                <parameter><parameterid>scale</parameterid><value>50</value></parameter>
+                            </effect>
+                        </filter>""",
+        1,
+    )
+    spans = [
+        CutSpan(idx=0, src_in_ms=0, src_out_ms=1000, action=KEEP),
+        CutSpan(idx=1, src_in_ms=1000, src_out_ms=2000, action=CUT),  # frames [30, 60)
+        CutSpan(idx=2, src_in_ms=2000, src_out_ms=10_000, action=KEEP),
+    ]
+    out_xml, report = recut(xml, _plan(spans))
+    root = ET.fromstring(out_xml)
+    v1_pieces = [c for c in root.findall(".//clipitem")
+                 if (c.find("name") is not None and c.find("name").text == "v1")]
+    assert len(v1_pieces) == 2  # split into two surviving pieces
+    assert all(p.find("filter") is not None for p in v1_pieces)
+    assert report.cuts_applied == 1
+
+
+def test_keyframed_filter_raises_and_names_it():
+    xml = _synthetic_xml().replace(
+        "<file id=\"file-1\"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>",
+        """<file id="file-1"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>
+                        <filter>
+                            <effect>
+                                <name>Basic Motion</name>
+                                <parameter>
+                                    <parameterid>scale</parameterid>
+                                    <keyframe><when>0</when><value>50</value></keyframe>
+                                    <keyframe><when>299</when><value>100</value></keyframe>
+                                </parameter>
+                            </effect>
+                        </filter>""",
+        1,
+    )
+    spans = [
+        CutSpan(idx=0, src_in_ms=0, src_out_ms=1000, action=KEEP),
+        CutSpan(idx=1, src_in_ms=1000, src_out_ms=2000, action=CUT),
+        CutSpan(idx=2, src_in_ms=2000, src_out_ms=10_000, action=KEEP),
+    ]
+    with pytest.raises(XmlRecutRefusal, match="filter"):
+        recut(xml, _plan(spans))
+
+
 def test_duration_identity_shrinks_by_summed_cut_frames():
     xml = _synthetic_xml()
     spans = [

@@ -28,15 +28,19 @@ never a silent reconcile).
 
 **Refusal list is strict, on purpose.** Any ``<transitionitem>`` anywhere in
 the sequence, any nested ``<sequence>`` clip, and a clipitem carrying a
-``<filter>`` that a cut boundary lands inside all raise ``XmlRecutRefusal``
-naming the exact clip (or transition) and its timecode, rather than guessing
-at a safe rewrite. Permissive would generate a wrong-but-plausible sequence
-nobody audits; strict generates a loud stop the first time real footage has
-something this transform doesn't yet understand, and that structure gets
-added to the recognised list with a test. **Known gap:** speed/time-remap
-clips have no dedicated check yet — none has been seen in a real fixture
-(see `docs/HANDOFF_CUTDECK_XML_RECUT.md`'s note on today's sequences); add
-one, with a test, before trusting this transform on footage that uses it.
+**keyframed** ``<filter>`` (real time-varying animation) that a cut boundary
+lands inside all raise ``XmlRecutRefusal`` naming the exact clip (or
+transition) and its timecode, rather than guessing at a safe rewrite. A
+static (non-keyframed) filter — e.g. Premiere's default Basic Motion with a
+fixed scale/position — round-trips identically onto both split halves, so
+it's exempt: splitting it changes nothing about how it renders. Permissive
+would generate a wrong-but-plausible sequence nobody audits; strict generates
+a loud stop the first time real footage has something this transform doesn't
+yet understand, and that structure gets added to the recognised list with a
+test. **Known gap:** speed/time-remap clips have no dedicated check yet —
+none has been seen in a real fixture (see
+`docs/HANDOFF_CUTDECK_XML_RECUT.md`'s note on today's sequences); add one,
+with a test, before trusting this transform on footage that uses it.
 """
 
 from __future__ import annotations
@@ -48,8 +52,9 @@ from xml.etree import ElementTree as ET
 from cutdeck.contracts import CUT, KEEP, CutPlan, Timebase
 from transcribe.timebase import ms_to_frame
 
-# Tags that, if found on a clipitem straddling a cut boundary, make a razor
-# unsafe to perform blindly — the refusal list (see module docstring).
+# Tags that, if found *keyframed* on a clipitem straddling a cut boundary,
+# make a razor unsafe to perform blindly — the refusal list (see module
+# docstring). A static (non-keyframed) instance of these tags is safe to split.
 _UNSAFE_CLIP_TAGS = ("filter",)
 
 # Premiere's internal high-precision tick rate (ticks/sec), constant across
@@ -161,12 +166,13 @@ def _shift_point(frame: int, cuts: list[tuple[int, int]]) -> int:
 
 def _refuse_if_unsafe(clipitem: ET.Element, tb: Timebase, start: int, end: int) -> None:
     for tag in _UNSAFE_CLIP_TAGS:
-        if clipitem.find(tag) is not None:
-            raise XmlRecutRefusal(
-                f"clip {_clip_name(clipitem)!r} at {_timecode(start, tb)}-{_timecode(end, tb)} "
-                f"carries a <{tag}> and a cut boundary lands inside it — refusing rather than "
-                f"guessing how the effect should split"
-            )
+        for elem in clipitem.findall(tag):
+            if elem.find(".//keyframe") is not None:
+                raise XmlRecutRefusal(
+                    f"clip {_clip_name(clipitem)!r} at {_timecode(start, tb)}-{_timecode(end, tb)} "
+                    f"carries an animated <{tag}> (keyframed) and a cut boundary lands inside "
+                    f"it — refusing rather than guessing how the animation should split"
+                )
 
 
 def _keep_subranges(start: int, end: int,
