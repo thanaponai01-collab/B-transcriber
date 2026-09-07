@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import NamedTuple
 
+from transcribe.console import safe_print as _safe_print
 from transcribe.db import store
 from transcribe.eval.gate import decide
 from transcribe.eval.metrics import CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics
@@ -19,16 +20,9 @@ from transcribe.thai.lint import find_cue_legality_violations
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
 
-
-def _safe_print(msg: str) -> None:
-    """print(), tolerant of a Windows console's non-UTF8 code page (cp1252)
-    choking on Thai text in a cue-legality violation's detail — never let a
-    console-encoding limitation crash the harness run itself."""
-    try:
-        print(msg)
-    except UnicodeEncodeError:
-        enc = sys.stdout.encoding or "utf-8"
-        print(msg.encode(enc, errors="replace").decode(enc))
+# _safe_print was born here (Thai cue-legality details crashing a cp1252 console)
+# and now lives in transcribe.console, because the CutDeck exporters hit the same
+# wall on Thai media paths. Aliased rather than renamed at ~4 call sites below.
 
 
 class HarnessResult(NamedTuple):

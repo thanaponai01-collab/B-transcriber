@@ -188,7 +188,8 @@ def conform_vfr(media_path: str, tb: Timebase, out_dir: Optional[str] = None) ->
         str(proxy_path),
     ]
     logger.info("Conforming VFR proxy: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    subprocess.run(cmd, check=True, capture_output=True, text=True,
+                   encoding="utf-8", errors="replace")
 
     new_tb = probe(str(proxy_path))
     if new_tb.is_vfr:
@@ -216,7 +217,11 @@ def _ffprobe(media_path: str) -> dict:
         "stream=codec_type,r_frame_rate,avg_frame_rate,sample_rate:format=duration",
         media_path,
     ]
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+    # encoding/errors explicit — see the note in cutdeck/xml_export.probe_frame_size:
+    # text=True decodes ffprobe's UTF-8 output with the locale codec, and a Thai
+    # media path in its stderr then loses the whole error message.
+    out = subprocess.run(cmd, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", check=True).stdout
     data = json.loads(out)
 
     result: dict = {}

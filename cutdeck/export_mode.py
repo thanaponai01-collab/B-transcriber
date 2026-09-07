@@ -6,17 +6,18 @@ Distinguishes the exporters CutDeck can hand a CutPlan to:
 
   * ``new_sequence``   -- ``cutdeck.xml_export.to_xml``, "build a fresh FCP7
     sequence for the editor to import".
-  * ``mark``           -- ``cutdeck.mark_export.to_mark_plan``, "split +
-    disable CUT regions on the editor's own live sequence via the UXP
-    Mark/Apply plugin" (issue #17). Supersedes the retired ExtendScript
-    ``in_place`` mode. Currently blocked on a UXP panel-compositing bug
-    (host renders nothing; see `uxp/spike18_split_probe/README.md`) — not a
-    capability gap, so ``recut_sequence`` below exists as an independent
-    path that keeps working regardless of that bug's status.
+  * ``mark``           -- ``cutdeck.mark_export.to_mark_plan``, "split + disable
+    CUT regions on the editor's own live sequence via the UXP Mark/Apply
+    plugin" (issue #17). Supersedes the retired ExtendScript ``in_place`` mode.
+    **Parked** -- the split primitive it depends on was abandoned on evidence
+    (see ``mark_export.py``'s docstring and ``assemble_export.py``'s).
+  * ``assemble``       -- ``cutdeck.assemble_export.to_assemble_plan``, "place
+    every span into a new sequence and disable the CUT ones". The route that
+    replaced ``mark`` after issue #24, needing no split primitive at all.
   * ``recut_sequence`` -- ``cutdeck.xml_recut.recut``, "rewrite the editor's
     own exported FCP7 XML with the plan's cuts applied, sync-preserving,
     entirely offline". Signature is ``(source_xml: str, plan: CutPlan) ->
-    tuple[str, RecutReport]`` — **not interchangeable** with the other two
+    tuple[str, RecutReport]`` -- **not interchangeable** with the other
     exporters, which take ``(plan, media_path, ...)``. Callers must not infer
     the call shape from ``new_sequence``/``mark``; this dispatcher exists so
     they never have to guess it from context either way.
@@ -32,8 +33,9 @@ from typing import Callable
 
 MODE_NEW_SEQUENCE = "new_sequence"
 MODE_MARK = "mark"
+MODE_ASSEMBLE = "assemble"
 MODE_RECUT_SEQUENCE = "recut_sequence"
-VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_RECUT_SEQUENCE)
+VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_ASSEMBLE, MODE_RECUT_SEQUENCE)
 
 
 def exporter_for_mode(mode: str) -> Callable:
@@ -49,6 +51,9 @@ def exporter_for_mode(mode: str) -> Callable:
     if mode == MODE_MARK:
         from cutdeck.mark_export import to_mark_plan
         return to_mark_plan
+    if mode == MODE_ASSEMBLE:
+        from cutdeck.assemble_export import to_assemble_plan
+        return to_assemble_plan
     if mode == MODE_RECUT_SEQUENCE:
         from cutdeck.xml_recut import recut
         return recut
@@ -58,8 +63,12 @@ def exporter_for_mode(mode: str) -> Callable:
 def mode_from_config(cfg: dict) -> str:
     """Read ``cutdeck.mode`` from a parsed ``config.yaml`` dict.
 
-    Defaults to ``new_sequence`` — the existing, already-proven export path —
-    on a missing key, so an unconfigured project never silently switches to
-    mark-and-apply on a live sequence unasked.
+    Defaults to ``new_sequence`` on a missing key, so an unconfigured project
+    never silently touches the editor's live sequence unasked. That is the only
+    claim being made for the default: ``new_sequence`` is the *safest* mode, not
+    a proven one. Its real acceptance — a clean import into Premiere on real
+    footage — has been open since 2026-06-19 (TODO_LEDGER, "CutDeck
+    real-Premiere XML import acceptance"); an earlier version of this docstring
+    called it "already-proven", which the ledger contradicts.
     """
     return str(((cfg or {}).get("cutdeck", {}) or {}).get("mode", MODE_NEW_SEQUENCE))

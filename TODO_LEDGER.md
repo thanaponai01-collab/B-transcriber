@@ -137,6 +137,177 @@ live-Premiere dependency at all, not a workaround for a UXP limitation.
   run already passed that gate on the same source XML and cut plan shape;
   the auto-extracted plan is structurally equivalent, but hasn't itself been
   through Phase 5).
+## Thai-path encoding at both process boundaries — FIXED (2026-08-26), see MAINT-003/004
+
+Two defects on the same axis, both fixed this session. Neither changes any
+bytes written to disk; both changed what the operator is *told*.
+
+- **MAINT-003 — every CLI exited 1 after fully succeeding.** `print()` of a
+  media-derived path raised `UnicodeEncodeError` on a redirected Windows stdout
+  (cp1252). The XML/SRT was already written and the DB already committed, so
+  this was a **false failure report**, not a cosmetic print bug. New
+  `transcribe/console.py` owns `safe_print`; `harness._safe_print` (which met
+  this wall first, in 2026-07) now delegates to it instead of duplicating it.
+  Applied at 8 call sites across `cutdeck/xml_export`, `scripts/export_job`,
+  `cutdeck/preview`, `cutdeck/plan`, `cutdeck/sequence_mixdown`.
+- **MAINT-004 — ffprobe/ffmpeg stderr was destroyed on Thai paths.**
+  `subprocess.run(text=True)` decodes with the locale codec; `ก` is `E0 B8 81`
+  and 0x81 is undefined in cp1252, so the reader thread died and `.stderr`
+  became `None`. Fixed with explicit `encoding="utf-8", errors="replace"` at
+  the four shipping call sites. **stdout was never affected**, so no frame rate
+  or frame size was ever silently wrong — verified directly against a real
+  29.97 file on a Thai path.
+
+**Trigger — the one residual:** `cutdeck/plan.py` and
+`cutdeck/sequence_mixdown.py`'s `--dry-run` JSON prints are covered as a
+*latent* instance, not a reproduced one. `dumps()` is `ensure_ascii=False` by
+design, but every span `reason` in `cutdeck/rules.py` is currently ASCII
+vocabulary (`silence`, `filler`, `min_clip_merge`), so no Thai reaches that
+stream today. **Due if any rule ever embeds a matched word in a reason** (e.g.
+a filler cut labelled with the filler it matched) — at that point the latent
+coverage becomes live and should get a real test.
+
+## CutDeck real-Premiere XML import acceptance — still OPEN, but the click is now diagnostic (2026-08-26)
+
+**Unchanged in substance: this still requires a human in Premiere and cannot be
+executed from a shell.** Open since 2026-06-19. What changed is the cost of
+answering it.
+
+Previously the runbook was "export a job, import it, see if it works" — one
+click yielding one bit. But the export rests on at least six independent
+unverified assumptions (Windows `file://localhost/C%3A/` pathurl form; the
+integer-timebase + ntsc rate mapping; the stereo audio link layout; the
+`samplecharacteristics` frame size; the single-`<file>`-listing id-stub de-dupe;
+the approximated word-blade crossfade `transitionitem`), and a single red result
+cannot say which one broke. That is the same evidentiary shape that produced
+eighteen confident wrong rounds on the clone route (#18/#24).
+
+**New: `scripts/xml_import_ladder.py`.** Emits a cumulative ladder — each rung
+adds exactly one assumption to the rung below, so the *first* rung that fails
+names its own cause — plus a generated `RUNBOOK.md` carrying the expected
+observation and the specific diagnosis for each rung.
+
+    python scripts/xml_import_ladder.py --job-id 29
+
+Every rung is produced by the **real `to_xml`** and then reduced by deleting
+named elements; the top rung is unmodified exporter output. A hand-written
+minimal XML that imports would prove something about that file, not about this
+exporter — so a green ladder is evidence about the shipping code path.
+
+Two defects were found in the ladder itself by generating it against a real
+2-second clip rather than by reading it: fixed-offset spans overran short media
+(a rung would then fail because it pointed past the end of the file — a failure
+about the ladder, not the exporter), and rung 4 silently degenerated to a single
+clip because `to_xml` drops spans that round to zero frames. Both are now pinned
+by `tests/test_xml_import_ladder.py` (69 tests, every rung × five media lengths
+from 2 s to 60 min).
+
+**Trigger — this is still the thing that could change the shape of everything
+downstream.** Run the ladder against real footage and report per-rung results.
+Blocked on it: the word-blade crossfade's fidelity (currently a documented
+approximation with no source overlap/trim), CutDeck Phases 5-6, and whether
+`segment` rough-cut mode can come off opt-in.
+
+**Note:** the ladder says nothing about the `assemble` route
+(`cutdeck/assemble_export.py`), whose primitives have still never executed once.
+That needs its own live probe — deliberately not built here.
+
+## Two stale claims corrected while investigating the above (2026-08-26)
+
+- `export_mode.mode_from_config`'s docstring called `new_sequence` "the
+  existing, already-proven export path". The ledger says its real acceptance has
+  been open since 2026-06-19. The docstring now claims only what is true: it is
+  the *safest* default (never touches a live sequence), not a proven one.
+- `config.yaml`'s `cutdeck.mode` comment read `new_sequence | mark` — stale
+  since #25 added `assemble` and parked `mark`. Now lists all three with their
+  real status.
+
+## CutDeck live-sequence cutting — RESOLVED by dropping the split entirely (issue #25) — 2026-08-26
+
+**Supersedes both sections below.** The razor question is closed: **CutDeck does not need
+a split primitive.** `CutSpan`'s own contract already guarantees spans *"tile the whole
+media duration with no gaps and no overlaps"*, so the pieces of a split exist as data
+before Premiere is involved. Rather than cutting a clip apart, **place the pieces** — a
+three-point edit, via two primitives that were in `adobe/premierepro-types` `main` the
+whole time and appear nowhere in #17, #18, #22, or #24:
+
+    ClipProjectItem.createSetInOutPointsAction(inPoint, outPoint)
+    SequenceEditor.createOverwriteItemAction(projectItem, time, vIdx, aIdx)
+
+Every span (KEEP *and* CUT) is placed back to back into a new sequence and the CUT ones
+disabled via `createSetDisabledAction(true)`. The result is byte-for-byte what "razor
+every boundary and grey out the silences" would have produced. Apply is unchanged from
+#17's design: one `createRemoveItemsAction(sel, ripple=true, MediaType.ANY)`.
+
+**Why `isInsert=true` was closed even though it works.** #24 round 16 found a genuine
+native split — head correctly trimmed, tail correctly continuing, correct ripple. But it
+leaves a *full-duration* duplicate per boundary, and round 17 proved cleanup needs a
+second, separately-committed transaction (mid-transaction structural state is never
+visible via `getTrackItems()`). Measured against this repo's own `transcriber.db` rather
+than #17's estimate: job 28 is **443 placements / 221 disabled** (38.6 min @ 59.94), job
+24 is **382 / 191** (32.0 min @ 25). At 221 boundaries the intermediate timeline runs to
+hundreds of hours before cleanup — disqualifying on arithmetic. Round 18's staged
+cascading double-insert was **deliberately not clicked**; recorded so a future session
+does not re-derive the question and spend the click.
+
+**Design decisions settled (full rationale on #25):** in-place downgraded to nice-to-have
+(build into a new sequence; undo is `Project.deleteSequence`, so #22's one-undo-step rule
+no longer binds); **the sequence is the sole timebase authority and the media file's frame
+rate is never consulted, for any source type**; entry point is the active sequence's first
+track item via `getProjectItem()`; `dest = src_in - in_point`, absolute per span, no
+cumulative sum; **one rounding per boundary** into a shared frame array so one-frame
+gaps/overlaps are structurally impossible; transport is a `request.json`/`plan.json`
+file exchange rather than the WebSocket, removing the Premiere 26.2 cold-start permission
+bug from the critical path (`bridge.handle_message` unchanged, only `serve()` shelved);
+panel is Build/Apply/Discard; single clip in v1.
+
+**Data findings worth keeping.** Every `.mp3` row in `media` reads `25/1` — `probe()`'s
+fabricated audio-only fallback — while CFD 92 is really 29.97. The fabrication `bridge.py`
+refuses in theory is already present in real data, and `createSequenceFromMedia` cannot
+fix it because an audio-only source has no frame rate to inherit. Separately: `cut_plan`
+is **empty** — CutDeck has never persisted a plan on real footage, on any path.
+
+**Built:** `cutdeck/assemble_export.py` (pure, deterministic),
+`tests/test_cutdeck_assemble_export.py` (14 tests, suite 667 green), `MODE_ASSEMBLE` in
+`export_mode.py`. `mark_export.py` is **parked, not deleted** — it is correct and tested
+and the assemble route has not yet cut real footage; retiring a proven module for an
+unproven one inverts the discipline #23 used on `jsx_export.py`. Delete it, its tests, and
+`MODE_MARK` once assemble passes live acceptance.
+
+**Trigger / still open (human):** `uxp/spike_assemble_probe/` — one click, three unknowns
+at N=3 (does `createSetSettingsAction` really carry the timebase; do interleaved
+`setInOut`/`overwrite` produce three *different* ranges in one transaction, or does the
+shared `ClipProjectItem` collapse them; does `createRemoveItemsAction(ripple=true)` close
+the gap exactly). **Not one primitive in this design has executed once in this project** —
+it rests on published type definitions, the same evidentiary footing that produced 18
+rounds of confident wrong assumptions on the clone route. Also still unspent, and the
+cheapest experiment on the board: **manually import the FCP7 XML `xml_export.py` already
+emits**, which is the only thing that can falsify the premise that a plugin is needed at all.
+
+## [SUPERSEDED by #25 above] CutDeck mark-and-apply live-sequence cutting (issue #17) — split recipe disproven, design reopened — 2026-08-26
+
+**Correction to the 2026-08-25 section immediately below: the specific split recipe it
+describes as proven-by-type-definitions is not proven — it was live-tested (issue #18,
+rounds 1–14) and found to be a mathematical dead end.** `createCloneTrackItemAction(...,
+isInsert=false)` on the same track is a no-op when `timeOffset=0` (rounds 4–5: it never
+produces a second item), and for any nonzero `timeOffset` the pair `(start − in)` is an
+invariant of `createSetStartAction`/`createSetInPointAction` that gets permanently fixed
+at the clone's `timeOffset` the instant it's created — no sequence of
+`createSetStartAction`/`createSetEndAction`/`createSetInPointAction`/`createSetOutPointAction`
+calls, in any order or count, can close that gap back to the `start = in` a clean split
+requires (proven algebraically and confirmed live at rounds 4, 13, 14; full history in
+`uxp/spike18_split_probe/README.md`). **Same-track `isInsert=false` clone+trim cannot
+implement a split, full stop** — this is narrower than "the wrong call order" and cannot
+be fixed by re-ordering the same four calls.
+
+`isInsert=true` (which ripples/shifts the rest of the timeline on clone, a materially
+different shape than the in-place overwrite this design assumed) is untested and is an
+open **human design decision** for issue #17, not an agent continuation of #18 — #18's own
+acceptance criteria ("if clone+trim doesn't compose into a clean split, say so and stop")
+was satisfied by reporting this dead end, and it closed on that basis. **Issue #22 (the
+UXP Mark/Apply panel) is blocked pending that decision** — its Mark button is specified
+against the now-disproven recipe. Do not build #22 against the recipe in the section below
+until #17 is corrected with a replacement split design.
 
 ## CutDeck mark-and-apply live-sequence cutting (issue #17) — supersedes the section below — 2026-08-25
 

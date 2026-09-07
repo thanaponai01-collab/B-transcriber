@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from transcribe.console import safe_print
 from transcribe.db.store import connect, get_tokens, get_job, get_media
 from transcribe.subtitles import write_subtitles
 
@@ -53,12 +54,15 @@ def main() -> None:
     srt_path.write_text(write_subtitles(rows, "srt", fps=args.fps), encoding="utf-8")
     suffix = f" (quantized to {args.fps} fps)" if args.fps else ""
 
+    # safe_print: both `out_dir` (the source media's folder) and `stem` (derived
+    # from the media filename) are Thai on every real job here, and the .srt is
+    # already on disk by this point — a print crash would report a false failure.
     if args.vtt:
         vtt_path = out_dir / f"{stem}.vtt"
         vtt_path.write_text(write_subtitles(rows, "vtt", fps=args.fps), encoding="utf-8")
-        print(f"Exported {len(rows)} tokens to {srt_path} / {vtt_path.name}{suffix}")
+        safe_print(f"Exported {len(rows)} tokens to {srt_path} / {vtt_path.name}{suffix}")
     else:
-        print(f"Exported {len(rows)} tokens to {srt_path}{suffix}")
+        safe_print(f"Exported {len(rows)} tokens to {srt_path}{suffix}")
 
 
 if __name__ == "__main__":
