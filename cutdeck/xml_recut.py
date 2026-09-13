@@ -167,7 +167,10 @@ def _shift_point(frame: int, cuts: list[tuple[int, int]]) -> int:
 def _refuse_if_unsafe(clipitem: ET.Element, tb: Timebase, start: int, end: int) -> None:
     for tag in _UNSAFE_CLIP_TAGS:
         for elem in clipitem.findall(tag):
-            if elem.find(".//keyframe") is not None:
+            # A parameter is animated only if its keyframes hold differing values —
+            # Premiere often writes a lone/constant keyframe that renders static.
+            if any(len({(k.findtext("value") or "").strip() for k in p.findall("keyframe")}) > 1
+                   for p in elem.iter("parameter")):
                 raise XmlRecutRefusal(
                     f"clip {_clip_name(clipitem)!r} at {_timecode(start, tb)}-{_timecode(end, tb)} "
                     f"carries an animated <{tag}> (keyframed) and a cut boundary lands inside "

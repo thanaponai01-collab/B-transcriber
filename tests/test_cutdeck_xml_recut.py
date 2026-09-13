@@ -277,6 +277,32 @@ def test_static_filter_splits_without_refusing():
     assert report.cuts_applied == 1
 
 
+def test_constant_keyframe_filter_splits_without_refusing():
+    """Premiere writes a lone keyframe (value == static level) on Audio Levels;
+    nothing animates, so it must not refuse."""
+    xml = _synthetic_xml().replace(
+        "<file id=\"file-1\"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>",
+        """<file id="file-1"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>
+                        <filter>
+                            <effect>
+                                <name>Audio Levels</name>
+                                <parameter>
+                                    <parameterid>level</parameterid><value>1</value>
+                                    <keyframe><when>69272</when><value>1</value></keyframe>
+                                </parameter>
+                            </effect>
+                        </filter>""",
+        1,
+    )
+    spans = [
+        CutSpan(idx=0, src_in_ms=0, src_out_ms=1000, action=KEEP),
+        CutSpan(idx=1, src_in_ms=1000, src_out_ms=2000, action=CUT),
+        CutSpan(idx=2, src_in_ms=2000, src_out_ms=10_000, action=KEEP),
+    ]
+    _, report = recut(xml, _plan(spans))
+    assert report.cuts_applied == 1
+
+
 def test_keyframed_filter_raises_and_names_it():
     xml = _synthetic_xml().replace(
         "<file id=\"file-1\"><pathurl>file://localhost/C:/fixtures/a.mp4</pathurl></file>",
