@@ -218,3 +218,127 @@ test("a malformed timeline read fails loudly instead of planning nonsense", () =
     items: [{ name: "float", mediaType: "video", trackIndex: 0, startTicks: 1.5, endTicks: "100" }] }),
     /not a whole number of ticks/);
 });
+
+/* ---- Phase 0 probe 1: orchestration only. Host mocks cannot establish Premiere's
+   real behavior (handoff section 10) — they establish that the probe reports it
+   instead of dying on it. ---- */
+const { probeMarksAndTiming, formatReport, identifyRate } = require("../uxp/cutdeck/capabilityProbe.js");
+
+const answer = (report, id) => (report.findings.find((f) => f.id === id) || {}).answer;
+const evidence = (report, id) => (report.findings.find((f) => f.id === id) || {}).evidence || {};
+
+function host(sequence, overrides = {}) {
+  return { Project: { getActiveProject: async () => ({
+    getActiveSequence: async () => sequence, ...overrides }) } };
+}
+const sequenceMock = (opts = {}) => ({
+  name: opts.name || "Interview",
+  getTimebase: async () => (opts.timebase === undefined ? TPF_2997.toString() : opts.timebase),
+  getInPoint: async () => opts.in,
+  getOutPoint: async () => opts.out,
+  getEndTime: async () => ({ ticks: (100000n * TPF_2997).toString(), seconds: 3336 }),
+  ...(opts.extra || {}) });
+
+const tick = (frames) => ({ ticks: (BigInt(frames) * TPF_2997).toString(), seconds: Number(frames) / 29.97 });
+
+test("the probe identifies every frame rate this project has met", () => {
+  assert.equal(identifyRate(TPF_2997), "29.97");
+  assert.equal(identifyRate(TPF_23976), "23.976");
+  assert.equal(identifyRate(TPF_25), "25");
+  assert.equal(identifyRate(4237833600n), "59.94");
+  assert.equal(identifyRate(12345n), null);
+});
+
+test("an exclusive host: one frame apart reads as exclusive and normalizes to 1 frame", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ in: tick(100), out: tick(101) })));
+  assert.equal(report.complete, true);
+  assert.equal(answer(report, "bigint"), "yes");
+  assert.equal(answer(report, "timebase"), TPF_2997.toString());
+  assert.equal(evidence(report, "timebase").matchesKnownRate, "29.97");
+  assert.match(report.verdict, /exclusive/);
+  assert.equal(evidence(report, "outConvention").durationIfExclusive, "1 frame");
+  assert.equal(evidence(report, "outConvention").durationIfInclusive, "2 frames");
+  // The evidence is produced by the real production path, not restated.
+  assert.equal(evidence(report, "outConvention").exclusiveNormalizes.frames, "1");
+  assert.equal(evidence(report, "outConvention").inclusiveNormalizes.frames, "2");
+});
+
+test("an inclusive host: identical marks read as inclusive", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ in: tick(100), out: tick(100) })));
+  assert.equal(report.verdict, "inclusive");
+  assert.match(evidence(report, "outConvention").why, /last INCLUDED frame/);
+});
+
+test("a wide range gives no verdict but hands the editor a decisive comparison", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ in: tick(100), out: tick(400) })));
+  assert.equal(report.verdict, null);
+  assert.equal(evidence(report, "outConvention").durationIfExclusive, "300 frames");
+  assert.equal(evidence(report, "outConvention").durationIfInclusive, "301 frames");
+  assert.match(evidence(report, "outConvention").how, /Program Monitor/);
+});
+
+test("unset marks are recorded as the answer, not treated as a crash", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ in: null, out: null })));
+  assert.equal(report.complete, true);
+  assert.equal(answer(report, "marks"), "at least one is absent");
+  assert.equal(evidence(report, "marks").in.present, false);
+  assert.equal(answer(report, "outConvention"), "could not test");
+  assert.equal(report.verdict, null);
+});
+
+test("a build whose mark calls throw still reports the timebase it did get", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({
+    in: tick(1), out: tick(2),
+    extra: { getInPoint: async () => { throw new Error("not a function"); } } })));
+  assert.equal(report.complete, true);
+  assert.equal(answer(report, "timebase"), TPF_2997.toString());
+  assert.deepEqual(evidence(report, "marks").inCall.at, "getInPoint");
+  assert.equal(report.verdict, null);
+});
+
+test("a timebase that is not an exact integer is called out rather than used", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ timebase: "8475667200.5", in: tick(1), out: tick(2) })));
+  assert.equal(answer(report, "timebase"), "not an exact integer");
+  assert.equal(answer(report, "outConvention"), "could not test");
+});
+
+test("a timebase off the broadcast grid is flagged, not quietly accepted", async () => {
+  const report = await probeMarksAndTiming(host(sequenceMock({ timebase: "12345", in: tick(1), out: tick(2) })));
+  assert.equal(evidence(report, "timebase").matchesKnownRate, null);
+  assert.match(evidence(report, "timebase").note, /does NOT match any broadcast rate/);
+});
+
+test("no host, no project and no sequence each stop cleanly with a finding", async () => {
+  for (const [subject, id] of [
+    [{}, "host"],
+    [{ Project: { getActiveProject: async () => null } }, "project"],
+    [host(null), "sequence"]]) {
+    const report = await probeMarksAndTiming(subject);
+    assert.equal(report.complete, false, id);
+    assert.equal(answer(report, id), "no", id);
+    assert.equal(report.verdict, null, id);
+    assert.equal(answer(report, "bigint"), "yes", "the runtime check runs before any host call");
+  }
+});
+
+test("every report formats to something an editor can read and paste back", async () => {
+  for (const sequence of [sequenceMock({ in: tick(100), out: tick(101) }), sequenceMock({ in: null, out: null })]) {
+    const text = formatReport(await probeMarksAndTiming(host(sequence)));
+    assert.match(text, /Phase 0 probe 1/);
+    assert.ok(text.split("\n").length > 5);
+  }
+  assert.match(formatReport(await probeMarksAndTiming({})), /stopped early/);
+});
+
+test("reports serialize to JSON — the panel logs them, and BigInt would throw", async () => {
+  for (const sequence of [
+    sequenceMock({ in: tick(100), out: tick(101) }),
+    sequenceMock({ in: tick(100), out: tick(400) }),
+    sequenceMock({ in: null, out: null }),
+    sequenceMock({ timebase: "12345", in: tick(1), out: tick(2) })]) {
+    const report = await probeMarksAndTiming(host(sequence));
+    const text = JSON.stringify(report);
+    assert.ok(text.length > 0);
+    assert.deepEqual(JSON.parse(text).probe, "marks-and-timing");
+  }
+});

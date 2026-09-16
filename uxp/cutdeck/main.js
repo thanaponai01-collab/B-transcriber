@@ -2,6 +2,7 @@ const ppro = require("premierepro");
 const workflow = require("./workflow.js");
 const { createRpc } = require("./rpc.js");
 const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
+const capability = require("./capabilityProbe.js");
 const $ = (id) => document.getElementById(id);
 const KEY = "cutdeck.xml.lastJob";
 let busy = false;
@@ -67,11 +68,11 @@ async function follow(job) {
 async function act(fn) {
   if (busy) return;
   busy = true;
-  ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe"].forEach((id) => $(id).disabled = true);
+  ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe"].forEach((id) => $(id).disabled = true);
   try { await fn(); } catch (error) { status(error.message || String(error)); console.error(error); }
   finally {
     busy = false;
-    ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe"].forEach((id) => $(id).disabled = false);
+    ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe"].forEach((id) => $(id).disabled = false);
   }
 }
 $("refresh").addEventListener("click", () => act(async () => { await refresh(); status("Range ready. Click Rough Cut In–Out."); }));
@@ -100,6 +101,15 @@ $("resume").addEventListener("click", () => act(async () => {
   }
   await follow(job);
 }));
+// Phase 0 probe 1. Read-only: it creates and changes nothing, so it is safe on a
+// real project, and it needs no helper running.
+$("timingprobe").addEventListener("click", () => act(async () => {
+  status("Reading this build's marks and timebase…");
+  const report = await capability.probeMarksAndTiming(ppro);
+  console.log("CutDeck capability probe", JSON.stringify(report, null, 2));
+  status(capability.formatReport(report));
+}));
+
 // Diagnostic only, and never on load: it opens sockets, so running it automatically would
 // make a panel that needs no helper report a helper failure every time it opens.
 $("socketprobe").addEventListener("click", () => act(async () => {
