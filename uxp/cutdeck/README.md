@@ -111,8 +111,9 @@ clip positions do not imply linked selections when dragging clips afterward.
 
 A second, separate workflow is being built alongside the XML one: mark In/Out and
 append that range to a reusable rough-cut sequence, with no export, no import and
-no helper. See `docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md`. **Nothing in it mutates a
-timeline yet.** What exists today:
+no helper. See `docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md`. **Nothing in this panel
+mutates a timeline** — everything that does lives in `uxp/spike_assemble_probe/`,
+loaded separately against a disposable project. What exists here today:
 
 - `timelineRange.js` — normalizes Premiere's marks into an exact half-open
   `[in, outExclusive)` interval in BigInt ticks.
@@ -120,7 +121,12 @@ timeline yet.** What exists today:
 - `capabilityProbe.js` — Phase 0 probe 1, behind the **Check Premiere timing
   (read-only)** button.
 
-### Run the timing probe (this is the next thing that needs a human)
+### Run the timing probe (one of two gestures waiting on a human)
+
+The other is the assemble probe below. They are independent: this one is read-only
+and settles the Out-point convention on a real project; that one mutates a
+disposable project and settles whether issue #25's route exists at all. Neither
+blocks the other, so run them in whichever order is convenient.
 
 `timelineRange.OUT_CONVENTION` is deliberately `null`, and every call throws until
 it is set. Adobe's reference does not say whether `Sequence.getOutPoint()` names
@@ -143,14 +149,27 @@ and whether it divides 254016000000 exactly at a known rate, what an unset mark
 returns on this build, whether `getZeroPoint` exists, and whether this UXP runtime
 supports BigInt at all.
 
-### Not yet built
+### The mutation probe lives elsewhere — `uxp/spike_assemble_probe/`
 
-Phase 0 probes 2-6 (subsequence extraction, cross-sequence append, sequence
-insertion, undo/failure, 50 repeats) all **mutate the project** and belong in a
-disposable test project, not this panel. Until they run, no backend is chosen and
-`assemblyHost.js` / `assemblySession.js` do not exist. Issue #25 records the
-three-point-edit route and the primitives it depends on, none of which has executed
-once in this project.
+Everything that **mutates a project** is deliberately not in this panel. Issue #25's
+three-point-edit route (create a matching sequence, place every span, disable the CUT
+ones, ripple the disabled ones out on Apply) depends on five API calls, **none of
+which has executed once in this project**. A separate throwaway plugin answers three
+of those unknowns in one click at N=3 spans instead of 443:
+
+1. does `createSetSettingsAction` carry a 29.97/59.94 timebase across, or fabricate 25?
+2. do three interleaved `setInOut`/`overwrite` pairs survive **one** transaction?
+3. does `createRemoveItemsAction(sel, ripple=true, ANY)` work at all?
+
+See `uxp/spike_assemble_probe/README.md` for how to run it and what each verdict
+means. It needs a **disposable project** and no helper. Until it has run, no backend
+is chosen and `assemblyHost.js` / `assemblySession.js` do not exist.
+
+### Still not built
+
+Phase 0 probes 4-6 (sequence insertion, undo/failure, 50 repeats) and the
+subsequence-extraction question. Those are separate gestures; do not fold them into
+the assemble probe's one click.
 
 ## Development
 
@@ -158,7 +177,7 @@ once in this project.
 ```powershell
 .venv\Scripts\python.exe -m cutdeck.xml_bridge
 .venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_xml_recut_cli.py tests/test_cutdeck_xml_recut.py -q
-node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
+node --test tests/cutdeck_assemble_probe.test.cjs tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
 `workflow.js` contains the Premiere operations; `rpc.js` owns the helper socket and

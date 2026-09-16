@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; box-sizing: border-box; overflow-y: auto; }
+    body { font-family: sans-serif; font-size: 12px; padding: 8px; background: #2f2f2f; color: #ddd; }
+    p { line-height: 1.5; }
+    .warn { background: #4a2222; border: 1px solid #a05050; padding: 8px; border-radius: 4px; }
+    button { margin-top: 12px; width: 100%; padding: 8px; font-weight: bold; }
+    #log { margin-top: 12px; background: #111; color: #9cdcfe; padding: 6px; height: 300px;
+      overflow-y: auto; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 11px;
+      border: 1px solid #444; }
+  </style>
+</head>
+<body>
+  <p class="warn">
+    <b>This mutates the project.</b> Use a disposable test project only. It creates a
+    sequence named <b>CutDeck probe &mdash; assemble</b> and never deletes it &mdash;
+    delete it by hand when you are done reading it.
+  </p>
+  <p>
+    Issue #25, Phase 0. Open a sequence whose <b>first clip on V1</b> is at least 12
+    frames long, then click once. Three unknowns are answered in that click:
+    whether a new sequence inherits the source timebase, whether three interleaved
+    <code>setInOut</code>/<code>overwrite</code> pairs survive one transaction, and
+    whether <code>createRemoveItemsAction(&hellip;, ripple)</code> works at all.
+    No helper is needed. Record the verdicts on issue #25.
+  </p>
+
+  <button id="run">Run assemble probe (N=3 spans)</button>
+  <button id="copyLog">Copy log to clipboard</button>
+
+  <div id="log"></div>
+
+  <script src="main.js"></script>
+</body>
+</html>

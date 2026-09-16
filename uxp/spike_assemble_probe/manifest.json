@@ -1,0 +1,44 @@
+{
+  "id": "com.cutdeck.spike.assemble",
+  "name": "CutDeck Spike - Assemble Probe",
+  "version": "1.0.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "requiredPermissions": {
+    "clipboard": "readAndWrite"
+  },
+  "host": {
+    "app": "premierepro",
+    "minVersion": "26.2.0"
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "spikeassemble.panel",
+      "label": { "default": "CutDeck Assemble Probe" },
+      "main": "index.html",
+      "minimumSize": { "width": 360, "height": 480 },
+      "preferredFloatingSize": { "width": 360, "height": 560 },
+      "preferredDockedSize": { "width": 360, "height": 560 },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/icon.svg",
+          "scale": [1, 2],
+          "theme": ["darkest", "dark", "medium", "lightest", "light"]
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/icon.svg",
+      "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium", "lightest", "light", "all"],
+      "species": ["pluginList"]
+    }
+  ]
+}
