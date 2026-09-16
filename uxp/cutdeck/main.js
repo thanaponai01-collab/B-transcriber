@@ -1,6 +1,7 @@
 const ppro = require("premierepro");
 const workflow = require("./workflow.js");
 const { createRpc } = require("./rpc.js");
+const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
 const $ = (id) => document.getElementById(id);
 const KEY = "cutdeck.xml.lastJob";
 let busy = false;
@@ -99,6 +100,12 @@ $("resume").addEventListener("click", () => act(async () => {
   }
   await follow(job);
 }));
+// TEMPORARY DIAGNOSTIC — remove with probe.js once the permitted URL form is known.
+probe.run().then(({ report, written }) => {
+  const lines = report.results.map((r) => `${r.url} -> ${r.outcome}`);
+  status([`Socket permission probe:`, ...lines, ``, `written: ${written}`].join(`\n`));
+}).catch((error) => status("Probe failed: " + (error.message || String(error))));
+
 $("resume").hidden = !lastJob();
 $("dismiss").hidden = !lastJob();
 $("dismiss").addEventListener("click", () => act(async () => {

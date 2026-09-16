@@ -7,7 +7,7 @@
   "host": { "app": "premierepro", "minVersion": "26.2.0" },
   "requiredPermissions": {
     "localFileSystem": "fullAccess",
-    "network": { "domains": ["ws://127.0.0.1:7891"] }
+    "network": { "domains": "all" }
   },
   "entrypoints": [{
     "type": "panel", "id": "cutdeck.panel", "label": { "default": "CutDeck" },
