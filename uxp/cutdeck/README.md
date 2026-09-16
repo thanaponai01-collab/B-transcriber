@@ -107,12 +107,58 @@ keyframed effects at split points can be refused; speed changes are not validate
 by the existing transformer. XML recutting removes link groups, so synchronized
 clip positions do not imply linked selections when dragging clips afterward.
 
+## Native assembly (in progress — Phase 0/1 only)
+
+A second, separate workflow is being built alongside the XML one: mark In/Out and
+append that range to a reusable rough-cut sequence, with no export, no import and
+no helper. See `docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md`. **Nothing in it mutates a
+timeline yet.** What exists today:
+
+- `timelineRange.js` — normalizes Premiere's marks into an exact half-open
+  `[in, outExclusive)` interval in BigInt ticks.
+- `assemblyPlan.js` — pure intersection and placement math (handoff section 6).
+- `capabilityProbe.js` — Phase 0 probe 1, behind the **Check Premiere timing
+  (read-only)** button.
+
+### Run the timing probe (this is the next thing that needs a human)
+
+`timelineRange.OUT_CONVENTION` is deliberately `null`, and every call throws until
+it is set. Adobe's reference does not say whether `Sequence.getOutPoint()` names
+the last **included** frame or the first **excluded** one, and guessing is wrong by
+exactly one frame on every single add — invisible once, obvious after fifty.
+
+1. Open any sequence. The helper does **not** need to be running.
+2. Set In and Out **on the same frame** (press `I` then `O` without moving the
+   playhead). This is the crispest test; any range also works.
+3. Click **Check Premiere timing (read-only)**. Nothing is created or changed.
+4. Read the VERDICT line, and cross-check `durationIfExclusive` /
+   `durationIfInclusive` against the duration Premiere itself shows in the Program
+   Monitor. Whichever matches is this build's convention.
+5. Set `OUT_CONVENTION` in `timelineRange.js` to `"exclusive"` or `"inclusive"`,
+   and record the full report (it is also in the UXP Developer Tool console as
+   JSON) on issue #25.
+
+The same report answers the rest of probe 1 in passing: the true ticks-per-frame
+and whether it divides 254016000000 exactly at a known rate, what an unset mark
+returns on this build, whether `getZeroPoint` exists, and whether this UXP runtime
+supports BigInt at all.
+
+### Not yet built
+
+Phase 0 probes 2-6 (subsequence extraction, cross-sequence append, sequence
+insertion, undo/failure, 50 repeats) all **mutate the project** and belong in a
+disposable test project, not this panel. Until they run, no backend is chosen and
+`assemblyHost.js` / `assemblySession.js` do not exist. Issue #25 records the
+three-point-edit route and the primitives it depends on, none of which has executed
+once in this project.
+
 ## Development
+
 
 ```powershell
 .venv\Scripts\python.exe -m cutdeck.xml_bridge
 .venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_xml_recut_cli.py tests/test_cutdeck_xml_recut.py -q
-node --test tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
+node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
 `workflow.js` contains the Premiere operations; `rpc.js` owns the helper socket and
