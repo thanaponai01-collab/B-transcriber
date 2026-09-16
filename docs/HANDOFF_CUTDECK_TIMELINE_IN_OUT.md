@@ -1,8 +1,52 @@
 # Handoff: CutDeck — Premiere timeline In/Out to rough cut
 
 Date: 2026-09-16  
-Status: implementation plan; native editing feasibility remains unverified.  
+Status: **Phase 1 complete; Phase 0 built but not yet run on a host.** Native editing
+feasibility remains unverified.  
 Repository: `D:\01 - Antigravity\00 Claude\B-transcriber`
+
+## 0. Where this actually stands (updated 2026-09-16)
+
+Read this before section 4 or 9 — it says which parts of the plan below are done,
+which changed, and what is blocking.
+
+**Built and tested (72 Node tests green across four files):**
+
+| What | File | Tests |
+| --- | --- | --- |
+| Exact half-open range normalization, BigInt ticks | `uxp/cutdeck/timelineRange.js` | `cutdeck_assembly.test.cjs` (29) |
+| Section 6 intersection and placement math | `uxp/cutdeck/assemblyPlan.js` | ″ |
+| Phase 0 probe 1 — marks and timing, read-only | `uxp/cutdeck/capabilityProbe.js` | ″ |
+| Phase 0 mutation probe — the three-point route | `uxp/cutdeck/assembleProbe.js` | `cutdeck_assemble_probe.test.cjs` (32) |
+
+Both probes are buttons in the single CutDeck panel. The mutation one arms on the
+first click. **Phase 1's exit criteria are met** — exact frames, no float drift, no
+production mutation enabled.
+
+**A backend candidate the plan below does not mention.** Sections 4 and 9 were
+written around `createSubsequence`, cross-sequence clone, and nested insertion.
+Issue #25 settled on a fourth route that is simpler than all three and shares this
+document's placement math exactly: a **three-point edit** —
+`ClipProjectItem.createSetInOutPointsAction` to bound the source, then
+`SequenceEditor.createOverwriteItemAction(projectItem, time, vIdx, aIdx)` to place
+it. No cloning, no nesting, no subsequence. `assembleProbe.js` probes it; it is now
+the leading candidate simply because it is the only one with a probe built.
+
+**Two gestures are blocking, both human, both independent of each other:**
+
+1. **Run the timing probe.** `timelineRange.OUT_CONVENTION` is deliberately `null`
+   and every call throws until it is set. Nothing in Phase 2 or 3 can be correct
+   without it — a wrong guess is off by exactly one frame on every single add.
+2. **Run the assemble probe** in a disposable project. It answers whether the
+   three-point route exists at all: does a new sequence inherit the timebase, do N
+   placements survive one transaction, does one overwrite carry **linked audio**
+   (this route's own question — a rough cut without dialogue is useless), and does
+   ripple-remove work.
+
+`uxp/cutdeck/README.md` has the step-by-step for both.
+
+**Still true and still the point:** host mocks establish orchestration, never
+Premiere's editing fidelity. Every verdict is `null` until those clicks happen.
 
 ## 1. Intended result
 
@@ -21,7 +65,7 @@ Read these files before implementation; paths below are repository-relative.
 | File | Current responsibility / relevance |
 | --- | --- |
 | `uxp/cutdeck/workflow.js` | `capture()` already reads active project, sequence, In/Out, end time, GUIDs, timebase and audio-track count. `prepare()` starts the helper workflow and exports XML. `importResult()` imports and identifies a new sequence. |
-| `uxp/cutdeck/main.js` | Panel events, busy guard, status messages, XML job persistence and resume. Includes a temporary startup socket probe. |
+| `uxp/cutdeck/main.js` | Panel events, busy guard, status messages, XML job persistence and resume. The socket probe is now behind an explicit button and no longer runs on load, as section 5 required. |
 | `uxp/cutdeck/index.html` | Existing panel controls. |
 | `uxp/cutdeck/rpc.js` | XML helper requests and connection retry behavior. |
 | `uxp/cutdeck/README.md` | Working workflow, existing limitations and test commands. |
@@ -88,11 +132,12 @@ Use a disposable test project with frame counters, audible boundary cues, linked
 
 Probe in this order:
 
-1. **Marks and timing:** determine unset-mark behavior, one-frame selections, Out-point inclusivity, nonzero sequence start timecode and the true ticks-per-frame value. Establish a normalized half-open interval `[in, outExclusive)`.
+1. **Marks and timing** — ✅ **built**, `capabilityProbe.js`, not yet run. Determines unset-mark behavior, one-frame selections, Out-point inclusivity, nonzero sequence start timecode and the true ticks-per-frame value. Establishes a normalized half-open interval `[in, outExclusive)`.
+1b. **Three-point placement** — ✅ **built**, `assembleProbe.js`, not yet run. Not in the original list; added after issue #25 settled on this route (see section 0). Does `createSetSettingsAction` carry the real timebase; do three interleaved `setInOut`/`overwrite` pairs survive one transaction or collapse against the shared `ClipProjectItem`; does one overwrite place **linked audio** on A1; does `createRemoveItemsAction(sel, ripple, ANY)` take that audio with it. **Run this before probes 2 and 3** — if it passes, they are moot, because it is the same capability reached without cloning or subsequencing.
 2. **Subsequence extraction:** test whether `createSubsequence(true)` isolates the marked range, includes all intended tracks and preserves independent clips/settings. Test targeted versus untargeted tracks explicitly.
-3. **Append editable clips:** test a destination editor operating on source track items through documented clone operations. Establish whether cross-sequence cloning is supported, then trimming, placement, links and effects. Avoid assuming a returned action gives a reference to a newly created item before commit.
+3. **Append editable clips:** test a destination editor operating on source track items through documented clone operations. Establish whether cross-sequence cloning is supported, then trimming, placement, links and effects. Avoid assuming a returned action gives a reference to a newly created item before commit. **Note:** issue #24 closed the same-sequence version of this after eighteen live rounds; do not restart it without reading that issue's closing comment.
 4. **Sequence insertion:** separately test inserting the source sequence's project item with marked boundaries. Record whether output is nested or expanded and whether marks are respected. This is an alternative product behavior, not equivalent evidence for editable copying.
-5. **Undo and failure:** add two sections, undo the second, redo it, then undo the first. Test failure after sequence creation and after part of a multistage append. Record whether a coherent recoverable state is possible.
+5. **Undo and failure:** add two sections, undo the second, redo it, then undo the first. Test failure after sequence creation and after part of a multistage append. Record whether a coherent recoverable state is possible. **Changed by issue #25:** if the destination is a new sequence beside the original rather than an in-place edit, undo is `Project.deleteSequence`, and the one-undo-step requirement relaxes to "the destination is disposable".
 6. **Repeated use:** perform 50 adds and check source marks, source clips, target duration, links, audio sync, UI responsiveness and project item growth.
 
 Timebox this investigation to one focused engineering day. Deliver evidence and a go/no-go decision even if no backend qualifies. Do not let the historic split experiments become an open-ended prerequisite.
@@ -101,6 +146,9 @@ Timebox this investigation to one focused engineering day. Deliver evidence and 
 
 | Outcome | Decision |
 | --- | --- |
+| **Three-point placement passes** (probe 1b: timebase inherited, placements independent, audio linked) | Build the native assembly MVP on it. Cheapest route, shares section 6's math unchanged, and nothing needs cloning. |
+| **Three-point passes but placements collapse** | Still build on it, at one transaction per placement. Record the cost; undo is `deleteSequence`, so multi-transaction is acceptable. |
+| **Three-point passes but audio is video-only or misaligned** | Not shippable as-is for a rough cut. Decide explicitly between a second placement call per range for audio, or falling back to probes 2/3. Never ship a silent rough cut. |
 | Editable cross-sequence range copy passes | Build the native assembly MVP. |
 | Subsequence creation passes, but append does not | Record partial feasibility; a new sequence per mark does not satisfy this request. |
 | Only nested insertion passes | Present it as a distinct option requiring a product decision. A nest keeps a dependency on its source and hides individual tracks in the destination. |
@@ -114,18 +162,21 @@ Do not silently fall back to XML, nesting, rendered clips, keyboard automation, 
 
 Keep existing XML recovery and native assembly state separate.
 
-| Proposed file | Responsibility |
-| --- | --- |
-| `uxp/cutdeck/timelineRange.js` | Capture and normalize exact marks, source identity, timing and preflight data. |
-| `uxp/cutdeck/assemblyPlan.js` | Pure range intersection and destination placement; no Premiere calls. |
-| `uxp/cutdeck/assemblyHost.js` | Native capability checks, destination creation, append operations, validation and recovery. |
-| `uxp/cutdeck/assemblySession.js` | Bound source/destination IDs, operation journal and session reconciliation. |
-| Existing `main.js` / `index.html` | Add the assembly controls and status states; retain automatic XML controls. |
-| `tests/cutdeck_assembly.test.cjs` | Timing, session and host-boundary behavior tests. |
+| File | Responsibility | State |
+| --- | --- | --- |
+| `uxp/cutdeck/timelineRange.js` | Capture and normalize exact marks, source identity, timing and preflight data. | ✅ built |
+| `uxp/cutdeck/assemblyPlan.js` | Pure range intersection and destination placement; no Premiere calls. | ✅ built |
+| `uxp/cutdeck/capabilityProbe.js` | Phase 0 probe 1, read-only. Not originally listed. | ✅ built |
+| `uxp/cutdeck/assembleProbe.js` | Phase 0 probe 1b, mutating. Not originally listed. | ✅ built |
+| `uxp/cutdeck/assemblyHost.js` | Native capability checks, destination creation, append operations, validation and recovery. | ⛔ blocked on Phase 0 — do not write it before a backend is chosen |
+| `uxp/cutdeck/assemblySession.js` | Bound source/destination IDs, operation journal and session reconciliation. | ⛔ same |
+| Existing `main.js` / `index.html` | Add the assembly controls and status states; retain automatic XML controls. | partial — probe buttons only, no assembly controls |
+| `tests/cutdeck_assembly.test.cjs` | Timing and host-boundary behavior tests. | ✅ 29 tests |
+| `tests/cutdeck_assemble_probe.test.cjs` + `tests/fixtures/cutdeck_assemble_host.cjs` | Mutation-probe orchestration against a mock timeline. | ✅ 32 tests |
 
 These are proposed seams, not a requirement to create empty abstractions. Merge small modules where it simplifies the actual implementation. Reuse the existing identity/capture code where compatible, but preserve the XML protocol's expected fields and behavior.
 
-Native assembly must initialize and operate with the helper stopped. Move the temporary startup socket diagnostic behind an explicit diagnostic control if it would otherwise overwrite assembly status or impose a connection dependency.
+Native assembly must initialize and operate with the helper stopped. ✅ The startup socket diagnostic is behind an explicit button and no longer runs on load; both probes run with the helper stopped.
 
 ## 6. Timing and clip placement
 
@@ -198,11 +249,13 @@ Matching settings includes frame rate, frame size, pixel aspect, audio sample ra
 
 ## 9. Delivery phases and exit criteria
 
-### Phase 1 — exact range model and tests
+### Phase 1 — exact range model and tests — ✅ COMPLETE
 
 Implement normalized range capture, placement calculations and session validation. Cover a one-frame range, boundary-touching clips, nonzero media In, nonzero sequence timecode, 23.976/29.97 timebases, gaps, overlapping tracks and large tick values.
 
 **Done when:** pure tests demonstrate exact expected frames and no floating-point drift; no production timeline mutation is enabled yet.
+
+**Met** by `timelineRange.js` + `assemblyPlan.js` under `cutdeck_assembly.test.cjs` (29 tests), covering every case listed plus fifty consecutive adds at zero drift and tick values past `Number` precision. Session validation is **not** in this phase's delivery — it moved to `assemblySession.js`, which stays unwritten until Phase 0 picks a backend.
 
 ### Phase 2 — proven native backend
 
