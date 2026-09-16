@@ -1,33 +1,15 @@
 const ppro = require("premierepro");
 const workflow = require("./workflow.js");
+const { createRpc } = require("./rpc.js");
 const $ = (id) => document.getElementById(id);
 const KEY = "cutdeck.xml.lastJob";
 let busy = false;
 
 // One short connection per request makes reconnects independent of long GPU jobs.
-function rpc(request) {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket("ws://127.0.0.1:7891");
-    let settled = false;
-    const finish = (error, result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.close();
-      if (error) reject(error); else resolve(result);
-    };
-    const timer = setTimeout(() => finish(new Error("CutDeck helper timed out. Start the helper and use Resume last job.")), 15000);
-    socket.onopen = () => socket.send(JSON.stringify(request));
-    socket.onmessage = (event) => {
-      try {
-        const result = JSON.parse(event.data);
-        finish(result.ok ? null : new Error(result.message), result);
-      } catch (error) { finish(error); }
-    };
-    socket.onerror = () => finish(new Error("Cannot reach CutDeck. Run Start CutDeck.cmd, then try again."));
-    socket.onclose = () => finish(new Error("Helper disconnected. Use Resume last job after reconnecting."));
-  });
-}
+// Connecting retries; a sent request never does. See rpc.js for why.
+const rpc = createRpc({
+  onRetry: (attempt, total) => status(`Connecting to the CutDeck helper… attempt ${attempt} of ${total}.`),
+});
 
 function lastJob() {
   try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (_) { return null; }

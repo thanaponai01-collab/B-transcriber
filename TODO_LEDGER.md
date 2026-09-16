@@ -390,6 +390,14 @@ way:**
   a reconnect loop is a day-one requirement for the plugin (issue #22), not later
   hardening. Load via UXP Developer Tool rather than a `.ccx` install until this is
   understood.
+  **Hit for real on the XML panel 2026-09-16** (a `.ccx` install of `com.cutdeck.xml`,
+  manifest domain declared correctly, error verbatim). **Reconnect loop now built:**
+  `uxp/cutdeck/rpc.js` retries *connecting* 5 times over ~3 s. The retry boundary is the
+  safety rule — a request that was already **sent** is never resent, because `prepare`
+  mints a job per call; `start` is idempotent server-side by design
+  (`xml_bridge.dispatch`), and a lost reply is recovered via Resume. Verified live: a
+  client started before the helper was listening connected on attempt 3.
+  `tests/cutdeck_rpc.test.cjs`, 6 tests.
 
 ---
 

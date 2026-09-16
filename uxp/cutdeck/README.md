@@ -46,6 +46,11 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
 - **Connection lost / panel reloaded:** start the helper if needed and click
   **Resume last job**. While the same helper remains running, processing continues
   even if the panel disconnects.
+- **"Permission denied to the url ws://127.0.0.1:7891":** UXP registers the plugin's
+  network permission later than the panel's first request, so a cold start can be
+  denied even though the manifest declares the domain. The panel now retries the
+  connection five times over about three seconds, which also covers a helper that is
+  still starting up. If it still fails, the helper is genuinely not running.
 - **Switched projects:** return to the original project and resume. The helper
   never imports into whichever unrelated project happens to be active.
 - **Helper restarted:** its live job list is reset. Existing files remain in
@@ -92,11 +97,12 @@ clip positions do not imply linked selections when dragging clips afterward.
 ```powershell
 .venv\Scripts\python.exe -m cutdeck.xml_bridge
 .venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_xml_recut_cli.py tests/test_cutdeck_xml_recut.py -q
-node --test tests/cutdeck_workflow.test.cjs
+node --test tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
-`workflow.js` contains the Premiere operations; `main.js` handles panel state and
-the socket. `cutdeck/xml_bridge.py` launches the existing CLI in a subprocess.
+`workflow.js` contains the Premiere operations; `rpc.js` owns the helper socket and
+its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
+existing CLI in a subprocess.
 The original `cutdeck/bridge.py` and split probe remain separate from this XML
 integration.
 
