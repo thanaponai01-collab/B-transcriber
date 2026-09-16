@@ -15,7 +15,7 @@ button:disabled { opacity: 0.45; } #status { white-space: pre-wrap; line-height:
 <button id="refresh">Read timeline range</button>
 <label><span>Dialogue audio</span><select id="audio"><option value="" selected>First audio track with clips</option></select></label>
 <label><span>Cutting mode</span><select id="mode"><option value="protected" selected>Usual preset · protect short speech</option><option value="silence">Faster · silence only</option></select></label>
-<button id="cut">Rough Cut In–Out</button><button id="resume" hidden>Resume last job</button><button id="dismiss" hidden>Dismiss last job</button>
+<button id="cut">Rough Cut In–Out</button><button id="socketprobe">Diagnose helper connection</button><button id="resume" hidden>Resume last job</button><button id="dismiss" hidden>Dismiss last job</button>
 <p id="status" role="status">Start the CutDeck helper, then read your timeline range.</p>
 <p class="muted small">Creates a new sequence using your current XML cutting settings. The full sequence is analyzed; cuts are limited to your marks.</p>
 <script src="main.js"></script></body></html>

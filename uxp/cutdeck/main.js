@@ -67,11 +67,11 @@ async function follow(job) {
 async function act(fn) {
   if (busy) return;
   busy = true;
-  ["cut", "refresh", "resume", "dismiss", "audio", "mode"].forEach((id) => $(id).disabled = true);
+  ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe"].forEach((id) => $(id).disabled = true);
   try { await fn(); } catch (error) { status(error.message || String(error)); console.error(error); }
   finally {
     busy = false;
-    ["cut", "refresh", "resume", "dismiss", "audio", "mode"].forEach((id) => $(id).disabled = false);
+    ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe"].forEach((id) => $(id).disabled = false);
   }
 }
 $("refresh").addEventListener("click", () => act(async () => { await refresh(); status("Range ready. Click Rough Cut In–Out."); }));
@@ -100,11 +100,14 @@ $("resume").addEventListener("click", () => act(async () => {
   }
   await follow(job);
 }));
-// TEMPORARY DIAGNOSTIC — remove with probe.js once the permitted URL form is known.
-probe.run().then(({ report, written }) => {
-  const lines = report.results.map((r) => `${r.url} -> ${r.outcome}`);
-  status([`Socket permission probe:`, ...lines, ``, `written: ${written}`].join(`\n`));
-}).catch((error) => status("Probe failed: " + (error.message || String(error))));
+// Diagnostic only, and never on load: it opens sockets, so running it automatically would
+// make a panel that needs no helper report a helper failure every time it opens.
+$("socketprobe").addEventListener("click", () => act(async () => {
+  status("Probing which socket URLs this Premiere build permits…");
+  const { report, written } = await probe.run();
+  status([`Socket permission probe:`, ...report.results.map((r) => `${r.url} -> ${r.outcome}`),
+    ``, `written: ${written}`].join(`\n`));
+}));
 
 $("resume").hidden = !lastJob();
 $("dismiss").hidden = !lastJob();
