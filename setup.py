@@ -5,4 +5,5 @@ setup(
     version="1.0.0",
     packages=find_packages(),
     python_requires=">=3.11",
+    extras_require={"ai": ["mcp>=1.12,<2"]},
 )
