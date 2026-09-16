@@ -5,10 +5,12 @@
    before spending a live Premiere click on it — drives the same host the tests
    assert against, instead of a second copy that could drift from it.
 
-   The one knob that matters is `mode`: "independent" applies staged actions in the
-   order they were added, "collapsed" applies every setInOut before every overwrite —
-   which is exactly the failure issue #25 predicts if the shared ClipProjectItem
-   resolves against the last value written. */
+   Two knobs carry most of its meaning. `mode`: "independent" applies staged actions
+   in the order they were added, "collapsed" applies every setInOut before every
+   overwrite — exactly the failure issue #25 predicts if the shared ClipProjectItem
+   resolves against the last value written. `audio`: whether one overwrite also puts
+   linked audio on A1, and on which boundaries — the question the rough-cut route in
+   docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md needs answered. */
 const PROBE_SEQUENCE_NAME = require("../../uxp/cutdeck/assembleProbe.js").PROBE_SEQUENCE_NAME;
 
 const TPF_25 = 10160640000n;   // 25 — the rate probe()'s fallback fabricates
@@ -79,6 +81,13 @@ function makeHost(opts = {}) {
   };
 
   const builtTrack = makeTrack();
+  // A1 on the destination. `audio` decides what one overwrite does with it:
+  //   "linked"     — places audio on the video's exact boundaries (the hoped-for result)
+  //   "none"       — video only, so audio would need its own call per span
+  //   "misaligned" — audio lands, but shifted, so sync cannot be assumed
+  //   "noTrack"    — createSequence made a video-only sequence
+  const builtAudioTrack = makeTrack();
+  const audioMode = opts.audio || "linked";
   const selectionGroup = { picked: [], clear() { this.picked = []; }, addItem(item) { this.picked.push(item); } };
   let builtTimebase = opts.newSequenceTimebase === undefined ? TPF_25 : opts.newSequenceTimebase;
   const built = {
@@ -86,6 +95,7 @@ function makeHost(opts = {}) {
     getTimebase: async () => (builtTimebase === null ? null : builtTimebase.toString()),
     getEndTime: async () => tickObj(builtTrack.end()),
     getVideoTrack: async (i) => (i === 0 ? builtTrack : null),
+    getAudioTrack: async (i) => (audioMode === "noTrack" ? null : (i === 0 ? builtAudioTrack : null)),
     getSelection: async () => selectionGroup,
     createSetSettingsAction(settings) {
       return { kind: "settings", apply: () => { if (!opts.settingsNoop) builtTimebase = BigInt(settings.timebase); } };
@@ -102,6 +112,13 @@ function makeHost(opts = {}) {
         const length = projectItem.outTicks - projectItem.inTicks - eatTicks;
         builtTrack.place({ name: `placed@${at}`, start: at, end: at + length,
           mediaIn: projectItem.inTicks, track: videoIndex });
+        // The same call carries an audio track index, so a build that places linked
+        // A/V puts audio down here too — which is what the probe reads back from A1.
+        if (audioMode === "linked" || audioMode === "misaligned") {
+          const shift = audioMode === "misaligned" ? tpf : 0n;
+          builtAudioTrack.place({ name: `audio@${at}`, start: at + shift, end: at + length + shift,
+            mediaIn: projectItem.inTicks, track: 0 });
+        }
       } };
     },
     createRemoveItemsAction(selection, ripple) {
@@ -109,7 +126,15 @@ function makeHost(opts = {}) {
       const picked = Array.isArray(selection) ? selection : selection.picked;
       return { kind: "remove", apply: () => {
         if (opts.removeThrows) throw new Error("removeItems refused");
-        for (const item of picked) builtTrack.remove(item, ripple);
+        for (const item of picked) {
+          // MediaType.ANY is meant to take the linked audio with the video. A build
+          // that does not is the orphaned-dialogue failure, so it is modellable.
+          if (!opts.removeLeavesAudio) {
+            const twin = builtAudioTrack.items.find((a) => a._state.start === item._state.start);
+            if (twin) builtAudioTrack.remove(twin, ripple);
+          }
+          builtTrack.remove(item, ripple);
+        }
       } };
     },
   };
@@ -147,7 +172,7 @@ function makeHost(opts = {}) {
     Constants: { TrackItemType: { CLIP: "clip" }, MediaType: { ANY: "any" } },
     TrackItemSelection: {},
   };
-  return { ppro, calls, builtTrack, get builtTimebase() { return builtTimebase; } };
+  return { ppro, calls, builtTrack, builtAudioTrack, get builtTimebase() { return builtTimebase; } };
 }
 
 

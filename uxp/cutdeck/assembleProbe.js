@@ -143,7 +143,7 @@ function planSpans(mediaInTicks, mediaOutTicks, ticksPerFrame, destBaseTicks) {
 async function runAssembleProbe(ppro, log) {
   const say = typeof log === "function" ? log : () => {};
   const findings = [];
-  const verdicts = { settings: null, placement: null, removal: null };
+  const verdicts = { settings: null, placement: null, audio: null, removal: null };
   let built = null;  // the probe sequence, once it exists — never auto-deleted
   const add = (id, question, answer, evidence) => {
     findings.push({ id, question, answer, evidence: evidence === undefined ? null : evidence });
@@ -304,6 +304,10 @@ async function runAssembleProbe(ppro, log) {
   if (!readBack) return stop(true);
   verdicts.placement = judgePlacement(readBack, spans, ticksPerFrame, predictedEnd, add,
     await attempt("assembled getEndTime", () => built.getEndTime()));
+  // Asked even when placement failed: "did audio come along" is a route question for
+  // the rough cut (docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md) as much as for issue #25,
+  // and a collapsed assembly still shows whether A1 received anything at all.
+  verdicts.audio = judgeAudio(readBack, ticksPerFrame, add);
   if (verdicts.placement !== "independent") return stop(true);
 
   /* ---- UNKNOWN 3: disable, then ripple-remove in a SEPARATE transaction ---- */
@@ -341,11 +345,39 @@ async function runAssembleProbe(ppro, log) {
   let endAfterTicks = null;
   try { endAfterTicks = endAfter.ok ? toTicks(endAfter.value, "End after remove") : null; } catch (_) {}
   const expected = predictedEnd - victimLength;
+
+  // MediaType.ANY is supposed to take the linked audio too. If it does not, Apply
+  // leaves orphaned dialogue where the silence used to be — worse than not cutting.
+  const afterRead = await readPlacedItems(built, add);
+  const audioBefore = readBack.audioSpans ? readBack.audioSpans.length : null;
+  const audioAfter = afterRead && afterRead.audioSpans ? afterRead.audioSpans.length : null;
+  const audioQuestion = "Did the ripple take the linked audio with the video?";
+  const evidenceBase = { videoItemsAfter: afterRead ? afterRead.spans.length : null,
+    mediaType: mediaAny === undefined ? "ANY unavailable" : "ANY" };
+  let audioOrphaned = false;
+  if (audioBefore === null || audioAfter === null) {
+    // No audio track to read; judgeAudio already said so.
+  } else if (audioBefore === 0) {
+    add("removalAudio", audioQuestion, "not applicable — A1 was empty before the ripple, so there "
+      + "was no linked audio to take", evidenceBase);
+  } else if (audioAfter === audioBefore - 1) {
+    add("removalAudio", audioQuestion, `yes — A1 went from ${audioBefore} to ${audioAfter} items`, evidenceBase);
+  } else {
+    audioOrphaned = true;
+    add("removalAudio", audioQuestion,
+      `NO — A1 still has ${audioAfter} item(s), was ${audioBefore}. Apply would leave orphaned audio `
+      + `where the cut span was, which is worse than not cutting at all.`, evidenceBase);
+  }
   if (endAfterTicks === expected) {
-    verdicts.removal = "exact";
+    // The video length being right is not the whole answer. A ripple that leaves the
+    // dialogue behind is a failure that a length check alone would call a success, so
+    // it belongs in the verdict rather than only in a finding further up the report.
+    verdicts.removal = audioOrphaned ? "exact, but audio orphaned" : "exact";
     add("removal", "Does createRemoveItemsAction(sel, ripple=true, ANY) work?",
-      `YES — length shrank by exactly the disabled span (${victimLength / ticksPerFrame} frames)`,
-      { before: predictedEnd.toString(), after: endAfterTicks.toString(), selectionVia: selection.via });
+      `YES — length shrank by exactly the disabled span (${victimLength / ticksPerFrame} frames)`
+      + (audioOrphaned ? " — but the linked audio was LEFT BEHIND; see the previous finding." : ""),
+      { before: predictedEnd.toString(), after: endAfterTicks.toString(), selectionVia: selection.via,
+        audioOrphaned });
   } else {
     verdicts.removal = endAfterTicks === null ? "unverifiable" : "wrong length";
     add("removal", "Does createRemoveItemsAction(sel, ripple=true, ANY) work?",
@@ -438,30 +470,87 @@ function makeTickTime(ppro, add) {
   return null;
 }
 
-async function readPlacedItems(sequence, add) {
-  const trackRead = await attempt("new getVideoTrack(0)", () => sequence.getVideoTrack(0));
-  if (!trackRead.ok || !trackRead.value) {
-    add("readBack", "Can the assembled track be read back?", "no", trackRead);
-    return null;
-  }
-  const itemsRead = await attempt("new getTrackItems", () => trackRead.value.getTrackItems(undefined, false));
+/* Reads one track's items and their exact spans, or null with a finding. */
+async function readTrackSpans(track, label, add) {
+  const itemsRead = await attempt(`${label} getTrackItems`, () => track.getTrackItems(undefined, false));
   const items = itemsRead.ok && itemsRead.value ? itemsRead.value : null;
-  if (!items) { add("readBack", "Can the assembled track be read back?", "no", itemsRead); return null; }
+  if (!items) { add("readBack", `Can the assembled ${label} be read back?`, "no", itemsRead); return null; }
   const spans = [];
   for (let i = 0; i < items.length; i++) {
-    const startRead = await attempt(`item[${i}] getStartTime`, () => items[i].getStartTime());
-    const endRead = await attempt(`item[${i}] getEndTime`, () => items[i].getEndTime());
-    const inRead = await attempt(`item[${i}] getInPoint`, () => items[i].getInPoint());
+    const startRead = await attempt(`${label}[${i}] getStartTime`, () => items[i].getStartTime());
+    const endRead = await attempt(`${label}[${i}] getEndTime`, () => items[i].getEndTime());
+    const inRead = await attempt(`${label}[${i}] getInPoint`, () => items[i].getInPoint());
     try {
       spans.push({ startTicks: toTicks(startRead.value, "start"), endTicks: toTicks(endRead.value, "end"),
         mediaInTicks: toTicks(inRead.value, "in") });
     } catch (error) {
-      add("readBack", "Can every assembled item be read back exactly?", "no",
+      add("readBack", `Can every assembled ${label} item be read back exactly?`, "no",
         { index: i, error: error.message });
       return null;
     }
   }
   return { items, spans };
+}
+
+/* Video track 0 is what unknown 2 is judged on. Audio track 0 is read for a
+   different question that costs nothing extra in the same click:
+   createOverwriteItemAction takes BOTH a video and an audio track index, and this
+   probe passes (0, 0) — so if Premiere places linked A/V from one call, audio is
+   already on A1. Nobody wants a silent rough cut, and nobody wants a silence-cut
+   sequence with no dialogue, so both routes need the answer. */
+async function readPlacedItems(sequence, add) {
+  const trackRead = await attempt("new getVideoTrack(0)", () => sequence.getVideoTrack(0));
+  if (!trackRead.ok || !trackRead.value) {
+    add("readBack", "Can the assembled video track be read back?", "no", trackRead);
+    return null;
+  }
+  const video = await readTrackSpans(trackRead.value, "video track", add);
+  if (!video) return null;
+
+  const audioTrackRead = await attempt("new getAudioTrack(0)", () =>
+    typeof sequence.getAudioTrack === "function" ? sequence.getAudioTrack(0) : null);
+  const audio = audioTrackRead.ok && audioTrackRead.value
+    ? await readTrackSpans(audioTrackRead.value, "audio track", add)
+    : null;
+  return { items: video.items, spans: video.spans,
+    audioItems: audio ? audio.items : null, audioSpans: audio ? audio.spans : null,
+    audioTrackPresent: !!(audioTrackRead.ok && audioTrackRead.value) };
+}
+
+/* Does one overwrite place audio alongside the video, on the same boundaries?
+   Descriptive, never a stop: a video-only result still lets unknown 3 be measured,
+   and the human needs both answers from the one click. */
+function judgeAudio(readBack, ticksPerFrame, add) {
+  const question = "Does one overwrite place linked audio on A1 as well as video on V1?";
+  if (!readBack.audioTrackPresent) {
+    add("linkedAudio", question, "could not tell — the new sequence has no audio track 0",
+      { note: "createSequence may make a video-only sequence; check the destination's track layout" });
+    return "no audio track";
+  }
+  if (!readBack.audioSpans) { return "unreadable"; }
+  const shown = readBack.audioSpans.map((s, i) => `[${i}] ${s.startTicks}..${s.endTicks} `
+    + `(media in ${s.mediaInTicks}, ${framesish(s.endTicks - s.startTicks, ticksPerFrame)})`);
+  if (readBack.audioSpans.length === 0) {
+    add("linkedAudio", question,
+      "NO — A1 is empty. One overwrite placed video only, so audio needs its own placement call "
+      + "per span. A rough cut or a silence cut without dialogue is useless, so this is a route "
+      + "question, not a detail.", { videoItems: readBack.spans.length });
+    return "video only";
+  }
+  const aligned = readBack.audioSpans.length === readBack.spans.length
+    && readBack.audioSpans.every((a, i) =>
+      a.startTicks === readBack.spans[i].startTicks && a.endTicks === readBack.spans[i].endTicks);
+  if (aligned) {
+    add("linkedAudio", question,
+      `YES — ${readBack.audioSpans.length} audio item(s) on A1 on exactly the video's boundaries. `
+      + `One call places linked A/V.`, { items: shown });
+    return "linked";
+  }
+  add("linkedAudio", question,
+    "PARTIALLY — audio landed on A1, but not on the video's boundaries. Audio sync cannot be "
+    + "assumed from a single overwrite on this build.",
+    { audio: shown, videoItems: readBack.spans.length, audioItemCount: readBack.audioSpans.length });
+  return "misaligned";
 }
 
 /* The whole point of unknown 2. Three distinct ranges is the cheap path living;
@@ -580,6 +669,7 @@ function formatReport(report) {
   lines.push(``);
   lines.push(`VERDICTS  settings:  ${report.verdicts.settings || "not reached"}`);
   lines.push(`          placement: ${report.verdicts.placement || "not reached"}`);
+  lines.push(`          audio:     ${report.verdicts.audio || "not reached"}`);
   lines.push(`          removal:   ${report.verdicts.removal || "not reached"}`);
   lines.push(``);
   lines.push(report.cleanup);

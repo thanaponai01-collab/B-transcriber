@@ -178,6 +178,71 @@ test("a missing createSetInOutPointsAction is a finding, not an unhandled reject
   assert.match(evidence(report, "placement").error, /createSetInOutPointsAction/);
 });
 
+/* ------------------------------ linked audio: the rough-cut route's own question ----
+   createOverwriteItemAction takes a video AND an audio track index, and the probe
+   passes (0, 0). Whether audio actually lands decides whether the handoff's "Add to
+   Rough Cut" needs one call per range or two, and whether issue #25's silence cut
+   keeps its dialogue. Free to ask in the same click. ---- */
+
+test("audio landing on the video's exact boundaries reads as LINKED", async () => {
+  const { report, host } = await run({ audio: "linked" });
+  assert.equal(report.verdicts.audio, "linked");
+  assert.match(answer(report, "linkedAudio"), /YES — 3 audio item\(s\) on A1/);
+  // The alignment is real in the fixture, not just asserted in the message.
+  const v = host.builtTrack.items.map((i) => i._state.start.toString());
+  const a = host.builtAudioTrack.items.map((i) => i._state.start.toString());
+  assert.deepEqual(a, v);
+});
+
+test("a video-only overwrite is called out as a route question, not a detail", async () => {
+  const { report, host } = await run({ audio: "none" });
+  assert.equal(report.verdicts.audio, "video only");
+  assert.match(answer(report, "linkedAudio"), /NO — A1 is empty/);
+  assert.match(answer(report, "linkedAudio"), /without dialogue is useless/);
+  assert.equal(host.builtAudioTrack.items.length, 0);
+  // Not a stop: unknown 3 is still worth measuring, so the one click still pays.
+  assert.equal(report.verdicts.removal, "exact");
+  // And the ripple question must not claim orphaned audio when there was none.
+  assert.match(answer(report, "removalAudio"), /not applicable — A1 was empty/);
+});
+
+test("audio that lands but drifts is MISALIGNED — sync cannot be assumed", async () => {
+  const { report } = await run({ audio: "misaligned" });
+  assert.equal(report.verdicts.audio, "misaligned");
+  assert.match(answer(report, "linkedAudio"), /PARTIALLY/);
+  assert.equal(evidence(report, "linkedAudio").audioItemCount, 3);
+});
+
+test("a destination with no audio track is recorded, not treated as silence", async () => {
+  const { report } = await run({ audio: "noTrack" });
+  assert.equal(report.verdicts.audio, "no audio track");
+  assert.match(answer(report, "linkedAudio"), /no audio track 0/);
+  assert.equal(report.verdicts.removal, "exact", "a video-only destination still answers unknown 3");
+});
+
+test("the audio question is still asked when the placement collapsed", async () => {
+  const { report } = await run({ mode: "collapsed" });
+  assert.equal(report.verdicts.placement, "collapsed");
+  assert.notEqual(report.verdicts.audio, null, "a collapsed assembly still shows whether A1 got anything");
+});
+
+test("a ripple that leaves the audio behind is caught — orphaned dialogue", async () => {
+  const clean = await run({});
+  assert.match(answer(clean.report, "removalAudio"), /yes — A1 went from 3 to 2 items/);
+  assert.equal(clean.host.builtAudioTrack.items.length, 2);
+
+  // The video length is still exactly right here, which is precisely the trap: a
+  // length-only check calls this a success. The verdict has to carry the failure.
+  const orphaned = await run({ removeLeavesAudio: true });
+  assert.equal(orphaned.report.verdicts.removal, "exact, but audio orphaned");
+  assert.match(answer(orphaned.report, "removal"), /LEFT BEHIND/);
+  assert.match(answer(orphaned.report, "removalAudio"), /NO — A1 still has 3 item\(s\)/);
+  assert.match(answer(orphaned.report, "removalAudio"), /worse than not cutting at all/);
+  assert.equal(orphaned.host.builtAudioTrack.items.length, 3);
+  assert.match(formatReport(orphaned.report), /removal:\s+exact, but audio orphaned/,
+    "the verdict block is what a human reads first — the orphan must be visible there");
+});
+
 /* --------------------------------------------- unknown 3: disable then ripple-remove */
 
 test("ripple-remove shrinks the assembly by exactly the disabled span", async () => {
@@ -249,6 +314,9 @@ const BUILT_CASES = [
   ["a placement that threw", { noOverwrite: true }],
   ["a removal that refused", { removeThrows: true }],
   ["an overwrite that ate a frame", { eatTicks: TPF_2997 }],
+  ["a video-only overwrite", { audio: "none" }],
+  ["a destination with no audio track", { audio: "noTrack" }],
+  ["a ripple that orphaned the audio", { removeLeavesAudio: true }],
 ];
 
 test("the probe NEVER deletes what it built — a partial build is the evidence", async () => {
@@ -277,12 +345,13 @@ test("every report serializes to JSON — the panel logs them, and a stray BigIn
   }
 });
 
-test("the formatted report names all three verdicts and the cleanup the human owes", async () => {
+test("the formatted report names all four verdicts and the cleanup the human owes", async () => {
   const { report } = await run({});
   const text = formatReport(report);
   assert.match(text, /issue #25/);
   assert.match(text, /settings:\s+inherited/);
   assert.match(text, /placement: independent/);
+  assert.match(text, /audio:\s+linked/);
   assert.match(text, /removal:\s+exact/);
   assert.match(text, /DELETE IT BY HAND/);
   const stopped = formatReport((await run({ settingsNoop: true })).report);
