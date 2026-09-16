@@ -98,6 +98,28 @@ def _select_audio_track(sequence: ET.Element, audio_track_index: int | None) -> 
     raise XmlRecutRefusal("no audio track has any clips")
 
 
+def reference_media_path(source_xml: str, audio_track_index: int | None = None) -> Path:
+    """The source media file backing the reference audio track's first real clip.
+
+    Lets callers place outputs beside the footage the cuts were derived from.
+    Track selection and the disabled-clip skip mirror ``extract_mixdown`` exactly,
+    so "the footage" always names the media that was actually analyzed rather than
+    whichever file the XML happens to list first.
+    """
+    sequence = ET.fromstring(source_xml).find("sequence")
+    if sequence is None:
+        raise XmlRecutRefusal("no <sequence> element found in source XML")
+    track = _select_audio_track(sequence, audio_track_index)
+    for clipitem in track.findall("clipitem"):
+        if _text(clipitem, "enabled", "TRUE") != "TRUE":
+            continue
+        file_el = clipitem.find("file")
+        if file_el is None or file_el.get("id") is None:
+            continue
+        return _resolve_file_path(sequence, file_el.get("id"))
+    raise XmlRecutRefusal("no enabled clip on the reference audio track names a source file")
+
+
 def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None) -> str:
     """Build a sequence-timeline mono WAV from the XML's own clipitems +
     source media, writing it to ``out_wav``. Returns ``out_wav``.

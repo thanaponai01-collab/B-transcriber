@@ -31,6 +31,21 @@ validated as a distributable `.ccx` installer.
 5. Click **Rough Cut In–Out**. CutDeck creates a sequence named
    `Your sequence — CutDeck <job identifier>` and opens it.
 
+The rough cut XML is written to a **`CutDeck` folder beside your footage**, named
+after the sequence and job, so it sits with the media instead of inside this repo:
+
+```
+D:\Footage\CFD 94  interview_A.mp4
+  CutDeck    Interview — CutDeck 4f2a1b9c.xml
+```
+
+"Beside your footage" means the folder holding the media on the audio track that was
+analyzed — the same track the cuts come from. Only the result goes there; `source.xml`,
+`job.json`, `report.json` and `process.log` stay in `output/premiere/<job identifier>/`.
+If the media cannot be located or written to (a disconnected drive, a sequence with no
+audio), the result falls back to the job folder and the panel says so rather than
+failing the cut. A run that finds no cuts leaves nothing in your media folder.
+
 The source sequence is never edited. Material before In is preserved; material
 after Out shifts earlier by the removed duration across all tracks. The entire
 sequence audio is still analyzed, preserving the existing analysis context.

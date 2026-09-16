@@ -32,7 +32,11 @@ async function prepare(ppro, rpc, snapshot, options, save) {
   // Record successful export before starting, allowing recovery from a lost start response.
   job.exported = true;
   save(job);
-  return rpc({ type: "start", job_id: job.job_id });
+  // The helper only settles output_path once it can read the export, so keep the
+  // recovery entry on the started job rather than the prepared one.
+  const started = await rpc({ type: "start", job_id: job.job_id });
+  save({ ...job, ...started });
+  return started;
 }
 
 async function importResult(ppro, job, previousAttempt, markAttempt) {

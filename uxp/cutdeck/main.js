@@ -59,7 +59,9 @@ async function follow(job) {
   await workflow.importResult(ppro, job, saved.importAttempted,
     () => save({ ...saved, ...job, importAttempted: true }));
   clearJob();
-  status(`${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.\nOpened ${job.result_name}`);
+  const note = job.output_note ? `\n${job.output_note}` : "";
+  status(`${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.`
+    + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`);
 }
 async function act(fn) {
   if (busy) return;

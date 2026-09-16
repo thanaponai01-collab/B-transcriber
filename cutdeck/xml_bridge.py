@@ -15,7 +15,8 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
-from cutdeck.xml_recut import _sequence_timebase, _PPRO_TICKS_PER_SECOND
+from cutdeck.xml_audio_extract import reference_media_path
+from cutdeck.xml_recut import XmlRecutRefusal, _sequence_timebase, _PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
@@ -49,6 +50,37 @@ def reference_audio_track(source_xml: str, request: dict) -> int | None:
     if len(groups) != request.get("audio_track_count") or not 0 <= selected < len(groups):
         raise ValueError("Export audio tracks differ from the timeline; refresh and try again")
     return groups[selected]
+
+
+_ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
+
+
+def _safe_filename(name: str) -> str:
+    """Premiere sequence names are free text; file names are not."""
+    cleaned = "".join("-" if c in _ILLEGAL_FILENAME_CHARS or ord(c) < 32 else c for c in name)
+    return cleaned.strip(" .") or "rough_cut"
+
+
+def result_path(job: dict, source_xml: str) -> Path:
+    """Where the finished rough cut is written: a ``CutDeck`` folder beside the footage.
+
+    The editor works out of the media folder, so the file they import belongs there
+    rather than inside this repo. Only the result moves — ``source.xml``, the log and
+    the reports stay in the job folder, keeping media folders clean and recovery in
+    one place.
+
+    Falls back to the job folder when the media cannot be located or written to. A
+    rough cut saved in the wrong place is recoverable; one that never gets written
+    because the media sits on a disconnected drive is not.
+    """
+    try:
+        media = reference_media_path(source_xml, job["xml_audio_track"])
+        folder = media.parent / "CutDeck"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / f"{_safe_filename(job['result_name'])}.xml"
+    except (XmlRecutRefusal, OSError) as exc:
+        job["output_note"] = f"Saved in the job folder instead of beside the footage: {exc}"
+        return Path(job["source_path"]).parent / "rough_cut.xml"
 
 
 def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
@@ -138,6 +170,8 @@ class XmlJobs:
             source_xml = source.read_text(encoding="utf-8-sig")
             start, end = range_from_ticks(source_xml, job["context"])
             job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
+            # Only now does the export exist, so only now is the footage location known.
+            job["output_path"] = str(result_path(job, source_xml))
             job["range_frames"] = [start, end]
             job["state"] = "running"
             self.active = job["job_id"]
@@ -179,6 +213,12 @@ class XmlJobs:
             report = json.loads(report_path.read_text(encoding="utf-8"))
             job["report"] = report
             job["state"] = "ready" if report["cuts_applied"] else "no_cuts"
+            if job["state"] == "no_cuts":
+                # A no-cut result just copies the source; don't leave it sitting in
+                # the editor's media folder. The job folder's own copy is kept.
+                output = Path(job["output_path"])
+                if output.parent != Path(job["source_path"]).parent:
+                    output.unlink(missing_ok=True)
             if job["state"] == "ready":
                 path = Path(job["output_path"])
                 root = ET.fromstring(path.read_text(encoding="utf-8"))
