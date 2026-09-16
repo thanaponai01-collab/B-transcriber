@@ -25,7 +25,9 @@
                    a separate transaction. Apply is built entirely on that call and
                    it has never run here.
 
-   MUTATES THE PROJECT. Run it in a disposable project, never a real edit.
+   MUTATES THE PROJECT — the only thing in this panel that does. Run it in a
+   disposable project, never a real edit. The panel arms the button in two clicks
+   for that reason; every other CutDeck control is read-only or writes to disk.
 
    Nothing here throws at the caller and nothing is auto-deleted. A missing method,
    a method that throws, a transaction that refuses and a half-built sequence are
@@ -34,8 +36,12 @@
    auto-delete it"). Deleting the probe sequence is the human's job, and the report
    says so.
 
-   Self-contained on purpose: this folder is throwaway and must be removable with
-   one `rm -rf` once it has answered. It deliberately does not require uxp/cutdeck/*. */
+   toTicks() below deliberately does NOT reuse timelineRange.ticks(), even though
+   they are now siblings. They have opposite jobs: ticks() is the production parser
+   and must refuse anything irregular, while this one is a diagnostic reader whose
+   whole purpose is to tolerate a host that hands back something unexpected and
+   report what it was. Collapsing them would make the probe throw exactly where it
+   most needs to keep reading. */
 
 const TICKS_PER_SECOND = 254016000000n;
 const PROBE_SEQUENCE_NAME = "CutDeck probe — assemble";

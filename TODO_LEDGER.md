@@ -293,7 +293,8 @@ and the assemble route has not yet cut real footage; retiring a proven module fo
 unproven one inverts the discipline #23 used on `jsx_export.py`. Delete it, its tests, and
 `MODE_MARK` once assemble passes live acceptance.
 
-**Trigger / still open (human):** `uxp/spike_assemble_probe/` — one click, three unknowns
+**Trigger / still open (human):** `uxp/cutdeck/assembleProbe.js`, behind the CutDeck
+panel's red **Run assemble probe** button (arms on the first click) — one click, three unknowns
 at N=3 (does `createSetSettingsAction` really carry the timebase; do interleaved
 `setInOut`/`overwrite` produce three *different* ranges in one transaction, or does the
 shared `ClipProjectItem` collapse them; does `createRemoveItemsAction(ripple=true)` close

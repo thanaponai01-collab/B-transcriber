@@ -14,7 +14,7 @@
    ClipProjectItem resolves against the last value written. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const probe = require("../uxp/spike_assemble_probe/assembleProbe.js");
+const probe = require("../uxp/cutdeck/assembleProbe.js");
 const { runAssembleProbe, formatReport, planSpans, PROBE_SEQUENCE_NAME } = probe;
 
 const TPS = 254016000000n;

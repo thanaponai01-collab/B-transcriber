@@ -9,7 +9,7 @@
    order they were added, "collapsed" applies every setInOut before every overwrite —
    which is exactly the failure issue #25 predicts if the shared ClipProjectItem
    resolves against the last value written. */
-const PROBE_SEQUENCE_NAME = require("../../uxp/spike_assemble_probe/assembleProbe.js").PROBE_SEQUENCE_NAME;
+const PROBE_SEQUENCE_NAME = require("../../uxp/cutdeck/assembleProbe.js").PROBE_SEQUENCE_NAME;
 
 const TPF_25 = 10160640000n;   // 25 — the rate probe()'s fallback fabricates
 const TPF_2997 = 8475667200n;  // 30000/1001
