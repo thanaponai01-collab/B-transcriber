@@ -145,3 +145,20 @@ def test_writes_output_beside_input_with_cut_suffix(mixdown_path, sequence_xml_p
     assert out_path.exists()
     root = ET.fromstring(out_path.read_text(encoding="utf-8"))
     assert root.find("sequence/name").text == "My Sequence — CutDeck"
+
+
+def test_scoped_cli_report_and_no_database_write(mixdown_path, sequence_xml_path, tmp_path):
+    import json
+    report = tmp_path / "report.json"
+    db = tmp_path / "unused.db"
+    xml_recut.main([str(sequence_xml_path), mixdown_path, "--range-start-frame", "55",
+                    "--range-end-frame", "80", "--no-save-plan", "--db", str(db),
+                    "--report", str(report)])
+    result = json.loads(report.read_text())
+    assert result["range_frames"] == [55, 80]
+    assert 0 < result["removed_frames"] <= 25
+    assert not db.exists()
+    root = ET.parse(sequence_xml_path.with_name("seq_cut.xml"))
+    for clip in root.findall(".//clipitem"):
+        start, end = int(clip.findtext("in")), int(clip.findtext("out"))
+        assert end <= 55 or start >= 80

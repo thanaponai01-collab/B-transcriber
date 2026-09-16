@@ -88,6 +88,7 @@ class RecutReport:
     clips_trimmed: int
     clips_shifted: int
     markers_dropped: int
+    removed_frames: int = 0
 
 
 def _text(el, tag, default=None):
@@ -336,7 +337,21 @@ def _refuse_unsupported_media(sequence: ET.Element) -> None:
             )
 
 
-def recut(source_xml: str, plan: CutPlan) -> tuple[str, RecutReport]:
+def scoped_cuts(plan: CutPlan, tb: Timebase, duration_frames: int,
+                frame_range: tuple[int, int] | None = None) -> list[tuple[int, int]]:
+    """Intersect cuts with a half-open sequence range on the XML frame grid."""
+    cuts = _cut_spans_frames(plan, tb)
+    if frame_range is None:
+        return cuts
+    start, end = frame_range
+    if not (0 <= start < end <= duration_frames):
+        raise XmlRecutRefusal("In/Out range must be inside the full sequence, with Out after In")
+    return [(max(a, start), min(b, end)) for a, b in cuts
+            if max(a, start) < min(b, end)]
+
+
+def recut(source_xml: str, plan: CutPlan, *,
+          frame_range: tuple[int, int] | None = None) -> tuple[str, RecutReport]:
     """Apply a CutPlan's CUT spans to an exported FCP7 sequence.
 
     Pure: string in, string out, no side effects, no Premiere dependency.
@@ -359,8 +374,10 @@ def recut(source_xml: str, plan: CutPlan) -> tuple[str, RecutReport]:
 
     _refuse_unsupported_media(sequence)
 
-    cuts = _cut_spans_frames(plan, tb)
+    cuts = scoped_cuts(plan, tb, int(_text(sequence, "duration", "0")), frame_range)
     if not cuts:
+        if frame_range is not None:
+            return source_xml, RecutReport(0, 0, 0, 0, 0)
         raise ValueError("plan has no cut spans — nothing to recut")
 
     report = RecutReport(cuts_applied=len(cuts), clips_removed=0, clips_trimmed=0,
@@ -385,6 +402,7 @@ def recut(source_xml: str, plan: CutPlan) -> tuple[str, RecutReport]:
 
     # Sequence-level duration shrinks by the total cut frames.
     total_cut = sum(c_end - c_start for c_start, c_end in cuts)
+    report.removed_frames = total_cut
     dur_el = sequence.find("duration")
     if dur_el is not None and dur_el.text is not None:
         dur_el.text = str(int(dur_el.text) - total_cut)
@@ -473,6 +491,11 @@ def main(argv: list[str] | None = None) -> int:
                           "everything else still comes from --config.")
     ap.add_argument("--db", default=None, help="SQLite path (defaults to store default)")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, write nothing")
+    ap.add_argument("--range-start-frame", type=int)
+    ap.add_argument("--range-end-frame", type=int)
+    ap.add_argument("--report", help="write a machine-readable JSON result")
+    ap.add_argument("--no-save-plan", action="store_true",
+                    help="skip cut-plan persistence (the Premiere helper keeps its own job files)")
     ap.add_argument("--asr", action="store_true",
                      help="run the full ASR pipeline (Engine A) on the mixdown first and "
                           "use its real tokens to protect short speech islands in the "
@@ -490,6 +513,13 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("no <sequence> element found in source XML")
     tb = _sequence_timebase(sequence)
     seq_frames = int(_text(sequence, "duration", "0"))
+    frame_range = None
+    if args.range_start_frame is not None or args.range_end_frame is not None:
+        if args.range_start_frame is None or args.range_end_frame is None:
+            ap.error("both range frame arguments are required")
+        frame_range = (args.range_start_frame, args.range_end_frame)
+        if not (0 <= frame_range[0] < frame_range[1] <= seq_frames):
+            ap.error("In/Out range must be inside the full sequence")
 
     raw_config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     if args.overlay:
@@ -569,25 +599,35 @@ def main(argv: list[str] | None = None) -> int:
         if extracted_tmp is not None:
             Path(extracted_tmp.name).unlink(missing_ok=True)
 
-    n_cut = sum(1 for s in plan.spans if s.action == CUT)
-    cut_ms = sum(s.duration_ms for s in plan.spans if s.action == CUT)
+    cuts = scoped_cuts(plan, tb, seq_frames, frame_range)
+    n_cut = len(cuts)
+    cut_ms = frame_to_ms_int(sum(b - a for a, b in cuts), tb)
 
     if args.dry_run:
         print(f"{n_cut} cut spans, {cut_ms} ms to remove of {plan.duration_ms} ms "
               f"({seq_frames} frames declared in sequence XML)")
         return 0
 
-    out_xml, report = recut(source_xml, plan)
+    out_xml, report = recut(source_xml, plan, frame_range=frame_range)
     out = Path(args.out) if args.out else src.with_name(src.stem + "_cut.xml")
     out.write_text(out_xml, encoding="utf-8")
 
-    from transcribe.db import store
-    conn = store.connect(Path(args.db)) if args.db else store.connect()
-    try:
-        from cutdeck import plan as planmod
-        planmod.save_plan(conn, plan)
-    finally:
-        conn.close()
+    if not args.no_save_plan:
+        from transcribe.db import store
+        conn = store.connect(Path(args.db)) if args.db else store.connect()
+        try:
+            from cutdeck import plan as planmod
+            planmod.save_plan(conn, plan)
+        finally:
+            conn.close()
+
+    if args.report:
+        import json
+        from dataclasses import asdict
+        Path(args.report).write_text(json.dumps({
+            **asdict(report), "removed_ms": frame_to_ms_int(report.removed_frames, tb),
+            "source_frames": seq_frames, "range_frames": frame_range,
+        }), encoding="utf-8")
 
     print(f"wrote {out}")
     print(f"{report.cuts_applied} cuts applied: {report.clips_trimmed} clip pieces trimmed, "

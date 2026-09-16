@@ -1,5 +1,24 @@
 # TODO_LEDGER
 
+## Premiere XML panel — 2026-09-15
+
+User selected the existing working XML method with automatic UXP export/import,
+without MCP. Implemented `uxp/cutdeck`, `cutdeck/xml_bridge.py`, and
+`Start CutDeck.cmd`. The helper runs the existing XML CLI with the usual overlay
+and ASR enabled by default. New frame-range arguments restrict removals to the
+captured In/Out; the full-sequence analysis and synchronized XML rewrite remain.
+The panel creates a uniquely named result sequence, verifies the destination
+project, and supports resuming a job after a panel disconnect. Stereo Premiere
+audio track selection is mapped through the export's exploded channel groups.
+
+Local automated checks cover geometry, CLI integration, helper/socket lifecycle,
+and panel import/recovery logic. **Live Premiere acceptance remains open**:
+load/render the panel, verify full XML export with marks set, exact mark-edge
+semantics, import/result discovery, and playback sync. Installed Premiere 26.5
+meets the documented 26.2 XML-export API minimum. See
+`uxp/cutdeck/README.md` for installation and the live acceptance checklist.
+No new native split/clone experiments are needed for this workflow.
+
 Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 

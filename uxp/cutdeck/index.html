@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+html, body { width: 100%; height: 100%; box-sizing: border-box; overflow-y: auto; }
+body { margin: 0; padding: 20px; font-family: sans-serif; font-size: 13px; color: #eceeed; background: #232625; }
+h1 { font-size: 25px; margin: 0 0 6px; } p { line-height: 1.5; }
+.muted { color: #b3bbb7; } .card { background: #303632; padding: 14px; border-radius: 8px; margin: 18px 0; }
+label { display: block; margin: 14px 0 6px; } label span { display: block; margin-bottom: 6px; } select { width: 100%; padding: 7px; }
+button { padding: 10px; margin-top: 12px; width: 100%; border-radius: 5px; border: 1px solid #606b64; background: #383f3b; color: white; }
+#cut { background: #75dfb2; color: #12251e; font-weight: bold; border: none; }
+button:disabled { opacity: 0.45; } #status { white-space: pre-wrap; line-height: 1.5; }
+#sequence { font-weight: bold; } #range { margin-top: 8px; } .small { font-size: 11px; }
+</style></head><body>
+<h1>CutDeck</h1><p class="muted">Mark a range. Make your rough cut.</p>
+<div class="card"><div id="sequence">Open a sequence in Premiere</div><div id="range" class="muted">Set timeline In and Out marks.</div></div>
+<button id="refresh">Read timeline range</button>
+<label><span>Dialogue audio</span><select id="audio"><option value="" selected>First audio track with clips</option></select></label>
+<label><span>Cutting mode</span><select id="mode"><option value="protected" selected>Usual preset · protect short speech</option><option value="silence">Faster · silence only</option></select></label>
+<button id="cut">Rough Cut In–Out</button><button id="resume" hidden>Resume last job</button><button id="dismiss" hidden>Dismiss last job</button>
+<p id="status" role="status">Start the CutDeck helper, then read your timeline range.</p>
+<p class="muted small">Creates a new sequence using your current XML cutting settings. The full sequence is analyzed; cuts are limited to your marks.</p>
+<script src="main.js"></script></body></html>

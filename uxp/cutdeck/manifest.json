@@ -1,0 +1,22 @@
+{
+  "id": "com.cutdeck.xml",
+  "name": "CutDeck",
+  "version": "0.1.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": { "app": "premierepro", "minVersion": "26.2.0" },
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "network": { "domains": ["ws://127.0.0.1:7891"] }
+  },
+  "entrypoints": [{
+    "type": "panel", "id": "cutdeck.panel", "label": { "default": "CutDeck" },
+    "minimumSize": { "width": 300, "height": 420 },
+    "preferredFloatingSize": { "width": 360, "height": 520 },
+    "preferredDockedSize": { "width": 340, "height": 520 },
+    "icons": [{ "width": 23, "height": 23, "path": "icons/icon.svg", "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium", "lightest", "light"] }]
+  }],
+  "icons": [{ "width": 48, "height": 48, "path": "icons/icon.svg", "scale": [1, 2],
+    "theme": ["darkest", "dark", "medium", "lightest", "light", "all"], "species": ["pluginList"] }]
+}
