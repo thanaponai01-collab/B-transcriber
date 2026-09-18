@@ -1,0 +1,206 @@
+[
+  {
+    "text": " ท",
+    "start_ms": 24480,
+    "end_ms": 24600,
+    "confidence": 0.98876953125
+  },
+  {
+    "text": "ี่",
+    "start_ms": 24600,
+    "end_ms": 24640,
+    "confidence": 0.99951171875
+  },
+  {
+    "text": "จะ",
+    "start_ms": 24640,
+    "end_ms": 24860,
+    "confidence": 0.990234375
+  },
+  {
+    "text": "ต",
+    "start_ms": 24860,
+    "end_ms": 24920,
+    "confidence": 0.923828125
+  },
+  {
+    "text": "้",
+    "start_ms": 24920,
+    "end_ms": 24920,
+    "confidence": 0.99853515625
+  },
+  {
+    "text": "อง",
+    "start_ms": 24920,
+    "end_ms": 24980,
+    "confidence": 1.0
+  },
+  {
+    "text": "ว",
+    "start_ms": 24960,
+    "end_ms": 24980,
+    "confidence": 0.99951171875
+  },
+  {
+    "text": "ไม",
+    "start_ms": 24980,
+    "end_ms": 25100,
+    "confidence": 0.8955078125
+  },
+  {
+    "text": "่",
+    "start_ms": 25100,
+    "end_ms": 25100,
+    "confidence": 0.99951171875
+  },
+  {
+    "text": "ต",
+    "start_ms": 25100,
+    "end_ms": 25200,
+    "confidence": 0.84912109375
+  },
+  {
+    "text": "้",
+    "start_ms": 25200,
+    "end_ms": 25200,
+    "confidence": 0.88232421875
+  },
+  {
+    "text": "อง",
+    "start_ms": 25200,
+    "end_ms": 25300,
+    "confidence": 0.99755859375
+  },
+  {
+    "text": "ไป",
+    "start_ms": 25300,
+    "end_ms": 25400,
+    "confidence": 0.94580078125
+  },
+  {
+    "text": "ท",
+    "start_ms": 25400,
+    "end_ms": 25460,
+    "confidence": 0.99560546875
+  },
+  {
+    "text": "ุ",
+    "start_ms": 25460,
+    "end_ms": 25460,
+    "confidence": 0.99951171875
+  },
+  {
+    "text": "ก",
+    "start_ms": 25460,
+    "end_ms": 25520,
+    "confidence": 0.9716796875
+  },
+  {
+    "text": "ข",
+    "start_ms": 25520,
+    "end_ms": 25540,
+    "confidence": 0.984375
+  },
+  {
+    "text": "์",
+    "start_ms": 25540,
+    "end_ms": 25540,
+    "confidence": 1.0
+  },
+  {
+    "text": "ท",
+    "start_ms": 25540,
+    "end_ms": 25620,
+    "confidence": 0.998046875
+  },
+  {
+    "text": "ร",
+    "start_ms": 25620,
+    "end_ms": 25720,
+    "confidence": 0.998046875
+  },
+  {
+    "text": "มา",
+    "start_ms": 25720,
+    "end_ms": 25780,
+    "confidence": 1.0
+  },
+  {
+    "text": "น",
+    "start_ms": 25780,
+    "end_ms": 25840,
+    "confidence": 0.9990234375
+  },
+  {
+    "text": "ก",
+    "start_ms": 25840,
+    "end_ms": 25920,
+    "confidence": 0.9287109375
+  },
+  {
+    "text": "ั",
+    "start_ms": 25920,
+    "end_ms": 25920,
+    "confidence": 0.99755859375
+  },
+  {
+    "text": "บ",
+    "start_ms": 25920,
+    "end_ms": 25980,
+    "confidence": 0.99951171875
+  },
+  {
+    "text": "คน",
+    "start_ms": 25980,
+    "end_ms": 26120,
+    "confidence": 0.994140625
+  },
+  {
+    "text": "เห",
+    "start_ms": 26120,
+    "end_ms": 26240,
+    "confidence": 0.99365234375
+  },
+  {
+    "text": "ล",
+    "start_ms": 26240,
+    "end_ms": 26240,
+    "confidence": 1.0
+  },
+  {
+    "text": "่",
+    "start_ms": 26240,
+    "end_ms": 26260,
+    "confidence": 1.0
+  },
+  {
+    "text": "าน",
+    "start_ms": 26260,
+    "end_ms": 26320,
+    "confidence": 0.9951171875
+  },
+  {
+    "text": "ี้",
+    "start_ms": 26320,
+    "end_ms": 26400,
+    "confidence": 0.9990234375
+  },
+  {
+    "text": "อ",
+    "start_ms": 26400,
+    "end_ms": 26540,
+    "confidence": 0.97119140625
+  },
+  {
+    "text": "ี",
+    "start_ms": 26540,
+    "end_ms": 26560,
+    "confidence": 1.0
+  },
+  {
+    "text": "ก",
+    "start_ms": 26560,
+    "end_ms": 26640,
+    "confidence": 1.0
+  }
+]
