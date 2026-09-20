@@ -78,7 +78,10 @@
   async function refresh() {
     const snap = await workflow.capture();
     $("sequence").textContent = snap.context.sequence_name;
-    $("range").textContent = `${time(snap.inSeconds)} → ${time(snap.outSeconds)}`;
+    const isFullSeq = snap.inSeconds === 0 && Math.abs(snap.outSeconds - snap.endSeconds) < 0.1;
+    $("range").textContent = isFullSeq
+      ? `Full sequence: ${time(snap.outSeconds)}`
+      : `In/Out: ${time(snap.inSeconds)} → ${time(snap.outSeconds)}`;
     const selected = $("audio").value;
     $("audio").innerHTML = "";
     const add = (value, label) => {
@@ -115,6 +118,22 @@
       throw new Error("Job is not ready: " + job.state);
     }
 
+    if (job.job_type === "sync") {
+      status("Opening synchronized multi-cam sequence in Premiere…");
+      const saved = lastJob() || {};
+      await workflow.importResult(job, saved.importAttempted, () => save({ ...saved, ...job, importAttempted: true }));
+      clearJob();
+      const rep = job.report || {};
+      const note = job.output_note ? `\n${job.output_note}` : "";
+      let msg = `Multi-cam sync complete! Synced ${rep.synced_groups || 0} angles.`;
+      if (rep.unsynced_groups > 0) {
+        msg += `\n${rep.unsynced_groups} angle(s) could not be synced with confidence and were placed at the end.`;
+      }
+      msg += `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`;
+      status(msg);
+      return;
+    }
+
     status("Opening your rough cut in Premiere…");
     const saved = lastJob() || {};
     await workflow.importResult(job, saved.importAttempted, () => save({ ...saved, ...job, importAttempted: true }));
@@ -127,7 +146,7 @@
   async function act(fn) {
     if (busy) return;
     busy = true;
-    ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "copystatus"].forEach((id) => {
+    ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "copystatus"].forEach((id) => {
       if ($(id)) $(id).disabled = true;
     });
     try {
@@ -137,7 +156,7 @@
       console.error(error);
     } finally {
       busy = false;
-      ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "copystatus"].forEach((id) => {
+      ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "copystatus"].forEach((id) => {
         if ($(id)) $(id).disabled = false;
       });
     }
@@ -145,8 +164,20 @@
 
   $("refresh").addEventListener("click", () => act(async () => {
     await refresh();
-    status("Range ready. Click Rough Cut In–Out.");
+    status("Range ready. Click Sync Multi-Cam or Rough Cut In–Out.");
     ensureHelper().catch(() => {});
+  }));
+
+  $("sync").addEventListener("click", () => act(async () => {
+    if (lastJob()) throw new Error("Resume or dismiss the previous job before starting another operation.");
+    await ensureHelper();
+    const snap = await refresh();
+    status("Exporting sequence XML to helper for multi-camera sync…");
+    const track = $("audio").value;
+    const job = await workflow.prepareSync(rpc, snap, {
+      audio_track: track === "" ? null : Number(track),
+    }, save);
+    await follow(job);
   }));
 
   $("cut").addEventListener("click", () => act(async () => {
@@ -250,9 +281,9 @@
   setTimeout(async () => {
     try {
       await refresh();
-      status("Range ready. Click Rough Cut In–Out.");
+      status("Ready. Click Sync Multi-Cam or Rough Cut In–Out.");
     } catch (_) {
-      status("Mark timeline In and Out, then click Read timeline range.");
+      status("Open a sequence in Premiere, then click Read timeline range.");
     }
   }, 50);
 

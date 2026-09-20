@@ -101,8 +101,12 @@ function getActiveSequenceInfo() {
     outParsed.seconds = endParsed.seconds;
   }
 
+  // If no In/Out marks are set or if Out <= In, default cleanly to the entire sequence
   if (inParsed.seconds < 0 || outParsed.seconds <= inParsed.seconds) {
-    return _safeJSON({ error: "Set valid timeline In/Out marks inside the sequence." });
+    inParsed.seconds = 0;
+    inParsed.ticks = "0";
+    outParsed.seconds = endParsed.seconds;
+    outParsed.ticks = endParsed.ticks;
   }
 
   var timebaseStr = "0";

@@ -87,13 +87,28 @@
       font-size: 13px;
       border: none;
       padding: 11px;
-      margin-top: 14px;
+      margin-top: 10px;
     }
     #cut:hover:not(:disabled) {
       background: #89e6bd;
     }
     #cut:active:not(:disabled) {
       background: #63caa0;
+    }
+    #sync {
+      background: #3e82f7;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 13px;
+      border: none;
+      padding: 11px;
+      margin-top: 14px;
+    }
+    #sync:hover:not(:disabled) {
+      background: #5a96f8;
+    }
+    #sync:active:not(:disabled) {
+      background: #2f6cd4;
     }
     button:disabled {
       opacity: 0.4;
@@ -134,23 +149,25 @@
 </head>
 <body>
   <h1>CutDeck <span class="badge">CEP</span></h1>
-  <p class="muted">Mark In / Out on timeline. Click Rough Cut.</p>
+  <p class="muted">Sync multi-cam or rough cut timeline in Premiere.</p>
 
   <div class="card">
     <div id="sequence">Open a sequence in Premiere</div>
-    <div id="range" class="muted">Set timeline In and Out marks.</div>
+    <div id="range" class="muted">Click Read timeline range to inspect sequence.</div>
   </div>
 
   <button id="refresh">Read timeline range</button>
 
   <label>
-    <span>Dialogue audio</span>
+    <span>Reference audio track</span>
     <select id="audio">
       <option value="" selected>First audio track with clips</option>
     </select>
   </label>
 
-  <label>
+  <button id="sync">Sync Multi-Cam</button>
+
+  <label style="margin-top: 14px;">
     <span>Cutting mode</span>
     <select id="mode">
       <option value="protected" selected>Usual preset · protect short speech</option>

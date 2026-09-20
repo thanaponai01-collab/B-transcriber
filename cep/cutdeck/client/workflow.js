@@ -72,6 +72,26 @@
       return started;
     }
 
+    async function prepareSync(rpc, snapshot, options, save) {
+      await rpc({ type: "hello", version: VERSION });
+      const job = await rpc({ type: "prepare_sync", ...snapshot.context, ...options });
+      save(job);
+
+      const safePath = JSON.stringify(job.source_path);
+      const res = await evalScript("exportSequenceXML(" + safePath + ")");
+      const expResult = typeof res === "string" ? JSON.parse(res) : res;
+      if (expResult.error || !expResult.success) {
+        throw new Error("Premiere could not export the sequence: " + (expResult.error || "export failed"));
+      }
+
+      job.exported = true;
+      save(job);
+
+      const started = await rpc({ type: "start", job_id: job.job_id });
+      save({ ...job, ...started });
+      return started;
+    }
+
     async function importResult(job, previousAttempt, markAttempt) {
       const safePath = JSON.stringify(job.output_path);
       const safeName = JSON.stringify(job.result_name);
@@ -95,7 +115,7 @@
       return impResult;
     }
 
-    return { VERSION, capture, prepare, importResult };
+    return { VERSION, capture, prepare, prepareSync, importResult };
   }
 
   const exportObj = { VERSION, createWorkflow };

@@ -125,6 +125,31 @@ test("successful prepare triggers hello, prepare, and start in order", async () 
   assert.equal(saved[2].state, "running");
 });
 
+test("prepareSync triggers hello, prepare_sync, and start in order", async () => {
+  const host = createMockHost();
+  const wf = createWorkflow(host.evalScript);
+
+  const calls = [];
+  const mockRpc = async (req) => {
+    calls.push(req.type);
+    if (req.type === "prepare_sync") return { job_id: "sync_job_1", source_path: "C:\\tmp\\src.xml", job_type: "sync" };
+    if (req.type === "start") return { job_id: "sync_job_1", state: "running" };
+    return { ok: true };
+  };
+
+  const snap = await wf.capture();
+  const saved = [];
+  const result = await wf.prepareSync(mockRpc, snap, { audio_track: 0 }, (j) => saved.push({ ...j }));
+
+  assert.deepEqual(calls, ["hello", "prepare_sync", "start"]);
+  assert.equal(result.state, "running");
+  assert.equal(saved.length, 3);
+  assert.equal(saved[0].exported, undefined);
+  assert.equal(saved[1].exported, true);
+  assert.equal(saved[2].state, "running");
+});
+
+
 test("importResult imports and activates sequence", async () => {
   const host = createMockHost();
   const wf = createWorkflow(host.evalScript);
