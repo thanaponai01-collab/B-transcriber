@@ -297,6 +297,72 @@ def _dedupe_file_listings(sequence: ET.Element) -> None:
             seen_full_ids.add(file_id)
 
 
+def _rebuild_links(sequence: ET.Element, orig_links: dict[str, set[str]]) -> None:
+    """Rebuild frame-accurate <link> elements for all split clipitem pieces.
+
+    In FCP7 XML for Premiere Pro, <link> elements between stereo channel clips
+    (Track 0 Left and Track 1 Right) are REQUIRED for Premiere Pro to collapse
+    the exploded XML tracks back into a single stereo timeline track. Dropping
+    links causes Premiere Pro to treat every channel as an unlinked mono track,
+    duplicating the visible audio tracks on the timeline. Furthermore, preserving
+    links ensures video and audio remain linked together in Premiere.
+    """
+    # Remove any existing (stale/cloned) links first
+    for clipitem in sequence.iter("clipitem"):
+        for link in list(clipitem.findall("link")):
+            clipitem.remove(link)
+
+    if not orig_links:
+        return
+
+    # Index all surviving clipitems by their base ID (original ID before cloning)
+    pieces_by_base: dict[str, list[tuple[ET.Element, str, int, int]]] = {}
+    video_tracks = sequence.findall("media/video/track")
+    audio_tracks = sequence.findall("media/audio/track")
+
+    for t_idx, track in enumerate(video_tracks, start=1):
+        for c_idx, clip in enumerate(track.findall("clipitem"), start=1):
+            cid = clip.get("id", "")
+            base_id = cid.split("__cd")[0]
+            pieces_by_base.setdefault(base_id, []).append((clip, "video", t_idx, c_idx))
+
+    for t_idx, track in enumerate(audio_tracks, start=1):
+        for c_idx, clip in enumerate(track.findall("clipitem"), start=1):
+            cid = clip.get("id", "")
+            base_id = cid.split("__cd")[0]
+            pieces_by_base.setdefault(base_id, []).append((clip, "audio", t_idx, c_idx))
+
+    # For each clipitem, find matching pieces of its linked partners that overlap in time
+    for clip in sequence.iter("clipitem"):
+        cid = clip.get("id", "")
+        base_id = cid.split("__cd")[0]
+        if base_id not in orig_links:
+            continue
+
+        c_start = int(_text(clip, "start", "0"))
+        c_end = int(_text(clip, "end", "0"))
+        if c_end <= c_start:
+            continue
+
+        matching_links: list[tuple[str, str, int, int]] = []
+        for tgt_base in orig_links[base_id]:
+            for cand_elem, cand_type, cand_t_idx, cand_c_idx in pieces_by_base.get(tgt_base, []):
+                cand_start = int(_text(cand_elem, "start", "0"))
+                cand_end = int(_text(cand_elem, "end", "0"))
+                if max(c_start, cand_start) < min(c_end, cand_end):
+                    matching_links.append((cand_elem.get("id"), cand_type, cand_t_idx, cand_c_idx))
+
+        # Sort predictably: video first, then by track index, then by clip index
+        matching_links.sort(key=lambda x: (0 if x[1] == "video" else 1, x[2], x[3]))
+        for piece_id, mediatype, t_idx, c_idx in matching_links:
+            link_el = ET.SubElement(clip, "link")
+            ET.SubElement(link_el, "linkclipref").text = piece_id
+            ET.SubElement(link_el, "mediatype").text = mediatype
+            ET.SubElement(link_el, "trackindex").text = str(t_idx)
+            ET.SubElement(link_el, "clipindex").text = str(c_idx)
+            ET.SubElement(link_el, "groupindex").text = "1"
+
+
 def _process_markers(sequence: ET.Element, cuts: list[tuple[int, int]]) -> int:
     """Shift every ``<marker>`` under the sequence; drop one inside a cut,
     counted and returned so the caller can report it."""
@@ -383,18 +449,33 @@ def recut(source_xml: str, plan: CutPlan, *,
     report = RecutReport(cuts_applied=len(cuts), clips_removed=0, clips_trimmed=0,
                           clips_shifted=0, markers_dropped=0)
 
+    # Record original link relationships before clips are split/trimmed.
+    # Linking is symmetric: if A links to B, then both A and B belong to the same link group.
+    link_groups: list[set[str]] = []
+    for c in sequence.iter("clipitem"):
+        cid = c.get("id")
+        if not cid:
+            continue
+        refs = {l.findtext("linkclipref") for l in c.findall("link") if l.findtext("linkclipref")}
+        if refs:
+            refs.add(cid)
+            matched_groups = [g for g in link_groups if g & refs]
+            unmatched = [g for g in link_groups if not (g & refs)]
+            new_group = refs
+            for g in matched_groups:
+                new_group |= g
+            link_groups = unmatched + [new_group]
+
+    orig_links: dict[str, set[str]] = {}
+    for g in link_groups:
+        for member in g:
+            orig_links[member] = g
+
     for track in sequence.iter("track"):
         _process_track(track, cuts, tb, report)
 
-    # Links are dropped wholesale rather than rewritten (module docstring):
-    # a split clip's clone ids invalidate any <linkclipref> that pointed at
-    # the original single id, and Premiere's own link groups are otherwise
-    # nastier to reconstruct correctly than to omit. Geometry (and therefore
-    # sync) is guaranteed by the per-track shift above regardless of links;
-    # linking only matters if the editor drags a clip afterwards.
-    for clipitem in sequence.iter("clipitem"):
-        for link in list(clipitem.findall("link")):
-            clipitem.remove(link)
+    # Rebuild accurate links for all surviving clip pieces
+    _rebuild_links(sequence, orig_links)
 
     _dedupe_file_listings(sequence)
 

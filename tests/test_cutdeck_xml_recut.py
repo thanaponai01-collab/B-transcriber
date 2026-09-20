@@ -472,3 +472,99 @@ def test_real_captured_fixture_recuts_without_crashing():
             full_counts[fid] = full_counts.get(fid, 0) + 1
     for fid, count in full_counts.items():
         assert count == 1, f"file id {fid!r} has {count} full listings, want exactly 1"
+
+
+def test_recut_preserves_and_rewrites_stereo_and_video_links():
+    """Verify that split clip pieces have frame-accurate <link> elements pointing to
+    their corresponding pieces of linked video and stereo channels. Without these,
+    Premiere Pro explodes stereo pairs into duplicate mono tracks on the timeline."""
+    xml = _synthetic_xml()  # in _synthetic_xml, a1-clip1 has link to v1-clip1
+    # Split into 2 pieces via a cut at [30, 60)
+    spans = [
+        CutSpan(idx=0, src_in_ms=0, src_out_ms=1000, action=KEEP),   # frames [0, 30)
+        CutSpan(idx=1, src_in_ms=1000, src_out_ms=2000, action=CUT),  # frames [30, 60)
+        CutSpan(idx=2, src_in_ms=2000, src_out_ms=10_000, action=KEEP),
+    ]
+    out_xml, report = recut(xml, _plan(spans))
+    root = ET.fromstring(out_xml)
+
+    v_clips = root.findall("sequence/media/video/track")[0].findall("clipitem")
+    a_clips = root.findall("sequence/media/audio/track")[0].findall("clipitem")
+
+    assert len(v_clips) == 2
+    assert len(a_clips) == 2
+
+    # Piece 0 of video and audio
+    v0_links = {l.findtext("linkclipref"): (l.findtext("mediatype"), int(l.findtext("trackindex")), int(l.findtext("clipindex")))
+                for l in v_clips[0].findall("link")}
+    a0_links = {l.findtext("linkclipref"): (l.findtext("mediatype"), int(l.findtext("trackindex")), int(l.findtext("clipindex")))
+                for l in a_clips[0].findall("link")}
+
+    assert "v1-clip1" in v0_links
+    assert v0_links["v1-clip1"] == ("video", 1, 1)
+    assert "a1-clip1" in v0_links
+    assert v0_links["a1-clip1"] == ("audio", 1, 1)
+
+    assert "v1-clip1" in a0_links
+    assert a0_links["v1-clip1"] == ("video", 1, 1)
+    assert "a1-clip1" in a0_links
+    assert a0_links["a1-clip1"] == ("audio", 1, 1)
+
+    # Piece 1 of video and audio (the split clone)
+    v1_id = v_clips[1].get("id")
+    a1_id = a_clips[1].get("id")
+    v1_links = {l.findtext("linkclipref"): (l.findtext("mediatype"), int(l.findtext("trackindex")), int(l.findtext("clipindex")))
+                for l in v_clips[1].findall("link")}
+    a1_links = {l.findtext("linkclipref"): (l.findtext("mediatype"), int(l.findtext("trackindex")), int(l.findtext("clipindex")))
+                for l in a_clips[1].findall("link")}
+
+    assert v1_id in v1_links
+    assert v1_links[v1_id] == ("video", 1, 2)
+    assert a1_id in v1_links
+    assert v1_links[a1_id] == ("audio", 1, 2)
+
+    assert v1_id in a1_links
+    assert a1_links[v1_id] == ("video", 1, 2)
+    assert a1_id in a1_links
+    assert a1_links[a1_id] == ("audio", 1, 2)
+
+
+@pytest.mark.skipif(not _FIXTURE.exists(), reason="real captured fixture not present")
+def test_recut_sample_fixture_preserves_stereo_track_links():
+    """Verify that multi-channel and multi-track sequences with stereo pairs
+    (like the real 12-audio-track fixture) maintain stereo channel links across
+    all split pieces, preventing Premiere Pro from exploding stereo tracks."""
+    xml = _FIXTURE.read_text(encoding="utf-8")
+    tb = Timebase(fps_num=30, fps_den=1)
+    spans = [
+        CutSpan(idx=0, src_in_ms=0, src_out_ms=1000, action=KEEP),
+        CutSpan(idx=1, src_in_ms=1000, src_out_ms=2000, action=CUT),
+        CutSpan(idx=2, src_in_ms=2000, src_out_ms=3000, action=KEEP),
+        CutSpan(idx=3, src_in_ms=3000, src_out_ms=3500, action=CUT),
+        CutSpan(idx=4, src_in_ms=3500, src_out_ms=10_000, action=KEEP),
+    ]
+    out_xml, report = recut(xml, _plan(spans, tb=tb))
+    root = ET.fromstring(out_xml)
+
+    audio_tracks = root.findall("sequence/media/audio/track")
+    assert len(audio_tracks) == 12
+
+    # Verify each stereo pair (tracks 0 & 1, 2 & 3, etc.)
+    for pair_idx in range(6):
+        t0 = audio_tracks[pair_idx * 2]
+        t1 = audio_tracks[pair_idx * 2 + 1]
+        t0_clips = t0.findall("clipitem")
+        t1_clips = t1.findall("clipitem")
+        assert len(t0_clips) == len(t1_clips)
+        assert len(t0_clips) >= 1
+
+        for c0, c1 in zip(t0_clips, t1_clips):
+            c0_links = {l.findtext("linkclipref"): int(l.findtext("trackindex")) for l in c0.findall("link")}
+            c1_links = {l.findtext("linkclipref"): int(l.findtext("trackindex")) for l in c1.findall("link")}
+            # c0 must link to c1 on the adjacent track
+            assert c1.get("id") in c0_links
+            assert c0_links[c1.get("id")] == pair_idx * 2 + 2  # 1-based index of t1
+            # c1 must link to c0 on the adjacent track
+            assert c0.get("id") in c1_links
+            assert c1_links[c0.get("id")] == pair_idx * 2 + 1  # 1-based index of t0
+
