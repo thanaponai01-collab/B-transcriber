@@ -291,3 +291,25 @@ def test_asr_forwards_word_timeline_to_the_plan(
     _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path,
              extracted=extracted, raw_words=raw)
     assert [(w.text, w.start_ms, w.end_ms) for w in seen["words"]] == [("เอ่อ", 700, 1000)]
+
+
+def test_cli_emits_progress_lines_the_bridge_can_parse(mixdown_path, sequence_xml_path, capsys, tmp_path):
+    from cutdeck.xml_bridge import parse_progress
+
+    db_path = tmp_path / "test.db"
+    from transcribe.db import store
+    store.init_db(db_path)
+    conn = store.connect(db_path)
+    job_id = store.create_job(conn, store.create_media(conn, mixdown_path), "mock", "", "test")
+    conn.close()
+
+    rc = xml_recut.main([str(sequence_xml_path), mixdown_path, "--job-id", str(job_id),
+                         "--db", str(db_path)])
+    assert rc == 0
+    lines = capsys.readouterr().out.splitlines()
+    progress = [parse_progress(line) for line in lines if line.startswith("PROGRESS:")]
+    assert all(progress), "an emitted PROGRESS line the bridge cannot parse"
+    pcts = [p["pct"] for p in progress]
+    assert pcts == sorted(set(pcts)), "progress must only move forward"
+    assert [p["stage"] for p in progress][-2:] == ["Calculating cut spans", "Rewriting sequence XML"]
+    assert pcts[-1] == 95

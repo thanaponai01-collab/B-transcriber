@@ -1,6 +1,7 @@
 """Unit tests for cutdeck.xml_bridge — handling prepare_sync and start_sync."""
 
 import asyncio
+import time
 from pathlib import Path
 import pytest
 
@@ -79,6 +80,7 @@ def test_parse_progress():
 
     assert parse_progress("PROGRESS:50:Transcribing speech\r\n") == {"pct": 50, "stage": "Transcribing speech"}
     assert parse_progress("PROGRESS:150:Overshoot")["pct"] == 100
+    assert parse_progress("PROGRESS:5:  Extracting audio  ") == {"pct": 5, "stage": "Extracting audio"}
     assert parse_progress("wrote out.xml") is None
     assert parse_progress("PROGRESS:abc:x") is None
 
@@ -138,3 +140,64 @@ json.dump({{'cuts_applied': 0}}, open(report, 'w'))
         assert "PROGRESS:50:Transcribing speech" in log and "a plain log line" in log
 
     asyncio.run(_test())
+
+
+def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
+    """Drive one cut job whose xml_recut child is `script`; return (jobs, final status)."""
+    import sys
+    from cutdeck import xml_bridge
+
+    real_exec = asyncio.create_subprocess_exec
+    spawned = []
+
+    async def spawn(*a, **k):
+        proc = await real_exec(sys.executable, "-u", "-c", script, **k)
+        spawned.append(proc)
+        return proc
+
+    monkeypatch.setattr(xml_bridge.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(xml_bridge, "range_from_ticks", lambda *_: (0, 10))
+    monkeypatch.setattr(xml_bridge, "reference_audio_track", lambda *_: None)
+    monkeypatch.setattr(xml_bridge, "result_path", lambda job, _xml: Path(job["output_path"]))
+
+    async def _drive():
+        jobs = XmlJobs(tmp_path / "jobs")
+        prep = await jobs.dispatch({
+            "type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "Seq",
+            "audio_track": None, "audio_track_count": 1, "asr": False,
+            "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1"})
+        Path(prep["source_path"]).write_text(SAMPLE_XML_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        await jobs.dispatch({"type": "start", "job_id": prep["job_id"]})
+        await asyncio.wait_for(asyncio.gather(*jobs.tasks), 30)
+        status = await jobs.dispatch({"type": "status", "job_id": prep["job_id"]})
+        return jobs, status, spawned[0].returncode
+
+    return asyncio.run(_drive())
+
+
+def test_failed_child_keeps_last_progress_and_log(tmp_path, monkeypatch):
+    script = """
+import sys
+print('PROGRESS:40:Detecting speech', flush=True)
+print('boom', file=sys.stderr, flush=True)
+sys.exit(3)
+"""
+    jobs, status, _ = _run_cut_with_fake_child(tmp_path, monkeypatch, script)
+    assert status["state"] == "failed" and "exit 3" in status["message"]
+    assert status["progress"] == {"pct": 40, "stage": "Detecting speech"}
+    assert "boom" in Path(status["log_path"]).read_text(encoding="utf-8")
+    assert jobs.active is None
+
+
+def test_oversize_output_line_does_not_orphan_the_child(tmp_path, monkeypatch):
+    """A >limit line (tqdm-style output) must fail the job cleanly and stop the child.
+    Otherwise the helper reports itself idle while the child still holds the GPU."""
+    script = """
+import sys, time
+sys.stdout.write('x' * (2 << 20) + chr(10)); sys.stdout.flush()
+time.sleep(60)
+"""
+    jobs, status, child_returncode = _run_cut_with_fake_child(tmp_path, monkeypatch, script)
+    assert status["state"] == "failed"
+    assert jobs.active is None
+    assert child_returncode is not None, "child still running after the job failed"

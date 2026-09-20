@@ -278,6 +278,10 @@ class XmlJobs:
             job["message"] = "Helper stopped during processing; start a new rough cut"
             raise
         except Exception as exc:
+            if process and process.returncode is None:
+                # e.g. unreadable output: never report idle while the child still holds the GPU.
+                process.terminate()
+                await process.wait()
             job["state"] = "failed"
             job["message"] = str(exc)
         finally:
