@@ -32,8 +32,8 @@
   }
 
   const workflow = (window.CutDeckWorkflow || require("./workflow.js")).createWorkflow(evalScript);
-  const createRpc = (window.CutDeckRpc || require("./rpc.js")).createRpc;
-  const progressText = (window.CutDeckProgressText || require("./progress_text.js")).progressText;
+  const createRpc = (window.CutDeckRpc || require("./core/rpc.js")).createRpc;
+  const progressText = (window.CutDeckProgressText || require("./core/progressText.js")).progressText;
   const helperManager = window.CutDeckHelperManager || (typeof require !== "undefined" ? require("./helper_manager.js") : null);
 
   const rpc = createRpc({

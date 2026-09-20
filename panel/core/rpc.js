@@ -1,7 +1,16 @@
-/* Helper transport for CutDeck CEP panel
- * Connects to the local CutDeck Python helper on ws://127.0.0.1:7891
- */
+/* Helper transport, shared by the CEP and UXP panels (source of truth: panel/core/rpc.js;
+   run scripts/sync_panel_core.py after editing). Connects to the CutDeck Python helper on
+   ws://127.0.0.1:7891.
 
+   Premiere can deny the socket on a cold start with "Permission denied to the url
+   ws://127.0.0.1:<port>. Manifest entry not found." even though the manifest does
+   declare the domain — UXP registers the plugin's network permission later than the
+   panel's first request. The helper may also not be listening yet. Both failures land
+   before the request is sent, so retrying them is safe.
+
+   Retries stop the moment a request is sent. `prepare` mints a new job per call, so a
+   blind resend could leave an orphan job behind; a lost reply is recovered through
+   "Resume last job" instead, which the helper answers idempotently. */
 (function (global) {
   const URL = "ws://127.0.0.1:7891";
   const ATTEMPTS = 5;
@@ -29,6 +38,7 @@
       try {
         socket = createSocket(url);
       } catch (error) {
+        // UXP throws the permission denial straight out of the constructor.
         done(error instanceof Error ? error : new Error(String(error)));
         return;
       }

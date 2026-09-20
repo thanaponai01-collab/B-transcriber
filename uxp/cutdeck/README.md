@@ -231,7 +231,7 @@ the assemble probe's one click. Until Phase 0 reports, no backend is chosen and
 node --test tests/cutdeck_assemble_probe.test.cjs tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
-`workflow.js` contains the Premiere operations; `rpc.js` owns the helper socket and
+`workflow.js` contains the Premiere operations; `core/rpc.js` (mirrored from `panel/core/`, shared with the CEP panel) owns the helper socket and
 its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
 existing CLI in a subprocess.
 `cutdeck/bridge.py` is now only the pure live-clip `plan` logic; the helper on port 7891

@@ -1,7 +1,7 @@
 const ppro = require("premierepro");
 const workflow = require("./workflow.js");
-const { createRpc } = require("./rpc.js");
-const { progressText } = require("./progressText.js");
+const { createRpc } = require("./core/rpc.js");
+const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
 const capability = require("./capabilityProbe.js");
 const assemble = require("./assembleProbe.js");

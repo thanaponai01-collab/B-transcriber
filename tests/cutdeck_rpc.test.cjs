@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRpc } = require("../uxp/cutdeck/rpc.js");
+const { createRpc } = require("../panel/core/rpc.js");
 
 /* Premiere's cold-start denial, thrown out of the WebSocket constructor. */
 const DENIED = "Permission denied to the url ws://127.0.0.1:7891. Manifest entry not found.";

@@ -50,7 +50,7 @@
           isAlive = true;
         }
       } else {
-        const rpcModule = global.CutDeckRpc || (typeof require !== "undefined" ? require("./rpc.js") : null);
+        const rpcModule = global.CutDeckRpc || (typeof require !== "undefined" ? require("./core/rpc.js") : null);
         if (rpcModule && typeof rpcModule.createRpc === "function") {
           const fastRpc = rpcModule.createRpc({
             attempts: 1,
