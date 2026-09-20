@@ -631,7 +631,11 @@ def main(argv: list[str] | None = None) -> int:
         extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         extracted_tmp.close()
         print("no mixdown given — extracting one from the XML's own source media...")
-        mixdown_wav = extract_mixdown(source_xml, extracted_tmp.name, args.audio_track)
+        mixdown_wav = extract_mixdown(
+            source_xml, extracted_tmp.name, args.audio_track,
+            range_start_frame=frame_range[0] if frame_range else None,
+            range_end_frame=frame_range[1] if frame_range else None,
+        )
 
     try:
         from transcribe.pipeline.ingest import ingest

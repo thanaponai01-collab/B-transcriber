@@ -120,7 +120,9 @@ def reference_media_path(source_xml: str, audio_track_index: int | None = None) 
     raise XmlRecutRefusal("no enabled clip on the reference audio track names a source file")
 
 
-def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None) -> str:
+def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None,
+                    range_start_frame: int | None = None, range_end_frame: int | None = None,
+                    pad_frames: int = 60) -> str:
     """Build a sequence-timeline mono WAV from the XML's own clipitems +
     source media, writing it to ``out_wav``. Returns ``out_wav``.
 
@@ -128,7 +130,14 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     to use as the reference dialogue track. Defaults to the first track that
     has any clips. Disabled clips (``<enabled>FALSE</enabled>``) are skipped
     — silence, same as they'd be muted in a real Premiere render.
+
+    ``range_start_frame``/``range_end_frame`` (sequence frames, both or neither):
+    only audio inside ``[start - pad_frames, end + pad_frames]`` is pulled from
+    source media; the rest of the buffer stays silent. The WAV keeps the full
+    sequence length and timeline positions, so callers need no timestamp remap.
     """
+    if (range_start_frame is None) != (range_end_frame is None):
+        raise ValueError("range_start_frame and range_end_frame must be given together")
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found on PATH — required to extract audio segments")
 
@@ -143,6 +152,13 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     total_samples = int(round(seq_seconds * _WORKING_SAMPLE_RATE))
 
     track = _select_audio_track(sequence, audio_track_index)
+
+    window = None  # (start_s, end_s) on the sequence timeline
+    if range_start_frame is not None:
+        lo_f = max(0, range_start_frame - pad_frames)
+        hi_f = min(seq_frames, range_end_frame + pad_frames)
+        window = (float(Fraction(lo_f * tb.fps_den, tb.fps_num)),
+                  float(Fraction(hi_f * tb.fps_den, tb.fps_num)))
 
     import numpy as np
     import soundfile as sf
@@ -162,6 +178,17 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
             if out_s <= in_s:
                 continue
 
+            start_frame = int(_text(clipitem, "start", "0"))
+            start_s = float(Fraction(start_frame * tb.fps_den, tb.fps_num))
+            if window is not None:
+                # Trim the source span to the part of the clip inside the window.
+                keep_lo = max(start_s, window[0])
+                keep_hi = min(start_s + (out_s - in_s), window[1])
+                if keep_hi <= keep_lo:
+                    continue
+                in_s, out_s = in_s + (keep_lo - start_s), in_s + (keep_hi - start_s)
+                start_s = keep_lo
+
             seg_path = tmp_dir / f"seg{i}.wav"
             cmd = ["ffmpeg", "-y", "-i", str(src_path),
                    "-ss", f"{in_s:.9f}", "-to", f"{out_s:.9f}",
@@ -174,8 +201,6 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
                 )
 
             seg_audio, _sr = sf.read(str(seg_path), dtype="float32")
-            start_frame = int(_text(clipitem, "start", "0"))
-            start_s = float(Fraction(start_frame * tb.fps_den, tb.fps_num))
             offset = int(round(start_s * _WORKING_SAMPLE_RATE))
             end = min(offset + len(seg_audio), total_samples)
             if end > offset:

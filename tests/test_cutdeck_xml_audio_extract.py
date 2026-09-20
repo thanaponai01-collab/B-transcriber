@@ -131,3 +131,37 @@ def test_out_of_range_audio_track_index_refuses(tmp_path):
     xml = _sequence_xml(src, [(0, 60, 0, 60, True)], 60, 30)
     with pytest.raises(XmlRecutRefusal, match="audio track"):
         extract_mixdown(xml, str(tmp_path / "out.wav"), audio_track_index=5)
+
+
+def test_range_extracts_only_range_plus_pad(tmp_path):
+    # One clip spans the whole 20s timeline; range is [10s, 12s) with a 2s pad,
+    # so only [8s, 14s) may be extracted — the clip must be trimmed, not skipped.
+    src = tmp_path / "source.wav"
+    _tone_wav(src, 20.0, 440.0)
+    fps = 30
+    xml = _sequence_xml(src, [(0, 600, 0, 600, True)], 600, fps)
+
+    out_wav = tmp_path / "mixdown.wav"
+    extract_mixdown(xml, str(out_wav), range_start_frame=300, range_end_frame=360, pad_frames=60)
+
+    import soundfile as sf
+    result, sr = sf.read(str(out_wav), dtype="float32")
+    assert abs(len(result) / sr - 20.0) < 0.05  # timeline positions preserved
+    assert np.abs(result[int(8.2 * sr):int(13.8 * sr)]).mean() > 0.05
+    assert np.abs(result[: int(7.8 * sr)]).mean() < 0.001
+    assert np.abs(result[int(14.2 * sr):]).mean() < 0.001
+
+
+def test_range_skips_clips_outside_window(tmp_path, monkeypatch):
+    import subprocess
+    src = tmp_path / "source.wav"
+    _tone_wav(src, 20.0, 440.0)
+    # three 5s clips back to back; range [6s, 8s) pad 0 touches only the second.
+    xml = _sequence_xml(src, [(0, 150, 0, 150, True), (150, 300, 150, 300, True),
+                              (300, 450, 300, 450, True)], 600, 30)
+    calls = []
+    real_run = subprocess.run
+    monkeypatch.setattr(subprocess, "run", lambda cmd, *a, **k: (calls.append(cmd), real_run(cmd, *a, **k))[1])
+
+    extract_mixdown(xml, str(tmp_path / "out.wav"), range_start_frame=180, range_end_frame=240, pad_frames=0)
+    assert len(calls) == 1
