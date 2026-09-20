@@ -169,3 +169,30 @@ def test_sync_sequence_unsynced_placement_at_end():
     synced_end = max(clips["file-1"][1], clips["file-3"][1])
     unsynced_start = clips["file-2"][0]
     assert unsynced_start >= synced_end + 60  # placed at end with gap buffer
+
+
+def test_sync_keeps_empty_audio_tracks_empty():
+    """Blank audio tracks stay blank: other angles' audio must not fill them."""
+    root = ET.parse(SAMPLE_XML_PATH).getroot()
+    tracks = root.findall("sequence/media/audio/track")
+    # Real-project layout: every camera's audio sits on the first stereo pair,
+    # the reference camera fills pairs 2-4, and the last two stereo pairs are empty.
+    for src, dst in ((8, 0), (9, 1), (10, 0), (11, 1)):
+        for clip in list(tracks[src].findall("clipitem")):
+            tracks[src].remove(clip)
+            tracks[dst].append(clip)
+    source_xml = ET.tostring(root, encoding="unicode")
+
+    def mock_extractor(file_path, start_s=None, duration_s=None, sample_rate=16000):
+        name = Path(file_path).name
+        offset = {"angle1": 10.0, "angle2": 15.0, "angle3": 8.0}.get(name.split(".")[0].split("_")[0], 10.0)
+        return mock_audio_generator(duration_s or 30.0, offset_s=offset + (start_s or 0.0), sr=sample_rate)
+
+    synced_xml, _ = sync_sequence_xml(source_xml, ref_track_idx=0, audio_extractor=mock_extractor)
+    out = ET.fromstring(synced_xml).findall("sequence/media/audio/track")
+
+    files = [[c.find("file").get("id") for c in t.findall("clipitem")] for t in out]
+    assert len(out) == 16
+    assert files[:8] == [["file-1"]] * 8          # reference audio keeps its tracks
+    assert files[8:12] == [[]] * 4                # blanks stay blank
+    assert sorted(f[0] for f in files[12:]) == ["file-2", "file-2", "file-3", "file-3"]

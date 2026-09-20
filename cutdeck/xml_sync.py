@@ -387,11 +387,28 @@ def sync_sequence_xml(
             else:
                 ET.SubElement(tpl_exp1, "outputchannelindex").text = "2"
 
-        for t in list(audio_parent.findall("track")):
+        # The reference angle's audio keeps its original tracks, and tracks that were empty
+        # in the source stay empty in place. Tracks held only by other angles are dropped;
+        # those angles' audio goes on new tracks after them.
+        reference = next((g for g in groups if g.is_reference and g.audio_clips), None)
+        original = list(audio_parent.findall("track"))
+        for t in original:
             audio_parent.remove(t)
+        if reference is not None:
+            reference_tracks = {clip.track_index for clip in reference.audio_clips}
+            for idx, t in enumerate(original):
+                if idx not in reference_tracks and t.findall("clipitem"):
+                    continue
+                slot = copy.deepcopy(t)
+                for ci in list(slot.findall("clipitem")):
+                    slot.remove(ci)
+                for clip in reference.audio_clips:
+                    if clip.track_index == idx:
+                        slot.append(clip.element)
+                audio_parent.append(slot)
 
         for g in groups:
-            if not g.audio_clips:
+            if not g.audio_clips or g is reference:
                 continue
             # Group audio clips by their original track_index so each channel/track of this angle
             # gets its own dedicated audio track in the final sequence.
