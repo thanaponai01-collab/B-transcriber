@@ -58,11 +58,20 @@ async function follow(job) {
   if (job.state === "failed") { clearJob(); throw new Error(job.message); }
   if (job.state === "no_cuts") { clearJob(); status("No cuts found inside this range. Your sequence is unchanged."); return; }
   if (job.state !== "ready") throw new Error("Job is not ready: " + job.state);
-  status("Opening your rough cut in Premiere…");
+  const sync = job.job_type === "sync";
+  status(sync ? "Opening synchronized multi-cam sequence…" : "Opening your rough cut in Premiere…");
   const saved = lastJob() || {};
   await workflow.importResult(ppro, job, saved.importAttempted,
     () => save({ ...saved, ...job, importAttempted: true }));
   clearJob();
+  if (sync) {
+    const rep = job.report || {};
+    const unsynced = rep.unsynced_groups > 0 ? ` ${rep.unsynced_groups} placed at end.` : "";
+    status(`Multi-cam sync complete (${rep.synced_groups || 0} angles).${unsynced}
+Opened ${job.result_name}
+Saved ${job.output_path}`);
+    return;
+  }
   const note = job.output_note ? `\n${job.output_note}` : "";
   status(`${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.`
     + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`);
@@ -70,11 +79,11 @@ async function follow(job) {
 async function act(fn) {
   if (busy) return;
   busy = true;
-  ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe", "assembleprobe", "copystatus"].forEach((id) => $(id).disabled = true);
+  ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe", "assembleprobe", "copystatus"].forEach((id) => $(id).disabled = true);
   try { await fn(); } catch (error) { status(error.message || String(error)); console.error(error); }
   finally {
     busy = false;
-    ["cut", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe", "assembleprobe", "copystatus"].forEach((id) => $(id).disabled = false);
+    ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "timingprobe", "assembleprobe", "copystatus"].forEach((id) => $(id).disabled = false);
   }
 }
 $("refresh").addEventListener("click", () => act(async () => { await refresh(); status("Range ready. Click Rough Cut In–Out."); }));
@@ -85,6 +94,14 @@ $("cut").addEventListener("click", () => act(async () => {
   const track = $("audio").value;
   const job = await workflow.prepare(ppro, rpc, snap,
     { audio_track: track === "" ? null : Number(track), asr: $("mode").value === "protected" }, save);
+  await follow(job);
+}));
+$("sync").addEventListener("click", () => act(async () => {
+  if (lastJob()) throw new Error("Resume or dismiss the previous job before starting another operation.");
+  const snap = await refresh();
+  status("Exporting sequence XML for multi-camera sync…");
+  const track = $("audio").value;
+  const job = await workflow.prepareSync(ppro, rpc, snap, { audio_track: track === "" ? null : Number(track) }, save);
   await follow(job);
 }));
 $("resume").addEventListener("click", () => act(async () => {

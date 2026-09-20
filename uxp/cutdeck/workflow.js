@@ -20,9 +20,10 @@ async function capture(ppro) {
       ticks_per_frame: await sequence.getTimebase(), audio_track_count: await sequence.getAudioTrackCount() } };
 }
 
-async function prepare(ppro, rpc, snapshot, options, save) {
+// Rough cut and multi-cam sync share the whole host sequence; only the prepare request differs.
+async function exportAndStart(ppro, rpc, snapshot, prepareType, options, save) {
   await rpc({ type: "hello", version: VERSION });
-  const job = await rpc({ type: "prepare", ...snapshot.context, ...options });
+  const job = await rpc({ type: prepareType, ...snapshot.context, ...options });
   save(job);
   if (!ppro.ProjectConverter || typeof ppro.ProjectConverter.exportAsFinalCutProXML !== "function") {
     throw new Error("This Premiere build does not expose XML export. CutDeck requires Premiere 26.2 or later.");
@@ -38,6 +39,11 @@ async function prepare(ppro, rpc, snapshot, options, save) {
   save({ ...job, ...started });
   return started;
 }
+
+const prepare = (ppro, rpc, snapshot, options, save) =>
+  exportAndStart(ppro, rpc, snapshot, "prepare", options, save);
+const prepareSync = (ppro, rpc, snapshot, options, save) =>
+  exportAndStart(ppro, rpc, snapshot, "prepare_sync", options, save);
 
 async function importResult(ppro, job, previousAttempt, markAttempt) {
   const project = await ppro.Project.getActiveProject();
@@ -71,4 +77,4 @@ async function importResult(ppro, job, previousAttempt, markAttempt) {
   return result;
 }
 
-module.exports = { VERSION, capture, prepare, importResult };
+module.exports = { VERSION, capture, prepare, prepareSync, importResult };
