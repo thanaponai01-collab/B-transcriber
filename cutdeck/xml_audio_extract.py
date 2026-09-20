@@ -39,7 +39,8 @@ from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import Timebase
-from cutdeck.xml_recut import XmlRecutRefusal, _PPRO_TICKS_PER_SECOND, _sequence_timebase, _text
+from cutdeck.xml_recut import (XmlRecutRefusal, _PPRO_TICKS_PER_SECOND, _sequence_timebase,
+                               _text, range_window_frames)
 
 _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
 
@@ -122,7 +123,7 @@ def reference_media_path(source_xml: str, audio_track_index: int | None = None) 
 
 def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None,
                     range_start_frame: int | None = None, range_end_frame: int | None = None,
-                    pad_frames: int = 60) -> str:
+                    pad_seconds: float = 2.0) -> str:
     """Build a sequence-timeline mono WAV from the XML's own clipitems +
     source media, writing it to ``out_wav``. Returns ``out_wav``.
 
@@ -132,9 +133,10 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     — silence, same as they'd be muted in a real Premiere render.
 
     ``range_start_frame``/``range_end_frame`` (sequence frames, both or neither):
-    only audio inside ``[start - pad_frames, end + pad_frames]`` is pulled from
-    source media; the rest of the buffer stays silent. The WAV keeps the full
-    sequence length and timeline positions, so callers need no timestamp remap.
+    the WAV covers only ``range_window_frames(...)`` = the range plus
+    ``pad_seconds`` each side, so ingest/ASR never touch the rest of the
+    sequence. Its first sample is the window's first frame: callers shift
+    results by that window start to get back to sequence time.
     """
     if (range_start_frame is None) != (range_end_frame is None):
         raise ValueError("range_start_frame and range_end_frame must be given together")
@@ -148,17 +150,17 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
 
     tb = _sequence_timebase(sequence)
     seq_frames = int(_text(sequence, "duration", "0"))
-    seq_seconds = float(Fraction(seq_frames * tb.fps_den, tb.fps_num))
-    total_samples = int(round(seq_seconds * _WORKING_SAMPLE_RATE))
+    lo_f, hi_f = (0, seq_frames)
+    if range_start_frame is not None:
+        lo_f, hi_f = range_window_frames(tb, seq_frames, (range_start_frame, range_end_frame),
+                                         pad_seconds)
+    win_lo_s = float(Fraction(lo_f * tb.fps_den, tb.fps_num))
+    win_hi_s = float(Fraction(hi_f * tb.fps_den, tb.fps_num))
+    total_samples = int(round((win_hi_s - win_lo_s) * _WORKING_SAMPLE_RATE))
 
     track = _select_audio_track(sequence, audio_track_index)
 
-    window = None  # (start_s, end_s) on the sequence timeline
-    if range_start_frame is not None:
-        lo_f = max(0, range_start_frame - pad_frames)
-        hi_f = min(seq_frames, range_end_frame + pad_frames)
-        window = (float(Fraction(lo_f * tb.fps_den, tb.fps_num)),
-                  float(Fraction(hi_f * tb.fps_den, tb.fps_num)))
+    window = (win_lo_s, win_hi_s) if range_start_frame is not None else None
 
     import numpy as np
     import soundfile as sf
@@ -201,7 +203,7 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
                 )
 
             seg_audio, _sr = sf.read(str(seg_path), dtype="float32")
-            offset = int(round(start_s * _WORKING_SAMPLE_RATE))
+            offset = int(round((start_s - win_lo_s) * _WORKING_SAMPLE_RATE))
             end = min(offset + len(seg_audio), total_samples)
             if end > offset:
                 buffer[offset:end] = seg_audio[: end - offset]

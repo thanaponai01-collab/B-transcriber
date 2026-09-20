@@ -45,7 +45,7 @@ with a test, before trusting this transform on footage that uses it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from xml.etree import ElementTree as ET
 
@@ -522,6 +522,23 @@ def _check_duration_guard(sequence_duration_frames: int, mixdown_duration_ms: in
         )
 
 
+def range_window_frames(tb: Timebase, seq_frames: int, frame_range: tuple[int, int],
+                        pad_seconds: float = 2.0) -> tuple[int, int]:
+    """Sequence-frame window ``[lo, hi]`` = the In/Out range plus ``pad_seconds``
+    of context each side, clamped to the sequence. The pad is defined in seconds
+    so the recognizer gets the same context at any frame rate."""
+    pad = int(round(pad_seconds * tb.fps_num / tb.fps_den))
+    return max(0, frame_range[0] - pad), min(seq_frames, frame_range[1] + pad)
+
+
+def shift_plan(plan: CutPlan, offset_ms: int) -> CutPlan:
+    """Move a plan built on a trimmed mixdown back onto the sequence timeline."""
+    return replace(plan, spans=[
+        replace(s, src_in_ms=s.src_in_ms + offset_ms, src_out_ms=s.src_out_ms + offset_ms)
+        for s in plan.spans
+    ])
+
+
 def frame_to_ms_int(frame: int, tb: Timebase) -> int:
     from transcribe.timebase import frame_to_ms
     return int(round(frame_to_ms(frame, tb)))
@@ -626,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
 
     extracted_tmp = None
     mixdown_wav = args.mixdown_wav
+    window = None  # (lo, hi) sequence frames, set only when we trim the mixdown ourselves
     if mixdown_wav is None:
         from cutdeck.xml_audio_extract import extract_mixdown
         extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
@@ -636,11 +654,14 @@ def main(argv: list[str] | None = None) -> int:
             range_start_frame=frame_range[0] if frame_range else None,
             range_end_frame=frame_range[1] if frame_range else None,
         )
+        if frame_range:
+            window = range_window_frames(tb, seq_frames, frame_range)
 
     try:
         from transcribe.pipeline.ingest import ingest
         mixdown_result = ingest(mixdown_wav, materialize_chunks=False, **ingest_kwargs)
-        _check_duration_guard(seq_frames, mixdown_result.duration_ms, tb)
+        _check_duration_guard(window[1] - window[0] if window else seq_frames,
+                              mixdown_result.duration_ms, tb)
 
         tokens = None
         if args.asr:
@@ -684,6 +705,10 @@ def main(argv: list[str] | None = None) -> int:
         if extracted_tmp is not None:
             Path(extracted_tmp.name).unlink(missing_ok=True)
 
+    if window:
+        # The plan was built on a WAV that starts at the window's first frame.
+        plan = shift_plan(plan, frame_to_ms_int(window[0], tb))
+
     cuts = scoped_cuts(plan, tb, seq_frames, frame_range)
     n_cut = len(cuts)
     cut_ms = frame_to_ms_int(sum(b - a for a, b in cuts), tb)
@@ -697,7 +722,9 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out) if args.out else src.with_name(src.stem + "_cut.xml")
     out.write_text(out_xml, encoding="utf-8")
 
-    if not args.no_save_plan:
+    if window and not args.no_save_plan:
+        print("plan not saved: it covers only the In/Out window, not the whole sequence")
+    elif not args.no_save_plan:
         from transcribe.db import store
         conn = store.connect(Path(args.db)) if args.db else store.connect()
         try:

@@ -135,21 +135,19 @@ def test_out_of_range_audio_track_index_refuses(tmp_path):
 
 def test_range_extracts_only_range_plus_pad(tmp_path):
     # One clip spans the whole 20s timeline; range is [10s, 12s) with a 2s pad,
-    # so only [8s, 14s) may be extracted — the clip must be trimmed, not skipped.
+    # so the WAV covers only [8s, 14s) — the clip must be trimmed, not skipped.
     src = tmp_path / "source.wav"
     _tone_wav(src, 20.0, 440.0)
     fps = 30
     xml = _sequence_xml(src, [(0, 600, 0, 600, True)], 600, fps)
 
     out_wav = tmp_path / "mixdown.wav"
-    extract_mixdown(xml, str(out_wav), range_start_frame=300, range_end_frame=360, pad_frames=60)
+    extract_mixdown(xml, str(out_wav), range_start_frame=300, range_end_frame=360, pad_seconds=2.0)
 
     import soundfile as sf
     result, sr = sf.read(str(out_wav), dtype="float32")
-    assert abs(len(result) / sr - 20.0) < 0.05  # timeline positions preserved
-    assert np.abs(result[int(8.2 * sr):int(13.8 * sr)]).mean() > 0.05
-    assert np.abs(result[: int(7.8 * sr)]).mean() < 0.001
-    assert np.abs(result[int(14.2 * sr):]).mean() < 0.001
+    assert abs(len(result) / sr - 6.0) < 0.05  # only the window: [8s, 14s)
+    assert np.abs(result[int(0.2 * sr):int(5.8 * sr)]).mean() > 0.05
 
 
 def test_range_skips_clips_outside_window(tmp_path, monkeypatch):
@@ -163,5 +161,52 @@ def test_range_skips_clips_outside_window(tmp_path, monkeypatch):
     real_run = subprocess.run
     monkeypatch.setattr(subprocess, "run", lambda cmd, *a, **k: (calls.append(cmd), real_run(cmd, *a, **k))[1])
 
-    extract_mixdown(xml, str(tmp_path / "out.wav"), range_start_frame=180, range_end_frame=240, pad_frames=0)
+    extract_mixdown(xml, str(tmp_path / "out.wav"), range_start_frame=180, range_end_frame=240, pad_seconds=0)
     assert len(calls) == 1
+
+
+def test_recut_range_matches_full_mixdown_and_guard_rejects_wrong_length(tmp_path, monkeypatch):
+    """The trimmed-WAV path must yield the same recut as a full-length mixdown
+    over the same range, and the duration guard must catch a wrong-length WAV."""
+    import soundfile as sf
+    from cutdeck import xml_recut
+    from transcribe.pipeline import ingest as ingest_mod
+
+    sr = 48000
+    t = np.arange(int(20 * sr)) / sr
+    audio = (0.5 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+    audio[int(4 * sr):int(10 * sr)] = 0.0   # silence 4-10s
+    audio[int(14 * sr):] = 0.0              # silence 14-20s
+    src = tmp_path / "source.wav"
+    sf.write(str(src), audio, sr)
+    xml = _sequence_xml(src, [(0, 600, 0, 600, True)], 600, 30)
+    xml_path = tmp_path / "seq.xml"
+    xml_path.write_text(xml, encoding="utf-8")
+
+    def energy_vad(tensor, model, **kw):
+        loud = (np.abs(np.asarray(tensor)) > 0.1).astype(np.int8)
+        edges = np.flatnonzero(np.diff(np.concatenate([[0], loud, [0]])))
+        return [{"start": int(a), "end": int(b)} for a, b in zip(edges[::2], edges[1::2])]
+
+    monkeypatch.setattr(ingest_mod, "_load_silero", lambda: (object(), energy_vad))
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("denoise: false\nrms_gate_enabled: false\n", encoding="utf-8")
+    rng = ["--range-start-frame", "180", "--range-end-frame", "360"]
+
+    def run(out_name, *extra):
+        out = tmp_path / out_name
+        rc = xml_recut.main([str(xml_path), *extra, *rng, "--overlay", str(overlay),
+                             "--out", str(out), "--no-save-plan"])
+        assert rc == 0
+        return out.read_text(encoding="utf-8")
+
+    scoped = run("scoped.xml")  # CLI trims the mixdown itself
+    full_wav = tmp_path / "full.wav"
+    extract_mixdown(xml, str(full_wav))
+    assert run("full.xml", str(full_wav)) == scoped
+
+    # 6s-10s of a 20s sequence is not the whole sequence and not the window.
+    wrong = tmp_path / "wrong.wav"
+    sf.write(str(wrong), audio[: 8 * sr], sr)
+    with pytest.raises(xml_recut.DurationMismatch):
+        run("wrong.xml", str(wrong))
