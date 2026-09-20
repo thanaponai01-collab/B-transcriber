@@ -553,6 +553,15 @@ def delete_speech_spans(conn: sqlite3.Connection, job_id: int) -> None:
 
 # ── engine_result (4.1/4.2, GAP-8) ────────────────────────────────────────────
 
+def purge_job_transcript_data(conn: sqlite3.Connection, job_id: int) -> None:
+    """Drop a job's per-run bulk rows (tokens, speech spans, engine results) but
+    keep the media/job rows, so cut_plan rows referencing the job stay valid.
+    For throwaway inputs (cutdeck's temp mixdown) that can never be resumed."""
+    for table in ("token", "speech_span", "engine_result"):
+        conn.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
+    conn.commit()
+
+
 def save_engine_result(
     conn: sqlite3.Connection,
     job_id: int,

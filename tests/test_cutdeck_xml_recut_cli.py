@@ -203,3 +203,66 @@ def test_asr_rough_cut_shares_one_raw_ingest_with_run_file(
     assert rc == 0
     assert len(calls) == 1
     assert seen["result"] is not None
+
+
+def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, *, extracted):
+    """Run --asr with a run_file stub that persists rows like the real one.
+    Returns (db path, job id the stub created)."""
+    import shutil
+
+    from cutdeck import xml_audio_extract
+    from transcribe.db import store
+    from transcribe.pipeline import run as run_mod
+
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    made = {}
+
+    def fake_run_file(path, config, db_path, ingest_result=None):
+        conn = store.connect(db_path)
+        media_id = store.create_media(conn, path)
+        job_id = store.create_job(conn, media_id, "a", "passthrough", "1.0.0")
+        store.bulk_create_tokens(conn, [dict(
+            job_id=job_id, idx=0, text="x", start_ms=0, end_ms=100, script="latin",
+            confidence=None, source_engine="a", speaker_id=None)])
+        store.bulk_create_speech_spans(
+            conn, job_id, [dict(idx=0, start_ms=0, end_ms=100, kind="speech")])
+        conn.close()
+        made["job"] = job_id
+        return [dict(text="x", start_ms=0, end_ms=100)]
+
+    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    argv = [str(sequence_xml_path), "--dry-run", "--job-id", "1", "--asr", "--db", str(db)]
+    if extracted:
+        def fake_extract(xml, out, track, **kw):
+            shutil.copy(mixdown_path, out)
+            return out
+        monkeypatch.setattr(xml_audio_extract, "extract_mixdown", fake_extract)
+    else:
+        argv.insert(1, mixdown_path)
+    assert xml_recut.main(argv) == 0
+    return db, made["job"]
+
+
+def _row_counts(db, job_id):
+    from transcribe.db import store
+    conn = store.connect(db)
+    try:
+        def n(table):
+            return conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {'id' if table == 'job' else 'job_id'}=?",
+                                (job_id,)).fetchone()[0]
+        return {"job": n("job"), "token": n("token"), "span": n("speech_span")}
+    finally:
+        conn.close()
+
+
+def test_asr_temp_mixdown_purges_bulk_rows_keeps_job(
+        mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
+    db, job = _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, extracted=True)
+    assert _row_counts(db, job) == {"job": 1, "token": 0, "span": 0}
+
+
+def test_asr_caller_supplied_mixdown_keeps_rows(
+        mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
+    db, job = _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, extracted=False)
+    assert _row_counts(db, job) == {"job": 1, "token": 1, "span": 1}

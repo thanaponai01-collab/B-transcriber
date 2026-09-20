@@ -695,6 +695,15 @@ def main(argv: list[str] | None = None) -> int:
                 asr_conn.close()
             if job_row is not None:
                 args.job_id = job_row.id
+                if extracted_tmp is not None:
+                    # Our own temp mixdown is deleted below and can never be
+                    # resumed — keep the job row for cut_plan's FK, drop the
+                    # tokens/spans/engine results that would otherwise pile up.
+                    purge_conn = store.connect(db_path)
+                    try:
+                        store.purge_job_transcript_data(purge_conn, job_row.id)
+                    finally:
+                        purge_conn.close()
             # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
             # dicts run_file returns aren't attribute-accessible, so wrap them
             # rather than re-deriving the job id run_file already resolved
