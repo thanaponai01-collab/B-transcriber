@@ -18,3 +18,20 @@ for (const mirror of mirrors) {
     }
   });
 }
+
+/* Wiring: every shared-module reference in a panel file must resolve to a real file next to it. */
+const callers = [
+  "cep/cutdeck/client/main.js", "cep/cutdeck/client/helper_manager.js",
+  "cep/cutdeck/client/index.html", "uxp/cutdeck/main.js",
+];
+for (const caller of callers) {
+  test(`${caller} references only existing shared modules`, () => {
+    const text = fs.readFileSync(path.join(root, caller), "utf8");
+    const refs = [...text.matchAll(/(?:require\("|src=")(\.\/)?((?:core\/)?(?:rpc|progressText|progress_text)\.js)"/g)]
+      .map((m) => m[2]);
+    assert.ok(refs.length >= 1, `${caller} no longer references a shared module`);
+    for (const ref of refs) {
+      assert.ok(fs.existsSync(path.join(root, path.dirname(caller), ref)), `${caller} -> ${ref} not found`);
+    }
+  });
+}
