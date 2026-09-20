@@ -181,3 +181,25 @@ def test_rough_cut_ingests_mixdown_once(mixdown_path, sequence_xml_path, monkeyp
     rc = xml_recut.main([str(sequence_xml_path), mixdown_path, "--dry-run", "--job-id", "1"])
     assert rc == 0
     assert len(calls) == 1
+
+
+def test_asr_rough_cut_shares_one_raw_ingest_with_run_file(
+        mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
+    from transcribe.db import store
+    from transcribe.pipeline import run as run_mod
+
+    calls = _count_ingest_calls(monkeypatch)
+    seen = {}
+
+    def fake_run_file(path, config, db_path, ingest_result=None):
+        seen["result"] = ingest_result
+        return []
+
+    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    rc = xml_recut.main([str(sequence_xml_path), mixdown_path, "--dry-run",
+                         "--job-id", "1", "--asr", "--db", str(db)])
+    assert rc == 0
+    assert len(calls) == 1
+    assert seen["result"] is not None

@@ -641,6 +641,12 @@ def main(argv: list[str] | None = None) -> int:
         rms_gate_min_gap_ms=int(raw_config.get("rms_gate_min_gap_ms", 300)),
     )
 
+    if args.asr:
+        # One ingest serves the duration guard, run_file() and the plan. run_file
+        # feeds ingest().audio to a whole-file engine, which must hear the raw
+        # track, so the shared pass can't be denoised (run_file's own rule).
+        ingest_kwargs["denoise"] = False
+
     extracted_tmp = None
     mixdown_wav = args.mixdown_wav
     window = None  # (lo, hi) sequence frames, set only when we trim the mixdown ourselves
@@ -673,7 +679,8 @@ def main(argv: list[str] | None = None) -> int:
             print("--asr: running the full ASR pipeline on the mixdown "
                   "(this transcribes the whole mixdown — slower than silence-only)...")
             db_path = Path(args.db) if args.db else store._DEFAULT_DB
-            token_dicts = run_file(mixdown_wav, raw_config, db_path)
+            token_dicts = run_file(mixdown_wav, raw_config, db_path,
+                                   ingest_result=mixdown_result)
             print(f"--asr: got {len(token_dicts)} tokens")
 
             # run_file() resolves/creates its own job_id internally and never

@@ -181,3 +181,48 @@ def test_different_engine_pair_is_not_resumable(monkeypatch):
     resumable = store.find_resumable_job(conn, media_id, "some_other_engine", "passthrough", "1.0.0")
     assert resumable is None
     conn.close()
+
+
+def test_run_file_reuses_supplied_ingest_result(monkeypatch):
+    """A whole-file-engine caller that already ingested (cutdeck xml_recut --asr)
+    hands the result over; run_file must not decode/VAD the file again."""
+    from transcribe.contracts import EngineInput, EngineResult, RecognizedToken
+    from transcribe.db import store
+    from transcribe.engines.base import Engine
+    from transcribe.engines.registry import register
+    from transcribe.pipeline import run as pipeline_run
+
+    @register("wf_reuse_engine")
+    class _WholeFileEngine(Engine):
+        prefers_whole_file = True
+
+        def __init__(self, **kwargs):
+            pass
+
+        def load(self):
+            pass
+
+        def transcribe(self, inp: EngineInput) -> EngineResult:
+            return EngineResult(
+                tokens=[RecognizedToken("hello", 0, 500, 0.9, "latin")],
+                engine_name="wf_reuse_engine", timestamps_final=True,
+            )
+
+        def unload(self):
+            pass
+
+    path = _synthetic_wav()
+    db = _tmp_db()
+    monkeypatch.setattr(ingest, "_load_silero",
+                        lambda: (object(), lambda a, m, **k: [{"start": 0, "end": len(a)}]))
+    store.init_db(db)
+    cfg = {"engine_a": "wf_reuse_engine", "engine_b": "passthrough",
+           "denoise": False, "drop_tokens_over_silence": False}
+    supplied = ingest.ingest(path, denoise=False, materialize_chunks=False)
+
+    def boom(*a, **k):
+        raise AssertionError("run_file re-ingested despite ingest_result")
+
+    monkeypatch.setattr(ingest, "ingest", boom)
+    monkeypatch.setattr(ingest, "load_audio", boom)
+    assert pipeline_run.run_file(path, cfg, db, ingest_result=supplied)

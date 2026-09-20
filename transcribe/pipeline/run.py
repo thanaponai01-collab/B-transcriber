@@ -37,10 +37,37 @@ _PHASE_RECONCILED = planning.PHASE_RECONCILED
 _PHASE_WRITTEN = planning.PHASE_WRITTEN
 
 
+def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestResult:
+    audio_arr, sr = ingest.load_audio(audio_path)
+    return ingest.ingest(
+        audio_path,
+        # Denoise only helps chunk engines. Whole-file engines load the raw
+        # track, so denoising here burns ~1.8k file writes/hr and desyncs the
+        # silence timeline from the audio the engine actually hears (3.2).
+        denoise=config.get("denoise", True) and job_plan.chunk_engine_active,
+        # Fallbacks must match config.yaml's values (0.35/500). The old
+        # fallbacks here were 0.5/300, which clip Thai sentence-final
+        # particles — see config.yaml's vad_threshold comment.
+        # tests/test_pipeline_run_config_fallbacks.py pins these.
+        vad_threshold=float(config.get("vad_threshold", 0.35)),
+        vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
+        vad_min_silence_ms=int(config.get("vad_min_silence_ms", 500)),
+        rms_gate_enabled=bool(config.get("rms_gate_enabled", True)),
+        rms_gate_floor_db=(float(config["rms_gate_floor_db"])
+                           if config.get("rms_gate_floor_db") is not None else None),
+        rms_gate_floor_percentile=float(config.get("rms_gate_floor_percentile", 10.0)),
+        rms_gate_min_gap_ms=int(config.get("rms_gate_min_gap_ms", 300)),
+        audio=audio_arr, sr=sr,
+        materialize_chunks=job_plan.chunk_engine_active,
+        chunk_overlap_ms=job_plan.chunk_overlap_ms if job_plan.chunk_engine_active else 0,
+    )
+
+
 def run_file(
     audio_path: str,
     config: dict,
     db_path: Path,
+    ingest_result: ingest.IngestResult | None = None,
 ) -> list[dict]:
     """
     Run the full pipeline on one audio file.
@@ -48,6 +75,11 @@ def run_file(
     Returns list of token dicts: {"text", "start_ms", "end_ms", "script",
                                    "confidence", "source_engine"}
     These are also written to the DB.
+
+    `ingest_result`: an `ingest()` result the caller already computed for this
+    exact file with the same VAD settings and `denoise=False`. Reused only when
+    no chunk engine is active (whole-file engines want the raw track and no
+    chunks); otherwise ignored and ingestion runs as usual.
     """
     conn = store.connect(db_path)
 
@@ -103,29 +135,10 @@ def run_file(
         logger.info("Using device: %s", device)
 
         # ── Phase 2: Ingestion — decode ONCE, share the array with the engines ─
-        audio_arr, sr = ingest.load_audio(audio_path)
-        ingest_result = ingest.ingest(
-            audio_path,
-            # Denoise only helps chunk engines. Whole-file engines load the raw
-            # track, so denoising here burns ~1.8k file writes/hr and desyncs the
-            # silence timeline from the audio the engine actually hears (3.2).
-            denoise=config.get("denoise", True) and job_plan.chunk_engine_active,
-            # Fallbacks must match config.yaml's values (0.35/500). The old
-            # fallbacks here were 0.5/300, which clip Thai sentence-final
-            # particles — see config.yaml's vad_threshold comment.
-            # tests/test_pipeline_run_config_fallbacks.py pins these.
-            vad_threshold=float(config.get("vad_threshold", 0.35)),
-            vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
-            vad_min_silence_ms=int(config.get("vad_min_silence_ms", 500)),
-            rms_gate_enabled=bool(config.get("rms_gate_enabled", True)),
-            rms_gate_floor_db=(float(config["rms_gate_floor_db"])
-                               if config.get("rms_gate_floor_db") is not None else None),
-            rms_gate_floor_percentile=float(config.get("rms_gate_floor_percentile", 10.0)),
-            rms_gate_min_gap_ms=int(config.get("rms_gate_min_gap_ms", 300)),
-            audio=audio_arr, sr=sr,
-            materialize_chunks=job_plan.chunk_engine_active,
-            chunk_overlap_ms=job_plan.chunk_overlap_ms if job_plan.chunk_engine_active else 0,
-        )
+        if ingest_result is not None and job_plan.chunk_engine_active:
+            ingest_result = None
+        if ingest_result is None:
+            ingest_result = _ingest_for_plan(audio_path, config, job_plan)
         chunks = ingest_result.chunks
         # The exact array the VAD/spans came from — feed it to the engine so the
         # silence filter can never drop words the engine heard (3.2).
