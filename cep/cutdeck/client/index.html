@@ -4,192 +4,538 @@
   <meta charset="utf-8">
   <title>CutDeck</title>
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%;
       height: 100%;
-      margin: 0;
-      padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13px;
+      font-size: 12px;
       color: #eceeed;
-      background: #232625;
+      background: #191b1a;
       overflow-y: auto;
       user-select: none;
     }
-    h1 {
-      font-size: 20px;
-      font-weight: 700;
-      margin: 0 0 4px;
-      color: #ffffff;
+    body {
+      padding: 12px;
+    }
+
+    /* Header */
+    .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2a302d;
     }
-    .badge {
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 700;
+      font-size: 14px;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+    }
+    .brand svg {
+      width: 16px;
+      height: 16px;
+      color: #3b82f6;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      background: #1e2e26;
+      color: #75dfb2;
+      border: 1px solid #2b473a;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #75dfb2;
+    }
+    .status-dot.busy {
+      background: #f59e0b;
+      box-shadow: 0 0 6px #f59e0b;
+      animation: pulse 1s infinite;
+    }
+    .status-dot.error {
+      background: #ef4444;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: #8e9893;
+      cursor: pointer;
+      padding: 5px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .icon-btn:hover:not(:disabled) {
+      background: #282e2b;
+      color: #ffffff;
+    }
+    .icon-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Diagnostics Drawer */
+    #diagnostics {
+      display: none;
+      margin-top: 8px;
+      padding: 10px;
+      background: #141615;
+      border: 1px solid #2a312d;
+      border-radius: 6px;
+    }
+    #diagnostics.open {
+      display: block;
+    }
+    .diag-title {
       font-size: 10px;
       font-weight: 600;
-      background: #334038;
-      color: #75dfb2;
-      padding: 2px 6px;
-      border-radius: 4px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      color: #7b8681;
+      margin-bottom: 6px;
     }
-    p { margin: 0 0 12px; line-height: 1.4; }
-    .muted { color: #8e9893; }
-    .card {
-      background: #2b302d;
-      padding: 12px 14px;
-      border-radius: 6px;
-      border: 1px solid #3a423e;
-      margin-bottom: 12px;
-    }
-    #sequence { font-weight: 600; font-size: 13px; color: #f0f3f1; word-break: break-all; }
-    #range { margin-top: 6px; font-size: 12px; color: #a4b0a9; }
-    label { display: block; margin: 10px 0 4px; font-weight: 500; font-size: 12px; color: #c4cdc7; }
-    label span { display: block; margin-bottom: 5px; }
-    select {
-      width: 100%;
-      padding: 8px 10px;
-      background: #1c1e1d;
-      border: 1px solid #444d47;
-      border-radius: 5px;
-      color: #e2e6e3;
-      font-size: 12px;
-      outline: none;
-    }
-    select:focus { border-color: #75dfb2; }
-    button {
-      padding: 9px 12px;
-      margin-top: 10px;
-      width: 100%;
-      border-radius: 5px;
-      border: 1px solid #48534d;
-      background: #343c37;
-      color: #e8ece9;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    button:hover:not(:disabled) {
-      background: #3f4943;
-      border-color: #5c6962;
-    }
-    button:active:not(:disabled) {
-      background: #2b322e;
-    }
-    #cut {
-      background: #75dfb2;
-      color: #0d2219;
-      font-weight: 700;
-      font-size: 13px;
-      border: none;
-      padding: 11px;
-      margin-top: 10px;
-    }
-    #cut:hover:not(:disabled) {
-      background: #89e6bd;
-    }
-    #cut:active:not(:disabled) {
-      background: #63caa0;
-    }
-    #sync {
-      background: #3e82f7;
-      color: #ffffff;
-      font-weight: 700;
-      font-size: 13px;
-      border: none;
-      padding: 11px;
-      margin-top: 14px;
-    }
-    #sync:hover:not(:disabled) {
-      background: #5a96f8;
-    }
-    #sync:active:not(:disabled) {
-      background: #2f6cd4;
-    }
-    button:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-    #status {
-      white-space: pre-wrap;
-      line-height: 1.45;
-      font-size: 12px;
-      padding: 10px 12px;
-      background: #1e201f;
-      border: 1px solid #333936;
-      border-radius: 5px;
-      margin-top: 14px;
-      color: #d1d8d3;
-      min-height: 48px;
-    }
-    .btn-secondary {
-      background: transparent;
-      border: 1px solid #3f4742;
-      color: #a0aaa4;
-      font-size: 11px;
-      padding: 7px;
-    }
-    .btn-secondary:hover:not(:disabled) {
-      background: #2d332f;
-      color: #d8deda;
-    }
-    .actions-grid {
+    .diag-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 4px;
+      gap: 6px;
     }
-    .actions-grid button { margin-top: 4px; }
-    .small { font-size: 11px; }
+
+    /* Resume / Dismiss Banner */
+    #job-banner {
+      display: none;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #2a2818;
+      border: 1px solid #5a5020;
+      border-radius: 6px;
+    }
+    #job-banner.show {
+      display: block;
+    }
+    .job-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fce788;
+      margin-bottom: 6px;
+    }
+    .job-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    /* Active Sequence Card */
+    .sequence-card {
+      margin-top: 10px;
+      padding: 9px 11px;
+      background: #232725;
+      border: 1px solid #333a36;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .sequence-card:hover {
+      border-color: #46514b;
+    }
+    .seq-info {
+      min-width: 0;
+      flex: 1;
+    }
+    .seq-label {
+      font-size: 10px;
+      color: #849089;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+    #sequence {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f3f6f4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    .range-badge {
+      flex-shrink: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: #7dd3fc;
+      background: #17242e;
+      border: 1px solid #1e3a4c;
+      padding: 3px 7px;
+      border-radius: 5px;
+    }
+
+    /* Segmented Tab Navigation: MULTI-CAM FIRST */
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: #131514;
+      border: 1px solid #282f2b;
+      border-radius: 7px;
+      padding: 3px;
+      margin-top: 10px;
+      gap: 3px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #8a9690;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover:not(.active) {
+      color: #e0e5e2;
+    }
+    .tab-btn.active {
+      background: #2b322e;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* Tab Content Views */
+    .view-panel {
+      display: none;
+      margin-top: 10px;
+    }
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Form Fields */
+    .control-group {
+      margin-bottom: 10px;
+    }
+    .control-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: #8a9690;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+    select {
+      width: 100%;
+      padding: 7px 9px;
+      background: #181a19;
+      border: 1px solid #363e39;
+      border-radius: 6px;
+      color: #e5eae7;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus {
+      border-color: #3b82f6;
+    }
+
+    /* Preset Switcher Pills */
+    .pills-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .pill-btn {
+      background: #1a1d1b;
+      border: 1px solid #343b37;
+      border-radius: 6px;
+      padding: 7px 8px;
+      color: #8c9791;
+      font-size: 11px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .pill-btn:hover:not(.active) {
+      border-color: #4a544f;
+      color: #d1d8d4;
+    }
+    .pill-btn.active {
+      background: #182c23;
+      border-color: #10b981;
+      color: #6ee7b7;
+      font-weight: 600;
+    }
+    .pill-indicator {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #10b981;
+      display: none;
+    }
+    .pill-btn.active .pill-indicator {
+      display: block;
+    }
+
+    /* Primary Action Buttons */
+    .btn-primary {
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: background 0.15s, transform 0.05s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .btn-primary svg {
+      width: 15px;
+      height: 15px;
+    }
+    #sync {
+      background: #3b82f6;
+      color: #ffffff;
+    }
+    #sync:hover:not(:disabled) {
+      background: #60a5fa;
+    }
+    #sync:active:not(:disabled) {
+      background: #2563eb;
+    }
+    #cut {
+      background: #10b981;
+      color: #042417;
+    }
+    #cut:hover:not(:disabled) {
+      background: #34d399;
+    }
+    #cut:active:not(:disabled) {
+      background: #059669;
+    }
+
+    /* Secondary Buttons */
+    .btn-secondary {
+      background: #232725;
+      border: 1px solid #363e39;
+      color: #a4b0a8;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: #2c322f;
+      color: #e5eae7;
+      border-color: #48534d;
+    }
+
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* Streamlined Status Box */
+    .status-card {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: #141615;
+      border: 1px solid #272d29;
+      border-radius: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      min-height: 34px;
+    }
+    .status-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    #status {
+      flex: 1;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #9ba6a0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Hidden element for compatibility with existing logic */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
   </style>
 </head>
 <body>
-  <h1>CutDeck <span class="badge">CEP</span></h1>
-  <p class="muted">Sync multi-cam or rough cut timeline in Premiere.</p>
 
-  <div class="card">
-    <div id="sequence">Open a sequence in Premiere</div>
-    <div id="range" class="muted">Click Read timeline range to inspect sequence.</div>
+  <!-- Top Header -->
+  <div class="header">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
+      </svg>
+      CutDeck
+      <span class="status-badge">
+        <span id="dot" class="status-dot"></span>
+        <span id="state-text">Ready</span>
+      </span>
+    </div>
+
+    <div class="header-actions">
+      <button id="refresh" class="icon-btn" title="Re-read timeline sequence & range">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
+      <button id="tools-toggle" class="icon-btn" title="Diagnostics & Tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="1"/>
+          <circle cx="12" cy="5" r="1"/>
+          <circle cx="12" cy="19" r="1"/>
+        </svg>
+      </button>
+    </div>
   </div>
 
-  <button id="refresh">Read timeline range</button>
-
-  <label>
-    <span>Reference audio track</span>
-    <select id="audio">
-      <option value="" selected>First audio track with clips</option>
-    </select>
-  </label>
-
-  <button id="sync">Sync Multi-Cam</button>
-
-  <label style="margin-top: 14px;">
-    <span>Cutting mode</span>
-    <select id="mode">
-      <option value="protected" selected>Usual preset · protect short speech</option>
-      <option value="silence">Faster · silence only</option>
-    </select>
-  </label>
-
-  <button id="cut">Rough Cut In–Out</button>
-
-  <div class="actions-grid">
-    <button id="resume" class="btn-secondary" hidden>Resume last job</button>
-    <button id="dismiss" class="btn-secondary" hidden>Dismiss last job</button>
+  <!-- Diagnostics Drawer (Toggleable) -->
+  <div id="diagnostics">
+    <div class="diag-title">Diagnostics & Debug</div>
+    <div class="diag-grid">
+      <button id="socketprobe" class="btn-secondary">Test Connection</button>
+      <button id="copystatus" class="btn-secondary">Copy Status</button>
+    </div>
   </div>
 
-  <p id="status" role="status">Connecting to CutDeck helper…</p>
-
-  <div class="actions-grid">
-    <button id="socketprobe" class="btn-secondary">Test helper connection</button>
-    <button id="copystatus" class="btn-secondary">Copy status to clipboard</button>
+  <!-- Resume / Dismiss Banner (Only shown if unfinished job exists) -->
+  <div id="job-banner">
+    <div class="job-title">Previous job in progress</div>
+    <div class="job-actions">
+      <button id="resume" class="btn-secondary">Resume Job</button>
+      <button id="dismiss" class="btn-secondary">Dismiss</button>
+    </div>
   </div>
 
-  <p class="muted small" style="margin-top: 14px;">Creates a newly imported sequence with silence and filler removed inside your marked In/Out interval.</p>
+  <!-- Active Sequence Card (Clicking also refreshes marks) -->
+  <div id="seq-card" class="sequence-card" title="Click to refresh timeline range">
+    <div class="seq-info">
+      <div class="seq-label">Active Sequence</div>
+      <div id="sequence">Open a sequence in Premiere</div>
+    </div>
+    <div id="range" class="range-badge">--:--</div>
+  </div>
+
+  <!-- Segmented Tabs: MULTI-CAM FIRST -->
+  <div class="tabs">
+    <button id="tab-sync" class="tab-btn active">Multi-Cam Sync</button>
+    <button id="tab-cut" class="tab-btn">Rough Cut</button>
+  </div>
+
+  <!-- 1. MULTI-CAM VIEW (Default Active) -->
+  <div id="view-sync" class="view-panel active">
+    <div class="control-group">
+      <label class="control-label" for="audio">Reference Audio</label>
+      <select id="audio">
+        <option value="" selected>Auto (First audio track with clips)</option>
+      </select>
+    </div>
+
+    <button id="sync" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
+      </svg>
+      Sync Multi-Cam
+    </button>
+  </div>
+
+  <!-- 2. ROUGH CUT VIEW -->
+  <div id="view-cut" class="view-panel">
+    <div class="control-group">
+      <div class="control-label">Cutting Preset</div>
+      <div class="pills-grid">
+        <button type="button" id="pill-speech" class="pill-btn active">
+          <span>Speech + Silence</span>
+          <span class="pill-indicator"></span>
+        </button>
+        <button type="button" id="pill-silence" class="pill-btn">
+          <span>Silence Only</span>
+          <span class="pill-indicator"></span>
+        </button>
+      </div>
+
+      <!-- Hidden select to keep existing JS compatibility -->
+      <select id="mode" class="sr-only">
+        <option value="protected" selected>protected</option>
+        <option value="silence">silence</option>
+      </select>
+    </div>
+
+    <button id="cut" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="6" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+        <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+        <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+      </svg>
+      Rough Cut In–Out
+    </button>
+  </div>
+
+  <!-- Sleek Status Output -->
+  <div class="status-card">
+    <div id="status-icon" class="status-icon"></div>
+    <div id="status" role="status">Connecting to CutDeck helper…</div>
+  </div>
 
   <script src="CSInterface.js"></script>
   <script src="rpc.js"></script>

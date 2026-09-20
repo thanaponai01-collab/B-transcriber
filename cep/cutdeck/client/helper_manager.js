@@ -44,21 +44,23 @@
     // 1. Fast single-shot ping (checks in <10ms without wasting 3 seconds on backoffs)
     let isAlive = false;
     try {
-      const rpcModule = global.CutDeckRpc || (typeof require !== "undefined" ? require("./rpc.js") : null);
-      if (rpcModule && typeof rpcModule.createRpc === "function") {
-        const fastRpc = rpcModule.createRpc({
-          attempts: 1,
-          connectTimeoutMs: 300,
-          replyTimeoutMs: 1000,
-        });
-        const reply = await fastRpc({ type: "hello", version });
+      if (rpc) {
+        const reply = await rpc({ type: "hello", version });
         if (reply && reply.version === version) {
           isAlive = true;
         }
       } else {
-        const reply = await rpc({ type: "hello", version });
-        if (reply && reply.version === version) {
-          isAlive = true;
+        const rpcModule = global.CutDeckRpc || (typeof require !== "undefined" ? require("./rpc.js") : null);
+        if (rpcModule && typeof rpcModule.createRpc === "function") {
+          const fastRpc = rpcModule.createRpc({
+            attempts: 1,
+            connectTimeoutMs: 300,
+            replyTimeoutMs: 1000,
+          });
+          const reply = await fastRpc({ type: "hello", version });
+          if (reply && reply.version === version) {
+            isAlive = true;
+          }
         }
       }
     } catch (_) {
@@ -84,7 +86,11 @@
         cwd: repoRoot,
         windowsHide: true,
         stdio: "ignore",
+        detached: true,
       });
+      if (typeof activeProcess.unref === "function") {
+        activeProcess.unref();
+      }
 
       activeProcess.on("error", (err) => {
         console.error("CutDeck helper spawn error:", err);
