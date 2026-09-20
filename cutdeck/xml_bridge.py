@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import uuid
@@ -21,6 +22,17 @@ from cutdeck.xml_recut import XmlRecutRefusal, _sequence_timebase, _PPRO_TICKS_P
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
 VERSION = "cutdeck-xml-1"
+
+
+_PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
+
+
+def parse_progress(line: str) -> dict | None:
+    """Read a `PROGRESS:<pct>:<stage>` line written by xml_recut, else None."""
+    match = _PROGRESS_LINE.fullmatch(line.strip())
+    if match is None:
+        return None
+    return {"pct": min(int(match.group(1)), 100), "stage": match.group(2).strip()}
 
 
 def reference_audio_track(source_xml: str, request: dict) -> int | None:
@@ -224,8 +236,17 @@ class XmlJobs:
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             with open(job["log_path"], "wb") as log:
                 process = await asyncio.create_subprocess_exec(
-                    *args, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
+                    *args, cwd=ROOT, env=env, stdout=asyncio.subprocess.PIPE,
+                    stderr=subprocess.STDOUT, limit=1 << 20,
                     **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
+                # Tee to the log so it stays the full record; progress lines also
+                # update the job that `status` requests read while we run.
+                async for raw_line in process.stdout:
+                    log.write(raw_line)
+                    log.flush()
+                    progress = parse_progress(raw_line.decode("utf-8", errors="replace"))
+                    if progress is not None:
+                        job["progress"] = progress
                 code = await process.wait()
             if code:
                 raise RuntimeError(f"CutDeck processing failed (exit {code}). See {job['log_path']}")

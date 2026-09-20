@@ -82,6 +82,16 @@ def test_selected_stereo_track_maps_to_first_channel_of_correct_group():
         reference_audio_track(xml, {"audio_track": 1, "audio_track_count": 4})
 
 
+class EmptyStdout:
+    """Stands in for a child process that printed nothing."""
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
 def test_real_fixture_audio_grouping():
     xml = (Path(__file__).parent / "fixtures/cutdeck_recut_sample_scrubbed.xml").read_text(encoding="utf-8")
     tracks = ET.fromstring(xml).findall("sequence/media/audio/track")
@@ -99,6 +109,8 @@ def test_job_runs_existing_cli_once_and_publishes_named_result(tmp_path, monkeyp
             json.dumps({"cuts_applied": 1, "removed_ms": 2000}), encoding="utf-8")
 
         class Process:
+            stdout = EmptyStdout()
+
             async def wait(self):
                 return 0
         return Process()
@@ -190,6 +202,8 @@ def run_to_completion(tmp_path, source_xml, report, sequence_name="Original", mo
         Path(args[args.index("--report") + 1]).write_text(json.dumps(report), encoding="utf-8")
 
         class Process:
+            stdout = EmptyStdout()
+
             async def wait(self):
                 return 0
         return Process()

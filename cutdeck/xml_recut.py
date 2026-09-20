@@ -165,6 +165,11 @@ def _shift_point(frame: int, cuts: list[tuple[int, int]]) -> int:
     return frame - _shift_for_frame(frame, cuts)
 
 
+def _progress(pct: int, stage: str) -> None:
+    """Phase marker the XML bridge parses off our stdout (xml_bridge.parse_progress)."""
+    print(f"PROGRESS:{pct}:{stage}", flush=True)
+
+
 def _refuse_if_unsafe(clipitem: ET.Element, tb: Timebase, start: int, end: int) -> None:
     for tag in _UNSAFE_CLIP_TAGS:
         for elem in clipitem.findall(tag):
@@ -652,6 +657,7 @@ def main(argv: list[str] | None = None) -> int:
     window = None  # (lo, hi) sequence frames, set only when we trim the mixdown ourselves
     if mixdown_wav is None:
         from cutdeck.xml_audio_extract import extract_mixdown
+        _progress(5, "Extracting audio")
         extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         extracted_tmp.close()
         print("no mixdown given — extracting one from the XML's own source media...")
@@ -665,6 +671,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         from transcribe.pipeline.ingest import ingest
+        _progress(20, "Detecting speech")
         mixdown_result = ingest(mixdown_wav, materialize_chunks=False, **ingest_kwargs)
         _check_duration_guard(window[1] - window[0] if window else seq_frames,
                               mixdown_result.duration_ms, tb)
@@ -679,6 +686,7 @@ def main(argv: list[str] | None = None) -> int:
 
             from cutdeck.words import words_for_job
 
+            _progress(35, "Transcribing speech")
             print("--asr: running the full ASR pipeline on the mixdown "
                   "(this transcribes the whole mixdown — slower than silence-only)...")
             db_path = Path(args.db) if args.db else store._DEFAULT_DB
@@ -725,6 +733,7 @@ def main(argv: list[str] | None = None) -> int:
                 for i, t in enumerate(token_dicts)
             ]
 
+        _progress(85, "Calculating cut spans")
         plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb,
                                   tokens=tokens, ingest_result=mixdown_result,
                                   words=words)
@@ -745,6 +754,7 @@ def main(argv: list[str] | None = None) -> int:
               f"({seq_frames} frames declared in sequence XML)")
         return 0
 
+    _progress(95, "Rewriting sequence XML")
     out_xml, report = recut(source_xml, plan, frame_range=frame_range)
     out = Path(args.out) if args.out else src.with_name(src.stem + "_cut.xml")
     out.write_text(out_xml, encoding="utf-8")

@@ -126,7 +126,10 @@
 
   async function follow(job) {
     while (job.state === "running") {
-      setStatus("Processing sequence in helper… Cuts stay inside marked In/Out.", "busy");
+      const p = job.progress;
+      setStatus(p
+        ? `${p.stage}… ${p.pct}% — cuts stay inside marked In/Out.`
+        : "Processing sequence in helper… Cuts stay inside marked In/Out.", "busy");
       await new Promise((resolve) => setTimeout(resolve, 1500));
       job = await rpc({ type: "status", job_id: job.job_id });
     }
