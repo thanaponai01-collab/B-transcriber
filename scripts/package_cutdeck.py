@@ -10,7 +10,7 @@ def main():
     manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
     out = root / "output" / f"CutDeck-{manifest['version']}.ccx"
     out.parent.mkdir(parents=True, exist_ok=True)
-    files = ["manifest.json", "index.html", "main.js", "workflow.js", "icons/icon.svg"]
+    files = ["manifest.json", "index.html", "main.js", "workflow.js", "rpc.js", "icons/icon.svg"]
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in files:
             archive.write(source / name, name)

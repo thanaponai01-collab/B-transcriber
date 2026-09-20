@@ -209,6 +209,33 @@ def _split_greedy(words, policy: CuePolicy):
             return False
         return chars >= space_min_chars and (last_end - first_start) >= space_min_ms
 
+    def _short_tail_fits(i: int) -> bool:
+        """Allow a small sizing overshoot instead of stranding a <500ms tail.
+
+        Only look to the next hard sentence/pause boundary. Never merge across
+        one, extend timestamps, or consume a long following phrase. The bounded
+        allowance is eight characters and 500ms beyond the sizing targets.
+        """
+        first_start = timed[i][1]
+        last_end = first_start
+        chars = 0
+        next_boundary = (boundary_offsets[boundary_idx]
+                         if boundary_idx < len(boundary_offsets) else None)
+        for j in range(i, len(timed)):
+            text, start, end, _conf, pos = timed[j]
+            if not text.strip():
+                continue
+            if chars and ((next_boundary is not None and pos >= next_boundary)
+                          or start - last_end >= gap_ms):
+                break
+            chars += len(text)
+            last_end = end
+            if chars > 8 or last_end - first_start >= 500:
+                return False
+        return (chars > 0
+                and _cue_so_far()[0] + chars <= target_chars + 8
+                and last_end - cur[0][1] <= target_ms + 500)
+
     for i, (t, s, e, conf, char_pos) in enumerate(timed):
         if not t.strip():
             if not cur:
@@ -237,6 +264,9 @@ def _split_greedy(words, policy: CuePolicy):
             span = e - cur[0][1]
             n_chars = len("".join(x[0] for x in cur).strip())
             wants_break = new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars
+            if (wants_break and not new_sentence and gap < gap_ms
+                    and _short_tail_fits(i)):
+                wants_break = False
             if wants_break:
                 _close()
                 cur = []

@@ -8,6 +8,7 @@ label { display: block; margin: 14px 0 6px; } label span { display: block; margi
 button { padding: 10px; margin-top: 12px; width: 100%; border-radius: 5px; border: 1px solid #606b64; background: #383f3b; color: white; }
 #cut { background: #75dfb2; color: #12251e; font-weight: bold; border: none; }
 button:disabled { opacity: 0.45; } #status { white-space: pre-wrap; line-height: 1.5; }
+.danger { border-color: #a05050; color: #ffb3b3; } .danger.armed { background: #6b2020; color: white; font-weight: bold; }
 #sequence { font-weight: bold; } #range { margin-top: 8px; } .small { font-size: 11px; }
 </style></head><body>
 <h1>CutDeck</h1><p class="muted">Mark a range. Make your rough cut.</p>
@@ -15,7 +16,7 @@ button:disabled { opacity: 0.45; } #status { white-space: pre-wrap; line-height:
 <button id="refresh">Read timeline range</button>
 <label><span>Dialogue audio</span><select id="audio"><option value="" selected>First audio track with clips</option></select></label>
 <label><span>Cutting mode</span><select id="mode"><option value="protected" selected>Usual preset · protect short speech</option><option value="silence">Faster · silence only</option></select></label>
-<button id="cut">Rough Cut In–Out</button><button id="resume" hidden>Resume last job</button><button id="dismiss" hidden>Dismiss last job</button>
+<button id="cut">Rough Cut In–Out</button><button id="timingprobe">Check Premiere timing (read-only)</button><button id="assembleprobe" class="danger">Run assemble probe (MUTATES — disposable projects only)</button><button id="socketprobe">Diagnose helper connection</button><button id="copystatus">Copy this report to clipboard</button><button id="resume" hidden>Resume last job</button><button id="dismiss" hidden>Dismiss last job</button>
 <p id="status" role="status">Start the CutDeck helper, then read your timeline range.</p>
 <p class="muted small">Creates a new sequence using your current XML cutting settings. The full sequence is analyzed; cuts are limited to your marks.</p>
 <script src="main.js"></script></body></html>

@@ -25,6 +25,7 @@ exclusion decision.
 | `Short1` | `20260713 - CFD 90` project export folder (`.../5. EXPORTS/audio/Short1.mp3`) | **CONFIRMED** (Phase C step-1 probe, 2026-08-05: sha256 byte-identical to the user's `F:\Me\Works\20260713 - CFD 90\5. EXPORTS\audio\Short1.mp3`) |
 | `Short2` | same `20260713 - CFD 90` project export folder (`Short2.mp3`) | **CONFIRMED** (same probe, sha256 byte-identical) |
 | `Short3` | same `20260713 - CFD 90` project export folder (`Short3.mp3`) | **CONFIRMED** (same probe, sha256 byte-identical) |
+| `shorts` | `F:/Me/Works/20260917 - CFD 95/5. EXPORTS/audio/shorts.mp3`, with user-corrected `shorts_mine.srt` | **CONFIRMED supplied pair** (2026-09-17). Used to diagnose trailing-word caption splits; this is now a development/regression sample, not an untouched holdout. Relationship to older CFD source episodes is unverified. Exclude this source from fine-tuning. |
 | `หายไปนานเลย กลับมา DCA ต่อ ｜ 26 Month Update ｜ Wealthy 40 - [j6IECK-D-D8]` | standalone finance-vlog YouTube upload (commit `9705e70`), first 2 min | Distinct creator/channel from the Bangkok Festivals rows — no overlap expected. **Full source video also confirmed present** at `D:\YT DLP\yt-zero-touch-clean\downloads\...[j6IECK-D-D8].mp4` (Phase C step-1 probe, 2026-08-05) — its `.th.srt` there is a raw yt-dlp auto-caption, not a hand-recut, so it was never a usable Phase C candidate regardless of contamination. |
 
 **Exclusion groups for Phase C tooling:** `{Short1_D5, Short2_D1, PeterWolf}`

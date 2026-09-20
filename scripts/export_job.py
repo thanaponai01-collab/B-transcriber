@@ -9,10 +9,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from transcribe.console import safe_print
-from transcribe.db.store import connect, get_tokens, get_job, get_media
+from transcribe.db.store import connect, get_tokens, get_job, get_media, get_corrections
 from transcribe.subtitles import write_subtitles
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,6 +31,7 @@ def main() -> None:
                               "doesn't re-round them. Varies per clip, so pass it explicitly.")
     parser.add_argument("--out-dir", default=None, help="destination directory (default: source media's directory)")
     parser.add_argument("--vtt", action="store_true", help="also export .vtt alongside .srt")
+    parser.add_argument("--layout-profile", type=Path, help="personal display profile; keeps cue timings")
     args = parser.parse_args()
 
     conn = connect(Path(args.db))
@@ -39,6 +41,8 @@ def main() -> None:
 
     job = get_job(conn, args.job_id)
     media = get_media(conn, job.media_id) if job else None
+    corrections = {c.token_idx: c.corrected_text for c in get_corrections(conn, args.job_id)}
+    conn.close()
     stem = args.name if args.name else (Path(media.path).stem if media else f"job{args.job_id}")
 
     if args.out_dir:
@@ -49,7 +53,11 @@ def main() -> None:
         out_dir = FALLBACK_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms} for t in tokens]
+    rows = [{"text": corrections.get(t.idx, t.text), "start_ms": t.start_ms, "end_ms": t.end_ms} for t in tokens]
+    if args.layout_profile:
+        from transcribe.subtitles.layout import LayoutProfile, layout_cues
+        profile = LayoutProfile(**json.loads(args.layout_profile.read_text(encoding="utf-8"))["profile"])
+        rows = layout_cues(rows, profile)
     srt_path = out_dir / f"{stem}.srt"
     srt_path.write_text(write_subtitles(rows, "srt", fps=args.fps), encoding="utf-8")
     suffix = f" (quantized to {args.fps} fps)" if args.fps else ""

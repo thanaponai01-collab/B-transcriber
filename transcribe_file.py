@@ -59,6 +59,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
     parser.add_argument("--no-editor", action="store_true", help="Skip opening the editor afterward")
+    parser.add_argument("--review-passages", action="store_true", help="Recheck suspicious passages and create a local audio review")
+    parser.add_argument("--layout-profile", type=Path, help="Personal subtitle display profile")
     args = parser.parse_args()
 
     result = subprocess.run(
@@ -78,10 +80,15 @@ def main() -> None:
             job_id = line.split("=", 1)[1].strip()
             break
     if job_id:
-        subprocess.run(
-            [sys.executable, "scripts/export_job.py", job_id, "--db", str(DB)],
-            cwd=ROOT,
-        )
+        export_args = [sys.executable, "scripts/export_job.py", job_id, "--db", str(DB)]
+        if args.layout_profile:
+            export_args += ["--layout-profile", str(args.layout_profile.resolve())]
+        subprocess.run(export_args, cwd=ROOT, check=True)
+        if args.review_passages:
+            subprocess.run([sys.executable, "-m", "tools.recheck_subtitles", job_id,
+                            "--db", str(DB), "--config", str(CONFIG),
+                            "--output", str(ROOT / "output" / f"review-{job_id}")],
+                           cwd=ROOT, check=True)
 
     if not args.no_editor:
         _start_editor()

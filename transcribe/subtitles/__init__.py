@@ -115,7 +115,7 @@ def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -
     return "\n".join(lines)
 
 
-def read_subtitles(text: str, fmt: Format = "srt") -> list[dict]:
+def read_subtitles(text: str, fmt: Format = "srt", *, preserve_line_breaks: bool = False) -> list[dict]:
     """Parse SRT or WebVTT text into gold/correction tokens.
 
     Each cue becomes one phrase-cue token (5.4 granularity) with an
@@ -125,6 +125,9 @@ def read_subtitles(text: str, fmt: Format = "srt") -> list[dict]:
     starts the cue" scan already skips any cue-number or WEBVTT header line
     ahead of it, so both formats share one parse path; fmt is accepted (and
     validated) for symmetry with write_subtitles rather than to branch on.
+
+    preserve_line_breaks retains authored display lines for layout learning.
+    The default still joins them for recognition scoring and correction import.
     """
     _check_format(fmt)
     text = text.lstrip("﻿")
@@ -145,7 +148,7 @@ def read_subtitles(text: str, fmt: Format = "srt") -> list[dict]:
             continue
         start_ms = _srt_ts_to_ms(*m.group(1, 2, 3, 4))
         end_ms = _srt_ts_to_ms(*m.group(5, 6, 7, 8))
-        cue_text = " ".join(content_lines).strip()
+        cue_text = ("\n" if preserve_line_breaks else " ").join(content_lines).strip()
         # NLE exports (e.g. Premiere) can carry <font color=...> markup for
         # on-screen styling — strip it so it never lands in a correction or
         # gold-set row as if it were transcript text.
