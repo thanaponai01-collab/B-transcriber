@@ -162,3 +162,22 @@ def test_scoped_cli_report_and_no_database_write(mixdown_path, sequence_xml_path
     for clip in root.findall(".//clipitem"):
         start, end = int(clip.findtext("in")), int(clip.findtext("out"))
         assert end <= 55 or start >= 80
+
+
+def _count_ingest_calls(monkeypatch):
+    calls = []
+    real = ingest_mod.ingest
+
+    def counting(*a, **kw):
+        calls.append(a)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ingest_mod, "ingest", counting)
+    return calls
+
+
+def test_rough_cut_ingests_mixdown_once(mixdown_path, sequence_xml_path, monkeypatch):
+    calls = _count_ingest_calls(monkeypatch)
+    rc = xml_recut.main([str(sequence_xml_path), mixdown_path, "--dry-run", "--job-id", "1"])
+    assert rc == 0
+    assert len(calls) == 1

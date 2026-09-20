@@ -50,6 +50,7 @@ def plan_from_mixdown(
     cfg: CutConfig,
     timebase: Optional[Timebase] = None,
     tokens: Optional[list] = None,
+    ingest_result=None,
     **ingest_kwargs,
 ) -> CutPlan:
     """Build a silence-removal ``CutPlan`` from a sequence's own audio mixdown.
@@ -74,6 +75,12 @@ def plan_from_mixdown(
     ``docs/HANDOFF_CUTDECK_XML_RECUT.md``). Passing real tokens lets it protect
     short speech islands by standing them alone instead of dissolving a
     neighbouring cut, so less silence survives into the recut output.
+
+    ``ingest_result`` (optional ``IngestResult`` from ``ingest(mixdown_path,
+    ...)`` with the same ``ingest_kwargs``): reuse a decode + VAD pass the
+    caller already ran on this mixdown instead of repeating it
+    (``xml_recut`` ingests once for its duration guard). ``ingest_kwargs`` are
+    ignored when it is given.
     """
     if cfg.fillers_enabled or cfg.repeats_enabled:
         logger.warning(
@@ -85,7 +92,8 @@ def plan_from_mixdown(
         )
         cfg = replace(cfg, fillers_enabled=False, repeats_enabled=False)
 
-    result = ingest(mixdown_path, materialize_chunks=False, **ingest_kwargs)
+    result = ingest_result if ingest_result is not None else ingest(
+        mixdown_path, materialize_chunks=False, **ingest_kwargs)
     duration_ms = result.duration_ms
     if timebase is not None:
         tb = timebase

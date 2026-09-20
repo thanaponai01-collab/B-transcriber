@@ -700,7 +700,7 @@ def main(argv: list[str] | None = None) -> int:
             ]
 
         plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb,
-                                  tokens=tokens, **ingest_kwargs)
+                                  tokens=tokens, ingest_result=mixdown_result)
     finally:
         if extracted_tmp is not None:
             Path(extracted_tmp.name).unlink(missing_ok=True)
