@@ -33,6 +33,7 @@
 
   const workflow = (window.CutDeckWorkflow || require("./workflow.js")).createWorkflow(evalScript);
   const createRpc = (window.CutDeckRpc || require("./rpc.js")).createRpc;
+  const progressText = (window.CutDeckProgressText || require("./progress_text.js")).progressText;
   const helperManager = window.CutDeckHelperManager || (typeof require !== "undefined" ? require("./helper_manager.js") : null);
 
   const rpc = createRpc({
@@ -126,10 +127,7 @@
 
   async function follow(job) {
     while (job.state === "running") {
-      const p = job.progress;
-      setStatus(p
-        ? `${p.stage}… ${p.pct}% — cuts stay inside marked In/Out.`
-        : "Processing sequence in helper… Cuts stay inside marked In/Out.", "busy");
+      setStatus(progressText(job), "busy");
       await new Promise((resolve) => setTimeout(resolve, 1500));
       job = await rpc({ type: "status", job_id: job.job_id });
     }

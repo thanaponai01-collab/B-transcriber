@@ -1,0 +1,24 @@
+/* Status line shown while the helper processes a cut job. */
+
+(function (global) {
+  const SUFFIX = "cuts stay inside marked In/Out.";
+  const FALLBACK = "Processing sequence in helper… Cuts stay inside marked In/Out.";
+
+  // `job.progress` is {pct, stage} once xml_recut has announced a phase; absent before that
+  // and for sync jobs. Anything malformed falls back to the static message rather than
+  // showing "undefined… NaN%".
+  function progressText(job) {
+    const p = job && job.progress;
+    if (!p || typeof p.stage !== "string" || !p.stage || !Number.isFinite(p.pct)) return FALLBACK;
+    const pct = Math.max(0, Math.min(100, Math.round(p.pct)));
+    return `${p.stage}… ${pct}% — ${SUFFIX}`;
+  }
+
+  const exportObj = { progressText };
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = exportObj;
+  }
+  if (global) {
+    global.CutDeckProgressText = exportObj;
+  }
+})(typeof window !== "undefined" ? window : globalThis);
