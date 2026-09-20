@@ -1,5 +1,7 @@
 # CutDeck for Premiere — XML workflow
 
+**Role: experimental.** The production panel is `cep/cutdeck` (permanent install, no UXP Developer Tool). This UXP panel is a source-loaded development build kept for native-API work (assembly and split probes) and for the day Premiere drops CEP. It talks to the same helper on `ws://127.0.0.1:7891` as the CEP panel.
+
 Mark **In / Out** on the timeline, click **Rough Cut In–Out**, and continue in
 a newly imported sequence. CutDeck automatically exports and imports XML using
 the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
@@ -232,8 +234,9 @@ node --test tests/cutdeck_assemble_probe.test.cjs tests/cutdeck_assembly.test.cj
 `workflow.js` contains the Premiere operations; `rpc.js` owns the helper socket and
 its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
 existing CLI in a subprocess.
-The original `cutdeck/bridge.py` and split probe remain separate from this XML
-integration.
+`cutdeck/bridge.py` is now only the pure live-clip `plan` logic; the helper on port 7891
+serves it, so there is one server to start (`Start CutDeck.cmd`). The split probe remains
+separate from this XML integration.
 
 New CLI options: `--range-start-frame`, `--range-end-frame` (half-open interval),
 `--report`, and `--no-save-plan`. The helper uses all four. Existing unscoped

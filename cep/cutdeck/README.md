@@ -2,6 +2,8 @@
 
 Permanent Premiere Pro extension (`Window > Extensions > CutDeck`) using Adobe's Common Extensibility Platform (CEP).
 
+**Role: the production panel** — the one to use day to day. Its sibling `uxp/cutdeck` is experimental (see its README). Both talk to the same helper on `ws://127.0.0.1:7891` (`Start CutDeck.cmd`); there is no other CutDeck server.
+
 ## Features
 - **No UXP Developer Tool required**: Runs automatically whenever Premiere Pro opens.
 - **Direct WebSocket connectivity**: Connects to the local Python helper (`ws://127.0.0.1:7891`) with zero cold-start permission prompt bugs.

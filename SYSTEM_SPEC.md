@@ -247,7 +247,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded as the in-place timestamp source by `live_clip.py` (issue #17/#20), kept in place but unused by that feature |
 | `mark_export.py` | CutPlan → JSON **mark plan** (frame numbers + idx/reason per CUT region) for the UXP Mark/Apply plugin (issue #17/#19); `cutdeck.mode: mark` in `export_mode.py`; refuses VFR, no ordering requirement (nothing ripples during Mark) |
 | `live_clip.py` | `ClipDescriptor` + `plan_from_live_clip` — builds a sequence-time `CutPlan` from a live clip's original media file (no mixdown render); refuses non-unit speed or reversed clips (`LiveClipRefused`); supersedes `sequence_mixdown.py` for this feature (issue #17/#20) |
-| `bridge.py` | `handle_message(req) -> dict` (pure — the primary test seam) + a loopback-only `websockets` server wrapping it; hello/plan/error protocol, structured refusals never exceptions on the wire, never probes a timebase (issue #17/#21); CLI `python -m cutdeck.bridge --port 7890` |
+| `bridge.py` | `handle_message(req) -> dict` (pure — the primary test seam): hello/plan/error protocol, structured refusals never exceptions, never probes a timebase (issue #17/#21). No socket of its own since issue #35 — `xml_bridge.py` (:7891) serves `plan` requests through it; refusals reach the wire as `{"ok": false, "reason", "message"}` |
 
 The retired ExtendScript/QE-DOM `in_place` mode (`jsx_export.py`, razor + reverse-
 chronological ripple-delete) has been removed — see `TODO_LEDGER.md` for why and

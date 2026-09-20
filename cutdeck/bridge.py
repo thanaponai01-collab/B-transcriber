@@ -8,14 +8,10 @@ Two things, deliberately separated so the interesting one needs no socket:
     the entire Python side (clip descriptor -> ``ingest()`` ->
     ``build_cut_spans()`` -> ``CutPlan`` -> mark plan) is exercised through
     this one function.
-  * :func:`serve` — a thin ``websockets`` server wrapping it. Python is the
-    **server**; the UXP plugin is the client. This is forced, not chosen —
-    UXP exposes no listen API. The server is a dumb transport: receive JSON,
-    call ``handle_message``, send JSON back. All logic stays on the pure side
-    of that line.
-
-Bound to loopback only (``127.0.0.1``) — this bridge is never meant to be
-reachable from outside the editor's own machine.
+  * The socket transport is not here: ``cutdeck.xml_bridge`` (ws://127.0.0.1:7891,
+    ``Start CutDeck.cmd``) is the single helper server and routes ``plan`` requests to
+    this function. Python is the server, the UXP plugin is the client — UXP exposes no
+    listen API.
 
 **No LLM anywhere on this path** — same select-only discipline as the
 reconciler (``pipeline/reconcile.py``) and the takes classifier (``takes.py``).
@@ -35,23 +31,13 @@ path, since a mixdown/media-only probe silently falls back to a fabricated
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import json
-import logging
-from pathlib import Path
 from typing import Optional
 
 from cutdeck.contracts import CutConfig, Timebase
 from cutdeck.live_clip import ClipDescriptor, LiveClipRefused, plan_from_live_clip
 from cutdeck.mark_export import to_mark_plan
 
-logger = logging.getLogger(__name__)
-
 BRIDGE_VERSION = "1.0"
-
-DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 7890
 
 
 def handle_message(req: dict, *, cfg: Optional[CutConfig] = None, **ingest_kwargs) -> dict:
@@ -65,7 +51,7 @@ def handle_message(req: dict, *, cfg: Optional[CutConfig] = None, **ingest_kwarg
 
     ``cfg`` defaults to ``CutConfig()`` (the deterministic defaults tests
     exercise) rather than reading ``transcribe/config.yaml`` off disk here —
-    ``main()`` below loads the real config once at process start instead.
+    ``cutdeck.xml_bridge`` loads the real config when it serves a ``plan`` request.
     """
     msg_type = req.get("type")
     if msg_type == "hello":
@@ -148,79 +134,3 @@ def _handle_plan(req: dict, cfg: CutConfig, **ingest_kwargs) -> dict:
 
 def _error(reason: str, message: str) -> dict:
     return {"type": "error", "reason": reason, "message": message}
-
-
-# ── WebSocket transport ─────────────────────────────────────────────────────
-
-async def _connection(websocket, cfg: Optional[CutConfig], ingest_kwargs: dict) -> None:
-    async for raw in websocket:
-        try:
-            req = json.loads(raw)
-        except (json.JSONDecodeError, TypeError) as e:
-            await websocket.send(json.dumps(_error("malformed_json", str(e))))
-            continue
-
-        # A live-clip 'plan' request runs ingest()/VAD over the real media
-        # file, which can take real time on a long clip. Send an immediate
-        # ack first so the plugin can tell "still working" from "disconnected"
-        # rather than reading a long silence as a hang.
-        if req.get("type") == "plan":
-            await websocket.send(json.dumps({"type": "working"}))
-
-        resp = handle_message(req, cfg=cfg, **ingest_kwargs)
-        await websocket.send(json.dumps(resp, ensure_ascii=False))
-
-
-async def serve(
-    host: str = DEFAULT_HOST,
-    port: int = DEFAULT_PORT,
-    cfg: Optional[CutConfig] = None,
-    **ingest_kwargs,
-):
-    """Run the loopback bridge server until cancelled. Returns the running
-    ``websockets`` server object (an async context manager) so callers/tests
-    can shut it down explicitly."""
-    import websockets
-
-    async def _handler(websocket):
-        await _connection(websocket, cfg, ingest_kwargs)
-
-    return await websockets.serve(_handler, host, port)
-
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
-
-_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "transcribe" / "config.yaml"
-
-
-def main(argv: Optional[list[str]] = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="Run the CutDeck <-> UXP plugin loopback WebSocket bridge."
-    )
-    ap.add_argument("--host", default=DEFAULT_HOST,
-                     help="bind address (default 127.0.0.1 — loopback only)")
-    ap.add_argument("--port", type=int, default=DEFAULT_PORT)
-    ap.add_argument("--config", default=str(_DEFAULT_CONFIG),
-                     help="pipeline config.yaml — the bridge's cut:/segment: "
-                          "thresholds (min_silence_ms, pad_pre_ms, ...) come "
-                          "from here, same as every other CutDeck entry point. "
-                          "Restart the bridge to pick up an edited config.")
-    args = ap.parse_args(argv)
-
-    logging.basicConfig(level=logging.INFO)
-
-    import yaml
-    cfg = CutConfig.from_yaml(yaml.safe_load(Path(args.config).read_text(encoding="utf-8")))
-
-    async def _run():
-        server = await serve(args.host, args.port, cfg=cfg)
-        logger.info("CutDeck bridge listening on ws://%s:%d", args.host, args.port)
-        async with server:
-            await asyncio.Future()  # run forever
-
-    asyncio.run(_run())
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -35,6 +35,32 @@ def parse_progress(line: str) -> dict | None:
     return {"pct": min(int(match.group(1)), 100), "stage": match.group(2).strip()}
 
 
+class PlanRefused(ValueError):
+    """A live-clip `plan` request refused by design (VFR, speed change, no timebase...).
+
+    `reason` is the machine-readable code the panel branches on; str() is for the editor.
+    """
+
+    def __init__(self, reason: str, message: str):
+        super().__init__(message)
+        self.reason = reason
+
+
+def _handle_plan(req: dict, cut_config) -> dict:
+    """Live-clip mark plan (issues #17/#21) — the pure logic still lives in cutdeck.bridge."""
+    from cutdeck.bridge import handle_message
+
+    if cut_config is None:
+        import yaml
+        from cutdeck.contracts import CutConfig
+        cut_config = CutConfig.from_yaml(
+            yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8")))
+    response = handle_message(req, cfg=cut_config)
+    if response.get("type") == "error":
+        raise PlanRefused(response["reason"], response["message"])
+    return response
+
+
 def reference_audio_track(source_xml: str, request: dict) -> int | None:
     """Map Premiere's logical track to FCP7's exploded channel tracks.
 
@@ -130,8 +156,9 @@ def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
 
 
 class XmlJobs:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, cut_config=None):
         self.directory = directory.resolve()
+        self.cut_config = cut_config  # None: read transcribe/config.yaml on each `plan`
         self.directory.mkdir(parents=True, exist_ok=True)
         self.jobs: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
@@ -145,6 +172,8 @@ class XmlJobs:
             if req.get("version") != VERSION:
                 raise ValueError("Panel/helper version mismatch")
             return {"version": VERSION}
+        if kind == "plan":
+            return await asyncio.to_thread(_handle_plan, req, self.cut_config)
         if kind == "prepare" or kind == "prepare_sync":
             if self.active:
                 raise ValueError("CutDeck is already processing a sequence")
@@ -337,6 +366,8 @@ async def serve(jobs: XmlJobs, port: int = PORT):
             try:
                 req = json.loads(raw)
                 response = {"ok": True, **await jobs.dispatch(req)}
+            except PlanRefused as exc:
+                response = {"ok": False, "message": str(exc), "reason": exc.reason}
             except Exception as exc:
                 response = {"ok": False, "message": str(exc)}
             await socket.send(json.dumps(response, ensure_ascii=False))

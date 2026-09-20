@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cutdeck.bridge import BRIDGE_VERSION, handle_message, serve  # noqa: E402
+from cutdeck.bridge import BRIDGE_VERSION, handle_message  # noqa: E402
 from cutdeck.contracts import CutConfig  # noqa: E402
 from transcribe.pipeline import ingest as ingest_mod  # noqa: E402
 from transcribe.timebase import frame_to_ms, ms_to_frame  # noqa: E402
@@ -274,21 +274,41 @@ def test_unreadable_media_path_is_a_structured_refusal():
     assert resp["reason"] == "unreadable_media"
 
 
-# ── socket smoke test (thin — the behaviour lives in handle_message) ────────
+# ── the one helper socket (xml_bridge, :7891) serves `plan` too ──────────────
 
-def test_websocket_round_trip_smoke():
+def _ask_helper(tmp_path, request):
+    """Send one request over a real websocket to xml_bridge.serve; return the parsed reply."""
+    import websockets
+    from cutdeck.xml_bridge import XmlJobs, serve as serve_helper
+
     async def _run():
-        server = await serve(host="127.0.0.1", port=17890)
+        server = await serve_helper(XmlJobs(tmp_path / "jobs", cut_config=CFG), port=0)
         try:
-            import websockets
-
-            async with websockets.connect("ws://127.0.0.1:17890") as ws:
-                await ws.send(json.dumps({"type": "hello", "version": BRIDGE_VERSION}))
-                raw = await ws.recv()
-                return json.loads(raw)
+            port = server.sockets[0].getsockname()[1]
+            async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                await ws.send(json.dumps(request))
+                return json.loads(await ws.recv())
         finally:
             server.close()
             await server.wait_closed()
 
-    resp = asyncio.run(_run())
-    assert resp == {"type": "hello", "version": BRIDGE_VERSION}
+    return asyncio.run(_run())
+
+
+def test_helper_socket_serves_plan_requests(multi_silence_media, tmp_path):
+    reply = _ask_helper(tmp_path, _plan_req(multi_silence_media))
+    assert reply["ok"] is True
+    assert reply["type"] == "mark_plan"
+    assert len(reply["mark_plan"]["regions"]) == 2
+
+
+def test_helper_socket_refusal_keeps_its_machine_readable_reason(multi_silence_media, tmp_path):
+    reply = _ask_helper(tmp_path, _plan_req(multi_silence_media, speed=2.0))
+    assert reply["ok"] is False
+    assert reply["reason"] == "speed_change"
+    assert reply["message"]
+
+
+def test_helper_socket_bridge_module_no_longer_owns_a_server():
+    import cutdeck.bridge as bridge_mod
+    assert not hasattr(bridge_mod, "serve") and not hasattr(bridge_mod, "DEFAULT_PORT")
