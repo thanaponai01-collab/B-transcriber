@@ -1,6 +1,7 @@
 const ppro = require("premierepro");
 const workflow = require("./workflow.js");
 const { createRpc } = require("./rpc.js");
+const { progressText } = require("./progressText.js");
 const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
 const capability = require("./capabilityProbe.js");
 const assemble = require("./assembleProbe.js");
@@ -50,7 +51,7 @@ async function refresh() {
 }
 async function follow(job) {
   while (job.state === "running") {
-    status("Analyzing the full sequence with your current preset. Cuts will stay inside the captured In/Out range.\nThis can take several minutes.");
+    status(progressText(job));
     await new Promise((resolve) => setTimeout(resolve, 1500));
     job = await rpc({ type: "status", job_id: job.job_id });
   }
