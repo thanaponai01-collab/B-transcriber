@@ -37,6 +37,8 @@ from typing import Optional
 from cutdeck.contracts import CutConfig, CutPlan
 from cutdeck.plan import build_plan
 from cutdeck.rules import build_cut_spans
+from cutdeck.segment import segment_tokens
+from cutdeck.words import Word
 from transcribe.console import safe_print
 from transcribe.pipeline.ingest import ingest
 from transcribe.timebase import Timebase, probe
@@ -51,6 +53,7 @@ def plan_from_mixdown(
     timebase: Optional[Timebase] = None,
     tokens: Optional[list] = None,
     ingest_result=None,
+    words: Optional[list[Word]] = None,
     **ingest_kwargs,
 ) -> CutPlan:
     """Build a silence-removal ``CutPlan`` from a sequence's own audio mixdown.
@@ -60,11 +63,12 @@ def plan_from_mixdown(
     stream to probe fps from). ``ingest_kwargs`` forward to ``ingest()`` (e.g.
     ``rms_gate_enabled=False`` for a deterministic test run).
 
-    ``cfg.fillers_enabled`` / ``cfg.repeats_enabled`` need a real word timeline,
-    which a mixdown-only run (no ASR pass) never builds — if either is on, this
-    degrades to silence-only removal with a logged warning rather than crashing
-    or silently guessing a word timeline. Run the full ASR pipeline on the
-    mixdown first (a separate job) if word-level cuts are actually needed.
+    ``cfg.fillers_enabled`` / ``cfg.repeats_enabled`` need a real word timeline
+    (``words``, e.g. ``cutdeck.words.words_for_job`` on an ASR job for this same
+    mixdown). Without one — a mixdown-only run — either flag degrades to
+    silence-only removal with a logged warning rather than crashing or silently
+    guessing a word timeline. Repeat cuts also need ``tokens`` (they are
+    grouped into utterance segments to keep a retake from reading as a stutter).
 
     ``tokens`` (optional, phrase-cue tokens with ``.start_ms``/``.end_ms`` — e.g.
     ``transcribe.db.store.TokenRow`` rows from a completed ASR job on this same
@@ -82,7 +86,7 @@ def plan_from_mixdown(
     (``xml_recut`` ingests once for its duration guard). ``ingest_kwargs`` are
     ignored when it is given.
     """
-    if cfg.fillers_enabled or cfg.repeats_enabled:
+    if (cfg.fillers_enabled or cfg.repeats_enabled) and not words:
         logger.warning(
             "sequence-mixdown ingest has no transcript for job %d — degrading "
             "cfg.fillers_enabled=%s / cfg.repeats_enabled=%s to silence-only "
@@ -109,8 +113,10 @@ def plan_from_mixdown(
             job_id, mixdown_path,
         )
 
+    segments = segment_tokens(tokens, result.spans, cfg) if tokens and words else None
     cut_spans = build_cut_spans(
         tokens=tokens or [], spans=result.spans, duration_ms=duration_ms, cfg=cfg,
+        words=words, segments=segments, job_id=job_id,
     )
 
     from transcribe.db import store

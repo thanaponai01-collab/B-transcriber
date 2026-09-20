@@ -123,3 +123,56 @@ def test_repeats_enabled_degrades_to_silence_only_with_warning(mixdown_path, cap
 
     assert any("degrading" in r.message for r in caplog.records)
     assert any(s.action == CUT for s in plan.spans)
+
+
+# ── word timeline (issue #33) ─────────────────────────────────────────────────
+
+def _filler_cfg(**kw):
+    return CutConfig(filler_lexicon=("เอ่อ",), min_clip_ms=0, **kw)
+
+
+def test_words_keep_fillers_enabled_and_cut_the_filler(mixdown_path, caplog):
+    from cutdeck.words import Word
+
+    # "เอ่อ" sits inside the first speech island [0-1500ms].
+    words = [Word("สวัสดี", 100, 600, None), Word("เอ่อ", 700, 1000, None),
+             Word("ครับ", 1050, 1400, None)]
+    with caplog.at_level(logging.WARNING):
+        plan = plan_from_mixdown(mixdown_path, job_id=1, cfg=_filler_cfg(fillers_enabled=True),
+                                 words=words, rms_gate_enabled=False)
+
+    assert not any("degrading" in r.message for r in caplog.records)
+    filler_cuts = [s for s in plan.spans if s.action == CUT and s.reason == "filler"]
+    assert [(c.src_in_ms, c.src_out_ms) for c in filler_cuts] == [(700, 1000)]
+
+
+def test_words_without_filler_match_cut_nothing_extra(mixdown_path):
+    from cutdeck.words import Word
+
+    words = [Word("สวัสดี", 100, 600, None)]
+    plan = plan_from_mixdown(mixdown_path, job_id=1, cfg=_filler_cfg(fillers_enabled=True),
+                             words=words, rms_gate_enabled=False)
+    assert not [s for s in plan.spans if s.reason == "filler"]
+
+
+def test_words_and_tokens_enable_repeat_cuts(mixdown_path, caplog):
+    from types import SimpleNamespace
+
+    from cutdeck.words import Word
+
+    words = [Word("ครับ", 100, 400, None), Word("ครับ", 450, 750, None),
+             Word("ผม", 800, 1100, None)]
+    tokens = [SimpleNamespace(idx=0, text="ครับ ครับ ผม", start_ms=100, end_ms=1100)]
+    with caplog.at_level(logging.WARNING):
+        plan = plan_from_mixdown(mixdown_path, job_id=1, cfg=CutConfig(repeats_enabled=True, min_clip_ms=0),
+                                 words=words, tokens=tokens, rms_gate_enabled=False)
+
+    assert not any("degrading" in r.message for r in caplog.records)
+    assert any(s.action == CUT and s.reason == "repeat" for s in plan.spans)
+
+
+def test_empty_words_still_degrade_with_warning(mixdown_path, caplog):
+    with caplog.at_level(logging.WARNING):
+        plan_from_mixdown(mixdown_path, job_id=1, cfg=_filler_cfg(fillers_enabled=True),
+                          words=[], rms_gate_enabled=False)
+    assert any("degrading" in r.message for r in caplog.records)

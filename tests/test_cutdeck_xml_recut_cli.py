@@ -2,6 +2,7 @@
 (docs/HANDOFF_CUTDECK_XML_RECUT.md).
 """
 
+import json
 import logging
 import sys
 import tempfile
@@ -205,7 +206,8 @@ def test_asr_rough_cut_shares_one_raw_ingest_with_run_file(
     assert seen["result"] is not None
 
 
-def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, *, extracted):
+def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, *, extracted,
+             raw_words=None):
     """Run --asr with a run_file stub that persists rows like the real one.
     Returns (db path, job id the stub created)."""
     import shutil
@@ -227,6 +229,9 @@ def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, *, extracte
             confidence=None, source_engine="a", speaker_id=None)])
         store.bulk_create_speech_spans(
             conn, job_id, [dict(idx=0, start_ms=0, end_ms=100, kind="speech")])
+        if raw_words is not None:
+            store.save_engine_result(conn, job_id, "a", "a", "[]", True,
+                                     raw_words_json=json.dumps(raw_words))
         conn.close()
         made["job"] = job_id
         return [dict(text="x", start_ms=0, end_ms=100)]
@@ -266,3 +271,23 @@ def test_asr_caller_supplied_mixdown_keeps_rows(
         mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
     db, job = _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, extracted=False)
     assert _row_counts(db, job) == {"job": 1, "token": 1, "span": 1}
+
+
+@pytest.mark.parametrize("extracted", [True, False])
+def test_asr_forwards_word_timeline_to_the_plan(
+        mixdown_path, sequence_xml_path, monkeypatch, tmp_path, extracted):
+    """words_for_job must be read before the temp-mixdown purge drops raw_words_json."""
+    from cutdeck import sequence_mixdown
+
+    seen = {}
+    real = sequence_mixdown.plan_from_mixdown
+
+    def spy(*a, **kw):
+        seen["words"] = kw.get("words")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(sequence_mixdown, "plan_from_mixdown", spy)
+    raw = [dict(text="เอ่อ", start_ms=700, end_ms=1000, confidence=None)]
+    _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path,
+             extracted=extracted, raw_words=raw)
+    assert [(w.text, w.start_ms, w.end_ms) for w in seen["words"]] == [("เอ่อ", 700, 1000)]

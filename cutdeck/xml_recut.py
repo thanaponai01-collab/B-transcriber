@@ -670,11 +670,14 @@ def main(argv: list[str] | None = None) -> int:
                               mixdown_result.duration_ms, tb)
 
         tokens = None
+        words = None
         if args.asr:
             from types import SimpleNamespace
 
             from transcribe.db import store
             from transcribe.pipeline.run import run_file
+
+            from cutdeck.words import words_for_job
 
             print("--asr: running the full ASR pipeline on the mixdown "
                   "(this transcribes the whole mixdown — slower than silence-only)...")
@@ -695,6 +698,13 @@ def main(argv: list[str] | None = None) -> int:
                 asr_conn.close()
             if job_row is not None:
                 args.job_id = job_row.id
+                # Read the word timeline before the purge below drops
+                # engine_result.raw_words_json — filler/repeat cuts need it.
+                words_conn = store.connect(db_path)
+                try:
+                    words = words_for_job(words_conn, job_row.id)
+                finally:
+                    words_conn.close()
                 if extracted_tmp is not None:
                     # Our own temp mixdown is deleted below and can never be
                     # resumed — keep the job row for cut_plan's FK, drop the
@@ -716,7 +726,8 @@ def main(argv: list[str] | None = None) -> int:
             ]
 
         plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb,
-                                  tokens=tokens, ingest_result=mixdown_result)
+                                  tokens=tokens, ingest_result=mixdown_result,
+                                  words=words)
     finally:
         if extracted_tmp is not None:
             Path(extracted_tmp.name).unlink(missing_ok=True)
