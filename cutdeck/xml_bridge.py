@@ -103,10 +103,15 @@ def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
         return result
 
     start, end = frame("in_ticks"), frame("out_ticks")
-    if frame("end_ticks") != duration:
+    req_end = frame("end_ticks")
+    tb_fps = tb.fps_num / tb.fps_den
+    max_pad_frames = max(30, int(tb_fps * 5))
+    if abs(req_end - duration) > max_pad_frames:
         raise ValueError("Export duration differs from the captured full sequence; refusing to cut")
     if int(request.get("ticks_per_frame", "0")) * tb.fps_num != tick_num:
         raise ValueError("Export frame rate differs from the captured sequence")
+    start = max(0, start)
+    end = min(duration, end)
     if not 0 <= start < end <= duration:
         raise ValueError("Set valid timeline In/Out marks inside the sequence")
     return start, end

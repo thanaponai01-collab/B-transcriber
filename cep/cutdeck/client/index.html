@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CutDeck</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #eceeed;
+      background: #232625;
+      overflow-y: auto;
+      user-select: none;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      background: #334038;
+      color: #75dfb2;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    p { margin: 0 0 12px; line-height: 1.4; }
+    .muted { color: #8e9893; }
+    .card {
+      background: #2b302d;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid #3a423e;
+      margin-bottom: 12px;
+    }
+    #sequence { font-weight: 600; font-size: 13px; color: #f0f3f1; word-break: break-all; }
+    #range { margin-top: 6px; font-size: 12px; color: #a4b0a9; }
+    label { display: block; margin: 10px 0 4px; font-weight: 500; font-size: 12px; color: #c4cdc7; }
+    label span { display: block; margin-bottom: 5px; }
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      background: #1c1e1d;
+      border: 1px solid #444d47;
+      border-radius: 5px;
+      color: #e2e6e3;
+      font-size: 12px;
+      outline: none;
+    }
+    select:focus { border-color: #75dfb2; }
+    button {
+      padding: 9px 12px;
+      margin-top: 10px;
+      width: 100%;
+      border-radius: 5px;
+      border: 1px solid #48534d;
+      background: #343c37;
+      color: #e8ece9;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover:not(:disabled) {
+      background: #3f4943;
+      border-color: #5c6962;
+    }
+    button:active:not(:disabled) {
+      background: #2b322e;
+    }
+    #cut {
+      background: #75dfb2;
+      color: #0d2219;
+      font-weight: 700;
+      font-size: 13px;
+      border: none;
+      padding: 11px;
+      margin-top: 14px;
+    }
+    #cut:hover:not(:disabled) {
+      background: #89e6bd;
+    }
+    #cut:active:not(:disabled) {
+      background: #63caa0;
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    #status {
+      white-space: pre-wrap;
+      line-height: 1.45;
+      font-size: 12px;
+      padding: 10px 12px;
+      background: #1e201f;
+      border: 1px solid #333936;
+      border-radius: 5px;
+      margin-top: 14px;
+      color: #d1d8d3;
+      min-height: 48px;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid #3f4742;
+      color: #a0aaa4;
+      font-size: 11px;
+      padding: 7px;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: #2d332f;
+      color: #d8deda;
+    }
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .actions-grid button { margin-top: 4px; }
+    .small { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1>CutDeck <span class="badge">CEP</span></h1>
+  <p class="muted">Mark In / Out on timeline. Click Rough Cut.</p>
+
+  <div class="card">
+    <div id="sequence">Open a sequence in Premiere</div>
+    <div id="range" class="muted">Set timeline In and Out marks.</div>
+  </div>
+
+  <button id="refresh">Read timeline range</button>
+
+  <label>
+    <span>Dialogue audio</span>
+    <select id="audio">
+      <option value="" selected>First audio track with clips</option>
+    </select>
+  </label>
+
+  <label>
+    <span>Cutting mode</span>
+    <select id="mode">
+      <option value="protected" selected>Usual preset · protect short speech</option>
+      <option value="silence">Faster · silence only</option>
+    </select>
+  </label>
+
+  <button id="cut">Rough Cut In–Out</button>
+
+  <div class="actions-grid">
+    <button id="resume" class="btn-secondary" hidden>Resume last job</button>
+    <button id="dismiss" class="btn-secondary" hidden>Dismiss last job</button>
+  </div>
+
+  <p id="status" role="status">Connecting to CutDeck helper…</p>
+
+  <div class="actions-grid">
+    <button id="socketprobe" class="btn-secondary">Test helper connection</button>
+    <button id="copystatus" class="btn-secondary">Copy status to clipboard</button>
+  </div>
+
+  <p class="muted small" style="margin-top: 14px;">Creates a newly imported sequence with silence and filler removed inside your marked In/Out interval.</p>
+
+  <script src="CSInterface.js"></script>
+  <script src="rpc.js"></script>
+  <script src="workflow.js"></script>
+  <script src="helper_manager.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
