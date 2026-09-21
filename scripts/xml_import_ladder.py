@@ -367,10 +367,6 @@ def _runbook(media_path: str, tb: Timebase, total_ms: int) -> str:
         "Premiere did (screenshot or the literal error). Then the next session can",
         "act on evidence instead of re-deriving the question.",
         "",
-        "Note what this ladder does **not** cover: it says nothing about the",
-        "`assemble` route (`cutdeck/assemble_export.py`), whose primitives have",
-        "still never executed once — that needs its own live probe.",
-        "",
     ]
     return "\n".join(lines)
 

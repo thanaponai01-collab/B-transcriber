@@ -4,7 +4,6 @@ const { createRpc } = require("./core/rpc.js");
 const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
-const assemble = require("./assembleProbe.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
@@ -268,18 +267,6 @@ async function handleProbe(name) {
     setStatus(`Saved active preset slot as [${s.activeFx}] in bin [${s.bin}]`, "ready");
     return;
   }
-  if (name === "assemble-arm") {
-    setStatus("The assemble probe mutates the open project: it creates a sequence, places three spans, "
-      + "disables one and ripple-removes it. Use a DISPOSABLE project.\nClick the red button again "
-      + "within 10 seconds to run it, or wait for it to disarm.", "ready");
-    return;
-  }
-  if (name === "assemble") {
-    setStatus("Running the assemble probe (issue #25, Phase 0)…", "busy");
-    const report = await assemble.runAssembleProbe(ppro, (line) => console.log("[assemble probe]", line));
-    console.log("CutDeck assemble probe", JSON.stringify(report, null, 2));
-    setStatus(assemble.formatReport(report), "ready");
-  }
 }
 
 function applySettingChange(patch) {
@@ -316,9 +303,7 @@ panel.bind({
   onAdjust: (mode) => act(() => doAdjust(mode)),
   onEffect: (mode) => act(() => doEffect(mode)),
   onSettingChange: (patch) => applySettingChange(patch),
-  // Arming the assemble probe is a local warning message, not a busy action — it must not
-  // disable the rest of the panel the way an actual probe run does.
-  onProbe: (name) => (name === "assemble-arm" ? handleProbe(name) : act(() => handleProbe(name))),
+  onProbe: (name) => act(() => handleProbe(name)),
 });
 
 const savedJob = lastJob();

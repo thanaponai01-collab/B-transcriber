@@ -383,36 +383,6 @@
     if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
   }
 
-  function bindAssembleProbe(intents) {
-    const btn = $("assembleprobe");
-    if (!btn) return;
-    const DISARMED_TEXT = "Run assemble probe (MUTATES — disposable projects only)";
-    const ARMED_TEXT = "Click again to run — this CREATES a sequence";
-    let armedTimer = null;
-
-    function setArmed(armed) {
-      btn.classList.toggle("armed", armed);
-      btn.textContent = armed ? ARMED_TEXT : DISARMED_TEXT;
-    }
-    function disarm() {
-      if (armedTimer) clearTimeout(armedTimer);
-      armedTimer = null;
-      setArmed(false);
-    }
-    setArmed(false);
-
-    btn.addEventListener("click", () => {
-      if (!armedTimer) {
-        armedTimer = setTimeout(disarm, 10000);
-        setArmed(true);
-        intents.onProbe("assemble-arm");
-        return;
-      }
-      disarm();
-      intents.onProbe("assemble");
-    });
-  }
-
   function bind(intents) {
     bindTabs(intents);
     bindCutModePills(intents);
@@ -427,7 +397,6 @@
     bindBadges(intents);
     bindAdjustmentButtons(intents);
     bindProbes(intents);
-    bindAssembleProbe(intents);
   }
 
   const exportObj = { render, bind };

@@ -51,9 +51,8 @@ const CUTDECK_BIN_NAME = "CutDeck";
 // sync results land organized in the Project panel instead of at the root.
 // Idempotent: only creates when a bin with this name doesn't already exist.
 //
-// executeTransaction must never be called bare — assembleProbe.js's commit()
-// documents this as "the pattern #18 confirmed against Adobe's own sample and
-// a third-party plugin": wrap it in project.lockedAccess(...), or references
+// executeTransaction must never be called bare — the pattern #18 confirmed against
+// Adobe's own sample and a third-party plugin: wrap it in project.lockedAccess(...), or references
 // fetched just beforehand (here, `root`) throw "The script object is no
 // longer valid" once the transaction runs, which is exactly what calling it
 // bare produced live in Premiere. Re-fetching `root` immediately before use

@@ -71,8 +71,7 @@ when that isn't set up, not as a replacement for it.
    scattering at the root).
 
 The diagnostics drawer (gear icon, top right) holds the read-only timing
-probe, the connection probe, copy-status, and the assemble probe described
-below.
+probe, the connection probe, and copy-status.
 
 The rough cut XML is written to a **`CutDeck` folder beside your footage**, named
 after the sequence and job, so it sits with the media instead of inside this repo:
@@ -166,18 +165,12 @@ no helper. See `docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md`. What exists today:
 - `assemblyPlan.js` — pure intersection and placement math (handoff section 6).
 - `capabilityProbe.js` — Phase 0 probe 1, behind the **Check Premiere timing
   (read-only)** button.
-- `assembleProbe.js` — the Phase 0 mutation probe, behind the red **Run assemble
-  probe** button. **This is the only control in the panel that changes a project.**
 
-No production code path mutates a timeline yet: the two probe buttons are the only
-host-mutating code here, and one of them is read-only.
+No production code path mutates a timeline yet. (The `assembleProbe.js` mutation
+probe from issue #25 was retired unrun on 2026-09-21: the XML recut route made
+native assembly of the *Mark/Apply* kind unnecessary.)
 
-### Run the timing probe (one of two gestures waiting on a human)
-
-The other is the assemble probe below. They are independent: this one is read-only
-and settles the Out-point convention on a real project; that one mutates a
-disposable project and settles whether issue #25's route exists at all. Neither
-blocks the other, so run them in whichever order is convenient.
+### Run the timing probe (a gesture waiting on a human)
 
 `timelineRange.OUT_CONVENTION` is deliberately `null`, and every call throws until
 it is set. Adobe's reference does not say whether `Sequence.getOutPoint()` names
@@ -200,72 +193,10 @@ and whether it divides 254016000000 exactly at a known rate, what an unset mark
 returns on this build, whether `getZeroPoint` exists, and whether this UXP runtime
 supports BigInt at all.
 
-### Run the assemble probe (the other gesture — USE A DISPOSABLE PROJECT)
-
-Issue #25's three-point route — create a matching sequence, place every span,
-disable the CUT ones, ripple the disabled ones out on Apply — depends on five API
-calls, **none of which has executed once in this project**. They come from Adobe's
-published type definitions, the same evidentiary footing that produced eighteen
-confident, wrong rounds on the clone route (#18/#24). This answers three of those
-unknowns in one click at **N=3 spans instead of 443**.
-
-Three in one click deliberately breaks the one-variable-per-round discipline #18
-used. They are independent and their log signatures cannot be confused:
-
-| # | Question | Why it decides something |
-|---|---|---|
-| 1 | Does `createSetSettingsAction(source.getSettings())` carry the real timebase? | A fabricated 25 fps silently corrupts every 29.97 and 59.94 job — and this project's `media` rows *already* read `25/1` from `probe()`'s fallback. |
-| 2 | Do three interleaved `setInOut`/`overwrite` pairs survive **one** transaction? | Three distinct ranges = the cheap path lives. Three identical = the shared `ClipProjectItem` resolved against the last value, and the fallback is one transaction per span (acceptable: undo is `deleteSequence`). |
-| 3 | Does `createRemoveItemsAction(sel, ripple=true, ANY)` work? | Apply is built **entirely** on this call. |
-
-Unknown 1 gates 2 and 3: a destination on the wrong timebase makes every placement
-wrong by construction, so the probe refuses to measure against it.
-
-1. **Open a disposable project.** This mutates. Never a real edit.
-2. Open a sequence whose **first clip on V1** is at least **12 frames** long. The
-   probe carves three spans of 1/2/3 units from it — distinct starts *and* distinct
-   lengths, so a partial collapse is as visible as a total one — and places them
-   back to back. No marks needed; the helper does not need to be running.
-3. Click the red **Run assemble probe** button. It arms on the first click and runs
-   on the second, disarming itself after ten seconds.
-4. Paste the report onto issue #25. The same report is in the UXP Developer Tool
-   console as JSON.
-5. **Delete the `CutDeck probe — assemble` sequence by hand.** The probe never
-   deletes it — a half-built sequence is the evidence (issue #25).
-
-Reading the verdicts:
-
-```
-VERDICTS  settings:  inherited | fabricated | unreadable
-          placement: independent | collapsed | distinct but wrong | wrong item count | threw
-          removal:   exact | wrong length | threw | unverifiable | not reached
-```
-
-- `inherited / independent / exact` — the route is live. Build `assemblyHost.js`.
-- `fabricated` — stop. The destination must be created another way; nothing past it
-  is worth measuring.
-- `collapsed` — the route lives, at one transaction per span. Record the cost and
-  re-plan Build for 443 transactions.
-- `distinct but wrong` — read `seams` and `mismatches`. A seam is a one-frame gap
-  (black flash) or overlap (a frame eaten by `createOverwriteItemAction`).
-- `threw` on removal — Apply needs a different primitive. A route-level finding, not
-  a bug to patch in the probe.
-
-Anything the probe could not do — a missing method, a method that throws, an
-unreadable value — is recorded as a finding rather than raised. A probe that dies on
-the first surprise tells you less than the build it was probing.
-
-`tests/cutdeck_assemble_probe.test.cjs` drives it against
-`tests/fixtures/cutdeck_assemble_host.cjs`, a small real timeline with a shared
-`ClipProjectItem`. Those tests prove the probe **tells the verdicts apart** and
-survives every way a host can disappoint it. They prove **nothing about Premiere**.
-Until the click above happens, every verdict is `null`.
-
 ### Still not built
 
 Phase 0 probes 4-6 (sequence insertion, undo/failure, 50 repeats) and the
-subsequence-extraction question. Those are separate gestures; do not fold them into
-the assemble probe's one click. Until Phase 0 reports, no backend is chosen and
+subsequence-extraction question. Until Phase 0 reports, no backend is chosen and
 `assemblyHost.js` / `assemblySession.js` do not exist.
 
 ## Development
@@ -274,7 +205,7 @@ the assemble probe's one click. Until Phase 0 reports, no backend is chosen and
 ```powershell
 .venv\Scripts\python.exe -m cutdeck.xml_bridge
 .venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_xml_recut_cli.py tests/test_cutdeck_xml_recut.py -q
-node --test tests/cutdeck_assemble_probe.test.cjs tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
+node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
 `workflow.js` contains the Premiere operations; `core/rpc.js` (mirrored from `panel/core/`, shared with the CEP panel) owns the helper socket and

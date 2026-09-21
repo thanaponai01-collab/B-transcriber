@@ -11,9 +11,6 @@ Distinguishes the exporters CutDeck can hand a CutPlan to:
     plugin" (issue #17). Supersedes the retired ExtendScript ``in_place`` mode.
     **Parked** -- the split primitive it depends on was abandoned on evidence
     (see ``mark_export.py``'s docstring and ``assemble_export.py``'s).
-  * ``assemble``       -- ``cutdeck.assemble_export.to_assemble_plan``, "place
-    every span into a new sequence and disable the CUT ones". The route that
-    replaced ``mark`` after issue #24, needing no split primitive at all.
   * ``recut_sequence`` -- ``cutdeck.xml_recut.recut``, "rewrite the editor's
     own exported FCP7 XML with the plan's cuts applied, sync-preserving,
     entirely offline". Signature is ``(source_xml: str, plan: CutPlan) ->
@@ -33,9 +30,8 @@ from typing import Callable
 
 MODE_NEW_SEQUENCE = "new_sequence"
 MODE_MARK = "mark"
-MODE_ASSEMBLE = "assemble"
 MODE_RECUT_SEQUENCE = "recut_sequence"
-VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_ASSEMBLE, MODE_RECUT_SEQUENCE)
+VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_RECUT_SEQUENCE)
 
 
 def exporter_for_mode(mode: str) -> Callable:
@@ -51,9 +47,6 @@ def exporter_for_mode(mode: str) -> Callable:
     if mode == MODE_MARK:
         from cutdeck.mark_export import to_mark_plan
         return to_mark_plan
-    if mode == MODE_ASSEMBLE:
-        from cutdeck.assemble_export import to_assemble_plan
-        return to_assemble_plan
     if mode == MODE_RECUT_SEQUENCE:
         from cutdeck.xml_recut import recut
         return recut

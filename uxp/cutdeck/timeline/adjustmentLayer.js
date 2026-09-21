@@ -762,8 +762,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
 
     // Commit the source Adjustment Layer's in/out points as their OWN transaction,
     // strictly before the overwrite below is even constructed — not queued into the
-    // same compound as the overwrite (the previous approach). See uxp/cutdeck/README.md
-    // issue #25 / assembleProbe.js: a shared ClipProjectItem's setInOut can resolve
+    // same compound as the overwrite (the previous approach). See issue #25 (retired
+    // assemble route): a shared ClipProjectItem's setInOut can resolve
     // against a stale value when paired with another action in one transaction: "Fall
     // back to one transaction per span." Confirmed 2026-09-21 the same-transaction
     // pairing is unsafe in practice — the overwrite read the item's STALE (much

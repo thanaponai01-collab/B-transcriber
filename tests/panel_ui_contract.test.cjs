@@ -155,7 +155,7 @@ function makeDomStub() {
   // Every id core/panel.js references via $(...), plus a few `.pill-mini` and `[data-act]`
   // fixtures so render()'s querySelectorAll paths have something to walk.
   const ids = [
-    "assembleprobe", "audio", "badge-active-fx", "badge-active-fx-text", "badge-transition",
+    "audio", "badge-active-fx", "badge-active-fx-text", "badge-transition",
     "badge-transition-text", "btn-adj", "btn-capture-preset", "btn-fx", "close-settings",
     "copystatus", "cut", "dismiss", "dot", "frame-dec", "frame-inc", "job-banner",
     "menu-item-reload", "menu-item-settings", "mode", "overflow-menu", "pill-silence",
@@ -165,7 +165,7 @@ function makeDomStub() {
     "tools-toggle", "view-adj", "view-edit",
   ];
   const dataActIds = new Set([
-    "audio", "assembleprobe", "badge-active-fx", "badge-transition", "btn-adj",
+    "audio", "badge-active-fx", "badge-transition", "btn-adj",
     "btn-capture-preset", "btn-fx", "copystatus", "cut", "frame-dec", "frame-inc",
     "menu-item-reload", "menu-item-settings", "mode", "pill-silence", "pill-speech",
     "refresh", "seq-card", "setting-active-fx", "setting-bin", "setting-clamp",
