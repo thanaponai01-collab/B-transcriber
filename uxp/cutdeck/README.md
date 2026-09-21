@@ -9,33 +9,55 @@ the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
 ## First-time setup
 
 1. Use Premiere **26.2 or later** (this machine currently has 26.5).
-2. Nothing to start by hand: the first time a session clicks **Rough Cut
-   In–Out**, **Sync Multi-Cam**, or **Resume last job** and the helper isn't
-   already answering, the panel launches it itself via UXP's `shell.openPath`
-   on `Start CutDeck (Hidden).vbs` and waits (up to 15s) for it to come up.
-   Premiere will ask for one-time consent to launch it; accept it. No console
-   window appears — the `.vbs` wrapper runs `Start CutDeck.cmd`'s python
-   process hidden (UXP itself has no way to pass a hidden-window flag, so the
-   wrapper does it instead) — and it uses this project's existing `.venv`,
-   models, configuration, and FFmpeg installation.
-   If it doesn't come up and you need to see why, run **`Start CutDeck.cmd`**
-   directly instead — the hidden path gives no visible error on failure.
-3. Enable **Developer Mode** in Premiere's Plugins preferences and UXP Developer
-   Tool (version 2.2 or later). In **UXP Developer Tool**, choose **Add Plugin**, select
-   `uxp/cutdeck/manifest.json`, and click **Load** with Premiere running.
-4. Open the **CutDeck** panel from Premiere's **Window > UXP Plugins** menu.
-   Accept Premiere's plugin permissions if prompted.
+2. In **UXP Developer Tool**, add this plugin if it isn't already added
+   (**Add Plugin**, select `uxp/cutdeck/manifest.json`), then use its **⋮**
+   menu → **Package**. First time only, UDT prompts to generate a
+   self-signed certificate — any placeholder name/org/email is fine, this is
+   for local install, not Marketplace distribution. UDT writes `cutdeck.ccx`
+   next to the plugin folder.
+3. Double-click `cutdeck.ccx`. This hands off to Creative Cloud Desktop's
+   installer (must be running); confirm the install prompt.
+4. **Fully quit and reopen Premiere Pro** (not just close/reopen the
+   project) so it re-scans installed plugins.
+5. Open the **CutDeck** panel from Premiere's **Window > UXP Plugins** menu.
+   No UXP Developer Tool needs to be running or even installed at this
+   point. Accept Premiere's plugin permissions if prompted.
 
-This is a source-loaded development build. It has not yet been packaged or
-validated as a distributable `.ccx` installer.
+Nothing to start by hand for the helper: the first time a session clicks
+**Rough Cut In–Out**, **Sync Multi-Cam**, or **Resume last job** and the
+helper isn't already answering, the panel launches it itself via UXP's
+`shell.openPath` on `Start CutDeck (Hidden).vbs` and waits (up to 15s) for it
+to come up. Premiere will ask for one-time consent to launch it; accept it.
+No console window appears — the `.vbs` wrapper runs `Start CutDeck.cmd`'s
+python process hidden (UXP itself has no way to pass a hidden-window flag,
+so the wrapper does it instead) — and it uses this project's existing
+`.venv`, models, configuration, and FFmpeg installation.
+If it doesn't come up and you need to see why, run **`Start CutDeck.cmd`**
+directly instead — the hidden path gives no visible error on failure.
 
-**Recommended for daily use:** register `Start CutDeck.cmd` as a Windows
-Scheduled Task that runs at login, instead of relying on the panel's
-launch-on-click fallback above. It avoids the one-time consent prompt
-entirely, and the helper is simply already there every session — the same
-tradeoff CEP's silent auto-spawn makes, without needing `child_process`. The
-panel's own launch (previous step) exists for when that isn't set up, not as
-a replacement for it.
+**Status (issue #40): packaging steps above are recorded but not yet run
+end-to-end on this machine** — Developer Mode off, UXP Developer Tool
+closed, panel visible under **Window > UXP Plugins**, and one rough cut run
+from the installed panel. Until that's confirmed, use source-loading for
+development below; it still talks to the same helper.
+
+### Development (source-load, no packaging)
+
+Enable **Developer Mode** in Premiere's Plugins preferences and UXP Developer
+Tool (version 2.2 or later). In **UXP Developer Tool**, choose **Add Plugin**,
+select `uxp/cutdeck/manifest.json`, and click **Load** with Premiere running.
+Open the **CutDeck** panel from Premiere's **Window > UXP Plugins** menu.
+Accept Premiere's plugin permissions if prompted. Installing the `.ccx`
+above does not remove the ability to source-load this way too — the two
+coexist.
+
+**Recommended for daily use once the install above is verified:** register
+`Start CutDeck.cmd` as a Windows Scheduled Task that runs at login, instead
+of relying on the panel's launch-on-click fallback above. It avoids the
+one-time consent prompt entirely, and the helper is simply already there
+every session — the same tradeoff CEP's silent auto-spawn makes, without
+needing `child_process`. The panel's own launch (previous step) exists for
+when that isn't set up, not as a replacement for it.
 
 ## Use
 

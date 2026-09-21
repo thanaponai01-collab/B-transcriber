@@ -2,18 +2,70 @@ const ppro = require("premierepro");
 const workflow = require("./workflow.js");
 const { createRpc } = require("./core/rpc.js");
 const { progressText } = require("./core/progressText.js");
-const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
+const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
 const assemble = require("./assembleProbe.js");
 const helperStart = require("./helperStart.js");
 const $ = (id) => document.getElementById(id);
 const KEY = "cutdeck.xml.lastJob";
+const SETTINGS_KEY = "cutdeck.adj.settings";
 let busy = false;
 
-// One short connection per request makes reconnects independent of long GPU jobs.
-// Connecting retries; a sent request never does. See rpc.js for why.
+const DEFAULT_SETTINGS = {
+  frames: 16,
+  bin: "CutDeck AL/FX",
+  color: "Iris",
+  clamp: true,
+  activeFx: "Zoom In",
+  fxList: [
+    "Zoom In", "Zoom Out", "Whip Pan L", "Whip Pan R",
+    "Camera Shake", "Motion Blur", "Film Glow", "Letterbox", "Custom FX"
+  ]
+};
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    return { ...DEFAULT_SETTINGS, ...saved };
+  } catch (_) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(s) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch (_) {}
+  updateUIFromSettings(s);
+}
+
+function updateUIFromSettings(s) {
+  if ($("setting-frames")) $("setting-frames").value = s.frames;
+  if ($("setting-bin")) $("setting-bin").value = s.bin;
+  if ($("setting-color")) $("setting-color").value = s.color;
+  if ($("setting-clamp")) $("setting-clamp").checked = !!s.clamp;
+  if ($("setting-active-fx")) $("setting-active-fx").value = s.activeFx;
+
+  const miniPills = document.querySelectorAll(".pill-mini");
+  miniPills.forEach((p) => {
+    const f = parseInt(p.getAttribute("data-frames"), 10);
+    if (f === s.frames) {
+      p.classList.add("active");
+    } else {
+      p.classList.remove("active");
+    }
+  });
+
+  if ($("badge-transition")) {
+    $("badge-transition").textContent = `${s.frames}f (50/50)`;
+  }
+  if ($("badge-active-fx")) {
+    $("badge-active-fx").textContent = s.activeFx;
+  }
+}
+
 const rpc = createRpc({
-  onRetry: (attempt, total) => setStatus(`Connecting to the CutDeck helper… attempt ${attempt} of ${total}.`, "busy"),
+  onRetry: (attempt, total) => setStatus(`Connecting to helper… attempt ${attempt} of ${total}.`, "busy"),
 });
 
 function lastJob() {
@@ -34,21 +86,17 @@ function clearJob() {
 function setStatus(message, state = "ready") {
   if ($("status")) $("status").textContent = message;
   const dot = $("dot");
-  const stateText = $("state-text");
   const icon = $("status-icon");
-  if (dot && stateText && icon) {
+  if (dot) {
     dot.className = "status-dot";
     if (state === "busy" || busy) {
       dot.classList.add("busy");
-      stateText.textContent = "BUSY";
-      icon.style.background = "#f59e0b";
+      if (icon) icon.style.background = "#f59e0b";
     } else if (state === "error") {
       dot.classList.add("error");
-      stateText.textContent = "ALERT";
-      icon.style.background = "#ef4444";
+      if (icon) icon.style.background = "#ef4444";
     } else {
-      stateText.textContent = "READY";
-      icon.style.background = "#10b981";
+      if (icon) icon.style.background = "#10b981";
     }
   }
 }
@@ -102,9 +150,7 @@ async function follow(job) {
   if (sync) {
     const rep = job.report || {};
     const unsynced = rep.unsynced_groups > 0 ? ` ${rep.unsynced_groups} placed at end.` : "";
-    setStatus(`Multi-cam sync complete (${rep.synced_groups || 0} angles).${unsynced}
-Opened ${job.result_name}
-Saved ${job.output_path}`, "ready");
+    setStatus(`Multi-cam sync complete (${rep.synced_groups || 0} angles).${unsynced}\nOpened ${job.result_name}\nSaved ${job.output_path}`, "ready");
     return;
   }
   const note = job.output_note ? `\n${job.output_note}` : "";
@@ -112,9 +158,12 @@ Saved ${job.output_path}`, "ready");
     + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`, "ready");
 }
 
-const ACT_TARGETS = ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode",
+const ACT_TARGETS = [
+  "cut", "sync", "refresh", "resume", "dismiss", "audio", "mode",
   "socketprobe", "timingprobe", "assembleprobe", "copystatus",
-  "pill-speech", "pill-silence"];
+  "pill-speech", "pill-silence", "tab-edit", "tab-adj", "btn-adj",
+  "btn-fx", "badge-transition", "badge-active-fx", "btn-capture-preset", "close-settings"
+];
 
 async function act(fn) {
   if (busy) return;
@@ -138,7 +187,7 @@ async function act(fn) {
       el.removeAttribute("disabled");
       el.classList.remove("disabled");
     });
-    if ($("state-text") && $("state-text").textContent === "BUSY") {
+    if ($("dot") && $("dot").classList.contains("busy")) {
       setStatus($("status") ? $("status").textContent : "Ready", "ready");
     }
   }
@@ -146,7 +195,31 @@ async function act(fn) {
 
 // --- UI Interactivity ---
 
-// 1. Preset Pills for Cutting Mode
+// 1. Tab Navigation: Cut & Sync vs Adjustment & FX
+function setupTabs() {
+  const tabEdit = $("tab-edit");
+  const tabAdj = $("tab-adj");
+  const viewEdit = $("view-edit");
+  const viewAdj = $("view-adj");
+
+  if (!tabEdit || !tabAdj || !viewEdit || !viewAdj) return;
+
+  tabEdit.addEventListener("click", () => {
+    tabEdit.classList.add("active");
+    tabAdj.classList.remove("active");
+    viewEdit.classList.add("active");
+    viewAdj.classList.remove("active");
+  });
+
+  tabAdj.addEventListener("click", () => {
+    tabAdj.classList.add("active");
+    tabEdit.classList.remove("active");
+    viewAdj.classList.add("active");
+    viewEdit.classList.remove("active");
+  });
+}
+
+// 2. Preset Pills for Cutting Mode
 function setupPresets() {
   const pillSpeech = $("pill-speech");
   const pillSilence = $("pill-silence");
@@ -165,16 +238,762 @@ function setupPresets() {
   });
 }
 
-// 2. Diagnostics Drawer Toggle
-function setupDiagnostics() {
+// 3. Settings & Configuration Drawer (3-Dots Button)
+function setupSettingsDrawer() {
   const toggleBtn = $("tools-toggle");
+  const closeBtn = $("close-settings");
   const diag = $("diagnostics");
+
   if (toggleBtn && diag) {
     toggleBtn.addEventListener("click", () => diag.classList.toggle("open"));
   }
+  if (closeBtn && diag) {
+    closeBtn.addEventListener("click", () => diag.classList.remove("open"));
+  }
+
+  const miniPills = document.querySelectorAll(".pill-mini");
+  miniPills.forEach((p) => {
+    p.addEventListener("click", () => {
+      const frames = parseInt(p.getAttribute("data-frames"), 10);
+      if (frames > 0) {
+        const s = loadSettings();
+        s.frames = frames;
+        saveSettings(s);
+      }
+    });
+  });
+
+  if ($("frame-dec")) {
+    $("frame-dec").addEventListener("click", () => {
+      const s = loadSettings();
+      if (s.frames > 2) {
+        s.frames -= 2;
+        saveSettings(s);
+      }
+    });
+  }
+  if ($("frame-inc")) {
+    $("frame-inc").addEventListener("click", () => {
+      const s = loadSettings();
+      if (s.frames < 240) {
+        s.frames += 2;
+        saveSettings(s);
+      }
+    });
+  }
+  if ($("setting-frames")) {
+    $("setting-frames").addEventListener("change", (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val) && val >= 2 && val <= 240) {
+        const s = loadSettings();
+        s.frames = val;
+        saveSettings(s);
+      }
+    });
+  }
+
+  if ($("setting-bin")) {
+    $("setting-bin").addEventListener("change", (e) => {
+      const s = loadSettings();
+      s.bin = e.target.value.trim() || "CutDeck AL/FX";
+      saveSettings(s);
+    });
+  }
+  if ($("setting-color")) {
+    $("setting-color").addEventListener("change", (e) => {
+      const s = loadSettings();
+      s.color = e.target.value;
+      saveSettings(s);
+    });
+  }
+  if ($("setting-clamp")) {
+    $("setting-clamp").addEventListener("change", (e) => {
+      const s = loadSettings();
+      s.clamp = e.target.checked;
+      saveSettings(s);
+    });
+  }
+  if ($("setting-active-fx")) {
+    $("setting-active-fx").addEventListener("change", (e) => {
+      const s = loadSettings();
+      s.activeFx = e.target.value;
+      saveSettings(s);
+    });
+  }
+
+  if ($("btn-capture-preset")) {
+    $("btn-capture-preset").addEventListener("click", () => act(async () => {
+      const s = loadSettings();
+      setStatus(`Saved active preset slot as [${s.activeFx}] in bin [${s.bin}]`, "ready");
+    }));
+  }
 }
 
-// 3. Click Sequence Card to re-read timeline
+// 4. Interactive Quick Badges
+function setupBadges() {
+  const badgeTrans = $("badge-transition");
+  if (badgeTrans) {
+    badgeTrans.addEventListener("click", () => {
+      const s = loadSettings();
+      const sequence = [8, 12, 16, 20, 24];
+      let idx = sequence.indexOf(s.frames);
+      idx = (idx + 1) % sequence.length;
+      s.frames = sequence[idx];
+      saveSettings(s);
+      setStatus(`Transition duration set to ${s.frames} frames (50/50)`, "ready");
+    });
+  }
+
+  const badgeFx = $("badge-active-fx");
+  if (badgeFx) {
+    badgeFx.addEventListener("click", () => {
+      const s = loadSettings();
+      const list = s.fxList || DEFAULT_SETTINGS.fxList;
+      let idx = list.indexOf(s.activeFx);
+      idx = (idx + 1) % list.length;
+      s.activeFx = list[idx];
+      saveSettings(s);
+      setStatus(`Active preset switched to: ${s.activeFx}`, "ready");
+    });
+  }
+}
+
+// Find adjustment layer in project panel or active timeline
+async function findAdjustmentLayerItem(project, seq) {
+  if (!project || typeof project.getRootItem !== "function") return null;
+  const root = await project.getRootItem();
+  if (!root) return null;
+
+  async function getFolderChildren(folder) {
+    if (typeof folder.getItems === "function") {
+      try { return await folder.getItems(); } catch (_) {}
+    }
+    if (ppro.BinProjectItem && typeof ppro.BinProjectItem.cast === "function") {
+      try {
+        const bin = ppro.BinProjectItem.cast(folder);
+        if (bin && typeof bin.getItems === "function") {
+          return await bin.getItems();
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  async function search(folder) {
+    const items = await getFolderChildren(folder);
+    if (!items || !items.length) return null;
+
+    for (const it of items) {
+      // In Premiere Pro UXP, it.type === 2 is a BIN (Folder)
+      const isBin = it.type === 2 || typeof it.getItems === "function" ||
+        (ppro.BinProjectItem && typeof ppro.BinProjectItem.cast === "function" && ppro.BinProjectItem.cast(it) !== null);
+
+      if (isBin) {
+        // Recurse into the bin (e.g. "07. Adjustment Layer") — NEVER return the bin itself!
+        const found = await search(it);
+        if (found) return found;
+        continue;
+      }
+
+      // Must be a clip item (type !== 2) whose name contains adjustment
+      if (it.type !== 2 && it.name) {
+        const lower = it.name.toLowerCase();
+        if (
+          lower.indexOf("adjustment layer") !== -1 ||
+          lower.indexOf("adjustment") !== -1 ||
+          lower.indexOf("adj_") === 0 ||
+          lower.indexOf("al_") === 0
+        ) {
+          return it;
+        }
+      }
+    }
+    return null;
+  }
+
+  const inProject = await search(root);
+  if (inProject) return inProject;
+
+  // Fallback: If not found in project bins, search active sequence video tracks for any existing Adjustment Layer
+  if (seq && typeof seq.getVideoTrackCount === "function") {
+    try {
+      const vCount = await seq.getVideoTrackCount();
+      for (let v = 0; v < vCount; v++) {
+        const track = await seq.getVideoTrack(v);
+        if (track && typeof track.getTrackItems === "function") {
+          const clipType = ppro.Constants && ppro.Constants.TrackItemType ? ppro.Constants.TrackItemType.CLIP : undefined;
+          const items = await track.getTrackItems(clipType, false);
+          if (items && items.length > 0) {
+            for (const it of items) {
+              if (it.name && (it.name.toLowerCase().indexOf("adjustment") !== -1 || it.name.toLowerCase().indexOf("adj") !== -1)) {
+                if (typeof it.getProjectItem === "function") {
+                  const pi = await it.getProjectItem();
+                  if (pi && pi.type !== 2) return pi;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+// Exact tick converter handling TickTime objects, decimal strings, numbers, and BigInt
+function toBigIntTicks(val) {
+  if (val === null || val === undefined) return 0n;
+  if (typeof val === "bigint") return val;
+  if (typeof val === "object") {
+    if (val.ticks !== undefined) return toBigIntTicks(val.ticks);
+    if (typeof val.getSeconds === "function") {
+      return BigInt(Math.round(val.getSeconds() * 254016000000));
+    }
+    if (typeof val.seconds === "number") {
+      return BigInt(Math.round(val.seconds * 254016000000));
+    }
+  }
+  const s = String(val).trim();
+  if (!s) return 0n;
+  const intPart = s.split(".")[0];
+  try {
+    return BigInt(intPart);
+  } catch (_) {
+    const n = parseFloat(s);
+    if (!isNaN(n)) return BigInt(Math.round(n));
+    return 0n;
+  }
+}
+
+// Label color index mapping for Premiere Pro clips
+function getLabelIndex(colorName) {
+  const map = {
+    "violet": 0, "iris": 1, "caribbean": 2, "lavender": 3,
+    "cerulean": 4, "forest": 5, "rose": 6, "mango": 7,
+    "purple": 8, "blue": 9, "teal": 10, "magenta": 11,
+    "tan": 12, "green": 13, "brown": 14, "yellow": 15
+  };
+  if (!colorName) return 1;
+  const key = String(colorName).toLowerCase();
+  return map[key] !== undefined ? map[key] : 1;
+}
+
+// Exact TickTime maker
+function makeTickTimeFn(ppro) {
+  const TickTime = ppro.TickTime;
+  if (!TickTime) return null;
+  const names = ["createWithTicks", "createWithTickcount", "createWithTickCount"];
+  for (const n of names) {
+    if (typeof TickTime[n] === "function") {
+      return (val) => TickTime[n](val.toString());
+    }
+  }
+  if (typeof TickTime.createWithSeconds === "function") {
+    return (val) => TickTime.createWithSeconds(Number(val) / 254016000000);
+  }
+  return (val) => new TickTime(Number(val) / 254016000000);
+}
+
+// Safe helper to get clip track items (never throws if Constants or arguments differ)
+async function getTrackClipItems(track) {
+  if (!track || typeof track.getTrackItems !== "function") return [];
+  const clipType = (ppro.Constants && ppro.Constants.TrackItemType && ppro.Constants.TrackItemType.CLIP !== undefined)
+    ? ppro.Constants.TrackItemType.CLIP
+    : 1;
+  try {
+    const items = await track.getTrackItems(clipType, false);
+    if (items && Array.isArray(items)) return items;
+  } catch (_) {}
+  try {
+    const items = await track.getTrackItems(1, false);
+    if (items && Array.isArray(items)) return items;
+  } catch (_) {}
+  try {
+    const items = await track.getTrackItems();
+    if (items && Array.isArray(items)) return items;
+  } catch (_) {}
+  return [];
+}
+
+// Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers)
+async function getSelectedTimelineClips(seq) {
+  let rawItems = [];
+  try {
+    if (typeof seq.getSelection === "function") {
+      const sel = await seq.getSelection();
+      if (sel) {
+        if (typeof sel.getTrackItems === "function") {
+          const items = await sel.getTrackItems();
+          if (items && items.length > 0) rawItems = items;
+        } else if (Array.isArray(sel)) {
+          rawItems = sel;
+        } else if (Array.isArray(sel.items)) {
+          rawItems = sel.items;
+        }
+      }
+    }
+  } catch (e) {
+    console.log("seq.getSelection() check:", e);
+  }
+
+  // Fallback: search video tracks for selected clips
+  if (rawItems.length === 0) {
+    try {
+      const trackCount = await seq.getVideoTrackCount();
+      for (let v = 0; v < trackCount; v++) {
+        const track = await seq.getVideoTrack(v);
+        const items = await getTrackClipItems(track);
+        if (items && items.length > 0) {
+          for (const it of items) {
+            let isSel = false;
+            if (typeof it.isSelected === "function") {
+              try { isSel = await it.isSelected(); } catch (_) {}
+            } else if (it.isSelected !== undefined) {
+              isSel = !!it.isSelected;
+            } else if (it.selected !== undefined) {
+              isSel = !!it.selected;
+            }
+            if (isSel) rawItems.push(it);
+          }
+        }
+      }
+    } catch (e) {
+      console.log("fallback track scan failed:", e);
+    }
+  }
+
+  if (!rawItems || rawItems.length === 0) return [];
+
+  // Filter: ONLY include Video clips (exclude Audio clips and Adjustment Layers!)
+  // In Premiere, linked selection selects Audio clips which may span longer cuts than Video!
+  const videoClips = [];
+  const videoItemsSet = new Set();
+
+  try {
+    const trackCount = await seq.getVideoTrackCount();
+    for (let v = 0; v < trackCount; v++) {
+      const track = await seq.getVideoTrack(v);
+      const vItems = await getTrackClipItems(track);
+      if (vItems) {
+        for (const vi of vItems) {
+          videoItemsSet.add(vi);
+        }
+      }
+    }
+  } catch (_) {}
+
+  for (const it of rawItems) {
+    if (!it) continue;
+
+    // 1. Ignore Adjustment Layers themselves
+    const name = it.name ? it.name.toLowerCase() : "";
+    if (name.includes("adjustment") || name.startsWith("adj_")) {
+      continue;
+    }
+
+    // 2. Check explicit mediaType
+    if (it.mediaType === "Audio" || it.mediaType === 2 || it.mediaType === "AUDIO") {
+      continue;
+    }
+    if (ppro.AudioClipTrackItem && it instanceof ppro.AudioClipTrackItem) {
+      continue;
+    }
+
+    // 3. Verify item belongs to a Video Track (if videoItemsSet was populated)
+    if (videoItemsSet.size > 0 && !videoItemsSet.has(it)) {
+      continue; // Audio clip on A1/A2, ignore!
+    }
+
+    videoClips.push(it);
+  }
+
+  return videoClips;
+}
+
+// Robust UXP timeline placement routine
+async function placeAdjustmentLayerOnTimeline(ppro, options) {
+  const project = await ppro.Project.getActiveProject();
+  if (!project) throw new Error("Open a Premiere project first.");
+  const seq = await project.getActiveSequence();
+  if (!seq) throw new Error("Open a sequence in Premiere first.");
+
+  // Keep sequence name up to date on UI
+  if ($("sequence") && seq.name) $("sequence").textContent = seq.name;
+
+  const tpfStr = await seq.getTimebase();
+  const tpf = toBigIntTicks(tpfStr) || 10594584000n;
+
+  let ctiTicks = 0n;
+  try {
+    const cti = await seq.getPlayerPosition();
+    ctiTicks = toBigIntTicks(cti);
+  } catch (_) {
+    ctiTicks = 0n;
+  }
+
+  const s = loadSettings();
+  const frames = BigInt(options.frames || s.frames || 16);
+
+  // Check if user has clips selected on timeline
+  const selectedClips = await getSelectedTimelineClips(seq);
+  let fitToSelection = false;
+
+  let startTicks = ctiTicks;
+  let durationTicks = frames * tpf;
+
+  if (selectedClips.length > 0 && options.mode !== "force_transition") {
+    // FIT TO SELECTED CLIPS!
+    let minStart = null;
+    let maxEnd = null;
+
+    for (const it of selectedClips) {
+      try {
+        const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+        const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+        const sTicks = toBigIntTicks(sTime);
+        const eTicks = toBigIntTicks(eTime);
+        if (sTicks !== 0n || eTicks !== 0n) {
+          if (minStart === null || sTicks < minStart) minStart = sTicks;
+          if (maxEnd === null || eTicks > maxEnd) maxEnd = eTicks;
+        }
+      } catch (_) {}
+    }
+
+    if (minStart !== null && maxEnd !== null && maxEnd > minStart) {
+      startTicks = minStart;
+      durationTicks = maxEnd - minStart;
+      fitToSelection = true;
+    }
+  }
+
+  if (!fitToSelection) {
+    // Transition mode (50/50 centered on playhead / cut seam)
+    const half = (frames / 2n) * tpf;
+    startTicks = ctiTicks > half ? ctiTicks - half : 0n;
+    durationTicks = frames * tpf;
+  }
+  if (startTicks < 0n) startTicks = 0n;
+
+  const tickTime = makeTickTimeFn(ppro);
+  if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
+
+  // Target Video Track Smart Stacking:
+  // Must be placed above the highest occupied track, AND must find a track that is completely
+  // clear of any existing clips within the placement interval to NEVER overwrite existing footage!
+  let targetTrack = 1;
+  const trackCount = await seq.getVideoTrackCount();
+  try {
+    let highestOccupiedAtSelection = 0;
+    const endSpanTicks = startTicks + durationTicks;
+
+    // Check which video tracks are occupied during the selected clip span
+    for (let v = 0; v < trackCount; v++) {
+      const track = await seq.getVideoTrack(v);
+      const items = await getTrackClipItems(track);
+      if (items && items.length > 0) {
+        for (const it of items) {
+          const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+          const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+          const itIn = toBigIntTicks(sTime);
+          const itOut = toBigIntTicks(eTime);
+          if (itOut > startTicks && itIn < endSpanTicks) {
+            if (v > highestOccupiedAtSelection) highestOccupiedAtSelection = v;
+            break;
+          }
+        }
+      }
+    }
+
+    // Candidate track starts immediately above the highest occupied track during the clip span
+    let candidate = Math.max(1, highestOccupiedAtSelection + 1);
+
+    // Safety window: Premiere Pro places synthetic items with default 5-second duration before trimming.
+    // The candidate track MUST be completely clear in this safety window so it NEVER crushes clips like Clip 3 on V2!
+    const fiveSecondsTicks = 254016000000n * 5n;
+    const safetyEndTicks = startTicks + (durationTicks > fiveSecondsTicks ? durationTicks : fiveSecondsTicks);
+
+    // Find the first track >= candidate that has NO clips in [startTicks, safetyEndTicks]
+    while (candidate < trackCount) {
+      const track = await seq.getVideoTrack(candidate);
+      const items = await getTrackClipItems(track);
+      let trackHasCollision = false;
+
+      if (items && items.length > 0) {
+        for (const it of items) {
+          const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+          const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+          const itIn = toBigIntTicks(sTime);
+          const itOut = toBigIntTicks(eTime);
+          // If any clip exists on this track within the overwrite safety window, it would be destroyed!
+          if (itOut > startTicks && itIn < safetyEndTicks) {
+            trackHasCollision = true;
+            break;
+          }
+        }
+      }
+
+      if (!trackHasCollision) {
+        break; // Clean track found!
+      }
+      candidate++; // Collision detected on this track (e.g. Clip 3 on V2) -> bump up to V3, V4...
+    }
+
+    targetTrack = candidate;
+  } catch (err) {
+    console.log("Smart stacking error:", err);
+    targetTrack = Math.max(1, trackCount);
+  }
+
+  // Re-fetch fresh references immediately before transaction to prevent stale references
+  const freshProject = await ppro.Project.getActiveProject();
+  const freshSeq = await freshProject.getActiveSequence();
+  const alItem = await findAdjustmentLayerItem(freshProject, freshSeq);
+  if (!alItem) {
+    throw new Error("No Adjustment Layer clip found in project or timeline. (Note: create one via File > New > Adjustment Layer)");
+  }
+
+  let clipItem = alItem;
+  if (typeof alItem.getProjectItem === "function") {
+    clipItem = await alItem.getProjectItem();
+  }
+  if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+    try {
+      const casted = ppro.ClipProjectItem.cast(clipItem);
+      if (casted) clipItem = casted;
+    } catch (_) {}
+  }
+
+  if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
+    throw new Error("SequenceEditor is not supported in this Premiere build.");
+  }
+  const editor = await ppro.SequenceEditor.getEditor(freshSeq);
+
+  // Check if an Adjustment Layer already exists anywhere on the active sequence timeline (fallback clone source)
+  let timelineAL = null;
+  try {
+    const trackCountNow = await freshSeq.getVideoTrackCount();
+    for (let v = 0; v < trackCountNow; v++) {
+      const track = await freshSeq.getVideoTrack(v);
+      const items = await getTrackClipItems(track);
+      if (items && items.length > 0) {
+        for (const it of items) {
+          let isAL = false;
+          if (it.name && (it.name.toLowerCase().indexOf("adjustment") !== -1 || it.name.toLowerCase().indexOf("adj") !== -1)) {
+            isAL = true;
+          }
+          if (!isAL && typeof it.getProjectItem === "function") {
+            try {
+              const pi = await it.getProjectItem();
+              if (pi && pi.name && (pi.name.toLowerCase().indexOf("adjustment") !== -1 || pi.name.toLowerCase().indexOf("adj") !== -1)) {
+                isAL = true;
+              }
+            } catch (_) {}
+          }
+          if (isAL) {
+            timelineAL = { trackItem: it, trackIndex: v };
+            break;
+          }
+        }
+      }
+      if (timelineAL) break;
+    }
+  } catch (_) {}
+
+  // Pre-calculate clone parameters before transaction (cannot await inside transaction)
+  let cloneParams = null;
+  if (timelineAL && editor && typeof editor.createCloneTrackItemAction === "function") {
+    try {
+      const origIn = typeof timelineAL.trackItem.getStartTime === "function" ? await timelineAL.trackItem.getStartTime() : timelineAL.trackItem.startTime;
+      const origInTicks = toBigIntTicks(origIn);
+      const offsetTicks = startTicks - origInTicks;
+      const timeOffset = tickTime(offsetTicks);
+      const vOffset = Number(targetTrack) - timelineAL.trackIndex;
+      cloneParams = { trackItem: timelineAL.trackItem, timeOffset, vOffset };
+    } catch (_) {}
+  }
+
+  let ok = false;
+  let thrown = null;
+
+  const tStart = tickTime(startTicks);
+
+  const run = () => {
+    try {
+      ok = freshProject.executeTransaction((compound) => {
+        let action = null;
+        let lastErr = null;
+
+        // Path 1: Overwrite or Insert from project item with In/Out duration set
+        if (clipItem) {
+          if (typeof clipItem.createSetInOutPointsAction === "function") {
+            try {
+              const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durationTicks));
+              if (inOut) compound.addAction(inOut);
+            } catch (_) {}
+          }
+
+          const attempts = [];
+          if (targetTrack >= trackCount) {
+            // Target track index is beyond existing tracks: createInsertProjectItemAction creates the new track automatically!
+            attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
+            attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
+          } else {
+            attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
+            attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
+          }
+          attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), 0));
+          attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
+
+          for (const fn of attempts) {
+            try {
+              action = fn();
+              if (action) break;
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+        }
+
+        // Path 2: Clone from timeline fallback
+        if (!action && cloneParams) {
+          try {
+            action = editor.createCloneTrackItemAction(
+              cloneParams.trackItem,
+              cloneParams.timeOffset,
+              cloneParams.vOffset,
+              0,
+              true,
+              false
+            );
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+
+        if (!action) {
+          const name = clipItem?.name || alItem?.name || "unknown";
+          const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
+          throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
+        }
+
+        if (!compound.addAction(action)) {
+          throw new Error("addAction returned false");
+        }
+      }, "CutDeck: Place Adjustment Layer");
+    } catch (e) {
+      thrown = e;
+    }
+  };
+
+  if (typeof freshProject.lockedAccess === "function") {
+    freshProject.lockedAccess(run);
+  } else {
+    run();
+  }
+
+  if (!ok && thrown) throw thrown;
+
+  // Step 2: Trim the placed Adjustment Layer to exact duration (so it is NEVER 5 seconds!)
+  try {
+    const targetEndTicks = startTicks + durationTicks;
+    const freshSeq2 = await freshProject.getActiveSequence();
+    const targetTrackObj = await freshSeq2.getVideoTrack(Number(targetTrack));
+    if (targetTrackObj) {
+      const trackItems = await getTrackClipItems(targetTrackObj);
+      if (trackItems && trackItems.length > 0) {
+        for (const it of trackItems) {
+          const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+          const sTicks = toBigIntTicks(sTime);
+          const diff = sTicks > startTicks ? (sTicks - startTicks) : (startTicks - sTicks);
+          if (diff <= (tpf * 2n)) {
+            const trimRun = () => {
+              freshProject.executeTransaction((compound) => {
+                if (typeof it.createSetEndAction === "function") {
+                  compound.addAction(it.createSetEndAction(tickTime(targetEndTicks)));
+                }
+              }, "CutDeck: Trim Adjustment Layer Duration");
+            };
+            if (typeof freshProject.lockedAccess === "function") {
+              freshProject.lockedAccess(trimRun);
+            } else {
+              trimRun();
+            }
+
+            // Set label color and name
+            try {
+              if (typeof it.setColorLabel === "function") {
+                await it.setColorLabel(getLabelIndex(s.color));
+              }
+            } catch (_) {}
+            try {
+              if (typeof it.setName === "function") {
+                const adjName = fitToSelection ? "ADJ_Fit" : `ADJ_${frames}f`;
+                await it.setName(adjName);
+              }
+            } catch (_) {}
+            break;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log("Trimming duration failed:", err);
+  }
+
+  return {
+    success: true,
+    targetTrack: targetTrack + 1,
+    frames: Number(durationTicks / tpf),
+    fitToSelection,
+    selectedCount: selectedClips.length
+  };
+}
+
+// 5. Button 1: Adjustment Layer (`#btn-adj`)
+function setupAdjustmentLayerButton() {
+  const btn = $("btn-adj");
+  if (!btn) return;
+
+  btn.addEventListener("click", (e) => act(async () => {
+    const s = loadSettings();
+    const mode = e.shiftKey ? "force_transition" : "auto";
+
+    setStatus("Placing Adjustment Layer…", "busy");
+
+    const res = await placeAdjustmentLayerOnTimeline(ppro, {
+      mode,
+      frames: s.frames
+    });
+
+    let msg = res.fitToSelection
+      ? `Fitted Adjustment Layer to ${res.selectedCount} selected clip(s) on V${res.targetTrack}!`
+      : `Placed 50/50 transition (${res.frames}f) on V${res.targetTrack}!`;
+    setStatus(msg, "ready");
+  }));
+}
+
+// 6. Button 2: Effect Preset (`#btn-fx`)
+function setupEffectButton() {
+  const btn = $("btn-fx");
+  if (!btn) return;
+
+  btn.addEventListener("click", (e) => act(async () => {
+    const s = loadSettings();
+    if (e.shiftKey) {
+      const list = s.fxList || DEFAULT_SETTINGS.fxList;
+      let idx = list.indexOf(s.activeFx);
+      idx = (idx + 1) % list.length;
+      s.activeFx = list[idx];
+      saveSettings(s);
+      setStatus(`Preset switched to: ${s.activeFx}`, "ready");
+      return;
+    }
+    setStatus(`Preset: [${s.activeFx}]. Click Adjustment Layer to place.`, "ready");
+  }));
+}
+
+// Sequence Card Click -> Refresh
 if ($("seq-card")) {
   $("seq-card").addEventListener("click", () => act(async () => {
     await refresh();
@@ -239,8 +1058,6 @@ if ($("dismiss")) {
   }));
 }
 
-// Phase 0 probe 1. Read-only: it creates and changes nothing, so it is safe on a
-// real project, and it needs no helper running.
 if ($("timingprobe")) {
   $("timingprobe").addEventListener("click", () => act(async () => {
     setStatus("Reading this build's marks and timebase…", "busy");
@@ -250,10 +1067,6 @@ if ($("timingprobe")) {
   }));
 }
 
-// The only control in this panel that mutates a project, so it arms before it runs.
-// A misclick on a real edit would leave a stray sequence behind — recoverable, but
-// the panel should not make it a one-click mistake. Disarms itself after 10s so an
-// armed button can never be inherited by a later, unrelated click.
 let assembleArmed = null;
 function disarmAssemble() {
   if (assembleArmed) clearTimeout(assembleArmed);
@@ -284,8 +1097,6 @@ if ($("assembleprobe")) {
   });
 }
 
-// Diagnostic only, and never on load: it opens sockets, so running it automatically would
-// make a panel that needs no helper report a helper failure every time it opens.
 if ($("socketprobe")) {
   $("socketprobe").addEventListener("click", () => act(async () => {
     setStatus("Probing which socket URLs this Premiere build permits…", "busy");
@@ -295,14 +1106,8 @@ if ($("socketprobe")) {
   }));
 }
 
-// Probe reports are long and are meant to be pasted onto an issue. Dual fallback
-// (navigator.clipboard, then the uxp module's) is the pattern spike18 confirmed
-// against a live Premiere plugin rather than assumed.
 if ($("copystatus")) {
   $("copystatus").addEventListener("click", () => {
-    // Captured before act() runs: act() immediately overwrites #status to
-    // "Processing…", so reading it from inside the act() callback below
-    // would copy that placeholder instead of the report the user clicked to copy.
     const text = $("status") ? $("status").textContent : "";
     act(async () => {
       if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
@@ -314,8 +1119,16 @@ if ($("copystatus")) {
 }
 
 // Init handlers
+setupTabs();
 setupPresets();
-setupDiagnostics();
+setupSettingsDrawer();
+setupBadges();
+setupAdjustmentLayerButton();
+setupEffectButton();
+
+// Load settings
+const initialSettings = loadSettings();
+updateUIFromSettings(initialSettings);
 
 if (lastJob()) {
   if ($("job-banner")) $("job-banner").classList.add("show");
@@ -326,12 +1139,12 @@ if (lastJob()) {
   if ($("dismiss")) $("dismiss").hidden = true;
 }
 
-// Immediately read and display timeline marks, if a sequence with marks is already open.
+// Automatically read and display timeline marks
 setTimeout(async () => {
   try {
     await refresh();
     setStatus("Ready", "ready");
   } catch (_) {
-    setStatus("No sequence open", "ready");
+    setStatus("Ready", "ready");
   }
 }, 50);

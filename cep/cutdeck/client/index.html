@@ -100,26 +100,182 @@
       height: 14px;
     }
 
-    /* Diagnostics Drawer */
+    /* Settings & Diagnostics Drawer (3-Dots Menu) */
     #diagnostics {
       display: none;
       margin-top: 8px;
-      padding: 10px;
+      padding: 12px;
       background: #141615;
-      border: 1px solid #2a312d;
-      border-radius: 6px;
+      border: 1px solid #2f3833;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
     #diagnostics.open {
       display: block;
+      animation: slideDown 0.15s ease-out;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #232926;
     }
     .diag-title {
       font-size: 10px;
-      font-weight: 600;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #7dd3fc;
+    }
+    .setting-section-title {
+      font-size: 9px;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: #7b8681;
-      margin-bottom: 6px;
+      margin: 8px 0 5px 0;
     }
+    .setting-row {
+      margin-bottom: 8px;
+    }
+    .setting-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: #9ba6a0;
+      margin-bottom: 4px;
+    }
+    .setting-subtext {
+      font-size: 10px;
+      color: #8c9892;
+      line-height: 1.3;
+    }
+    .setting-input, .setting-select {
+      width: 100%;
+      padding: 6px 8px;
+      background: #191c1a;
+      border: 1px solid #343c37;
+      border-radius: 5px;
+      color: #e5eae7;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .setting-input:focus, .setting-select:focus {
+      border-color: #3b82f6;
+    }
+    .settings-grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* Mini frame buttons & stepper */
+    .frame-stepper-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .pills-grid-mini {
+      display: flex;
+      gap: 4px;
+    }
+    .pill-mini {
+      background: #1d211f;
+      border: 1px solid #363e39;
+      color: #8fa097;
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .pill-mini:hover {
+      border-color: #4f5b54;
+      color: #e2e8e4;
+    }
+    .pill-mini.active {
+      background: #172b22;
+      border-color: #10b981;
+      color: #6ee7b7;
+    }
+    .number-stepper {
+      display: inline-flex;
+      align-items: center;
+      background: #191c1a;
+      border: 1px solid #343c37;
+      border-radius: 5px;
+      overflow: hidden;
+      height: 24px;
+    }
+    .number-stepper input {
+      width: 36px;
+      text-align: center;
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 600;
+      outline: none;
+      -moz-appearance: textfield;
+    }
+    .number-stepper input::-webkit-outer-spin-button,
+    .number-stepper input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .step-btn {
+      background: #252b28;
+      border: none;
+      color: #a4b0a8;
+      width: 20px;
+      height: 100%;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s;
+    }
+    .step-btn:hover {
+      background: #313a36;
+      color: #ffffff;
+    }
+
+    /* Checkbox styling */
+    .checkbox-container {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .checkbox-container input {
+      margin-top: 2px;
+      accent-color: #10b981;
+      cursor: pointer;
+    }
+
+    .fx-select-row {
+      display: flex;
+      gap: 6px;
+    }
+    .setting-divider {
+      height: 1px;
+      background: #242a27;
+      margin: 10px 0 8px 0;
+    }
+
     .diag-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -153,9 +309,9 @@
     /* Active Sequence Card */
     .sequence-card {
       margin-top: 10px;
-      padding: 9px 11px;
-      background: #232725;
-      border: 1px solid #333a36;
+      padding: 8px 10px;
+      background: #202422;
+      border: 1px solid #303733;
       border-radius: 7px;
       display: flex;
       align-items: center;
@@ -172,14 +328,14 @@
       flex: 1;
     }
     .seq-label {
-      font-size: 10px;
+      font-size: 9px;
       color: #849089;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      font-weight: 500;
+      font-weight: 600;
     }
     #sequence {
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
       color: #f3f6f4;
       white-space: nowrap;
@@ -190,16 +346,16 @@
     .range-badge {
       flex-shrink: 0;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 600;
       color: #7dd3fc;
       background: #17242e;
       border: 1px solid #1e3a4c;
-      padding: 3px 7px;
-      border-radius: 5px;
+      padding: 2px 6px;
+      border-radius: 4px;
     }
 
-    /* Segmented Tab Navigation: MULTI-CAM FIRST */
+    /* Segmented Tab Navigation: Cut & Sync vs Adjustment & FX */
     .tabs {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -220,6 +376,10 @@
       border-radius: 5px;
       cursor: pointer;
       transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
     }
     .tab-btn:hover:not(.active) {
       color: #e0e5e2;
@@ -228,6 +388,10 @@
       background: #2b322e;
       color: #ffffff;
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .tab-btn svg {
+      width: 13px;
+      height: 13px;
     }
 
     /* Tab Content Views */
@@ -241,20 +405,20 @@
 
     /* Form Fields */
     .control-group {
-      margin-bottom: 10px;
+      margin-bottom: 9px;
     }
     .control-label {
       display: block;
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: 600;
       color: #8a9690;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
     }
     select {
       width: 100%;
-      padding: 7px 9px;
+      padding: 6px 8px;
       background: #181a19;
       border: 1px solid #363e39;
       border-radius: 6px;
@@ -277,9 +441,9 @@
       background: #1a1d1b;
       border: 1px solid #343b37;
       border-radius: 6px;
-      padding: 7px 8px;
+      padding: 6px 8px;
       color: #8c9791;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 500;
       text-align: left;
       cursor: pointer;
@@ -309,35 +473,55 @@
       display: block;
     }
 
+    /* Section divider inside Cut & Sync */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 8px 0;
+    }
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: #272d29;
+    }
+    .section-tag {
+      font-size: 9px;
+      font-weight: 700;
+      color: #6c7872;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
     /* Primary Action Buttons */
     .btn-primary {
       width: 100%;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border: none;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
+      gap: 6px;
       transition: background 0.15s, transform 0.05s;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.25);
     }
     .btn-primary svg {
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
     }
     #sync {
-      background: #3b82f6;
+      background: #2563eb;
       color: #ffffff;
     }
     #sync:hover:not(:disabled) {
-      background: #60a5fa;
+      background: #3b82f6;
     }
     #sync:active:not(:disabled) {
-      background: #2563eb;
+      background: #1d4ed8;
     }
     #cut {
       background: #10b981;
@@ -355,12 +539,13 @@
       background: #232725;
       border: 1px solid #363e39;
       color: #a4b0a8;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 500;
-      padding: 6px 10px;
+      padding: 5px 8px;
       border-radius: 5px;
       cursor: pointer;
       transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
     }
     .btn-secondary:hover:not(:disabled) {
       background: #2c322f;
@@ -368,9 +553,146 @@
       border-color: #48534d;
     }
 
-    button:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
+    /* =======================================================
+       PAGE 2: ADJUSTMENT LAYER & FX (2-BUTTON INTERACTION)
+       ======================================================= */
+    .action-cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .action-card {
+      background: #1d211f;
+      border: 1px solid #333c37;
+      border-radius: 8px;
+      padding: 12px 9px 10px 9px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      user-select: none;
+      position: relative;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .action-card:hover:not(:disabled) {
+      background: #252b28;
+      transform: translateY(-1px);
+    }
+    .action-card:active:not(:disabled) {
+      background: #171918;
+      transform: translateY(1px);
+    }
+    .action-card.card-al {
+      border-top: 3px solid #3b82f6;
+    }
+    .action-card.card-al:hover:not(:disabled) {
+      border-color: #60a5fa;
+      border-top-color: #3b82f6;
+    }
+    .action-card.card-fx {
+      border-top: 3px solid #8b5cf6;
+    }
+    .action-card.card-fx:hover:not(:disabled) {
+      border-color: #a78bfa;
+      border-top-color: #8b5cf6;
+    }
+
+    .card-icon-box {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      margin-bottom: 2px;
+    }
+    .card-al .card-icon-box {
+      background: #1e293b;
+      color: #60a5fa;
+    }
+    .card-fx .card-icon-box {
+      background: #2e1065;
+      color: #c084fc;
+    }
+    .card-icon-box svg {
+      width: 18px;
+      height: 18px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.3px;
+    }
+    .card-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 3px;
+      width: 100%;
+    }
+    .legend-row {
+      font-size: 9px;
+      color: #8fa096;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .key-tag {
+      background: #29302c;
+      color: #7dd3fc;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: 700;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .key-tag.purple {
+      color: #d8b4fe;
+    }
+
+    /* Interactive Status / Badges bar */
+    .adj-status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 9px;
+      padding: 6px 8px;
+      background: #141615;
+      border: 1px solid #272d29;
+      border-radius: 6px;
+    }
+    .badge-btn {
+      background: #17242e;
+      border: 1px solid #1e3a4c;
+      color: #7dd3fc;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.12s;
+    }
+    .badge-btn:hover {
+      background: #1f3747;
+      color: #bae6fd;
+    }
+    .badge-btn.fx-badge {
+      background: #25173b;
+      border-color: #3f2268;
+      color: #c084fc;
+    }
+    .badge-btn.fx-badge:hover {
+      background: #391f60;
+      color: #e9d5ff;
     }
 
     /* Streamlined Status Box */
@@ -402,7 +724,10 @@
       word-break: break-word;
     }
 
-    /* Hidden element for compatibility with existing logic */
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
     .sr-only {
       position: absolute;
       width: 1px;
@@ -437,26 +762,108 @@
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
       </button>
-      <button id="tools-toggle" class="icon-btn" title="Diagnostics & Tools">
+      <button id="tools-toggle" class="icon-btn" title="CutDeck Settings & Tools (3-Dots)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="1"/>
-          <circle cx="12" cy="5" r="1"/>
-          <circle cx="12" cy="19" r="1"/>
+          <circle cx="12" cy="12" r="1.2"/>
+          <circle cx="12" cy="5" r="1.2"/>
+          <circle cx="12" cy="19" r="1.2"/>
         </svg>
       </button>
     </div>
   </div>
 
-  <!-- Diagnostics Drawer (Toggleable) -->
+  <!-- Settings & Configuration Drawer (Opened by 3-Dots Button) -->
   <div id="diagnostics">
-    <div class="diag-title">Diagnostics & Debug</div>
+    <div class="settings-header">
+      <span class="diag-title">CutDeck Settings &amp; Tools</span>
+      <button type="button" id="close-settings" class="icon-btn" title="Close Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- 1. Transition Settings -->
+    <div class="setting-row">
+      <label class="setting-label">Transition Frames (50/50)</label>
+      <div class="frame-stepper-group">
+        <div class="pills-grid-mini">
+          <button type="button" class="pill-mini" data-frames="8">8f</button>
+          <button type="button" class="pill-mini" data-frames="12">12f</button>
+          <button type="button" class="pill-mini active" data-frames="16">16f</button>
+          <button type="button" class="pill-mini" data-frames="20">20f</button>
+          <button type="button" class="pill-mini" data-frames="24">24f</button>
+        </div>
+        <div class="number-stepper">
+          <button type="button" id="frame-dec" class="step-btn">−</button>
+          <input type="number" id="setting-frames" value="16" min="2" max="240">
+          <button type="button" id="frame-inc" class="step-btn">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Bin & Color Labels -->
+    <div class="settings-grid-2col">
+      <div class="setting-row">
+        <label class="setting-label" for="setting-bin">Project Bin Name</label>
+        <input type="text" id="setting-bin" class="setting-input" value="CutDeck AL/FX">
+      </div>
+      <div class="setting-row">
+        <label class="setting-label" for="setting-color">Timeline Color</label>
+        <select id="setting-color" class="setting-select">
+          <option value="Iris" selected>Iris (Cyan)</option>
+          <option value="Lavender">Lavender</option>
+          <option value="Mango">Mango (Orange)</option>
+          <option value="Forest">Forest (Green)</option>
+          <option value="Rose">Rose (Pink)</option>
+          <option value="Violet">Violet (Purple)</option>
+          <option value="Caribbean">Caribbean</option>
+          <option value="Cerulean">Cerulean</option>
+          <option value="Magenta">Magenta</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 3. Short Clip Protection -->
+    <div class="setting-row">
+      <label class="checkbox-container">
+        <input type="checkbox" id="setting-clamp" checked>
+        <span class="setting-subtext">Clamp transition length on short clips (prevents bleeding)</span>
+      </label>
+    </div>
+
+    <!-- 4. FX Presets & Capture -->
+    <div class="setting-row">
+      <label class="setting-label" for="setting-active-fx">Active Effect Preset (.prfpset / Native)</label>
+      <div class="fx-select-row">
+        <select id="setting-active-fx" class="setting-select">
+          <option value="Zoom In" selected>Zoom In (Transform)</option>
+          <option value="Zoom Out">Zoom Out</option>
+          <option value="Whip Pan L">Whip Pan Left</option>
+          <option value="Whip Pan R">Whip Pan Right</option>
+          <option value="Camera Shake">Camera Shake / Hit</option>
+          <option value="Motion Blur">Motion Blur</option>
+          <option value="Film Glow">Film Glow / Halation</option>
+          <option value="Letterbox">2.35:1 Letterbox</option>
+          <option value="Custom FX">Custom FX Slot</option>
+        </select>
+        <button type="button" id="btn-capture-preset" class="btn-secondary" title="Capture selected timeline AL as active preset">
+          Capture
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. Diagnostics -->
+    <div class="setting-divider"></div>
+    <div class="diag-title" style="margin-bottom:6px;">Diagnostics &amp; Tools</div>
     <div class="diag-grid">
       <button id="socketprobe" class="btn-secondary">Test Connection</button>
       <button id="copystatus" class="btn-secondary">Copy Status</button>
     </div>
   </div>
 
-  <!-- Resume / Dismiss Banner (Only shown if unfinished job exists) -->
+  <!-- Resume / Dismiss Banner -->
   <div id="job-banner">
     <div class="job-title">Previous job in progress</div>
     <div class="job-actions">
@@ -474,31 +881,50 @@
     <div id="range" class="range-badge">--:--</div>
   </div>
 
-  <!-- Segmented Tabs: MULTI-CAM FIRST -->
+  <!-- Segmented Tabs: 2-Page Workflow Progression -->
   <div class="tabs">
-    <button id="tab-sync" class="tab-btn active">Multi-Cam Sync</button>
-    <button id="tab-cut" class="tab-btn">Rough Cut</button>
+    <button id="tab-edit" class="tab-btn active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6h16M4 12h10M4 18h16"/>
+      </svg>
+      Cut &amp; Sync
+    </button>
+    <button id="tab-adj" class="tab-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+      Adjustment &amp; FX
+    </button>
   </div>
 
-  <!-- 1. MULTI-CAM VIEW (Default Active) -->
-  <div id="view-sync" class="view-panel active">
+  <!-- =========================================================
+       PAGE 1: CUT & SYNC VIEW (Multi-cam + Rough Cut Combined)
+       ========================================================= -->
+  <div id="view-edit" class="view-panel active">
+    <!-- Multi-Cam Section -->
     <div class="control-group">
-      <label class="control-label" for="audio">Reference Audio</label>
+      <label class="control-label" for="audio">Reference Audio Track</label>
       <select id="audio">
         <option value="" selected>Auto (First audio track with clips)</option>
       </select>
     </div>
 
-    <button id="sync" class="btn-primary">
+    <button id="sync" class="btn-primary" style="margin-bottom:10px;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
       </svg>
-      Sync Multi-Cam
+      Sync Multi-Cam Sequence
     </button>
-  </div>
 
-  <!-- 2. ROUGH CUT VIEW -->
-  <div id="view-cut" class="view-panel">
+    <div class="section-divider">
+      <div class="section-line"></div>
+      <span class="section-tag">Rough Cut Engine</span>
+      <div class="section-line"></div>
+    </div>
+
+    <!-- Rough Cut Section -->
     <div class="control-group">
       <div class="control-label">Cutting Preset</div>
       <div class="pills-grid">
@@ -512,7 +938,6 @@
         </button>
       </div>
 
-      <!-- Hidden select to keep existing JS compatibility -->
       <select id="mode" class="sr-only">
         <option value="protected" selected>protected</option>
         <option value="silence">silence</option>
@@ -527,8 +952,57 @@
         <line x1="14.47" y1="14.48" x2="20" y2="20"/>
         <line x1="8.12" y1="8.12" x2="12" y2="12"/>
       </svg>
-      Rough Cut In–Out
+      Rough Cut In–Out Range
     </button>
+  </div>
+
+  <!-- =========================================================
+       PAGE 2: ADJUSTMENT & FX VIEW (Minimalist 2-Button Control)
+       ========================================================= -->
+  <div id="view-adj" class="view-panel">
+    <div class="action-cards-grid">
+      <!-- Button 1: Adjustment Layer -->
+      <button type="button" id="btn-adj" class="action-card card-al" title="Click: Span Clips | Shift+Click: Cut 50/50 | Ctrl+Click: +Active FX">
+        <div class="card-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </div>
+        <div class="card-title">ADJUSTMENT LAYER</div>
+        <div class="card-legend">
+          <div class="legend-row"><span class="key-tag">Click</span> Span Clips</div>
+          <div class="legend-row"><span class="key-tag">⇧ Click</span> Cut (50/50)</div>
+          <div class="legend-row"><span class="key-tag">⌃ Click</span> + Active FX</div>
+        </div>
+      </button>
+
+      <!-- Button 2: Effect Preset -->
+      <button type="button" id="btn-fx" class="action-card card-fx" title="Click: Apply Active FX | Shift+Click: Cycle FX | Alt+Click: Capture AL">
+        <div class="card-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
+          </svg>
+        </div>
+        <div class="card-title">EFFECT PRESET</div>
+        <div class="card-legend">
+          <div class="legend-row"><span class="key-tag purple">Click</span> Apply FX</div>
+          <div class="legend-row"><span class="key-tag purple">⇧ Click</span> Next FX</div>
+          <div class="legend-row"><span class="key-tag purple">⌥ Click</span> Capture AL</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Interactive Badges Quick Bar -->
+    <div class="adj-status-bar">
+      <button type="button" id="badge-transition" class="badge-btn" title="Click to cycle frame lengths or open settings">
+        ⚡ 16f (50/50)
+      </button>
+      <button type="button" id="badge-active-fx" class="badge-btn fx-badge" title="Click to cycle next preset">
+        ✦ Active: Zoom In
+      </button>
+    </div>
   </div>
 
   <!-- Sleek Status Output -->

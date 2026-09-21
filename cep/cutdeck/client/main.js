@@ -3,7 +3,62 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const KEY = "cutdeck.cep.lastJob";
+  const SETTINGS_KEY = "cutdeck.adj.settings";
   let busy = false;
+
+  const DEFAULT_SETTINGS = {
+    frames: 16,
+    bin: "CutDeck AL/FX",
+    color: "Iris",
+    clamp: true,
+    activeFx: "Zoom In",
+    fxList: [
+      "Zoom In", "Zoom Out", "Whip Pan L", "Whip Pan R",
+      "Camera Shake", "Motion Blur", "Film Glow", "Letterbox", "Custom FX"
+    ]
+  };
+
+  function loadSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+      return { ...DEFAULT_SETTINGS, ...saved };
+    } catch (_) {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  function saveSettings(s) {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch (_) {}
+    updateUIFromSettings(s);
+  }
+
+  function updateUIFromSettings(s) {
+    if ($("setting-frames")) $("setting-frames").value = s.frames;
+    if ($("setting-bin")) $("setting-bin").value = s.bin;
+    if ($("setting-color")) $("setting-color").value = s.color;
+    if ($("setting-clamp")) $("setting-clamp").checked = !!s.clamp;
+    if ($("setting-active-fx")) $("setting-active-fx").value = s.activeFx;
+
+    // Highlight mini pills if matching
+    const miniPills = document.querySelectorAll(".pill-mini");
+    miniPills.forEach((p) => {
+      const f = parseInt(p.getAttribute("data-frames"), 10);
+      if (f === s.frames) {
+        p.classList.add("active");
+      } else {
+        p.classList.remove("active");
+      }
+    });
+
+    if ($("badge-transition")) {
+      $("badge-transition").textContent = `⚡ ${s.frames}f (50/50)`;
+    }
+    if ($("badge-active-fx")) {
+      $("badge-active-fx").textContent = `✦ Active: ${s.activeFx}`;
+    }
+  }
 
   // Initialize CSInterface and ensure host.jsx is loaded
   const csInterface = typeof CSInterface !== "undefined" ? new CSInterface() : null;
@@ -171,7 +226,12 @@
   async function act(fn) {
     if (busy) return;
     busy = true;
-    const targets = ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode", "socketprobe", "copystatus", "tab-sync", "tab-cut", "pill-speech", "pill-silence"];
+    const targets = [
+      "cut", "sync", "refresh", "resume", "dismiss", "audio", "mode",
+      "socketprobe", "copystatus", "tab-edit", "tab-adj", "pill-speech",
+      "pill-silence", "btn-adj", "btn-fx", "badge-transition", "badge-active-fx",
+      "btn-capture-preset"
+    ];
     targets.forEach((id) => {
       if ($(id)) $(id).disabled = true;
     });
@@ -194,31 +254,31 @@
 
   // --- UI Interactivity ---
 
-  // 1. Tab Navigation: Multi-Cam (Default) vs Rough Cut
+  // 1. Two-Page Tab Navigation: Cut & Sync vs Adjustment & FX
   function setupTabs() {
-    const tabSync = $("tab-sync");
-    const tabCut = $("tab-cut");
-    const viewSync = $("view-sync");
-    const viewCut = $("view-cut");
+    const tabEdit = $("tab-edit");
+    const tabAdj = $("tab-adj");
+    const viewEdit = $("view-edit");
+    const viewAdj = $("view-adj");
 
-    if (!tabSync || !tabCut || !viewSync || !viewCut) return;
+    if (!tabEdit || !tabAdj || !viewEdit || !viewAdj) return;
 
-    tabSync.addEventListener("click", () => {
-      tabSync.classList.add("active");
-      tabCut.classList.remove("active");
-      viewSync.classList.add("active");
-      viewCut.classList.remove("active");
+    tabEdit.addEventListener("click", () => {
+      tabEdit.classList.add("active");
+      tabAdj.classList.remove("active");
+      viewEdit.classList.add("active");
+      viewAdj.classList.remove("active");
     });
 
-    tabCut.addEventListener("click", () => {
-      tabCut.classList.add("active");
-      tabSync.classList.remove("active");
-      viewCut.classList.add("active");
-      viewSync.classList.remove("active");
+    tabAdj.addEventListener("click", () => {
+      tabAdj.classList.add("active");
+      tabEdit.classList.remove("active");
+      viewAdj.classList.add("active");
+      viewEdit.classList.remove("active");
     });
   }
 
-  // 2. Preset Pills for Cutting Mode
+  // 2. Preset Pills for Rough Cut
   function setupPresets() {
     const pillSpeech = $("pill-speech");
     const pillSilence = $("pill-silence");
@@ -239,18 +299,240 @@
     });
   }
 
-  // 3. Diagnostics Drawer Toggle
-  function setupDiagnostics() {
+  // 3. Settings & Configuration Drawer (3-Dots Button)
+  function setupSettingsDrawer() {
     const toggleBtn = $("tools-toggle");
+    const closeBtn = $("close-settings");
     const diag = $("diagnostics");
+
     if (toggleBtn && diag) {
       toggleBtn.addEventListener("click", () => {
         diag.classList.toggle("open");
       });
     }
+
+    if (closeBtn && diag) {
+      closeBtn.addEventListener("click", () => {
+        diag.classList.remove("open");
+      });
+    }
+
+    // Mini pill frame buttons
+    const miniPills = document.querySelectorAll(".pill-mini");
+    miniPills.forEach((p) => {
+      p.addEventListener("click", () => {
+        const frames = parseInt(p.getAttribute("data-frames"), 10);
+        if (frames > 0) {
+          const s = loadSettings();
+          s.frames = frames;
+          saveSettings(s);
+        }
+      });
+    });
+
+    // Stepper buttons
+    if ($("frame-dec")) {
+      $("frame-dec").addEventListener("click", () => {
+        const s = loadSettings();
+        if (s.frames > 2) {
+          s.frames -= 2;
+          saveSettings(s);
+        }
+      });
+    }
+    if ($("frame-inc")) {
+      $("frame-inc").addEventListener("click", () => {
+        const s = loadSettings();
+        if (s.frames < 240) {
+          s.frames += 2;
+          saveSettings(s);
+        }
+      });
+    }
+    if ($("setting-frames")) {
+      $("setting-frames").addEventListener("change", (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (!isNaN(val) && val >= 2 && val <= 240) {
+          const s = loadSettings();
+          s.frames = val;
+          saveSettings(s);
+        }
+      });
+    }
+
+    // Bin Name input
+    if ($("setting-bin")) {
+      $("setting-bin").addEventListener("change", (e) => {
+        const s = loadSettings();
+        s.bin = e.target.value.trim() || "CutDeck AL/FX";
+        saveSettings(s);
+      });
+    }
+
+    // Color selector
+    if ($("setting-color")) {
+      $("setting-color").addEventListener("change", (e) => {
+        const s = loadSettings();
+        s.color = e.target.value;
+        saveSettings(s);
+      });
+    }
+
+    // Clamp checkbox
+    if ($("setting-clamp")) {
+      $("setting-clamp").addEventListener("change", (e) => {
+        const s = loadSettings();
+        s.clamp = e.target.checked;
+        saveSettings(s);
+      });
+    }
+
+    // Active FX preset dropdown
+    if ($("setting-active-fx")) {
+      $("setting-active-fx").addEventListener("change", (e) => {
+        const s = loadSettings();
+        s.activeFx = e.target.value;
+        saveSettings(s);
+      });
+    }
+
+    // Capture preset button
+    if ($("btn-capture-preset")) {
+      $("btn-capture-preset").addEventListener("click", () => act(async () => {
+        const s = loadSettings();
+        const safeName = JSON.stringify(s.activeFx);
+        const rawRes = await evalScript("captureSelectedClipAsPreset(" + safeName + ")");
+        const res = typeof rawRes === "string" ? JSON.parse(rawRes) : rawRes;
+        if (res.error) throw new Error(res.error);
+        setStatus(`Captured timeline clip as [${res.presetName || s.activeFx}] in bin [${s.bin}]`, "ready");
+      }));
+    }
   }
 
-  // 4. Click Sequence Card to re-read timeline
+  // 4. Interactive Quick Badges
+  function setupBadges() {
+    // Transition frames badge: cycle 8 -> 12 -> 16 -> 20 -> 24 -> 8
+    const badgeTrans = $("badge-transition");
+    if (badgeTrans) {
+      badgeTrans.addEventListener("click", () => {
+        const s = loadSettings();
+        const sequence = [8, 12, 16, 20, 24];
+        let idx = sequence.indexOf(s.frames);
+        idx = (idx + 1) % sequence.length;
+        s.frames = sequence[idx];
+        saveSettings(s);
+        setStatus(`Transition duration set to ${s.frames} frames (50/50)`, "ready");
+      });
+    }
+
+    // Active FX badge: cycle through presets
+    const badgeFx = $("badge-active-fx");
+    if (badgeFx) {
+      badgeFx.addEventListener("click", () => {
+        const s = loadSettings();
+        const list = s.fxList || DEFAULT_SETTINGS.fxList;
+        let idx = list.indexOf(s.activeFx);
+        idx = (idx + 1) % list.length;
+        s.activeFx = list[idx];
+        saveSettings(s);
+        setStatus(`Active FX preset switched to: ${s.activeFx}`, "ready");
+      });
+    }
+  }
+
+  // 5. Button 1: Adjustment Layer (`#btn-adj`)
+  function setupAdjustmentLayerButton() {
+    const btn = $("btn-adj");
+    if (!btn) return;
+
+    btn.addEventListener("click", (e) => act(async () => {
+      const s = loadSettings();
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+
+      const mode = isShift ? "transition" : "span";
+      const effectName = isCtrl ? s.activeFx : "";
+
+      const payload = JSON.stringify({
+        mode: mode,
+        binName: s.bin,
+        labelColor: s.color,
+        transitionFrames: s.frames,
+        clampShortClips: s.clamp,
+        effectName: effectName
+      });
+
+      setStatus(
+        mode === "transition"
+          ? `Creating 50/50 cut transition (${s.frames}f)…`
+          : "Fitting Adjustment Layer over selected clips…",
+        "busy"
+      );
+
+      const rawRes = await evalScript("placeAdjustmentLayers(" + JSON.stringify(payload) + ")");
+      const res = typeof rawRes === "string" ? JSON.parse(rawRes) : rawRes;
+      if (res.error) throw new Error(res.error);
+
+      let msg = mode === "transition"
+        ? `Added ${res.placedCount} transition AL (${s.frames}f 50/50)`
+        : `Spanned ${res.placedCount} clip(s) with Adjustment Layer`;
+      if (effectName) {
+        msg += ` + ${effectName}`;
+      }
+      msg += ` in [${res.bin}]`;
+      setStatus(msg, "ready");
+    }));
+  }
+
+  // 6. Button 2: Effect Preset (`#btn-fx`)
+  function setupEffectButton() {
+    const btn = $("btn-fx");
+    if (!btn) return;
+
+    btn.addEventListener("click", (e) => act(async () => {
+      const s = loadSettings();
+
+      // Alt + Click: Capture selected timeline AL as preset
+      if (e.altKey) {
+        const safeName = JSON.stringify(s.activeFx);
+        const rawRes = await evalScript("captureSelectedClipAsPreset(" + safeName + ")");
+        const res = typeof rawRes === "string" ? JSON.parse(rawRes) : rawRes;
+        if (res.error) throw new Error(res.error);
+        setStatus(`Captured timeline clip as [${res.presetName || s.activeFx}] in bin [${s.bin}]`, "ready");
+        return;
+      }
+
+      // Shift + Click: Cycle to next preset
+      if (e.shiftKey) {
+        const list = s.fxList || DEFAULT_SETTINGS.fxList;
+        let idx = list.indexOf(s.activeFx);
+        idx = (idx + 1) % list.length;
+        s.activeFx = list[idx];
+        saveSettings(s);
+        setStatus(`Active FX preset set to: ${s.activeFx}`, "ready");
+        return;
+      }
+
+      // Normal Click: Apply active preset over selection
+      const payload = JSON.stringify({
+        mode: "span",
+        binName: s.bin,
+        labelColor: s.color,
+        transitionFrames: s.frames,
+        clampShortClips: s.clamp,
+        effectName: s.activeFx
+      });
+
+      setStatus(`Applying preset [${s.activeFx}] to selection…`, "busy");
+      const rawRes = await evalScript("placeAdjustmentLayers(" + JSON.stringify(payload) + ")");
+      const res = typeof rawRes === "string" ? JSON.parse(rawRes) : rawRes;
+      if (res.error) throw new Error(res.error);
+
+      setStatus(`Applied [${s.activeFx}] to ${res.placedCount} clip(s) in [${res.bin}]`, "ready");
+    }));
+  }
+
+  // Sequence Card Click -> Refresh
   if ($("seq-card")) {
     $("seq-card").addEventListener("click", () => act(async () => {
       await refresh();
@@ -258,7 +540,6 @@
     }));
   }
 
-  // Button actions
   if ($("refresh")) {
     $("refresh").addEventListener("click", () => act(async () => {
       await refresh();
@@ -381,10 +662,17 @@
     });
   }
 
-  // Init handlers
+  // Initialize UI components
   setupTabs();
   setupPresets();
-  setupDiagnostics();
+  setupSettingsDrawer();
+  setupBadges();
+  setupAdjustmentLayerButton();
+  setupEffectButton();
+
+  // Load and apply persistent settings
+  const initialSettings = loadSettings();
+  updateUIFromSettings(initialSettings);
 
   // Initial state on panel open
   if (lastJob()) {
@@ -397,7 +685,7 @@
   setTimeout(async () => {
     try {
       await refresh();
-      setStatus("Ready. Set In/Out and click Sync or Cut.", "ready");
+      setStatus("Ready. Choose Cut & Sync or Adjustment & FX.", "ready");
     } catch (_) {
       setStatus("Open a sequence in Premiere to begin.", "ready");
     }
