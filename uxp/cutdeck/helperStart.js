@@ -8,11 +8,34 @@
    no hidden run) — Start CutDeck.cmd takes no arguments, so that limitation
    doesn't bite here. It resolves to "" on success or an error message
    string on failure, requires user consent, and needs the plugin
-   manifest's `launchProcess` permission (uxp/cutdeck/manifest.json). */
-const path = require("path");
+   manifest's `launchProcess` permission (uxp/cutdeck/manifest.json).
 
-function findHelperScript() {
-  return path.resolve(__dirname, "..", "..", "Start CutDeck.cmd");
+   The path it launches must be a plain native path string. `require("path")`
+   plus `__dirname` is NOT trustworthy for that here: UXP's own `path` module
+   is documented as a global registered only since UXP v6.4.0, and its
+   require()-module behavior (and __dirname inside it) isn't something this
+   plugin has ever exercised — it produced "path should be a string type"
+   from shell.openPath in a real Premiere run. `storage.localFileSystem
+   .getPluginFolder().nativePath` is the route probe.js already proves works
+   in this exact plugin (uxp/cutdeck/probe.js), so derive the repo root from
+   that instead. */
+
+/* Pure and independently testable: given the plugin folder's own native
+   path (".../uxp/cutdeck"), returns the repo root's Start CutDeck.cmd. */
+function deriveHelperScriptPath(pluginNativePath) {
+  const sep = pluginNativePath.indexOf("\\") !== -1 ? "\\" : "/";
+  const trimmed = pluginNativePath.replace(/[\\/]+$/, "");
+  const repoRoot = trimmed.replace(/[\\/]uxp[\\/]cutdeck$/, "");
+  if (repoRoot === trimmed) {
+    throw new Error("Could not find the repo root from plugin path: " + pluginNativePath);
+  }
+  return repoRoot + sep + "Start CutDeck.cmd";
+}
+
+async function findHelperScript() {
+  const localFileSystem = require("uxp").storage.localFileSystem;
+  const pluginFolder = await localFileSystem.getPluginFolder();
+  return deriveHelperScriptPath(pluginFolder.nativePath);
 }
 
 async function ensureHelperRunning(options) {
@@ -20,7 +43,6 @@ async function ensureHelperRunning(options) {
   const rpc = opts.rpc;
   const version = opts.version || "cutdeck-xml-1";
   const onStatus = opts.onStatus || (() => {});
-  const scriptPath = opts.scriptPath || findHelperScript();
   const now = opts.now || Date.now;
   const sleep = opts.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
@@ -38,6 +60,8 @@ async function ensureHelperRunning(options) {
   if (!shell || typeof shell.openPath !== "function") {
     throw new Error("This UXP build cannot launch external processes. Start the helper manually with Start CutDeck.cmd.");
   }
+
+  const scriptPath = opts.scriptPath || await findHelperScript();
 
   onStatus("Starting CutDeck helper…");
   const result = await shell.openPath(scriptPath, "Start the CutDeck helper");
@@ -68,4 +92,4 @@ async function ensureHelperRunning(options) {
     + (lastError ? lastError.message : "timed out"));
 }
 
-module.exports = { ensureHelperRunning, findHelperScript };
+module.exports = { ensureHelperRunning, findHelperScript, deriveHelperScriptPath };
