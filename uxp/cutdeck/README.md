@@ -11,14 +11,15 @@ the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
 1. Use Premiere **26.2 or later** (this machine currently has 26.5).
 2. Nothing to start by hand: the first time a session clicks **Rough Cut
    In–Out**, **Sync Multi-Cam**, or **Resume last job** and the helper isn't
-   already answering, the panel launches `Start CutDeck.cmd` itself via
-   UXP's `shell.openPath` and waits (up to 15s) for it to come up. Premiere
-   will ask for one-time consent to launch it; accept it. It uses this
-   project's existing `.venv`, models, configuration, and FFmpeg
-   installation. You'll still see its console window — UXP cannot launch it
-   hidden or pass it arguments — so keep that window open for the session.
-   You can also still double-click **Start CutDeck.cmd** yourself first if
-   you'd rather not see the consent prompt mid-click.
+   already answering, the panel launches it itself via UXP's `shell.openPath`
+   on `Start CutDeck (Hidden).vbs` and waits (up to 15s) for it to come up.
+   Premiere will ask for one-time consent to launch it; accept it. No console
+   window appears — the `.vbs` wrapper runs `Start CutDeck.cmd`'s python
+   process hidden (UXP itself has no way to pass a hidden-window flag, so the
+   wrapper does it instead) — and it uses this project's existing `.venv`,
+   models, configuration, and FFmpeg installation.
+   If it doesn't come up and you need to see why, run **`Start CutDeck.cmd`**
+   directly instead — the hidden path gives no visible error on failure.
 3. Enable **Developer Mode** in Premiere's Plugins preferences and UXP Developer
    Tool (version 2.2 or later). In **UXP Developer Tool**, choose **Add Plugin**, select
    `uxp/cutdeck/manifest.json`, and click **Load** with Premiere running.
@@ -30,27 +31,29 @@ validated as a distributable `.ccx` installer.
 
 **Recommended for daily use:** register `Start CutDeck.cmd` as a Windows
 Scheduled Task that runs at login, instead of relying on the panel's
-launch-on-click fallback above. It avoids the one-time consent prompt and the
-15-second wait entirely, and the helper is simply already there every session
-— the same tradeoff CEP's silent auto-spawn makes, without needing
-`child_process`. The panel's own launch (previous step) exists for when that
-isn't set up, not as a replacement for it.
+launch-on-click fallback above. It avoids the one-time consent prompt
+entirely, and the helper is simply already there every session — the same
+tradeoff CEP's silent auto-spawn makes, without needing `child_process`. The
+panel's own launch (previous step) exists for when that isn't set up, not as
+a replacement for it.
 
 ## Use
 
 1. Open your source sequence. Set timeline In and Out marks. The panel reads
    them automatically on open; click the refresh icon (top right) or the
    sequence card to re-read after changing the marks.
-2. Open the **Rough Cut** tab. Leave **Reference Audio** on its default to
-   match the working XML command, or select a specific Premiere audio track.
+2. Leave **Reference Audio** on its default to match the working XML
+   command, or select a specific Premiere audio track.
 3. Leave the **Speech + Silence** preset selected for aggressive silence
    cutting with ASR protection for short speech. **Silence Only** skips ASR,
    just like the existing command's `-NoAsr` switch.
-4. Click **Rough Cut In–Out**. CutDeck creates a sequence named
-   `Your sequence — CutDeck <job identifier>` and opens it.
+4. Click **Rough Cut In–Out**, or **Sync Multi-Cam** for a multi-camera sync
+   using the same In/Out and Reference Audio. CutDeck creates a sequence
+   named `Your sequence — CutDeck <job identifier>` and opens it, filed in a
+   **`CutDeck` bin in the Project panel** (created once, on first use, at the
+   project root — every result after that lands in the same bin instead of
+   scattering at the root).
 
-Multi-camera sync uses the same In/Out and Reference Audio, from the
-**Multi-Cam Sync** tab (the panel's default tab) — click **Sync Multi-Cam**.
 The diagnostics drawer (gear icon, top right) holds the read-only timing
 probe, the connection probe, copy-status, and the assemble probe described
 below.
