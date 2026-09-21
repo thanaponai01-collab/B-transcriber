@@ -59,6 +59,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
+    position: relative;
   }
   .icon-btn {
     background: transparent;
@@ -330,6 +331,108 @@
     color: #e5ece8;
     letter-spacing: -0.1px;
   }
+  .card-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    width: 100%;
+  }
+  .legend-row {
+    font-size: 9px;
+    color: #8fa096;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .key-tag {
+    background: #191d1a;
+    border: 1px solid #2d3631;
+    color: #7dd3fc;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .key-tag.purple {
+    color: #d8b4fe;
+  }
+
+  /* Quick Badges Bar */
+  .adj-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .badge-btn {
+    flex: 1;
+    background: #181b19;
+    border: 1px solid #2b332e;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #38bdf8;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    user-select: none;
+  }
+  .badge-btn:hover {
+    background: #222724;
+    border-color: #3d4942;
+  }
+  .badge-btn.fx-badge {
+    color: #c084fc;
+  }
+
+  /* Settings Help Box */
+  .setting-help-box {
+    background: #111312;
+    border: 1px solid #232825;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 8px;
+  }
+  .help-box-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #6ee7b7;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .help-section {
+    margin-bottom: 6px;
+  }
+  .help-section:last-child {
+    margin-bottom: 0;
+  }
+  .help-tool-name {
+    font-size: 9px;
+    font-weight: 700;
+    color: #d1dad4;
+    margin-bottom: 2px;
+  }
+  .help-item {
+    font-size: 9px;
+    color: #8c9992;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 2px;
+  }
+  .help-item strong {
+    color: #b0beb6;
+  }
 
   /* Status Bar */
   .status-card {
@@ -360,16 +463,88 @@
     word-break: break-word;
   }
 
-  /* Settings Drawer */
-  #diagnostics {
+  /* Chrome-Style Floating Dropdown Menu (3-Dots Menu) */
+  .dropdown-menu {
     display: none;
-    margin-top: 8px;
-    padding: 9px 10px;
-    background: #141615;
-    border: 1px solid #282f2a;
-    border-radius: 5px;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 1000;
+    min-width: 175px;
+    background: #1b1e1c;
+    border: 1px solid #333b36;
+    border-radius: 7px;
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.4);
   }
-  #diagnostics.open { display: block; }
+  .dropdown-menu.open { display: block; }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: calc(100% - 8px);
+    margin: 2px 4px;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: #d1dbd5;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+  }
+  .dropdown-item:hover {
+    background: #27312b;
+    color: #ffffff;
+  }
+  .dropdown-item:active {
+    background: #323e37;
+  }
+  .dropdown-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    stroke: #8c9892;
+    transition: stroke 0.12s;
+  }
+  .dropdown-item:hover .dropdown-icon {
+    stroke: #6ee7b7;
+  }
+  .dropdown-divider {
+    height: 1px;
+    background: #262c28;
+    margin: 4px 0;
+  }
+
+  /* Floating Settings Modal Overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1050;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: #141715;
+    border: 1px solid #2f3833;
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%;
+    max-width: 340px;
+    box-shadow: 0 16px 36px rgba(0,0,0,0.8);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
   .settings-header {
     display: flex;
     align-items: center;
@@ -565,6 +740,49 @@
           <circle cx="12" cy="19" r="1.5"/>
         </svg>
       </div>
+
+      <!-- Chrome-Style Floating Dropdown Menu -->
+      <div id="overflow-menu" class="dropdown-menu">
+        <div id="menu-item-settings" class="dropdown-item" role="button">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </div>
+        <div id="socketprobe" class="dropdown-item" role="button">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span>Test Connection</span>
+        </div>
+        <div id="copystatus" class="dropdown-item" role="button">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Copy Status</span>
+        </div>
+        <div id="timingprobe" class="dropdown-item" role="button">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>Check Timing</span>
+        </div>
+        <div class="dropdown-divider"></div>
+        <div id="menu-item-reload" class="dropdown-item" role="button">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 4v6h-6"/>
+            <path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          <span>Reload Panel</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -630,7 +848,7 @@
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
       <!-- Card 1: Adjustment Layer -->
-      <div id="btn-adj" class="action-card card-al" role="button" title="Click: 50/50 Transition | Shift+Click: Span CTI">
+      <div id="btn-adj" class="action-card card-al" role="button" title="Click: Fit Selection or 50/50 | Shift+Click: Force Cut (50/50)">
         <div class="card-icon-box">
           <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -639,6 +857,10 @@
           </svg>
         </div>
         <div class="card-title">Adjustment Layer</div>
+        <div class="card-legend">
+          <div class="legend-row"><span class="key-tag">Click</span> Fit / 50-50</div>
+          <div class="legend-row"><span class="key-tag">⇧ Click</span> Force Cut</div>
+        </div>
       </div>
 
       <!-- Card 2: Effect Preset -->
@@ -649,6 +871,20 @@
           </svg>
         </div>
         <div class="card-title">Effect Preset</div>
+        <div class="card-legend">
+          <div class="legend-row"><span class="key-tag purple">Click</span> Show Active</div>
+          <div class="legend-row"><span class="key-tag purple">⇧ Click</span> Next FX</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Badges Bar -->
+    <div class="adj-status-bar">
+      <div id="badge-transition" class="badge-btn" role="button" title="Click to cycle frame lengths">
+        ⚡ 16f (50/50)
+      </div>
+      <div id="badge-active-fx" class="badge-btn fx-badge" role="button" title="Click to cycle next preset">
+        ✦ Active: Zoom In
       </div>
     </div>
   </div>
@@ -659,91 +895,119 @@
     <div id="status" role="status">Ready</div>
   </div>
 
-  <!-- Settings Drawer -->
-  <div id="diagnostics">
-    <div class="settings-header">
-      <span class="diag-title">Settings</span>
-      <div id="close-settings" class="icon-btn" role="button" title="Close Settings">
-        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </div>
-    </div>
-
-    <div class="setting-row">
-      <label class="setting-label">Transition Length (50/50)</label>
-      <div class="frame-stepper-group">
-        <div class="pills-grid-mini">
-          <div class="pill-mini" data-frames="8" role="button">8f</div>
-          <div class="pill-mini" data-frames="12" role="button">12f</div>
-          <div class="pill-mini active" data-frames="16" role="button">16f</div>
-          <div class="pill-mini" data-frames="20" role="button">20f</div>
-          <div class="pill-mini" data-frames="24" role="button">24f</div>
-        </div>
-        <div class="number-stepper">
-          <div id="frame-dec" class="step-btn" role="button">−</div>
-          <input type="number" id="setting-frames" value="16" min="2" max="240">
-          <div id="frame-inc" class="step-btn" role="button">+</div>
+  <!-- Settings Modal (Opened by Settings in Dropdown Menu) -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="settings-header">
+        <span class="diag-title">Settings</span>
+        <div id="close-settings" class="icon-btn" role="button" title="Close Settings">
+          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </div>
       </div>
-    </div>
 
-    <div class="settings-grid-2col">
       <div class="setting-row">
-        <label class="setting-label" for="setting-bin">Project Bin</label>
-        <input type="text" id="setting-bin" class="setting-input" value="CutDeck AL/FX">
-      </div>
-      <div class="setting-row">
-        <label class="setting-label" for="setting-color">Color</label>
-        <select id="setting-color" class="setting-select">
-          <option value="Iris" selected>Iris (Cyan)</option>
-          <option value="Lavender">Lavender</option>
-          <option value="Mango">Mango (Orange)</option>
-          <option value="Forest">Forest (Green)</option>
-          <option value="Rose">Rose (Pink)</option>
-          <option value="Violet">Violet (Purple)</option>
-          <option value="Caribbean">Caribbean</option>
-          <option value="Cerulean">Cerulean</option>
-          <option value="Magenta">Magenta</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="setting-row">
-      <label class="checkbox-container">
-        <input type="checkbox" id="setting-clamp" checked>
-        <span class="setting-subtext">Clamp transition on short clips</span>
-      </label>
-    </div>
-
-    <div class="setting-row">
-      <label class="setting-label" for="setting-active-fx">Preset</label>
-      <div class="fx-select-row">
-        <select id="setting-active-fx" class="setting-select">
-          <option value="Zoom In" selected>Zoom In</option>
-          <option value="Zoom Out">Zoom Out</option>
-          <option value="Whip Pan L">Whip Pan Left</option>
-          <option value="Whip Pan R">Whip Pan Right</option>
-          <option value="Camera Shake">Camera Shake</option>
-          <option value="Motion Blur">Motion Blur</option>
-          <option value="Film Glow">Film Glow</option>
-          <option value="Letterbox">Letterbox</option>
-          <option value="Custom FX">Custom FX</option>
-        </select>
-        <div id="btn-capture-preset" class="btn-secondary" role="button" title="Capture selected AL">
-          Capture
+        <label class="setting-label">Transition Length (50/50)</label>
+        <div class="frame-stepper-group">
+          <div class="pills-grid-mini">
+            <div class="pill-mini" data-frames="8" role="button">8f</div>
+            <div class="pill-mini" data-frames="12" role="button">12f</div>
+            <div class="pill-mini active" data-frames="16" role="button">16f</div>
+            <div class="pill-mini" data-frames="20" role="button">20f</div>
+            <div class="pill-mini" data-frames="24" role="button">24f</div>
+          </div>
+          <div class="number-stepper">
+            <div id="frame-dec" class="step-btn" role="button">−</div>
+            <input type="number" id="setting-frames" value="16" min="2" max="240">
+            <div id="frame-inc" class="step-btn" role="button">+</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="setting-divider"></div>
-    <div class="diag-title" style="margin-bottom:5px;">Diagnostics</div>
-    <div class="diag-grid">
-      <div id="socketprobe" class="btn-secondary" role="button">Diagnose helper connection</div>
-      <div id="copystatus" class="btn-secondary" role="button">Copy status to clipboard</div>
-      <div id="timingprobe" class="btn-secondary" role="button">Check Premiere timing</div>
-      <div id="assembleprobe" class="btn-secondary danger" role="button">Run assemble probe</div>
+      <div class="settings-grid-2col">
+        <div class="setting-row">
+          <label class="setting-label" for="setting-bin">Project Bin</label>
+          <input type="text" id="setting-bin" class="setting-input" value="CutDeck AL/FX">
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-color">Color</label>
+          <select id="setting-color" class="setting-select">
+            <option value="Iris" selected>Iris (Cyan)</option>
+            <option value="Lavender">Lavender</option>
+            <option value="Mango">Mango (Orange)</option>
+            <option value="Forest">Forest (Green)</option>
+            <option value="Rose">Rose (Pink)</option>
+            <option value="Violet">Violet (Purple)</option>
+            <option value="Caribbean">Caribbean</option>
+            <option value="Cerulean">Cerulean</option>
+            <option value="Magenta">Magenta</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="checkbox-container">
+          <input type="checkbox" id="setting-clamp" checked>
+          <span class="setting-subtext">Clamp transition on short clips</span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="setting-active-fx">Preset</label>
+        <div class="fx-select-row">
+          <select id="setting-active-fx" class="setting-select">
+            <option value="Zoom In" selected>Zoom In</option>
+            <option value="Zoom Out">Zoom Out</option>
+            <option value="Whip Pan L">Whip Pan Left</option>
+            <option value="Whip Pan R">Whip Pan Right</option>
+            <option value="Camera Shake">Camera Shake</option>
+            <option value="Motion Blur">Motion Blur</option>
+            <option value="Film Glow">Film Glow</option>
+            <option value="Letterbox">Letterbox</option>
+            <option value="Custom FX">Custom FX</option>
+          </select>
+          <div id="btn-capture-preset" class="btn-secondary" role="button" title="Capture selected AL">
+            Capture
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool Shortcuts & Reference Guide -->
+      <div class="setting-divider"></div>
+      <div class="setting-help-box">
+        <div class="help-box-title">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          ADJ &amp; FX Tools &amp; Shortcuts Guide
+        </div>
+        <div class="help-section">
+          <div class="help-tool-name">Adjustment Layer:</div>
+          <div class="help-item"><span class="key-tag">Click</span> Fit AL over selected clips (or 50/50 cut if on cut point)</div>
+          <div class="help-item"><span class="key-tag">⇧ Shift+Click</span> Force 50/50 cut transition at playhead</div>
+        </div>
+        <div class="help-section">
+          <div class="help-tool-name">Effect Preset:</div>
+          <div class="help-item"><span class="key-tag purple">Click</span> Show current active preset</div>
+          <div class="help-item"><span class="key-tag purple">⇧ Shift+Click</span> Cycle to next effect preset</div>
+          <div class="help-item"><span class="key-tag purple">Capture</span> Save selected timeline AL as active preset</div>
+        </div>
+        <div class="help-section">
+          <div class="help-tool-name">Settings Reference:</div>
+          <div class="help-item">• <strong>Transition (50/50)</strong>: Frame duration split evenly across the cut point (e.g. 16f = 8f left + 8f right).</div>
+          <div class="help-item">• <strong>Clamp</strong>: Shrinks transition on short clips to prevent bleeding into adjacent cuts.</div>
+          <div class="help-item">• <strong>Bin &amp; Color</strong>: Target bin folder &amp; timeline label color for created ALs.</div>
+        </div>
+      </div>
+
+      <div class="setting-divider"></div>
+      <div style="margin-top:6px;">
+        <div id="assembleprobe" class="btn-secondary danger" role="button">Run assemble probe</div>
+      </div>
     </div>
   </div>
 

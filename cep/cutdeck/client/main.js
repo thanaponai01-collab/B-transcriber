@@ -299,21 +299,86 @@
     });
   }
 
-  // 3. Settings & Configuration Drawer (3-Dots Button)
+  // 3. Overflow Menu (3-Dots) & Settings Modal
   function setupSettingsDrawer() {
     const toggleBtn = $("tools-toggle");
+    const overflowMenu = $("overflow-menu");
+    const settingsModal = $("settings-modal");
     const closeBtn = $("close-settings");
-    const diag = $("diagnostics");
+    const settingsMenuItem = $("menu-item-settings");
+    const reloadMenuItem = $("menu-item-reload");
 
-    if (toggleBtn && diag) {
-      toggleBtn.addEventListener("click", () => {
-        diag.classList.toggle("open");
+    // Toggle dropdown when clicking 3-dots button
+    if (toggleBtn && overflowMenu) {
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        overflowMenu.classList.toggle("open");
       });
     }
 
-    if (closeBtn && diag) {
+    // Open settings modal from dropdown menu item
+    if (settingsMenuItem && settingsModal) {
+      settingsMenuItem.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (overflowMenu) overflowMenu.classList.remove("open");
+        settingsModal.classList.add("open");
+      });
+    }
+
+    // Close settings modal via close button
+    if (closeBtn && settingsModal) {
       closeBtn.addEventListener("click", () => {
-        diag.classList.remove("open");
+        settingsModal.classList.remove("open");
+      });
+    }
+
+    // Dismiss dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (overflowMenu && overflowMenu.classList.contains("open")) {
+        if (!overflowMenu.contains(e.target) && !toggleBtn.contains(e.target)) {
+          overflowMenu.classList.remove("open");
+        }
+      }
+    });
+
+    // Dismiss settings modal when clicking outside card (backdrop)
+    if (settingsModal) {
+      settingsModal.addEventListener("click", (e) => {
+        if (e.target === settingsModal) {
+          settingsModal.classList.remove("open");
+        }
+      });
+    }
+
+    // Escape key closes open dropdown or modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        if (overflowMenu && overflowMenu.classList.contains("open")) {
+          overflowMenu.classList.remove("open");
+        }
+        if (settingsModal && settingsModal.classList.contains("open")) {
+          settingsModal.classList.remove("open");
+        }
+      }
+    });
+
+    // Reload panel menu item
+    if (reloadMenuItem) {
+      reloadMenuItem.addEventListener("click", () => {
+        if (overflowMenu) overflowMenu.classList.remove("open");
+        window.location.reload();
+      });
+    }
+
+    // Close dropdown when socketprobe or copystatus clicked
+    if ($("socketprobe") && overflowMenu) {
+      $("socketprobe").addEventListener("click", () => {
+        overflowMenu.classList.remove("open");
+      });
+    }
+    if ($("copystatus") && overflowMenu) {
+      $("copystatus").addEventListener("click", () => {
+        overflowMenu.classList.remove("open");
       });
     }
 
