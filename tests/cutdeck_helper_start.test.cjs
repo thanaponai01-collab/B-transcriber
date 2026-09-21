@@ -97,17 +97,17 @@ test("a shell without openPath fails clearly instead of crashing", async () => {
 
 test("deriveHelperScriptPath finds the repo root from the plugin's own folder (Windows)", () => {
   const script = deriveHelperScriptPath("D:\\repo\\uxp\\cutdeck");
-  assert.equal(script, "D:\\repo\\Start CutDeck.cmd");
+  assert.equal(script, "D:\\repo\\Start CutDeck (Hidden).vbs");
 });
 
 test("deriveHelperScriptPath finds the repo root from the plugin's own folder (posix)", () => {
   const script = deriveHelperScriptPath("/Users/thana/repo/uxp/cutdeck");
-  assert.equal(script, "/Users/thana/repo/Start CutDeck.cmd");
+  assert.equal(script, "/Users/thana/repo/Start CutDeck (Hidden).vbs");
 });
 
 test("deriveHelperScriptPath tolerates a trailing slash", () => {
   const script = deriveHelperScriptPath("D:\\repo\\uxp\\cutdeck\\");
-  assert.equal(script, "D:\\repo\\Start CutDeck.cmd");
+  assert.equal(script, "D:\\repo\\Start CutDeck (Hidden).vbs");
 });
 
 test("deriveHelperScriptPath rejects a path that isn't the plugin's own folder", () => {

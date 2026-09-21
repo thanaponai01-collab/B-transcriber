@@ -15,7 +15,7 @@
     },
     "clipboard": "readAndWrite",
     "launchProcess": {
-      "extensions": [".cmd"]
+      "extensions": [".cmd", ".vbs"]
     }
   },
   "entrypoints": [

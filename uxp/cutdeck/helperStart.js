@@ -1,14 +1,16 @@
 /* Starts the CutDeck helper the only way UXP can: `shell.openPath` on
-   Start CutDeck.cmd, then poll `hello` until it answers.
+   "Start CutDeck (Hidden).vbs", then poll `hello` until it answers.
 
    UXP has no `child_process` — see cep/cutdeck/client/helper_manager.js for
    the CEP equivalent, which spawns the helper directly and silently instead.
-   `openPath` cannot pass arguments, capture output, or report an exit code
-   (Adobe's own external-process recipe: no parameters, no stdout capture,
-   no hidden run) — Start CutDeck.cmd takes no arguments, so that limitation
-   doesn't bite here. It resolves to "" on success or an error message
-   string on failure, requires user consent, and needs the plugin
-   manifest's `launchProcess` permission (uxp/cutdeck/manifest.json).
+   `openPath` cannot pass arguments, capture output, report an exit code, or
+   run its target hidden (Adobe's own external-process recipe says as much).
+   The .vbs wrapper is how a visible console window is avoided anyway:
+   wscript.exe (the default .vbs handler) shows no window of its own, and its
+   WshShell.Run(path, 0, False) call hides the console it starts — including
+   Start CutDeck.cmd's python.exe — while still running it in the background.
+   If the helper silently fails to come up, that hides the real error too:
+   run "Start CutDeck.cmd" directly to see it.
 
    The path it launches must be a plain native path string. `require("path")`
    plus `__dirname` is NOT trustworthy for that here: UXP's own `path` module
@@ -20,8 +22,10 @@
    in this exact plugin (uxp/cutdeck/probe.js), so derive the repo root from
    that instead. */
 
+const HELPER_LAUNCHER_NAME = "Start CutDeck (Hidden).vbs";
+
 /* Pure and independently testable: given the plugin folder's own native
-   path (".../uxp/cutdeck"), returns the repo root's Start CutDeck.cmd. */
+   path (".../uxp/cutdeck"), returns the repo root's hidden-launch script. */
 function deriveHelperScriptPath(pluginNativePath) {
   const sep = pluginNativePath.indexOf("\\") !== -1 ? "\\" : "/";
   const trimmed = pluginNativePath.replace(/[\\/]+$/, "");
@@ -29,7 +33,7 @@ function deriveHelperScriptPath(pluginNativePath) {
   if (repoRoot === trimmed) {
     throw new Error("Could not find the repo root from plugin path: " + pluginNativePath);
   }
-  return repoRoot + sep + "Start CutDeck.cmd";
+  return repoRoot + sep + HELPER_LAUNCHER_NAME;
 }
 
 async function findHelperScript() {
