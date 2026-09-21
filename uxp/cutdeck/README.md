@@ -23,15 +23,22 @@ validated as a distributable `.ccx` installer.
 
 ## Use
 
-1. Open your source sequence. Set timeline In and Out marks.
-2. Click **Read timeline range** to see the sequence and range in the panel.
-3. Leave **Dialogue audio** on its default to match the working XML command,
-   or select a specific Premiere audio track.
-4. Leave the usual preset selected for aggressive silence cutting with ASR
-   protection for short speech. **Faster · silence only** skips ASR, just like
-   the existing command's `-NoAsr` switch.
-5. Click **Rough Cut In–Out**. CutDeck creates a sequence named
+1. Open your source sequence. Set timeline In and Out marks. The panel reads
+   them automatically on open; click the refresh icon (top right) or the
+   sequence card to re-read after changing the marks.
+2. Open the **Rough Cut** tab. Leave **Reference Audio** on its default to
+   match the working XML command, or select a specific Premiere audio track.
+3. Leave the **Speech + Silence** preset selected for aggressive silence
+   cutting with ASR protection for short speech. **Silence Only** skips ASR,
+   just like the existing command's `-NoAsr` switch.
+4. Click **Rough Cut In–Out**. CutDeck creates a sequence named
    `Your sequence — CutDeck <job identifier>` and opens it.
+
+Multi-camera sync uses the same In/Out and Reference Audio, from the
+**Multi-Cam Sync** tab (the panel's default tab) — click **Sync Multi-Cam**.
+The diagnostics drawer (gear icon, top right) holds the read-only timing
+probe, the connection probe, copy-status, and the assemble probe described
+below.
 
 The rough cut XML is written to a **`CutDeck` folder beside your footage**, named
 after the sequence and job, so it sits with the media instead of inside this repo:
