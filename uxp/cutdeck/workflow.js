@@ -45,6 +45,30 @@ const prepare = (ppro, rpc, snapshot, options, save) =>
 const prepareSync = (ppro, rpc, snapshot, options, save) =>
   exportAndStart(ppro, rpc, snapshot, "prepare_sync", options, save);
 
+const CUTDECK_BIN_NAME = "CutDeck";
+
+// Finds (or creates once) the project's top-level CutDeck bin, so rough-cut and
+// sync results land organized in the Project panel instead of at the root.
+// Idempotent: only creates when a bin with this name doesn't already exist.
+async function getOrCreateCutDeckBin(project) {
+  const root = await project.getRootItem();
+  const before = await root.getItems();
+  const existing = before.find((item) => item.name === CUTDECK_BIN_NAME);
+  if (existing) return existing;
+
+  const ok = project.executeTransaction((compound) => {
+    if (!compound.addAction(root.createBinAction(CUTDECK_BIN_NAME, false))) {
+      throw new Error("addAction(createBin) returned false");
+    }
+  }, `Create ${CUTDECK_BIN_NAME} bin`);
+  if (!ok) throw new Error(`Could not create the ${CUTDECK_BIN_NAME} bin in this project.`);
+
+  const after = await root.getItems();
+  const bin = after.find((item) => item.name === CUTDECK_BIN_NAME);
+  if (!bin) throw new Error(`${CUTDECK_BIN_NAME} bin was created but could not be found afterward.`);
+  return bin;
+}
+
 async function importResult(ppro, job, previousAttempt, markAttempt) {
   const project = await ppro.Project.getActiveProject();
   if (!project || guid(project) !== job.context.project_id) {
@@ -64,7 +88,8 @@ async function importResult(ppro, job, previousAttempt, markAttempt) {
     }
     const ids = new Set(before.map(guid));
     markAttempt();
-    const imported = await project.importFiles([job.output_path], true, await project.getRootItem(), false);
+    const targetBin = await getOrCreateCutDeckBin(project);
+    const imported = await project.importFiles([job.output_path], true, targetBin, false);
     if (!imported) throw new Error("Premiere did not confirm the XML import. Check the Project panel. Result: " + job.output_path);
     const after = await project.getSequences();
     const matches = after.filter((s) => !ids.has(guid(s)) && s.name === job.result_name);
@@ -77,4 +102,4 @@ async function importResult(ppro, job, previousAttempt, markAttempt) {
   return result;
 }
 
-module.exports = { VERSION, capture, prepare, prepareSync, importResult };
+module.exports = { VERSION, capture, prepare, prepareSync, importResult, getOrCreateCutDeckBin };

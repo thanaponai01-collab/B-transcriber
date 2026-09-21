@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { capture, prepare, prepareSync, importResult } = require("../uxp/cutdeck/workflow.js");
+const { capture, prepare, prepareSync, importResult, getOrCreateCutDeckBin } = require("../uxp/cutdeck/workflow.js");
 
 function fixture() {
   const source = { guid: { toString: () => "source" }, name: "Interview",
@@ -10,16 +10,40 @@ function fixture() {
     getTimebase: async () => "10", getAudioTrackCount: async () => 2 };
   const result = { guid: { toString: () => "result" }, name: "Interview — CutDeck 123" };
   let sequences = [source], imports = 0;
+  let rootItems = [];
+  let binsCreated = 0;
+  const importTargets = [];
+  const root = {
+    getItems: async () => rootItems,
+    createBinAction: (name, makeUnique) => ({ __createBin: true, name, makeUnique }),
+  };
   const project = { guid: {toString: () => "project"},
     getActiveSequence: async () => source, getSequences: async () => sequences,
-    getRootItem: async () => ({}),
-    importFiles: async () => { imports++; sequences.push(result); return true; },
+    getRootItem: async () => root,
+    executeTransaction: (callback) => {
+      const compound = {
+        addAction: (action) => {
+          if (action && action.__createBin) {
+            binsCreated++;
+            rootItems.push({ name: action.name });
+            return true;
+          }
+          return false;
+        },
+      };
+      callback(compound);
+      return true;
+    },
+    importFiles: async (paths, suppressUI, targetBin) => {
+      imports++; importTargets.push(targetBin); sequences.push(result); return true;
+    },
     openSequence: async () => true, setActiveSequence: async () => true };
   const ppro = { Project: { getActiveProject: async () => project },
     ProjectConverter: { exportAsFinalCutProXML: async () => true } };
   const job = { context: {project_id: "project", sequence_id: "source"},
     result_name: result.name, output_path: "result.xml", source_path: "source.xml", job_id: "123" };
-  return { source, project, ppro, job, imports: () => imports };
+  return { source, project, ppro, job, imports: () => imports,
+    binsCreated: () => binsCreated, importTargets, rootItems: () => rootItems };
 }
 test("captures exact tick strings and rejects missing marks", async () => {
   const f = fixture();
@@ -67,4 +91,18 @@ test("unconfirmed earlier import cannot silently import twice", async () => {
   const f = fixture();
   await assert.rejects(importResult(f.ppro, f.job, true, () => {}), /previous import/);
   assert.equal(f.imports(), 0);
+});
+test("result import lands in the CutDeck bin, created on first use", async () => {
+  const f = fixture();
+  await importResult(f.ppro, f.job, false, () => {});
+  assert.equal(f.binsCreated(), 1);
+  assert.deepEqual(f.rootItems(), [{ name: "CutDeck" }]);
+  assert.equal(f.importTargets[0].name, "CutDeck");
+});
+test("a second call reuses the existing CutDeck bin instead of creating another", async () => {
+  const f = fixture();
+  const first = await getOrCreateCutDeckBin(f.project);
+  const second = await getOrCreateCutDeckBin(f.project);
+  assert.equal(f.binsCreated(), 1);
+  assert.deepEqual(first, second);
 });
