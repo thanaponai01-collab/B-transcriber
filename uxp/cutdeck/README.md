@@ -35,12 +35,6 @@ so the wrapper does it instead) — and it uses this project's existing
 If it doesn't come up and you need to see why, run **`Start CutDeck.cmd`**
 directly instead — the hidden path gives no visible error on failure.
 
-**Status (issue #40): packaging steps above are recorded but not yet run
-end-to-end on this machine** — Developer Mode off, UXP Developer Tool
-closed, panel visible under **Window > UXP Plugins**, and one rough cut run
-from the installed panel. Until that's confirmed, use source-loading for
-development below; it still talks to the same helper.
-
 ### Development (source-load, no packaging)
 
 Enable **Developer Mode** in Premiere's Plugins preferences and UXP Developer
@@ -51,7 +45,7 @@ Accept Premiere's plugin permissions if prompted. Installing the `.ccx`
 above does not remove the ability to source-load this way too — the two
 coexist.
 
-**Recommended for daily use once the install above is verified:** register
+**Recommended for daily use:** register
 `Start CutDeck.cmd` as a Windows Scheduled Task that runs at login, instead
 of relying on the panel's launch-on-click fallback above. It avoids the
 one-time consent prompt entirely, and the helper is simply already there
