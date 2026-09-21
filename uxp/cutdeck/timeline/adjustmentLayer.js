@@ -264,8 +264,10 @@ async function getSelectedTimelineClips(seq) {
 
   // Filter: ONLY include Video clips (exclude Audio clips and Adjustment Layers!)
   // In Premiere, linked selection selects Audio clips which may span longer cuts than Video!
+  // Also record which video track each item lives on — callers need to tell V1 (the
+  // canvas real footage lives on) apart from a duplicate clip sitting on a higher track.
   const videoClips = [];
-  const videoItemsSet = new Set();
+  const videoItemsTrackMap = new Map();
 
   try {
     const trackCount = await seq.getVideoTrackCount();
@@ -274,7 +276,7 @@ async function getSelectedTimelineClips(seq) {
       const vItems = await getTrackClipItems(track);
       if (vItems) {
         for (const vi of vItems) {
-          videoItemsSet.add(vi);
+          videoItemsTrackMap.set(vi, v);
         }
       }
     }
@@ -297,12 +299,12 @@ async function getSelectedTimelineClips(seq) {
       continue;
     }
 
-    // 3. Verify item belongs to a Video Track (if videoItemsSet was populated)
-    if (videoItemsSet.size > 0 && !videoItemsSet.has(it)) {
+    // 3. Verify item belongs to a Video Track (if videoItemsTrackMap was populated)
+    if (videoItemsTrackMap.size > 0 && !videoItemsTrackMap.has(it)) {
       continue; // Audio clip on A1/A2, ignore!
     }
 
-    videoClips.push(it);
+    videoClips.push({ item: it, track: videoItemsTrackMap.has(it) ? videoItemsTrackMap.get(it) : -1 });
   }
 
   return videoClips;
@@ -434,19 +436,63 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
 
   // Check if user has clips selected on timeline
   const selectedClips = await getSelectedTimelineClips(seq);
-  const clipsWithTimes = [];
-  for (const it of selectedClips) {
+  const rawClipsWithTimes = [];
+  for (const sc of selectedClips) {
     try {
+      const it = sc.item;
       const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
       const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
       const sTicks = toBigIntTicks(sTime);
       const eTicks = toBigIntTicks(eTime);
       if (eTicks > sTicks) {
-        clipsWithTimes.push({ item: it, startTicks: sTicks, endTicks: eTicks });
+        rawClipsWithTimes.push({ track: sc.track, startTicks: sTicks, endTicks: eTicks });
       }
     } catch (_) {}
   }
-  clipsWithTimes.sort((a, b) => (a.startTicks < b.startTicks ? -1 : a.startTicks > b.startTicks ? 1 : 0));
+
+  // Cover every selected clip's own span, any track — not just V1 (confirmed
+  // 2026-09-21: the user wants AL over a region where only V2/V3 have a selected
+  // clip and V1 has nothing there too).
+  //
+  // Where more than one selected clip covers the same stretch, only the TOPMOST
+  // track's clip should drive it — a lower clip hidden underneath a higher one
+  // must not introduce its own split point there (confirmed 2026-09-21: a V2 clip
+  // straddling the real boundary between a V4 clip and a V3 clip fragmented what
+  // should have been 2 clean AL segments into 4 — "it like spot the V2 that is
+  // under both V3, V4 ... i want it to spot only top layer"). So this is a
+  // layering resolve, not a plain interval union: assign each breakpoint-bounded
+  // sub-interval to whichever covering clip has the highest track, tagged with that
+  // clip's identity, then merge adjacent sub-intervals that resolve to the SAME
+  // clip. A boundary between two DIFFERENT top clips (even same track, different
+  // clip) still survives — this only removes splits contributed by a clip that
+  // never actually wins the region it overlaps.
+  const taggedClips = rawClipsWithTimes.map((cl, idx) => ({ ...cl, idx }));
+  const breakpoints = [];
+  for (const cl of taggedClips) {
+    breakpoints.push(cl.startTicks, cl.endTicks);
+  }
+  breakpoints.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const uniqueBreakpoints = breakpoints.filter((b, idx) => idx === 0 || b !== breakpoints[idx - 1]);
+
+  const clipsWithTimes = [];
+  for (let i = 0; i < uniqueBreakpoints.length - 1; i++) {
+    const segStart = uniqueBreakpoints[i];
+    const segEnd = uniqueBreakpoints[i + 1];
+    const covering = taggedClips.filter((cl) => cl.startTicks <= segStart && cl.endTicks >= segEnd);
+    if (covering.length === 0) continue; // real gap between separate, non-touching selections
+
+    let winner = covering[0];
+    for (const cl of covering) {
+      if (cl.track > winner.track) winner = cl;
+    }
+
+    const last = clipsWithTimes[clipsWithTimes.length - 1];
+    if (last && last.winnerIdx === winner.idx && last.endTicks === segStart) {
+      last.endTicks = segEnd;
+    } else {
+      clipsWithTimes.push({ startTicks: segStart, endTicks: segEnd, winnerIdx: winner.idx });
+    }
+  }
 
   const placements = [];
 
@@ -681,14 +727,11 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     let targetTrack = batchTargetTrack;
 
     // Hard gate: re-verify the exact intended span is actually clear immediately
-    // before committing. Placement briefly lands at Premiere's default duration
-    // before Step 2 trims it — but that trim is now confirmed reliable (readback-
-    // verified: actualEndTicks matches requestedEndTicks exactly), and it completes
-    // before the next iteration's check ever runs, so by the time this check sees a
-    // previous per-clip placement, it's already the correct short span, not the
-    // untrimmed default. This should normally find batchTargetTrack already clear
-    // (it was clear across the whole batch's union span) — it only walks further
-    // if something unexpected changed since the batch scan.
+    // before committing. Log evidence (2026-09-21) confirms Step 2's trim always
+    // lands exactly (trimHeld/trimOk true, actualEndTicks === requestedEndTicks every
+    // time) — there's no readback race to guard against here. This should normally
+    // find batchTargetTrack already clear (it was clear across the whole batch's
+    // union span) — it only walks further if genuinely new content showed up.
     let guard = 0;
     while (guard < 32) {
       let clear;
@@ -717,6 +760,32 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     const editor = await ppro.SequenceEditor.getEditor(freshSeq);
     const tStart = tickTime(p.startTicks);
 
+    // Commit the source Adjustment Layer's in/out points as their OWN transaction,
+    // strictly before the overwrite below is even constructed — not queued into the
+    // same compound as the overwrite (the previous approach). See uxp/cutdeck/README.md
+    // issue #25 / assembleProbe.js: a shared ClipProjectItem's setInOut can resolve
+    // against a stale value when paired with another action in one transaction: "Fall
+    // back to one transaction per span." Confirmed 2026-09-21 the same-transaction
+    // pairing is unsafe in practice — the overwrite read the item's STALE (much
+    // longer) length and destroyed real footage on the target track that Step 2's
+    // later trim can't undo (a trim only shrinks the AL clip; it doesn't restore what
+    // the overwrite already erased).
+    if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
+      const setDuration = () => {
+        try {
+          freshProject.executeTransaction((compound) => {
+            const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
+            if (inOut) compound.addAction(inOut);
+          }, "CutDeck: Set Adjustment Layer Duration");
+        } catch (_) {}
+      };
+      if (typeof freshProject.lockedAccess === "function") {
+        freshProject.lockedAccess(setDuration);
+      } else {
+        setDuration();
+      }
+    }
+
     let ok = false;
     let thrown = null;
 
@@ -727,13 +796,6 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
           let lastErr = null;
 
           if (clipItem) {
-            if (typeof clipItem.createSetInOutPointsAction === "function") {
-              try {
-                const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
-                if (inOut) compound.addAction(inOut);
-              } catch (_) {}
-            }
-
             const attempts = [];
             if (targetTrack >= trackCountNow) {
               attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
