@@ -848,7 +848,7 @@
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
       <!-- Card 1: Adjustment Layer -->
-      <div id="btn-adj" class="action-card card-al" role="button" title="Click: Fit Selection or 50/50 | Shift+Click: Force Cut (50/50)">
+      <div id="btn-adj" class="action-card card-al" role="button" title="Click: Span Selection | Ctrl+Click: Each Clip | Shift+Click: Every Cut (50/50)">
         <div class="card-icon-box">
           <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -858,8 +858,9 @@
         </div>
         <div class="card-title">Adjustment Layer</div>
         <div class="card-legend">
-          <div class="legend-row"><span class="key-tag">Click</span> Fit / 50-50</div>
-          <div class="legend-row"><span class="key-tag">⇧ Click</span> Force Cut</div>
+          <div class="legend-row"><span class="key-tag">Click</span> Span All</div>
+          <div class="legend-row"><span class="key-tag">Ctrl</span> Each Clip</div>
+          <div class="legend-row"><span class="key-tag">⇧</span> Every Cut</div>
         </div>
       </div>
 
@@ -987,12 +988,13 @@
         </div>
         <div class="help-section">
           <div class="help-tool-name">Adjustment Layer:</div>
-          <div class="help-item"><span class="key-tag">Click</span> Fit AL over selected clips (or 50/50 cut if on cut point)</div>
-          <div class="help-item"><span class="key-tag">⇧ Shift+Click</span> Force 50/50 cut transition at playhead</div>
+          <div class="help-item"><span class="key-tag">Click</span> Span 1 continuous AL over full selection</div>
+          <div class="help-item"><span class="key-tag">Ctrl+Click</span> Place 1 separate AL per selected clip (e.g. 3 clips = 3 ALs)</div>
+          <div class="help-item"><span class="key-tag">⇧ Shift+Click</span> 50/50 cut transition on every cut between selected clips (or at playhead)</div>
         </div>
         <div class="help-section">
           <div class="help-tool-name">Effect Preset:</div>
-          <div class="help-item"><span class="key-tag purple">Click</span> Show current active preset</div>
+          <div class="help-item"><span class="key-tag purple">Click</span> Apply active preset to selected clips</div>
           <div class="help-item"><span class="key-tag purple">⇧ Shift+Click</span> Cycle to next effect preset</div>
           <div class="help-item"><span class="key-tag purple">Capture</span> Save selected timeline AL as active preset</div>
         </div>
