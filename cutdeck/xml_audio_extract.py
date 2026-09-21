@@ -8,9 +8,9 @@ detection against. Normally that means the editor exports one by hand
 without that step: the XML already names every source file and its exact
 in/out/start/end on the timeline, so each audio clip's segment can be pulled
 straight from its original source file (via ffmpeg) and pasted into a silence
-buffer at its timeline position — the same pattern ``cutdeck/live_clip.py``
-uses for the mark-and-apply mode (reads original media directly rather than
-waiting on a render).
+buffer at its timeline position — the same pattern the retired mark-and-apply
+``live_clip.py`` used (reads original media directly rather than waiting on
+a render).
 
 **What this trades away, on purpose:** a real Premiere export bakes in
 whatever the sequence's mix actually does — gain automation, EQ, panning,

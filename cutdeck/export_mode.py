@@ -1,22 +1,17 @@
 """export_mode.py — cutdeck.mode config selection (Phase 4,
-docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md; ``mark`` added by issue #17/#19;
+docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md;
 ``recut_sequence`` added by docs/HANDOFF_CUTDECK_XML_RECUT.md Phase 4).
 
 Distinguishes the exporters CutDeck can hand a CutPlan to:
 
   * ``new_sequence``   -- ``cutdeck.xml_export.to_xml``, "build a fresh FCP7
     sequence for the editor to import".
-  * ``mark``           -- ``cutdeck.mark_export.to_mark_plan``, "split + disable
-    CUT regions on the editor's own live sequence via the UXP Mark/Apply
-    plugin" (issue #17). Supersedes the retired ExtendScript ``in_place`` mode.
-    **Parked** -- the split primitive it depends on was abandoned on evidence
-    (see ``mark_export.py``'s docstring and ``assemble_export.py``'s).
   * ``recut_sequence`` -- ``cutdeck.xml_recut.recut``, "rewrite the editor's
     own exported FCP7 XML with the plan's cuts applied, sync-preserving,
     entirely offline". Signature is ``(source_xml: str, plan: CutPlan) ->
     tuple[str, RecutReport]`` -- **not interchangeable** with the other
     exporters, which take ``(plan, media_path, ...)``. Callers must not infer
-    the call shape from ``new_sequence``/``mark``; this dispatcher exists so
+    the call shape from ``new_sequence``; this dispatcher exists so
     they never have to guess it from context either way.
 
 They stay separate modules with different risk profiles (see each module's
@@ -29,9 +24,8 @@ from __future__ import annotations
 from typing import Callable
 
 MODE_NEW_SEQUENCE = "new_sequence"
-MODE_MARK = "mark"
 MODE_RECUT_SEQUENCE = "recut_sequence"
-VALID_MODES = (MODE_NEW_SEQUENCE, MODE_MARK, MODE_RECUT_SEQUENCE)
+VALID_MODES = (MODE_NEW_SEQUENCE, MODE_RECUT_SEQUENCE)
 
 
 def exporter_for_mode(mode: str) -> Callable:
@@ -44,9 +38,6 @@ def exporter_for_mode(mode: str) -> Callable:
     if mode == MODE_NEW_SEQUENCE:
         from cutdeck.xml_export import to_xml
         return to_xml
-    if mode == MODE_MARK:
-        from cutdeck.mark_export import to_mark_plan
-        return to_mark_plan
     if mode == MODE_RECUT_SEQUENCE:
         from cutdeck.xml_recut import recut
         return recut

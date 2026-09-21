@@ -358,16 +358,12 @@ segment:
 
 # which exporter consumes a CutPlan. 'new_sequence' (default): xml_export.py
 # builds a fresh FCP7 sequence for the editor to import — the proven,
-# lower-risk path. 'mark': mark_export.py turns the plan into a mark plan the
-# UXP Mark/Apply plugin (issue #17) uses to split + disable CUT regions on
-# the editor's own live sequence, in place, without deleting anything until
-# the editor hits Apply. See cutdeck/export_mode.py.
+# lower-risk path. See cutdeck/export_mode.py.
 cutdeck:
-  # new_sequence | mark | recut_sequence
+  # new_sequence | recut_sequence
   #   new_sequence   — write an FCP7 XML for the editor to import. Safest default
   #                    (never touches a live sequence); real-import acceptance
   #                    still OPEN, see TODO_LEDGER.
-  #   mark           — PARKED: depends on the split primitive abandoned in #24.
   #   recut_sequence — rewrite the editor's OWN exported FCP7 XML with the cuts
   #                    applied, sync-preserving and offline (HANDOFF_CUTDECK_XML_RECUT).
   mode: new_sequence

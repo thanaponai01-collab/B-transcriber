@@ -1,11 +1,10 @@
 """sequence_mixdown.py — sequence-mixdown ingest path (Phase 2,
 docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
 
-**Superseded as the in-place timestamp source by ``cutdeck/live_clip.py``**
-(issue #17/#20), which reads the clip's original media file directly instead
-of requiring a rendered mixdown export — no render wait, full-quality audio,
-and it sidesteps the fabricated-25fps timebase trap this module documents
-below. This module stays in place for now; it is not the path the UXP
+**Superseded as the in-place timestamp source** by the (since-retired,
+issue #25) ``live_clip.py`` mark-and-apply path, which read the clip's
+original media file directly instead of requiring a rendered mixdown export.
+This module stays in place for now; it is not the path the UXP
 Mark/Apply feature uses.
 
 A thin wrapper, not new pipeline code:

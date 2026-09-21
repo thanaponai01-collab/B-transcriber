@@ -211,9 +211,9 @@ node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs test
 `workflow.js` contains the Premiere operations; `core/rpc.js` (mirrored from `panel/core/`, shared with the CEP panel) owns the helper socket and
 its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
 existing CLI in a subprocess.
-`cutdeck/bridge.py` is now only the pure live-clip `plan` logic; the helper on port 7891
-serves it, so there is one server to start (`Start CutDeck.cmd`). The split probe remains
-separate from this XML integration.
+The helper on port 7891 is the one server to start (`Start CutDeck.cmd`). The split probe
+remains separate from this XML integration. (`bridge.py`, `live_clip.py` and `mark_export.py`
+— the retired mark-and-apply `plan` path — were removed under issue #25.)
 
 New CLI options: `--range-start-frame`, `--range-end-frame` (half-open interval),
 `--report`, and `--no-save-plan`. The helper uses all four. Existing unscoped

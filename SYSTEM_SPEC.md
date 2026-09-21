@@ -244,10 +244,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
 | `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); emits an audio-only crossfade transition on word-blade junctions; CLI `python -m cutdeck.xml_export --job-id N` |
 | `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
-| `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded as the in-place timestamp source by `live_clip.py` (issue #17/#20), kept in place but unused by that feature |
-| `mark_export.py` | CutPlan → JSON **mark plan** (frame numbers + idx/reason per CUT region) for the UXP Mark/Apply plugin (issue #17/#19); `cutdeck.mode: mark` in `export_mode.py`; refuses VFR, no ordering requirement (nothing ripples during Mark) |
-| `live_clip.py` | `ClipDescriptor` + `plan_from_live_clip` — builds a sequence-time `CutPlan` from a live clip's original media file (no mixdown render); refuses non-unit speed or reversed clips (`LiveClipRefused`); supersedes `sequence_mixdown.py` for this feature (issue #17/#20) |
-| `bridge.py` | `handle_message(req) -> dict` (pure — the primary test seam): hello/plan/error protocol, structured refusals never exceptions, never probes a timebase (issue #17/#21). No socket of its own since issue #35 — `xml_bridge.py` (:7891) serves `plan` requests through it; refusals reach the wire as `{"ok": false, "reason", "message"}` |
+| `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded (issue #17/#20) by the since-retired `live_clip.py`; kept in place, currently unused |
 
 The retired ExtendScript/QE-DOM `in_place` mode (`jsx_export.py`, razor + reverse-
 chronological ripple-delete) has been removed — see `TODO_LEDGER.md` for why and
