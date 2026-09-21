@@ -5,6 +5,7 @@ const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");  // TEMPORARY DIAGNOSTIC
 const capability = require("./capabilityProbe.js");
 const assemble = require("./assembleProbe.js");
+const helperStart = require("./helperStart.js");
 const $ = (id) => document.getElementById(id);
 const KEY = "cutdeck.xml.lastJob";
 let busy = false;
@@ -51,6 +52,13 @@ function setStatus(message, state = "ready") {
     }
   }
 }
+async function ensureHelper() {
+  return helperStart.ensureHelperRunning({
+    rpc,
+    version: workflow.VERSION,
+    onStatus: (msg) => setStatus(msg, "busy"),
+  });
+}
 function time(seconds) {
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
@@ -69,9 +77,9 @@ async function refresh() {
       option.textContent = label;
       audioSelect.appendChild(option);
     };
-    add("", "Auto (First track with clips)");
+    add("", "Auto");
     const count = snap.context.audio_track_count;
-    for (let i = 0; i < count; i++) add(String(i), `Audio Track ${i + 1}`);
+    for (let i = 0; i < count; i++) add(String(i), `Track A${i + 1}`);
     audioSelect.value = selected === "" || Number(selected) < count ? selected : "";
   }
   return snap;
@@ -105,19 +113,31 @@ Saved ${job.output_path}`, "ready");
 }
 
 const ACT_TARGETS = ["cut", "sync", "refresh", "resume", "dismiss", "audio", "mode",
-  "socketprobe", "timingprobe", "assembleprobe", "copystatus", "tab-sync", "tab-cut",
+  "socketprobe", "timingprobe", "assembleprobe", "copystatus",
   "pill-speech", "pill-silence"];
 
 async function act(fn) {
   if (busy) return;
   busy = true;
-  ACT_TARGETS.forEach((id) => { if ($(id)) $(id).disabled = true; });
+  ACT_TARGETS.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.disabled = true;
+    el.setAttribute("disabled", "true");
+    el.classList.add("disabled");
+  });
   setStatus("Processing…", "busy");
   try { await fn(); }
   catch (error) { setStatus(error.message || String(error), "error"); console.error(error); }
   finally {
     busy = false;
-    ACT_TARGETS.forEach((id) => { if ($(id)) $(id).disabled = false; });
+    ACT_TARGETS.forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      el.disabled = false;
+      el.removeAttribute("disabled");
+      el.classList.remove("disabled");
+    });
     if ($("state-text") && $("state-text").textContent === "BUSY") {
       setStatus($("status") ? $("status").textContent : "Ready", "ready");
     }
@@ -126,29 +146,7 @@ async function act(fn) {
 
 // --- UI Interactivity ---
 
-// 1. Tab Navigation: Multi-Cam (Default) vs Rough Cut
-function setupTabs() {
-  const tabSync = $("tab-sync");
-  const tabCut = $("tab-cut");
-  const viewSync = $("view-sync");
-  const viewCut = $("view-cut");
-  if (!tabSync || !tabCut || !viewSync || !viewCut) return;
-
-  tabSync.addEventListener("click", () => {
-    tabSync.classList.add("active");
-    tabCut.classList.remove("active");
-    viewSync.classList.add("active");
-    viewCut.classList.remove("active");
-  });
-  tabCut.addEventListener("click", () => {
-    tabCut.classList.add("active");
-    tabSync.classList.remove("active");
-    viewCut.classList.add("active");
-    viewSync.classList.remove("active");
-  });
-}
-
-// 2. Preset Pills for Cutting Mode
+// 1. Preset Pills for Cutting Mode
 function setupPresets() {
   const pillSpeech = $("pill-speech");
   const pillSilence = $("pill-silence");
@@ -167,7 +165,7 @@ function setupPresets() {
   });
 }
 
-// 3. Diagnostics Drawer Toggle
+// 2. Diagnostics Drawer Toggle
 function setupDiagnostics() {
   const toggleBtn = $("tools-toggle");
   const diag = $("diagnostics");
@@ -176,23 +174,24 @@ function setupDiagnostics() {
   }
 }
 
-// 4. Click Sequence Card to re-read timeline
+// 3. Click Sequence Card to re-read timeline
 if ($("seq-card")) {
   $("seq-card").addEventListener("click", () => act(async () => {
     await refresh();
-    setStatus("Timeline range updated.", "ready");
+    setStatus("Range updated", "ready");
   }));
 }
 
 if ($("refresh")) {
   $("refresh").addEventListener("click", () => act(async () => {
     await refresh();
-    setStatus("Range ready. Click Rough Cut In–Out or Sync Multi-Cam.", "ready");
+    setStatus("Range ready", "ready");
   }));
 }
 if ($("cut")) {
   $("cut").addEventListener("click", () => act(async () => {
     if (lastJob()) throw new Error("Resume the previous job before starting another rough cut.");
+    await ensureHelper();
     const snap = await refresh();
     setStatus("Preparing your sequence…", "busy");
     const track = $("audio") ? $("audio").value : "";
@@ -205,6 +204,7 @@ if ($("cut")) {
 if ($("sync")) {
   $("sync").addEventListener("click", () => act(async () => {
     if (lastJob()) throw new Error("Resume or dismiss the previous job before starting another operation.");
+    await ensureHelper();
     const snap = await refresh();
     setStatus("Exporting sequence XML for multi-camera sync…", "busy");
     const track = $("audio") ? $("audio").value : "";
@@ -216,6 +216,7 @@ if ($("resume")) {
   $("resume").addEventListener("click", () => act(async () => {
     const saved = lastJob();
     if (!saved) return;
+    await ensureHelper();
     await rpc({ type: "hello", version: workflow.VERSION });
     let job;
     try { job = await rpc({ type: "status", job_id: saved.job_id }); }
@@ -308,7 +309,6 @@ if ($("copystatus")) {
 }
 
 // Init handlers
-setupTabs();
 setupPresets();
 setupDiagnostics();
 
@@ -325,8 +325,8 @@ if (lastJob()) {
 setTimeout(async () => {
   try {
     await refresh();
-    setStatus("Ready. Set In/Out and click Sync or Cut.", "ready");
+    setStatus("Ready", "ready");
   } catch (_) {
-    setStatus("Open a sequence in Premiere to begin.", "ready");
+    setStatus("No sequence open", "ready");
   }
 }, 50);

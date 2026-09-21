@@ -9,9 +9,16 @@ the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
 ## First-time setup
 
 1. Use Premiere **26.2 or later** (this machine currently has 26.5).
-2. Double-click **Start CutDeck.cmd** in the project folder. Keep that helper
-   window open while using CutDeck. It uses this project's existing `.venv`,
-   models, configuration, and FFmpeg installation.
+2. Nothing to start by hand: the first time a session clicks **Rough Cut
+   In–Out**, **Sync Multi-Cam**, or **Resume last job** and the helper isn't
+   already answering, the panel launches `Start CutDeck.cmd` itself via
+   UXP's `shell.openPath` and waits (up to 15s) for it to come up. Premiere
+   will ask for one-time consent to launch it; accept it. It uses this
+   project's existing `.venv`, models, configuration, and FFmpeg
+   installation. You'll still see its console window — UXP cannot launch it
+   hidden or pass it arguments — so keep that window open for the session.
+   You can also still double-click **Start CutDeck.cmd** yourself first if
+   you'd rather not see the consent prompt mid-click.
 3. Enable **Developer Mode** in Premiere's Plugins preferences and UXP Developer
    Tool (version 2.2 or later). In **UXP Developer Tool**, choose **Add Plugin**, select
    `uxp/cutdeck/manifest.json`, and click **Load** with Premiere running.
@@ -20,6 +27,14 @@ the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
 
 This is a source-loaded development build. It has not yet been packaged or
 validated as a distributable `.ccx` installer.
+
+**Recommended for daily use:** register `Start CutDeck.cmd` as a Windows
+Scheduled Task that runs at login, instead of relying on the panel's
+launch-on-click fallback above. It avoids the one-time consent prompt and the
+15-second wait entirely, and the helper is simply already there every session
+— the same tradeoff CEP's silent auto-spawn makes, without needing
+`child_process`. The panel's own launch (previous step) exists for when that
+isn't set up, not as a replacement for it.
 
 ## Use
 
@@ -67,14 +82,19 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
 
 ## Recovery
 
-- **Connection lost / panel reloaded:** start the helper if needed and click
-  **Resume last job**. While the same helper remains running, processing continues
-  even if the panel disconnects.
+- **Connection lost / panel reloaded:** click **Resume last job** — it launches
+  the helper again if needed. While the same helper remains running, processing
+  continues even if the panel disconnects.
 - **"Permission denied to the url ws://127.0.0.1:7891":** UXP registers the plugin's
   network permission later than the panel's first request, so a cold start can be
   denied even though the manifest declares the domain. The panel now retries the
   connection five times over about three seconds, which also covers a helper that is
-  still starting up. If it still fails, the helper is genuinely not running.
+  still starting up.
+- **"Cannot reach CutDeck helper" persists after accepting the launch prompt:**
+  `shell.openPath` cannot report why a launch failed beyond an error string, and
+  cannot run hidden or pass arguments — if `Start CutDeck.cmd` itself has a problem
+  (no Python found, a broken `.venv`), its console window says so. Run it manually
+  once to see the real error.
 - **Switched projects:** return to the original project and resume. The helper
   never imports into whichever unrelated project happens to be active.
 - **Helper restarted:** its live job list is reset. Existing files remain in

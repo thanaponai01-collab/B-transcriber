@@ -13,7 +13,10 @@
     "network": {
       "domains": "all"
     },
-    "clipboard": "readAndWrite"
+    "clipboard": "readAndWrite",
+    "launchProcess": {
+      "extensions": [".cmd"]
+    }
   },
   "entrypoints": [
     {
