@@ -181,23 +181,36 @@ function makeTickTimeFn(ppro) {
 
 // Safe helper to get clip track items (never throws if Constants or arguments differ)
 async function getTrackClipItems(track) {
+  try {
+    return await getTrackClipItemsOrThrow(track);
+  } catch (_) {
+    return [];
+  }
+}
+
+// Same lookup, but rethrows the last error instead of masking "couldn't read this
+// track" as "this track is empty" — callers that use the result to avoid colliding
+// with existing clips (findSmartStackTrack) must be able to tell the difference,
+// since treating an unreadable track as empty risks overwriting real footage on it.
+async function getTrackClipItemsOrThrow(track) {
   if (!track || typeof track.getTrackItems !== "function") return [];
   const clipType = (ppro.Constants && ppro.Constants.TrackItemType && ppro.Constants.TrackItemType.CLIP !== undefined)
     ? ppro.Constants.TrackItemType.CLIP
     : 1;
+  let lastErr = null;
   try {
     const items = await track.getTrackItems(clipType, false);
     if (items && Array.isArray(items)) return items;
-  } catch (_) {}
+  } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems(1, false);
     if (items && Array.isArray(items)) return items;
-  } catch (_) {}
+  } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems();
     if (items && Array.isArray(items)) return items;
-  } catch (_) {}
-  return [];
+  } catch (e) { lastErr = e; }
+  throw lastErr || new Error("getTrackItems returned no usable result");
 }
 
 // Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers)
@@ -301,7 +314,16 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
   let highestOccupied = 0;
   for (let v = 0; v < trackCount; v++) {
     const track = await seq.getVideoTrack(v);
-    const items = await getTrackClipItems(track);
+    let items;
+    try {
+      items = await getTrackClipItemsOrThrow(track);
+    } catch (e) {
+      // Could not verify V(v+1) is actually empty — assume it's occupied rather than
+      // risk overwriting real clips we failed to see (see getTrackClipItemsOrThrow).
+      console.log(`findSmartStackTrack: could not read V${v + 1} items, assuming occupied:`, e);
+      if (v > highestOccupied) highestOccupied = v;
+      continue;
+    }
     if (items && items.length > 0) {
       for (const it of items) {
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
@@ -309,6 +331,8 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
         const itIn = toBigIntTicks(sTime);
         const itOut = toBigIntTicks(eTime);
         if (itOut > startTicks && itIn < endTicks) {
+          console.log(`findSmartStackTrack: V${v + 1} collides with query [${startTicks},${endTicks}) — ` +
+            `item "${it.name || "?"}" is [${itIn},${itOut})`);
           if (v > highestOccupied) highestOccupied = v;
           break;
         }
@@ -317,21 +341,33 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
   }
 
   let candidate = Math.max(minTrack, highestOccupied + 1);
-  const fiveSecondsTicks = 254016000000n * 5n;
-  const durationTicks = endTicks - startTicks;
-  const safetyEndTicks = startTicks + (durationTicks > fiveSecondsTicks ? durationTicks : fiveSecondsTicks);
 
+  // Refine past any occupied track using the exact intended span, same as the scan
+  // above. (Previously padded to a 5s "safety window" to cover the placed clip's
+  // untrimmed default duration — that's now confirmed unnecessary: the caller's own
+  // hard gate + Step 2 trim reliably lands each placement at its exact span before
+  // the next one is ever checked, so padding here only fragmented adjacent short
+  // clips onto separate tracks instead of letting them share one.)
   while (candidate < trackCount) {
     const track = await seq.getVideoTrack(candidate);
-    const items = await getTrackClipItems(track);
+    let items;
     let trackHasCollision = false;
+    try {
+      items = await getTrackClipItemsOrThrow(track);
+    } catch (e) {
+      console.log(`findSmartStackTrack: could not read V${candidate + 1} items during safety scan, assuming occupied:`, e);
+      candidate++;
+      continue;
+    }
     if (items && items.length > 0) {
       for (const it of items) {
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
         const itIn = toBigIntTicks(sTime);
         const itOut = toBigIntTicks(eTime);
-        if (itOut > startTicks && itIn < safetyEndTicks) {
+        if (itOut > startTicks && itIn < endTicks) {
+          console.log(`findSmartStackTrack: V${candidate + 1} collides with query [${startTicks},${endTicks}) during refine — ` +
+            `item "${it.name || "?"}" is [${itIn},${itOut})`);
           trackHasCollision = true;
           break;
         }
@@ -343,6 +379,30 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
     candidate++;
   }
   return candidate;
+}
+
+// Last-line defense, called immediately before the destructive action: re-reads the
+// exact target track/span with the strict (throw-on-unreadable) item lookup, right
+// before we commit to overwriting it. findSmartStackTrack's picks have been wrong in
+// practice, so this does not trust that result — it verifies it, one more time, with
+// nothing able to happen in between.
+async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks) {
+  const trackCount = await seq.getVideoTrackCount();
+  if (trackIndex >= trackCount) return true; // track doesn't exist yet — nothing to collide with
+  const track = await seq.getVideoTrack(trackIndex);
+  const items = await getTrackClipItemsOrThrow(track);
+  for (const it of items) {
+    const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+    const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+    const itIn = toBigIntTicks(sTime);
+    const itOut = toBigIntTicks(eTime);
+    if (itOut > startTicks && itIn < endTicks) {
+      console.log(`isTrackRangeClear: V${trackIndex + 1} collides with query [${startTicks},${endTicks}) — ` +
+        `item "${it.name || "?"}" is [${itIn},${itOut})`);
+      return false;
+    }
+  }
+  return true;
 }
 
 // Robust UXP timeline placement routine (supporting multi-clip cut transitions and separate clip spans)
@@ -563,11 +623,92 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   let placedCount = 0;
   const targetTracksSet = new Set();
 
+  // Pick one track for the whole batch, clear across every clip's span, not
+  // per-clip. This project can have real footage on tracks above V1 partway
+  // through the timeline (confirmed: a real clip sits on V2 mid-timeline in this
+  // project) — recomputing per clip means a clip over that stretch gets bumped to
+  // a higher track while clips elsewhere don't, fragmenting one batch across many
+  // tracks. Scanning the union of all planned spans finds a track guaranteed clear
+  // of whatever real content exists anywhere in that range, and the whole batch
+  // shares it.
+  let batchTargetTrack = 1;
+  if (placements.length > 0) {
+    const batchProject = await ppro.Project.getActiveProject();
+    const batchSeq = await batchProject.getActiveSequence();
+    let unionStart = placements[0].startTicks;
+    let unionEnd = placements[0].endTicks;
+    for (const p of placements) {
+      if (p.startTicks < unionStart) unionStart = p.startTicks;
+      if (p.endTicks > unionEnd) unionEnd = p.endTicks;
+    }
+    batchTargetTrack = await findSmartStackTrack(batchSeq, unionStart, unionEnd, 1);
+
+    // The union scan is a starting guess. Verify it against every individual
+    // clip's own exact span before placing anything — keep bumping and re-checking
+    // the whole set until one track clears all of them, so the batch always lands
+    // on a single track instead of splitting when one clip's own narrow span still
+    // collides with something the union-level check didn't isolate precisely enough.
+    let batchGuard = 0;
+    outer:
+    while (batchGuard < 32) {
+      for (const p of placements) {
+        let clear;
+        try {
+          clear = await isTrackRangeClear(batchSeq, batchTargetTrack, p.startTicks, p.endTicks);
+        } catch (e) {
+          throw new Error(
+            `Could not verify V${batchTargetTrack + 1} is empty for the whole batch — ` +
+            `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
+          );
+        }
+        if (!clear) {
+          batchTargetTrack++;
+          batchGuard++;
+          continue outer;
+        }
+      }
+      break; // every placement in the batch cleared this track
+    }
+    if (batchGuard >= 32) {
+      throw new Error("Could not find a single track clear for the whole batch after checking 32 candidates — aborting.");
+    }
+  }
+
   for (const p of placements) {
     const freshProject = await ppro.Project.getActiveProject();
     const freshSeq = await freshProject.getActiveSequence();
+    const durTicks = p.endTicks - p.startTicks;
+    let targetTrack = batchTargetTrack;
+
+    // Hard gate: re-verify the exact intended span is actually clear immediately
+    // before committing. Placement briefly lands at Premiere's default duration
+    // before Step 2 trims it — but that trim is now confirmed reliable (readback-
+    // verified: actualEndTicks matches requestedEndTicks exactly), and it completes
+    // before the next iteration's check ever runs, so by the time this check sees a
+    // previous per-clip placement, it's already the correct short span, not the
+    // untrimmed default. This should normally find batchTargetTrack already clear
+    // (it was clear across the whole batch's union span) — it only walks further
+    // if something unexpected changed since the batch scan.
+    let guard = 0;
+    while (guard < 32) {
+      let clear;
+      try {
+        clear = await isTrackRangeClear(freshSeq, targetTrack, p.startTicks, p.endTicks);
+      } catch (e) {
+        throw new Error(
+          `Could not verify V${targetTrack + 1} is empty before placing "${p.name}" — ` +
+          `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
+        );
+      }
+      if (clear) break;
+      targetTrack++;
+      guard++;
+    }
+    if (guard >= 32) {
+      throw new Error(`Could not find a clear track for "${p.name}" after checking 32 candidates — aborting.`);
+    }
+
     const trackCountNow = await freshSeq.getVideoTrackCount();
-    const targetTrack = await findSmartStackTrack(freshSeq, p.startTicks, p.endTicks, 1);
     targetTracksSet.add(targetTrack + 1);
 
     if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
@@ -575,7 +716,6 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     }
     const editor = await ppro.SequenceEditor.getEditor(freshSeq);
     const tStart = tickTime(p.startTicks);
-    const durTicks = p.endTicks - p.startTicks;
 
     let ok = false;
     let thrown = null;
@@ -603,7 +743,13 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
               attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
             }
             attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), 0));
-            attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
+            // clipItem is alItem after ClipProjectItem.cast() — that cast has been
+            // observed to make Premiere reject the placement with "Invalid parameter"
+            // in cases where the pre-cast item works fine. Fall back to it.
+            if (alItem && alItem !== clipItem) {
+              attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
+              attempts.push(() => editor.createInsertProjectItemAction(alItem, tStart, Number(targetTrack), -1, false));
+            }
 
             for (const fn of attempts) {
               try {
@@ -613,12 +759,16 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
                 lastErr = e;
               }
             }
+
+            if (!action) {
+              const name = clipItem?.name || alItem?.name || "unknown";
+              const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
+              throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
+            }
           }
 
           if (!action) {
-            const name = clipItem?.name || alItem?.name || "unknown";
-            const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
-            throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
+            throw new Error(`No clipItem was available to place at V${targetTrack + 1}.`);
           }
 
           if (!compound.addAction(action)) {
@@ -639,6 +789,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     if (!ok && thrown) throw thrown;
 
     // Step 2: Trim the placed Adjustment Layer to exact duration (so it is NEVER 5 seconds!)
+    // Also doubles as placement verification — see `verified` below.
+    let verified = false;
     try {
       const freshSeq2 = await freshProject.getActiveSequence();
       const targetTrackObj = await freshSeq2.getVideoTrack(Number(targetTrack));
@@ -650,18 +802,46 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
             const sTicks = toBigIntTicks(sTime);
             const diff = sTicks > p.startTicks ? (sTicks - p.startTicks) : (p.startTicks - sTicks);
             if (diff <= (tpf * 2n)) {
+              let trimOk = false;
+              let trimErr = null;
               const trimRun = () => {
-                freshProject.executeTransaction((compound) => {
-                  if (typeof it.createSetEndAction === "function") {
-                    compound.addAction(it.createSetEndAction(tickTime(p.endTicks)));
-                  }
-                }, "CutDeck: Trim Adjustment Layer Duration");
+                try {
+                  trimOk = freshProject.executeTransaction((compound) => {
+                    if (typeof it.createSetEndAction !== "function") {
+                      throw new Error("track item has no createSetEndAction");
+                    }
+                    const setEndAction = it.createSetEndAction(tickTime(p.endTicks));
+                    if (!setEndAction) {
+                      throw new Error("createSetEndAction returned falsy");
+                    }
+                    if (!compound.addAction(setEndAction)) {
+                      throw new Error("addAction(setEndAction) returned false");
+                    }
+                  }, "CutDeck: Trim Adjustment Layer Duration");
+                } catch (e) {
+                  trimErr = e;
+                }
               };
               if (typeof freshProject.lockedAccess === "function") {
                 freshProject.lockedAccess(trimRun);
               } else {
                 trimRun();
               }
+
+              // Read back the real result — don't trust the API's claimed success,
+              // confirm the item's end time actually moved.
+              let actualEndTicks = null;
+              try {
+                const eTimeAfter = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+                actualEndTicks = toBigIntTicks(eTimeAfter);
+              } catch (_) {}
+              console.log("Adjustment Layer trim result:", {
+                trimOk,
+                trimErr: trimErr ? (trimErr.message || String(trimErr)) : null,
+                requestedEndTicks: p.endTicks.toString(),
+                actualEndTicks: actualEndTicks !== null ? actualEndTicks.toString() : null,
+                trimHeld: actualEndTicks !== null && actualEndTicks <= (p.endTicks + tpf)
+              });
 
               // Set label color and name
               try {
@@ -681,6 +861,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
                   await it.scaleToFrameSize();
                 }
               } catch (_) {}
+              verified = true;
               break;
             }
           }
@@ -688,6 +869,14 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       }
     } catch (err) {
       console.log("Trimming duration failed:", err);
+    }
+
+    if (!verified) {
+      throw new Error(
+        `Placed an Adjustment Layer on V${targetTrack + 1} but could not find it there afterward — ` +
+        `the edit may have landed on the wrong track instead of a clip you have. Check Edit > Undo History ` +
+        `and Ctrl+Z if anything looks wrong before placing more.`
+      );
     }
 
     placedCount++;
