@@ -1,8 +1,8 @@
 /* Starts the CutDeck helper the only way UXP can: `shell.openPath` on
    "Start CutDeck (Hidden).vbs", then poll `hello` until it answers.
 
-   UXP has no `child_process` — see cep/cutdeck/client/helper_manager.js for
-   the CEP equivalent, which spawns the helper directly and silently instead.
+   UXP has no `child_process` (the retired CEP panel's helper_manager.js
+   spawned the helper directly and silently instead — see issue #41).
    `openPath` cannot pass arguments, capture output, report an exit code, or
    run its target hidden (Adobe's own external-process recipe says as much).
    The .vbs wrapper is how a visible console window is avoided anyway:

@@ -1,6 +1,6 @@
 # CutDeck for Premiere — XML workflow
 
-**Role: experimental.** The production panel is `cep/cutdeck` (permanent install, no UXP Developer Tool). This UXP panel is a source-loaded development build kept for native-API work (assembly and split probes) and for the day Premiere drops CEP. It talks to the same helper on `ws://127.0.0.1:7891` as the CEP panel.
+**Role: production.** This is the only CutDeck panel — `cep/cutdeck` was retired (issue #41) once Adobe confirmed CEP's retirement and the live acceptance gate (issue #38) passed. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
 
 Mark **In / Out** on the timeline, click **Rough Cut In–Out**, and continue in
 a newly imported sequence. CutDeck automatically exports and imports XML using

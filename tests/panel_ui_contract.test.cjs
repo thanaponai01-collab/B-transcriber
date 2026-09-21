@@ -7,42 +7,21 @@ const root = path.join(__dirname, "..");
 const panelJsPath = path.join(root, "panel", "core", "panel.js");
 const panelJsSource = fs.readFileSync(panelJsPath, "utf8");
 const uxpHtmlPath = path.join(root, "uxp", "cutdeck", "index.html");
-const cepHtmlPath = path.join(root, "cep", "cutdeck", "client", "index.html");
 const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
-const cepHtml = fs.readFileSync(cepHtmlPath, "utf8");
 
 function idsInHtml(html) {
   return new Set([...html.matchAll(/\bid="([a-zA-Z0-9_-]+)"/g)].map((m) => m[1]));
 }
 const uxpIds = idsInHtml(uxpHtml);
-const cepIds = idsInHtml(cepHtml);
 
-/* Move #45 is UXP-only (cep/ is not touched by moves 1-5, see docs/arch-design-panel-ui.md).
-   panel.js is mirrored into cep/cutdeck/client/core/ mechanically (the existing
-   scripts/sync_panel_core.py pattern also used for rpc.js/theme.css) but CEP's own main.js
-   does not call it yet, so a handful of ids are allowed to miss one side:
-     - timingprobe, assembleprobe: UXP-only dev/debug probes, never shipped in CEP's markup.
-     - badge-transition-text, badge-active-fx-text: the new spans this move adds so the ⚡/✦
-       icon prefixes survive a re-render (finding !3) — CEP's markup isn't touched here.
-   job-banner, resume and dismiss (issue #46) are gone from this list: both markups carry them now. */
-const CEP_ONLY_GAP = new Set(["timingprobe", "assembleprobe", "badge-transition-text", "badge-active-fx-text"]);
-const ALLOWLIST = new Set([...CEP_ONLY_GAP]);
-
-test("every $(\"id\") in core/panel.js resolves to an id in both index.html files (except the documented, issue-tracked gaps)", () => {
+test("every $(\"id\") in core/panel.js resolves to an id in uxp/cutdeck/index.html", () => {
   const ids = new Set([...panelJsSource.matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]));
   assert.ok(ids.size > 30, "expected panel.js to reference a substantial number of ids");
   const uxpMisses = [];
-  const cepMisses = [];
   for (const id of ids) {
-    if (ALLOWLIST.has(id)) continue;
     if (!uxpIds.has(id)) uxpMisses.push(id);
-    if (!cepIds.has(id)) cepMisses.push(id);
   }
   assert.deepEqual(uxpMisses, [], `panel.js references ids missing from uxp/cutdeck/index.html: ${uxpMisses}`);
-  assert.deepEqual(cepMisses, [], `panel.js references ids missing from cep/cutdeck/client/index.html: ${cepMisses}`);
-  // The allowlist itself must resolve on the side it's expected to — otherwise it's silently
-  // hiding a real drift instead of a documented, scoped gap.
-  for (const id of CEP_ONLY_GAP) assert.ok(uxpIds.has(id), `${id} should exist in uxp/cutdeck/index.html`);
 });
 
 test("getElementById/classList/textContent/addEventListener appear in no panel file except core/panel.js", () => {

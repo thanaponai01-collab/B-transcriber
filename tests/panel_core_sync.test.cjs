@@ -5,7 +5,7 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 const source = path.join(root, "panel", "core");
-const mirrors = ["cep/cutdeck/client/core", "uxp/cutdeck/core"];
+const mirrors = ["uxp/cutdeck/core"];
 
 for (const mirror of mirrors) {
   test(`${mirror} matches panel/core (run scripts/sync_panel_core.py)`, () => {
@@ -20,10 +20,7 @@ for (const mirror of mirrors) {
 }
 
 /* Wiring: every shared-module reference in a panel file must resolve to a real file next to it. */
-const callers = [
-  "cep/cutdeck/client/main.js", "cep/cutdeck/client/helper_manager.js",
-  "cep/cutdeck/client/index.html", "uxp/cutdeck/main.js",
-];
+const callers = ["uxp/cutdeck/main.js"];
 for (const caller of callers) {
   test(`${caller} references only existing shared modules`, () => {
     const text = fs.readFileSync(path.join(root, caller), "utf8");
