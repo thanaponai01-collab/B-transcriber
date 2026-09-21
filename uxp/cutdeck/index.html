@@ -15,12 +15,12 @@
     </div>
 
     <div class="header-actions">
-      <div id="refresh" class="icon-btn" role="button" title="Refresh sequence & range">
+      <div id="refresh" class="icon-btn" role="button" data-act="refresh" title="Refresh sequence & range">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
       </div>
-      <div id="tools-toggle" class="icon-btn" role="button" title="Settings & Tools">
+      <div id="tools-toggle" class="icon-btn" role="button" data-act="tools-toggle" title="Settings & Tools">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="1.5"/>
           <circle cx="12" cy="5" r="1.5"/>
@@ -30,14 +30,14 @@
 
       <!-- Chrome-Style Floating Dropdown Menu -->
       <div id="overflow-menu" class="dropdown-menu">
-        <div id="menu-item-settings" class="dropdown-item" role="button">
+        <div id="menu-item-settings" class="dropdown-item" role="button" data-act="menu-item-settings">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
           <span>Settings</span>
         </div>
-        <div id="socketprobe" class="dropdown-item" role="button">
+        <div id="socketprobe" class="dropdown-item" role="button" data-act="socketprobe">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
             <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
@@ -46,14 +46,14 @@
           </svg>
           <span>Test Connection</span>
         </div>
-        <div id="copystatus" class="dropdown-item" role="button">
+        <div id="copystatus" class="dropdown-item" role="button" data-act="copystatus">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>
           <span>Copy Status</span>
         </div>
-        <div id="timingprobe" class="dropdown-item" role="button">
+        <div id="timingprobe" class="dropdown-item" role="button" data-act="timingprobe">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
@@ -61,7 +61,7 @@
           <span>Check Timing</span>
         </div>
         <div class="dropdown-divider"></div>
-        <div id="menu-item-reload" class="dropdown-item" role="button">
+        <div id="menu-item-reload" class="dropdown-item" role="button" data-act="menu-item-reload">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 4v6h-6"/>
             <path d="M1 20v-6h6"/>
@@ -74,27 +74,27 @@
   </div>
 
   <!-- Sequence Card -->
-  <div id="seq-card" class="sequence-card" role="button" title="Click to refresh timeline marks">
+  <div id="seq-card" class="sequence-card" role="button" data-act="seq-card" title="Click to refresh timeline marks">
     <div id="sequence">No sequence open</div>
     <div id="range" class="range-badge">--:--</div>
   </div>
 
   <!-- Segmented Tabs -->
   <div class="tabs">
-    <div id="tab-edit" class="tab-btn" role="button">Cut &amp; Sync</div>
-    <div id="tab-adj" class="tab-btn active" role="button">Adjustment &amp; FX</div>
+    <div id="tab-edit" class="tab-btn" role="button" data-act="tab-edit">Cut &amp; Sync</div>
+    <div id="tab-adj" class="tab-btn active" role="button" data-act="tab-adj">Adjustment &amp; FX</div>
   </div>
 
   <!-- PAGE 1: CUT & SYNC -->
   <div id="view-edit" class="view-panel">
     <div class="control-group">
       <label class="control-label" for="audio">Reference Audio Track</label>
-      <select id="audio">
+      <select id="audio" data-act="audio">
         <option value="" selected>Auto</option>
       </select>
     </div>
 
-    <div id="sync" class="btn-primary" role="button" style="margin-top:7px;">
+    <div id="sync" class="btn-primary" role="button" data-act="sync" style="margin-top:7px;">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
       </svg>
@@ -110,16 +110,16 @@
     <div class="control-group">
       <div class="control-label">Cutting Preset</div>
       <div class="pills-grid">
-        <div id="pill-speech" class="pill-btn active" role="button">Speech + Silence</div>
-        <div id="pill-silence" class="pill-btn" role="button">Silence Only</div>
+        <div id="pill-speech" class="pill-btn active" role="button" data-act="pill-speech">Speech + Silence</div>
+        <div id="pill-silence" class="pill-btn" role="button" data-act="pill-silence">Silence Only</div>
       </div>
-      <select id="mode" class="sr-only">
+      <select id="mode" class="sr-only" data-act="mode">
         <option value="protected" selected>protected</option>
         <option value="silence">silence</option>
       </select>
     </div>
 
-    <div id="cut" class="btn-primary" role="button" style="margin-top:7px;">
+    <div id="cut" class="btn-primary" role="button" data-act="cut" style="margin-top:7px;">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="6" cy="6" r="3"/>
         <circle cx="6" cy="18" r="3"/>
@@ -135,7 +135,7 @@
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
       <!-- Card 1: Adjustment Layer -->
-      <div id="btn-adj" class="action-card card-al" role="button" title="Click: Span Selection | Ctrl+Click: Each Clip | Shift+Click: Every Cut (50/50)">
+      <div id="btn-adj" class="action-card card-al" role="button" data-act="btn-adj" title="Click: Span Selection | Ctrl+Click: Each Clip | Shift+Click: Every Cut (50/50)">
         <div class="card-icon-box">
           <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -152,7 +152,7 @@
       </div>
 
       <!-- Card 2: Effect Preset -->
-      <div id="btn-fx" class="action-card card-fx" role="button" title="Click: Show Active Preset | Shift+Click: Cycle Presets">
+      <div id="btn-fx" class="action-card card-fx" role="button" data-act="btn-fx" title="Click: Show Active Preset | Shift+Click: Cycle Presets">
         <div class="card-icon-box">
           <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
@@ -168,11 +168,11 @@
 
     <!-- Quick Badges Bar -->
     <div class="adj-status-bar">
-      <div id="badge-transition" class="badge-btn" role="button" title="Click to cycle frame lengths">
-        ⚡ 16f (50/50)
+      <div id="badge-transition" class="badge-btn" role="button" data-act="badge-transition" title="Click to cycle frame lengths">
+        ⚡ <span id="badge-transition-text"></span>
       </div>
-      <div id="badge-active-fx" class="badge-btn fx-badge" role="button" title="Click to cycle next preset">
-        ✦ Active: Zoom In
+      <div id="badge-active-fx" class="badge-btn fx-badge" role="button" data-act="badge-active-fx" title="Click to cycle next preset">
+        ✦ Active: <span id="badge-active-fx-text"></span>
       </div>
     </div>
   </div>
@@ -200,16 +200,16 @@
         <label class="setting-label">Transition Length (50/50)</label>
         <div class="frame-stepper-group">
           <div class="pills-grid-mini">
-            <div class="pill-mini" data-frames="8" role="button">8f</div>
-            <div class="pill-mini" data-frames="12" role="button">12f</div>
-            <div class="pill-mini active" data-frames="16" role="button">16f</div>
-            <div class="pill-mini" data-frames="20" role="button">20f</div>
-            <div class="pill-mini" data-frames="24" role="button">24f</div>
+            <div class="pill-mini" data-frames="8" data-act="pill-mini" role="button">8f</div>
+            <div class="pill-mini" data-frames="12" data-act="pill-mini" role="button">12f</div>
+            <div class="pill-mini active" data-frames="16" data-act="pill-mini" role="button">16f</div>
+            <div class="pill-mini" data-frames="20" data-act="pill-mini" role="button">20f</div>
+            <div class="pill-mini" data-frames="24" data-act="pill-mini" role="button">24f</div>
           </div>
           <div class="number-stepper">
-            <div id="frame-dec" class="step-btn" role="button">−</div>
-            <input type="number" id="setting-frames" value="16" min="2" max="240">
-            <div id="frame-inc" class="step-btn" role="button">+</div>
+            <div id="frame-dec" class="step-btn" role="button" data-act="frame-dec">−</div>
+            <input type="number" id="setting-frames" data-act="setting-frames" value="16" min="2" max="240">
+            <div id="frame-inc" class="step-btn" role="button" data-act="frame-inc">+</div>
           </div>
         </div>
       </div>
@@ -217,11 +217,11 @@
       <div class="settings-grid-2col">
         <div class="setting-row">
           <label class="setting-label" for="setting-bin">Project Bin</label>
-          <input type="text" id="setting-bin" class="setting-input" value="CutDeck AL/FX">
+          <input type="text" id="setting-bin" class="setting-input" data-act="setting-bin" value="CutDeck AL/FX">
         </div>
         <div class="setting-row">
           <label class="setting-label" for="setting-color">Color</label>
-          <select id="setting-color" class="setting-select">
+          <select id="setting-color" class="setting-select" data-act="setting-color">
             <option value="Iris" selected>Iris (Cyan)</option>
             <option value="Lavender">Lavender</option>
             <option value="Mango">Mango (Orange)</option>
@@ -237,7 +237,7 @@
 
       <div class="setting-row">
         <label class="checkbox-container">
-          <input type="checkbox" id="setting-clamp" checked>
+          <input type="checkbox" id="setting-clamp" data-act="setting-clamp" checked>
           <span class="setting-subtext">Clamp transition on short clips</span>
         </label>
       </div>
@@ -245,7 +245,7 @@
       <div class="setting-row">
         <label class="setting-label" for="setting-active-fx">Preset</label>
         <div class="fx-select-row">
-          <select id="setting-active-fx" class="setting-select">
+          <select id="setting-active-fx" class="setting-select" data-act="setting-active-fx">
             <option value="Zoom In" selected>Zoom In</option>
             <option value="Zoom Out">Zoom Out</option>
             <option value="Whip Pan L">Whip Pan Left</option>
@@ -256,7 +256,7 @@
             <option value="Letterbox">Letterbox</option>
             <option value="Custom FX">Custom FX</option>
           </select>
-          <div id="btn-capture-preset" class="btn-secondary" role="button" title="Capture selected AL">
+          <div id="btn-capture-preset" class="btn-secondary" role="button" data-act="btn-capture-preset" title="Capture selected AL">
             Capture
           </div>
         </div>
@@ -295,7 +295,7 @@
 
       <div class="setting-divider"></div>
       <div style="margin-top:6px;">
-        <div id="assembleprobe" class="btn-secondary danger" role="button">Run assemble probe</div>
+        <div id="assembleprobe" class="btn-secondary danger" role="button" data-act="assembleprobe"></div>
       </div>
     </div>
   </div>

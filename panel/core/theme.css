@@ -524,6 +524,8 @@
     border-radius: 50%;
     background: var(--accent-ok);
   }
+  .status-icon.busy { background: var(--accent-warn); }
+  .status-icon.error { background: var(--accent-err); }
   #status {
     flex: 1;
     font-size: 10px;
