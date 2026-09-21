@@ -362,6 +362,27 @@ def _materialize_chunks(audio: np.ndarray, sr: int,
     return chunks
 
 
+def ingest_settings(config: dict) -> dict:
+    """The config.yaml -> ingest() kwargs mapping, resolved in one place.
+
+    Covers VAD and RMS-gate knobs only. `denoise` is caller policy (chunk
+    engines want it, whole-file engines must hear the raw track) so it is not
+    resolved here. Fallbacks must match config.yaml (0.35/500 keep Thai
+    sentence-final particles from being clipped); the test in
+    tests/test_pipeline_run_config_fallbacks.py pins them.
+    """
+    return dict(
+        vad_threshold=float(config.get("vad_threshold", 0.35)),
+        vad_min_speech_ms=int(config.get("vad_min_speech_ms", 250)),
+        vad_min_silence_ms=int(config.get("vad_min_silence_ms", 500)),
+        rms_gate_enabled=bool(config.get("rms_gate_enabled", True)),
+        rms_gate_floor_db=(float(config["rms_gate_floor_db"])
+                           if config.get("rms_gate_floor_db") is not None else None),
+        rms_gate_floor_percentile=float(config.get("rms_gate_floor_percentile", 10.0)),
+        rms_gate_min_gap_ms=int(config.get("rms_gate_min_gap_ms", 300)),
+    )
+
+
 def ingest(path: str, denoise: bool = True,
            vad_threshold: float = 0.5,
            vad_min_speech_ms: int = 250,

@@ -629,22 +629,13 @@ def main(argv: list[str] | None = None) -> int:
         _deep_update(raw_config, yaml.safe_load(Path(args.overlay).read_text(encoding="utf-8")))
     cfg = CutConfig.from_yaml(raw_config)
 
-    # Mirror transcribe/pipeline/run.py's ingest_kwargs construction exactly —
-    # without this, ingest() silently falls back to its own hardcoded defaults
-    # (vad_threshold=0.5, vad_min_silence_ms=300, ...) instead of config.yaml's
-    # tuned values, so the recut CLI's silence detection quietly diverges from
-    # the rest of the pipeline (2026-08-29 bug: leftover silence in recut output).
-    ingest_kwargs = dict(
-        denoise=raw_config.get("denoise", True),
-        vad_threshold=float(raw_config.get("vad_threshold", 0.35)),
-        vad_min_speech_ms=int(raw_config.get("vad_min_speech_ms", 250)),
-        vad_min_silence_ms=int(raw_config.get("vad_min_silence_ms", 500)),
-        rms_gate_enabled=bool(raw_config.get("rms_gate_enabled", True)),
-        rms_gate_floor_db=(float(raw_config["rms_gate_floor_db"])
-                            if raw_config.get("rms_gate_floor_db") is not None else None),
-        rms_gate_floor_percentile=float(raw_config.get("rms_gate_floor_percentile", 10.0)),
-        rms_gate_min_gap_ms=int(raw_config.get("rms_gate_min_gap_ms", 300)),
-    )
+    # Same config->ingest mapping as the rest of the pipeline. Without it,
+    # ingest() falls back to its own hardcoded defaults (vad_threshold=0.5,
+    # vad_min_silence_ms=300) and silence detection diverges from config.yaml
+    # (2026-08-29 bug: leftover silence in recut output).
+    from transcribe.pipeline.ingest import ingest_settings
+    ingest_kwargs = dict(denoise=raw_config.get("denoise", True),
+                         **ingest_settings(raw_config))
 
     if args.asr:
         # One ingest serves the duration guard, run_file() and the plan. run_file

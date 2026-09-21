@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).parent.parent
-RUN_PY = REPO_ROOT / "transcribe" / "pipeline" / "run.py"
+RUN_PY = REPO_ROOT / "transcribe" / "pipeline" / "ingest.py"  # issue #26: mapping now lives in ingest_settings()
 CONFIG_YAML = REPO_ROOT / "transcribe" / "config.yaml"
 
 
@@ -72,3 +72,24 @@ def test_vad_fallbacks_specifically_match_config_yaml():
 
     assert defaults["vad_threshold"] == cfg["vad_threshold"] == 0.35
     assert defaults["vad_min_silence_ms"] == cfg["vad_min_silence_ms"] == 500
+
+
+def test_ingest_settings_is_the_single_mapping_and_matches_config_yaml():
+    """Issue #26: one owner resolves ingest kwargs; empty config == config.yaml."""
+    from transcribe.pipeline.ingest import ingest_settings
+
+    cfg = yaml.safe_load(CONFIG_YAML.read_text(encoding="utf-8"))
+    from_fallbacks = ingest_settings({})
+    from_yaml = ingest_settings(cfg)
+    assert from_fallbacks == from_yaml
+    assert set(from_yaml) == {
+        "vad_threshold", "vad_min_speech_ms", "vad_min_silence_ms",
+        "rms_gate_enabled", "rms_gate_floor_db",
+        "rms_gate_floor_percentile", "rms_gate_min_gap_ms",
+    }
+
+
+def test_callers_do_not_re_spell_the_mapping():
+    for path in (REPO_ROOT / "transcribe" / "pipeline" / "run.py",
+                 REPO_ROOT / "cutdeck" / "xml_recut.py"):
+        assert 'get("vad_' not in path.read_text(encoding="utf-8"), path
