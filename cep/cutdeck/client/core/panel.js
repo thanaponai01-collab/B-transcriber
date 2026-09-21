@@ -121,8 +121,6 @@
   }
 
   function renderJobBanner(job) {
-    // #job-banner/#resume/#dismiss don't exist in uxp/cutdeck/index.html yet — issue #46
-    // restores them. Guarded lookups mean this is a silent no-op until then, same as today.
     const banner = $("job-banner");
     if (banner) banner.classList.toggle("show", !!job);
     setHidden($("resume"), !job);

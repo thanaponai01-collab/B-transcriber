@@ -58,6 +58,9 @@
 
   /* Accent: warn / err */
   --accent-warn: #f59e0b;
+  --accent-warn-bg: #2a2818;
+  --accent-warn-line: #5a5020;
+  --accent-warn-text: #fce788;
   --accent-err: #ef4444;
   --accent-danger-line: #552d2d;
   --accent-danger-text: #cc8080;
@@ -145,6 +148,31 @@
     width: 14px;
     height: 14px;
     stroke: currentColor;
+  }
+
+  /* Job Recovery Banner (issue #46) */
+  #job-banner {
+    display: none;
+    margin-top: 7px;
+    padding: 6px 8px;
+    background: var(--accent-warn-bg);
+    border: 1px solid var(--accent-warn-line);
+    border-radius: 5px;
+    flex-shrink: 0;
+  }
+  #job-banner.show {
+    display: block;
+  }
+  .job-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent-warn-text);
+    margin-bottom: 5px;
+  }
+  .job-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 
   /* Sequence Card */

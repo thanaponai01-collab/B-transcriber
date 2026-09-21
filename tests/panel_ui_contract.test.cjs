@@ -24,11 +24,9 @@ const cepIds = idsInHtml(cepHtml);
      - timingprobe, assembleprobe: UXP-only dev/debug probes, never shipped in CEP's markup.
      - badge-transition-text, badge-active-fx-text: the new spans this move adds so the ⚡/✦
        icon prefixes survive a re-render (finding !3) — CEP's markup isn't touched here.
-     - job-banner, resume, dismiss: tracked by issue #46 ("job-recovery UI gone from the
-       HTML"), which is explicitly blocked BY this issue and restores these to UXP's HTML. */
+   job-banner, resume and dismiss (issue #46) are gone from this list: both markups carry them now. */
 const CEP_ONLY_GAP = new Set(["timingprobe", "assembleprobe", "badge-transition-text", "badge-active-fx-text"]);
-const UXP_MISSING_PENDING_46 = new Set(["job-banner", "resume", "dismiss"]);
-const ALLOWLIST = new Set([...CEP_ONLY_GAP, ...UXP_MISSING_PENDING_46]);
+const ALLOWLIST = new Set([...CEP_ONLY_GAP]);
 
 test("every $(\"id\") in core/panel.js resolves to an id in both index.html files (except the documented, issue-tracked gaps)", () => {
   const ids = new Set([...panelJsSource.matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]));
@@ -45,7 +43,6 @@ test("every $(\"id\") in core/panel.js resolves to an id in both index.html file
   // The allowlist itself must resolve on the side it's expected to — otherwise it's silently
   // hiding a real drift instead of a documented, scoped gap.
   for (const id of CEP_ONLY_GAP) assert.ok(uxpIds.has(id), `${id} should exist in uxp/cutdeck/index.html`);
-  for (const id of UXP_MISSING_PENDING_46) assert.ok(cepIds.has(id), `${id} should exist in cep/cutdeck/client/index.html`);
 });
 
 test("getElementById/classList/textContent/addEventListener appear in no panel file except core/panel.js", () => {
