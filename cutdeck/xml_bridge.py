@@ -1,8 +1,11 @@
-"""Local UXP job service wrapping the working XML CLI, without MCP.
+"""Local job service for CutDeck's processing tools: the one job owner.
 
+The UXP panel and the MCP server (`cutdeck.ai_backend`) are both clients of this
+socket, so there is one job_id space and one GPU lock.
 One subprocess at a time keeps GPU use serial and the socket responsive.
 Jobs survive panel disconnection; files remain in output/premiere for recovery.
-The client cannot choose commands or paths: it receives a unique export path.
+The client cannot choose commands. Panel jobs receive a unique export path; the
+MCP `submit_*` verbs take local input files but only ever write inside the job folder.
 """
 from __future__ import annotations
 
@@ -155,6 +158,36 @@ def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
     return start, end
 
 
+def _input_file(value, suffix: str | None = None) -> str:
+    path = Path(value) if isinstance(value, str) else None
+    if path is None or not path.is_absolute() or not path.is_file():
+        raise ValueError("Input must be an absolute path to an existing local file")
+    if suffix and path.suffix.lower() != suffix:
+        raise ValueError(f"Expected an exported FCP7 {suffix} sequence")
+    return str(path.resolve())
+
+
+def _rough_cut_arguments(req: dict) -> dict:
+    """Validate an MCP `submit_rough_cut` request; nothing runs on a bad one."""
+    preset = req.get("preset", "aggressive")
+    speech_protection = req.get("speech_protection", True)
+    audio_track = req.get("audio_track")
+    start_frame, end_frame = req.get("start_frame"), req.get("end_frame")
+    if preset not in {"aggressive", "standard"}:
+        raise ValueError("preset must be aggressive or standard")
+    if type(speech_protection) is not bool:
+        raise ValueError("speech_protection must be boolean")
+    if audio_track is not None and (type(audio_track) is not int or audio_track < 0):
+        raise ValueError("audio_track must be a non-negative XML audio track index")
+    if start_frame is not None or end_frame is not None:
+        if (type(start_frame) is not int or type(end_frame) is not int
+                or not 0 <= start_frame < end_frame):
+            raise ValueError("Provide both frame bounds with 0 <= start_frame < end_frame")
+    return dict(sequence_xml=_input_file(req.get("sequence_xml"), ".xml"), preset=preset,
+                speech_protection=speech_protection, audio_track=audio_track,
+                start_frame=start_frame, end_frame=end_frame)
+
+
 class XmlJobs:
     def __init__(self, directory: Path, cut_config=None):
         self.directory = directory.resolve()
@@ -175,13 +208,7 @@ class XmlJobs:
         if kind == "plan":
             return await asyncio.to_thread(_handle_plan, req, self.cut_config)
         if kind == "prepare" or kind == "prepare_sync":
-            if self.active:
-                raise ValueError("CutDeck is already processing a sequence")
-            if len(self.jobs) >= 1000:
-                raise ValueError("Restart the helper before creating more jobs")
-            job_id = uuid.uuid4().hex
-            folder = self.directory / job_id
-            folder.mkdir()
+            job_id, folder = self._allocate()
             is_sync = (kind == "prepare_sync")
             context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count")
             if not is_sync:
@@ -206,6 +233,29 @@ class XmlJobs:
             self.jobs[job_id] = job
             self._save(job)
             return dict(job)
+        if kind == "submit_transcribe":
+            media = _input_file(req.get("media_path"))
+            job_id, folder = self._allocate()
+            job = {"job_id": job_id, "job_type": "transcribe", "kind": "transcribe",
+                   "state": "running", "arguments": {"media_path": media},
+                   "result_path": str(folder / "result.json"),
+                   "log_path": str(folder / "process.log")}
+            return self._launch(job, self._run_transcribe(job))
+        if kind == "submit_rough_cut":
+            arguments = _rough_cut_arguments(req)
+            job_id, folder = self._allocate()
+            job = {"job_id": job_id, "job_type": "cut", "kind": "rough_cut_xml",
+                   "state": "running", "arguments": arguments,
+                   "context": {"asr": arguments["speech_protection"]},
+                   "preset": arguments["preset"],
+                   "source_path": arguments["sequence_xml"],
+                   "output_path": str(folder / "rough_cut.xml"),
+                   "result_name": f"{Path(arguments['sequence_xml']).stem} — CutDeck {job_id[:8]}",
+                   "xml_audio_track": arguments["audio_track"],
+                   "log_path": str(folder / "process.log")}
+            if arguments["start_frame"] is not None:
+                job["range_frames"] = [arguments["start_frame"], arguments["end_frame"]]
+            return self._launch(job, self._run(job))
         job = self.jobs.get(req.get("job_id"))
         if job is None:
             raise ValueError("Unknown job; start a new operation")
@@ -222,42 +272,53 @@ class XmlJobs:
                 job["xml_audio_track"] = reference_audio_track(source_xml, job["context"]) if job["context"].get("audio_track") is not None else 0
                 job["output_path"] = str(result_path(job, source_xml))
                 job["state"] = "running"
-                self.active = job["job_id"]
-                self._save(job)
-                task = asyncio.create_task(self._run_sync(job))
-                self.tasks.add(task)
-                task.add_done_callback(self.tasks.discard)
-                return dict(job)
+                return self._launch(job, self._run_sync(job))
             start, end = range_from_ticks(source_xml, job["context"])
             job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
             # Only now does the export exist, so only now is the footage location known.
             job["output_path"] = str(result_path(job, source_xml))
             job["range_frames"] = [start, end]
             job["state"] = "running"
-            self.active = job["job_id"]
-            self._save(job)
-            task = asyncio.create_task(self._run(job))
-            self.tasks.add(task)
-            task.add_done_callback(self.tasks.discard)
-            return dict(job)
+            return self._launch(job, self._run(job))
         raise ValueError("Unknown request type")
 
+    def _allocate(self) -> tuple[str, Path]:
+        """Claim the one GPU slot's next job folder, or refuse if the helper is busy."""
+        if self.active:
+            raise ValueError("CutDeck is already processing a sequence")
+        if len(self.jobs) >= 1000:
+            raise ValueError("Restart the helper before creating more jobs")
+        job_id = uuid.uuid4().hex
+        folder = self.directory / job_id
+        folder.mkdir()
+        return job_id, folder
+
+    def _launch(self, job: dict, coroutine) -> dict:
+        self.jobs[job["job_id"]] = job
+        self.active = job["job_id"]
+        self._save(job)
+        task = asyncio.create_task(coroutine)
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+        return dict(job)
+
     def _save(self, job):
-        (Path(job["source_path"]).parent / "job.json").write_text(
+        (self.directory / job["job_id"] / "job.json").write_text(
             json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
 
     async def _run(self, job):
         process = None
         try:
-            folder = Path(job["source_path"]).parent
+            folder = self.directory / job["job_id"]
             report_path = folder / "report.json"
-            start, end = job["range_frames"]
             args = [sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
                     "--out", job["output_path"], "--report", str(report_path),
-                    "--config", str(ROOT / "transcribe/config.yaml"),
-                    "--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml"),
-                    "--range-start-frame", str(start), "--range-end-frame", str(end),
-                    "--no-save-plan"]
+                    "--config", str(ROOT / "transcribe/config.yaml"), "--no-save-plan"]
+            if job.get("preset", "aggressive") == "aggressive":
+                args += ["--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")]
+            if "range_frames" in job:
+                start, end = job["range_frames"]
+                args += ["--range-start-frame", str(start), "--range-end-frame", str(end)]
             if job["context"]["asr"]:
                 args.append("--asr")
             if job["xml_audio_track"] is not None:
@@ -286,7 +347,7 @@ class XmlJobs:
                 # A no-cut result just copies the source; don't leave it sitting in
                 # the editor's media folder. The job folder's own copy is kept.
                 output = Path(job["output_path"])
-                if output.parent != Path(job["source_path"]).parent:
+                if output.parent != folder:
                     output.unlink(missing_ok=True)
             if job["state"] == "ready":
                 path = Path(job["output_path"])
@@ -309,6 +370,39 @@ class XmlJobs:
         except Exception as exc:
             if process and process.returncode is None:
                 # e.g. unreadable output: never report idle while the child still holds the GPU.
+                process.terminate()
+                await process.wait()
+            job["state"] = "failed"
+            job["message"] = str(exc)
+        finally:
+            self.active = None
+            self._save(job)
+
+    async def _run_transcribe(self, job):
+        """Whole-file ASR in the existing worker subprocess; its result.json is the record."""
+        process = None
+        folder = self.directory / job["job_id"]
+        try:
+            with open(job["log_path"], "wb") as log:
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable, "-u", "-m", "cutdeck.ai_worker", str(folder),
+                    cwd=ROOT, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                    stdout=log, stderr=subprocess.STDOUT,
+                    **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
+                code = await process.wait()
+            if code:
+                raise RuntimeError(f"Transcription failed (exit {code}). See {job['log_path']}")
+            json.loads(Path(job["result_path"]).read_text(encoding="utf-8"))
+            job["state"] = "ready"
+        except asyncio.CancelledError:
+            if process and process.returncode is None:
+                process.terminate()
+                await process.wait()
+            job["state"] = "failed"
+            job["message"] = "Helper stopped during processing; start a new transcription"
+            raise
+        except Exception as exc:
+            if process and process.returncode is None:
                 process.terminate()
                 await process.wait()
             job["state"] = "failed"

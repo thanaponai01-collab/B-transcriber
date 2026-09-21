@@ -1,4 +1,4 @@
-"""Subprocess adapter: reuse the existing pipelines without changing their rules."""
+"""Subprocess adapter the :7891 helper spawns for `transcribe` jobs."""
 from __future__ import annotations
 
 import json
@@ -21,27 +21,6 @@ def run(folder: Path) -> None:
         cues = run_file(args["media_path"], config, database)
         result = {"kind": "transcribe", "media_path": args["media_path"],
                   "timing_unit": "milliseconds", "granularity": "phrase_cues", "cues": cues}
-    elif job["kind"] == "rough_cut_xml":
-        from cutdeck.xml_recut import main
-        output = folder / "rough_cut.xml"
-        report = folder / "report.json"
-        command = [args["sequence_xml"], "--out", str(output), "--report", str(report),
-                   "--config", str(ROOT / "transcribe/config.yaml"),
-                   "--db", str(database), "--no-save-plan"]
-        if args["preset"] == "aggressive":
-            command += ["--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")]
-        if args["speech_protection"]:
-            command.append("--asr")
-        if args["audio_track"] is not None:
-            command += ["--audio-track", str(args["audio_track"])]
-        if args["start_frame"] is not None:
-            command += ["--range-start-frame", str(args["start_frame"]),
-                        "--range-end-frame", str(args["end_frame"])]
-        if main(command) != 0:
-            raise RuntimeError("Rough cut did not complete")
-        result = {"kind": "rough_cut_xml", "output_path": str(output),
-                  "report": json.loads(report.read_text(encoding="utf-8")),
-                  "import_required": True}
     else:
         raise ValueError("Unknown worker operation")
     write_json(folder / "result.json", result)

@@ -1,24 +1,18 @@
-"""CutDeck MCP stdio entry point; all processing output stays in job logs."""
-from contextlib import asynccontextmanager
-from pathlib import Path
+"""CutDeck MCP stdio entry point; all processing output stays in job logs.
+
+Jobs run in the :7891 helper (`python -m cutdeck.xml_bridge`), which must be running.
+"""
 import argparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from cutdeck.ai_backend import Backend, ROOT
+from cutdeck.ai_backend import Backend
+from cutdeck.xml_bridge import PORT
 
 
 def create_server(backend: Backend) -> FastMCP:
-    @asynccontextmanager
-    async def lifespan(server):
-        backend.start()
-        try:
-            yield backend
-        finally:
-            await backend.close()
-
-    server = FastMCP("CutDeck", lifespan=lifespan, instructions=(
+    server = FastMCP("CutDeck", instructions=(
         "Start transcription or XML rough-cut jobs, retain their job_id, poll get_job, "
         "then read get_result. Do not resubmit a running job. Inputs are absolute local "
         "paths. Rough cutting produces new FCP7 XML; it does not edit live Premiere. "
@@ -39,7 +33,7 @@ def create_server(backend: Backend) -> FastMCP:
         Uses the existing configured ASR pipeline. Results are timestamped phrase
         cues, not guaranteed individual words. Poll get_job then get_result.
         """
-        return backend.transcribe(media_path)
+        return await backend.transcribe(media_path)
 
     @server.tool(annotations=write)
     async def rough_cut_xml(sequence_xml: str, speech_protection: bool = True,
@@ -56,30 +50,30 @@ def create_server(backend: Backend) -> FastMCP:
         is still analyzed over the full sequence. Unsupported XML structures fail
         explicitly; this does not render Premiere effects or export an MP4.
         """
-        return backend.rough_cut(sequence_xml, speech_protection, preset, audio_track,
+        return await backend.rough_cut(sequence_xml, speech_protection, preset, audio_track,
                                  start_frame, end_frame)
 
     @server.tool(annotations=read)
-    def get_job(job_id: str) -> dict:
+    async def get_job(job_id: str) -> dict:
         """Read queued/running/succeeded/failed/interrupted state and error/log path."""
-        return backend.status(job_id)
+        return await backend.status(job_id)
 
     @server.tool(annotations=read)
-    def get_result(job_id: str, offset: int = 0, limit: int = 100) -> dict:
+    async def get_result(job_id: str, offset: int = 0, limit: int = 100) -> dict:
         """Read completed output or current job state. Transcript pages max 500 cues.
 
         Follow next_offset until null. Rough cuts return output_path and report.
         """
-        return backend.result(job_id, offset, limit)
+        return await backend.result(job_id, offset, limit)
 
     return server
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CutDeck AI tools over MCP stdio")
-    parser.add_argument("--jobs-dir", type=Path, default=ROOT / "output/ai")
+    parser.add_argument("--port", type=int, default=PORT, help="helper port")
     args = parser.parse_args()
-    create_server(Backend(args.jobs_dir)).run(transport="stdio")
+    create_server(Backend(args.port)).run(transport="stdio")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
-"""Absolute-path launcher for MCP clients, independent of their working directory."""
+"""Absolute-path launcher for MCP clients, independent of their working directory.
+
+The MCP server is a client of the CutDeck helper: start `python -m cutdeck.xml_bridge`
+first (the tools report a clear error if it is not running).
+"""
 from pathlib import Path
 import sys
 
