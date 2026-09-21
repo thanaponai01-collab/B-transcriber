@@ -106,3 +106,17 @@ test("a second call reuses the existing CutDeck bin instead of creating another"
   assert.equal(f.binsCreated(), 1);
   assert.deepEqual(first, second);
 });
+test("bin creation runs through project.lockedAccess when the host provides it", async () => {
+  const f = fixture();
+  let lockedAccessCalls = 0;
+  f.project.lockedAccess = (run) => { lockedAccessCalls++; run(); };
+  await getOrCreateCutDeckBin(f.project);
+  assert.equal(lockedAccessCalls, 1);
+  assert.equal(f.binsCreated(), 1);
+});
+test("bin creation still works when the host has no lockedAccess", async () => {
+  const f = fixture();
+  assert.equal(typeof f.project.lockedAccess, "undefined");
+  const bin = await getOrCreateCutDeckBin(f.project);
+  assert.equal(bin.name, "CutDeck");
+});

@@ -51,23 +51,29 @@ const CUTDECK_BIN_NAME = "CutDeck";
 // sync results land organized in the Project panel instead of at the root.
 // Idempotent: only creates when a bin with this name doesn't already exist.
 //
-// Premiere's UXP object references can invalidate across an await boundary —
-// uxp/spike18_split_probe/README.md hit "The script object is no longer
-// valid" from a track-item reference held across a couple of awaits before a
-// transaction. Every use of `root` below re-fetches it immediately first
-// rather than reusing one held across the executeTransaction call, closing
-// the same gap that bit that spike.
+// executeTransaction must never be called bare — assembleProbe.js's commit()
+// documents this as "the pattern #18 confirmed against Adobe's own sample and
+// a third-party plugin": wrap it in project.lockedAccess(...), or references
+// fetched just beforehand (here, `root`) throw "The script object is no
+// longer valid" once the transaction runs, which is exactly what calling it
+// bare produced live in Premiere. Re-fetching `root` immediately before use
+// (still done below, and again for the "after" check) is not a substitute
+// for this — that was tried first and did not fix it.
 async function getOrCreateCutDeckBin(project) {
   const existing = (await (await project.getRootItem()).getItems())
     .find((item) => item.name === CUTDECK_BIN_NAME);
   if (existing) return existing;
 
   const root = await project.getRootItem();
-  const ok = project.executeTransaction((compound) => {
-    if (!compound.addAction(root.createBinAction(CUTDECK_BIN_NAME, false))) {
-      throw new Error("addAction(createBin) returned false");
-    }
-  }, `Create ${CUTDECK_BIN_NAME} bin`);
+  let ok = false;
+  const run = () => {
+    ok = project.executeTransaction((compound) => {
+      if (!compound.addAction(root.createBinAction(CUTDECK_BIN_NAME, false))) {
+        throw new Error("addAction(createBin) returned false");
+      }
+    }, `Create ${CUTDECK_BIN_NAME} bin`);
+  };
+  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
   if (!ok) throw new Error(`Could not create the ${CUTDECK_BIN_NAME} bin in this project.`);
 
   const bin = (await (await project.getRootItem()).getItems())

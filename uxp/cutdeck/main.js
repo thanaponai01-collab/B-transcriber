@@ -299,13 +299,18 @@ if ($("socketprobe")) {
 // (navigator.clipboard, then the uxp module's) is the pattern spike18 confirmed
 // against a live Premiere plugin rather than assumed.
 if ($("copystatus")) {
-  $("copystatus").addEventListener("click", () => act(async () => {
+  $("copystatus").addEventListener("click", () => {
+    // Captured before act() runs: act() immediately overwrites #status to
+    // "Processing…", so reading it from inside the act() callback below
+    // would copy that placeholder instead of the report the user clicked to copy.
     const text = $("status") ? $("status").textContent : "";
-    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
-    else if (require("uxp").clipboard) require("uxp").clipboard.copyText(text);
-    else throw new Error("No clipboard API on this build. The full report is in the UXP Developer Tool console as JSON.");
-    setStatus(text + "\n\n--- copied to clipboard ---", "ready");
-  }));
+    act(async () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+      else if (require("uxp").clipboard) require("uxp").clipboard.copyText(text);
+      else throw new Error("No clipboard API on this build. The full report is in the UXP Developer Tool console as JSON.");
+      setStatus(text + "\n\n--- copied to clipboard ---", "ready");
+    });
+  });
 }
 
 // Init handlers
