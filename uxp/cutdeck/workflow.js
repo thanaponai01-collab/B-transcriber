@@ -50,12 +50,19 @@ const CUTDECK_BIN_NAME = "CutDeck";
 // Finds (or creates once) the project's top-level CutDeck bin, so rough-cut and
 // sync results land organized in the Project panel instead of at the root.
 // Idempotent: only creates when a bin with this name doesn't already exist.
+//
+// Premiere's UXP object references can invalidate across an await boundary —
+// uxp/spike18_split_probe/README.md hit "The script object is no longer
+// valid" from a track-item reference held across a couple of awaits before a
+// transaction. Every use of `root` below re-fetches it immediately first
+// rather than reusing one held across the executeTransaction call, closing
+// the same gap that bit that spike.
 async function getOrCreateCutDeckBin(project) {
-  const root = await project.getRootItem();
-  const before = await root.getItems();
-  const existing = before.find((item) => item.name === CUTDECK_BIN_NAME);
+  const existing = (await (await project.getRootItem()).getItems())
+    .find((item) => item.name === CUTDECK_BIN_NAME);
   if (existing) return existing;
 
+  const root = await project.getRootItem();
   const ok = project.executeTransaction((compound) => {
     if (!compound.addAction(root.createBinAction(CUTDECK_BIN_NAME, false))) {
       throw new Error("addAction(createBin) returned false");
@@ -63,8 +70,8 @@ async function getOrCreateCutDeckBin(project) {
   }, `Create ${CUTDECK_BIN_NAME} bin`);
   if (!ok) throw new Error(`Could not create the ${CUTDECK_BIN_NAME} bin in this project.`);
 
-  const after = await root.getItems();
-  const bin = after.find((item) => item.name === CUTDECK_BIN_NAME);
+  const bin = (await (await project.getRootItem()).getItems())
+    .find((item) => item.name === CUTDECK_BIN_NAME);
   if (!bin) throw new Error(`${CUTDECK_BIN_NAME} bin was created but could not be found afterward.`);
   return bin;
 }
