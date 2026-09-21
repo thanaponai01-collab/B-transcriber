@@ -91,13 +91,13 @@
   <!-- Segmented Tabs -->
   <div class="tabs">
     <div id="tab-edit" class="tab-btn" role="button" data-act="tab-edit">Cut &amp; Sync</div>
-    <div id="tab-adj" class="tab-btn active" role="button" data-act="tab-adj">Adjustment &amp; FX</div>
+    <div id="tab-adj" class="tab-btn active" role="button" data-act="tab-adj">Adj &amp; FX</div>
   </div>
 
   <!-- PAGE 1: CUT & SYNC -->
   <div id="view-edit" class="view-panel">
     <div class="control-group">
-      <label class="control-label" for="audio">Reference Audio Track</label>
+      <label class="control-label" for="audio">Audio Track</label>
       <select id="audio" data-act="audio">
         <option value="" selected>Auto</option>
       </select>
@@ -107,20 +107,20 @@
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
       </svg>
-      Sync Multi-Cam
+      Sync
     </div>
 
     <div class="section-divider">
       <div class="section-line"></div>
-      <span class="section-tag">Rough Cut Engine</span>
+      <span class="section-tag">Rough Cut</span>
       <div class="section-line"></div>
     </div>
 
     <div class="control-group">
-      <div class="control-label">Cutting Preset</div>
+      <div class="control-label">Preset</div>
       <div class="pills-grid">
-        <div id="pill-speech" class="pill-btn active" role="button" data-act="pill-speech">Speech + Silence</div>
-        <div id="pill-silence" class="pill-btn" role="button" data-act="pill-silence">Silence Only</div>
+        <div id="pill-speech" class="pill-btn active" role="button" data-act="pill-speech">Speech</div>
+        <div id="pill-silence" class="pill-btn" role="button" data-act="pill-silence">Silence</div>
       </div>
       <select id="mode" class="sr-only" data-act="mode">
         <option value="protected" selected>protected</option>
@@ -136,42 +136,27 @@
         <line x1="14.47" y1="14.48" x2="20" y2="20"/>
         <line x1="8.12" y1="8.12" x2="12" y2="12"/>
       </svg>
-      Rough Cut In–Out Range
+      Rough Cut
     </div>
   </div>
 
-  <!-- PAGE 2: ADJUSTMENT LAYER & FX (PURE 2 BUTTONS) -->
+  <!-- PAGE 2: ADJUSTMENT LAYER & FX -->
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
       <!-- Card 1: Adjustment Layer -->
-      <div id="btn-adj" class="action-card card-al" role="button" data-act="btn-adj" title="Click: Span Selection | Ctrl+Click: Each Clip | Shift+Click: Every Cut (50/50)">
-        <div class="card-icon-box">
-          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-            <polyline points="2 17 12 22 22 17"/>
-            <polyline points="2 12 12 17 22 12"/>
-          </svg>
-        </div>
-        <div class="card-title">Adjustment Layer</div>
-        <div class="card-legend">
-          <div class="legend-row"><span class="key-tag">Click</span> Span All</div>
-          <div class="legend-row"><span class="key-tag">Ctrl</span> Each Clip</div>
-          <div class="legend-row"><span class="key-tag">⇧</span> Every Cut</div>
-        </div>
+      <div id="btn-adj" class="action-card card-al" role="button" data-act="btn-adj" title="Adjustment Layer (Click: Span All | Ctrl: Each Clip | Shift: Every Cut)">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
       </div>
 
       <!-- Card 2: Effect Preset -->
-      <div id="btn-fx" class="action-card card-fx" role="button" data-act="btn-fx" title="Click: Show Active Preset | Shift+Click: Cycle Presets">
-        <div class="card-icon-box">
-          <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
-          </svg>
-        </div>
-        <div class="card-title">Effect Preset</div>
-        <div class="card-legend">
-          <div class="legend-row"><span class="key-tag purple">Click</span> Show Active</div>
-          <div class="legend-row"><span class="key-tag purple">⇧ Click</span> Next FX</div>
-        </div>
+      <div id="btn-fx" class="action-card card-fx" role="button" data-act="btn-fx" title="Effect Preset (Click: Apply Preset | Shift: Next Preset)">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
+        </svg>
       </div>
     </div>
 
@@ -181,7 +166,7 @@
         ⚡ <span id="badge-transition-text"></span>
       </div>
       <div id="badge-active-fx" class="badge-btn fx-badge" role="button" data-act="badge-active-fx" title="Click to cycle next preset">
-        ✦ Active: <span id="badge-active-fx-text"></span>
+        ✦ <span id="badge-active-fx-text"></span>
       </div>
     </div>
   </div>
