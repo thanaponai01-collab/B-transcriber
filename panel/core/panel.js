@@ -245,7 +245,7 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe"].forEach((id) => {
+    ["socketprobe", "copystatus", "timingprobe", "motionprobe"].forEach((id) => {
       const el = $(id);
       if (el && overflowMenu) {
         el.addEventListener("click", () => overflowMenu.classList.remove("open"));
@@ -381,6 +381,8 @@
     if (socket) socket.addEventListener("click", () => intents.onProbe("socket"));
     const copy = $("copystatus");
     if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
+    const motion = $("motionprobe");
+    if (motion) motion.addEventListener("click", () => intents.onProbe("motion"));
   }
 
   function bind(intents) {

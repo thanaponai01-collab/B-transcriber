@@ -3,6 +3,129 @@ const ppro = require("premierepro");
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
 // Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47.
 
+// Same top-level bin workflow.js's getOrCreateCutDeckBin creates/reuses for Cut/Sync
+// results — deliberately the SAME name, so this is one shared folder tree in the Project
+// panel, not a second one. ADJ_BIN_NAME is the canonical, unambiguous home for the
+// Adjustment Layer: dropping it there means CutDeck finds it instantly on any sequence,
+// with no name-guessing required.
+const CUTDECK_BIN_NAME = "CutDeck";
+const ADJ_BIN_NAME = "ADJ & FX";
+
+// Resolves a folder-like item's createBinAction/getItems, casting to FolderItem when
+// the plain methods aren't directly present — same fallback getFolderChildren uses below.
+function asBinLike(item) {
+  if (!item) return null;
+  if (typeof item.createBinAction === "function" && typeof item.getItems === "function") return item;
+  if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
+    try {
+      const cast = ppro.FolderItem.cast(item);
+      if (cast) return cast;
+    } catch (_) {}
+  }
+  return item;
+}
+
+// Finds (or creates once) a named child bin directly under `parent`. Same pattern as
+// workflow.js's getOrCreateCutDeckBin (issue #18: executeTransaction must be wrapped in
+// project.lockedAccess — called bare, references fetched just beforehand throw "The script
+// object is no longer valid").
+async function getOrCreateChildBin(project, parent, name) {
+  const parentBin = asBinLike(parent);
+  const existingItems = (await parentBin.getItems()) || [];
+  const existing = existingItems.find((item) => item.name === name);
+  if (existing) return existing;
+
+  let ok = false;
+  const run = () => {
+    ok = project.executeTransaction((compound) => {
+      if (!compound.addAction(parentBin.createBinAction(name, false))) {
+        throw new Error("addAction(createBin) returned false");
+      }
+    }, `Create ${name} bin`);
+  };
+  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
+  if (!ok) throw new Error(`Could not create the "${name}" bin in this project.`);
+
+  const afterItems = (await parentBin.getItems()) || [];
+  const created = afterItems.find((item) => item.name === name);
+  if (!created) throw new Error(`"${name}" bin was created but could not be found afterward.`);
+  return created;
+}
+
+// Finds (or creates once) Project panel > CutDeck > ADJ & FX.
+async function getOrCreateAdjBin(project) {
+  const root = await project.getRootItem();
+  const cutdeckBin = await getOrCreateChildBin(project, root, CUTDECK_BIN_NAME);
+  return getOrCreateChildBin(project, cutdeckBin, ADJ_BIN_NAME);
+}
+
+// Best-effort resolution auto-detection, tried before any naming convention. Premiere
+// stores an item's own computed frame size in its internal "Column.Intrinsic.VideoInfo"
+// project metadata field — the same data behind the Project panel's "Video Info" column, so
+// it should exist even for a synthetic item like an Adjustment Layer, not just real media.
+// Adobe's own community documents this field as unreliable ("works only half the time" —
+// not every item populates it), so this is strictly a bonus: any failure (missing field,
+// parse error, a build without ppro.Metadata or require("uxp").xmp) returns null and the
+// caller falls through to name matching, unchanged.
+async function detectResolutionFromMetadata(projectItem) {
+  try {
+    if (!projectItem || !ppro.Metadata || typeof ppro.Metadata.getProjectMetadata !== "function") return null;
+    const xmpStr = await ppro.Metadata.getProjectMetadata(projectItem);
+    if (!xmpStr) return null;
+    const uxpXmp = require("uxp").xmp;
+    if (!uxpXmp || typeof uxpXmp.XMPMeta !== "function") return null;
+    const xmp = new uxpXmp.XMPMeta(xmpStr);
+    const prop = xmp.getProperty(
+      "http://ns.adobe.com/premierePrivateProjectMetaData/1.0/",
+      "Column.Intrinsic.VideoInfo"
+    );
+    const raw = prop && prop.value ? String(prop.value) : "";
+    if (!raw) return null;
+    // Observed format is space-separated with the numbers at either end (e.g.
+    // "1920 x 1080" per the field's own documented example) — pull every number out and
+    // take the first/last rather than assume exact token positions.
+    const numbers = raw.match(/\d+/g);
+    if (!numbers || numbers.length < 2) return null;
+    const width = parseInt(numbers[0], 10);
+    const height = parseInt(numbers[numbers.length - 1], 10);
+    if (!width || !height) return null;
+    return { width, height };
+  } catch (_) {
+    return null;
+  }
+}
+
+// Picks the right Adjustment Layer when more than one sits in the same folder. Tries
+// Premiere's own metadata first (exact match, no naming needed when it works); falls back to
+// matching by name (e.g. "1920x1080", "AL 1080x1920") when metadata isn't available — so a
+// same-size placement needs no scaling at all either way, Scale stays the proven-working 100%.
+async function pickBestCandidate(candidates, targetWidth, targetHeight, seq) {
+  if (!candidates || candidates.length === 0) return null;
+  if (targetWidth && targetHeight) {
+    for (const cand of candidates) {
+      const detected = await detectResolutionFromMetadata(cand);
+      if (detected && detected.width === targetWidth && detected.height === targetHeight) {
+        return cand;
+      }
+    }
+    // Width must appear BEFORE height with a short separator ("x", "×", "-", " ", or
+    // nothing) between them — a plain "does this substring appear anywhere" check (the
+    // original version of this) matched "1920x1080" against a 1080x1920 target too, since
+    // both numbers are present, just transposed. Order matters.
+    const pattern = new RegExp(`${targetWidth}\\D{0,3}${targetHeight}`);
+    for (const cand of candidates) {
+      if (pattern.test(cand.name || "")) return cand;
+    }
+  }
+  if (seq && seq.name) {
+    const sName = seq.name.toLowerCase();
+    for (const cand of candidates) {
+      if ((cand.name || "").toLowerCase().indexOf(sName) !== -1) return cand;
+    }
+  }
+  return candidates[0];
+}
+
 // Find adjustment layer in project panel or active timeline, matching active sequence dimensions and fps
 async function findAdjustmentLayerItem(project, seq) {
   if (!project || typeof project.getRootItem !== "function") return null;
@@ -13,47 +136,46 @@ async function findAdjustmentLayerItem(project, seq) {
   let targetHeight = null;
   try {
     if (seq && typeof seq.getSettings === "function") {
+      // SequenceSettings has no plain videoFrameWidth/videoFrameHeight fields (confirmed
+      // against the official class reference) — it's getVideoFrameRect(): RectF, and RectF
+      // is the plain {width, height} struct.
       const st = await seq.getSettings();
-      if (st && st.videoFrameWidth && st.videoFrameHeight) {
-        targetWidth = st.videoFrameWidth;
-        targetHeight = st.videoFrameHeight;
+      const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
+      if (rect && rect.width && rect.height) {
+        targetWidth = rect.width;
+        targetHeight = rect.height;
       }
     }
   } catch (_) {}
 
-  // 1. First priority: If active sequence already has an Adjustment Layer on any video track,
-  // that project item is already calibrated to this sequence's exact dimensions and fps!
-  if (seq && typeof seq.getVideoTrackCount === "function") {
-    try {
-      const vCount = await seq.getVideoTrackCount();
-      for (let v = 0; v < vCount; v++) {
-        const track = await seq.getVideoTrack(v);
-        if (track && typeof track.getTrackItems === "function") {
-          const clipType = ppro.Constants && ppro.Constants.TrackItemType ? ppro.Constants.TrackItemType.CLIP : undefined;
-          const items = await track.getTrackItems(clipType, false);
-          if (items && items.length > 0) {
-            for (const it of items) {
-              if (it.name && (it.name.toLowerCase().indexOf("adjustment") !== -1 || it.name.toLowerCase().indexOf("adj") !== -1)) {
-                if (typeof it.getProjectItem === "function") {
-                  const pi = await it.getProjectItem();
-                  if (pi && pi.type !== 2) return pi;
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (_) {}
-  }
+  // Removed: a step that trusted whatever Adjustment Layer was already sitting on the
+  // active sequence's timeline, on the assumption it must already be the right one for that
+  // sequence. Proven wrong (2026-09-22): once either AL lands on a sequence once — including
+  // by mistake — this made CutDeck reuse that exact instance forever on that sequence,
+  // completely bypassing the resolution-aware pick below. That pick (metadata, then name) is
+  // now the only path — always re-evaluated, so it can't get stuck on a stale placement.
 
-  // 2. Search project bins
+  // Canonical home: Project panel > CutDeck > ADJ & FX. Ensured to exist (created if
+  // missing) so there is always one unambiguous, always-findable place for the Adjustment
+  // Layer(s) — no depending on it already being on some other sequence's timeline. One AL in
+  // here just works. Several (one per resolution you actually use — e.g. "1920x1080",
+  // "1080x1920") get matched to the active sequence by name — see pickBestCandidate.
+  try {
+    const adjBin = await getOrCreateAdjBin(project);
+    const items = (await asBinLike(adjBin).getItems()) || [];
+    const candidates = items.filter((it) => it.type !== 2 && it.name);
+    const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq);
+    if (picked) return picked;
+  } catch (_) {}
+
+  // Legacy fallback: search the whole project (an AL named/placed before ADJ & FX existed)
   async function getFolderChildren(folder) {
     if (typeof folder.getItems === "function") {
       try { return await folder.getItems(); } catch (_) {}
     }
-    if (ppro.BinProjectItem && typeof ppro.BinProjectItem.cast === "function") {
+    if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
       try {
-        const bin = ppro.BinProjectItem.cast(folder);
+        const bin = ppro.FolderItem.cast(folder);
         if (bin && typeof bin.getItems === "function") {
           return await bin.getItems();
         }
@@ -71,7 +193,7 @@ async function findAdjustmentLayerItem(project, seq) {
     for (const it of items) {
       // In Premiere Pro UXP, it.type === 2 is a BIN (Folder)
       const isBin = it.type === 2 || typeof it.getItems === "function" ||
-        (ppro.BinProjectItem && typeof ppro.BinProjectItem.cast === "function" && ppro.BinProjectItem.cast(it) !== null);
+        (ppro.FolderItem && typeof ppro.FolderItem.cast === "function" && ppro.FolderItem.cast(it) !== null);
 
       if (isBin) {
         // Recurse into the bin (e.g. "07. Adjustment Layer") — NEVER return the bin itself!
@@ -96,33 +218,7 @@ async function findAdjustmentLayerItem(project, seq) {
 
   await search(root);
 
-  if (allCandidates.length > 0) {
-    // If targetWidth and targetHeight are known (e.g. 3840x2160, 1080x1920 vertical),
-    // prioritize candidates whose name reflects the sequence resolution
-    if (targetWidth && targetHeight) {
-      const dimStr1 = `${targetWidth}x${targetHeight}`.toLowerCase();
-      const dimStr2 = `${targetWidth}`.toLowerCase();
-      for (const cand of allCandidates) {
-        const cLower = cand.name.toLowerCase();
-        if (cLower.indexOf(dimStr1) !== -1 || (cLower.indexOf(dimStr2) !== -1 && cLower.indexOf(`${targetHeight}`) !== -1)) {
-          return cand;
-        }
-      }
-    }
-    // Also check if candidate name mentions sequence name
-    if (seq && seq.name) {
-      const sName = seq.name.toLowerCase();
-      for (const cand of allCandidates) {
-        if (cand.name.toLowerCase().indexOf(sName) !== -1) {
-          return cand;
-        }
-      }
-    }
-    // Return first candidate
-    return allCandidates[0];
-  }
-
-  return null;
+  return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq);
 }
 
 // Exact tick converter handling TickTime objects, decimal strings, numbers, and BigInt
@@ -418,6 +514,31 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     options.onSequenceName(seq.name);
   }
 
+  // Scaling was tried and removed (2026-09-22): createSetScaleToFrameSizeAction() proved to
+  // have no visible effect, and there's no API to read a project item's native pixel
+  // dimensions to compute a scale manually either (confirmed against ProjectItem/
+  // ClipProjectItem/Media/FootageInterpretation — none expose width/height). The workflow
+  // now avoids needing scale at all: keep one Adjustment Layer per resolution you use in
+  // Project panel > CutDeck > ADJ & FX, and findAdjustmentLayerItem picks the one that
+  // already matches this sequence exactly, so it's placed at native 100% — see
+  // pickBestCandidate. sequenceWidth/sequenceHeight are still read here purely to report
+  // what CutDeck detected, for the status line.
+  let sequenceWidth = null;
+  let sequenceHeight = null;
+  try {
+    // SequenceSettings has no plain videoFrameWidth/videoFrameHeight fields (confirmed
+    // against the official class reference) — it's getVideoFrameRect(): RectF, and RectF
+    // is the plain {width, height} struct.
+    if (typeof seq.getSettings === "function") {
+      const st = await seq.getSettings();
+      const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
+      if (rect && rect.width && rect.height) {
+        sequenceWidth = rect.width;
+        sequenceHeight = rect.height;
+      }
+    }
+  } catch (_) {}
+
   const tpfStr = await seq.getTimebase();
   const tpf = toBigIntTicks(tpfStr) || 10594584000n;
 
@@ -645,7 +766,15 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
 
   const alItem = await findAdjustmentLayerItem(project, seq);
   if (!alItem) {
-    throw new Error("No Adjustment Layer clip found in project or timeline. (Note: create one via File > New > Adjustment Layer)");
+    throw new Error(
+      "No Adjustment Layer found yet — Premiere's scripting API has no way to create one from a script " +
+      "(confirmed against the official UXP Project class reference: no createAdjustmentLayer method exists), " +
+      "but I've made a spot for it: Project panel > CutDeck > ADJ & FX. Create an Adjustment Layer manually " +
+      "(File > New Item > Adjustment Layer) at your sequence's resolution and drag it into that folder. If you " +
+      "only ever use one resolution, one AL is enough. If you switch between resolutions, create one per " +
+      "resolution and name each one after its size (e.g. \"1920x1080\", \"1080x1920\") — CutDeck matches the " +
+      "right one to whichever sequence is active automatically."
+    );
   }
 
   let clipItem = alItem;
@@ -658,13 +787,6 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       if (casted) clipItem = casted;
     } catch (_) {}
   }
-
-  // Ensure Adjustment Layer matches active sequence dimensions and aspect ratio
-  try {
-    if (clipItem && typeof clipItem.setScaleToFrameSize === "function") {
-      clipItem.setScaleToFrameSize();
-    }
-  } catch (_) {}
 
   let placedCount = 0;
   const targetTracksSet = new Set();
@@ -905,22 +1027,55 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
                 trimHeld: actualEndTicks !== null && actualEndTicks <= (p.endTicks + tpf)
               });
 
-              // Set label color and name
+              // Set label color and name.
+              // Neither setColorLabel nor setName is a real plain method — confirmed against
+              // the official class references, so both used to silently no-op the same way
+              // setScaleToFrameSize did above.
+              //
+              // Name: VideoClipTrackItem.createSetNameAction() is real and per-instance —
+              // wrapped in a transaction like every other mutation here, this now actually
+              // renames just this placement.
+              //
+              // Color: VideoClipTrackItem has no color-label action at all (confirmed — only
+              // createSetNameAction lives on it); the only real API is
+              // ClipProjectItem.createSetColorLabelAction() on the shared master AL project
+              // item. Every placement reuses that same master clip, so this recolors every
+              // existing and future instance of it, not just this one placement — a genuine
+              // Premiere API limitation (no per-instance timeline color override is exposed),
+              // not a bug in this call.
               try {
-                if (typeof it.setColorLabel === "function") {
-                  await it.setColorLabel(getLabelIndex(options.color));
+                if (clipItem && typeof clipItem.createSetColorLabelAction === "function") {
+                  const setColor = () => {
+                    try {
+                      freshProject.executeTransaction((compound) => {
+                        const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
+                        if (colorAction) compound.addAction(colorAction);
+                      }, "CutDeck: Set Adjustment Layer Color Label");
+                    } catch (_) {}
+                  };
+                  if (typeof freshProject.lockedAccess === "function") {
+                    freshProject.lockedAccess(setColor);
+                  } else {
+                    setColor();
+                  }
                 }
               } catch (_) {}
               try {
-                if (typeof it.setName === "function") {
-                  await it.setName(p.name);
-                }
-              } catch (_) {}
-              try {
-                if (typeof it.setScaleToFrameSize === "function") {
-                  await it.setScaleToFrameSize();
-                } else if (typeof it.scaleToFrameSize === "function") {
-                  await it.scaleToFrameSize();
+                if (typeof it.createSetNameAction === "function") {
+                  const setNameRun = () => {
+                    try {
+                      freshProject.executeTransaction((compound) => {
+                        const nameAction = it.createSetNameAction(p.name);
+                        if (!nameAction) throw new Error("createSetNameAction returned falsy");
+                        if (!compound.addAction(nameAction)) throw new Error("addAction(nameAction) returned false");
+                      }, "CutDeck: Name Adjustment Layer");
+                    } catch (_) {}
+                  };
+                  if (typeof freshProject.lockedAccess === "function") {
+                    freshProject.lockedAccess(setNameRun);
+                  } else {
+                    setNameRun();
+                  }
                 }
               } catch (_) {}
               verified = true;
@@ -951,8 +1106,18 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     frames: Number(frames),
     mode,
     cutCount: mode === "transition" ? placedCount : 0,
-    selectedCount: clipsWithTimes.length
+    selectedCount: clipsWithTimes.length,
+    sequenceWidth,
+    sequenceHeight
   };
 }
 
-module.exports = { placeAdjustmentLayersOnTimeline };
+module.exports = {
+  placeAdjustmentLayersOnTimeline,
+  findAdjustmentLayerItem,
+  getOrCreateAdjBin,
+  pickBestCandidate,
+  detectResolutionFromMetadata,
+  CUTDECK_BIN_NAME,
+  ADJ_BIN_NAME,
+};

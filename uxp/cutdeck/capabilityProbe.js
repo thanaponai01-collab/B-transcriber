@@ -199,4 +199,151 @@ function formatReport(report) {
   return lines.join("\n");
 }
 
-module.exports = { probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES };
+/* Phase 2 probe: reads the ACTUAL Motion component (Scale, Position, Anchor Point, ...) of
+   every Adjustment Layer sitting on the current sequence's timeline, right now. Ground truth
+   for the "does the AL actually scale to a differently-shaped sequence" question —
+   createSetScaleToFrameSizeAction() cannot be verified by re-reading a flag (ClipProjectItem
+   has no such getter — confirmed against the official class reference), so the only way to
+   know what Premiere actually did is to read the live effect values it produced. Read-only,
+   creates/inserts/deletes nothing. */
+async function probeAdjustmentLayerMotion(ppro) {
+  const findings = [];
+  const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
+
+  if (!ppro || !ppro.Project) {
+    add("host", "Is the Premiere API reachable?", "no", { detail: "require('premierepro') gave no Project" });
+    return { probe: "adjustment-layer-motion", complete: false, findings };
+  }
+  const projectRead = await attempt("getActiveProject", () => ppro.Project.getActiveProject());
+  if (!projectRead.ok || !projectRead.value) {
+    add("project", "Is a project open?", "no", projectRead.ok ? { detail: "no active project" } : projectRead);
+    return { probe: "adjustment-layer-motion", complete: false, findings };
+  }
+  const project = projectRead.value;
+  const sequenceRead = await attempt("getActiveSequence", () => project.getActiveSequence());
+  if (!sequenceRead.ok || !sequenceRead.value) {
+    add("sequence", "Is a sequence open?", "no", sequenceRead.ok ? { detail: "no active sequence" } : sequenceRead);
+    return { probe: "adjustment-layer-motion", complete: false, findings };
+  }
+  const seq = sequenceRead.value;
+
+  // SequenceSettings has no plain videoFrameWidth/videoFrameHeight fields (confirmed
+  // against the official class reference — this was the same wrong-field-name mistake as
+  // BinProjectItem/FolderItem) — it's getVideoFrameRect(): RectF, and RectF is the plain
+  // {width, height} struct.
+  const settingsRead = await attempt("getSettings", () =>
+    (typeof seq.getSettings === "function" ? seq.getSettings() : null));
+  const rectRead = settingsRead.ok && settingsRead.value && typeof settingsRead.value.getVideoFrameRect === "function"
+    ? await attempt("getVideoFrameRect", () => settingsRead.value.getVideoFrameRect())
+    : { ok: false };
+  const dims = rectRead.ok && rectRead.value && rectRead.value.width
+    ? { width: rectRead.value.width, height: rectRead.value.height }
+    : null;
+  add("sequence", "What does this sequence report as its frame size?",
+    dims ? `${dims.width}x${dims.height}` : "could not read",
+    { name: seq.name || "(unnamed)", settingsCall: settingsRead.ok ? "ok" : settingsRead });
+
+  // Find every Adjustment Layer clip sitting on THIS sequence's timeline right now.
+  const found = [];
+  try {
+    const vCount = await seq.getVideoTrackCount();
+    for (let v = 0; v < vCount; v++) {
+      const track = await seq.getVideoTrack(v);
+      if (!track || typeof track.getTrackItems !== "function") continue;
+      const clipType = ppro.Constants && ppro.Constants.TrackItemType ? ppro.Constants.TrackItemType.CLIP : undefined;
+      const items = await track.getTrackItems(clipType, false);
+      for (const it of (items || [])) {
+        let isAL = false;
+        if (typeof it.isAdjustmentLayer === "function") {
+          try { isAL = await it.isAdjustmentLayer(); } catch (_) { isAL = false; }
+        }
+        if (isAL) found.push({ item: it, track: v + 1 });
+      }
+    }
+  } catch (error) {
+    add("scan", "Could this sequence's video tracks be scanned?", "no", { error: error.message || String(error) });
+  }
+
+  add("found", "How many Adjustment Layer clips are on this sequence's timeline right now?", String(found.length),
+    { items: found.map((f) => `V${f.track}: "${f.item.name || "?"}"`) });
+
+  for (const { item, track } of found) {
+    const label = `V${track} "${item.name || "?"}"`;
+
+    const mediaType = ppro.Constants && ppro.Constants.MediaType ? ppro.Constants.MediaType.VIDEO : undefined;
+    const chainRead = await attempt(`getComponentChain(${label})`, () =>
+      (typeof item.getComponentChain === "function" ? item.getComponentChain(mediaType) : null));
+    if (!chainRead.ok || !chainRead.value) {
+      add("chain", `Does ${label} expose a video component chain?`, "no",
+        chainRead.ok ? { detail: "null chain" } : chainRead);
+      continue;
+    }
+    const chain = chainRead.value;
+    const countRead = await attempt(`getComponentCount(${label})`, () => chain.getComponentCount());
+    const count = countRead.ok ? countRead.value : 0;
+
+    const components = [];
+    let motion = null;
+    for (let i = 0; i < count; i++) {
+      const compRead = await attempt(`getComponentAtIndex(${i})`, () => chain.getComponentAtIndex(i));
+      if (!compRead.ok || !compRead.value) continue;
+      const c = compRead.value;
+      const displayName = (await attempt("getDisplayName", () => c.getDisplayName())).value || null;
+      const matchName = (await attempt("getMatchName", () => c.getMatchName())).value || null;
+      components.push({ displayName, matchName });
+      if (!motion && ((displayName || "").toLowerCase() === "motion" || (matchName || "").toLowerCase().indexOf("motion") !== -1)) {
+        motion = c;
+      }
+    }
+    add("components", `What components does ${label} have?`,
+      components.map((c) => c.displayName || c.matchName || "?").join(", ") || "(none read)", { components });
+
+    if (!motion) {
+      add("motion", `Does ${label} have a Motion component?`, "not found", null);
+      continue;
+    }
+
+    const startRead = await attempt("getStartTime", () =>
+      (typeof item.getStartTime === "function" ? item.getStartTime() : null));
+    const paramCountRead = await attempt("getParamCount", () => motion.getParamCount());
+    const paramCount = paramCountRead.ok ? paramCountRead.value : 0;
+
+    const params = [];
+    for (let i = 0; i < paramCount; i++) {
+      const paramRead = await attempt(`getParam(${i})`, () => motion.getParam(i));
+      if (!paramRead.ok || !paramRead.value) continue;
+      const p = paramRead.value;
+      const name = p.displayName || `param[${i}]`;
+      let value = null;
+      if (startRead.ok && startRead.value && typeof p.getValueAtTime === "function") {
+        const valRead = await attempt(`getValueAtTime(${name})`, () => p.getValueAtTime(startRead.value));
+        value = valRead.ok ? valRead.value : `error: ${valRead.error}`;
+      }
+      params.push({ name, value });
+    }
+    add("motionParams", `What are ${label}'s Motion parameters right now?`,
+      params.map((p) => `${p.name}=${JSON.stringify(p.value)}`).join(", ") || "(none read)", { params });
+  }
+
+  return { probe: "adjustment-layer-motion", complete: true, findings, sequenceDims: dims };
+}
+
+function formatMotionReport(report) {
+  const lines = [`Adjustment Layer / Motion probe (${report.complete ? "complete" : "stopped early"})`];
+  for (const f of report.findings) {
+    lines.push(`• ${f.question}`);
+    lines.push(`    ${f.answer}`);
+    if (f.evidence) {
+      for (const [key, value] of Object.entries(f.evidence)) {
+        if (value === null || value === undefined) continue;
+        lines.push(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
+module.exports = {
+  probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES,
+  probeAdjustmentLayerMotion, formatMotionReport,
+};

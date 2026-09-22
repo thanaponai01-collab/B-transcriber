@@ -147,6 +147,15 @@ function onAdjLayerSequenceName(name) {
   panel.render(state);
 }
 
+// No scaling happens — CutDeck picks whichever Adjustment Layer in CutDeck > ADJ & FX
+// already matches this sequence's resolution (see timeline/adjustmentLayer.js's
+// pickBestCandidate) and places it at native 100%. This just confirms which sequence it
+// detected, so a wrong pick is visible immediately instead of only showing up visually.
+function describeSequenceMatch(res) {
+  if (!res || !res.sequenceWidth || !res.sequenceHeight) return "";
+  return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}`;
+}
+
 async function doAdjust(mode) {
   const s = state.settings;
   if (mode === "transition") {
@@ -165,19 +174,20 @@ async function doAdjust(mode) {
     onSequenceName: onAdjLayerSequenceName
   });
 
+  const seqNote = describeSequenceMatch(res);
   let msg = "";
   if (mode === "transition") {
     msg = res.placedCount > 1
-      ? `Added ${res.placedCount} cut transition ALs (${s.frames}f 50/50) on V${res.targetTrack}!`
-      : `Placed 50/50 cut transition (${res.frames}f) on V${res.targetTrack}!`;
+      ? `Added ${res.placedCount} cut transition ALs (${s.frames}f 50/50) on V${res.targetTrack}${seqNote}!`
+      : `Placed 50/50 cut transition (${res.frames}f) on V${res.targetTrack}${seqNote}!`;
   } else if (mode === "per_clip") {
     msg = res.placedCount > 1
-      ? `Added ${res.placedCount} separate Adjustment Layers (1 per clip) on V${res.targetTrack}!`
-      : `Fitted Adjustment Layer over clip on V${res.targetTrack}!`;
+      ? `Added ${res.placedCount} separate Adjustment Layers (1 per clip) on V${res.targetTrack}${seqNote}!`
+      : `Fitted Adjustment Layer over clip on V${res.targetTrack}${seqNote}!`;
   } else {
     msg = res.selectedCount > 1
-      ? `Spanned ${res.selectedCount} selected clips with 1 Adjustment Layer on V${res.targetTrack}!`
-      : `Fitted Adjustment Layer on V${res.targetTrack}!`;
+      ? `Spanned ${res.selectedCount} selected clips with 1 Adjustment Layer on V${res.targetTrack}${seqNote}!`
+      : `Fitted Adjustment Layer on V${res.targetTrack}${seqNote}!`;
   }
   setStatus(msg, "ready");
 }
@@ -193,7 +203,7 @@ async function doEffect(mode) {
     effectName: s.activeFx,
     onSequenceName: onAdjLayerSequenceName
   });
-  setStatus(`Applied [${s.activeFx}] to ${res.placedCount} AL(s) on V${res.targetTrack}!`, "ready");
+  setStatus(`Applied [${s.activeFx}] to ${res.placedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
 }
 
 async function doCut() {
@@ -245,6 +255,13 @@ async function handleProbe(name) {
     const report = await capability.probeMarksAndTiming(ppro);
     console.log("CutDeck capability probe", JSON.stringify(report, null, 2));
     setStatus(capability.formatReport(report), "ready");
+    return;
+  }
+  if (name === "motion") {
+    setStatus("Reading the Adjustment Layer's live Motion component on this sequence…", "busy");
+    const report = await capability.probeAdjustmentLayerMotion(ppro);
+    console.log("CutDeck AL motion probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatMotionReport(report), "ready");
     return;
   }
   if (name === "socket") {
