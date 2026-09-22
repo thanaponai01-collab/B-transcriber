@@ -201,6 +201,24 @@
       <div id="align-sequence">No sequence open</div>
     </div>
 
+    <!-- Phase 1: read-only display of the selected clip's Position/Scale/Rotation/Anchor
+         Point, kept live by a background poll (see main.js's pollAlignTransform) and refreshed
+         immediately by clicking the sequence card above. -->
+    <div class="control-group">
+      <div id="align-transform-clip" class="control-label">No sequence open</div>
+      <div id="align-transform-reason" class="setting-subtext" hidden>Select a clip on the timeline.</div>
+      <div id="align-transform-fields" class="transform-fields" hidden>
+        <div class="transform-field-label">Position</div>
+        <div id="align-position" class="transform-field-value">—</div>
+        <div class="transform-field-label">Scale</div>
+        <div id="align-scale" class="transform-field-value">—</div>
+        <div class="transform-field-label">Rotation</div>
+        <div id="align-rotation" class="transform-field-value">—</div>
+        <div class="transform-field-label">Anchor Point</div>
+        <div id="align-anchor" class="transform-field-value">—</div>
+      </div>
+    </div>
+
     <div class="section-divider">
       <div class="section-line"></div>
       <span class="section-tag">Phase 0</span>

@@ -335,7 +335,7 @@ has been run on at least the first two.** This is the same discipline `timelineR
 | --- | --- | --- |
 | **0** | ✅ **SHIPPED AND RUN** `probeTransformParams` + `formatTransformReport`, wired to the ⋮ menu and to the transform panel's own button. Run live on 2 clip shapes 2026-09-22 — see Part 1a | — |
 | **0a** | ✅ **SHIPPED** second entrypoint `cutdeck.align.panel`, `#view-transform` container, `core/alignPanel.js` seam, guarded `entrypoints.setup()` | — (was independent of 0; both gate questions are now answered above — no per-entrypoint `main` exists, and one shared document makes `localStorage` sharing moot) |
-| **1** | ⬅ **NEXT** Read-only display of the selected clip's position/scale/rotation/anchor, live | **Unblocked.** Param index map and the normalized-coordinate space are proven (Part 1a) on 2 of the plan's 5 target shapes (matched-source video, repositioned/scaled graphic). AL and non-square-pixel shapes are still untested — probe them opportunistically, don't block Phase 1 on scheduling that separately |
+| **1** | ✅ **BUILT, NOT YET RUN LIVE (2026-09-22).** `transform/params.js` (host discovery: finds the Motion component by matchName, reads Position/Scale/Rotation/Anchor Point by the Part 1a index map, reports `isTimeVarying` per field) + `transform/geometry.js` (pure normalized→pixel conversion) + `timeline/componentAccess.js` (lifted selection lookup — the `getIsSelected()` fix below — and the `{value:{value:X}}` unwrap). `core/alignPanel.js` renders the four fields (or "unavailable"/"Animated (keyframed)"); `main.js` reads on mount, on "Click to refresh", and on a 600ms silent poll for the "live" requirement. 50 new node:test cases (component access, params/geometry, panel rendering, main.js wiring); no Premiere run yet — that verification (digit-for-digit against Effect Controls, on a matched-source clip, a mismatched-source clip and an Adjustment Layer) is still open. | **Unblocked for the build.** Live verification still needed on an Adjustment Layer and a non-square-pixel clip (never probed at all) before this phase is called done, not just built. |
 | **2** | Numeric edit of those four, one clip at a time, with undo | Research-doc gate 2 — write a point, read it back, confirm in Effect Controls *and* Program Monitor, undo |
 | **3** | Nine-point anchor picker, preserve-position off | Phase 2. `P_new = P_old + R·S·(A_new − A_old)` is geometry reasoning, **not** an Adobe formula — it is a hypothesis Phase 3 tests, and it may be wrong if Position and Anchor use different spaces |
 | **4** | Preserve-position on; batch across a multi-clip selection | Gate 4 — nine targets × {100%, nonuniform scale} × {0°, 90°, arbitrary} |
@@ -366,11 +366,13 @@ selection updates them; a clip with no readable Transform shows "unavailable" ra
   (`", Straight Alpha"` on an image) that any parser must tolerate.
 - **Two panels, one settings store.** Unverified whether `localStorage` is shared across
   entrypoints in one plugin. Gate 0a answers it; until then the new panel keeps its own key.
-- **Selection reliability.** `seq.getSelection()` is already proven unreliable on this build
-  (`adjustmentLayer.js`, `effects.js`). The new panel must reuse the existing fallback path, not
-  write a third one — and that fallback has a bug, now confirmed live (Part 1a): it tries
-  `.isSelected`, which is `undefined` on every item on this build; the real getter is
-  `getIsSelected()`. Fix before Phase 1 reuses that fallback.
+- **Selection reliability — FIXED 2026-09-22.** `seq.getSelection()` is already proven
+  unreliable on this build (`adjustmentLayer.js`, `effects.js`). The fallback both `effects.js`
+  and the new panel share had a bug, confirmed live (Part 1a): it tried `.isSelected`, which is
+  `undefined` on every item on this build, and never `getIsSelected()`, the real getter. Fixed
+  in the lift to `timeline/componentAccess.js`'s `isTrackItemSelected` (tries `getIsSelected()`
+  first now) — `effects.js` picks up the fix automatically since it now calls through the same
+  shared function instead of its own copy. Covered by `tests/cutdeck_component_access.test.cjs`.
 
 ---
 

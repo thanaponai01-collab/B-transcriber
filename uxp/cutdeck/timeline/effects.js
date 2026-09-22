@@ -20,87 +20,19 @@
 // sample-panels/premiere-api/src/effects.ts (the transaction/lockedAccess shape below is
 // lifted directly from that sample, same as every other mutation in this plugin).
 
-// Every plain video clip and Adjustment Layer carries these fixed effects in Premiere's own
-// Effect Controls panel — never something a user added, so Capture must never mistake one for
-// a real effect to replay. Matched by display name because this build's real matchNames were
-// not confirmed at the time this was written (Adobe's own sample only shows a NEW effect
-// landing at chain index 2 on a plain clip, which implies but does not document two fixed
-// entries before it). Run the "Check Effect Chain" probe (capabilityProbe.js) against a plain,
-// effect-free Adjustment Layer to get the real matchNames for this build, then prefer matching
-// on matchName here instead — it's stable across UI language, display name isn't guaranteed to
-// be.
-const FIXED_EFFECT_DISPLAY_NAMES = new Set(["motion", "opacity", "time remapping"]);
-
-// Reused, not re-guessed: adjustmentLayer.js already proved seq.getSelection() alone is
-// unreliable on this Premiere build (see its getSelectedTimelineClips) and built a
-// never-throws getTrackItems lookup to work around it.
-const { getTrackClipItems } = require("./adjustmentLayer.js");
-
-function isFixedComponent(displayName) {
-  return FIXED_EFFECT_DISPLAY_NAMES.has(String(displayName || "").trim().toLowerCase());
-}
-
-async function isTrackItemSelected(it) {
-  if (typeof it.isSelected === "function") {
-    try { return await it.isSelected(); } catch (_) { return false; }
-  }
-  if (it.isSelected !== undefined) return !!it.isSelected;
-  if (it.selected !== undefined) return !!it.selected;
-  return false;
-}
-
-// Every track item selected on the timeline right now, unfiltered — both Capture and the
-// Apply Effect job read whatever's actually selected (an Adjustment Layer or a clip), so
-// unlike adjustmentLayer.js's getSelectedTimelineClips this must NOT exclude Adjustment
-// Layers, and unlike that function this is not restricted to video tracks either.
-async function getSelectedTrackItems(seq) {
-  if (!seq) return [];
-  let rawItems = [];
-  try {
-    if (typeof seq.getSelection === "function") {
-      const sel = await seq.getSelection();
-      if (sel) {
-        if (typeof sel.getTrackItems === "function") {
-          const items = await sel.getTrackItems();
-          if (items && items.length > 0) rawItems = items;
-        } else if (Array.isArray(sel)) {
-          rawItems = sel;
-        } else if (Array.isArray(sel.items)) {
-          rawItems = sel.items;
-        }
-      }
-    }
-  } catch (_) {}
-
-  if (rawItems.length > 0) return rawItems;
-
-  // seq.getSelection() has already proven unreliable on this build once before (see
-  // adjustmentLayer.js's getSelectedTimelineClips, which needed the exact same fallback) — walk
-  // every video AND audio track's own items and ask each one directly whether it's selected.
-  const found = [];
-  try {
-    const videoCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
-    for (let v = 0; v < videoCount; v++) {
-      const track = await seq.getVideoTrack(v);
-      const items = await getTrackClipItems(track);
-      for (const it of items) if (await isTrackItemSelected(it)) found.push(it);
-    }
-  } catch (_) {}
-  try {
-    const audioCount = typeof seq.getAudioTrackCount === "function" ? await seq.getAudioTrackCount() : 0;
-    for (let a = 0; a < audioCount; a++) {
-      const track = await seq.getAudioTrack(a);
-      const items = await getTrackClipItems(track);
-      for (const it of items) if (await isTrackItemSelected(it)) found.push(it);
-    }
-  } catch (_) {}
-  return found;
-}
-
-async function getFirstSelectedTrackItem(seq) {
-  const items = await getSelectedTrackItems(seq);
-  return items.length > 0 ? items[0] : null;
-}
+// Selection lookup, the fixed-effect skip list, the {value:{value:X}} unwrap and the
+// transaction helper all live in timeline/componentAccess.js — lifted out of this file once
+// transform/params.js became a second consumer (see that module's header and
+// docs/research/cutdeck-transform-panel-plan.md Part 2). Re-exported below for callers that
+// already import them from here.
+const {
+  FIXED_EFFECT_DISPLAY_NAMES,
+  isFixedComponent,
+  getSelectedTrackItems,
+  getFirstSelectedTrackItem,
+  unwrapKeyframeValue,
+  runInTransaction,
+} = require("./componentAccess.js");
 
 // Reads trackItem's real, currently-applied effect stack (skipping Premiere's own fixed
 // Motion/Opacity/Time Remapping) into a plain, JSON-serializable preset object. Static values
@@ -139,8 +71,7 @@ async function captureEffectFromTrackItem(ppro, trackItem) {
       if (typeof param.getStartValue === "function") {
         try {
           const kf = await param.getStartValue();
-          const raw = kf ? kf.value : null;
-          value = (raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw) ? raw.value : raw;
+          value = unwrapKeyframeValue(kf);
         } catch (_) { value = null; }
       }
       params.push({ index: p, displayName: param.displayName || `param[${p}]`, value });
@@ -184,26 +115,12 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
     created.push({ component: newComponent, spec: comp });
   }
 
-  function runInTransaction(label, fn) {
-    let ok = false;
-    let thrown = null;
-    const run = () => {
-      try {
-        ok = project.executeTransaction(fn, label);
-      } catch (e) {
-        thrown = e;
-      }
-    };
-    if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
-    if (!ok) throw thrown || new Error(`Could not complete "${label}".`);
-  }
-
   // Phase 1: insert every component. Confirmed at runtime: the object VideoFilterFactory.
   // createComponent() returns is a VideoFilterComponent, not the chain's Component class — it
   // has no getParam ("component.getParam is not a function"), so its params cannot be touched
   // before insertion. The insert must commit in its own transaction before a real,
   // param-capable Component exists to fetch back from the chain.
-  runInTransaction("CutDeck: Apply Captured Preset (insert)", (compound) => {
+  runInTransaction(project, "CutDeck: Apply Captured Preset (insert)", (compound) => {
     let nextIndex = startIndex;
     for (const { component, spec } of created) {
       const insertAction = chain.createInsertComponentAction(component, nextIndex);
@@ -216,7 +133,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   // Phase 2: re-fetch each just-inserted component from the chain as a real Component (which
   // does have getParam) and set its captured values.
   const liveChain = await trackItem.getComponentChain();
-  runInTransaction("CutDeck: Apply Captured Preset (values)", (compound) => {
+  runInTransaction(project, "CutDeck: Apply Captured Preset (values)", (compound) => {
     let index = startIndex;
     for (const { spec } of created) {
       const liveComponent = liveChain.getComponentAtIndex(index);

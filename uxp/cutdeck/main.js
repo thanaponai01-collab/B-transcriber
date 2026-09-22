@@ -9,6 +9,9 @@ const panel = require("./core/panel.js");
 const alignPanel = require("./core/alignPanel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
 const effects = require("./timeline/effects.js");
+const componentAccess = require("./timeline/componentAccess.js");
+const transformParams = require("./transform/params.js");
+const transformGeometry = require("./transform/geometry.js");
 
 const KEY = "cutdeck.xml.lastJob";
 const SETTINGS_KEY = "cutdeck.adj.settings";
@@ -429,7 +432,7 @@ panel.bind({
 // surfaces with separate status lines, and sharing one would mean every Cut & Sync status
 // message also overwrote whatever the transform panel was showing. Keeping them apart also
 // means this whole block can be reverted without touching a single existing render call.
-const alignState = { sequence: null, busy: false, status: { text: "Ready", level: "ready" } };
+const alignState = { sequence: null, transform: null, busy: false, status: { text: "Ready", level: "ready" } };
 
 function renderAlign() {
   alignPanel.render(alignState);
@@ -437,6 +440,65 @@ function renderAlign() {
 function setAlignStatus(text, level = "ready") {
   alignState.status = { text, level };
   renderAlign();
+}
+
+// --- Phase 1: read-only Position/Scale/Rotation/Anchor Point display -----------------------
+//
+// Turns transform/params.js's raw per-field reads into the shape core/alignPanel.js renders.
+// Position and Anchor Point are normalized to the sequence frame (transform-panel-plan.md
+// Part 1a) so they need transform/geometry.js's pixel conversion; Scale and Rotation are
+// already the numbers Effect Controls displays. An animated param (isTimeVarying === true) is
+// reported as `animated: true` with no value — the plan requires it be skipped with a visible
+// explanation, never silently shown as a possibly-wrong static number.
+function describeField(entry, isPoint, frameSize) {
+  if (!entry) return { known: false };
+  if (entry.isTimeVarying) return { known: true, animated: true };
+  if (isPoint) {
+    const px = frameSize
+      ? transformGeometry.normalizedToFramePixels(entry.value, frameSize.width, frameSize.height)
+      : null;
+    return px ? { known: true, animated: false, x: px.x, y: px.y } : { known: false };
+  }
+  return typeof entry.value === "number" ? { known: true, animated: false, value: entry.value } : { known: false };
+}
+
+// Reads the currently selected track item's Motion component and returns the display-ready
+// shape core/alignPanel.js's renderTransform expects. `seq` may be null (no sequence open).
+// Never throws — every failure path (no sequence, nothing selected, no readable Transform)
+// returns `{ available: false, reason }` instead, per Phase 1's Definition of Done: a clip
+// with no readable Transform shows "unavailable", not zeros.
+async function readAlignTransform(seq) {
+  if (!seq) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
+
+  const items = await componentAccess.getSelectedTrackItems(seq);
+  if (items.length === 0) {
+    return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
+  }
+  const item = items[0];
+  const clipName = (item.name || "(unnamed)") + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
+
+  const transform = await transformParams.readTransform(item);
+  if (!transform) {
+    return { clipName, available: false, reason: "This item has no readable Transform.", fields: null };
+  }
+
+  const frameSize = await transformParams.readSequenceFrameSize(seq);
+  const fields = {
+    position: describeField(transform.position, true, frameSize),
+    scale: describeField(transform.scale, false, frameSize),
+    rotation: describeField(transform.rotation, false, frameSize),
+    anchor: describeField(transform.anchorPoint, true, frameSize),
+  };
+  return { clipName, available: true, reason: null, fields };
+}
+
+async function readAlignState() {
+  const project = await ppro.Project.getActiveProject();
+  const seq = project ? await project.getActiveSequence() : null;
+  return {
+    sequence: seq ? { name: seq.name || "(unnamed)" } : null,
+    transform: await readAlignTransform(seq),
+  };
 }
 
 // Same act() shape as the main panel's: one job at a time, errors land in the status line.
@@ -458,10 +520,33 @@ async function actAlign(fn) {
 }
 
 async function refreshAlignSequence() {
-  const project = await ppro.Project.getActiveProject();
-  const seq = project ? await project.getActiveSequence() : null;
-  alignState.sequence = seq ? { name: seq.name || "(unnamed)" } : null;
+  const next = await readAlignState();
+  alignState.sequence = next.sequence;
+  alignState.transform = next.transform;
   renderAlign();
+}
+
+// Keeps the transform display "live" (phase table: "Read-only display... live") the way Effect
+// Controls itself does, without a selection-changed event to hook — Adobe's UXP declarations
+// expose none for Premiere. Unlike refreshAlignSequence (wrapped in actAlign for the explicit
+// "Click to refresh" action), this never touches alignState.busy/status: a poll tick must not
+// flicker the busy spinner or disable controls every 600ms, and a poll error (e.g. no project
+// open, which is normal steady state) must not spam the status line — it's logged and skipped.
+let alignPollTimer = null;
+async function pollAlignTransform() {
+  if (alignState.busy) return;
+  try {
+    const next = await readAlignState();
+    alignState.sequence = next.sequence;
+    alignState.transform = next.transform;
+    renderAlign();
+  } catch (error) {
+    console.error("CutDeck: transform poll failed", error);
+  }
+}
+function startAlignPolling() {
+  if (alignPollTimer) return;
+  alignPollTimer = setInterval(pollAlignTransform, 600);
 }
 
 alignPanel.bind({
@@ -501,6 +586,7 @@ try {
           refreshAlignSequence().catch((error) => {
             setAlignStatus(error.message || String(error), "error");
           });
+          startAlignPolling();
         },
       },
     },

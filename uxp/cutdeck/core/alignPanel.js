@@ -37,6 +37,24 @@
     if (el && el.hidden !== hidden) el.hidden = hidden;
   }
 
+  // --- transform field formatting -----------------------------------------------------------
+  // One decimal place matches the precision Part 1a's live probe confirmed against Effect
+  // Controls' own readout (e.g. "-510.8, 44.9") — more would imply false precision, fewer would
+  // stop matching it digit for digit.
+  function formatNum(n) {
+    return (Math.round(n * 10) / 10).toString();
+  }
+  function formatPoint(field) {
+    if (!field || !field.known) return "—";
+    if (field.animated) return "Animated (keyframed)";
+    return `${formatNum(field.x)}, ${formatNum(field.y)} px`;
+  }
+  function formatScalar(field, unit) {
+    if (!field || !field.known) return "—";
+    if (field.animated) return "Animated (keyframed)";
+    return `${formatNum(field.value)}${unit}`;
+  }
+
   // --- mount: move this panel's container into the root Premiere made for it ---------------
 
   function container() {
@@ -87,10 +105,47 @@
     });
   }
 
+  // Phase 1: read-only display of the selected clip's Position/Scale/Rotation/Anchor Point
+  // (docs/research/cutdeck-transform-panel-plan.md). `transform` is null when there is no
+  // sequence to read; otherwise `{ clipName, available, reason, fields }` — `available: false`
+  // (no readable Motion component, or nothing selected) shows `reason` instead of the field
+  // grid, per the plan's Definition of Done: "a clip with no readable Transform shows
+  // 'unavailable' rather than zeros."
+  function renderTransform(transform) {
+    const clipEl = $("align-transform-clip");
+    const reasonEl = $("align-transform-reason");
+    const fieldsEl = $("align-transform-fields");
+
+    if (!transform) {
+      setText(clipEl, "No sequence open");
+      setHidden(reasonEl, true);
+      setHidden(fieldsEl, true);
+      return;
+    }
+
+    setText(clipEl, transform.clipName || "No clip selected");
+
+    if (!transform.available) {
+      setText(reasonEl, transform.reason || "Unavailable.");
+      setHidden(reasonEl, false);
+      setHidden(fieldsEl, true);
+      return;
+    }
+
+    setHidden(reasonEl, true);
+    setHidden(fieldsEl, false);
+    const fields = transform.fields || {};
+    setText($("align-position"), formatPoint(fields.position));
+    setText($("align-scale"), formatScalar(fields.scale, "%"));
+    setText($("align-rotation"), formatScalar(fields.rotation, "°"));
+    setText($("align-anchor"), formatPoint(fields.anchor));
+  }
+
   function render(state) {
     if (!state) return;
     current = state;
     setText($("align-sequence"), state.sequence ? state.sequence.name : "No sequence open");
+    renderTransform(state.transform);
     renderStatus(state.status);
     renderBusy(state.busy);
   }

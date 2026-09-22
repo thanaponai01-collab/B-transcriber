@@ -874,6 +874,33 @@
     opacity: 0.35;
     pointer-events: none;
   }
+
+  /* Transform & Align panel — Phase 1 read-only field grid */
+  .transform-fields {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    row-gap: 5px;
+    margin-top: 7px;
+    padding: 7px 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-1);
+    border-radius: 5px;
+  }
+  .transform-field-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    align-self: center;
+  }
+  .transform-field-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--fg-0);
+    text-align: right;
+  }
   .sr-only {
     position: absolute;
     width: 1px;

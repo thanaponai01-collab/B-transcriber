@@ -139,6 +139,13 @@ function makeStub() {
   el("align-sequence");
   el("align-status");
   el("align-status-icon");
+  el("align-transform-clip");
+  el("align-transform-reason");
+  el("align-transform-fields");
+  el("align-position");
+  el("align-scale");
+  el("align-rotation");
+  el("align-anchor");
 
   const body = el("__body__");
   body.appendChild(container);
@@ -247,6 +254,120 @@ test("render writes the sequence name, the status, and disables controls while b
   delete global.document;
 });
 
+// --- Phase 1: renderTransform (docs/research/cutdeck-transform-panel-plan.md) --------------
+
+test("renderTransform shows 'No sequence open' and hides both the reason and the field grid when transform is null", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({ sequence: null, transform: null, busy: false, status: { text: "Ready", level: "ready" } });
+  assert.equal(nodes.get("align-transform-clip").textContent, "No sequence open");
+  assert.equal(nodes.get("align-transform-reason").hidden, true);
+  assert.equal(nodes.get("align-transform-fields").hidden, true);
+  delete global.document;
+});
+
+test("renderTransform shows the reason and hides the field grid when the clip has no readable Transform", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({
+    sequence: { name: "CFD 94" },
+    transform: { clipName: "AudioOnly.wav", available: false, reason: "This item has no readable Transform.", fields: null },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(nodes.get("align-transform-clip").textContent, "AudioOnly.wav");
+  assert.equal(nodes.get("align-transform-reason").textContent, "This item has no readable Transform.");
+  assert.equal(nodes.get("align-transform-reason").hidden, false);
+  assert.equal(nodes.get("align-transform-fields").hidden, true);
+  delete global.document;
+});
+
+test("renderTransform shows 'Select a clip on the timeline.' when nothing is selected", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({
+    sequence: { name: "CFD 94" },
+    transform: { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(nodes.get("align-transform-clip").textContent, "No clip selected");
+  assert.equal(nodes.get("align-transform-reason").textContent, "Select a clip on the timeline.");
+  delete global.document;
+});
+
+test("renderTransform formats Position/Scale/Rotation/Anchor to one decimal, matching Effect Controls", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({
+    sequence: { name: "CFD 94" },
+    transform: {
+      clipName: "Lowerthird 2026.png",
+      available: true,
+      reason: null,
+      fields: {
+        position: { known: true, animated: false, x: -510.77, y: 44.92 },
+        scale: { known: true, animated: false, value: 162 },
+        rotation: { known: true, animated: false, value: 0 },
+        anchor: { known: true, animated: false, x: 1.953, y: 60.54 },
+      },
+    },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(nodes.get("align-transform-clip").textContent, "Lowerthird 2026.png");
+  assert.equal(nodes.get("align-transform-fields").hidden, false);
+  assert.equal(nodes.get("align-transform-reason").hidden, true);
+  assert.equal(nodes.get("align-position").textContent, "-510.8, 44.9 px");
+  assert.equal(nodes.get("align-scale").textContent, "162%");
+  assert.equal(nodes.get("align-rotation").textContent, "0°");
+  assert.equal(nodes.get("align-anchor").textContent, "2, 60.5 px");
+  delete global.document;
+});
+
+test("renderTransform shows 'Animated (keyframed)' for a time-varying field instead of a possibly-wrong static number", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({
+    sequence: { name: "CFD 94" },
+    transform: {
+      clipName: "clip A",
+      available: true,
+      reason: null,
+      fields: {
+        position: { known: true, animated: true },
+        scale: { known: true, animated: false, value: 100 },
+        rotation: { known: true, animated: false, value: 0 },
+        anchor: { known: true, animated: false, x: 960, y: 540 },
+      },
+    },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(nodes.get("align-position").textContent, "Animated (keyframed)");
+  assert.equal(nodes.get("align-scale").textContent, "100%");
+  delete global.document;
+});
+
+test("renderTransform shows '—' for a field that could not be read at all", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  alignPanel.render({
+    sequence: { name: "CFD 94" },
+    transform: {
+      clipName: "clip A",
+      available: true,
+      reason: null,
+      fields: {
+        position: { known: false },
+        scale: { known: true, animated: false, value: 100 },
+        rotation: { known: false },
+        anchor: { known: true, animated: false, x: 960, y: 540 },
+      },
+    },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(nodes.get("align-position").textContent, "—");
+  assert.equal(nodes.get("align-rotation").textContent, "—");
+  delete global.document;
+});
+
 test("bind raises the transform intent when the probe button is clicked", () => {
   const { probe } = makeStub();
   const alignPanel = loadAlignPanel();
@@ -278,6 +399,34 @@ test("entrypoints.setup is guarded, and runs after the main panel is already bou
 
   const guarded = /try\s*\{[\s\S]*entrypoints\.setup\([\s\S]*\}\s*catch/.test(mainJs);
   assert.ok(guarded, "entrypoints.setup() must be wrapped in try/catch");
+});
+
+// --- Phase 1 wiring: the read-only transform display is reachable from the real entry point -
+
+test("main.js requires the transform host-discovery and geometry modules", () => {
+  assert.match(mainJs, /require\("\.\/timeline\/componentAccess\.js"\)/);
+  assert.match(mainJs, /require\("\.\/transform\/params\.js"\)/);
+  assert.match(mainJs, /require\("\.\/transform\/geometry\.js"\)/);
+});
+
+test("the transform panel's show hook starts the live poll, after mounting and the first read", () => {
+  const showAt = mainJs.indexOf('"cutdeck.align.panel"');
+  assert.ok(showAt !== -1, "cutdeck.align.panel entrypoint is not registered");
+  const showBlock = mainJs.slice(showAt, mainJs.indexOf("},", showAt));
+  assert.match(showBlock, /alignPanel\.mount\(rootNode\)/);
+  assert.match(showBlock, /refreshAlignSequence\(\)/);
+  assert.match(showBlock, /startAlignPolling\(\)/);
+  const mountAt = showBlock.indexOf("alignPanel.mount");
+  const pollAt = showBlock.indexOf("startAlignPolling()");
+  assert.ok(mountAt < pollAt, "polling must start after the container is mounted");
+});
+
+test("the poll never touches alignState.busy/status, so it cannot flicker the spinner or disable controls", () => {
+  const pollAt = mainJs.indexOf("async function pollAlignTransform");
+  assert.ok(pollAt !== -1, "pollAlignTransform is not defined");
+  const pollBody = mainJs.slice(pollAt, mainJs.indexOf("\nfunction startAlignPolling", pollAt));
+  assert.equal(/alignState\.busy\s*=/.test(pollBody), false, "poll must not set busy");
+  assert.equal(/alignState\.status\s*=/.test(pollBody), false, "poll must not set status");
 });
 
 test("no hide or destroy hook is registered", () => {
