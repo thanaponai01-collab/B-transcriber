@@ -790,6 +790,10 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
 
   let placedCount = 0;
   const targetTracksSet = new Set();
+  // Every actually-placed track item, in placement order — lets a caller (see main.js's
+  // doEffect) apply a real Premiere effect to each one after placement, instead of only
+  // knowing a count happened.
+  const placedItems = [];
 
   // Pick one track for the whole batch, clear across every clip's span, not
   // per-clip. This project can have real footage on tracks above V1 partway
@@ -1079,6 +1083,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
                 }
               } catch (_) {}
               verified = true;
+              placedItems.push(it);
               break;
             }
           }
@@ -1108,7 +1113,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     cutCount: mode === "transition" ? placedCount : 0,
     selectedCount: clipsWithTimes.length,
     sequenceWidth,
-    sequenceHeight
+    sequenceHeight,
+    placedItems
   };
 }
 
@@ -1118,6 +1124,9 @@ module.exports = {
   getOrCreateAdjBin,
   pickBestCandidate,
   detectResolutionFromMetadata,
+  // Exported for timeline/effects.js: the robust (never-throws) getTrackItems lookup, reused
+  // rather than re-guessed — see that module's getSelectedTrackItems.
+  getTrackClipItems,
   CUTDECK_BIN_NAME,
   ADJ_BIN_NAME,
 };

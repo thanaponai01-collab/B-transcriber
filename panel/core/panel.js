@@ -17,6 +17,10 @@
   }
 
   let current = null;
+  // Up to this many captured presets get their own quick-effect button below the Adjustment
+  // Layer card, laid out as a 3-column grid. Bump this if more room is wanted later — nothing
+  // else assumes exactly 9.
+  const MAX_QUICK_PRESETS = 9;
 
   function setText(el, value) {
     if (el && el.textContent !== value) el.textContent = value;
@@ -109,15 +113,56 @@
     setValue($("setting-bin"), settings.bin);
     setValue($("setting-color"), settings.color);
     setChecked($("setting-clamp"), !!settings.clamp);
-    setValue($("setting-active-fx"), settings.activeFx);
 
     document.querySelectorAll(".pill-mini").forEach((p) => {
       const f = parseInt(p.getAttribute("data-frames"), 10);
       setActive(p, f === settings.frames);
     });
+  }
 
-    setText($("badge-transition-text"), `${settings.frames}f (50/50)`);
-    setText($("badge-active-fx-text"), settings.activeFx);
+  // One quick-effect button per captured preset (capped at MAX_QUICK_PRESETS), below the
+  // Adjustment Layer card — same dynamic-content diff discipline as renderAudioOptions above,
+  // rebuilt only when the underlying preset list actually changed. Always renders exactly
+  // MAX_QUICK_PRESETS tiles (a full 3x3 grid), not just as many as are captured — an unfilled
+  // slot is its own empty-tile button (click opens Settings to Capture one).
+  function renderPresetButtons(customPresets) {
+    const container = $("fx-preset-buttons");
+    if (!container) return;
+    const presets = customPresets || [];
+    const desired = [];
+    for (let i = 0; i < MAX_QUICK_PRESETS; i++) {
+      desired.push(presets[i] ? { id: presets[i].id, name: presets[i].name } : null);
+    }
+
+    const existing = Array.prototype.slice.call(container.children || []);
+    const same =
+      existing.length === desired.length &&
+      existing.every((el, i) => {
+        const d = desired[i];
+        return d
+          ? el.getAttribute("data-preset-id") === d.id && el.textContent === d.name
+          : el.classList.contains("fx-preset-empty-slot");
+      });
+    if (same) return;
+
+    container.innerHTML = "";
+    desired.forEach((d) => {
+      const btn = document.createElement("div");
+      btn.setAttribute("role", "button");
+      if (d) {
+        btn.className = "fx-preset-btn";
+        btn.setAttribute("data-act", "fx-preset-btn");
+        btn.setAttribute("data-preset-id", d.id);
+        btn.title = `${d.name} (Click: Span | Ctrl: Each Clip | Shift: Every Cut)`;
+        btn.textContent = d.name;
+      } else {
+        btn.className = "fx-preset-btn fx-preset-empty-slot";
+        btn.setAttribute("data-act", "fx-preset-empty-slot");
+        btn.title = "Capture a preset in Settings to fill this slot";
+        btn.textContent = "+";
+      }
+      container.appendChild(btn);
+    });
   }
 
   function renderJobBanner(job) {
@@ -150,6 +195,7 @@
     renderTabs(state.tab);
     renderCutMode(state.cutMode);
     renderSettings(state.settings);
+    renderPresetButtons(state.customPresets);
     renderJobBanner(state.job);
     renderBusy(state.busy);
   }
@@ -245,7 +291,7 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe", "motionprobe"].forEach((id) => {
+    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe"].forEach((id) => {
       const el = $(id);
       if (el && overflowMenu) {
         el.addEventListener("click", () => overflowMenu.classList.remove("open"));
@@ -264,10 +310,6 @@
 
   function currentFrames() {
     return current && current.settings ? current.settings.frames : 16;
-  }
-  function currentFxList() {
-    const settings = current && current.settings;
-    return settings ? { list: settings.fxList || [], activeFx: settings.activeFx } : { list: [], activeFx: null };
   }
 
   function bindFrameStepper(intents) {
@@ -309,39 +351,42 @@
     if (clampInput) {
       clampInput.addEventListener("change", (e) => intents.onSettingChange({ clamp: e.target.checked }));
     }
-    const fxInput = $("setting-active-fx");
-    if (fxInput) {
-      fxInput.addEventListener("change", (e) => intents.onSettingChange({ activeFx: e.target.value }));
-    }
+  }
+
+  // Event delegation on the quick-effect button row: reads which preset and which modifier
+  // keys, same gesture set as bindAdjustmentButtons' btn-adj below (Click: span | Ctrl: per
+  // clip | Shift: every cut) — each click both places the AL that way AND applies that
+  // preset's real effect to it (see main.js's doApplyPreset).
+  function bindPresetButtons(intents) {
+    const container = $("fx-preset-buttons");
+    if (!container) return;
+    container.addEventListener("click", (e) => {
+      const btn = e.target.closest ? e.target.closest(".fx-preset-btn") : null;
+      if (!btn) return;
+      const presetId = btn.getAttribute("data-preset-id");
+      if (!presetId) {
+        // Empty slot — jump straight to where a preset actually gets captured, same
+        // presentational exception as the overflow menu / settings modal noted up top.
+        const settingsModal = $("settings-modal");
+        if (settingsModal) settingsModal.classList.add("open");
+        const nameInput = $("fx-capture-name");
+        if (nameInput) nameInput.focus();
+        return;
+      }
+      let mode = "span";
+      if (e.shiftKey) mode = "transition";
+      else if (e.ctrlKey || e.metaKey) mode = "per_clip";
+      intents.onApplyPreset(presetId, mode);
+    });
   }
 
   function bindCapturePreset(intents) {
     const btn = $("btn-capture-preset");
-    if (btn) btn.addEventListener("click", () => intents.onProbe("capture-preset"));
-  }
-
-  const FRAME_CYCLE = [8, 12, 16, 20, 24];
-
-  function bindBadges(intents) {
-    const badgeTrans = $("badge-transition");
-    if (badgeTrans) {
-      badgeTrans.addEventListener("click", () => {
-        const frames = currentFrames();
-        let idx = FRAME_CYCLE.indexOf(frames);
-        idx = (idx + 1) % FRAME_CYCLE.length;
-        const next = FRAME_CYCLE[idx];
-        intents.onSettingChange({ frames: next, statusText: `Transition duration set to ${next} frames (50/50)` });
-      });
-    }
-    const badgeFx = $("badge-active-fx");
-    if (badgeFx) {
-      badgeFx.addEventListener("click", () => {
-        const { list, activeFx } = currentFxList();
-        if (!list.length) return;
-        let idx = list.indexOf(activeFx);
-        idx = (idx + 1) % list.length;
-        const next = list[idx];
-        intents.onSettingChange({ activeFx: next, statusText: `Active preset switched to: ${next}` });
+    const nameInput = $("fx-capture-name");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const name = nameInput ? nameInput.value.trim() : "";
+        intents.onProbe("capture-preset", { name });
       });
     }
   }
@@ -356,22 +401,6 @@
         intents.onAdjust(mode);
       });
     }
-    const fxBtn = $("btn-fx");
-    if (fxBtn) {
-      fxBtn.addEventListener("click", (e) => {
-        if (e.shiftKey) {
-          const { list, activeFx } = currentFxList();
-          if (!list.length) return;
-          let idx = list.indexOf(activeFx);
-          idx = (idx + 1) % list.length;
-          const next = list[idx];
-          intents.onSettingChange({ activeFx: next, statusText: `Preset switched to: ${next}` });
-          return;
-        }
-        const mode = e.ctrlKey || e.metaKey ? "per_clip" : "span";
-        intents.onEffect(mode);
-      });
-    }
   }
 
   function bindProbes(intents) {
@@ -383,6 +412,8 @@
     if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
     const motion = $("motionprobe");
     if (motion) motion.addEventListener("click", () => intents.onProbe("motion"));
+    const effectChain = $("effectprobe");
+    if (effectChain) effectChain.addEventListener("click", () => intents.onProbe("effect"));
   }
 
   function bind(intents) {
@@ -395,8 +426,8 @@
     bindMiniPills(intents);
     bindFrameStepper(intents);
     bindSettingInputs(intents);
+    bindPresetButtons(intents);
     bindCapturePreset(intents);
-    bindBadges(intents);
     bindAdjustmentButtons(intents);
     bindProbes(intents);
   }

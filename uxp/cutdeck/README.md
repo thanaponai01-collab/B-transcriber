@@ -227,3 +227,41 @@ API references checked during implementation:
 - [TickTime](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/ticktime)
 - [UXP networking](https://developer.adobe.com/premiere-pro/uxp/resources/recipes/network/)
 - [Adobe sample manifest](https://github.com/AdobeDocs/uxp-premiere-pro-samples/blob/main/sample-panels/premiere-api/public/manifest.json)
+- [Component / ComponentParam](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/component) —
+  reading/setting real effect parameters
+- [VideoComponentChain](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videocomponentchain) /
+  [VideoFilterFactory](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/videofilterfactory) —
+  listing and applying real effects (`timeline/effects.js`)
+- [AdobeDocs sample: effects.ts](https://github.com/AdobeDocs/uxp-premiere-pro-samples/blob/main/sample-panels/premiere-api/src/effects.ts) —
+  the `executeTransaction`/`createInsertComponentAction` shape `effects.js` follows
+
+### Quick-effect preset buttons (Adj & FX page)
+
+Below the Adjustment Layer card, up to `MAX_QUICK_PRESETS` (currently 9, in
+`panel/core/panel.js`) captured presets each get their own button, laid out as a 3x3 grid of
+small buttons. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Layer card itself
+(span / per-clip / 50-50 cut transition) — clicking one both places the AL that way AND
+applies that preset's real captured effect to every AL it just placed, via
+`timeline/effects.js`'s `applyCapturedPreset`. One combined action, same as the Adjustment
+Layer card, just per-preset. The old quick frame-length cycle badge was removed — the
+Transition (50/50) frame length is still set in Settings (frame stepper / mini pills).
+
+**Capture** (Settings > Presets) is the only way to fill a slot: select a clip or Adjustment
+Layer that already has a real effect applied to it in Premiere, name it, click Capture — it
+reads the item's actual `VideoComponentChain` via `effects.js`'s `captureEffectFromTrackItem`
+and saves it to its own `localStorage` key (`cutdeck.fx.presets`), separate from
+`cutdeck.adj.settings` so a bad/oversized preset can't corrupt core settings.
+
+**v1 is static-value effects only — no keyframes/animation**: a captured Keyframe's
+`TickTime` convention (clip-relative vs. sequence-relative) isn't documented anywhere in
+Adobe's reference, so animated presets (the old Zoom In/Whip Pan/Camera Shake-style names)
+are a deliberate later step, gated on the **Check Effect Chain** probe (diagnostics drawer)
+the same way `timelineRange.js`'s `OUT_CONVENTION` was gated on Check Timing. Run that probe
+against a plain, effect-free Adjustment Layer first — it confirms this build's real
+fixed-effect matchNames (Motion/Opacity/Time Remapping), which `effects.js` currently guesses
+by display name.
+
+There is deliberately no built-in-effect browser any more (`VideoFilterFactory.getDisplayNames`
+listing every installed effect) — presets are captured-only. That code path was built, worked,
+and was removed once it was clear captured presets were the only source wanted; see git
+history on `timeline/effects.js` if a live effect browser is wanted back later.

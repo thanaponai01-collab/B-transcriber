@@ -438,43 +438,6 @@
     stroke: var(--fg-1);
   }
 
-  /* Quick Badges Bar */
-  .adj-status-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  .badge-btn {
-    flex: 1;
-    background: var(--bg-1);
-    border: 1px solid var(--line-1);
-    border-radius: 4px;
-    padding: 4px 6px;
-    font-size: 9.5px;
-    font-weight: 600;
-    color: var(--fg-1);
-    text-align: center;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
-    user-select: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .badge-btn:hover {
-    background: var(--bg-2);
-    border-color: var(--line-2);
-    color: var(--fg-white);
-  }
-  .badge-btn.fx-badge {
-    color: var(--fg-1);
-  }
-  .badge-btn.fx-badge:hover {
-    color: var(--fg-white);
-  }
-
   /* Settings Help Box */
   .setting-help-box {
     background: var(--bg-0);
@@ -761,6 +724,68 @@
   .fx-select-row {
     display: flex;
     gap: 4px;
+  }
+  .fx-capture-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .fx-capture-row .setting-input {
+    flex: 1;
+  }
+  /* Flexbox, not CSS Grid: two different Grid-based approaches here (aspect-ratio, then a
+     fixed grid-auto-rows height) both produced 0x0 tiles in this UXP build's embedded
+     browser, confirmed live via getBoundingClientRect(). Every other button row in this
+     panel (.action-cards-grid, .pills-grid) already uses flex and renders correctly, so
+     flex is the proven-working layout model here, not Grid. */
+  .fx-preset-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .fx-preset-btn {
+    flex: 0 0 calc((100% - 10px) / 3);
+    width: calc((100% - 10px) / 3);
+    height: 44px;
+    box-sizing: border-box;
+    background: var(--bg-2);
+    border: 1px solid var(--line-1);
+    border-radius: 4px;
+    padding: 4px;
+    color: var(--fg-1);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .fx-preset-btn:hover:not(.disabled) {
+    background: var(--bg-3);
+    border-color: var(--line-2);
+    color: var(--fg-white);
+  }
+  .fx-preset-btn:active:not(.disabled) {
+    background: var(--bg-4);
+  }
+  .fx-preset-btn.fx-preset-empty-slot {
+    background: transparent;
+    border: 1px dashed var(--line-1);
+    color: var(--fg-3);
+    font-size: 15px;
+    font-weight: 400;
+  }
+  .fx-preset-btn.fx-preset-empty-slot:hover:not(.disabled) {
+    background: var(--bg-1);
+    border-color: var(--line-2);
+    color: var(--fg-2);
   }
   .setting-divider {
     height: 1px;

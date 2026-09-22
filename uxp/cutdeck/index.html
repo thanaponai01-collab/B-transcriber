@@ -67,6 +67,13 @@
           </svg>
           <span>Check AL Scale</span>
         </div>
+        <div id="effectprobe" class="dropdown-item" role="button" data-act="effectprobe">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
+          </svg>
+          <span>Check Effect Chain</span>
+        </div>
         <div class="dropdown-divider"></div>
         <div id="menu-item-reload" class="dropdown-item" role="button" data-act="menu-item-reload">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -150,7 +157,7 @@
   <!-- PAGE 2: ADJUSTMENT LAYER & FX -->
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
-      <!-- Card 1: Adjustment Layer -->
+      <!-- Adjustment Layer -->
       <div id="btn-adj" class="action-card card-al" role="button" data-act="btn-adj" title="Adjustment Layer (Click: Span All | Ctrl: Each Clip | Shift: Every Cut)">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -158,24 +165,12 @@
           <polyline points="2 12 12 17 22 12"/>
         </svg>
       </div>
-
-      <!-- Card 2: Effect Preset -->
-      <div id="btn-fx" class="action-card card-fx" role="button" data-act="btn-fx" title="Effect Preset (Click: Apply Preset | Shift: Next Preset)">
-        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
-        </svg>
-      </div>
     </div>
 
-    <!-- Quick Badges Bar -->
-    <div class="adj-status-bar">
-      <div id="badge-transition" class="badge-btn" role="button" data-act="badge-transition" title="Click to cycle frame lengths">
-        ⚡ <span id="badge-transition-text"></span>
-      </div>
-      <div id="badge-active-fx" class="badge-btn fx-badge" role="button" data-act="badge-active-fx" title="Click to cycle next preset">
-        ✦ <span id="badge-active-fx-text"></span>
-      </div>
-    </div>
+    <!-- Quick-effect buttons: one per captured preset (Settings > Presets > Capture), up to 9
+         in a 3x3 grid. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Layer card
+         above — each one places the AL that way AND applies that preset's real effect to it. -->
+    <div id="fx-preset-buttons" class="fx-preset-grid"></div>
   </div>
 
   <!-- Status Bar -->
@@ -244,20 +239,11 @@
       </div>
 
       <div class="setting-row">
-        <label class="setting-label" for="setting-active-fx">Preset</label>
-        <div class="fx-select-row">
-          <select id="setting-active-fx" class="setting-select" data-act="setting-active-fx">
-            <option value="Zoom In" selected>Zoom In</option>
-            <option value="Zoom Out">Zoom Out</option>
-            <option value="Whip Pan L">Whip Pan Left</option>
-            <option value="Whip Pan R">Whip Pan Right</option>
-            <option value="Camera Shake">Camera Shake</option>
-            <option value="Motion Blur">Motion Blur</option>
-            <option value="Film Glow">Film Glow</option>
-            <option value="Letterbox">Letterbox</option>
-            <option value="Custom FX">Custom FX</option>
-          </select>
-          <div id="btn-capture-preset" class="btn-secondary" role="button" data-act="btn-capture-preset" title="Capture selected AL">
+        <label class="setting-label">Presets</label>
+        <div class="setting-subtext">Select a clip or Adjustment Layer that already has a real effect applied to it in Premiere, name it, then Capture. The first 9 captured presets get their own quick button (3x3 grid) on the Adj &amp; FX page.</div>
+        <div class="fx-capture-row">
+          <input type="text" id="fx-capture-name" class="setting-input" placeholder="Name this preset…" data-act="fx-capture-name">
+          <div id="btn-capture-preset" class="btn-secondary" role="button" data-act="btn-capture-preset" title="Capture the selected clip or Adjustment Layer's real effects as a new preset">
             Capture
           </div>
         </div>
@@ -281,10 +267,11 @@
           <div class="help-item"><span class="key-tag">⇧ Shift+Click</span> 50/50 cut transition on every cut between selected clips (or at playhead)</div>
         </div>
         <div class="help-section">
-          <div class="help-tool-name">Effect Preset:</div>
-          <div class="help-item"><span class="key-tag purple">Click</span> Apply active preset to selected clips</div>
-          <div class="help-item"><span class="key-tag purple">⇧ Shift+Click</span> Cycle to next effect preset</div>
-          <div class="help-item"><span class="key-tag purple">Capture</span> Save selected timeline AL as active preset</div>
+          <div class="help-tool-name">Quick-effect buttons (below Adjustment Layer):</div>
+          <div class="help-item"><span class="key-tag purple">Click</span> Span 1 AL over the selection and apply that preset's effect to it</div>
+          <div class="help-item"><span class="key-tag purple">Ctrl+Click</span> 1 AL per selected clip, each with that preset's effect applied</div>
+          <div class="help-item"><span class="key-tag purple">⇧ Shift+Click</span> 50/50 cut transition AL(s) with that preset's effect applied</div>
+          <div class="help-item"><span class="key-tag purple">Capture</span> (Settings) Name it, then save the selected clip/AL's real applied effects as a new quick-effect button</div>
         </div>
         <div class="help-section">
           <div class="help-tool-name">Settings Reference:</div>

@@ -7,20 +7,22 @@ const capability = require("./capabilityProbe.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
+const effects = require("./timeline/effects.js");
 
 const KEY = "cutdeck.xml.lastJob";
 const SETTINGS_KEY = "cutdeck.adj.settings";
+// Custom effect presets get their OWN storage key, deliberately not folded into
+// cutdeck.adj.settings: saveSettingsToStorage rewrites its entire blob on every minor setting
+// change (frame count, color, ...), and a corrupt/oversized preset would otherwise silently
+// wipe core settings back to DEFAULT_SETTINGS on the next load (see loadSettingsFromStorage's
+// catch below). A separate key isolates both problems.
+const FX_PRESETS_KEY = "cutdeck.fx.presets";
 
 const DEFAULT_SETTINGS = {
   frames: 16,
   bin: "CutDeck AL/FX",
   color: "Iris",
-  clamp: true,
-  activeFx: "Zoom In",
-  fxList: [
-    "Zoom In", "Zoom Out", "Whip Pan L", "Whip Pan R",
-    "Camera Shake", "Motion Blur", "Film Glow", "Letterbox", "Custom FX"
-  ]
+  clamp: true
 };
 
 // The controller: holds the one state object, calls Premiere and the helper, hands new state
@@ -31,6 +33,7 @@ const state = {
   cutMode: "protected",
   audioTrack: null,
   settings: loadSettingsFromStorage(),
+  customPresets: loadCustomPresets(),
   job: null,
   busy: false,
   status: { text: "Ready", level: "ready" },
@@ -47,6 +50,20 @@ function loadSettingsFromStorage() {
 function saveSettingsToStorage(s) {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch (_) {}
+}
+
+function loadCustomPresets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FX_PRESETS_KEY) || "null");
+    return Array.isArray(saved) ? saved : [];
+  } catch (_) {
+    return [];
+  }
+}
+function saveCustomPresets(list) {
+  try {
+    localStorage.setItem(FX_PRESETS_KEY, JSON.stringify(list));
   } catch (_) {}
 }
 
@@ -192,18 +209,35 @@ async function doAdjust(mode) {
   setStatus(msg, "ready");
 }
 
-async function doEffect(mode) {
+// Each quick-effect button is its own preset, wired to place the Adjustment Layer exactly the
+// way the plain Adjust card does (same mode gestures) and then apply that preset's captured
+// effect to every AL it just placed — one click does both, same as the original combined
+// behavior, just per-preset instead of via a shared "active effect" selector.
+async function doApplyPreset(presetId, mode) {
+  const preset = state.customPresets.find((p) => p.id === presetId);
+  if (!preset) throw new Error("This preset could not be found — it may have been deleted.");
   const s = state.settings;
-  setStatus(`Applying preset [${s.activeFx}] (${mode === "per_clip" ? "per clip" : "span"})…`, "busy");
+
+  const modeLabel = mode === "transition" ? "cut transition" : mode === "per_clip" ? "per clip" : "span";
+  setStatus(`Placing AL for [${preset.name}] (${modeLabel})…`, "busy");
   const res = await timeline.placeAdjustmentLayersOnTimeline(ppro, {
     mode,
     frames: s.frames,
     clamp: s.clamp !== false,
     color: s.color,
-    effectName: s.activeFx,
+    effectName: preset.name,
     onSequenceName: onAdjLayerSequenceName
   });
-  setStatus(`Applied [${s.activeFx}] to ${res.placedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
+
+  setStatus(`Applying [${preset.name}] to ${res.placedItems.length} AL(s)…`, "busy");
+  const project = await ppro.Project.getActiveProject();
+  let appliedCount = 0;
+  for (const item of res.placedItems) {
+    await effects.applyCapturedPreset(ppro, project, item, preset);
+    appliedCount++;
+  }
+
+  setStatus(`Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
 }
 
 async function doCut() {
@@ -249,7 +283,7 @@ async function doDismiss() {
   setStatus("Previous job dismissed. Any running analysis continues in the helper. Saved result location:\n" + (saved ? saved.output_path : ""), "ready");
 }
 
-async function handleProbe(name) {
+async function handleProbe(name, payload) {
   if (name === "timing") {
     setStatus("Reading this build's marks and timebase…", "busy");
     const report = await capability.probeMarksAndTiming(ppro);
@@ -262,6 +296,13 @@ async function handleProbe(name) {
     const report = await capability.probeAdjustmentLayerMotion(ppro);
     console.log("CutDeck AL motion probe", JSON.stringify(report, null, 2));
     setStatus(capability.formatMotionReport(report), "ready");
+    return;
+  }
+  if (name === "effect") {
+    setStatus("Reading the selected item's real effect chain…", "busy");
+    const report = await capability.probeEffectChain(ppro);
+    console.log("CutDeck effect chain probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatEffectChainReport(report), "ready");
     return;
   }
   if (name === "socket") {
@@ -280,8 +321,30 @@ async function handleProbe(name) {
     return;
   }
   if (name === "capture-preset") {
-    const s = state.settings;
-    setStatus(`Saved active preset slot as [${s.activeFx}] in bin [${s.bin}]`, "ready");
+    const label = ((payload && payload.name) || "").trim();
+    if (!label) throw new Error("Name this preset first (the field next to Capture), then click Capture.");
+
+    const project = await ppro.Project.getActiveProject();
+    if (!project) throw new Error("Open a Premiere project first.");
+    const seq = await project.getActiveSequence();
+    if (!seq) throw new Error("Open a sequence first.");
+    const item = await effects.getFirstSelectedTrackItem(seq);
+    if (!item) {
+      throw new Error("Select the clip or Adjustment Layer whose effects you want to capture, then click Capture.");
+    }
+
+    const captured = await effects.captureEffectFromTrackItem(ppro, item);
+    const id = `fx-${Date.now().toString(36)}`;
+    const preset = { id, name: label, components: captured.components };
+    state.customPresets = [...state.customPresets, preset];
+    saveCustomPresets(state.customPresets);
+    panel.render(state);
+
+    const names = captured.components.map((c) => c.displayName || c.matchName).join(", ");
+    setStatus(
+      `Captured "${label}" — ${captured.components.length} effect${captured.components.length === 1 ? "" : "s"}: ${names}.`,
+      "ready"
+    );
     return;
   }
 }
@@ -290,7 +353,7 @@ function applySettingChange(patch) {
   if (Object.prototype.hasOwnProperty.call(patch, "audioTrack")) {
     state.audioTrack = patch.audioTrack;
   }
-  const settingKeys = ["frames", "bin", "color", "clamp", "activeFx"];
+  const settingKeys = ["frames", "bin", "color", "clamp"];
   let changedSettings = false;
   const nextSettings = { ...state.settings };
   for (const key of settingKeys) {
@@ -318,9 +381,9 @@ panel.bind({
   onTab: (name) => { state.tab = name; panel.render(state); },
   onCutMode: (mode) => { state.cutMode = mode; panel.render(state); },
   onAdjust: (mode) => act(() => doAdjust(mode)),
-  onEffect: (mode) => act(() => doEffect(mode)),
+  onApplyPreset: (presetId, mode) => act(() => doApplyPreset(presetId, mode)),
   onSettingChange: (patch) => applySettingChange(patch),
-  onProbe: (name) => act(() => handleProbe(name)),
+  onProbe: (name, payload) => act(() => handleProbe(name, payload)),
 });
 
 const savedJob = lastJob();

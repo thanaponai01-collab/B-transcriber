@@ -343,7 +343,112 @@ function formatMotionReport(report) {
   return lines.join("\n");
 }
 
+/* Effects-chain probe (CutDeck "Apply Effect" job, see timeline/effects.js): dumps the real
+   component chain of whatever's selected on the timeline right now — matchNames, display
+   names, and param names — in index order. Read-only: creates/inserts/deletes nothing.
+
+   Its job is to confirm, against THIS build, which components are Premiere's own fixed
+   effects (Motion/Opacity/Time Remapping) by real matchName, before effects.js's capture
+   logic (which currently skips by display-name guess — see FIXED_EFFECT_DISPLAY_NAMES) is
+   trusted on a clip with real user-added effects. Run it against a plain, freshly-created
+   Adjustment Layer with ZERO manually-added effects first — everything it reports there is,
+   by definition, a fixed effect, not something a user built. */
+async function probeEffectChain(ppro) {
+  const findings = [];
+  const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
+
+  if (!ppro || !ppro.Project) {
+    add("host", "Is the Premiere API reachable?", "no", { detail: "require('premierepro') gave no Project" });
+    return { probe: "effect-chain", complete: false, findings };
+  }
+  const projectRead = await attempt("getActiveProject", () => ppro.Project.getActiveProject());
+  if (!projectRead.ok || !projectRead.value) {
+    add("project", "Is a project open?", "no", projectRead.ok ? { detail: "no active project" } : projectRead);
+    return { probe: "effect-chain", complete: false, findings };
+  }
+  const project = projectRead.value;
+  const sequenceRead = await attempt("getActiveSequence", () => project.getActiveSequence());
+  if (!sequenceRead.ok || !sequenceRead.value) {
+    add("sequence", "Is a sequence open?", "no", sequenceRead.ok ? { detail: "no active sequence" } : sequenceRead);
+    return { probe: "effect-chain", complete: false, findings };
+  }
+  const seq = sequenceRead.value;
+
+  const selRead = await attempt("getSelection", () =>
+    (typeof seq.getSelection === "function" ? seq.getSelection() : null));
+  let items = [];
+  if (selRead.ok && selRead.value) {
+    if (typeof selRead.value.getTrackItems === "function") {
+      const itemsRead = await attempt("getTrackItems", () => selRead.value.getTrackItems());
+      items = itemsRead.ok && itemsRead.value ? itemsRead.value : [];
+    } else if (Array.isArray(selRead.value)) {
+      items = selRead.value;
+    }
+  }
+  add("selection", "How many track items are selected right now?", String(items.length),
+    { note: "Select exactly one item — ideally a freshly-created Adjustment Layer with no " +
+        "effects added by hand — before running this probe." });
+
+  if (items.length === 0) {
+    return { probe: "effect-chain", complete: false, findings };
+  }
+
+  for (const item of items) {
+    const label = item.name || "(unnamed)";
+    const chainRead = await attempt(`getComponentChain(${label})`, () =>
+      (typeof item.getComponentChain === "function" ? item.getComponentChain() : null));
+    if (!chainRead.ok || !chainRead.value) {
+      add("chain", `Does "${label}" expose a component chain?`, "no",
+        chainRead.ok ? { detail: "null chain" } : chainRead);
+      continue;
+    }
+    const chain = chainRead.value;
+    const countRead = await attempt(`getComponentCount(${label})`, () => chain.getComponentCount());
+    const count = countRead.ok ? countRead.value : 0;
+
+    const components = [];
+    for (let i = 0; i < count; i++) {
+      const compRead = await attempt(`getComponentAtIndex(${i})`, () => chain.getComponentAtIndex(i));
+      if (!compRead.ok || !compRead.value) continue;
+      const c = compRead.value;
+      const displayName = (await attempt("getDisplayName", () => c.getDisplayName())).value || null;
+      const matchName = (await attempt("getMatchName", () => c.getMatchName())).value || null;
+      const paramCountRead = await attempt("getParamCount", () => c.getParamCount());
+      const paramCount = paramCountRead.ok ? paramCountRead.value : 0;
+      const paramNames = [];
+      for (let p = 0; p < paramCount; p++) {
+        const paramRead = await attempt(`getParam(${p})`, () => c.getParam(p));
+        if (paramRead.ok && paramRead.value) paramNames.push(paramRead.value.displayName || `param[${p}]`);
+      }
+      components.push({ index: i, displayName, matchName, paramCount, paramNames });
+    }
+    add("components", `What components does "${label}" have, in index order?`,
+      components.map((c) => `[${c.index}] ${c.displayName} (${c.matchName})`).join(", ") || "(none read)",
+      { components,
+        why: "Entries here that you did NOT add by hand are Premiere's own fixed effects — " +
+          "copy their real matchNames into timeline/effects.js's fixed-component skip list." });
+  }
+
+  return { probe: "effect-chain", complete: true, findings };
+}
+
+function formatEffectChainReport(report) {
+  const lines = [`Effect chain probe (${report.complete ? "complete" : "stopped early"})`];
+  for (const f of report.findings) {
+    lines.push(`• ${f.question}`);
+    lines.push(`    ${f.answer}`);
+    if (f.evidence) {
+      for (const [key, value] of Object.entries(f.evidence)) {
+        if (value === null || value === undefined) continue;
+        lines.push(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
 module.exports = {
   probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES,
   probeAdjustmentLayerMotion, formatMotionReport,
+  probeEffectChain, formatEffectChainReport,
 };
