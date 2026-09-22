@@ -22,7 +22,12 @@ const DEFAULT_SETTINGS = {
   frames: 16,
   bin: "CutDeck AL/FX",
   color: "Iris",
-  clamp: true
+  // Default OFF (2026-09-22): transitions always get the full requested 50/50
+  // width now that overlapping ones auto-stack onto separate tracks (see
+  // timeline/adjustmentLayer.js's lane assignment) instead of overwriting each
+  // other — confirmed working on real tight cuts. Clamping to fit a short clip
+  // is still available as an opt-in for anyone who'd rather shrink than stack.
+  clamp: false
 };
 
 // The controller: holds the one state object, calls Premiere and the helper, hands new state
