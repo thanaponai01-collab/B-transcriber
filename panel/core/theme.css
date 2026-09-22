@@ -277,7 +277,8 @@
   }
   select {
     width: 100%;
-    padding: 5px 7px;
+    height: 28px;
+    padding: 0 7px;
     background: var(--bg-1);
     border: 1px solid var(--line-1);
     border-radius: 4px;
@@ -287,18 +288,22 @@
   }
   .pills-grid {
     display: flex;
-    gap: 4px;
+    gap: 5px;
   }
   .pill-btn {
     flex: 1;
+    height: 28px;
     background: var(--bg-1);
     border: 1px solid var(--line-1);
     border-radius: 4px;
-    padding: 5px 6px;
+    padding: 0 6px;
     color: var(--fg-2);
     font-size: 10px;
     font-weight: 500;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -336,24 +341,27 @@
   }
   .btn-primary {
     width: 100%;
-    padding: 7px 10px;
+    height: 40px;
+    margin-top: 7px;
+    padding: 0 10px;
     border: 1px solid var(--line-1);
     border-radius: 4px;
     background: var(--bg-2);
     color: var(--fg-0);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 7px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.2;
     transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
+  .btn-primary svg { width: 15px; height: 15px; }
   .btn-primary:hover {
     background: var(--bg-3);
     border-color: var(--line-2);
@@ -391,11 +399,13 @@
 
   /* =========================================================
      PAGE 2: MINIMALIST ACTION CARDS (NATIVE PREMIERE LOOK)
+     Shares one row-height/margin rhythm with .fx-preset-grid below it
+     (48px tiles, 7px top margin) so the two rows read as one grid.
      ========================================================= */
   .action-cards-grid {
     display: flex;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: 7px;
   }
   .action-card {
     flex: 1;
@@ -425,17 +435,6 @@
   }
   .action-card:hover:not(.disabled) svg {
     stroke: var(--fg-white);
-  }
-
-  .card-icon-box {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .card-icon-box svg {
-    width: 22px;
-    height: 22px;
-    stroke: var(--fg-1);
   }
 
   /* Settings Help Box */
@@ -737,18 +736,25 @@
      fixed grid-auto-rows height) both produced 0x0 tiles in this UXP build's embedded
      browser, confirmed live via getBoundingClientRect(). Every other button row in this
      panel (.action-cards-grid, .pills-grid) already uses flex and renders correctly, so
-     flex is the proven-working layout model here, not Grid. */
+     flex is the proven-working layout model here, not Grid.
+     Spacing is done with margin, not the `gap` property: in this UXP build's embedded
+     browser, `gap` on a wrapped flex row gets subtracted from the row's available width
+     TWICE — once by the browser's own gap handling, once again because it also shrinks
+     each item's `calc((100% - 2*gap)/3)` basis — so the row came up ~2 gaps short on the
+     right edge (issue: 3x3 grid not flush with .action-cards-grid above it). Margins don't
+     have this double-subtraction problem. Same 7px top margin as .action-cards-grid above
+     it, so the AL card and the 3x3 grid read as one continuous grid. */
   .fx-preset-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 8px;
+    margin-top: 7px;
   }
   .fx-preset-btn {
-    flex: 0 0 calc((100% - 10px) / 3);
-    width: calc((100% - 10px) / 3);
-    height: 44px;
+    flex: 0 0 calc((100% - 12px) / 3);
+    width: calc((100% - 12px) / 3);
+    height: 48px;
     box-sizing: border-box;
+    margin: 0 6px 6px 0;
     background: var(--bg-2);
     border: 1px solid var(--line-1);
     border-radius: 4px;
@@ -767,6 +773,12 @@
     user-select: none;
     transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
+  .fx-preset-btn:nth-child(3n) {
+    margin-right: 0;
+  }
+  .fx-preset-btn:nth-child(n+7) {
+    margin-bottom: 0;
+  }
   .fx-preset-btn:hover:not(.disabled) {
     background: var(--bg-3);
     border-color: var(--line-2);
@@ -775,17 +787,24 @@
   .fx-preset-btn:active:not(.disabled) {
     background: var(--bg-4);
   }
+  /* Empty slots use the same solid-border tile shape as a filled preset (not dashed) so the
+     3x3 grid reads as one consistent grid — only the dimmer fill/icon marks it as unfilled. */
   .fx-preset-btn.fx-preset-empty-slot {
-    background: transparent;
-    border: 1px dashed var(--line-1);
-    color: var(--fg-3);
-    font-size: 15px;
-    font-weight: 400;
+    background: var(--bg-0);
+    border: 1px solid var(--line-0);
+  }
+  .fx-preset-btn.fx-preset-empty-slot svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--fg-3);
+    transition: stroke 0.12s;
   }
   .fx-preset-btn.fx-preset-empty-slot:hover:not(.disabled) {
     background: var(--bg-1);
     border-color: var(--line-2);
-    color: var(--fg-2);
+  }
+  .fx-preset-btn.fx-preset-empty-slot:hover:not(.disabled) svg {
+    stroke: var(--fg-2);
   }
   .fx-preset-manage-list {
     display: flex;

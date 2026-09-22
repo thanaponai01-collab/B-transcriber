@@ -159,7 +159,12 @@
         btn.className = "fx-preset-btn fx-preset-empty-slot";
         btn.setAttribute("data-act", "fx-preset-empty-slot");
         btn.title = "Capture a preset in Settings to fill this slot";
-        btn.textContent = "+";
+        // SVG plus, not a "+" glyph: keeps the icon the same crisp size/weight in every
+        // slot regardless of font metrics, matching the icon language used elsewhere in
+        // the panel (header icon-btns, action-card).
+        btn.innerHTML =
+          '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round">' +
+          '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
       }
       container.appendChild(btn);
     });
@@ -277,8 +282,6 @@
   function bindPrimaryActions(intents) {
     const seqCard = $("seq-card");
     if (seqCard) seqCard.addEventListener("click", () => intents.onRefresh());
-    const refresh = $("refresh");
-    if (refresh) refresh.addEventListener("click", () => intents.onRefresh());
     const cut = $("cut");
     if (cut) cut.addEventListener("click", () => intents.onCut());
     const sync = $("sync");
