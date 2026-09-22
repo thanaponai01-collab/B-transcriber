@@ -326,6 +326,13 @@ async function handleProbe(name, payload) {
     setStatus(capability.formatEffectChainReport(report), "ready");
     return;
   }
+  if (name === "transform") {
+    setStatus("Reading the selected clip's real Motion/Transform params, units and source dimensions…", "busy");
+    const report = await capability.probeTransformParams(ppro);
+    console.log("CutDeck transform params probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatTransformReport(report), "ready");
+    return;
+  }
   if (name === "socket") {
     setStatus("Probing which socket URLs this Premiere build permits…", "busy");
     const { report, written } = await probe.run();

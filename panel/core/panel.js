@@ -343,7 +343,7 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe"].forEach((id) => {
+    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe"].forEach((id) => {
       const el = $(id);
       if (el && overflowMenu) {
         el.addEventListener("click", () => overflowMenu.classList.remove("open"));
@@ -487,6 +487,8 @@
     if (motion) motion.addEventListener("click", () => intents.onProbe("motion"));
     const effectChain = $("effectprobe");
     if (effectChain) effectChain.addEventListener("click", () => intents.onProbe("effect"));
+    const transform = $("transformprobe");
+    if (transform) transform.addEventListener("click", () => intents.onProbe("transform"));
   }
 
   function bind(intents) {

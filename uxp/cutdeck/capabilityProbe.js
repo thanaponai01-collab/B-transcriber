@@ -180,9 +180,11 @@ function describeNormalize(inMark, outMark, endMark, ticksPerFrame, convention) 
   }
 }
 
-/* One human-readable block for the panel status line. */
-function formatReport(report) {
-  const lines = [`Phase 0 probe 1 — marks and timing (${report.complete ? "complete" : "stopped early"})`];
+/* One human-readable block for the panel status line, shared by every probe in this file.
+   The per-probe title and an optional trailing verdict line are all that ever differed
+   between the formatters; extracted when a fourth probe would have meant a fourth copy. */
+function formatFindings(title, report, trailer) {
+  const lines = [`${title} (${report.complete ? "complete" : "stopped early"})`];
   for (const f of report.findings) {
     lines.push(`• ${f.question}`);
     lines.push(`    ${f.answer}`);
@@ -193,10 +195,14 @@ function formatReport(report) {
       }
     }
   }
-  lines.push(report.verdict
+  if (trailer) lines.push(trailer);
+  return lines.join("\n");
+}
+
+function formatReport(report) {
+  return formatFindings("Phase 0 probe 1 — marks and timing", report, report.verdict
     ? `VERDICT: Out point looks ${report.verdict}. Set OUT_CONVENTION in timelineRange.js only after confirming against Premiere's own duration display.`
     : `No verdict yet. Set In and Out on the source timeline — ideally on the same frame — and run again.`);
-  return lines.join("\n");
 }
 
 /* Phase 2 probe: reads the ACTUAL Motion component (Scale, Position, Anchor Point, ...) of
@@ -329,18 +335,7 @@ async function probeAdjustmentLayerMotion(ppro) {
 }
 
 function formatMotionReport(report) {
-  const lines = [`Adjustment Layer / Motion probe (${report.complete ? "complete" : "stopped early"})`];
-  for (const f of report.findings) {
-    lines.push(`• ${f.question}`);
-    lines.push(`    ${f.answer}`);
-    if (f.evidence) {
-      for (const [key, value] of Object.entries(f.evidence)) {
-        if (value === null || value === undefined) continue;
-        lines.push(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
-      }
-    }
-  }
-  return lines.join("\n");
+  return formatFindings("Adjustment Layer / Motion probe", report);
 }
 
 /* Effects-chain probe (CutDeck "Apply Effect" job, see timeline/effects.js): dumps the real
@@ -433,22 +428,318 @@ async function probeEffectChain(ppro) {
 }
 
 function formatEffectChainReport(report) {
-  const lines = [`Effect chain probe (${report.complete ? "complete" : "stopped early"})`];
-  for (const f of report.findings) {
-    lines.push(`• ${f.question}`);
-    lines.push(`    ${f.answer}`);
-    if (f.evidence) {
-      for (const [key, value] of Object.entries(f.evidence)) {
-        if (value === null || value === undefined) continue;
-        lines.push(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
-      }
+  return formatFindings("Effect chain probe", report);
+}
+
+/* Phase 0 probe of docs/research/cutdeck-transform-panel-plan.md — the Transform & Align
+   feature's blocking unknowns, asked of the installed build rather than of Adobe's reference.
+
+   Adobe documents no parameter map. `@adobe/premierepro@26.2.1`'s declarations (the release
+   line manifest.json pins) name exactly two match names anywhere, both as doc-comment
+   examples: 'PR.ADBE Solarize' and 'AE.ADBE Mosaic'. Motion and Transform are never named,
+   their param indices are never listed, and no page states whether Position and Anchor Point
+   are in pixels or normalized units, or even whether they share a coordinate space. So every
+   number the align math would eventually write has to be aimed by reading the real component
+   first — the same "ask the build, don't guess" rule timelineRange.js's OUT_CONVENTION and
+   effects.js's fixed-effect list were held to.
+
+   Read-only: creates nothing, inserts nothing, deletes nothing. Safe in a real project.
+
+   Four questions, in the order the plan's phases need them:
+
+     1. What are Motion's and Transform's real match names and param indices HERE?
+     2. What SHAPE do point params come back in? The raw JSON is recorded verbatim, not just
+        the unwrapped value, because `{"value":[0.5,0.5]}` vs `{"value":{"x":960,"y":540}}` is
+        the entire units question and decides whether the anchor-compensation formula in the
+        plan's Phase 3 is even expressible. effects.js only ever saw this by accident, on one
+        component, while doing something else.
+     3. What does this sequence report as frame size and pixel aspect ratio? (PAR is typed
+        `Promise<string>`, not a number — recorded raw, unparsed.)
+     4. Does `Metadata.getProjectColumnsMetadata()` carry the SOURCE resolution? UXP exposes
+        no source width/height on ProjectItem, ClipProjectItem or FootageInterpretation; this
+        column dump is the one candidate route (plan Part 3) and Phase 5's frame alignment is
+        blocked on the answer. ExtendScript's identically-named call is documented as
+        returning the columns of "the current project view layout" — so this must be run with
+        the Project panel's Video Info column both SHOWN and HIDDEN. If the answer differs,
+        the route depends on a user-configurable panel setting and cannot be trusted silently.
+
+   Run it against, separately: a clip whose source matches the sequence, a clip whose source
+   does NOT, a clip with non-square pixels, an Adjustment Layer, and a graphic. */
+const TRANSFORM_COMPONENT_HINTS = ["motion", "transform"];
+
+function looksLikeTransformComponent(displayName, matchName) {
+  const haystack = `${displayName || ""} ${matchName || ""}`.toLowerCase();
+  return TRANSFORM_COMPONENT_HINTS.some((hint) => haystack.indexOf(hint) !== -1);
+}
+
+/* Records a param value the way the units question actually needs it: the unwrapped value
+   AND the raw shape it arrived in. Adobe's own types declare the double wrapper
+   (`Keyframe.value: { value: ... }`), so the unwrap is a contract, not a guess — but what
+   sits INSIDE it for a point param is exactly what is undocumented. */
+function describeParamValue(keyframe) {
+  if (keyframe === null || keyframe === undefined) return { present: false };
+  const raw = keyframe.value !== undefined ? keyframe.value : null;
+  const unwrapped = (raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw)
+    ? raw.value : raw;
+  let rawJson = null;
+  try { rawJson = JSON.stringify(raw); } catch (_) { rawJson = "(not JSON-serializable)"; }
+  const shape = unwrapped === null || unwrapped === undefined ? "null"
+    : Array.isArray(unwrapped) ? `array[${unwrapped.length}]`
+    : typeof unwrapped === "object"
+      ? `object{${Object.keys(unwrapped).sort().join(",")}}`
+      : typeof unwrapped;
+  return {
+    present: true,
+    rawJson,
+    shape,
+    // The two candidate point shapes, reported explicitly so neither has to be inferred
+    // from the JSON by eye when this lands in a bug report.
+    hasXY: !!(unwrapped && typeof unwrapped === "object" && "x" in unwrapped && "y" in unwrapped),
+    unwrapped: unwrapped === undefined ? null : unwrapped,
+  };
+}
+
+/* Question 4, isolated: dump the project-columns metadata for one track item's project item.
+   Never throws — a build without Metadata, an item without a project item, and a call that
+   rejects are all findings. */
+async function readSourceDimensionCandidates(ppro, item) {
+  if (!ppro || !ppro.Metadata || typeof ppro.Metadata.getProjectColumnsMetadata !== "function") {
+    return { available: false, why: "this build exposes no Metadata.getProjectColumnsMetadata" };
+  }
+  if (!item || typeof item.getProjectItem !== "function") {
+    return { available: false, why: "this track item exposes no getProjectItem" };
+  }
+  const projectItemRead = await attempt("getProjectItem", () => item.getProjectItem());
+  if (!projectItemRead.ok || !projectItemRead.value) {
+    return { available: false, why: "no project item", detail: projectItemRead.ok ? null : projectItemRead };
+  }
+  const dumpRead = await attempt("getProjectColumnsMetadata", () =>
+    ppro.Metadata.getProjectColumnsMetadata(projectItemRead.value));
+  if (!dumpRead.ok) return { available: false, why: "the call failed", detail: dumpRead };
+
+  const rawText = typeof dumpRead.value === "string" ? dumpRead.value : String(dumpRead.value);
+  let columns = null;
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) columns = parsed;
+    else if (parsed && Array.isArray(parsed.columns)) columns = parsed.columns;
+  } catch (_) { columns = null; }
+
+  // Anything that could plausibly carry "1920 x 1080". Deliberately broad: the point of the
+  // probe is to find out what the column is really called on this build, not to confirm a
+  // name guessed in advance.
+  const RESOLUTION_HINT = /(video\s*info|resolution|frame\s*size|width|height|dimension)/i;
+  const candidates = (columns || [])
+    .filter((c) => c && (RESOLUTION_HINT.test(String(c.ColumnID || "")) ||
+                         RESOLUTION_HINT.test(String(c.ColumnName || "")) ||
+                         /\d{2,}\s*[x×]\s*\d{2,}/.test(String(c.ColumnValue || ""))))
+    .map((c) => ({ ColumnID: c.ColumnID, ColumnName: c.ColumnName, ColumnValue: c.ColumnValue }));
+
+  return {
+    available: true,
+    parsedAsJson: columns !== null,
+    columnCount: columns ? columns.length : null,
+    resolutionCandidates: candidates,
+    // Truncated so one probe run cannot flood the status line; the console.log in main.js
+    // carries the whole report as JSON either way.
+    rawHead: rawText.slice(0, 600),
+    rawLength: rawText.length,
+  };
+}
+
+async function probeTransformParams(ppro) {
+  const findings = [];
+  const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
+
+  if (!ppro || !ppro.Project) {
+    add("host", "Is the Premiere API reachable?", "no", { detail: "require('premierepro') gave no Project" });
+    return { probe: "transform-params", complete: false, findings };
+  }
+  const projectRead = await attempt("getActiveProject", () => ppro.Project.getActiveProject());
+  if (!projectRead.ok || !projectRead.value) {
+    add("project", "Is a project open?", "no", projectRead.ok ? { detail: "no active project" } : projectRead);
+    return { probe: "transform-params", complete: false, findings };
+  }
+  const sequenceRead = await attempt("getActiveSequence", () => projectRead.value.getActiveSequence());
+  if (!sequenceRead.ok || !sequenceRead.value) {
+    add("sequence", "Is a sequence open?", "no", sequenceRead.ok ? { detail: "no active sequence" } : sequenceRead);
+    return { probe: "transform-params", complete: false, findings };
+  }
+  const seq = sequenceRead.value;
+
+  // --- Question 3: the sequence's own geometry ------------------------------------------
+  // Both documented routes are read, because they are separate calls on separate classes and
+  // nothing promises they agree. If they ever disagree, the align math needs to know which
+  // one Premiere itself renders against.
+  const frameSizeRead = await attempt("getFrameSize", () =>
+    (typeof seq.getFrameSize === "function" ? seq.getFrameSize() : null));
+  const settingsRead = await attempt("getSettings", () =>
+    (typeof seq.getSettings === "function" ? seq.getSettings() : null));
+  const settings = settingsRead.ok ? settingsRead.value : null;
+  const frameRectRead = settings && typeof settings.getVideoFrameRect === "function"
+    ? await attempt("getVideoFrameRect", () => settings.getVideoFrameRect())
+    : { ok: false, error: "no getVideoFrameRect on this build" };
+  const parRead = settings && typeof settings.getVideoPixelAspectRatio === "function"
+    ? await attempt("getVideoPixelAspectRatio", () => settings.getVideoPixelAspectRatio())
+    : { ok: false, error: "no getVideoPixelAspectRatio on this build" };
+
+  const asSize = (r) => (r.ok && r.value && r.value.width !== undefined
+    ? `${r.value.width}x${r.value.height}` : null);
+  const frameSize = asSize(frameSizeRead);
+  const frameRect = asSize(frameRectRead);
+  add("sequenceGeometry", "What does this sequence report as frame size and pixel aspect?",
+    frameSize || frameRect || "could not read",
+    {
+      name: seq.name || "(unnamed)",
+      "Sequence.getFrameSize()": frameSize || (frameSizeRead.ok ? "(no width on result)" : frameSizeRead.error),
+      "SequenceSettings.getVideoFrameRect()": frameRect || (frameRectRead.ok ? "(no width on result)" : frameRectRead.error),
+      routesAgree: frameSize && frameRect ? frameSize === frameRect : null,
+      // Typed Promise<string> in Adobe's declarations, so it is recorded raw and unparsed.
+      pixelAspectRatioRaw: parRead.ok ? JSON.stringify(parRead.value) : parRead.error,
+      pixelAspectRatioType: parRead.ok ? typeof parRead.value : null,
+    });
+
+  // --- Selection ------------------------------------------------------------------------
+  // Same route probeEffectChain uses. Deliberately NOT the per-track fallback in
+  // timeline/effects.js: that fallback tests for an `isSelected` member that does not exist
+  // in Adobe's declarations at any version in this line, so it finds nothing. A probe that
+  // silently inherited that bug would report "nothing selected" on a build where something
+  // is plainly selected, which is worse than no probe at all.
+  const selRead = await attempt("getSelection", () =>
+    (typeof seq.getSelection === "function" ? seq.getSelection() : null));
+  let items = [];
+  if (selRead.ok && selRead.value) {
+    if (typeof selRead.value.getTrackItems === "function") {
+      const itemsRead = await attempt("getTrackItems", () => selRead.value.getTrackItems());
+      items = itemsRead.ok && itemsRead.value ? itemsRead.value : [];
+    } else if (Array.isArray(selRead.value)) {
+      items = selRead.value;
     }
   }
-  return lines.join("\n");
+  add("selection", "How many track items are selected right now?", String(items.length),
+    { selectionCall: selRead.ok ? "ok" : selRead,
+      note: "Select ONE clip and run again for each shape in turn: source matching the " +
+        "sequence, source not matching, non-square pixels, an Adjustment Layer, a graphic." });
+
+  if (items.length === 0) {
+    return { probe: "transform-params", complete: false, findings };
+  }
+
+  for (const item of items) {
+    const label = item.name || "(unnamed)";
+
+    // Adobe declares getIsSelected(); `isSelected` appears nowhere. Recorded per item so the
+    // claim is evidenced on this build rather than inferred from the .d.ts alone.
+    add("selectionApi", `Which selection getter does "${label}" actually expose?`,
+      typeof item.getIsSelected === "function" ? "getIsSelected()" : "neither",
+      { "getIsSelected": typeof item.getIsSelected,
+        "isSelected (undocumented)": typeof item.isSelected });
+
+    // --- Question 4 ---------------------------------------------------------------------
+    const sourceDims = await readSourceDimensionCandidates(ppro, item);
+    add("sourceDimensions", `Can a SOURCE resolution be recovered for "${label}"?`,
+      sourceDims.available
+        ? (sourceDims.resolutionCandidates && sourceDims.resolutionCandidates.length > 0
+            ? `yes — ${sourceDims.resolutionCandidates.length} candidate column(s)`
+            : "no — the metadata parsed but carries no resolution-looking column")
+        : `no — ${sourceDims.why}`,
+      Object.assign({
+        why: "UXP exposes no source width/height on ProjectItem, ClipProjectItem or " +
+          "FootageInterpretation. This column dump is the only candidate route, and Phase 5 " +
+          "frame-alignment is blocked on it. Re-run with the Project panel's Video Info " +
+          "column HIDDEN — if the answer changes, the route depends on a user setting.",
+      }, sourceDims));
+
+    // --- Questions 1 and 2 --------------------------------------------------------------
+    const chainRead = await attempt(`getComponentChain(${label})`, () =>
+      (typeof item.getComponentChain === "function" ? item.getComponentChain() : null));
+    if (!chainRead.ok || !chainRead.value) {
+      add("chain", `Does "${label}" expose a component chain?`, "no",
+        chainRead.ok ? { detail: "null chain" } : chainRead);
+      continue;
+    }
+    const chain = chainRead.value;
+    const countRead = await attempt(`getComponentCount(${label})`, () => chain.getComponentCount());
+    const count = countRead.ok ? countRead.value : 0;
+
+    const allComponents = [];
+    const transformComponents = [];
+    for (let i = 0; i < count; i++) {
+      const compRead = await attempt(`getComponentAtIndex(${i})`, () => chain.getComponentAtIndex(i));
+      if (!compRead.ok || !compRead.value) continue;
+      const component = compRead.value;
+      const displayName = (await attempt("getDisplayName", () => component.getDisplayName())).value || null;
+      const matchName = (await attempt("getMatchName", () => component.getMatchName())).value || null;
+      allComponents.push({ index: i, displayName, matchName });
+      if (looksLikeTransformComponent(displayName, matchName)) {
+        transformComponents.push({ index: i, displayName, matchName, component });
+      }
+    }
+
+    add("components", `What components does "${label}" carry, in index order?`,
+      allComponents.map((c) => `[${c.index}] ${c.displayName} (${c.matchName})`).join(", ") || "(none read)",
+      { components: allComponents,
+        why: "The real Motion/Transform match names for this build go into transform/params.js. " +
+          "Match on matchName, never displayName — displayName is localized (Premiere ships " +
+          "per-locale ZString dictionaries), which is the same trap effects.js already warns about." });
+
+    if (transformComponents.length === 0) {
+      add("transform", `Does "${label}" have a Motion or Transform component?`, "not found",
+        { searchedFor: TRANSFORM_COMPONENT_HINTS });
+      continue;
+    }
+
+    for (const { index, displayName, matchName, component } of transformComponents) {
+      const paramCountRead = await attempt("getParamCount", () => component.getParamCount());
+      const paramCount = paramCountRead.ok ? paramCountRead.value : 0;
+
+      const params = [];
+      for (let p = 0; p < paramCount; p++) {
+        const paramRead = await attempt(`getParam(${p})`, () => component.getParam(p));
+        if (!paramRead.ok || !paramRead.value) {
+          params.push({ index: p, error: paramRead.ok ? "getParam returned nothing" : paramRead.error });
+          continue;
+        }
+        const param = paramRead.value;
+        const name = param.displayName || `param[${p}]`;
+
+        // getStartValue() takes no TickTime, which is why effects.js standardized on it: it
+        // sidesteps the clip-relative-vs-sequence-relative ambiguity that Adobe documents
+        // nowhere. Same choice here, for the same reason.
+        const timeVaryingRead = await attempt("isTimeVarying", () =>
+          (typeof param.isTimeVarying === "function" ? param.isTimeVarying() : null));
+        const startRead = typeof param.getStartValue === "function"
+          ? await attempt("getStartValue", () => param.getStartValue())
+          : { ok: false, error: "no getStartValue on this param" };
+
+        params.push(Object.assign(
+          { index: p, name, isTimeVarying: timeVaryingRead.ok ? timeVaryingRead.value : `error: ${timeVaryingRead.error}` },
+          startRead.ok ? describeParamValue(startRead.value) : { present: false, error: startRead.error }
+        ));
+      }
+
+      add("transformParams",
+        `What are "${label}"'s [${index}] ${displayName} params, by index?`,
+        params.map((p) => `[${p.index}] ${p.name || "?"}=${p.rawJson || p.error || "?"}`).join(", ") || "(none read)",
+        { matchName, componentIndex: index, paramCount, params,
+          why: "Index + rawJson together answer the plan's Phase 1 and Phase 3 gates: which " +
+            "index is Position/Scale/Anchor, and whether a point arrives as [x,y] or {x,y} " +
+            "and in pixels or normalized units. Compare rawJson against the same clip's " +
+            "Effect Controls readout before trusting either." });
+    }
+  }
+
+  return { probe: "transform-params", complete: true, findings };
+}
+
+function formatTransformReport(report) {
+  return formatFindings("Transform & Align Phase 0 probe — components, params, units", report);
 }
 
 module.exports = {
   probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES,
   probeAdjustmentLayerMotion, formatMotionReport,
   probeEffectChain, formatEffectChainReport,
+  probeTransformParams, formatTransformReport,
+  formatFindings, describeParamValue, looksLikeTransformComponent,
 };
