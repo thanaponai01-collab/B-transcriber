@@ -240,6 +240,22 @@ async function doApplyPreset(presetId, mode) {
   setStatus(`Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
 }
 
+// Local-storage-only edits, no Premiere call — same synchronous-intent pattern as
+// applySettingChange below, not wrapped in act() (nothing to be "busy" about).
+function doRemovePreset(presetId) {
+  const preset = state.customPresets.find((p) => p.id === presetId);
+  state.customPresets = state.customPresets.filter((p) => p.id !== presetId);
+  saveCustomPresets(state.customPresets);
+  setStatus(preset ? `Removed "${preset.name}".` : "Removed.", "ready");
+}
+
+function doRenamePreset(presetId, name) {
+  if (!state.customPresets.some((p) => p.id === presetId)) return;
+  state.customPresets = state.customPresets.map((p) => (p.id === presetId ? { ...p, name } : p));
+  saveCustomPresets(state.customPresets);
+  setStatus(`Renamed to "${name}".`, "ready");
+}
+
 async function doCut() {
   if (lastJob()) throw new Error("Resume the previous job before starting another rough cut.");
   await ensureHelper();
@@ -382,6 +398,8 @@ panel.bind({
   onCutMode: (mode) => { state.cutMode = mode; panel.render(state); },
   onAdjust: (mode) => act(() => doAdjust(mode)),
   onApplyPreset: (presetId, mode) => act(() => doApplyPreset(presetId, mode)),
+  onRemovePreset: (presetId) => doRemovePreset(presetId),
+  onRenamePreset: (presetId, name) => doRenamePreset(presetId, name),
   onSettingChange: (patch) => applySettingChange(patch),
   onProbe: (name, payload) => act(() => handleProbe(name, payload)),
 });

@@ -165,6 +165,54 @@
     });
   }
 
+  // Rename/remove rows for captured presets, in Settings below the Capture row. Rebuilt only
+  // when the id list itself changes (add/remove/reorder) — same diff discipline as
+  // renderPresetButtons — so a rename input's live edit and focus survive the renders that
+  // happen constantly while busy (setStatus re-renders on every progress tick).
+  function renderPresetManageList(customPresets) {
+    const container = $("fx-preset-manage-list");
+    if (!container) return;
+    const presets = customPresets || [];
+
+    const existing = Array.prototype.slice.call(container.children || []);
+    const same =
+      existing.length === presets.length &&
+      existing.every((row, i) => row.getAttribute("data-preset-id") === presets[i].id);
+    if (same) {
+      existing.forEach((row, i) => {
+        const input = row.querySelector(".fx-preset-manage-name");
+        if (input && document.activeElement !== input) setValue(input, presets[i].name);
+      });
+      return;
+    }
+
+    container.innerHTML = "";
+    presets.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "fx-preset-manage-row";
+      row.setAttribute("data-preset-id", p.id);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "setting-input fx-preset-manage-name";
+      input.value = p.name;
+      input.setAttribute("data-act", "fx-preset-rename");
+      input.setAttribute("data-preset-id", p.id);
+
+      const del = document.createElement("div");
+      del.className = "fx-preset-manage-remove";
+      del.setAttribute("role", "button");
+      del.setAttribute("data-act", "fx-preset-remove");
+      del.setAttribute("data-preset-id", p.id);
+      del.title = `Remove "${p.name}"`;
+      del.textContent = "×";
+
+      row.appendChild(input);
+      row.appendChild(del);
+      container.appendChild(row);
+    });
+  }
+
   function renderJobBanner(job) {
     const banner = $("job-banner");
     if (banner) banner.classList.toggle("show", !!job);
@@ -196,6 +244,7 @@
     renderCutMode(state.cutMode);
     renderSettings(state.settings);
     renderPresetButtons(state.customPresets);
+    renderPresetManageList(state.customPresets);
     renderJobBanner(state.job);
     renderBusy(state.busy);
   }
@@ -380,6 +429,27 @@
     });
   }
 
+  // The rename/remove list in Settings: delegated the same way as bindPresetButtons above.
+  // Rename fires on "change" (blur / Enter), not every keystroke, so it composes cleanly with
+  // renderPresetManageList's own-input-has-focus guard.
+  function bindPresetManage(intents) {
+    const container = $("fx-preset-manage-list");
+    if (!container) return;
+    container.addEventListener("click", (e) => {
+      const del = e.target.closest ? e.target.closest("[data-act='fx-preset-remove']") : null;
+      if (!del) return;
+      const presetId = del.getAttribute("data-preset-id");
+      if (presetId) intents.onRemovePreset(presetId);
+    });
+    container.addEventListener("change", (e) => {
+      const input = e.target.closest ? e.target.closest("[data-act='fx-preset-rename']") : null;
+      if (!input) return;
+      const presetId = input.getAttribute("data-preset-id");
+      const name = input.value.trim();
+      if (presetId && name) intents.onRenamePreset(presetId, name);
+    });
+  }
+
   function bindCapturePreset(intents) {
     const btn = $("btn-capture-preset");
     const nameInput = $("fx-capture-name");
@@ -427,6 +497,7 @@
     bindFrameStepper(intents);
     bindSettingInputs(intents);
     bindPresetButtons(intents);
+    bindPresetManage(intents);
     bindCapturePreset(intents);
     bindAdjustmentButtons(intents);
     bindProbes(intents);

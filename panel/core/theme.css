@@ -787,6 +787,41 @@
     border-color: var(--line-2);
     color: var(--fg-2);
   }
+  .fx-preset-manage-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .fx-preset-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .fx-preset-manage-row .fx-preset-manage-name {
+    flex: 1;
+  }
+  .fx-preset-manage-remove {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 1px solid var(--accent-danger-line);
+    color: var(--accent-danger-text);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+  }
+  .fx-preset-manage-remove:hover:not(.disabled) {
+    background: var(--accent-danger-bg-armed);
+    border-color: var(--accent-danger-line-armed);
+    color: var(--fg-white);
+  }
   .setting-divider {
     height: 1px;
     background: var(--bg-2);

@@ -252,6 +252,14 @@ reads the item's actual `VideoComponentChain` via `effects.js`'s `captureEffectF
 and saves it to its own `localStorage` key (`cutdeck.fx.presets`), separate from
 `cutdeck.adj.settings` so a bad/oversized preset can't corrupt core settings.
 
+Below the Capture row, every captured preset gets a rename/remove row
+(`#fx-preset-manage-list`, `panel/core/panel.js`'s `renderPresetManageList`/
+`bindPresetManage`): edit the text field (renames on blur/Enter) or click × (removes it and its
+quick-effect button immediately — no confirmation, same as every other destructive action in
+this panel). Rename/remove are plain `localStorage` writes, not Premiere calls, so they're
+wired directly through `main.js`'s `onRenamePreset`/`onRemovePreset` intents rather than
+`act()`.
+
 **v1 is static-value effects only — no keyframes/animation**: a captured Keyframe's
 `TickTime` convention (clip-relative vs. sequence-relative) isn't documented anywhere in
 Adobe's reference, so animated presets (the old Zoom In/Whip Pan/Camera Shake-style names)
