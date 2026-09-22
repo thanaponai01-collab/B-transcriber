@@ -6,6 +6,7 @@ const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
+const alignPanel = require("./core/alignPanel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
 const effects = require("./timeline/effects.js");
 
@@ -416,6 +417,98 @@ panel.bind({
   onSettingChange: (patch) => applySettingChange(patch),
   onProbe: (name, payload) => act(() => handleProbe(name, payload)),
 });
+
+// --- second panel: Transform & Align (manifest entrypoint cutdeck.align.panel) -------------
+//
+// Premiere gives a plugin ONE main HTML document however many panel entrypoints it declares —
+// there is no per-entrypoint "main" field. So the transform panel is a container inside
+// index.html that entrypoints.setup()'s show() hook moves into the root Premiere creates for
+// it. See core/alignPanel.js's header.
+//
+// Its own small state, deliberately not folded into `state`: the two panels are separate
+// surfaces with separate status lines, and sharing one would mean every Cut & Sync status
+// message also overwrote whatever the transform panel was showing. Keeping them apart also
+// means this whole block can be reverted without touching a single existing render call.
+const alignState = { sequence: null, busy: false, status: { text: "Ready", level: "ready" } };
+
+function renderAlign() {
+  alignPanel.render(alignState);
+}
+function setAlignStatus(text, level = "ready") {
+  alignState.status = { text, level };
+  renderAlign();
+}
+
+// Same act() shape as the main panel's: one job at a time, errors land in the status line.
+async function actAlign(fn) {
+  if (alignState.busy) return;
+  alignState.busy = true;
+  alignState.status = { text: "Processing…", level: "busy" };
+  renderAlign();
+  try {
+    await fn();
+    if (alignState.status.level === "busy") alignState.status = { text: "Ready", level: "ready" };
+  } catch (error) {
+    alignState.status = { text: error.message || String(error), level: "error" };
+    console.error(error);
+  } finally {
+    alignState.busy = false;
+    renderAlign();
+  }
+}
+
+async function refreshAlignSequence() {
+  const project = await ppro.Project.getActiveProject();
+  const seq = project ? await project.getActiveSequence() : null;
+  alignState.sequence = seq ? { name: seq.name || "(unnamed)" } : null;
+  renderAlign();
+}
+
+alignPanel.bind({
+  onRefresh: () => actAlign(refreshAlignSequence),
+  onProbe: (name) => actAlign(async () => {
+    await refreshAlignSequence();
+    setAlignStatus("Reading this clip's real Motion/Transform params, units and source dimensions…", "busy");
+    const report = await capability.probeTransformParams(ppro);
+    console.log("CutDeck transform params probe", JSON.stringify(report, null, 2));
+    setAlignStatus(capability.formatTransformReport(report), "ready");
+  }),
+});
+
+// Registering panels is what makes the SECOND entrypoint work; the first keeps its existing
+// behavior because its content is already static in the document and its show() hook does
+// nothing. Guarded, and placed after the main panel is fully bound and rendered, so that a
+// build where entrypoints.setup() is absent or throws still gets a fully working Cut & Sync
+// panel — the shipped tool must not regress to add a new one.
+//
+// No hide()/destroy() hooks: Adobe documents both as "not working as expected yet" in
+// Premiere, so depending on them would be depending on something known broken. The container
+// simply stays where show() put it.
+try {
+  const { entrypoints } = require("uxp");
+  entrypoints.setup({
+    panels: {
+      "cutdeck.panel": {
+        show() {},
+      },
+      "cutdeck.align.panel": {
+        show(rootNode) {
+          if (!alignPanel.mount(rootNode)) {
+            console.error("CutDeck: could not mount #view-transform into the transform panel root.");
+            return;
+          }
+          renderAlign();
+          refreshAlignSequence().catch((error) => {
+            setAlignStatus(error.message || String(error), "error");
+          });
+        },
+      },
+    },
+  });
+} catch (error) {
+  // The Cut & Sync panel is unaffected — it is already bound and rendered above.
+  console.error("CutDeck: entrypoints.setup() failed; the Transform panel will not open.", error);
+}
 
 const savedJob = lastJob();
 state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;

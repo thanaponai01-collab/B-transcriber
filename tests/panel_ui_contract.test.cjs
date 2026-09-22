@@ -9,6 +9,14 @@ const panelJsSource = fs.readFileSync(panelJsPath, "utf8");
 const uxpHtmlPath = path.join(root, "uxp", "cutdeck", "index.html");
 const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
 
+/* The UI seam is one file PER PANEL DOCUMENT, not one file forever. Premiere gives a plugin a
+   single main HTML document however many panel entrypoints it declares, so both panels share
+   index.html — but each owns its own seam module, and DOM access stays confined to these.
+   Adding a name here is a deliberate architectural decision (see docs/arch-design-panel-ui.md),
+   never a way to quiet this test: anything listed must also be held to the id-resolution and
+   render-idempotence tests below. */
+const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js"];
+
 function idsInHtml(html) {
   return new Set([...html.matchAll(/\bid="([a-zA-Z0-9_-]+)"/g)].map((m) => m[1]));
 }
@@ -24,7 +32,7 @@ test("every $(\"id\") in core/panel.js resolves to an id in uxp/cutdeck/index.ht
   assert.deepEqual(uxpMisses, [], `panel.js references ids missing from uxp/cutdeck/index.html: ${uxpMisses}`);
 });
 
-test("getElementById/classList/textContent/addEventListener appear in no panel file except core/panel.js", () => {
+test(`getElementById/classList/textContent/addEventListener appear in no panel file except ${UI_SEAM_FILES.join(", ")}`, () => {
   const uxpDir = path.join(root, "uxp", "cutdeck");
   const jsFiles = [];
   (function walk(dir) {
@@ -35,14 +43,25 @@ test("getElementById/classList/textContent/addEventListener appear in no panel f
     }
   })(uxpDir);
 
+  const seamPaths = UI_SEAM_FILES.map((rel) => path.resolve(path.join(uxpDir, rel)));
   const domPatterns = [/getElementById\(/, /\.classList\b/, /\.textContent\b/, /\baddEventListener\(/];
   const offenders = [];
   for (const file of jsFiles) {
-    if (path.resolve(file) === path.resolve(path.join(uxpDir, "core", "panel.js"))) continue;
+    if (seamPaths.includes(path.resolve(file))) continue;
     const text = fs.readFileSync(file, "utf8");
     if (domPatterns.some((re) => re.test(text))) offenders.push(path.relative(root, file));
   }
-  assert.deepEqual(offenders, [], `DOM touches found outside core/panel.js: ${offenders}`);
+  assert.deepEqual(offenders, [], `DOM touches found outside the UI seam: ${offenders}`);
+});
+
+test("every seam file named in the allowlist actually exists in both source and mirror", () => {
+  // Guards the allowlist itself: a typo here would silently exempt nothing (harmless) or, on a
+  // rename, silently exempt a file that no longer exists while the real one goes unchecked.
+  for (const rel of UI_SEAM_FILES) {
+    const name = path.basename(rel);
+    assert.ok(fs.existsSync(path.join(root, "panel", "core", name)), `panel/core/${name} missing`);
+    assert.ok(fs.existsSync(path.join(root, "uxp", "cutdeck", rel)), `uxp/cutdeck/${rel} missing`);
+  }
 });
 
 test("no #rrggbb literal outside core/theme.css (within uxp/cutdeck)", () => {

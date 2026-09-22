@@ -182,6 +182,55 @@
     <div id="status" role="status">Ready</div>
   </div>
 
+  <!-- ============================================================================
+       SECOND PANEL: Transform & Align (manifest entrypoint cutdeck.align.panel)
+
+       Premiere gives a plugin one main HTML document however many panel entrypoints
+       it declares — there is no per-entrypoint "main". So this is the transform
+       panel's container, living in the shared document and moved into its own panel
+       root by core/alignPanel.js's mount(), called from the entrypoints.setup()
+       show() hook in main.js. It ships hidden so it never flashes inside the Cut &
+       Sync panel before its own panel is opened.
+       ============================================================================ -->
+  <div id="view-transform" hidden>
+    <div class="header">
+      <div class="brand"><span>Transform &amp; Align</span></div>
+    </div>
+
+    <div id="align-seq-card" class="sequence-card" role="button" data-act="align-refresh" title="Click to refresh">
+      <div id="align-sequence">No sequence open</div>
+    </div>
+
+    <div class="section-divider">
+      <div class="section-line"></div>
+      <span class="section-tag">Phase 0</span>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="control-group">
+      <div class="setting-subtext">
+        Select one clip on the timeline, then read its real Motion/Transform components,
+        parameter indexes, value shapes and source dimensions from this build. Read-only —
+        it creates, inserts and deletes nothing. Run it once per clip shape: source matching
+        the sequence, source not matching, non-square pixels, an Adjustment Layer, a graphic.
+      </div>
+    </div>
+
+    <div id="align-probe" class="btn-primary" role="button" data-act="align-probe">
+      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="1"/>
+        <circle cx="12" cy="12" r="1.5"/>
+        <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
+      </svg>
+      Check Transform
+    </div>
+
+    <div class="status-card">
+      <div id="align-status-icon" class="status-icon"></div>
+      <div id="align-status" role="status">Ready</div>
+    </div>
+  </div>
+
   <!-- Settings Modal (Opened by Settings in Dropdown Menu) -->
   <div id="settings-modal" class="modal-overlay">
     <div class="modal-card">
