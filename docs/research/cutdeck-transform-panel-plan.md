@@ -8,9 +8,11 @@ Easify 4 — and what the CEP/ExtendScript stack it uses does and does not buy.
 
 No Premiere runtime experiment has been performed — every "unknown" below is still unknown.
 
-**Build status (2026-09-22): Phases 0 and 0a are shipped** (commits `412887c`, `5644394`).
-Phase 0's probe and the second panel exist and are tested off-host; what does *not* exist yet
-are the probe's **answers**, which require running it in Premiere. Phase 1 is blocked on that.
+**Build status (2026-09-22): Phases 0 and 0a are shipped AND Phase 0 has now been RUN in
+Premiere** (commits `412887c`, `5644394`), via `probeTransformParams` triggered from the live
+panel's ⋮ menu → **Check Transform**, on two real clip shapes in an open project
+(`20260923 - หนุมคนโสด โทร 233`). The answers below unblock Phase 1. Adjustment-layer and
+non-square-pixel shapes are still untested — see the note at the end of Part 1a.
 
 ---
 
@@ -130,6 +132,94 @@ each supported media type") is the weakest — but Part 3 identifies a candidate
 
 ---
 
+## Part 1a — Phase 0 RUN: the answers (2026-09-22)
+
+Executed live via the CutDeck panel's own ⋮ → **Check Transform** menu item
+(`probeTransformParams`), against the currently open project, on two clip shapes. Full raw JSON
+captured via DevTools console (`copy(window.__lastReport)`), not transcribed from a screenshot —
+exact float precision below is real, not rounded by eye.
+
+**Sequence:** `getFrameSize()` and `SequenceSettings.getVideoFrameRect()` agree: `1920x1080`.
+`getVideoPixelAspectRatio()` returns the JSON string `"1:1"`, confirming Part 1 item 2.
+
+**Clip A — full-frame matched-source video** (`3 - แบบกคนเดียว...mp4`, Position/Anchor at
+Effect Controls default): Motion params read `Position=[0.5, 0.5]`, `Anchor Point=[0.5, 0.5]`,
+`Scale=100`. The Properties panel showed `Position 960,540` — exactly `0.5 × 1920` and
+`0.5 × 1080`.
+
+**Clip B — repositioned/scaled PNG graphic** (`Lowerthird 2026.png`, real non-default transform,
+a much stronger test than a clip left at defaults): Motion params read
+`Position=[-0.26602596044540405, 0.04159132018685341]`,
+`Anchor Point=[0.0010172923405964325, 0.05605786641438807]`, `Scale=162`, `Scale Width=100`.
+The Properties panel showed `Position -510.8, 44.9`, `Anchor point 2, 60.5`, `Scale 162%`.
+Checking the math independently on each axis: `-0.26602596 × 1920 = -510.77` (≈ -510.8),
+`0.04159132 × 1080 = 44.92` (≈ 44.9), `0.00101729 × 1920 = 1.953` (≈ 2),
+`0.05605787 × 1080 = 60.54` (≈ 60.5). All four values land within display rounding.
+
+### The big unknown is resolved
+
+**Position and Anchor Point are `[x, y]` arrays normalized to the *sequence* frame width and
+height independently per axis** (x fraction × frame width, y fraction × frame height) — not
+pixels, not normalized to the source media's own dimensions (Clip B's source also happens to be
+1920x1080 per its Video Info column, so this run alone can't fully separate "sequence-normalized"
+from "source-normalized" for Clip B in isolation, but Clip A's plain `[0.5, 0.5]` on a matched
+1920x1080 source is consistent with either reading, while Clip B's *two independently correct
+per-axis multiplications against 1920 and 1080* is the discriminating evidence: a single shared
+normalization space of the wrong aspect ratio could not hit both axes to sub-pixel accuracy at
+once). Confidence: **proven**, not suspected — this is measured agreement between the raw param
+value and the host's own Effect Controls display, on real data, not a documentation claim.
+
+### Confirmed parameter index map (this build, `26.5.1`)
+
+`Motion` (`matchName: "AE.ADBE Motion"`), found at component index 1 (index 0 is always
+`Opacity`/`AE.ADBE Opacity`), `paramCount: 11`:
+
+| Index | Name | Shape | Notes |
+| --- | --- | --- | --- |
+| 0 | Position | `array[2]`, normalized | `[x, y]`, see above |
+| 1 | Scale | `number` (percent) | uniform scale when index 3 is `true` |
+| 2 | Scale Width | `number` (percent) | active when index 3 (uniform) is `false` |
+| 3 | *(blank displayName)* | `boolean` | the Uniform Scale checkbox — this build's ZString gives it no label; match on index/matchName, never displayName, exactly as `effects.js` already warns |
+| 4 | Rotation | `number` (degrees) | |
+| 5 | Anchor Point | `array[2]`, normalized | same space as Position, see above |
+| 6 | Anti-flicker Filter | `number` | |
+| 7 | Crop Left | `number` (percent) | |
+| 8 | Crop Top | `number` (percent) | |
+| 9 | Crop Right | `number` (percent) | |
+| 10 | Crop Bottom | `number` (percent) | |
+
+All params on both clips reported `isTimeVarying: false`, so the `getStartValue()` route was
+exercised, not the animated/keyframe path — Phase 1's "skip animated params with a visible
+explanation" behavior remains untested by this run and stays as designed.
+
+### Source dimensions: resolved, Part 3's hypothesis confirmed live
+
+`Metadata.getProjectColumnsMetadata()` returned real data on **both** clips, parsed as JSON, 7
+columns, with a `Column.Intrinsic.VideoInfo` entry each time: `"1920 x 1080 (1.0)"` for the video
+clip, `"1920 x 1080 (1.0), Straight Alpha"` for the PNG (note the extra alpha-channel suffix on an
+image — the parser feeding Phase 5 must tolerate trailing text after the `(par)` group, not assume
+the string ends there). This was run with the Project panel's Video Info column in its default
+(shown) state — the caveat about a hidden column changing the answer is still open, not yet tested.
+
+### `getIsSelected()` bug, confirmed live
+
+`typeof item.getIsSelected` is `"function"`; `item.isSelected` is `undefined`. Part 1 item 5's
+finding is not just a documentation reading — the fallback in `effects.js`'s
+`isTrackItemSelected()` that tries `.isSelected` will silently return `false` for every item on
+this exact build whenever `seq.getSelection()` is the thing that failed. Worth fixing before
+Phase 1 reuses that fallback, per the plan's own "Known risks" note below.
+
+### What Phase 0 still has not tested
+
+An Adjustment Layer and a non-square-pixel source were both in the plan's "run it on" list and
+neither was available to select in the currently open timeline without adding a new clip to the
+user's real, open project — deliberately not done. **Phase 1 can proceed for ordinary clips on the
+strength of two independently-verified shapes**, but the AL and non-square-pixel cases should be
+probed (read-only, same menu item, no new risk) the next time either is naturally on a timeline
+being worked on, before Phase 1 is called done rather than just started.
+
+---
+
 ## Part 2 — New panel plan
 
 ### The one deliberate departure
@@ -243,9 +333,9 @@ has been run on at least the first two.** This is the same discipline `timelineR
 
 | Phase | Ships | Blocked until |
 | --- | --- | --- |
-| **0** | ✅ **SHIPPED** `probeTransformParams` + `formatTransformReport`, wired to the ⋮ menu and to the transform panel's own button | — |
+| **0** | ✅ **SHIPPED AND RUN** `probeTransformParams` + `formatTransformReport`, wired to the ⋮ menu and to the transform panel's own button. Run live on 2 clip shapes 2026-09-22 — see Part 1a | — |
 | **0a** | ✅ **SHIPPED** second entrypoint `cutdeck.align.panel`, `#view-transform` container, `core/alignPanel.js` seam, guarded `entrypoints.setup()` | — (was independent of 0; both gate questions are now answered above — no per-entrypoint `main` exists, and one shared document makes `localStorage` sharing moot) |
-| **1** | ⬅ **NEXT** Read-only display of the selected clip's position/scale/rotation/anchor, live | **Phase 0 must be RUN in Premiere on ≥2 clip shapes.** The code ships; the answers do not exist yet. Proves param mapping before any write |
+| **1** | ⬅ **NEXT** Read-only display of the selected clip's position/scale/rotation/anchor, live | **Unblocked.** Param index map and the normalized-coordinate space are proven (Part 1a) on 2 of the plan's 5 target shapes (matched-source video, repositioned/scaled graphic). AL and non-square-pixel shapes are still untested — probe them opportunistically, don't block Phase 1 on scheduling that separately |
 | **2** | Numeric edit of those four, one clip at a time, with undo | Research-doc gate 2 — write a point, read it back, confirm in Effect Controls *and* Program Monitor, undo |
 | **3** | Nine-point anchor picker, preserve-position off | Phase 2. `P_new = P_old + R·S·(A_new − A_old)` is geometry reasoning, **not** an Adobe formula — it is a hypothesis Phase 3 tests, and it may be wrong if Position and Anchor use different spaces |
 | **4** | Preserve-position on; batch across a multi-clip selection | Gate 4 — nine targets × {100%, nonuniform scale} × {0°, 90°, arbitrary} |
@@ -266,17 +356,21 @@ selection updates them; a clip with no readable Transform shows "unavailable" ra
 
 ### Known risks
 
-- **Units unknown until Phase 0.** If Position and Anchor turn out to be in different spaces, the
-  anchor compensation in Phase 3 is wrong and Phases 3–6 need re-planning. This is the single
-  largest unknown and Phase 0 is cheap, so it is the first thing done.
-- **Source dimensions have no read path.** Phase 5's frame alignment needs a clip's rendered extent.
-  With no documented source width/height, the honest v1 is: align using the sequence frame and the
-  clip's own scale, and refuse when the media type does not yield dimensions.
+- **Units — RESOLVED 2026-09-22.** Position and Anchor Point are both `[x, y]` arrays normalized
+  to the sequence frame, independently per axis (Part 1a). Proven on 2 shapes; not yet proven for
+  non-uniform pixel aspect or an Adjustment Layer's own coordinate space, which could still differ.
+- **Source dimensions — has a working read path.** `Metadata.getProjectColumnsMetadata()` →
+  `Column.Intrinsic.VideoInfo` returned real resolution strings on both probed clips (Part 1a).
+  Still open: whether hiding that Project-panel column changes the answer (documented as a
+  view-layout-dependent field, not yet tested), and the string's trailing-text variation
+  (`", Straight Alpha"` on an image) that any parser must tolerate.
 - **Two panels, one settings store.** Unverified whether `localStorage` is shared across
   entrypoints in one plugin. Gate 0a answers it; until then the new panel keeps its own key.
 - **Selection reliability.** `seq.getSelection()` is already proven unreliable on this build
   (`adjustmentLayer.js`, `effects.js`). The new panel must reuse the existing fallback path, not
-  write a third one — and that fallback has a bug (Part 1, item 5) that should be fixed first.
+  write a third one — and that fallback has a bug, now confirmed live (Part 1a): it tries
+  `.isSelected`, which is `undefined` on every item on this build; the real getter is
+  `getIsSelected()`. Fix before Phase 1 reuses that fallback.
 
 ---
 
