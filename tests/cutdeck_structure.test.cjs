@@ -13,11 +13,7 @@ const uxpDir = path.join(root, "uxp", "cutdeck");
    never a way to quiet this test: this table must only shrink as refactoring moves land. */
 const KNOWN_EXCEPTIONS = {
   // (a) executeTransaction( allowed only in host/project.js
-  executeTransaction: [
-    { file: "workflow.js", move: 4 },
-    { file: "timeline/adjustmentLayer.js", move: 4 },
-    { file: "timeline/componentAccess.js", move: 5 },
-  ],
+  executeTransaction: [],
   // (b) 254016000000 / TICKS_PER_SECOND = allowed only in host/ticks.js
   ticks: [],
   // (c) Layer direction: parse every require("./…") and fail when lower layer requires higher layer

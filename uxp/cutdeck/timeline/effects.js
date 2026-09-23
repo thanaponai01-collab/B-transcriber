@@ -40,9 +40,9 @@ const {
   getSelectedTrackItems,
   getFirstSelectedTrackItem,
   unwrapKeyframeValue,
-  runInTransaction,
 } = require("./componentAccess.js");
 const { toTicks } = require("../host/ticks.js");
+const { runTransaction } = require("../host/project.js");
 
 /* Captured point params (Anchor Point, Position) read back as plain [x, y] arrays, but
    createKeyframe only accepts a real PointF for them — an array throws "Illegal Parameter type"
@@ -177,7 +177,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   // has no getParam ("component.getParam is not a function"), so its params cannot be touched
   // before insertion. The insert must commit in its own transaction before a real,
   // param-capable Component exists to fetch back from the chain.
-  runInTransaction(project, "CutDeck: Apply Captured Preset (insert)", (compound) => {
+  runTransaction(project, "CutDeck: Apply Captured Preset (insert)", (compound) => {
     let nextIndex = startIndex;
     for (const { component, spec } of created) {
       const insertAction = chain.createInsertComponentAction(component, nextIndex);
@@ -209,7 +209,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   const animated = pairs.filter(({ p }) => Array.isArray(p.keyframes) && p.keyframes.length > 0);
 
   // Phase 2: static values, for every param that isn't animated.
-  runInTransaction(project, "CutDeck: Apply Captured Preset (values)", (compound) => {
+  runTransaction(project, "CutDeck: Apply Captured Preset (values)", (compound) => {
     for (const { p, param, label } of pairs) {
       if (Array.isArray(p.keyframes) && p.keyframes.length > 0) continue;
       if (p.value === null || p.value === undefined) {
@@ -235,12 +235,12 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
 
   // Phase 3: turn keyframing on (the stopwatch). Its own transaction, so the params are
   // time-varying before any keyframe is added to them.
-  runInTransaction(project, "CutDeck: Apply Captured Preset (enable keyframes)", (compound) => {
+  runTransaction(project, "CutDeck: Apply Captured Preset (enable keyframes)", (compound) => {
     for (const { param } of animated) compound.addAction(param.createSetTimeVaryingAction(true));
   });
 
   // Phase 4: the keyframes themselves, at target In point + captured offset.
-  runInTransaction(project, "CutDeck: Apply Captured Preset (keyframes)", (compound) => {
+  runTransaction(project, "CutDeck: Apply Captured Preset (keyframes)", (compound) => {
     for (const { p, param, label } of animated) {
       const at = placeKeyframes(p.keyframes, targetIn);
       p.keyframes.forEach((k, i) => {
@@ -258,7 +258,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   // Phase 5: interpolation (Linear / Hold / Bezier), where it was readable at capture.
   const withMode = animated.filter(({ p }) => p.keyframes.some((k) => typeof k.mode === "number"));
   if (withMode.length) {
-    runInTransaction(project, "CutDeck: Apply Captured Preset (interpolation)", (compound) => {
+    runTransaction(project, "CutDeck: Apply Captured Preset (interpolation)", (compound) => {
       for (const { p, param, label } of withMode) {
         const at = placeKeyframes(p.keyframes, targetIn);
         p.keyframes.forEach((k, i) => {

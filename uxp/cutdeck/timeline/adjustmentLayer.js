@@ -1,5 +1,12 @@
 const ppro = require("premierepro");
 const { toTicksOr, makeTickTime } = require("../host/ticks.js");
+const {
+  CUTDECK_BIN_NAME,
+  asBinLike,
+  runTransaction,
+  getOrCreateBin,
+  activeProjectAndSequence,
+} = require("../host/project.js");
 
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
 // Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47.
@@ -9,55 +16,11 @@ const { toTicksOr, makeTickTime } = require("../host/ticks.js");
 // panel, not a second one. ADJ_BIN_NAME is the canonical, unambiguous home for the
 // Adjustment Layer: dropping it there means CutDeck finds it instantly on any sequence,
 // with no name-guessing required.
-const CUTDECK_BIN_NAME = "CutDeck";
 const ADJ_BIN_NAME = "ADJ & FX";
-
-// Resolves a folder-like item's createBinAction/getItems, casting to FolderItem when
-// the plain methods aren't directly present — same fallback getFolderChildren uses below.
-function asBinLike(item) {
-  if (!item) return null;
-  if (typeof item.createBinAction === "function" && typeof item.getItems === "function") return item;
-  if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
-    try {
-      const cast = ppro.FolderItem.cast(item);
-      if (cast) return cast;
-    } catch (_) {}
-  }
-  return item;
-}
-
-// Finds (or creates once) a named child bin directly under `parent`. Same pattern as
-// workflow.js's getOrCreateCutDeckBin (issue #18: executeTransaction must be wrapped in
-// project.lockedAccess — called bare, references fetched just beforehand throw "The script
-// object is no longer valid").
-async function getOrCreateChildBin(project, parent, name) {
-  const parentBin = asBinLike(parent);
-  const existingItems = (await parentBin.getItems()) || [];
-  const existing = existingItems.find((item) => item.name === name);
-  if (existing) return existing;
-
-  let ok = false;
-  const run = () => {
-    ok = project.executeTransaction((compound) => {
-      if (!compound.addAction(parentBin.createBinAction(name, false))) {
-        throw new Error("addAction(createBin) returned false");
-      }
-    }, `Create ${name} bin`);
-  };
-  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
-  if (!ok) throw new Error(`Could not create the "${name}" bin in this project.`);
-
-  const afterItems = (await parentBin.getItems()) || [];
-  const created = afterItems.find((item) => item.name === name);
-  if (!created) throw new Error(`"${name}" bin was created but could not be found afterward.`);
-  return created;
-}
 
 // Finds (or creates once) Project panel > CutDeck > ADJ & FX.
 async function getOrCreateAdjBin(project) {
-  const root = await project.getRootItem();
-  const cutdeckBin = await getOrCreateChildBin(project, root, CUTDECK_BIN_NAME);
-  return getOrCreateChildBin(project, cutdeckBin, ADJ_BIN_NAME);
+  return getOrCreateBin(project, [CUTDECK_BIN_NAME, ADJ_BIN_NAME]);
 }
 
 // Importing a generated "CutDeck <W>x<H>.prproj" makes Premiere wrap its item in a bin named
@@ -68,13 +31,6 @@ async function getOrCreateAdjBin(project) {
 // the user made is ever moved or removed. Failure is logged, never thrown: the AL still works
 // from inside the wrapper.
 const IMPORT_WRAPPER_NAME = /^CutDeck \d+x\d+\.prproj$/;
-
-function runTransaction(project, label, build) {
-  let ok = false;
-  const run = () => { ok = project.executeTransaction(build, label); };
-  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
-  if (!ok) throw new Error(`${label}: executeTransaction returned false`);
-}
 
 async function listWrappers(bin) {
   const found = [];
@@ -598,10 +554,9 @@ function assignPlacementLanes(placements) {
 
 // Robust UXP timeline placement routine (supporting multi-clip cut transitions and separate clip spans)
 async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
-  const seq = await project.getActiveSequence();
-  if (!seq) throw new Error("Open a sequence in Premiere first.");
+  const { project, sequence: seq } = await activeProjectAndSequence(ppro, {
+    sequenceErrorMessage: "Open a sequence in Premiere first.",
+  });
 
   if (seq.name && typeof options.onSequenceName === "function") {
     options.onSequenceName(seq.name);
@@ -1026,84 +981,60 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     // later trim can't undo (a trim only shrinks the AL clip; it doesn't restore what
     // the overwrite already erased).
     if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
-      const setDuration = () => {
-        try {
-          freshProject.executeTransaction((compound) => {
-            const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
-            if (inOut) compound.addAction(inOut);
-          }, "CutDeck: Set Adjustment Layer Duration");
-        } catch (_) {}
-      };
-      if (typeof freshProject.lockedAccess === "function") {
-        freshProject.lockedAccess(setDuration);
-      } else {
-        setDuration();
-      }
-    }
-
-    let ok = false;
-    let thrown = null;
-
-    const run = () => {
       try {
-        ok = freshProject.executeTransaction((compound) => {
-          let action = null;
-          let lastErr = null;
-
-          if (clipItem) {
-            const attempts = [];
-            if (targetTrack >= trackCountNow) {
-              attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
-              attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
-            } else {
-              attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
-              attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
-            }
-            attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), 0));
-            // clipItem is alItem after ClipProjectItem.cast() — that cast has been
-            // observed to make Premiere reject the placement with "Invalid parameter"
-            // in cases where the pre-cast item works fine. Fall back to it.
-            if (alItem && alItem !== clipItem) {
-              attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
-              attempts.push(() => editor.createInsertProjectItemAction(alItem, tStart, Number(targetTrack), -1, false));
-            }
-
-            for (const fn of attempts) {
-              try {
-                action = fn();
-                if (action) break;
-              } catch (e) {
-                lastErr = e;
-              }
-            }
-
-            if (!action) {
-              const name = clipItem?.name || alItem?.name || "unknown";
-              const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
-              throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
-            }
-          }
-
-          if (!action) {
-            throw new Error(`No clipItem was available to place at V${targetTrack + 1}.`);
-          }
-
-          if (!compound.addAction(action)) {
-            throw new Error("addAction returned false");
-          }
-        }, "CutDeck: Place Adjustment Layer");
-      } catch (e) {
-        thrown = e;
-      }
-    };
-
-    if (typeof freshProject.lockedAccess === "function") {
-      freshProject.lockedAccess(run);
-    } else {
-      run();
+        runTransaction(freshProject, "CutDeck: Set Adjustment Layer Duration", (compound) => {
+          const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
+          if (inOut) compound.addAction(inOut);
+        });
+      } catch (_) {}
     }
 
-    if (!ok && thrown) throw thrown;
+    runTransaction(freshProject, "CutDeck: Place Adjustment Layer", (compound) => {
+      let action = null;
+      let lastErr = null;
+
+      if (clipItem) {
+        const attempts = [];
+        if (targetTrack >= trackCountNow) {
+          attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
+          attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
+        } else {
+          attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
+          attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
+        }
+        attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), 0));
+        // clipItem is alItem after ClipProjectItem.cast() — that cast has been
+        // observed to make Premiere reject the placement with "Invalid parameter"
+        // in cases where the pre-cast item works fine. Fall back to it.
+        if (alItem && alItem !== clipItem) {
+          attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
+          attempts.push(() => editor.createInsertProjectItemAction(alItem, tStart, Number(targetTrack), -1, false));
+        }
+
+        for (const fn of attempts) {
+          try {
+            action = fn();
+            if (action) break;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+
+        if (!action) {
+          const name = clipItem?.name || alItem?.name || "unknown";
+          const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
+          throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
+        }
+      }
+
+      if (!action) {
+        throw new Error(`No clipItem was available to place at V${targetTrack + 1}.`);
+      }
+
+      if (!compound.addAction(action)) {
+        throw new Error("addAction returned false");
+      }
+    });
 
     // Step 2: Trim the placed Adjustment Layer to exact duration (so it is NEVER 5 seconds!)
     // Also doubles as placement verification — see `verified` below.
@@ -1121,28 +1052,22 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
             if (diff <= (tpf * 2n)) {
               let trimOk = false;
               let trimErr = null;
-              const trimRun = () => {
-                try {
-                  trimOk = freshProject.executeTransaction((compound) => {
-                    if (typeof it.createSetEndAction !== "function") {
-                      throw new Error("track item has no createSetEndAction");
-                    }
-                    const setEndAction = it.createSetEndAction(tickTime(p.endTicks));
-                    if (!setEndAction) {
-                      throw new Error("createSetEndAction returned falsy");
-                    }
-                    if (!compound.addAction(setEndAction)) {
-                      throw new Error("addAction(setEndAction) returned false");
-                    }
-                  }, "CutDeck: Trim Adjustment Layer Duration");
-                } catch (e) {
-                  trimErr = e;
-                }
-              };
-              if (typeof freshProject.lockedAccess === "function") {
-                freshProject.lockedAccess(trimRun);
-              } else {
-                trimRun();
+              try {
+                runTransaction(freshProject, "CutDeck: Trim Adjustment Layer Duration", (compound) => {
+                  if (typeof it.createSetEndAction !== "function") {
+                    throw new Error("track item has no createSetEndAction");
+                  }
+                  const setEndAction = it.createSetEndAction(tickTime(p.endTicks));
+                  if (!setEndAction) {
+                    throw new Error("createSetEndAction returned falsy");
+                  }
+                  if (!compound.addAction(setEndAction)) {
+                    throw new Error("addAction(setEndAction) returned false");
+                  }
+                });
+                trimOk = true;
+              } catch (e) {
+                trimErr = e;
               }
 
               // Read back the real result — don't trust the API's claimed success,
@@ -1178,37 +1103,23 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
               // not a bug in this call.
               try {
                 if (clipItem && typeof clipItem.createSetColorLabelAction === "function") {
-                  const setColor = () => {
-                    try {
-                      freshProject.executeTransaction((compound) => {
-                        const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
-                        if (colorAction) compound.addAction(colorAction);
-                      }, "CutDeck: Set Adjustment Layer Color Label");
-                    } catch (_) {}
-                  };
-                  if (typeof freshProject.lockedAccess === "function") {
-                    freshProject.lockedAccess(setColor);
-                  } else {
-                    setColor();
-                  }
+                  try {
+                    runTransaction(freshProject, "CutDeck: Set Adjustment Layer Color Label", (compound) => {
+                      const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
+                      if (colorAction) compound.addAction(colorAction);
+                    });
+                  } catch (_) {}
                 }
               } catch (_) {}
               try {
                 if (typeof it.createSetNameAction === "function") {
-                  const setNameRun = () => {
-                    try {
-                      freshProject.executeTransaction((compound) => {
-                        const nameAction = it.createSetNameAction(p.name);
-                        if (!nameAction) throw new Error("createSetNameAction returned falsy");
-                        if (!compound.addAction(nameAction)) throw new Error("addAction(nameAction) returned false");
-                      }, "CutDeck: Name Adjustment Layer");
-                    } catch (_) {}
-                  };
-                  if (typeof freshProject.lockedAccess === "function") {
-                    freshProject.lockedAccess(setNameRun);
-                  } else {
-                    setNameRun();
-                  }
+                  try {
+                    runTransaction(freshProject, "CutDeck: Name Adjustment Layer", (compound) => {
+                      const nameAction = it.createSetNameAction(p.name);
+                      if (!nameAction) throw new Error("createSetNameAction returned falsy");
+                      if (!compound.addAction(nameAction)) throw new Error("addAction(nameAction) returned false");
+                    });
+                  } catch (_) {}
                 }
               } catch (_) {}
               verified = true;

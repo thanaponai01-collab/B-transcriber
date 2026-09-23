@@ -20,7 +20,7 @@
    Like capabilityProbe.js, nothing here throws at the caller: a failed call is a finding. */
 
 const { attempt, finding, formatFindings } = require("./capabilityProbe.js");
-const { runInTransaction } = require("./timeline/componentAccess.js");
+const { runTransaction } = require("./host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
 // Shared with native Sync, which owns them.
 const { readSequence, groupUnits, baseName } = require("./timeline/nativeSync.js");
@@ -86,7 +86,7 @@ async function probeSyncMoves(ppro, deps = {}) {
 
   // Copy the sequence; everything below edits the copy only.
   const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  const copyRead = await attempt("createCloneAction", () => runInTransaction(project, "CutDeck sync test: copy sequence", (compound) => {
+  const copyRead = await attempt("createCloneAction", () => runTransaction(project, "CutDeck sync test: copy sequence", (compound) => {
     if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
   }));
   const created = copyRead.ok ? (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString())) : [];
@@ -99,7 +99,7 @@ async function probeSyncMoves(ppro, deps = {}) {
   const testName = `${source.name}${TEST_SUFFIX}`;
   const renamed = await attempt("rename copy", async () => {
     const item = await copy.getProjectItem();
-    runInTransaction(project, "CutDeck sync test: name copy", (compound) => {
+    runTransaction(project, "CutDeck sync test: name copy", (compound) => {
       if (!compound.addAction(item.createSetNameAction(testName))) throw new Error("addAction(rename) returned false");
     });
   });
@@ -127,7 +127,7 @@ async function probeSyncMoves(ppro, deps = {}) {
   // 2. Clone the clip to one past the last video and audio track, after the sequence end.
   const vOffset = c0.videoTracks - cu.video.track;
   const aOffset = c0.audioTracks - firstAudioTrack;
-  const cloneRead = await attempt("createCloneTrackItemAction", () => runInTransaction(project, "CutDeck sync test: clone to new track", (compound) => {
+  const cloneRead = await attempt("createCloneTrackItemAction", () => runTransaction(project, "CutDeck sync test: clone to new track", (compound) => {
     if (!compound.addAction(cloneAction(cu.video.item, vOffset, aOffset, offset))) throw new Error("addAction(clone clip) returned false");
   }));
   const c1 = await readSequence(ppro, copy);
@@ -154,7 +154,7 @@ async function probeSyncMoves(ppro, deps = {}) {
   if (!landedA.length) {
     const fresh = await readSequence(ppro, copy);
     const sources = cu.audio.map((a) => fresh.audio.find((c) => c.track === a.track && c.start === a.start)).filter(Boolean);
-    const sepRead = await attempt("clone audio", () => runInTransaction(project, "CutDeck sync test: clone audio", (compound) => {
+    const sepRead = await attempt("clone audio", () => runTransaction(project, "CutDeck sync test: clone audio", (compound) => {
       for (const a of sources) {
         if (!compound.addAction(cloneAction(a.item, 0, c0.audioTracks - firstAudioTrack, offset, false))) throw new Error("addAction(clone audio) returned false");
       }
@@ -171,7 +171,7 @@ async function probeSyncMoves(ppro, deps = {}) {
   let subframe = null;
   if (audioHere.length) {
     const a = audioHere[0];
-    const moveRead = await attempt("createMoveAction", () => runInTransaction(project, "CutDeck sync test: half-frame audio", (compound) => {
+    const moveRead = await attempt("createMoveAction", () => runTransaction(project, "CutDeck sync test: half-frame audio", (compound) => {
       if (!compound.addAction(a.item.createMoveAction(tick(ticksPerFrame / 2n)))) throw new Error("addAction(move) returned false");
     }));
     const c2 = await readSequence(ppro, copy);
@@ -197,7 +197,7 @@ async function probeSyncMoves(ppro, deps = {}) {
     const r = await attempt(label, async () => {
       const projectItem = await placeSource.item.getProjectItem();
       const editor = ppro.SequenceEditor.getEditor(copy);
-      runInTransaction(project, `CutDeck sync test: ${label}`, (compound) => {
+      runTransaction(project, `CutDeck sync test: ${label}`, (compound) => {
         if (!compound.addAction(make(editor, projectItem))) throw new Error(`addAction(${label}) returned false`);
       });
     });
@@ -225,7 +225,7 @@ async function probeSyncMoves(ppro, deps = {}) {
   const sameFile = (seq) => seq.video.filter((c) => c.path === cu.video.path).length;
   const sourceItem = (findSource(before) || cu.video).item;
   const started = now();
-  const speedRead = await attempt("speed", () => runInTransaction(project, `CutDeck sync test: ${SPEED_CLONES} clones`, (compound) => {
+  const speedRead = await attempt("speed", () => runTransaction(project, `CutDeck sync test: ${SPEED_CLONES} clones`, (compound) => {
     for (let i = 1; i <= SPEED_CLONES; i++) {
       const action = newTrack
         ? cloneAction(sourceItem, vOffset + i, aOffset + i * channels, offset)

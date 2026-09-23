@@ -120,23 +120,10 @@ function unwrapKeyframeValue(keyframe) {
   return (raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw) ? raw.value : raw;
 }
 
-// The transaction/lockedAccess shape every mutation in this plugin uses (lifted from the
-// AdobeDocs sample-panels/premiere-api/src/effects.ts sample). Runs `fn` inside
-// project.executeTransaction, wrapped in project.lockedAccess when the host provides it, and
-// throws whatever executeTransaction threw (or a generic error) when it reports failure.
-function runInTransaction(project, label, fn) {
-  let ok = false;
-  let thrown = null;
-  const run = () => {
-    try {
-      ok = project.executeTransaction(fn, label);
-    } catch (e) {
-      thrown = e;
-    }
-  };
-  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
-  if (!ok) throw thrown || new Error(`Could not complete "${label}".`);
-}
+const { runTransaction } = require("../host/project.js");
+
+// Re-exported for backward compatibility until move 5 moves componentAccess.
+const runInTransaction = runTransaction;
 
 module.exports = {
   FIXED_EFFECT_DISPLAY_NAMES,
@@ -146,4 +133,5 @@ module.exports = {
   getFirstSelectedTrackItem,
   unwrapKeyframeValue,
   runInTransaction,
+  runTransaction,
 };

@@ -14,6 +14,7 @@ const effects = require("./timeline/effects.js");
 const componentAccess = require("./timeline/componentAccess.js");
 const transformParams = require("./transform/params.js");
 const transformGeometry = require("./transform/geometry.js");
+const { activeProjectAndSequence } = require("./host/project.js");
 const { createPresetStore, CACHE_KEY: FX_PRESETS_KEY } = require("./presetStore.js");
 
 const KEY = "cutdeck.xml.lastJob";
@@ -418,10 +419,7 @@ async function handleProbe(name, payload) {
     const label = ((payload && payload.name) || "").trim();
     if (!label) throw new Error("Name this preset first (the field next to Capture), then click Capture.");
 
-    const project = await ppro.Project.getActiveProject();
-    if (!project) throw new Error("Open a Premiere project first.");
-    const seq = await project.getActiveSequence();
-    if (!seq) throw new Error("Open a sequence first.");
+    const { project, sequence: seq } = await activeProjectAndSequence(ppro);
     const item = await effects.getFirstSelectedTrackItem(seq);
     if (!item) {
       throw new Error("Select the clip or Adjustment Layer whose effects you want to capture, then click Capture.");
@@ -565,8 +563,7 @@ async function readAlignTransform(seq) {
 }
 
 async function readAlignState() {
-  const project = await ppro.Project.getActiveProject();
-  const seq = project ? await project.getActiveSequence() : null;
+  const { sequence: seq } = await activeProjectAndSequence(ppro, { requireProject: false, requireSequence: false });
   return {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
     transform: await readAlignTransform(seq),

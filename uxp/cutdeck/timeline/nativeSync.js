@@ -16,7 +16,7 @@
    onto not-yet-existing tracks in one transaction, overwrite at a between-frames time, and -1 as
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
-const { runInTransaction } = require("./componentAccess.js");
+const { runTransaction, activeProjectAndSequence } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 
 const SYNCED_SUFFIX = "_Synced";
@@ -130,14 +130,14 @@ async function waitForPlan(rpc, clips, deps) {
 
 async function copySequence(project, source, name) {
   const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runInTransaction(project, "CutDeck Sync: copy sequence", (compound) => {
+  runTransaction(project, "CutDeck Sync: copy sequence", (compound) => {
     if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
   });
   const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; stopped before placing anything.`);
   const copy = created[0];
   const item = await copy.getProjectItem();
-  runInTransaction(project, "CutDeck Sync: name copy", (compound) => {
+  runTransaction(project, "CutDeck Sync: name copy", (compound) => {
     if (!compound.addAction(item.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
   });
   return copy.guid.toString();
@@ -161,7 +161,7 @@ async function placeAll(ppro, project, copy, targets) {
   }
   const editor = ppro.SequenceEditor.getEditor(copy);
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
-  runInTransaction(project, "CutDeck Sync", (compound) => {
+  runTransaction(project, "CutDeck Sync", (compound) => {
     // The selection is only valid while its callback runs (live 2026-09-23: "The script object
     // is no longer valid"; Adobe's eslint-plugin-premierepro rule no-empty-selection-escape),
     // so it is filled and turned into the remove action in there, synchronously.
@@ -221,10 +221,9 @@ function formatReport(name, plan, clips, skipped, problems) {
 
 /* deps: { rpc, ensureHelper, onStatus, sleep? }. Returns { text, problems }. */
 async function syncSequence(ppro, deps) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
-  const source = await project.getActiveSequence();
-  if (!source) throw new Error("Open the sequence with your camera and recorder clips first.");
+  const { project, sequence: source } = await activeProjectAndSequence(ppro, {
+    sequenceErrorMessage: "Open the sequence with your camera and recorder clips first.",
+  });
   if (String(source.name).endsWith(SYNCED_SUFFIX)) {
     throw new Error(`"${source.name}" is already a synced copy. Open the original sequence and run Sync on that.`);
   }
