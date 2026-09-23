@@ -36,11 +36,11 @@ function toTicks(value, what) {
     } else {
       if (typeof value.getSeconds === "function") {
         const sec = value.getSeconds();
-        if (typeof sec === "number" && !isNaN(sec)) {
+        if (typeof sec === "number" && Number.isFinite(sec)) {
           return BigInt(Math.round(sec * Number(TICKS_PER_SECOND)));
         }
       }
-      if (typeof value.seconds === "number" && !isNaN(value.seconds)) {
+      if (typeof value.seconds === "number" && Number.isFinite(value.seconds)) {
         return BigInt(Math.round(value.seconds * Number(TICKS_PER_SECOND)));
       }
     }

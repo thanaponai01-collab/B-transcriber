@@ -72,6 +72,12 @@ test("toTicks unwraps TickTime objects", () => {
   assert.throws(() => toTicks({ ticks: 1.5 }), /not a whole number of ticks/);
   assert.throws(() => toTicks({ ticks: "12.5" }), /not an exact tick value/);
   assert.throws(() => toTicks({ ticks: "bad" }), /not an exact tick value/);
+  assert.throws(() => toTicks({ ticks: null }), /not an exact tick value/);
+  assert.throws(() => toTicks({ ticks: undefined }), /not an exact tick value/);
+  assert.throws(() => toTicks({ ticks: "" }), /not an exact tick value/);
+  assert.throws(() => toTicks({ seconds: NaN }), /not an exact tick value/);
+  assert.throws(() => toTicks({ seconds: Infinity }), /not an exact tick value/);
+  assert.throws(() => toTicks({ seconds: -Infinity }), /not an exact tick value/);
 });
 
 test("toTicksOr returns converted value when valid, fallback on failure", () => {
