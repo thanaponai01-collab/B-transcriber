@@ -32,7 +32,7 @@
           </svg>
           <span>Settings</span>
         </div>
-        <div id="socketprobe" class="dropdown-item" role="button" data-act="socketprobe">
+        <div id="socketprobe" class="dropdown-item" role="button" data-act="socketprobe" data-probe="socket">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
             <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
@@ -41,35 +41,35 @@
           </svg>
           <span>Test Connection</span>
         </div>
-        <div id="copystatus" class="dropdown-item" role="button" data-act="copystatus">
+        <div id="copystatus" class="dropdown-item" role="button" data-act="copystatus" data-probe="copystatus">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>
           <span>Copy Status</span>
         </div>
-        <div id="timingprobe" class="dropdown-item" role="button" data-act="timingprobe">
+        <div id="timingprobe" class="dropdown-item" role="button" data-act="timingprobe" data-probe="timing">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
           <span>Check Timing</span>
         </div>
-        <div id="motionprobe" class="dropdown-item" role="button" data-act="motionprobe">
+        <div id="motionprobe" class="dropdown-item" role="button" data-act="motionprobe" data-probe="motion">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <path d="M3 9h18M9 21V9"/>
           </svg>
           <span>Check AL Scale</span>
         </div>
-        <div id="effectprobe" class="dropdown-item" role="button" data-act="effectprobe">
+        <div id="effectprobe" class="dropdown-item" role="button" data-act="effectprobe" data-probe="effect">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
             <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
           </svg>
           <span>Check Effect Chain</span>
         </div>
-        <div id="transformprobe" class="dropdown-item" role="button" data-act="transformprobe">
+        <div id="transformprobe" class="dropdown-item" role="button" data-act="transformprobe" data-probe="transform">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="1"/>
             <circle cx="12" cy="12" r="1.5"/>
@@ -77,20 +77,20 @@
           </svg>
           <span>Check Transform</span>
         </div>
-        <div id="keyframeprobe" class="dropdown-item" role="button" data-act="keyframeprobe" title="Read-only. Select one clip with a keyframe at the playhead first.">
+        <div id="keyframeprobe" class="dropdown-item" role="button" data-act="keyframeprobe" data-probe="keyframe" title="Read-only. Select one clip with a keyframe at the playhead first.">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3l5 9-5 9-5-9z"/>
           </svg>
           <span>Check Keyframes</span>
         </div>
-        <div id="alcreateprobe" class="dropdown-item" role="button" data-act="alcreateprobe" title="Adds one item: imports an Adjustment Layer sized to the active sequence into CutDeck &gt; ADJ &amp; FX.">
+        <div id="alcreateprobe" class="dropdown-item" role="button" data-act="alcreateprobe" data-probe="alcreate" title="Adds one item: imports an Adjustment Layer sized to the active sequence into CutDeck &gt; ADJ &amp; FX.">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="5" width="18" height="14" rx="2"/>
             <path d="M12 9v6M9 12h6"/>
           </svg>
           <span>Try Creating AL</span>
         </div>
-        <div id="syncmovesprobe" class="dropdown-item" role="button" data-act="syncmovesprobe" title="Copies the active sequence, then tests moving one camera clip and its audio on the copy. Your sequence is not edited.">
+        <div id="syncmovesprobe" class="dropdown-item" role="button" data-act="syncmovesprobe" data-probe="syncmoves" title="Copies the active sequence, then tests moving one camera clip and its audio on the copy. Your sequence is not edited.">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 7h10M4 12h14M4 17h7"/>
             <path d="M17 14l3 3-3 3"/>

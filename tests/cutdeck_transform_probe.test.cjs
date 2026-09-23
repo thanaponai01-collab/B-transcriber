@@ -327,19 +327,20 @@ test("the transform report renders the real probe output as text", async () => {
 test("the Check Transform menu item is wired through to the probe", () => {
   const html = read("uxp/cutdeck/index.html");
   const panelJs = read("uxp/cutdeck/core/panel.js");
-  const probesJs = read("uxp/cutdeck/features/probes.js");
+  const { PROBES } = require("../uxp/cutdeck/features/probes.js");
 
-  // reachable: the control exists in the document the panel actually loads
-  assert.match(html, /id="transformprobe"/, "no #transformprobe control in index.html");
+  // reachable: the control exists in the document the panel actually loads with data-probe="transform"
+  assert.match(html, /id="transformprobe"[^>]*data-probe="transform"/, "no #transformprobe control with data-probe='transform' in index.html");
 
-  // invoked: a click on it raises the intent
-  assert.match(panelJs, /\$\("transformprobe"\)/, "panel.js never looks the control up");
-  assert.match(panelJs, /intents\.onProbe\("transform"\)/, "panel.js never raises the transform intent");
+  // invoked: panel.js queries [data-probe] and calls intents.onProbe(probeId)
+  assert.match(panelJs, /querySelectorAll\("\[data-probe\]"\)/, "panel.js never looks [data-probe] elements up");
+  assert.match(panelJs, /intents\.onProbe\(/, "panel.js never raises probe intents");
 
-  // routed: the controller handles that intent name and calls the probe + its formatter
-  assert.match(probesJs, /name === "transform"/, "probes.js has no branch for the transform intent");
-  assert.match(probesJs, /capability\.probeTransformParams\(ppro\)/, "probes.js never calls the probe");
-  assert.match(probesJs, /capability\.formatTransformReport\(/, "probes.js never renders the report");
+  // routed: PROBES registry has the transform probe entry with its runner and formatter
+  const transformEntry = PROBES.find((p) => p.id === "transform");
+  assert.ok(transformEntry, "PROBES registry has no entry for transform");
+  assert.equal(typeof transformEntry.run, "function", "transform probe entry has no run function");
+  assert.equal(typeof transformEntry.format, "function", "transform probe entry has no format function");
 
   // registered: both are exported from the module probes.js requires
   const exports = Object.keys(require("../uxp/cutdeck/capabilityProbe.js"));
@@ -348,5 +349,5 @@ test("the Check Transform menu item is wired through to the probe", () => {
   }
 
   // and the menu closes on click, like every other probe entry
-  assert.match(panelJs, /"effectprobe", "transformprobe"/, "the menu will not close after clicking it");
+  assert.match(panelJs, /overflowMenu\.classList\.remove\("open"\)/, "the menu will not close after clicking it");
 });

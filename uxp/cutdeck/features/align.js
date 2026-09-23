@@ -5,7 +5,9 @@ const trackItems = require("../host/trackItems.js");
 const transformParams = require("../transform/params.js");
 const transformGeometry = require("../transform/geometry.js");
 const { activeProjectAndSequence } = require("../host/project.js");
-const capability = require("../capabilityProbe.js");
+const { PROBES, runProbe } = require("./probes.js");
+
+const transformProbe = PROBES.find((p) => p.id === "transform");
 
 function describeField(entry, isPoint, frameSize) {
   if (!entry) return { known: false };
@@ -84,10 +86,7 @@ function createAlignFeature({ ppro, ctl }) {
     onRefresh: () => ctl.act(refreshAlignSequence),
     onProbe: (_name) => ctl.act(async () => {
       await refreshAlignSequence();
-      ctl.setStatus("Reading this clip's real Motion/Transform params, units and source dimensions…", "busy");
-      const report = await capability.probeTransformParams(ppro);
-      console.log("CutDeck transform params probe", JSON.stringify(report, null, 2));
-      ctl.setStatus(capability.formatTransformReport(report), "ready");
+      await runProbe(transformProbe, ppro, ctl);
     }),
     refresh: refreshAlignSequence,
     startPolling: startAlignPolling,

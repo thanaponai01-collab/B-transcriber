@@ -355,12 +355,6 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe", "keyframeprobe", "alcreateprobe", "syncmovesprobe"].forEach((id) => {
-      const el = $(id);
-      if (el && overflowMenu) {
-        el.addEventListener("click", () => overflowMenu.classList.remove("open"));
-      }
-    });
   }
 
   function bindMiniPills(intents) {
@@ -495,24 +489,14 @@
   }
 
   function bindProbes(intents) {
-    const timing = $("timingprobe");
-    if (timing) timing.addEventListener("click", () => intents.onProbe("timing"));
-    const socket = $("socketprobe");
-    if (socket) socket.addEventListener("click", () => intents.onProbe("socket"));
-    const copy = $("copystatus");
-    if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
-    const motion = $("motionprobe");
-    if (motion) motion.addEventListener("click", () => intents.onProbe("motion"));
-    const effectChain = $("effectprobe");
-    if (effectChain) effectChain.addEventListener("click", () => intents.onProbe("effect"));
-    const transform = $("transformprobe");
-    if (transform) transform.addEventListener("click", () => intents.onProbe("transform"));
-    const keyframe = $("keyframeprobe");
-    if (keyframe) keyframe.addEventListener("click", () => intents.onProbe("keyframe"));
-    const alCreate = $("alcreateprobe");
-    if (alCreate) alCreate.addEventListener("click", () => intents.onProbe("alcreate"));
-    const syncMoves = $("syncmovesprobe");
-    if (syncMoves) syncMoves.addEventListener("click", () => intents.onProbe("syncmoves"));
+    const overflowMenu = $("overflow-menu");
+    document.querySelectorAll("[data-probe]").forEach((el) => {
+      el.addEventListener("click", () => {
+        if (overflowMenu) overflowMenu.classList.remove("open");
+        const probeId = el.getAttribute("data-probe") || (el.dataset && el.dataset.probe);
+        if (probeId) intents.onProbe(probeId);
+      });
+    });
   }
 
   function bind(intents) {
