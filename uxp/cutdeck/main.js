@@ -275,9 +275,7 @@ async function doApplyPreset(presetId, mode) {
 
   const done = `Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}`;
   if (warnings.length) {
-    setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:
-${warnings.slice(0, 6).join("
-")}`, "error");
+    setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:\n${warnings.slice(0, 6).join("\n")}`, "error");
   } else {
     setStatus(`${done}!`, "ready");
   }

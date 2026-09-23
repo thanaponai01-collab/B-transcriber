@@ -170,3 +170,15 @@ test("read-back reports keyframes that didn't land where captured (e.g. a stopwa
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /expected keyframes at .* but found 0, /);
 });
+
+test("point values ([x, y] as captured) are written as PointF, other values pass through", () => {
+  class PointF { constructor(x, y) { this.x = x; this.y = y; } }
+  const host = { PointF };
+  const p = effects.toParamValue(host, [0.5, 0.25]);
+  assert.ok(p instanceof PointF);
+  assert.deepEqual([p.x, p.y], [0.5, 0.25]);
+  assert.ok(effects.toParamValue(host, { x: 1, y: 2 }) instanceof PointF);
+  assert.equal(effects.toParamValue(host, 100), 100);
+  assert.equal(effects.toParamValue(host, true), true);
+  assert.deepEqual(effects.toParamValue(host, [1, 2, 3]), [1, 2, 3], "not a 2D point");
+});

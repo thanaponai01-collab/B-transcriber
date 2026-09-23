@@ -48,6 +48,20 @@ function tickCount(tickTime) {
   return BigInt(String(raw).split(".")[0]);
 }
 
+/* Captured point params (Anchor Point, Position) read back as plain [x, y] arrays, but
+   createKeyframe only accepts a real PointF for them — an array throws "Illegal Parameter type"
+   (UXPLogs, 2026-09-23: every Anchor Point / Position in every applied preset). Convert here;
+   every other value type passes through unchanged. */
+function toParamValue(ppro, value) {
+  const isPair = Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number");
+  const isXY = value && typeof value === "object" && !Array.isArray(value)
+    && typeof value.x === "number" && typeof value.y === "number";
+  if ((isPair || isXY) && ppro && typeof ppro.PointF === "function") {
+    return isPair ? new ppro.PointF(value[0], value[1]) : new ppro.PointF(value.x, value.y);
+  }
+  return value;
+}
+
 /* Pure: where each captured keyframe lands on a target whose source In point is
    `targetInTicks` (BigInt). Returns tick strings, ready for TickTime.createWithTicks. */
 function placeKeyframes(keyframes, targetInTicks) {
@@ -207,7 +221,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
         continue;
       }
       try {
-        const setAction = param.createSetValueAction(param.createKeyframe(p.value), true);
+        const setAction = param.createSetValueAction(param.createKeyframe(toParamValue(ppro, p.value)), true);
         if (setAction) compound.addAction(setAction);
         else warn(`createSetValueAction returned nothing for ${label} — left at default.`);
       } catch (e) {
@@ -235,7 +249,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
       const at = placeKeyframes(p.keyframes, targetIn);
       p.keyframes.forEach((k, i) => {
         try {
-          const keyframe = param.createKeyframe(k.value);
+          const keyframe = param.createKeyframe(toParamValue(ppro, k.value));
           keyframe.position = TickTime.createWithTicks(at[i]);
           compound.addAction(param.createAddKeyframeAction(keyframe));
         } catch (e) {
@@ -286,6 +300,7 @@ module.exports = {
   captureEffectFromTrackItem,
   applyCapturedPreset,
   placeKeyframes,
+  toParamValue,
   isFixedComponent,
   FIXED_EFFECT_DISPLAY_NAMES,
 };
