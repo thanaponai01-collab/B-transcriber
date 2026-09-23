@@ -11,7 +11,9 @@
   "requiredPermissions": {
     "localFileSystem": "fullAccess",
     "network": {
-      "domains": "all"
+      "domains": [
+        "ws://localhost:7891"
+      ]
     },
     "clipboard": "readAndWrite",
     "launchProcess": {

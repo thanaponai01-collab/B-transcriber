@@ -1,8 +1,8 @@
 /* Helper transport for the CutDeck panel. Connects to the CutDeck Python helper on
-   ws://127.0.0.1:7891.
+   ws://localhost:7891.
 
    Premiere can deny the socket on a cold start with "Permission denied to the url
-   ws://127.0.0.1:<port>. Manifest entry not found." even though the manifest does
+   ws://localhost:<port>. Manifest entry not found." even though the manifest does
    declare the domain — UXP registers the plugin's network permission later than the
    panel's first request. The helper may also not be listening yet. Both failures land
    before the request is sent, so retrying them is safe.
@@ -11,7 +11,7 @@
    blind resend could leave an orphan job behind; a lost reply is recovered through
    "Resume last job" instead, which the helper answers idempotently. */
 (function (global) {
-  const URL = "ws://127.0.0.1:7891";
+  const URL = "ws://localhost:7891";
   const ATTEMPTS = 5;
   const BACKOFF_MS = [200, 400, 800, 1600];
   const CONNECT_TIMEOUT_MS = 4000;

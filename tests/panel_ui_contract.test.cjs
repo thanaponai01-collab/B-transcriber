@@ -178,7 +178,7 @@ function makeDomStub() {
     "menu-item-reload", "menu-item-settings", "mode", "overflow-menu", "pill-silence",
     "pill-speech", "range", "refresh", "resume", "seq-card", "sequence", "setting-active-fx",
     "setting-bin", "setting-clamp", "setting-color", "setting-frames", "settings-modal",
-    "socketprobe", "status", "status-icon", "sync", "tab-adj", "tab-edit", "timingprobe",
+    "status", "status-icon", "sync", "tab-adj", "tab-edit", "timingprobe",
     "tools-toggle", "view-adj", "view-edit",
   ];
   const dataActIds = new Set([
@@ -186,7 +186,7 @@ function makeDomStub() {
     "btn-capture-preset", "btn-fx", "copystatus", "cut", "frame-dec", "frame-inc",
     "menu-item-reload", "menu-item-settings", "mode", "pill-silence", "pill-speech",
     "refresh", "seq-card", "setting-active-fx", "setting-bin", "setting-clamp",
-    "setting-color", "setting-frames", "socketprobe", "sync", "tab-adj", "tab-edit",
+    "setting-color", "setting-frames", "sync", "tab-adj", "tab-edit",
     "timingprobe", "tools-toggle",
   ]);
 

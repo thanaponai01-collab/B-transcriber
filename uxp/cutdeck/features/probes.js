@@ -3,21 +3,8 @@
 
 const capability = require("../capabilityProbe.js");
 const syncProbe = require("../syncProbe.js");
-const probe = require("../probe.js");
 
 const PROBES = [
-  {
-    id: "socket",
-    startText: "Probing which socket URLs this Premiere build permits…",
-    run: async () => probe.run(),
-    format: ({ report, written }) => [
-      "Socket permission probe:",
-      ...report.results.map((r) => `${r.url} -> ${r.outcome}`),
-      "",
-      `written: ${written}`,
-    ].join("\n"),
-    logLabel: "CutDeck socket probe",
-  },
   {
     id: "copystatus",
     special: true,

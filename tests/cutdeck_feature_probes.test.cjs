@@ -48,28 +48,6 @@ test("probes: onProbe('copystatus') fails gracefully when no clipboard API exist
   assert.match(ctl.state.status.text, /No clipboard API/);
 });
 
-test("probes: onProbe('socket') runs probe and updates status", async () => {
-  const ctl = createController({ render: () => {} });
-  const probeMod = require("../uxp/cutdeck/probe.js");
-  const origRun = probeMod.run;
-
-  probeMod.run = async () => ({
-    report: { results: [{ url: "ws://127.0.0.1", outcome: "connected" }] },
-    written: true,
-  });
-
-  try {
-    const probes = createProbesFeature({ ppro: {}, ctl });
-    await probes.onProbe("socket");
-
-    assert.equal(ctl.state.status.level, "ready");
-    assert.match(ctl.state.status.text, /Socket permission probe/);
-    assert.match(ctl.state.status.text, /ws:\/\/127\.0\.0\.1 -> connected/);
-  } finally {
-    probeMod.run = origRun;
-  }
-});
-
 test("every data-probe in index.html has a PROBES entry and vice versa", () => {
   const htmlPath = path.join(__dirname, "..", "uxp", "cutdeck", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");

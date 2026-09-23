@@ -18,9 +18,8 @@
    require()-module behavior (and __dirname inside it) isn't something this
    plugin has ever exercised — it produced "path should be a string type"
    from shell.openPath in a real Premiere run. `storage.localFileSystem
-   .getPluginFolder().nativePath` is the route probe.js already proves works
-   in this exact plugin (uxp/cutdeck/probe.js), so derive the repo root from
-   that instead. */
+   .getPluginFolder().nativePath` is the route used by `findHelperScript` on
+   every helper launch, so derive the repo root from that instead. */
 
 const HELPER_LAUNCHER_NAME = "Start CutDeck (Hidden).vbs";
 
