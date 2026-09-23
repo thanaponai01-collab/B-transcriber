@@ -16,6 +16,7 @@ const transformParams = require("./transform/params.js");
 const transformGeometry = require("./transform/geometry.js");
 const { activeProjectAndSequence } = require("./host/project.js");
 const { createPresetStore, CACHE_KEY: FX_PRESETS_KEY } = require("./presetStore.js");
+const { createController } = require("./features/controller.js");
 
 const KEY = "cutdeck.xml.lastJob";
 const SETTINGS_KEY = "cutdeck.adj.settings";
@@ -43,21 +44,21 @@ const DEFAULT_SETTINGS = {
   clamp: false
 };
 
-// The controller: holds the one state object, calls Premiere and the helper, hands new state
-// to panel.render(). Never touches the DOM directly — see core/panel.js and issue #45.
-const state = {
-  sequence: null,
-  tab: "adj",
-  cutMode: "protected",
-  audioTrack: null,
-  settings: loadSettingsFromStorage(),
-  customPresets: loadCustomPresets(),
-  // Where presets are saved: { path: null | folder native path, error: null | message }.
-  presetFile: { path: null, error: null },
-  job: null,
-  busy: false,
-  status: { text: "Ready", level: "ready" },
-};
+const mainCtl = createController({
+  render: panel.render,
+  initialState: {
+    sequence: null,
+    tab: "adj",
+    cutMode: "protected",
+    audioTrack: null,
+    settings: loadSettingsFromStorage(),
+    customPresets: loadCustomPresets(),
+    // Where presets are saved: { path: null | folder native path, error: null | message }.
+    presetFile: { path: null, error: null },
+    job: null,
+  },
+});
+const { state, act, setStatus } = mainCtl;
 
 function loadSettingsFromStorage() {
   try {
@@ -118,11 +119,6 @@ function clearJob() {
   panel.render(state);
 }
 
-function setStatus(text, level = "ready") {
-  state.status = { text, level };
-  panel.render(state);
-}
-
 const rpc = createRpc({
   onRetry: (attempt, total) => setStatus(`Connecting to helper… attempt ${attempt} of ${total}.`, "busy"),
 });
@@ -147,25 +143,6 @@ async function ensureHelper() {
     version: workflow.VERSION,
     onStatus: (msg) => setStatus(msg, "busy"),
   });
-}
-
-async function act(fn) {
-  if (state.busy) return;
-  state.busy = true;
-  state.status = { text: "Processing…", level: "busy" };
-  panel.render(state);
-  try {
-    await fn();
-    if (state.status.level === "busy") {
-      state.status = { text: "Ready", level: "ready" };
-    }
-  } catch (error) {
-    state.status = { text: error.message || String(error), level: "error" };
-    console.error(error);
-  } finally {
-    state.busy = false;
-    panel.render(state);
-  }
 }
 
 async function doRefresh() {
@@ -495,14 +472,16 @@ panel.bind({
 // surfaces with separate status lines, and sharing one would mean every Cut & Sync status
 // message also overwrote whatever the transform panel was showing. Keeping them apart also
 // means this whole block can be reverted without touching a single existing render call.
-const alignState = { sequence: null, transform: null, busy: false, status: { text: "Ready", level: "ready" } };
-
+const alignCtl = createController({
+  render: alignPanel.render,
+  initialState: {
+    sequence: null,
+    transform: null,
+  },
+});
+const { state: alignState, act: actAlign, setStatus: setAlignStatus } = alignCtl;
 function renderAlign() {
-  alignPanel.render(alignState);
-}
-function setAlignStatus(text, level = "ready") {
-  alignState.status = { text, level };
-  renderAlign();
+  alignCtl.render();
 }
 
 // --- Phase 1: read-only Position/Scale/Rotation/Anchor Point display -----------------------
@@ -568,24 +547,6 @@ async function readAlignState() {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
     transform: await readAlignTransform(seq),
   };
-}
-
-// Same act() shape as the main panel's: one job at a time, errors land in the status line.
-async function actAlign(fn) {
-  if (alignState.busy) return;
-  alignState.busy = true;
-  alignState.status = { text: "Processing…", level: "busy" };
-  renderAlign();
-  try {
-    await fn();
-    if (alignState.status.level === "busy") alignState.status = { text: "Ready", level: "ready" };
-  } catch (error) {
-    alignState.status = { text: error.message || String(error), level: "error" };
-    console.error(error);
-  } finally {
-    alignState.busy = false;
-    renderAlign();
-  }
 }
 
 async function refreshAlignSequence() {
