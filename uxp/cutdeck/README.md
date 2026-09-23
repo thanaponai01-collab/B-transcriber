@@ -276,15 +276,25 @@ wired directly through `main.js`'s `onRenamePreset`/`onRemovePreset` intents rat
 `act()`.
 
 **Where presets are saved** (Settings > Presets > **Choose folder…**, `presetStore.js`): pick a
-folder and presets live in `cutdeck-presets.json` there. Pick a synced folder (OneDrive,
-Dropbox) and choose the same folder on each machine to share one preset list; linking a
-folder that already has presets merges them with this machine's. With no folder chosen,
-presets stay in this plugin install's `localStorage` only, which a reinstall or a switch
-between source-load and the packaged `.ccx` does not carry over. Every edit re-reads the file
-before writing, so one machine never erases another machine's newer presets, and a
-`cutdeck-presets.json` that isn't valid is reported and left untouched, never overwritten.
+folder and each preset is its own file there, named after it (`Zoom In.json`). Pick a synced
+folder (OneDrive, Dropbox) and choose the same folder on each machine to share one library;
+linking a folder writes in any of this machine's presets it doesn't already have. Removing a
+preset (×) moves its file into a `Removed` subfolder, never deletes it. Other `.json` files in
+the folder are ignored; a CutDeck preset file that can't be read is reported and left
+untouched. An older single `cutdeck-presets.json` is split into per-preset files on load and
+renamed to `.migrated`. With no folder chosen, presets stay in this plugin install's
+`localStorage` only.
 
-**v1 is static-value effects only — no keyframes/animation**: a captured Keyframe's
+**Animated presets:** Capture includes keyframes. Each keyframe is stored as an offset from the
+captured clip's first frame and replayed at the same offset from each Adjustment Layer's
+start, with its Linear/Hold/Bezier interpolation. It is not stretched to fit, so a 5-frame zoom
+stays 5 frames long. This rests on the **Check Keyframes** result from Premiere 26.5
+(keyframe times are relative to source media). Position/Anchor Point interpolation can't be
+read (Premiere's `PointKeyframe` has no getter), so those keep Premiere's default. After
+applying, CutDeck reads the keyframes back and names any that didn't land as captured.
+Premiere's own Motion is still skipped, so animate the **Transform** effect, not Motion.
+
+**Historical note (before Check Keyframes ran):** a captured Keyframe's
 `TickTime` convention (clip-relative vs. sequence-relative) isn't documented anywhere in
 Adobe's reference, so animated presets (the old Zoom In/Whip Pan/Camera Shake-style names)
 are a deliberate later step, gated on the **Check Effect Chain** probe (diagnostics drawer)

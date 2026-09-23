@@ -2,172 +2,164 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const store = require(path.join(__dirname, "..", "uxp", "cutdeck", "presetStore.js"));
-const { createPresetStore, parsePresetFile, serializePresets, mergePresets, PRESET_FILE_NAME, CACHE_KEY, LINK_KEY } = store;
+const {
+  createPresetStore, parsePresetFile, serializePreset, fileNameFor,
+  LEGACY_FILE_NAME, REMOVED_FOLDER, CACHE_KEY, LINK_KEY,
+} = require(path.join(__dirname, "..", "uxp", "cutdeck", "presetStore.js"));
 
 /* In-memory stand-ins for UXP's localStorage and localFileSystem — only the calls presetStore uses. */
 function fakeStorage(initial) {
   const map = new Map(Object.entries(initial || {}));
-  return {
-    getItem: (k) => (map.has(k) ? map.get(k) : null),
-    setItem: (k, v) => map.set(k, String(v)),
-    map,
-  };
+  return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)) };
 }
 function fakeFolder(nativePath, files) {
   const disk = new Map(Object.entries(files || {}));
-  const fileEntry = (name) => ({
-    name, isFile: true, isFolder: false,
-    read: async () => disk.get(name),
-    write: async (text) => { disk.set(name, text); return text.length; },
-  });
-  return {
-    nativePath, isFolder: true, isFile: false, disk,
-    getEntries: async () => [...disk.keys()].map(fileEntry),
+  const sub = new Map();
+  const folder = {
+    nativePath, name: nativePath, isFolder: true, isFile: false, disk, sub,
+    getEntries: async () => [
+      ...[...disk.keys()].map(fileEntry),
+      ...[...sub.values()],
+    ],
     createFile: async (name) => fileEntry(name),
+    createFolder: async (name) => { const f = fakeFolder(name); sub.set(name, f); return f; },
     renameEntry: async (entry, newName) => {
       disk.set(newName, disk.get(entry.name));
       disk.delete(entry.name);
     },
   };
+  function fileEntry(name) {
+    return {
+      name, isFile: true, isFolder: false,
+      read: async () => disk.get(name),
+      write: async (text) => { disk.set(name, text); return text.length; },
+      delete: async () => { disk.delete(name); return 0; },
+      moveTo: async (target, opts) => { target.disk.set(opts.newName || name, disk.get(name)); disk.delete(name); },
+    };
+  }
+  return folder;
 }
 function fakeFs(folder, opts) {
   const o = opts || {};
   return {
     getFolder: async () => (o.cancel ? null : folder),
     createPersistentToken: async () => "tok-1",
-    getEntryForPersistentToken: async () => {
-      if (o.tokenBroken) throw new Error("stale token");
-      return folder;
-    },
-    getEntryWithUrl: async () => {
-      if (o.unreachable) throw new Error("no such path");
-      return folder;
-    },
+    getEntryForPersistentToken: async () => { if (o.tokenBroken) throw new Error("stale token"); return folder; },
+    getEntryWithUrl: async () => { if (o.unreachable) throw new Error("no such path"); return folder; },
   };
 }
-const preset = (id, name) => ({ id, name: name || id, components: [{ matchName: "AE.ADBE Gaussian Blur 2", params: [] }] });
-const fileText = (presets) => serializePresets(presets);
-const onDisk = (folder) => JSON.parse(folder.disk.get(PRESET_FILE_NAME)).presets.map((p) => p.id);
+const preset = (id, name) => ({ id, name: name || id, components: [{ matchName: "AE.ADBE Geometry2", params: [] }] });
+const linked = (extra) => fakeStorage({ [LINK_KEY]: JSON.stringify({ token: "tok-1", path: "F:\\Presets" }), ...extra });
+const names = (folder) => [...folder.disk.keys()].sort();
 
-test("parsePresetFile refuses non-JSON and foreign JSON, drops malformed presets", () => {
-  assert.throws(() => parsePresetFile("{nope"), /not valid JSON/);
-  assert.throws(() => parsePresetFile(JSON.stringify([preset("a")])), /not a CutDeck preset file/);
-  assert.throws(() => parsePresetFile(JSON.stringify({ format: "cutdeck-fx-presets", version: 99, presets: [] })), /newer CutDeck/);
-  const parsed = parsePresetFile(JSON.stringify({ format: "cutdeck-fx-presets", version: 1, presets: [preset("a"), { id: "b" }] }));
-  assert.deepEqual(parsed.map((p) => p.id), ["a"]);
+test("fileNameFor keeps readable names (incl. Thai) and strips characters Windows rejects", () => {
+  assert.equal(fileNameFor("Zoom In"), "Zoom In.json");
+  assert.equal(fileNameFor("ซูมเข้า"), "ซูมเข้า.json");
+  assert.equal(fileNameFor('a/b:c*?"<>|'), "a_b_c______.json");
+  assert.equal(fileNameFor("trailing. "), "trailing.json");
+  assert.equal(fileNameFor("  "), "Preset.json");
 });
 
-test("mergePresets keeps file order, appends local-only presets, file wins on id clash", () => {
-  const merged = mergePresets([preset("a", "file A"), preset("b")], [preset("a", "local A"), preset("c")]);
-  assert.deepEqual(merged.map((p) => p.id), ["a", "b", "c"]);
-  assert.equal(merged[0].name, "file A");
+test("parsePresetFile: foreign JSON is ignored, broken CutDeck files are errors", () => {
+  assert.equal(parsePresetFile("{nope").kind, "foreign");
+  assert.equal(parsePresetFile(JSON.stringify({ some: "other tool" })).kind, "foreign");
+  assert.equal(parsePresetFile(serializePreset(preset("a"))).kind, "preset");
+  assert.equal(parsePresetFile(JSON.stringify({ format: "cutdeck-fx-preset", version: 99, preset: preset("a") })).kind, "error");
+  assert.equal(parsePresetFile(JSON.stringify({ format: "cutdeck-fx-preset", version: 2, preset: { id: "a" } })).kind, "error");
 });
 
-test("no folder linked: behaves exactly like the old localStorage-only store", async () => {
+test("no folder linked: add / rename / remove work on localStorage exactly as before", async () => {
   const storage = fakeStorage({ [CACHE_KEY]: JSON.stringify([preset("a")]) });
   const s = createPresetStore({ localFileSystem: fakeFs(null), storage });
-  const loaded = await s.load();
-  assert.deepEqual(loaded, { presets: [preset("a")], path: null, error: null });
-  const next = await s.update((list) => [...list, preset("b")]);
-  assert.deepEqual(next.map((p) => p.id), ["a", "b"]);
-  assert.deepEqual(JSON.parse(storage.getItem(CACHE_KEY)).map((p) => p.id), ["a", "b"]);
+  assert.deepEqual(await s.load(), { presets: [preset("a")], path: null, error: null });
+  await s.add(preset("b"));
+  await s.rename("a", "Renamed");
+  const next = await s.remove("b");
+  assert.deepEqual(next.map((p) => [p.id, p.name]), [["a", "Renamed"]]);
 });
 
-test("choosing a folder with no preset file writes the local presets there and links it", async () => {
-  const folder = fakeFolder("D:\\Sync\\CutDeck");
-  const storage = fakeStorage({ [CACHE_KEY]: JSON.stringify([preset("a")]) });
+test("choosing a folder writes one file per preset, named after it", async () => {
+  const folder = fakeFolder("F:\\Presets");
+  const storage = fakeStorage({ [CACHE_KEY]: JSON.stringify([preset("fx-1", "Zoom In"), preset("fx-2", "Shake")]) });
   const s = createPresetStore({ localFileSystem: fakeFs(folder), storage });
   const res = await s.chooseFolder();
-  assert.equal(res.path, "D:\\Sync\\CutDeck");
-  assert.deepEqual(onDisk(folder), ["a"]);
-  assert.ok(!folder.disk.has(PRESET_FILE_NAME + ".tmp"), "temp file must be renamed away");
-  assert.deepEqual(JSON.parse(storage.getItem(LINK_KEY)), { token: "tok-1", path: "D:\\Sync\\CutDeck" });
+  assert.equal(res.path, "F:\\Presets");
+  assert.deepEqual(names(folder), ["Shake.json", "Zoom In.json"]);
+  assert.deepEqual(JSON.parse(storage.getItem(LINK_KEY)), { token: "tok-1", path: "F:\\Presets" });
 });
 
-test("choosing a folder that already has presets (second machine) merges both lists", async () => {
-  const folder = fakeFolder("D:\\Sync", { [PRESET_FILE_NAME]: fileText([preset("fromA")]) });
-  const storage = fakeStorage({ [CACHE_KEY]: JSON.stringify([preset("localB")]) });
-  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage });
-  const res = await s.chooseFolder();
-  assert.deepEqual(res.presets.map((p) => p.id), ["fromA", "localB"]);
-  assert.deepEqual(onDisk(folder), ["fromA", "localB"]);
-});
-
-test("cancelling the picker changes nothing", async () => {
-  const storage = fakeStorage();
-  const s = createPresetStore({ localFileSystem: fakeFs(null, { cancel: true }), storage });
-  assert.equal(await s.chooseFolder(), null);
-  assert.equal(storage.getItem(LINK_KEY), null);
-});
-
-test("a corrupt preset file is never overwritten, on link or on edit", async () => {
-  const folder = fakeFolder("D:\\Sync", { [PRESET_FILE_NAME]: "{ half-synced" });
-  const storage = fakeStorage({ [CACHE_KEY]: JSON.stringify([preset("a")]) });
-  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage });
-  await assert.rejects(s.chooseFolder(), /not valid JSON/);
-  assert.equal(folder.disk.get(PRESET_FILE_NAME), "{ half-synced");
-  assert.equal(storage.getItem(LINK_KEY), null, "must not link a folder it refused");
-
-  // Already linked, file corrupted later: load reports it, edits refuse to write.
-  storage.setItem(LINK_KEY, JSON.stringify({ token: "tok-1", path: "D:\\Sync" }));
-  const loaded = await s.load();
-  assert.match(loaded.error, /not valid JSON/);
-  assert.deepEqual(loaded.presets.map((p) => p.id), ["a"], "falls back to cache");
-  await assert.rejects(s.update((list) => [...list, preset("b")]), /not valid JSON/);
-  assert.equal(folder.disk.get(PRESET_FILE_NAME), "{ half-synced");
-});
-
-test("an edit re-reads the file first, so a stale machine cannot delete another machine's preset", async () => {
-  const folder = fakeFolder("D:\\Sync", { [PRESET_FILE_NAME]: fileText([preset("a")]) });
-  const storage = fakeStorage({ [LINK_KEY]: JSON.stringify({ token: "tok-1", path: "D:\\Sync" }) });
-  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage });
+test("two presets with the same name get distinct files", async () => {
+  const folder = fakeFolder("F:\\Presets");
+  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() });
   await s.load();
-  // Another machine captures "fromOther" after this one loaded.
-  folder.disk.set(PRESET_FILE_NAME, fileText([preset("a"), preset("fromOther")]));
-  await s.update((list) => [...list, preset("mine")]);
-  assert.deepEqual(onDisk(folder), ["a", "fromOther", "mine"]);
+  await s.add(preset("fx-1", "Zoom"));
+  await s.add(preset("fx-2", "Zoom"));
+  assert.deepEqual(names(folder), ["Zoom (2).json", "Zoom.json"]);
 });
 
-test("load: linked file wins over the cache and refreshes it", async () => {
-  const folder = fakeFolder("D:\\Sync", { [PRESET_FILE_NAME]: fileText([preset("file")]) });
-  const storage = fakeStorage({
-    [CACHE_KEY]: JSON.stringify([preset("stale")]),
-    [LINK_KEY]: JSON.stringify({ token: "tok-1", path: "D:\\Sync" }),
+test("a v1 cutdeck-presets.json is split into per-preset files and set aside", async () => {
+  const legacy = JSON.stringify({ format: "cutdeck-fx-presets", version: 1, presets: [preset("fx-1", "Transform"), preset("fx-2", "Blur")] });
+  const folder = fakeFolder("F:\\Presets", { [LEGACY_FILE_NAME]: legacy });
+  const loaded = await createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() }).load();
+  assert.deepEqual(loaded.presets.map((p) => p.name), ["Transform", "Blur"]);
+  assert.deepEqual(names(folder), ["Blur.json", "Transform.json", LEGACY_FILE_NAME + ".migrated"]);
+});
+
+test("rename writes the new file and drops the old one", async () => {
+  const folder = fakeFolder("F:\\Presets", { "Old.json": serializePreset(preset("fx-1", "Old")) });
+  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() });
+  await s.load();
+  await s.rename("fx-1", "New");
+  assert.deepEqual(names(folder), ["New.json"]);
+  assert.equal(parsePresetFile(folder.disk.get("New.json")).preset.id, "fx-1");
+});
+
+test("remove moves the file into Removed/, never deletes it", async () => {
+  const folder = fakeFolder("F:\\Presets", { "Zoom.json": serializePreset(preset("fx-1", "Zoom")) });
+  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() });
+  await s.load();
+  assert.deepEqual(await s.remove("fx-1"), []);
+  assert.deepEqual(names(folder), []);
+  const bin = folder.sub.get(REMOVED_FOLDER);
+  assert.equal([...bin.disk.keys()].length, 1);
+  assert.match([...bin.disk.keys()][0], / Zoom\.json$/);
+});
+
+test("edits re-scan the folder, so another machine's new preset survives", async () => {
+  const folder = fakeFolder("F:\\Presets", { "A.json": serializePreset(preset("fx-1", "A")) });
+  const s = createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() });
+  await s.load();
+  folder.disk.set("FromOther.json", serializePreset(preset("fx-2", "FromOther")));
+  const next = await s.add(preset("fx-3", "Mine"));
+  assert.deepEqual(next.map((p) => p.name), ["A", "FromOther", "Mine"]);
+});
+
+test("unreadable CutDeck files are skipped and reported; foreign JSON is ignored silently", async () => {
+  const folder = fakeFolder("F:\\Presets", {
+    "Good.json": serializePreset(preset("fx-1", "Good")),
+    "Future.json": JSON.stringify({ format: "cutdeck-fx-preset", version: 9, preset: preset("fx-2") }),
+    "other-tool.json": "{\"x\":1}",
   });
-  const loaded = await createPresetStore({ localFileSystem: fakeFs(folder), storage }).load();
-  assert.deepEqual(loaded.presets.map((p) => p.id), ["file"]);
-  assert.deepEqual(JSON.parse(storage.getItem(CACHE_KEY)).map((p) => p.id), ["file"]);
+  const loaded = await createPresetStore({ localFileSystem: fakeFs(folder), storage: linked() }).load();
+  assert.deepEqual(loaded.presets.map((p) => p.name), ["Good"]);
+  assert.match(loaded.error, /Future\.json/);
+  assert.doesNotMatch(loaded.error, /other-tool/);
+  assert.equal(folder.disk.get("Future.json").includes("\"version\":9"), true, "never rewritten");
 });
 
-test("load: a missing file in a linked folder is recreated from the cache", async () => {
-  const folder = fakeFolder("D:\\Sync");
-  const storage = fakeStorage({
-    [CACHE_KEY]: JSON.stringify([preset("a")]),
-    [LINK_KEY]: JSON.stringify({ token: "tok-1", path: "D:\\Sync" }),
-  });
-  await createPresetStore({ localFileSystem: fakeFs(folder), storage }).load();
-  assert.deepEqual(onDisk(folder), ["a"]);
-});
-
-test("load: a stale token falls back to the saved path", async () => {
-  const folder = fakeFolder("D:\\Sync", { [PRESET_FILE_NAME]: fileText([preset("a")]) });
-  const storage = fakeStorage({ [LINK_KEY]: JSON.stringify({ token: "old", path: "D:\\Sync" }) });
-  const loaded = await createPresetStore({ localFileSystem: fakeFs(folder, { tokenBroken: true }), storage }).load();
+test("a stale token falls back to the saved path", async () => {
+  const folder = fakeFolder("F:\\Presets", { "A.json": serializePreset(preset("fx-1", "A")) });
+  const loaded = await createPresetStore({ localFileSystem: fakeFs(folder, { tokenBroken: true }), storage: linked() }).load();
   assert.equal(loaded.error, null);
-  assert.deepEqual(loaded.presets.map((p) => p.id), ["a"]);
+  assert.deepEqual(loaded.presets.map((p) => p.name), ["A"]);
 });
 
-test("unreachable folder: load shows cached presets with an error, and edits are refused", async () => {
-  const storage = fakeStorage({
-    [CACHE_KEY]: JSON.stringify([preset("a")]),
-    [LINK_KEY]: JSON.stringify({ token: "old", path: "E:\\Unplugged" }),
-  });
+test("unreachable folder: cached presets shown with an error, and edits are refused", async () => {
+  const storage = linked({ [CACHE_KEY]: JSON.stringify([preset("fx-1", "A")]) });
   const s = createPresetStore({ localFileSystem: fakeFs(null, { tokenBroken: true, unreachable: true }), storage });
   const loaded = await s.load();
-  assert.deepEqual(loaded.presets.map((p) => p.id), ["a"]);
-  assert.equal(loaded.path, "E:\\Unplugged");
+  assert.deepEqual(loaded.presets.map((p) => p.name), ["A"]);
   assert.ok(loaded.error);
-  await assert.rejects(s.update((list) => [...list, preset("b")]));
-  assert.deepEqual(JSON.parse(storage.getItem(CACHE_KEY)).map((p) => p.id), ["a"], "cache must not diverge from the file");
+  await assert.rejects(s.add(preset("fx-2", "B")));
+  assert.deepEqual(JSON.parse(storage.getItem(CACHE_KEY)).map((p) => p.name), ["A"], "cache must not diverge from the folder");
 });

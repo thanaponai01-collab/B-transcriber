@@ -21,8 +21,8 @@ const SETTINGS_KEY = "cutdeck.adj.settings";
 // blob on every minor setting change (frame count, color, ...), and a corrupt/oversized preset
 // would otherwise silently wipe core settings back to DEFAULT_SETTINGS on the next load (see
 // loadSettingsFromStorage's catch below). A separate key isolates both problems. With a preset
-// folder linked, that key is only a cache of the folder's cutdeck-presets.json — every edit
-// goes through presetStore.update().
+// folder linked, that key is only a cache of the folder's per-preset files — every edit goes
+// through presetStore.add / rename / remove.
 const presetStore = createPresetStore({
   localFileSystem: require("uxp").storage.localFileSystem,
   storage: localStorage,
@@ -88,8 +88,8 @@ async function loadPresets() {
   else panel.render(state);
 }
 
-async function editPresets(edit) {
-  state.customPresets = await presetStore.update(edit);
+async function editPresets(op) {
+  state.customPresets = await op;
   state.presetFile = { path: presetStore.path, error: null };
 }
 
@@ -266,25 +266,34 @@ async function doApplyPreset(presetId, mode) {
   setStatus(`Applying [${preset.name}] to ${res.placedItems.length} AL(s)…`, "busy");
   const project = await ppro.Project.getActiveProject();
   let appliedCount = 0;
+  const warnings = [];
   for (const item of res.placedItems) {
-    await effects.applyCapturedPreset(ppro, project, item, preset);
+    const applied = await effects.applyCapturedPreset(ppro, project, item, preset);
+    warnings.push(...applied.warnings);
     appliedCount++;
   }
 
-  setStatus(`Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
+  const done = `Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}`;
+  if (warnings.length) {
+    setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:
+${warnings.slice(0, 6).join("
+")}`, "error");
+  } else {
+    setStatus(`${done}!`, "ready");
+  }
 }
 
 // No Premiere call, but a file write when a preset folder is linked — so these run through
 // act() like everything else that can fail.
 async function doRemovePreset(presetId) {
   const preset = state.customPresets.find((p) => p.id === presetId);
-  await editPresets((list) => list.filter((p) => p.id !== presetId));
+  await editPresets(presetStore.remove(presetId));
   setStatus(preset ? `Removed "${preset.name}".` : "Removed.", "ready");
 }
 
 async function doRenamePreset(presetId, name) {
   if (!state.customPresets.some((p) => p.id === presetId)) return;
-  await editPresets((list) => list.map((p) => (p.id === presetId ? { ...p, name } : p)));
+  await editPresets(presetStore.rename(presetId, name));
   setStatus(`Renamed to "${name}".`, "ready");
 }
 
@@ -399,12 +408,15 @@ async function handleProbe(name, payload) {
     console.log("CutDeck captured preset:", JSON.stringify(captured, null, 2));
     const id = `fx-${Date.now().toString(36)}`;
     const preset = { id, name: label, components: captured.components };
-    await editPresets((list) => [...list, preset]);
+    await editPresets(presetStore.add(preset));
     panel.render(state);
 
     const names = captured.components.map((c) => c.displayName || c.matchName).join(", ");
+    const animatedNote = captured.animatedCount
+      ? ` ${captured.animatedCount} keyframed param${captured.animatedCount === 1 ? "" : "s"} included.`
+      : "";
     setStatus(
-      `Captured "${label}" — ${captured.components.length} effect${captured.components.length === 1 ? "" : "s"}: ${names}.`,
+      `Captured "${label}" — ${captured.components.length} effect${captured.components.length === 1 ? "" : "s"}: ${names}.${animatedNote}`,
       "ready"
     );
     return;
