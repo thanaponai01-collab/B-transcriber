@@ -204,7 +204,8 @@ function onAdjLayerSequenceName(name) {
 // detected, so a wrong pick is visible immediately instead of only showing up visually.
 function describeSequenceMatch(res) {
   if (!res || !res.sequenceWidth || !res.sequenceHeight) return "";
-  return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}`;
+  const created = res.createdAdjustmentLayer ? ` (created "${res.createdAdjustmentLayer}" in CutDeck > ADJ & FX)` : "";
+  return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}${created}`;
 }
 
 async function doAdjust(mode) {
@@ -365,6 +366,13 @@ async function handleProbe(name, payload) {
     const report = await capability.probeKeyframeTiming(ppro);
     console.log("CutDeck keyframe timing probe", JSON.stringify(report, null, 2));
     setStatus(capability.formatKeyframeReport(report), "ready");
+    return;
+  }
+  if (name === "alcreate") {
+    setStatus("Generating an Adjustment Layer at this sequence's size and importing it…", "busy");
+    const report = await capability.probeCreateAdjustmentLayer(ppro);
+    console.log("CutDeck AL creation probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatCreateAdjustmentLayerReport(report), "ready");
     return;
   }
   if (name === "transform") {

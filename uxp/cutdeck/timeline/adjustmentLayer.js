@@ -59,6 +59,58 @@ async function getOrCreateAdjBin(project) {
   return getOrCreateChildBin(project, cutdeckBin, ADJ_BIN_NAME);
 }
 
+// Importing a generated "CutDeck <W>x<H>.prproj" makes Premiere wrap its item in a bin named
+// after the file (seen 2026-09-23). This moves each such AL up into ADJ & FX, then removes the
+// wrapper only once a fresh read shows it EMPTY — two transactions, deliberately: removing a
+// bin that still held the AL would delete the AL and every placement of it on the timeline.
+// Only bins with exactly that name holding exactly one non-bin item are touched, so nothing
+// the user made is ever moved or removed. Failure is logged, never thrown: the AL still works
+// from inside the wrapper.
+const IMPORT_WRAPPER_NAME = /^CutDeck \d+x\d+\.prproj$/;
+
+function runTransaction(project, label, build) {
+  let ok = false;
+  const run = () => { ok = project.executeTransaction(build, label); };
+  if (typeof project.lockedAccess === "function") project.lockedAccess(run); else run();
+  if (!ok) throw new Error(`${label}: executeTransaction returned false`);
+}
+
+async function listWrappers(bin) {
+  const found = [];
+  for (const it of (await bin.getItems()) || []) {
+    if (it.type !== 2 || !IMPORT_WRAPPER_NAME.test(it.name || "")) continue;
+    const wrapper = asBinLike(it);
+    found.push({ item: it, wrapper, children: (await wrapper.getItems()) || [] });
+  }
+  return found;
+}
+
+async function flattenImportWrappers(project, adjBin) {
+  const bin = asBinLike(adjBin);
+  try {
+    const toMove = (await listWrappers(bin))
+      .filter((w) => w.children.length === 1 && w.children[0].type !== 2);
+    if (!toMove.length) return 0;
+    runTransaction(project, "CutDeck: move Adjustment Layers into ADJ & FX", (compound) => {
+      for (const { wrapper, children } of toMove) {
+        if (!compound.addAction(wrapper.createMoveItemAction(children[0], bin))) throw new Error("addAction(move) returned false");
+      }
+    });
+    const empty = (await listWrappers(bin)).filter((w) => w.children.length === 0);
+    if (empty.length) {
+      runTransaction(project, "CutDeck: remove empty import folders", (compound) => {
+        for (const { item } of empty) {
+          if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove) returned false");
+        }
+      });
+    }
+    return toMove.length;
+  } catch (err) {
+    console.log("CutDeck AL tidy: could not flatten import folders:", err);
+    return 0;
+  }
+}
+
 // Best-effort resolution auto-detection, tried before any naming convention. Premiere
 // stores an item's own computed frame size in its internal "Column.Intrinsic.VideoInfo"
 // project metadata field — the same data behind the Project panel's "Video Info" column, so
@@ -116,6 +168,10 @@ async function pickBestCandidate(candidates, targetWidth, targetHeight, seq) {
     for (const cand of candidates) {
       if (pattern.test(cand.name || "")) return cand;
     }
+    // Size known but nothing matches: return none, so placement creates a correctly sized AL
+    // (createAdjustmentLayerForSequence) instead of reusing another size's. Proven needed
+    // 2026-09-23: a 1920x1080 sequence got the 1080x1920 AL from the fallbacks below.
+    return null;
   }
   if (seq && seq.name) {
     const sName = seq.name.toLowerCase();
@@ -162,6 +218,7 @@ async function findAdjustmentLayerItem(project, seq) {
   // "1080x1920") get matched to the active sequence by name — see pickBestCandidate.
   try {
     const adjBin = await getOrCreateAdjBin(project);
+    await flattenImportWrappers(project, adjBin);
     const items = (await asBinLike(adjBin).getItems()) || [];
     const candidates = items.filter((it) => it.type !== 2 && it.name);
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq);
@@ -219,6 +276,53 @@ async function findAdjustmentLayerItem(project, seq) {
   await search(root);
 
   return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq);
+}
+
+// Writes bytes to the plugin's temporary folder and returns the native path.
+async function writeTempFile(fileName, bytes) {
+  const uxp = require("uxp");
+  const folder = await uxp.storage.localFileSystem.getTemporaryFolder();
+  const file = await folder.createFile(fileName, { overwrite: true });
+  await file.write(bytes.buffer, { format: uxp.storage.formats.binary });
+  return file.nativePath;
+}
+
+// The API has no createAdjustmentLayer, so this generates a one-AL .prproj at the sequence's
+// exact size (timeline/alProject.js) and imports it into CutDeck > ADJ & FX. Returns the
+// imported project item, or throws saying what went wrong. Premiere may wrap an imported
+// project in a bin named after the file, so one level of sub-bins is searched too.
+async function createAdjustmentLayerForSequence(project, width, height, ticksPerFrame) {
+  const alProject = require("./alProject.js");
+  const w = Math.round(Number(width));
+  const h = Math.round(Number(height));
+  const { bytes, name } = alProject.buildAdjustmentLayerPrproj({
+    width: w,
+    height: h,
+    ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null,
+  });
+  const filePath = await writeTempFile(`CutDeck ${w}x${h}.prproj`, bytes);
+  const adjBin = asBinLike(await getOrCreateAdjBin(project));
+  const imported = await project.importFiles([filePath], true, adjBin, false);
+  console.log(`CutDeck AL create: importFiles(${filePath}) returned`, imported);
+
+  await flattenImportWrappers(project, adjBin);
+  const items = (await adjBin.getItems()) || [];
+  const direct = items.find((it) => it.type !== 2 && it.name === name);
+  if (direct) return direct;
+  for (const it of items) {
+    if (it.type !== 2) continue;
+    const children = (await asBinLike(it).getItems()) || [];
+    const nested = children.find((c) => c.type !== 2 && c.name === name);
+    if (nested) {
+      console.log(`CutDeck AL create: "${name}" landed inside the "${it.name}" bin`);
+      return nested;
+    }
+  }
+  throw new Error(
+    `Tried to create "${name}" automatically (import returned ${imported}), but it did not appear in ` +
+    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > Adjustment Layer at ` +
+    `${w}x${h}, name it "${w}x${h}", and drag it into that folder.`
+  );
 }
 
 // Exact tick converter handling TickTime objects, decimal strings, numbers, and BigInt
@@ -793,17 +897,19 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   const tickTime = makeTickTimeFn(ppro);
   if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
 
-  const alItem = await findAdjustmentLayerItem(project, seq);
+  let alItem = await findAdjustmentLayerItem(project, seq);
+  let createdAdjustmentLayer = null;
   if (!alItem) {
-    throw new Error(
-      "No Adjustment Layer found yet — Premiere's scripting API has no way to create one from a script " +
-      "(confirmed against the official UXP Project class reference: no createAdjustmentLayer method exists), " +
-      "but I've made a spot for it: Project panel > CutDeck > ADJ & FX. Create an Adjustment Layer manually " +
-      "(File > New Item > Adjustment Layer) at your sequence's resolution and drag it into that folder. If you " +
-      "only ever use one resolution, one AL is enough. If you switch between resolutions, create one per " +
-      "resolution and name each one after its size (e.g. \"1920x1080\", \"1080x1920\") — CutDeck matches the " +
-      "right one to whichever sequence is active automatically."
-    );
+    if (!sequenceWidth || !sequenceHeight) {
+      throw new Error(
+        "No Adjustment Layer found, and this sequence's frame size couldn't be read to create one. " +
+        "Create one by hand: File > New Item > Adjustment Layer, then drag it into Project panel > CutDeck > ADJ & FX."
+      );
+    }
+    const tpfNumber = Number(tpf);
+    alItem = await createAdjustmentLayerForSequence(
+      project, sequenceWidth, sequenceHeight, Number.isSafeInteger(tpfNumber) ? tpfNumber : null);
+    createdAdjustmentLayer = alItem.name;
   }
 
   let clipItem = alItem;
@@ -1177,6 +1283,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     selectedCount: clipsWithTimes.length,
     sequenceWidth,
     sequenceHeight,
+    createdAdjustmentLayer,
     placedItems
   };
 }
@@ -1187,6 +1294,9 @@ module.exports = {
   getOrCreateAdjBin,
   pickBestCandidate,
   detectResolutionFromMetadata,
+  createAdjustmentLayerForSequence,
+  flattenImportWrappers,
+  writeTempFile,
   // Exported for timeline/effects.js: the robust (never-throws) getTrackItems lookup, reused
   // rather than re-guessed — see that module's getSelectedTrackItems.
   getTrackClipItems,

@@ -937,7 +937,152 @@ function formatKeyframeReport(report) {
     : `No verdict yet — read the findings above for what to change, then run again.`);
 }
 
+/* Adjustment Layer creation probe (docs/HANDOFF_CUTDECK_AL_FX_NEXT.md task 1). NOT read-only:
+   it imports one generated Adjustment Layer into Project panel > CutDeck > ADJ & FX. That is
+   the whole question: the API has no create call, so can a generated one-AL .prproj
+   (timeline/alProject.js), sized to the active sequence, come in through importFiles?
+
+   It answers, from the real host: does the import succeed without a dialog, where does the
+   item land (the target bin, or a bin named after the file), does Premiere report the frame
+   size we wrote, and would CutDeck's own findAdjustmentLayerItem now pick it. Undo steps are
+   visible only in Edit > Undo, so the trailer asks the user to look.
+
+   `deps` exists for tests; in Premiere every default is the real module / UXP storage. */
+// Name multiset diff: project items have no stable identity across getItems() calls.
+function newItemsByName(before, after) {
+  const left = new Map();
+  for (const it of before) left.set(it.name, (left.get(it.name) || 0) + 1);
+  const added = [];
+  for (const it of after) {
+    const n = left.get(it.name) || 0;
+    if (n > 0) left.set(it.name, n - 1); else added.push(it);
+  }
+  return added;
+}
+
+async function probeCreateAdjustmentLayer(ppro, deps = {}) {
+  const findings = [];
+  const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
+  const stop = () => ({ probe: "al-create", complete: false, findings, verdict: null });
+  const alProject = deps.alProject || require("./timeline/alProject.js");
+  const al = deps.al || require("./timeline/adjustmentLayer.js");
+  const write = deps.writeFile || al.writeTempFile;
+  const now = deps.now || (() => Date.now());
+
+  if (!ppro || !ppro.Project) {
+    add("host", "Is the Premiere API reachable?", "no", { detail: "require('premierepro') gave no Project" });
+    return stop();
+  }
+  const projectRead = await attempt("getActiveProject", () => ppro.Project.getActiveProject());
+  if (!projectRead.ok || !projectRead.value) {
+    add("project", "Is a project open?", "no", projectRead.ok ? { detail: "no active project" } : projectRead);
+    return stop();
+  }
+  const project = projectRead.value;
+  const sequenceRead = await attempt("getActiveSequence", () => project.getActiveSequence());
+  if (!sequenceRead.ok || !sequenceRead.value) {
+    add("sequence", "Is a sequence open?", "no", sequenceRead.ok ? { detail: "no active sequence" } : sequenceRead);
+    return stop();
+  }
+  const seq = sequenceRead.value;
+
+  const settingsRead = await attempt("getSettings", () => seq.getSettings());
+  const settings = settingsRead.ok ? settingsRead.value : null;
+  const rectRead = await attempt("getVideoFrameRect", () => settings.getVideoFrameRect());
+  const rateRead = await attempt("getVideoFrameRate", () => settings.getVideoFrameRate());
+  const parRead = await attempt("getVideoPixelAspectRatio", () => settings.getVideoPixelAspectRatio());
+  const width = rectRead.ok && rectRead.value ? Math.round(rectRead.value.width) : null;
+  const height = rectRead.ok && rectRead.value ? Math.round(rectRead.value.height) : null;
+  const ticksPerFrame = rateRead.ok && rateRead.value ? rateRead.value.ticksPerFrame : null;
+  add("sequenceSize", `What size is "${seq.name || "the active sequence"}"?`,
+    width && height ? `${width}x${height}` : "unreadable",
+    { ticksPerFrame: rateRead.ok ? ticksPerFrame : rateRead.error,
+      pixelAspectRatio: parRead.ok ? parRead.value : parRead.error,
+      rect: rectRead.ok ? null : rectRead.error });
+  if (!width || !height) return stop();
+
+  let built;
+  try {
+    built = alProject.buildAdjustmentLayerPrproj({ width, height, ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null });
+  } catch (error) {
+    add("build", "Can the Adjustment Layer project be generated?", "no", { error: error.message || String(error) });
+    return stop();
+  }
+  const fileName = `CutDeck ${width}x${height}.prproj`;
+  const writeRead = await attempt("writeFile", () => write(fileName, built.bytes));
+  add("file", "Was the generated .prproj written?", writeRead.ok ? "yes" : "no",
+    writeRead.ok ? { path: writeRead.value, bytes: built.bytes.length, alName: built.name } : writeRead);
+  if (!writeRead.ok) return stop();
+
+  const binRead = await attempt("getOrCreateAdjBin", () => al.getOrCreateAdjBin(project));
+  if (!binRead.ok || !binRead.value) {
+    add("bin", `Is Project panel > CutDeck > ${al.ADJ_BIN_NAME} reachable?`, "no", binRead);
+    return stop();
+  }
+  const adjBin = binRead.value;
+  const rootRead = await attempt("getRootItem", () => project.getRootItem());
+  const listBin = async (bin) => {
+    const r = await attempt("getItems", () => bin.getItems());
+    return r.ok && r.value ? r.value : [];
+  };
+  const binBefore = await listBin(adjBin);
+  const rootBefore = rootRead.ok && rootRead.value ? await listBin(rootRead.value) : [];
+
+  const t0 = now();
+  const importRead = await attempt("importFiles", () => project.importFiles([writeRead.value], true, adjBin, false));
+  const elapsedMs = now() - t0;
+  add("import", "Did importFiles(generated .prproj, suppressUI=true, ADJ & FX) succeed?",
+    importRead.ok ? String(importRead.value) : "threw",
+    { elapsedMs, note: "If Premiere showed an Import Project dialog, the elapsed time includes you clicking it — say so when you report back.",
+      error: importRead.ok ? null : importRead.error });
+  if (!importRead.ok) return stop();
+
+  const binAdded = newItemsByName(binBefore, await listBin(adjBin));
+  const rootAdded = rootRead.ok && rootRead.value ? newItemsByName(rootBefore, await listBin(rootRead.value)) : [];
+  const describe = async (it) => {
+    if (it.type === 2) return { name: it.name, bin: true, children: (await listBin(it)).map((c) => c.name) };
+    return { name: it.name, bin: false, videoInfo: await al.detectResolutionFromMetadata(it) };
+  };
+  const landed = [];
+  for (const it of binAdded) landed.push({ where: al.ADJ_BIN_NAME, ...(await describe(it)) });
+  for (const it of rootAdded) landed.push({ where: "project root", ...(await describe(it)) });
+  add("landing", "Where did the imported item(s) land?",
+    landed.length ? landed.map((l) => `${l.where}: "${l.name}"${l.bin ? " (a bin)" : ""}`).join("; ") : "nowhere visible — nothing new in ADJ & FX or the root",
+    { items: landed });
+
+  const direct = landed.find((l) => !l.bin && l.name === built.name);
+  const nested = landed.find((l) => l.bin && l.children.includes(built.name));
+  const sizeOk = direct && direct.videoInfo && direct.videoInfo.width === width && direct.videoInfo.height === height;
+  if (direct) {
+    add("size", `Does Premiere report "${built.name}" at ${width}x${height}?`,
+      direct.videoInfo ? `${direct.videoInfo.width}x${direct.videoInfo.height}${sizeOk ? "" : " — MISMATCH"}` : "Video Info not populated (check the Project panel's Video Info column by eye)",
+      null);
+  }
+
+  const pickRead = await attempt("findAdjustmentLayerItem", () => al.findAdjustmentLayerItem(project, seq));
+  const pickedName = pickRead.ok && pickRead.value ? pickRead.value.name : null;
+  add("pick", "Would Place AL now pick the generated layer for this sequence?",
+    pickedName === built.name ? "yes" : pickedName ? `no — it picks "${pickedName}"` : "no AL found",
+    pickRead.ok ? null : pickRead);
+
+  const verdict = direct && pickedName === built.name && sizeOk !== false
+    ? "works"
+    : nested ? "lands-in-subbin" : null;
+  return { probe: "al-create", complete: true, findings, verdict, alName: built.name };
+}
+
+function formatCreateAdjustmentLayerReport(report) {
+  const undo = "Also check Edit > Undo: how many steps did this add, and does one Undo remove the item? Delete the test item afterwards if you like.";
+  const trailer = report.verdict === "works"
+    ? `VERDICT: CutDeck can create "${report.alName}" itself. ${undo}`
+    : report.verdict === "lands-in-subbin"
+      ? `VERDICT: the import works but lands inside a bin named after the file; production code would move it up. ${undo}`
+      : "No verdict — read the findings above and send them back before any production code is built.";
+  return formatFindings("Adjustment Layer creation probe (adds one item)", report, trailer);
+}
+
 module.exports = {
+  probeCreateAdjustmentLayer, formatCreateAdjustmentLayerReport, newItemsByName,
   probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES,
   probeAdjustmentLayerMotion, formatMotionReport,
   probeEffectChain, formatEffectChainReport,

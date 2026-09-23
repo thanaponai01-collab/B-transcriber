@@ -23,6 +23,20 @@ doc was `6913f76`). Read `CLAUDE.md` and `uxp/cutdeck/README.md` first.
 
 ## Task 1: create Adjustment Layers without the manual setup
 
+**DONE 2026-09-23, confirmed working in Premiere by the user.** Place AL now creates a missing
+AL itself, at any sequence size, not a fixed list. `timeline/alProject.js` patches an embedded
+one-AL seed project (`timeline/alSeedData.js`, pruned from the user's own template) to the
+sequence's exact `FrameRect`, name and frame rate, and gives it fresh ObjectUIDs. It gzips the
+result and imports it with `importFiles(..., suppressUI=true, ADJ & FX)`; no dialog appears.
+Premiere wraps the import in a `CutDeck WxH.prproj` bin, so `flattenImportWrappers` moves the AL
+up and then removes the bin only once it reads empty (two undo steps, on purpose). The temp
+files go to UXP's plugin temp folder (for a UDT load:
+`%TEMP%\Adobe\UXP\PluginsStorage\PPRO\26\Developer\com.cutdeck.xml\PluginData`), one per
+size. `pickBestCandidate` now returns null when the size is known and nothing matches, so a
+sequence never borrows another size's AL. Correction to the facts below: `isAdjustmentLayer()`
+exists only on track items (d.ts lines 264 and 3815), not on `ProjectItem`. The original
+analysis follows for the record.
+
 **The pain.** `placeAdjustmentLayersOnTimeline` throws at `adjustmentLayer.js` about line 798
 when no matching AL exists. The user must then run File > New Item > Adjustment Layer, once
 per resolution, and name each one `1920x1080`, `1080x1920` and so on. `findAdjustmentLayerItem`
