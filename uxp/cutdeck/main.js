@@ -445,8 +445,9 @@ function setAlignStatus(text, level = "ready") {
 // --- Phase 1: read-only Position/Scale/Rotation/Anchor Point display -----------------------
 //
 // Turns transform/params.js's raw per-field reads into the shape core/alignPanel.js renders.
-// Position and Anchor Point are normalized to the sequence frame (transform-panel-plan.md
-// Part 1a) so they need transform/geometry.js's pixel conversion; Scale and Rotation are
+// Position is normalized to the SEQUENCE frame and Anchor Point to the clip's SOURCE frame
+// (transform-panel-plan.md Part 1a), so each needs transform/geometry.js's pixel conversion
+// against its own frame; Scale and Rotation are
 // already the numbers Effect Controls displays. An animated param (isTimeVarying === true) is
 // reported as `animated: true` with no value — the plan requires it be skipped with a visible
 // explanation, never silently shown as a possibly-wrong static number.
@@ -483,11 +484,17 @@ async function readAlignTransform(seq) {
   }
 
   const frameSize = await transformParams.readSequenceFrameSize(seq);
+  // Anchor Point is converted against the SOURCE frame, never the sequence frame as a
+  // fallback — that would print a confidently wrong number on any clip whose source differs
+  // from the sequence. Pixel aspect is deliberately NOT applied: a live run on a 1280x720 clip
+  // interpreted as 2.0 PAR stored an Effect Controls anchor of 100,200 as [100/1280, 200/720],
+  // so the anchor is in the source's stored pixels whatever its aspect (plan Part 1a).
+  const anchorFrame = await transformParams.readSourceFrameSize(ppro, item);
   const fields = {
     position: describeField(transform.position, true, frameSize),
     scale: describeField(transform.scale, false, frameSize),
     rotation: describeField(transform.rotation, false, frameSize),
-    anchor: describeField(transform.anchorPoint, true, frameSize),
+    anchor: describeField(transform.anchorPoint, true, anchorFrame),
   };
   return { clipName, available: true, reason: null, fields };
 }

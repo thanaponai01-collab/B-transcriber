@@ -1,14 +1,18 @@
 // transform/params.js — HOST DISCOVERY ONLY for the Transform & Align panel (Phase 1 of
 // docs/research/cutdeck-transform-panel-plan.md). Finds the Motion component on a track item
 // and reads its four semantic fields (position, scale, rotation, anchor) by the param indices
-// this build was PROVEN to use — Part 1a of the plan, a live Premiere run (26.5.1) on two real
-// clip shapes, matched against the Properties panel's own pixel readout to sub-pixel accuracy:
+// this build was PROVEN to use — Part 1a of the plan, live Premiere runs (26.5.1) matched
+// against Effect Controls' own pixel readout to sub-pixel accuracy:
 //
 //   index 0 Position       array[2], normalized to the SEQUENCE frame, independently per axis
 //   index 1 Scale          number (percent), the uniform scale value
 //   index 3 Uniform Scale  boolean (this build's ZString gives it no displayName — index only)
 //   index 4 Rotation       number (degrees)
-//   index 5 Anchor Point   array[2], same normalized space as Position
+//   index 5 Anchor Point   array[2], normalized to the clip's SOURCE frame — NOT Position's
+//                          space. Proven on a 1280x720 clip in a 1920x1080 sequence with both
+//                          set to 100,200: Position read [0.0521, 0.1852] (÷1920x1080),
+//                          Anchor Point read [0.078125, 0.2778] (÷1280x720). The first run
+//                          missed this because its clips' sources matched the sequence.
 //
 // Matched by matchName ("AE.ADBE Motion"), never displayName — displayName is localized
 // (effects.js's FIXED_EFFECT_DISPLAY_NAMES warning applies here too). Never guesses: a build
@@ -117,7 +121,8 @@ async function readTransform(item) {
 // The sequence's own frame size, read the same dual-route way capabilityProbe.js and
 // adjustmentLayer.js already do (SequenceSettings has no plain width/height fields — confirmed
 // against the official class reference — it's getVideoFrameRect(): RectF). Needed to convert
-// Position/Anchor Point's normalized values into the pixel numbers Effect Controls displays;
+// Position's normalized value into the pixel numbers Effect Controls displays (Anchor Point is
+// normalized to the SOURCE frame instead — see readSourceFrameSize below);
 // the conversion itself is pure math and lives in transform/geometry.js, not here.
 async function readSequenceFrameSize(seq) {
   if (!seq) return null;
@@ -139,10 +144,51 @@ async function readSequenceFrameSize(seq) {
   return null;
 }
 
+// Parses the Project panel's Video Info text — "1280 x 720 (1.0)" for video,
+// "1920 x 1080 (1.0), Straight Alpha" for a PNG (Part 1a) — into the source frame size and its
+// pixel aspect ratio. Trailing text after the "(par)" group is tolerated, not required. Returns
+// null for anything that doesn't carry "W x H", never a guessed size. `pixelAspect` is null
+// when the "(par)" group is missing, so a caller can refuse rather than assume square pixels.
+function parseVideoInfoSize(text) {
+  const match = /(\d+)\s*[x×]\s*(\d+)(?:\s*\(\s*([\d.]+)\s*\))?/.exec(String(text || ""));
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!width || !height) return null;
+  const pixelAspect = match[3] === undefined ? null : Number(match[3]);
+  return { width, height, pixelAspect: Number.isFinite(pixelAspect) ? pixelAspect : null };
+}
+
+const VIDEO_INFO_COLUMN_ID = "Column.Intrinsic.VideoInfo";
+
+// The selected item's SOURCE frame size, which Anchor Point is normalized to. UXP has no
+// width/height on ProjectItem, ClipProjectItem or FootageInterpretation; the only read path is
+// Metadata.getProjectColumnsMetadata()'s Video Info column (Part 1a, proven on video and PNG).
+// Open question the plan still carries: whether hiding that column in the Project panel
+// removes it from this dump. If it does, this returns null and the panel shows Anchor Point
+// as unavailable — the right failure, never a sequence-sized fallback. Never throws.
+async function readSourceFrameSize(ppro, item) {
+  if (!ppro || !ppro.Metadata || typeof ppro.Metadata.getProjectColumnsMetadata !== "function") return null;
+  if (!item || typeof item.getProjectItem !== "function") return null;
+  try {
+    const projectItem = await item.getProjectItem();
+    if (!projectItem) return null;
+    const raw = await ppro.Metadata.getProjectColumnsMetadata(projectItem);
+    const parsed = JSON.parse(typeof raw === "string" ? raw : String(raw));
+    const columns = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.columns) ? parsed.columns : []);
+    const column = columns.find((c) => c && c.ColumnID === VIDEO_INFO_COLUMN_ID);
+    return column ? parseVideoInfoSize(column.ColumnValue) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   MOTION_MATCH_NAME,
   PARAM_INDEX,
   findMotionComponent,
   readTransform,
   readSequenceFrameSize,
+  parseVideoInfoSize,
+  readSourceFrameSize,
 };

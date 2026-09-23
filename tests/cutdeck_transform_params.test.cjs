@@ -145,3 +145,71 @@ test("normalizedToFramePixels returns null instead of a wrong number for bad inp
   assert.equal(geometry.normalizedToFramePixels("not a point", 1920, 1080), null);
   assert.equal(geometry.normalizedToFramePixels([0.5], 1920, 1080), null);
 });
+
+// --- Anchor Point is normalized to the SOURCE frame, not the sequence frame -----------------
+//
+// Part 1a, second live run: a 1280x720 clip in a 1920x1080 sequence, Position and Anchor Point
+// both set to 100,200 in Effect Controls. The raw values below are verbatim from that run.
+
+test("live 720p-in-1080p run: Position converts against the sequence, Anchor Point against the source", () => {
+  const pos = geometry.normalizedToFramePixels([0.0520833320915699, 0.18518517911434174], 1920, 1080);
+  assert.ok(Math.abs(pos.x - 100) < 0.01 && Math.abs(pos.y - 200) < 0.01);
+  const anchor = geometry.normalizedToFramePixels([0.078125, 0.2777777910232544], 1280, 720);
+  assert.ok(Math.abs(anchor.x - 100) < 0.01 && Math.abs(anchor.y - 200) < 0.01);
+  // The bug this pins: converting Anchor Point against the sequence frame gives 150, 300.
+  const wrong = geometry.normalizedToFramePixels([0.078125, 0.2777777910232544], 1920, 1080);
+  assert.ok(Math.abs(wrong.x - 150) < 0.01);
+});
+
+test("live non-square run: a 2.0-PAR 1280x720 source still stores Anchor Point against 1280x720", () => {
+  // Same clip, Interpret Footage -> Anamorphic 2:1, Video Info "1280 x 720 (2.0)", anchor set
+  // to 100,200 in Effect Controls: the raw value was unchanged, so PAR is not applied.
+  const size = params.parseVideoInfoSize("1280 x 720 (2.0)");
+  const anchor = geometry.normalizedToFramePixels([0.078125, 0.2777777910232544], size.width, size.height);
+  assert.ok(Math.abs(anchor.x - 100) < 0.01 && Math.abs(anchor.y - 200) < 0.01);
+});
+
+test("parseVideoInfoSize reads the Video Info strings the live runs returned", () => {
+  assert.deepEqual(params.parseVideoInfoSize("1280 x 720 (1.0)"), { width: 1280, height: 720, pixelAspect: 1 });
+  assert.deepEqual(params.parseVideoInfoSize("3840 x 2160 (1.0)"), { width: 3840, height: 2160, pixelAspect: 1 });
+  // A PNG carries trailing text after the (par) group.
+  assert.deepEqual(params.parseVideoInfoSize("1920 x 1080 (1.0), Straight Alpha"), { width: 1920, height: 1080, pixelAspect: 1 });
+});
+
+test("parseVideoInfoSize keeps a non-square aspect and reports a missing one as null, never 1", () => {
+  assert.deepEqual(params.parseVideoInfoSize("1440 x 1080 (1.333)"), { width: 1440, height: 1080, pixelAspect: 1.333 });
+  assert.deepEqual(params.parseVideoInfoSize("1280 x 720"), { width: 1280, height: 720, pixelAspect: null });
+});
+
+test("parseVideoInfoSize returns null for text without a size", () => {
+  assert.equal(params.parseVideoInfoSize(""), null);
+  assert.equal(params.parseVideoInfoSize(null), null);
+  assert.equal(params.parseVideoInfoSize("Straight Alpha"), null);
+  assert.equal(params.parseVideoInfoSize("0 x 720 (1.0)"), null);
+});
+
+function fakeColumnsHost(columnsJson) {
+  return {
+    Metadata: { getProjectColumnsMetadata: () => Promise.resolve(columnsJson) },
+  };
+}
+const itemWithProjectItem = { getProjectItem: () => Promise.resolve({ name: "clip" }) };
+
+test("readSourceFrameSize finds the Video Info column by ColumnID", async () => {
+  const json = JSON.stringify([
+    { ColumnID: "Column.Intrinsic.Name", ColumnName: "Name", ColumnValue: "clip 1920 x 1080.mp4" },
+    { ColumnID: "Column.Intrinsic.VideoInfo", ColumnName: "Video Info", ColumnValue: "1280 x 720 (1.0)" },
+  ]);
+  assert.deepEqual(await params.readSourceFrameSize(fakeColumnsHost(json), itemWithProjectItem),
+    { width: 1280, height: 720, pixelAspect: 1 });
+});
+
+test("readSourceFrameSize returns null, never throws, when the source size cannot be read", async () => {
+  const noVideoInfo = JSON.stringify([{ ColumnID: "Column.Intrinsic.Name", ColumnValue: "x" }]);
+  assert.equal(await params.readSourceFrameSize(fakeColumnsHost(noVideoInfo), itemWithProjectItem), null);
+  assert.equal(await params.readSourceFrameSize(fakeColumnsHost("not json"), itemWithProjectItem), null);
+  assert.equal(await params.readSourceFrameSize({}, itemWithProjectItem), null);
+  assert.equal(await params.readSourceFrameSize(fakeColumnsHost("[]"), {}), null);
+  const rejecting = { Metadata: { getProjectColumnsMetadata: () => Promise.reject(new Error("boom")) } };
+  assert.equal(await params.readSourceFrameSize(rejecting, itemWithProjectItem), null);
+});

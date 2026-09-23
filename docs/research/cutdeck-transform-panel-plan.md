@@ -6,13 +6,14 @@ Three parts: (1) what survived verification against Adobe's own sources, (2) the
 **separate panel** rather than the in-tab section the research doc recommended, (3) prior art —
 Easify 4 — and what the CEP/ExtendScript stack it uses does and does not buy.
 
-No Premiere runtime experiment has been performed — every "unknown" below is still unknown.
-
 **Build status (2026-09-22): Phases 0 and 0a are shipped AND Phase 0 has now been RUN in
 Premiere** (commits `412887c`, `5644394`), via `probeTransformParams` triggered from the live
 panel's ⋮ menu → **Check Transform**, on two real clip shapes in an open project
-(`20260923 - หนุมคนโสด โทร 233`). The answers below unblock Phase 1. Adjustment-layer and
-non-square-pixel shapes are still untested — see the note at the end of Part 1a.
+(`20260923 - หนุมคนโสด โทร 233`). The answers below unblock Phase 1. **A second run
+(2026-09-23) on sources that differ from the sequence overturned one first-run conclusion:
+Anchor Point is normalized to the SOURCE frame, not the sequence frame** — see "Second run" in
+Part 1a. A third run the same day covered the hidden Video Info column, an Adjustment Layer and
+a non-square-pixel source; only the Transform *effect*'s match name is still unseen.
 
 ---
 
@@ -156,7 +157,12 @@ Checking the math independently on each axis: `-0.26602596 × 1920 = -510.77` (�
 `0.04159132 × 1080 = 44.92` (≈ 44.9), `0.00101729 × 1920 = 1.953` (≈ 2),
 `0.05605787 × 1080 = 60.54` (≈ 60.5). All four values land within display rounding.
 
-### The big unknown is resolved
+### The big unknown is resolved — half right, corrected by the second run below
+
+> **Correction (2026-09-23):** the paragraph below is right about **Position** and wrong about
+> **Anchor Point**. Both clips in this run had 1920x1080 sources in a 1920x1080 sequence, so the
+> two spaces gave identical numbers and could not be told apart — the "discriminating evidence"
+> argument below discriminates between axes, not between frames. The second run settles it.
 
 **Position and Anchor Point are `[x, y]` arrays normalized to the *sequence* frame width and
 height independently per axis** (x fraction × frame width, y fraction × frame height) — not
@@ -176,12 +182,12 @@ value and the host's own Effect Controls display, on real data, not a documentat
 
 | Index | Name | Shape | Notes |
 | --- | --- | --- | --- |
-| 0 | Position | `array[2]`, normalized | `[x, y]`, see above |
+| 0 | Position | `array[2]`, normalized | `[x, y]`, **sequence**-normalized |
 | 1 | Scale | `number` (percent) | uniform scale when index 3 is `true` |
 | 2 | Scale Width | `number` (percent) | active when index 3 (uniform) is `false` |
 | 3 | *(blank displayName)* | `boolean` | the Uniform Scale checkbox — this build's ZString gives it no label; match on index/matchName, never displayName, exactly as `effects.js` already warns |
 | 4 | Rotation | `number` (degrees) | |
-| 5 | Anchor Point | `array[2]`, normalized | same space as Position, see above |
+| 5 | Anchor Point | `array[2]`, normalized | **source**-normalized — NOT Position's space (second run below) |
 | 6 | Anti-flicker Filter | `number` | |
 | 7 | Crop Left | `number` (percent) | |
 | 8 | Crop Top | `number` (percent) | |
@@ -199,7 +205,7 @@ columns, with a `Column.Intrinsic.VideoInfo` entry each time: `"1920 x 1080 (1.0
 clip, `"1920 x 1080 (1.0), Straight Alpha"` for the PNG (note the extra alpha-channel suffix on an
 image — the parser feeding Phase 5 must tolerate trailing text after the `(par)` group, not assume
 the string ends there). This was run with the Project panel's Video Info column in its default
-(shown) state — the caveat about a hidden column changing the answer is still open, not yet tested.
+(shown) state — the hidden-column case was tested in the third run below: no change.
 
 ### `getIsSelected()` bug, confirmed live
 
@@ -209,7 +215,71 @@ finding is not just a documentation reading — the fallback in `effects.js`'s
 this exact build whenever `seq.getSelection()` is the thing that failed. Worth fixing before
 Phase 1 reuses that fallback, per the plan's own "Known risks" note below.
 
+### Second run (2026-09-23): sources that differ from the sequence
+
+Same probe, a 1920x1080 sequence (`pixelAspectRatio "1:1"`), three new clips:
+
+- **PNG still** (`1920 x 1080 (1.0), Straight Alpha`) at defaults — repeats the first run.
+- **720p video** (`1280 x 720 (1.0)`) and **4K video** (`3840 x 2160 (1.0)`) at defaults: every
+  param reads `[0.5, 0.5]` / `100` / `0`. Uninformative on its own — a centred default is 0.5
+  under either rule — but the Video Info column read the right size on both, so the source-size
+  path works on sources that don't match the sequence.
+- **Discriminating test:** the 720p clip with Position **and** Anchor Point both set to
+  `100, 200` in Effect Controls. At defaults its Anchor Point displayed `640, 360` (source
+  centre), not `960, 540`.
+
+| Param | Raw value | ÷ sequence 1920×1080 | ÷ source 1280×720 |
+| --- | --- | --- | --- |
+| Position | `[0.0520833320915699, 0.18518517911434174]` | **100, 200 ✓** | 66.7, 133.3 |
+| Anchor Point | `[0.078125, 0.2777777910232544]` | 150, 300 | **100, 200 ✓** |
+
+**Proven: Position is normalized to the sequence frame; Anchor Point to the clip's source
+frame.** Consequences:
+
+- **Phase 1 had a real bug, now fixed.** `main.js` converted Anchor Point with the sequence frame
+  size, so any clip whose source differs from the sequence showed a wrong anchor (150, 300 here).
+  It now converts against the source size read by `transform/params.js`'s
+  `readSourceFrameSize()` (Video Info column, parsed by `parseVideoInfoSize()`), and shows
+  "unavailable" — never a sequence-sized fallback — when that can't be read. (It briefly also
+  refused non-square pixels; the third run below showed that was unnecessary and it was removed.) Pinned by the live numbers above in
+  `tests/cutdeck_transform_params.test.cjs`. **Verified live 2026-09-23:** after a plugin
+  reload the panel showed Anchor Point `100, 200 px` on the same 720p clip (was 150, 300).
+- **Phase 1's anchor display now depends on the Video Info column read**, so the "hidden column"
+  caveat is no longer a Phase 5 concern — it gates Phase 1.
+- **Phase 3's formula needs a unit conversion.** `P_new = P_old + R·S·(A_new − A_old)` mixes a
+  sequence-normalized P with a source-normalized A; both must go to pixels (sequence and source
+  frames respectively) before the formula means anything.
+
+Also observed: with 2–4 items selected (a clip plus its linked audio), the probe reports only the
+first; select one clip per shape.
+
+### Third run (2026-09-23): hidden column, Adjustment Layer, non-square pixels
+
+- **Video Info column hidden** (Project panel → Metadata Display, Video Info unticked), 720p clip:
+  the dump still carried `Column.Intrinsic.VideoInfo = "1280 x 720 (1.0)"`, `columnCount` still
+  7. **The source-size read does not depend on the column being visible** — Part 3 caveat 1 is
+  closed.
+- **Adjustment Layer**: same `AE.ADBE Opacity` + `AE.ADBE Motion` chain, same 11-param layout,
+  and it **has** a Video Info value — `"1920 x 1080 (1.0)"`, the sequence size it was created
+  at. So an AL's "source" frame is its own creation size and the same anchor conversion applies.
+  Params were left at defaults (`[0.5, 0.5]`), which can't separate the two spaces, but the
+  question is moot for an AL created at sequence size: both frames are the same.
+- **Non-square pixels**: a duplicate of the 720p clip interpreted as Anamorphic 2:1, Video Info
+  `"1280 x 720 (2.0)"`, Position and Anchor Point set to `100, 200` in Effect Controls. Raw
+  Anchor Point was `[0.078125, 0.2777777910232544]` — exactly `100/1280, 200/720`, unchanged from
+  the square-pixel run. **Anchor Point is normalized to the source's stored pixel size; pixel
+  aspect is not applied.** Position was also unchanged (`[0.0521, 0.1852]`, sequence-normalized).
+  The panel's non-square refusal was removed on this evidence; pinned by a test with these values.
+  **Verified live:** after a reload, Effect Controls and the panel both read Anchor Point
+  `100, 200` on the 2.0-PAR copy.
+  PAR is still parsed and kept (`parseVideoInfoSize().pixelAspect`) — Phase 5's rendered-extent
+  math will need it (a 2.0-PAR 1280-wide source displays 2560 wide), even though the anchor
+  readout does not.
+
 ### What Phase 0 still has not tested
+
+Still open after the third run: only **the Transform *effect*'s match name** (never seen — no probed clip had it applied; Phase 1 reads only
+Motion, so this doesn't block it).
 
 An Adjustment Layer and a non-square-pixel source were both in the plan's "run it on" list and
 neither was available to select in the currently open timeline without adding a new clip to the
@@ -217,6 +287,8 @@ user's real, open project — deliberately not done. **Phase 1 can proceed for o
 strength of two independently-verified shapes**, but the AL and non-square-pixel cases should be
 probed (read-only, same menu item, no new risk) the next time either is naturally on a timeline
 being worked on, before Phase 1 is called done rather than just started.
+
+*(Superseded 2026-09-23: both were probed in the third run above, on a scratch test sequence.)*
 
 ---
 
@@ -333,11 +405,11 @@ has been run on at least the first two.** This is the same discipline `timelineR
 
 | Phase | Ships | Blocked until |
 | --- | --- | --- |
-| **0** | ✅ **SHIPPED AND RUN** `probeTransformParams` + `formatTransformReport`, wired to the ⋮ menu and to the transform panel's own button. Run live on 2 clip shapes 2026-09-22 — see Part 1a | — |
+| **0** | ✅ **SHIPPED AND RUN** `probeTransformParams` + `formatTransformReport`, wired to the ⋮ menu and to the transform panel's own button. Run live on 2 clip shapes 2026-09-22, then on 720p/4K/PNG in a 1080 sequence 2026-09-23 — see Part 1a. then hidden-column / Adjustment Layer / non-square runs the same day. **Done** except the Transform *effect* match name (optional — Phase 1 reads only Motion) | — |
 | **0a** | ✅ **SHIPPED** second entrypoint `cutdeck.align.panel`, `#view-transform` container, `core/alignPanel.js` seam, guarded `entrypoints.setup()` | — (was independent of 0; both gate questions are now answered above — no per-entrypoint `main` exists, and one shared document makes `localStorage` sharing moot) |
-| **1** | ✅ **BUILT, NOT YET RUN LIVE (2026-09-22).** `transform/params.js` (host discovery: finds the Motion component by matchName, reads Position/Scale/Rotation/Anchor Point by the Part 1a index map, reports `isTimeVarying` per field) + `transform/geometry.js` (pure normalized→pixel conversion) + `timeline/componentAccess.js` (lifted selection lookup — the `getIsSelected()` fix below — and the `{value:{value:X}}` unwrap). `core/alignPanel.js` renders the four fields (or "unavailable"/"Animated (keyframed)"); `main.js` reads on mount, on "Click to refresh", and on a 600ms silent poll for the "live" requirement. 50 new node:test cases (component access, params/geometry, panel rendering, main.js wiring); no Premiere run yet — that verification (digit-for-digit against Effect Controls, on a matched-source clip, a mismatched-source clip and an Adjustment Layer) is still open. | **Unblocked for the build.** Live verification still needed on an Adjustment Layer and a non-square-pixel clip (never probed at all) before this phase is called done, not just built. |
+| **1** | ✅ **BUILT, NOT YET RUN LIVE (2026-09-22).** `transform/params.js` (host discovery: finds the Motion component by matchName, reads Position/Scale/Rotation/Anchor Point by the Part 1a index map, reports `isTimeVarying` per field; since 2026-09-23 also reads the source frame size Anchor Point is normalized to) + `transform/geometry.js` (pure normalized→pixel conversion) + `timeline/componentAccess.js` (lifted selection lookup — the `getIsSelected()` fix below — and the `{value:{value:X}}` unwrap). `core/alignPanel.js` renders the four fields (or "unavailable"/"Animated (keyframed)"); `main.js` reads on mount, on "Click to refresh", and on a 600ms silent poll for the "live" requirement. 50 new node:test cases (component access, params/geometry, panel rendering, main.js wiring); no Premiere run yet — that verification (digit-for-digit against Effect Controls, on a matched-source clip, a mismatched-source clip and an Adjustment Layer) is still open. | **Unblocked for the build.** Live verification still needed on an Adjustment Layer and a non-square-pixel clip (never probed at all) before this phase is called done, not just built. |
 | **2** | Numeric edit of those four, one clip at a time, with undo | Research-doc gate 2 — write a point, read it back, confirm in Effect Controls *and* Program Monitor, undo |
-| **3** | Nine-point anchor picker, preserve-position off | Phase 2. `P_new = P_old + R·S·(A_new − A_old)` is geometry reasoning, **not** an Adobe formula — it is a hypothesis Phase 3 tests, and it may be wrong if Position and Anchor use different spaces |
+| **3** | Nine-point anchor picker, preserve-position off | Phase 2. `P_new = P_old + R·S·(A_new − A_old)` is geometry reasoning, **not** an Adobe formula — it is a hypothesis Phase 3 tests. **They DO use different spaces** (Part 1a, second run: Position sequence-normalized, Anchor source-normalized), so both must be converted to pixels in their own frames before applying it |
 | **4** | Preserve-position on; batch across a multi-clip selection | Gate 4 — nine targets × {100%, nonuniform scale} × {0°, 90°, arbitrary} |
 | **5** | Align to sequence frame: left/centre/right/top/middle/bottom | Gate 3 **and** a decided answer for source dimensions. Expect "refuse clearly when unknown" |
 | **6** | Align to selection bounds; distribute centres; distribute equal gaps (distinct commands, ≥3 clips) | Phase 5 |
@@ -356,16 +428,20 @@ selection updates them; a clip with no readable Transform shows "unavailable" ra
 
 ### Known risks
 
-- **Units — RESOLVED 2026-09-22.** Position and Anchor Point are both `[x, y]` arrays normalized
-  to the sequence frame, independently per axis (Part 1a). Proven on 2 shapes; not yet proven for
-  non-uniform pixel aspect or an Adjustment Layer's own coordinate space, which could still differ.
-- **Source dimensions — has a working read path.** `Metadata.getProjectColumnsMetadata()` →
+- **Units — RESOLVED 2026-09-23 (corrected).** Position is `[x, y]` normalized to the
+  **sequence** frame; Anchor Point is `[x, y]` normalized to the clip's **source** frame, both
+  independently per axis (Part 1a, second run). The 2026-09-22 claim that they share the sequence
+  space was wrong and shipped a Phase 1 bug, now fixed. Non-square pixels: anchor uses the
+  stored source size, PAR not applied (third run). Adjustment Layer: has its own Video Info size
+  (its creation size), so the same conversion applies.
+- **Source dimensions — has a working read path, and Phase 1 now depends on it.** `Metadata.getProjectColumnsMetadata()` →
   `Column.Intrinsic.VideoInfo` returned real resolution strings on both probed clips (Part 1a).
-  Still open: whether hiding that Project-panel column changes the answer (documented as a
-  view-layout-dependent field, not yet tested), and the string's trailing-text variation
+  Hiding the Project-panel column does NOT change the answer (third run). Still relevant: the
+  string's trailing-text variation
   (`", Straight Alpha"` on an image) that any parser must tolerate.
-- **Two panels, one settings store.** Unverified whether `localStorage` is shared across
-  entrypoints in one plugin. Gate 0a answers it; until then the new panel keeps its own key.
+- **Two panels, one settings store — ANSWERED by gate 0a.** One shared document means one JS
+  context, so `localStorage` is shared; the remaining risk is the shared id namespace, covered by
+  a collision test.
 - **Selection reliability — FIXED 2026-09-22.** `seq.getSelection()` is already proven
   unreliable on this build (`adjustmentLayer.js`, `effects.js`). The fallback both `effects.js`
   and the new panel share had a bug, confirmed live (Part 1a): it tried `.isSelected`, which is

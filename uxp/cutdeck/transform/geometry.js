@@ -2,12 +2,13 @@
 // require("premierepro"), so it is unit-testable off-host (plan Part 2's file layout,
 // docs/research/cutdeck-transform-panel-plan.md).
 //
-// Phase 1 needs exactly one conversion: Position and Anchor Point are proven (Part 1a, a live
-// Premiere run on two real clip shapes, matched against the Properties panel's own pixel
-// readout to sub-pixel accuracy) to be [x, y] normalized to the SEQUENCE frame, independently
-// per axis — pixel = fraction * frameWidth on x, fraction * frameHeight on y. Anchor and
-// Distribute math (Phases 3+) will add real geometry here; nothing beyond this one conversion
-// is built ahead of the phase that needs it.
+// Phase 1 needs exactly one conversion — pixel = fraction * frameWidth on x, fraction *
+// frameHeight on y — applied against TWO different frames (Part 1a, proven live against
+// Effect Controls): Position is normalized to the SEQUENCE frame, Anchor Point to the clip's
+// SOURCE frame. Pass the right frame for the param; they only coincide when the source matches
+// the sequence. Anchor and Distribute math (Phases 3+) will add real geometry here, and must
+// convert between the two spaces; nothing beyond this one conversion is built ahead of the
+// phase that needs it.
 
 // A point param has been observed in both an array [x, y] shape (the real build, Part 1a) and
 // an {x, y} object shape (an earlier probe on the same build's params, see
@@ -28,7 +29,8 @@ function pointXY(value) {
 }
 
 // Converts a normalized Position/Anchor Point value to the pixel coordinates Effect Controls
-// and the Properties panel display, given the sequence's frame size. Returns null when either
+// and the Properties panel display, given the frame that param is normalized to (sequence for
+// Position, source for Anchor Point). Returns null when either
 // input is unusable, never a wrong number.
 function normalizedToFramePixels(value, frameWidth, frameHeight) {
   const point = pointXY(value);

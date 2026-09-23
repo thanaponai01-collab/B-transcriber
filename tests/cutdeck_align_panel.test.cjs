@@ -409,6 +409,15 @@ test("main.js requires the transform host-discovery and geometry modules", () =>
   assert.match(mainJs, /require\("\.\/transform\/geometry\.js"\)/);
 });
 
+test("Anchor Point is converted against the SOURCE frame, never the sequence frame", () => {
+  // Part 1a: Anchor Point is normalized to the source, Position to the sequence. Converting
+  // Anchor Point against frameSize printed 150, 300 for a 100, 200 anchor on a 720p clip.
+  assert.match(mainJs, /readSourceFrameSize\(ppro, item\)/);
+  assert.match(mainJs, /anchorFrame = await transformParams\.readSourceFrameSize\(ppro, item\)/);
+  assert.match(mainJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
+  assert.match(mainJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
+});
+
 test("the transform panel's show hook starts the live poll, after mounting and the first read", () => {
   const showAt = mainJs.indexOf('"cutdeck.align.panel"');
   assert.ok(showAt !== -1, "cutdeck.align.panel entrypoint is not registered");
