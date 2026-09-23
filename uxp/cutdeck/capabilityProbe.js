@@ -965,7 +965,7 @@ async function probeCreateAdjustmentLayer(ppro, deps = {}) {
   const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
   const stop = () => ({ probe: "al-create", complete: false, findings, verdict: null });
   const alProject = deps.alProject || require("./timeline/alProject.js");
-  const al = deps.al || require("./timeline/adjustmentLayer.js");
+  const al = deps.al || require("./timeline/alLibrary.js");
   const write = deps.writeFile || al.writeTempFile;
   const now = deps.now || (() => Date.now());
 
@@ -1059,7 +1059,7 @@ async function probeCreateAdjustmentLayer(ppro, deps = {}) {
       null);
   }
 
-  const pickRead = await attempt("findAdjustmentLayerItem", () => al.findAdjustmentLayerItem(project, seq));
+  const pickRead = await attempt("findAdjustmentLayerItem", () => al.findAdjustmentLayerItem(project, seq, ppro));
   const pickedName = pickRead.ok && pickRead.value ? pickRead.value.name : null;
   add("pick", "Would Place AL now pick the generated layer for this sequence?",
     pickedName === built.name ? "yes" : pickedName ? `no — it picks "${pickedName}"` : "no AL found",

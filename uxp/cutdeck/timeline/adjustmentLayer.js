@@ -1,10 +1,7 @@
-const ppro = require("premierepro");
 const { toTicksOr, makeTickTime } = require("../host/ticks.js");
 const {
   CUTDECK_BIN_NAME,
-  asBinLike,
   runTransaction,
-  getOrCreateBin,
   activeProjectAndSequence,
 } = require("../host/project.js");
 const {
@@ -12,280 +9,24 @@ const {
   getTrackClipItemsOrThrow,
   getSelectedVideoClips,
 } = require("../host/trackItems.js");
+const {
+  assignPlacementLanes,
+  resolveTopLayer,
+  planPlacements,
+} = require("./alPlacement.js");
+const {
+  ADJ_BIN_NAME,
+  getOrCreateAdjBin,
+  flattenImportWrappers,
+  detectResolutionFromMetadata,
+  pickBestCandidate,
+  findAdjustmentLayerItem,
+  writeTempFile,
+  createAdjustmentLayerForSequence,
+} = require("./alLibrary.js");
 
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
-// Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47.
-
-// Same top-level bin workflow.js's getOrCreateCutDeckBin creates/reuses for Cut/Sync
-// results — deliberately the SAME name, so this is one shared folder tree in the Project
-// panel, not a second one. ADJ_BIN_NAME is the canonical, unambiguous home for the
-// Adjustment Layer: dropping it there means CutDeck finds it instantly on any sequence,
-// with no name-guessing required.
-const ADJ_BIN_NAME = "ADJ & FX";
-
-// Finds (or creates once) Project panel > CutDeck > ADJ & FX.
-async function getOrCreateAdjBin(project) {
-  return getOrCreateBin(project, [CUTDECK_BIN_NAME, ADJ_BIN_NAME]);
-}
-
-// Importing a generated "CutDeck <W>x<H>.prproj" makes Premiere wrap its item in a bin named
-// after the file (seen 2026-09-23). This moves each such AL up into ADJ & FX, then removes the
-// wrapper only once a fresh read shows it EMPTY — two transactions, deliberately: removing a
-// bin that still held the AL would delete the AL and every placement of it on the timeline.
-// Only bins with exactly that name holding exactly one non-bin item are touched, so nothing
-// the user made is ever moved or removed. Failure is logged, never thrown: the AL still works
-// from inside the wrapper.
-const IMPORT_WRAPPER_NAME = /^CutDeck \d+x\d+\.prproj$/;
-
-async function listWrappers(bin) {
-  const found = [];
-  for (const it of (await bin.getItems()) || []) {
-    if (it.type !== 2 || !IMPORT_WRAPPER_NAME.test(it.name || "")) continue;
-    const wrapper = asBinLike(it);
-    found.push({ item: it, wrapper, children: (await wrapper.getItems()) || [] });
-  }
-  return found;
-}
-
-async function flattenImportWrappers(project, adjBin) {
-  const bin = asBinLike(adjBin);
-  try {
-    const toMove = (await listWrappers(bin))
-      .filter((w) => w.children.length === 1 && w.children[0].type !== 2);
-    if (!toMove.length) return 0;
-    runTransaction(project, "CutDeck: move Adjustment Layers into ADJ & FX", (compound) => {
-      for (const { wrapper, children } of toMove) {
-        if (!compound.addAction(wrapper.createMoveItemAction(children[0], bin))) throw new Error("addAction(move) returned false");
-      }
-    });
-    const empty = (await listWrappers(bin)).filter((w) => w.children.length === 0);
-    if (empty.length) {
-      runTransaction(project, "CutDeck: remove empty import folders", (compound) => {
-        for (const { item } of empty) {
-          if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove) returned false");
-        }
-      });
-    }
-    return toMove.length;
-  } catch (err) {
-    console.log("CutDeck AL tidy: could not flatten import folders:", err);
-    return 0;
-  }
-}
-
-// Best-effort resolution auto-detection, tried before any naming convention. Premiere
-// stores an item's own computed frame size in its internal "Column.Intrinsic.VideoInfo"
-// project metadata field — the same data behind the Project panel's "Video Info" column, so
-// it should exist even for a synthetic item like an Adjustment Layer, not just real media.
-// Adobe's own community documents this field as unreliable ("works only half the time" —
-// not every item populates it), so this is strictly a bonus: any failure (missing field,
-// parse error, a build without ppro.Metadata or require("uxp").xmp) returns null and the
-// caller falls through to name matching, unchanged.
-async function detectResolutionFromMetadata(projectItem) {
-  try {
-    if (!projectItem || !ppro.Metadata || typeof ppro.Metadata.getProjectMetadata !== "function") return null;
-    const xmpStr = await ppro.Metadata.getProjectMetadata(projectItem);
-    if (!xmpStr) return null;
-    const uxpXmp = require("uxp").xmp;
-    if (!uxpXmp || typeof uxpXmp.XMPMeta !== "function") return null;
-    const xmp = new uxpXmp.XMPMeta(xmpStr);
-    const prop = xmp.getProperty(
-      "http://ns.adobe.com/premierePrivateProjectMetaData/1.0/",
-      "Column.Intrinsic.VideoInfo"
-    );
-    const raw = prop && prop.value ? String(prop.value) : "";
-    if (!raw) return null;
-    // Observed format is space-separated with the numbers at either end (e.g.
-    // "1920 x 1080" per the field's own documented example) — pull every number out and
-    // take the first/last rather than assume exact token positions.
-    const numbers = raw.match(/\d+/g);
-    if (!numbers || numbers.length < 2) return null;
-    const width = parseInt(numbers[0], 10);
-    const height = parseInt(numbers[numbers.length - 1], 10);
-    if (!width || !height) return null;
-    return { width, height };
-  } catch (_) {
-    return null;
-  }
-}
-
-// Picks the right Adjustment Layer when more than one sits in the same folder. Tries
-// Premiere's own metadata first (exact match, no naming needed when it works); falls back to
-// matching by name (e.g. "1920x1080", "AL 1080x1920") when metadata isn't available — so a
-// same-size placement needs no scaling at all either way, Scale stays the proven-working 100%.
-async function pickBestCandidate(candidates, targetWidth, targetHeight, seq) {
-  if (!candidates || candidates.length === 0) return null;
-  if (targetWidth && targetHeight) {
-    for (const cand of candidates) {
-      const detected = await detectResolutionFromMetadata(cand);
-      if (detected && detected.width === targetWidth && detected.height === targetHeight) {
-        return cand;
-      }
-    }
-    // Width must appear BEFORE height with a short separator ("x", "×", "-", " ", or
-    // nothing) between them — a plain "does this substring appear anywhere" check (the
-    // original version of this) matched "1920x1080" against a 1080x1920 target too, since
-    // both numbers are present, just transposed. Order matters.
-    const pattern = new RegExp(`${targetWidth}\\D{0,3}${targetHeight}`);
-    for (const cand of candidates) {
-      if (pattern.test(cand.name || "")) return cand;
-    }
-    // Size known but nothing matches: return none, so placement creates a correctly sized AL
-    // (createAdjustmentLayerForSequence) instead of reusing another size's. Proven needed
-    // 2026-09-23: a 1920x1080 sequence got the 1080x1920 AL from the fallbacks below.
-    return null;
-  }
-  if (seq && seq.name) {
-    const sName = seq.name.toLowerCase();
-    for (const cand of candidates) {
-      if ((cand.name || "").toLowerCase().indexOf(sName) !== -1) return cand;
-    }
-  }
-  return candidates[0];
-}
-
-// Find adjustment layer in project panel or active timeline, matching active sequence dimensions and fps
-async function findAdjustmentLayerItem(project, seq) {
-  if (!project || typeof project.getRootItem !== "function") return null;
-  const root = await project.getRootItem();
-  if (!root) return null;
-
-  let targetWidth = null;
-  let targetHeight = null;
-  try {
-    if (seq && typeof seq.getSettings === "function") {
-      // SequenceSettings has no plain videoFrameWidth/videoFrameHeight fields (confirmed
-      // against the official class reference) — it's getVideoFrameRect(): RectF, and RectF
-      // is the plain {width, height} struct.
-      const st = await seq.getSettings();
-      const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
-      if (rect && rect.width && rect.height) {
-        targetWidth = rect.width;
-        targetHeight = rect.height;
-      }
-    }
-  } catch (_) {}
-
-  // Removed: a step that trusted whatever Adjustment Layer was already sitting on the
-  // active sequence's timeline, on the assumption it must already be the right one for that
-  // sequence. Proven wrong (2026-09-22): once either AL lands on a sequence once — including
-  // by mistake — this made CutDeck reuse that exact instance forever on that sequence,
-  // completely bypassing the resolution-aware pick below. That pick (metadata, then name) is
-  // now the only path — always re-evaluated, so it can't get stuck on a stale placement.
-
-  // Canonical home: Project panel > CutDeck > ADJ & FX. Ensured to exist (created if
-  // missing) so there is always one unambiguous, always-findable place for the Adjustment
-  // Layer(s) — no depending on it already being on some other sequence's timeline. One AL in
-  // here just works. Several (one per resolution you actually use — e.g. "1920x1080",
-  // "1080x1920") get matched to the active sequence by name — see pickBestCandidate.
-  try {
-    const adjBin = await getOrCreateAdjBin(project);
-    await flattenImportWrappers(project, adjBin);
-    const items = (await asBinLike(adjBin).getItems()) || [];
-    const candidates = items.filter((it) => it.type !== 2 && it.name);
-    const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq);
-    if (picked) return picked;
-  } catch (_) {}
-
-  // Legacy fallback: search the whole project (an AL named/placed before ADJ & FX existed)
-  async function getFolderChildren(folder) {
-    if (typeof folder.getItems === "function") {
-      try { return await folder.getItems(); } catch (_) {}
-    }
-    if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
-      try {
-        const bin = ppro.FolderItem.cast(folder);
-        if (bin && typeof bin.getItems === "function") {
-          return await bin.getItems();
-        }
-      } catch (_) {}
-    }
-    return [];
-  }
-
-  const allCandidates = [];
-
-  async function search(folder) {
-    const items = await getFolderChildren(folder);
-    if (!items || !items.length) return;
-
-    for (const it of items) {
-      // In Premiere Pro UXP, it.type === 2 is a BIN (Folder)
-      const isBin = it.type === 2 || typeof it.getItems === "function" ||
-        (ppro.FolderItem && typeof ppro.FolderItem.cast === "function" && ppro.FolderItem.cast(it) !== null);
-
-      if (isBin) {
-        // Recurse into the bin (e.g. "07. Adjustment Layer") — NEVER return the bin itself!
-        await search(it);
-        continue;
-      }
-
-      // Must be a clip item (type !== 2) whose name contains adjustment
-      if (it.type !== 2 && it.name) {
-        const lower = it.name.toLowerCase();
-        if (
-          lower.indexOf("adjustment layer") !== -1 ||
-          lower.indexOf("adjustment") !== -1 ||
-          lower.indexOf("adj_") === 0 ||
-          lower.indexOf("al_") === 0
-        ) {
-          allCandidates.push(it);
-        }
-      }
-    }
-  }
-
-  await search(root);
-
-  return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq);
-}
-
-// Writes bytes to the plugin's temporary folder and returns the native path.
-async function writeTempFile(fileName, bytes) {
-  const uxp = require("uxp");
-  const folder = await uxp.storage.localFileSystem.getTemporaryFolder();
-  const file = await folder.createFile(fileName, { overwrite: true });
-  await file.write(bytes.buffer, { format: uxp.storage.formats.binary });
-  return file.nativePath;
-}
-
-// The API has no createAdjustmentLayer, so this generates a one-AL .prproj at the sequence's
-// exact size (timeline/alProject.js) and imports it into CutDeck > ADJ & FX. Returns the
-// imported project item, or throws saying what went wrong. Premiere may wrap an imported
-// project in a bin named after the file, so one level of sub-bins is searched too.
-async function createAdjustmentLayerForSequence(project, width, height, ticksPerFrame) {
-  const alProject = require("./alProject.js");
-  const w = Math.round(Number(width));
-  const h = Math.round(Number(height));
-  const { bytes, name } = alProject.buildAdjustmentLayerPrproj({
-    width: w,
-    height: h,
-    ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null,
-  });
-  const filePath = await writeTempFile(`CutDeck ${w}x${h}.prproj`, bytes);
-  const adjBin = asBinLike(await getOrCreateAdjBin(project));
-  const imported = await project.importFiles([filePath], true, adjBin, false);
-  console.log(`CutDeck AL create: importFiles(${filePath}) returned`, imported);
-
-  await flattenImportWrappers(project, adjBin);
-  const items = (await adjBin.getItems()) || [];
-  const direct = items.find((it) => it.type !== 2 && it.name === name);
-  if (direct) return direct;
-  for (const it of items) {
-    if (it.type !== 2) continue;
-    const children = (await asBinLike(it).getItems()) || [];
-    const nested = children.find((c) => c.type !== 2 && c.name === name);
-    if (nested) {
-      console.log(`CutDeck AL create: "${name}" landed inside the "${it.name}" bin`);
-      return nested;
-    }
-  }
-  throw new Error(
-    `Tried to create "${name}" automatically (import returned ${imported}), but it did not appear in ` +
-    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > Adjustment Layer at ` +
-    `${w}x${h}, name it "${w}x${h}", and drag it into that folder.`
-  );
-}
+// Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47, #56.
 
 // Label color index mapping for Premiere Pro clips
 function getLabelIndex(colorName) {
@@ -300,9 +41,8 @@ function getLabelIndex(colorName) {
   return map[key] !== undefined ? map[key] : 1;
 }
 
-
 // Robust UXP helper to determine collision-free track using Smart Stacking
-async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
+async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1, ppro) {
   const trackCount = await seq.getVideoTrackCount();
   let highestOccupied = 0;
   for (let v = 0; v < trackCount; v++) {
@@ -379,7 +119,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
 // before we commit to overwriting it. findSmartStackTrack's picks have been wrong in
 // practice, so this does not trust that result — it verifies it, one more time, with
 // nothing able to happen in between.
-async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks) {
+async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks, ppro) {
   const trackCount = await seq.getVideoTrackCount();
   if (trackIndex >= trackCount) return true; // track doesn't exist yet — nothing to collide with
   const track = await seq.getVideoTrack(trackIndex);
@@ -398,35 +138,6 @@ async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks) {
   return true;
 }
 
-// Groups planned placements into "lanes" so any two that overlap in time never end up in
-// the same lane — classic interval-scheduling greedy assignment (sort by start, drop each
-// into the first lane whose last-placed end is already <= this start, else open a new lane).
-// Needed because transition mode (Shift+Click) centers each AL independently on its own cut:
-// when cuts sit closer together than the requested frame width, neighboring ALs' spans can
-// genuinely overlap, and placements within one lane never do, by construction.
-function assignPlacementLanes(placements) {
-  const order = placements.map((_, idx) => idx).sort((a, b) => {
-    const pa = placements[a], pb = placements[b];
-    if (pa.startTicks < pb.startTicks) return -1;
-    if (pa.startTicks > pb.startTicks) return 1;
-    return a - b;
-  });
-  const laneEnds = [];
-  const laneOf = new Array(placements.length).fill(0);
-  for (const idx of order) {
-    const p = placements[idx];
-    let lane = laneEnds.findIndex((end) => end <= p.startTicks);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(p.endTicks);
-    } else {
-      laneEnds[lane] = p.endTicks;
-    }
-    laneOf[idx] = lane;
-  }
-  return laneOf;
-}
-
 // Robust UXP timeline placement routine (supporting multi-clip cut transitions and separate clip spans)
 async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro, {
@@ -437,21 +148,9 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     options.onSequenceName(seq.name);
   }
 
-  // Scaling was tried and removed (2026-09-22): createSetScaleToFrameSizeAction() proved to
-  // have no visible effect, and there's no API to read a project item's native pixel
-  // dimensions to compute a scale manually either (confirmed against ProjectItem/
-  // ClipProjectItem/Media/FootageInterpretation — none expose width/height). The workflow
-  // now avoids needing scale at all: keep one Adjustment Layer per resolution you use in
-  // Project panel > CutDeck > ADJ & FX, and findAdjustmentLayerItem picks the one that
-  // already matches this sequence exactly, so it's placed at native 100% — see
-  // pickBestCandidate. sequenceWidth/sequenceHeight are still read here purely to report
-  // what CutDeck detected, for the status line.
   let sequenceWidth = null;
   let sequenceHeight = null;
   try {
-    // SequenceSettings has no plain videoFrameWidth/videoFrameHeight fields (confirmed
-    // against the official class reference) — it's getVideoFrameRect(): RectF, and RectF
-    // is the plain {width, height} struct.
     if (typeof seq.getSettings === "function") {
       const st = await seq.getSettings();
       const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
@@ -494,200 +193,35 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     } catch (_) {}
   }
 
-  // Cover every selected clip's own span, any track — not just V1 (confirmed
-  // 2026-09-21: the user wants AL over a region where only V2/V3 have a selected
-  // clip and V1 has nothing there too).
-  //
-  // Where more than one selected clip covers the same stretch, only the TOPMOST
-  // track's clip should drive it — a lower clip hidden underneath a higher one
-  // must not introduce its own split point there (confirmed 2026-09-21: a V2 clip
-  // straddling the real boundary between a V4 clip and a V3 clip fragmented what
-  // should have been 2 clean AL segments into 4 — "it like spot the V2 that is
-  // under both V3, V4 ... i want it to spot only top layer"). So this is a
-  // layering resolve, not a plain interval union: assign each breakpoint-bounded
-  // sub-interval to whichever covering clip has the highest track, tagged with that
-  // clip's identity, then merge adjacent sub-intervals that resolve to the SAME
-  // clip. A boundary between two DIFFERENT top clips (even same track, different
-  // clip) still survives — this only removes splits contributed by a clip that
-  // never actually wins the region it overlaps.
-  const taggedClips = rawClipsWithTimes.map((cl, idx) => ({ ...cl, idx }));
-  const breakpoints = [];
-  for (const cl of taggedClips) {
-    breakpoints.push(cl.startTicks, cl.endTicks);
-  }
-  breakpoints.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  const uniqueBreakpoints = breakpoints.filter((b, idx) => idx === 0 || b !== breakpoints[idx - 1]);
+  const clipsWithTimes = resolveTopLayer(rawClipsWithTimes);
 
-  const clipsWithTimes = [];
-  for (let i = 0; i < uniqueBreakpoints.length - 1; i++) {
-    const segStart = uniqueBreakpoints[i];
-    const segEnd = uniqueBreakpoints[i + 1];
-    const covering = taggedClips.filter((cl) => cl.startTicks <= segStart && cl.endTicks >= segEnd);
-    if (covering.length === 0) continue; // real gap between separate, non-touching selections
-
-    let winner = covering[0];
-    for (const cl of covering) {
-      if (cl.track > winner.track) winner = cl;
-    }
-
-    const last = clipsWithTimes[clipsWithTimes.length - 1];
-    if (last && last.winnerIdx === winner.idx && last.endTicks === segStart) {
-      last.endTicks = segEnd;
-    } else {
-      clipsWithTimes.push({ startTicks: segStart, endTicks: segEnd, winnerIdx: winner.idx });
-    }
+  let inTicks = 0n;
+  let outTicks = 0n;
+  if (clipsWithTimes.length === 0) {
+    try {
+      const inPoint = await seq.getInPoint();
+      const outPoint = await seq.getOutPoint();
+      inTicks = toTicksOr(inPoint, 0n);
+      outTicks = toTicksOr(outPoint, 0n);
+    } catch (_) {}
   }
 
-  const placements = [];
-
-  if (mode === "transition") {
-    // -------------------------------------------------------------
-    // TRANSITION MODE (Shift+Click): 50/50 centered on cuts
-    // -------------------------------------------------------------
-    const halfFrames = frames / 2n;
-    const halfTicks = halfFrames * tpf;
-
-    if (clipsWithTimes.length >= 2) {
-      // Find internal cuts between adjacent selected clips
-      for (let i = 0; i < clipsWithTimes.length - 1; i++) {
-        const cLeft = clipsWithTimes[i];
-        const cRight = clipsWithTimes[i + 1];
-
-        // Sequential clips within 2 frames tolerance of a clean cut seam
-        const diff = cRight.startTicks > cLeft.endTicks
-          ? (cRight.startTicks - cLeft.endTicks)
-          : (cLeft.endTicks - cRight.startTicks);
-
-        if (diff <= (tpf * 2n)) {
-          const cutTick = cLeft.endTicks;
-          let curHalfLeft = halfTicks;
-          let curHalfRight = halfTicks;
-
-          if (clamp) {
-            const durLeft = cLeft.endTicks - cLeft.startTicks;
-            const durRight = cRight.endTicks - cRight.startTicks;
-            const maxHalfLeft = (durLeft * 45n) / 100n;
-            const maxHalfRight = (durRight * 45n) / 100n;
-            if (curHalfLeft > maxHalfLeft) curHalfLeft = maxHalfLeft;
-            if (curHalfRight > maxHalfRight) curHalfRight = maxHalfRight;
-          }
-
-          const sT = cutTick > curHalfLeft ? (cutTick - curHalfLeft) : 0n;
-          const eT = cutTick + curHalfRight;
-          placements.push({
-            startTicks: sT,
-            endTicks: eT,
-            name: effectName ? `ADJ_${effectName}_${frames}f` : `ADJ_Cut_${frames}f`
-          });
-        }
-      }
-    }
-
-    // Fallback: If no internal cuts found (e.g. 0-1 clip selected, or clips separated), place at CTI
-    if (placements.length === 0) {
-      const sT = ctiTicks > halfTicks ? (ctiTicks - halfTicks) : 0n;
-      const eT = sT + (frames * tpf);
-      placements.push({
-        startTicks: sT,
-        endTicks: eT,
-        name: effectName ? `ADJ_${effectName}_${frames}f` : `ADJ_Cut_${frames}f`
-      });
-    }
-  } else if (mode === "per_clip") {
-    // -------------------------------------------------------------
-    // PER-CLIP MODE (Ctrl+Click): Dedicated AL per selected clip
-    // -------------------------------------------------------------
-    if (clipsWithTimes.length > 0) {
-      for (let i = 0; i < clipsWithTimes.length; i++) {
-        const cl = clipsWithTimes[i];
-        placements.push({
-          startTicks: cl.startTicks,
-          endTicks: cl.endTicks,
-          name: effectName
-            ? `ADJ_${effectName}`
-            : (clipsWithTimes.length === 1 ? "ADJ_Fit" : `ADJ_Clip_${i + 1}`)
-        });
-      }
-    } else {
-      // If nothing selected, check In/Out or playhead
-      let inTicks = 0n;
-      let outTicks = 0n;
-      try {
-        const inPoint = await seq.getInPoint();
-        const outPoint = await seq.getOutPoint();
-        inTicks = toTicksOr(inPoint, 0n);
-        outTicks = toTicksOr(outPoint, 0n);
-      } catch (_) {}
-
-      if (outTicks > inTicks && inTicks >= 0n) {
-        placements.push({
-          startTicks: inTicks,
-          endTicks: outTicks,
-          name: effectName ? `ADJ_${effectName}` : "ADJ_InOut"
-        });
-      } else {
-        const half = (frames / 2n) * tpf;
-        const sT = ctiTicks > half ? ctiTicks - half : 0n;
-        const eT = sT + (frames * tpf);
-        placements.push({
-          startTicks: sT,
-          endTicks: eT,
-          name: effectName ? `ADJ_${effectName}_${frames}f` : `ADJ_${frames}f`
-        });
-      }
-    }
-  } else {
-    // -------------------------------------------------------------
-    // SPAN MODE (Normal Click): Spans the full selection
-    // -------------------------------------------------------------
-    if (clipsWithTimes.length > 0) {
-      let minStart = clipsWithTimes[0].startTicks;
-      let maxEnd = clipsWithTimes[0].endTicks;
-      for (const cl of clipsWithTimes) {
-        if (cl.startTicks < minStart) minStart = cl.startTicks;
-        if (cl.endTicks > maxEnd) maxEnd = cl.endTicks;
-      }
-      placements.push({
-        startTicks: minStart,
-        endTicks: maxEnd,
-        name: effectName
-          ? `ADJ_${effectName}`
-          : (clipsWithTimes.length === 1 ? "ADJ_Fit" : "ADJ_Span")
-      });
-    } else {
-      // If nothing selected, check In/Out or playhead
-      let inTicks = 0n;
-      let outTicks = 0n;
-      try {
-        const inPoint = await seq.getInPoint();
-        const outPoint = await seq.getOutPoint();
-        inTicks = toTicksOr(inPoint, 0n);
-        outTicks = toTicksOr(outPoint, 0n);
-      } catch (_) {}
-
-      if (outTicks > inTicks && inTicks >= 0n) {
-        placements.push({
-          startTicks: inTicks,
-          endTicks: outTicks,
-          name: effectName ? `ADJ_${effectName}` : "ADJ_InOut"
-        });
-      } else {
-        const half = (frames / 2n) * tpf;
-        const sT = ctiTicks > half ? ctiTicks - half : 0n;
-        const eT = sT + (frames * tpf);
-        placements.push({
-          startTicks: sT,
-          endTicks: eT,
-          name: effectName ? `ADJ_${effectName}_${frames}f` : `ADJ_${frames}f`
-        });
-      }
-    }
-  }
+  const placements = planPlacements({
+    mode,
+    spans: clipsWithTimes,
+    frames,
+    tpf,
+    cti: ctiTicks,
+    clamp,
+    effectName,
+    inPoint: inTicks,
+    outPoint: outTicks,
+  });
 
   const tickTime = makeTickTime(ppro);
   if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
 
-  let alItem = await findAdjustmentLayerItem(project, seq);
+  let alItem = await findAdjustmentLayerItem(project, seq, ppro);
   let createdAdjustmentLayer = null;
   if (!alItem) {
     if (!sequenceWidth || !sequenceHeight) {
@@ -713,12 +247,9 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     } catch (_) {}
   }
 
-  let placedCount = 0;
   const targetTracksSet = new Set();
-  // Every actually-placed track item, in placement order — lets a caller (see main.js's
-  // doEffect) apply a real Premiere effect to each one after placement, instead of only
-  // knowing a count happened.
   const placedItems = [];
+  let placedCount = 0;
 
   // Pick one track per LANE (see assignPlacementLanes), clear across every
   // placement's span in that lane, not per-placement. This project can have real
@@ -761,7 +292,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
         if (placements[i].startTicks < unionStart) unionStart = placements[i].startTicks;
         if (placements[i].endTicks > unionEnd) unionEnd = placements[i].endTicks;
       }
-      let laneTrack = await findSmartStackTrack(batchSeq, unionStart, unionEnd, floorTrack);
+      let laneTrack = await findSmartStackTrack(batchSeq, unionStart, unionEnd, floorTrack, ppro);
 
       // The union scan is a starting guess. Verify it against every individual
       // placement's own exact span in this lane before placing anything — keep
@@ -776,7 +307,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
           const p = placements[i];
           let clear;
           try {
-            clear = await isTrackRangeClear(batchSeq, laneTrack, p.startTicks, p.endTicks);
+            clear = await isTrackRangeClear(batchSeq, laneTrack, p.startTicks, p.endTicks, ppro);
           } catch (e) {
             throw new Error(
               `Could not verify V${laneTrack + 1} is empty for a group of overlapping cut transitions — ` +
@@ -821,7 +352,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     while (guard < 32) {
       let clear;
       try {
-        clear = await isTrackRangeClear(freshSeq, targetTrack, p.startTicks, p.endTicks);
+        clear = await isTrackRangeClear(freshSeq, targetTrack, p.startTicks, p.endTicks, ppro);
       } catch (e) {
         throw new Error(
           `Could not verify V${targetTrack + 1} is empty before placing "${p.name}" — ` +
@@ -961,21 +492,6 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
               });
 
               // Set label color and name.
-              // Neither setColorLabel nor setName is a real plain method — confirmed against
-              // the official class references, so both used to silently no-op the same way
-              // setScaleToFrameSize did above.
-              //
-              // Name: VideoClipTrackItem.createSetNameAction() is real and per-instance —
-              // wrapped in a transaction like every other mutation here, this now actually
-              // renames just this placement.
-              //
-              // Color: VideoClipTrackItem has no color-label action at all (confirmed — only
-              // createSetNameAction lives on it); the only real API is
-              // ClipProjectItem.createSetColorLabelAction() on the shared master AL project
-              // item. Every placement reuses that same master clip, so this recolors every
-              // existing and future instance of it, not just this one placement — a genuine
-              // Premiere API limitation (no per-instance timeline color override is exposed),
-              // not a bug in this call.
               try {
                 if (clipItem && typeof clipItem.createSetColorLabelAction === "function") {
                   try {
@@ -987,7 +503,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
                 }
               } catch (_) {}
               try {
-                if (typeof it.createSetNameAction === "function") {
+                if (p.name && typeof it.createSetNameAction === "function") {
                   try {
                     runTransaction(freshProject, "CutDeck: Name Adjustment Layer", (compound) => {
                       const nameAction = it.createSetNameAction(p.name);
@@ -1046,6 +562,12 @@ module.exports = {
   // Exported for timeline/effects.js: the robust (never-throws) getTrackItems lookup, reused
   // rather than re-guessed — see that module's getSelectedTrackItems.
   getTrackClipItems,
+  resolveTopLayer,
+  planPlacements,
+  assignPlacementLanes,
+  findSmartStackTrack,
+  isTrackRangeClear,
+  getLabelIndex,
   CUTDECK_BIN_NAME,
   ADJ_BIN_NAME,
 };

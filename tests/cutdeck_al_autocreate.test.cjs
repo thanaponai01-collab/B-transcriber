@@ -1,4 +1,4 @@
-/* adjustmentLayer.js createAdjustmentLayerForSequence: the Place AL fallback when no AL exists.
+/* alLibrary.js createAdjustmentLayerForSequence: the Place AL fallback when no AL exists.
    Off-host it proves the wiring: a gzip .prproj of the right size is written, imported into
    ADJ & FX with suppressUI, and the item is found whether it lands directly or one bin down —
    and a failed import says so instead of pretending. Real Premiere behaviour is not provable here. */
@@ -9,7 +9,6 @@ const zlib = require("node:zlib");
 
 const written = [];
 const stubs = {
-  premierepro: {},
   uxp: {
     storage: {
       formats: { binary: "binary" },
@@ -29,7 +28,7 @@ Module._load = function (request, ...rest) {
   if (Object.prototype.hasOwnProperty.call(stubs, request)) return stubs[request];
   return realLoad.call(this, request, ...rest);
 };
-const al = require("../uxp/cutdeck/timeline/adjustmentLayer.js");
+const al = require("../uxp/cutdeck/timeline/alLibrary.js");
 // "uxp" is required lazily at call time, so the stub stays until this file's tests finish.
 test.after(() => { Module._load = realLoad; });
 

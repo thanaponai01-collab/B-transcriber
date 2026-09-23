@@ -19,9 +19,7 @@ const KNOWN_EXCEPTIONS = {
   // (c) Layer direction: parse every require("./…") and fail when lower layer requires higher layer
   layerDirection: [],
   // (d) require("premierepro") at module scope allowed only in main.js
-  premiereproModuleScope: [
-    { file: "timeline/adjustmentLayer.js", move: 9 },
-  ],
+  premiereproModuleScope: [],
 };
 
 function panelJsFiles(dir) {
