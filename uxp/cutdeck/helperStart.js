@@ -45,7 +45,10 @@ async function findHelperScript() {
 async function ensureHelperRunning(options) {
   const opts = options || {};
   const rpc = opts.rpc;
-  const version = opts.version || "cutdeck-xml-2";
+  const version = opts.version;
+  if (!version) {
+    throw new Error("opts.version is required");
+  }
   const onStatus = opts.onStatus || (() => {});
   const now = opts.now || Date.now;
   const sleep = opts.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));

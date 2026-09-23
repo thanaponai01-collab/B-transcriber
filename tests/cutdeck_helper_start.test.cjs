@@ -95,6 +95,13 @@ test("a shell without openPath fails clearly instead of crashing", async () => {
   );
 });
 
+test("ensureHelperRunning throws when opts.version is missing", async () => {
+  await assert.rejects(
+    ensureHelperRunning({ rpc: async () => {} }),
+    /opts\.version is required/
+  );
+});
+
 test("deriveHelperScriptPath finds the repo root from the plugin's own folder (Windows)", () => {
   const script = deriveHelperScriptPath("D:\\repo\\uxp\\cutdeck");
   assert.equal(script, "D:\\repo\\Start CutDeck (Hidden).vbs");
