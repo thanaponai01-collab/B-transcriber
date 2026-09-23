@@ -24,6 +24,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const manifest = JSON.parse(read("uxp/cutdeck/manifest.json"));
 const html = read("uxp/cutdeck/index.html");
 const mainJs = read("uxp/cutdeck/main.js");
+const alignFeatureJs = read("uxp/cutdeck/features/align.js");
 const alignJsPath = path.join(root, "uxp", "cutdeck", "core", "alignPanel.js");
 
 // --- manifest ------------------------------------------------------------------------------
@@ -403,19 +404,19 @@ test("entrypoints.setup is guarded, and runs after the main panel is already bou
 
 // --- Phase 1 wiring: the read-only transform display is reachable from the real entry point -
 
-test("main.js requires the transform host-discovery and geometry modules", () => {
-  assert.match(mainJs, /require\("\.\/host\/trackItems\.js"\)/);
-  assert.match(mainJs, /require\("\.\/transform\/params\.js"\)/);
-  assert.match(mainJs, /require\("\.\/transform\/geometry\.js"\)/);
+test("features/align.js requires the transform host-discovery and geometry modules", () => {
+  assert.match(alignFeatureJs, /require\("\.\.\/host\/trackItems\.js"\)/);
+  assert.match(alignFeatureJs, /require\("\.\.\/transform\/params\.js"\)/);
+  assert.match(alignFeatureJs, /require\("\.\.\/transform\/geometry\.js"\)/);
 });
 
 test("Anchor Point is converted against the SOURCE frame, never the sequence frame", () => {
   // Part 1a: Anchor Point is normalized to the source, Position to the sequence. Converting
   // Anchor Point against frameSize printed 150, 300 for a 100, 200 anchor on a 720p clip.
-  assert.match(mainJs, /readSourceFrameSize\(ppro, item\)/);
-  assert.match(mainJs, /anchorFrame = await transformParams\.readSourceFrameSize\(ppro, item\)/);
-  assert.match(mainJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
-  assert.match(mainJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
+  assert.match(alignFeatureJs, /readSourceFrameSize\(ppro, item\)/);
+  assert.match(alignFeatureJs, /anchorFrame = await transformParams\.readSourceFrameSize\(ppro, item\)/);
+  assert.match(alignFeatureJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
+  assert.match(alignFeatureJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
 });
 
 test("the transform panel's show hook starts the live poll, after mounting and the first read", () => {
@@ -423,19 +424,19 @@ test("the transform panel's show hook starts the live poll, after mounting and t
   assert.ok(showAt !== -1, "cutdeck.align.panel entrypoint is not registered");
   const showBlock = mainJs.slice(showAt, mainJs.indexOf("},", showAt));
   assert.match(showBlock, /alignPanel\.mount\(rootNode\)/);
-  assert.match(showBlock, /refreshAlignSequence\(\)/);
-  assert.match(showBlock, /startAlignPolling\(\)/);
+  assert.match(showBlock, /align\.refresh\(\)/);
+  assert.match(showBlock, /align\.startPolling\(\)/);
   const mountAt = showBlock.indexOf("alignPanel.mount");
-  const pollAt = showBlock.indexOf("startAlignPolling()");
+  const pollAt = showBlock.indexOf("align.startPolling()");
   assert.ok(mountAt < pollAt, "polling must start after the container is mounted");
 });
 
 test("the poll never touches alignState.busy/status, so it cannot flicker the spinner or disable controls", () => {
-  const pollAt = mainJs.indexOf("async function pollAlignTransform");
+  const pollAt = alignFeatureJs.indexOf("async function pollAlignTransform");
   assert.ok(pollAt !== -1, "pollAlignTransform is not defined");
-  const pollBody = mainJs.slice(pollAt, mainJs.indexOf("\nfunction startAlignPolling", pollAt));
-  assert.equal(/alignState\.busy\s*=/.test(pollBody), false, "poll must not set busy");
-  assert.equal(/alignState\.status\s*=/.test(pollBody), false, "poll must not set status");
+  const pollBody = alignFeatureJs.slice(pollAt, alignFeatureJs.indexOf("\n  function startAlignPolling", pollAt));
+  assert.equal(/ctl\.state\.busy\s*=/.test(pollBody), false, "poll must not set busy");
+  assert.equal(/ctl\.state\.status\s*=/.test(pollBody), false, "poll must not set status");
 });
 
 test("no hide or destroy hook is registered", () => {

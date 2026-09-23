@@ -327,7 +327,7 @@ test("the transform report renders the real probe output as text", async () => {
 test("the Check Transform menu item is wired through to the probe", () => {
   const html = read("uxp/cutdeck/index.html");
   const panelJs = read("uxp/cutdeck/core/panel.js");
-  const mainJs = read("uxp/cutdeck/main.js");
+  const probesJs = read("uxp/cutdeck/features/probes.js");
 
   // reachable: the control exists in the document the panel actually loads
   assert.match(html, /id="transformprobe"/, "no #transformprobe control in index.html");
@@ -337,11 +337,11 @@ test("the Check Transform menu item is wired through to the probe", () => {
   assert.match(panelJs, /intents\.onProbe\("transform"\)/, "panel.js never raises the transform intent");
 
   // routed: the controller handles that intent name and calls the probe + its formatter
-  assert.match(mainJs, /name === "transform"/, "main.js has no branch for the transform intent");
-  assert.match(mainJs, /capability\.probeTransformParams\(ppro\)/, "main.js never calls the probe");
-  assert.match(mainJs, /capability\.formatTransformReport\(/, "main.js never renders the report");
+  assert.match(probesJs, /name === "transform"/, "probes.js has no branch for the transform intent");
+  assert.match(probesJs, /capability\.probeTransformParams\(ppro\)/, "probes.js never calls the probe");
+  assert.match(probesJs, /capability\.formatTransformReport\(/, "probes.js never renders the report");
 
-  // registered: both are exported from the module main.js requires
+  // registered: both are exported from the module probes.js requires
   const exports = Object.keys(require("../uxp/cutdeck/capabilityProbe.js"));
   for (const name of ["probeTransformParams", "formatTransformReport"]) {
     assert.ok(exports.includes(name), `capabilityProbe.js does not export ${name}`);

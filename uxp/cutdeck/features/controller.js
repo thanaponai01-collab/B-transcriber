@@ -20,6 +20,7 @@ function createController({ render, initialState = {} }) {
   async function act(fn) {
     if (state.busy) return;
     state.busy = true;
+    state.lastStatus = state.status;
     state.status = { text: "Processing…", level: "busy" };
     render(state);
     try {

@@ -471,7 +471,8 @@
     if (btn) {
       btn.addEventListener("click", () => {
         const name = nameInput ? nameInput.value.trim() : "";
-        intents.onProbe("capture-preset", { name });
+        if (intents.onCapturePreset) intents.onCapturePreset(name);
+        else if (intents.onProbe) intents.onProbe("capture-preset", { name });
       });
     }
   }
