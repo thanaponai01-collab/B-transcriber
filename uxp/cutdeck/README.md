@@ -235,6 +235,21 @@ API references checked during implementation:
 - [AdobeDocs sample: effects.ts](https://github.com/AdobeDocs/uxp-premiere-pro-samples/blob/main/sample-panels/premiere-api/src/effects.ts) —
   the `executeTransaction`/`createInsertComponentAction` shape `effects.js` follows
 
+### Run the keyframe probe (gates animated presets)
+
+**Check Keyframes** (diagnostics drawer) is read-only. It answers the one thing blocking
+animated presets: are keyframe times counted from the sequence, the clip's first frame, or
+the source media? It also records this build's interpolation-mode numbers (Linear/Hold/Bezier).
+
+1. Pick a clip that starts **later than 0:00** on the timeline **and is trimmed at its head**
+   (its In point is not the media's first frame). Speed at 100%. Otherwise two readings
+   coincide and the probe correctly refuses a verdict.
+2. Select only that clip. In Effect Controls, turn on the Scale stopwatch so it keyframes at
+   the playhead. Move the playhead, add a second keyframe, right-click it > **Bezier**.
+3. Move the playhead **back onto the first keyframe** and click **Check Keyframes**.
+4. Read the VERDICT, then copy the full report (also JSON in the UDT console) somewhere
+   before animated presets are built on it.
+
 ### Quick-effect preset buttons (Adj & FX page)
 
 Below the Adjustment Layer card, up to `MAX_QUICK_PRESETS` (currently 9, in

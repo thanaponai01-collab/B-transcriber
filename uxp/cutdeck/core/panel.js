@@ -355,7 +355,7 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe"].forEach((id) => {
+    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe", "keyframeprobe"].forEach((id) => {
       const el = $(id);
       if (el && overflowMenu) {
         el.addEventListener("click", () => overflowMenu.classList.remove("open"));
@@ -506,6 +506,8 @@
     if (effectChain) effectChain.addEventListener("click", () => intents.onProbe("effect"));
     const transform = $("transformprobe");
     if (transform) transform.addEventListener("click", () => intents.onProbe("transform"));
+    const keyframe = $("keyframeprobe");
+    if (keyframe) keyframe.addEventListener("click", () => intents.onProbe("keyframe"));
   }
 
   function bind(intents) {

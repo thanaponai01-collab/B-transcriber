@@ -736,10 +736,212 @@ function formatTransformReport(report) {
   return formatFindings("Transform & Align Phase 0 probe — components, params, units", report);
 }
 
+/* Keyframe probe — the gate on animated quick-effect presets (timeline/effects.js is
+   static-values-only until this reports). Read-only: creates, inserts and deletes nothing, and
+   builds no Action objects either.
+
+   The one question Adobe's reference leaves open: ComponentParam.getKeyframeListAsTickTimes()
+   returns TickTimes, but relative to WHAT? Three readings are plausible, and they only differ
+   on a clip that is both placed later than 0:00 and trimmed at its head:
+
+     sequence  keyframe time = playhead
+     clip      keyframe time = playhead - clip start            (0 = clip's first frame)
+     media     keyframe time = playhead - clip start + In point (source-media time)
+
+   Premiere's own declarations do say TrackItem.getInPoint() is "relative to the start time of
+   the project item" and getStartTime() "relative to the sequence start time", so those two
+   are well defined — only the keyframe side is unknown.
+
+   The playhead is the anchor, not a guess about where the user clicked: put a keyframe AT the
+   playhead, leave the playhead there, run this. Whichever reading turns the playhead into a
+   time that is in the keyframe list is this build's convention. A preset replayed under the
+   wrong one lands every keyframe off by the clip's start or In point — invisible on a clip at
+   0:00 with no trim, wrong everywhere else. (Speed changes are out of scope: probe a 100% clip.)
+
+   It also records what the interpolation mode numbers mean on this build: the declarations
+   carry Keyframe.INTERPOLATION_MODE_* statics and a Constants.InterpolationMode enum, but not
+   their numeric values, and effects.js must not store a raw number it can't name. */
+
+/* Pure: which frame(s) of reference put a keyframe exactly on the playhead. All inputs are
+   BigInt ticks. `ambiguous` means two readings coincide on this clip (it starts at 0:00, or
+   its In point equals its start), so this clip cannot tell them apart. */
+function classifyKeyframeReference({ keyframeTicks, playheadTicks, startTicks, inPointTicks }) {
+  const candidates = {
+    sequence: playheadTicks,
+    clip: playheadTicks - startTicks,
+    media: playheadTicks - startTicks + inPointTicks,
+  };
+  const onList = new Set(keyframeTicks.map(String));
+  const matches = Object.keys(candidates).filter((k) => onList.has(String(candidates[k])));
+  const distinct = new Set(Object.values(candidates).map(String)).size === 3;
+  return {
+    candidates: Object.fromEntries(Object.entries(candidates).map(([k, v]) => [k, v.toString()])),
+    matches,
+    ambiguous: !distinct,
+    verdict: distinct && matches.length === 1 ? matches[0] : null,
+  };
+}
+
+function readInterpolationConstants(ppro) {
+  const statics = {};
+  const kf = ppro && ppro.Keyframe;
+  for (const name of ["LINEAR", "HOLD", "BEZIER", "TIME", "TIME_TRANSITION_START", "TIME_TRANSITION_END"]) {
+    const key = `INTERPOLATION_MODE_${name}`;
+    statics[key] = kf && kf[key] !== undefined ? kf[key] : null;
+  }
+  const constants = ppro && ppro.Constants && ppro.Constants.InterpolationMode;
+  return {
+    "Keyframe.INTERPOLATION_MODE_*": statics,
+    "Constants.InterpolationMode": constants ? { ...constants } : null,
+  };
+}
+
+async function probeKeyframeTiming(ppro) {
+  const findings = [];
+  const add = (...args) => { findings.push(finding(...args)); return findings[findings.length - 1]; };
+  const stop = () => ({ probe: "keyframe-timing", complete: false, findings, verdict: null });
+
+  if (!ppro || !ppro.Project) {
+    add("host", "Is the Premiere API reachable?", "no", { detail: "require('premierepro') gave no Project" });
+    return stop();
+  }
+  const projectRead = await attempt("getActiveProject", () => ppro.Project.getActiveProject());
+  if (!projectRead.ok || !projectRead.value) {
+    add("project", "Is a project open?", "no", projectRead.ok ? { detail: "no active project" } : projectRead);
+    return stop();
+  }
+  const sequenceRead = await attempt("getActiveSequence", () => projectRead.value.getActiveSequence());
+  if (!sequenceRead.ok || !sequenceRead.value) {
+    add("sequence", "Is a sequence open?", "no", sequenceRead.ok ? { detail: "no active sequence" } : sequenceRead);
+    return stop();
+  }
+  const seq = sequenceRead.value;
+
+  add("interpolationConstants", "What numbers does this build use for keyframe interpolation modes?",
+    "see evidence", readInterpolationConstants(ppro));
+
+  // Same selection route as probeEffectChain / probeTransformParams (see the note there).
+  const selRead = await attempt("getSelection", () =>
+    (typeof seq.getSelection === "function" ? seq.getSelection() : null));
+  let items = [];
+  if (selRead.ok && selRead.value) {
+    if (typeof selRead.value.getTrackItems === "function") {
+      const itemsRead = await attempt("getTrackItems", () => selRead.value.getTrackItems());
+      items = itemsRead.ok && itemsRead.value ? itemsRead.value : [];
+    } else if (Array.isArray(selRead.value)) {
+      items = selRead.value;
+    }
+  }
+  add("selection", "How many track items are selected?", String(items.length),
+    { note: "Select exactly ONE clip that starts later than 0:00 on the timeline AND is trimmed " +
+        "at its head. Put the playhead inside it, add a keyframe there (e.g. Scale), add a " +
+        "second one elsewhere set to Bezier, leave the playhead on the first, run again." });
+  if (items.length !== 1) return stop();
+  const item = items[0];
+  const label = item.name || "(unnamed)";
+
+  const startRead = await attempt("getStartTime", () => item.getStartTime());
+  const endRead = await attempt("getEndTime", () => item.getEndTime());
+  const inRead = await attempt("getInPoint", () => item.getInPoint());
+  const playheadRead = await attempt("getPlayerPosition", () => seq.getPlayerPosition());
+  const start = startRead.ok ? readTick(startRead.value) : null;
+  const end = endRead.ok ? readTick(endRead.value) : null;
+  const inPoint = inRead.ok ? readTick(inRead.value) : null;
+  const playhead = playheadRead.ok ? readTick(playheadRead.value) : null;
+  const clipTiming = {
+    "getStartTime (sequence)": start ? start.ticks : startRead.error,
+    "getEndTime (sequence)": end ? end.ticks : endRead.error,
+    "getInPoint (source media)": inPoint ? inPoint.ticks : inRead.error,
+    "playhead (sequence)": playhead ? playhead.ticks : playheadRead.error,
+  };
+  if (!start || !start.ticks || !inPoint || !inPoint.ticks || !playhead || !playhead.ticks) {
+    add("clipTiming", `Can "${label}"'s timing and the playhead be read?`, "no", clipTiming);
+    return stop();
+  }
+  const startTicks = BigInt(start.ticks);
+  const inPointTicks = BigInt(inPoint.ticks);
+  const playheadTicks = BigInt(playhead.ticks);
+  const inside = end && end.ticks ? playheadTicks >= startTicks && playheadTicks < BigInt(end.ticks) : null;
+  add("clipTiming", `Where is "${label}", and is the playhead on it?`,
+    inside === false ? "playhead is OUTSIDE the clip — move it onto the keyframe and run again" : "read",
+    clipTiming);
+
+  // Every animated param on every component. Nothing is written; getKeyframePtr only reads.
+  const chainRead = await attempt("getComponentChain", () => item.getComponentChain());
+  if (!chainRead.ok || !chainRead.value) {
+    add("chain", `Does "${label}" expose a component chain?`, "no", chainRead.ok ? null : chainRead);
+    return stop();
+  }
+  const chain = chainRead.value;
+  const count = (await attempt("getComponentCount", () => chain.getComponentCount())).value || 0;
+  const animated = [];
+  for (let i = 0; i < count; i++) {
+    const c = (await attempt(`getComponentAtIndex(${i})`, () => chain.getComponentAtIndex(i))).value;
+    if (!c) continue;
+    const compName = (await attempt("getDisplayName", () => c.getDisplayName())).value || `component[${i}]`;
+    const paramCount = (await attempt("getParamCount", () => c.getParamCount())).value || 0;
+    for (let p = 0; p < paramCount; p++) {
+      const param = (await attempt(`getParam(${p})`, () => c.getParam(p))).value;
+      if (!param) continue;
+      const varying = await attempt("isTimeVarying", () => param.isTimeVarying());
+      if (!varying.ok || !varying.value) continue;
+      const listRead = await attempt("getKeyframeListAsTickTimes", () => param.getKeyframeListAsTickTimes());
+      const times = listRead.ok && Array.isArray(listRead.value) ? listRead.value : [];
+      const keyframes = [];
+      for (const t of times.slice(0, 8)) {
+        const kf = (await attempt("getKeyframePtr", () => param.getKeyframePtr(t))).value;
+        const mode = kf && typeof kf.getTemporalInterpolationMode === "function"
+          ? await attempt("getTemporalInterpolationMode", () => kf.getTemporalInterpolationMode())
+          : { ok: false, error: "no keyframe object" };
+        keyframes.push({
+          ticks: readTick(t).ticks,
+          positionTicks: kf && kf.position ? readTick(kf.position).ticks : null,
+          interpolationMode: mode.ok ? mode.value : mode.error,
+          value: kf && kf.value !== undefined ? JSON.stringify(kf.value) : null,
+        });
+      }
+      animated.push({
+        param: `${compName} > ${param.displayName || `param[${p}]`}`,
+        keyframeCount: times.length,
+        listCall: listRead.ok ? "ok" : listRead.error,
+        keyframes,
+        hasSetInterpolationAction: typeof param.createSetInterpolationAtKeyframeAction === "function",
+      });
+    }
+  }
+  if (animated.length === 0) {
+    add("animated", `Does "${label}" have any keyframed param?`, "no",
+      { note: "Turn on the stopwatch for Scale (or any param) and add a keyframe at the playhead." });
+    return stop();
+  }
+  add("animated", `Which params on "${label}" are keyframed, and what do their keyframes read as?`,
+    animated.map((a) => `${a.param} (${a.keyframeCount})`).join(", "), { params: animated });
+
+  const keyframeTicks = [];
+  for (const a of animated) for (const k of a.keyframes) if (k.ticks) keyframeTicks.push(BigInt(k.ticks));
+  const result = classifyKeyframeReference({ keyframeTicks, playheadTicks, startTicks, inPointTicks });
+  add("reference", "Which frame of reference puts a keyframe exactly on the playhead?",
+    result.ambiguous
+      ? "cannot tell on this clip — it starts at 0:00 or isn't trimmed at its head, so two readings coincide"
+      : result.matches.length === 0
+        ? "none — no keyframe sits exactly on the playhead (move the playhead onto one and run again)"
+        : result.matches.join(" AND "),
+    { candidateTicks: result.candidates, matches: result.matches });
+
+  return { probe: "keyframe-timing", complete: true, findings, verdict: result.verdict };
+}
+
+function formatKeyframeReport(report) {
+  return formatFindings("Keyframe timing probe (animated presets gate)", report, report.verdict
+    ? `VERDICT: keyframe times are ${report.verdict}-relative on this build. Record this report before building animated presets.`
+    : `No verdict yet — read the findings above for what to change, then run again.`);
+}
+
 module.exports = {
   probeMarksAndTiming, formatReport, identifyRate, KNOWN_RATES,
   probeAdjustmentLayerMotion, formatMotionReport,
   probeEffectChain, formatEffectChainReport,
   probeTransformParams, formatTransformReport,
+  probeKeyframeTiming, formatKeyframeReport, classifyKeyframeReference,
   formatFindings, describeParamValue, looksLikeTransformComponent,
 };

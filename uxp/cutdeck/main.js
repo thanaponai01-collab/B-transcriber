@@ -353,6 +353,13 @@ async function handleProbe(name, payload) {
     setStatus(capability.formatEffectChainReport(report), "ready");
     return;
   }
+  if (name === "keyframe") {
+    setStatus("Reading the selected clip's keyframes against the playhead…", "busy");
+    const report = await capability.probeKeyframeTiming(ppro);
+    console.log("CutDeck keyframe timing probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatKeyframeReport(report), "ready");
+    return;
+  }
   if (name === "transform") {
     setStatus("Reading the selected clip's real Motion/Transform params, units and source dimensions…", "busy");
     const report = await capability.probeTransformParams(ppro);
