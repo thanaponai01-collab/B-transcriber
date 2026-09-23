@@ -46,39 +46,17 @@ with a test, before trusting this transform on footage that uses it.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from fractions import Fraction
 from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, Timebase
+from cutdeck.xml_sequence import (XmlRecutRefusal, child_text, frame_to_ticks, range_window_frames,
+                                  sequence_timebase)
 from transcribe.timebase import ms_to_frame
 
 # Tags that, if found *keyframed* on a clipitem straddling a cut boundary,
 # make a razor unsafe to perform blindly — the refusal list (see module
 # docstring). A static (non-keyframed) instance of these tags is safe to split.
 _UNSAFE_CLIP_TAGS = ("filter",)
-
-# Premiere's internal high-precision tick rate (ticks/sec), constant across
-# every frame rate — confirmed against a real export's own pproTicksOut
-# (278977305600000 ticks for a 32948-frame @30fps clip => exactly
-# 254016000000 ticks/sec, 2026-08-29). <pproTicksIn>/<pproTicksOut> are what
-# Premiere's *audio* engine reads for playback precision; <in>/<out> are the
-# frame-based numbers video playback and the rest of this transform use.
-# Trimming a clip and updating only <in>/<out> leaves pproTicks pointing at
-# the ORIGINAL untrimmed source range — video then plays from the right
-# frame while audio silently plays from wherever the stale ticks pointed
-# (confirmed on a real Premiere import, 2026-08-29: cuts landed correctly,
-# every audio track was silent). Every trim must update both.
-_PPRO_TICKS_PER_SECOND = 254016000000
-
-
-def _frame_to_ticks(frame: int, tb: Timebase) -> int:
-    exact = Fraction(frame * _PPRO_TICKS_PER_SECOND * tb.fps_den, tb.fps_num)
-    return exact.numerator // exact.denominator
-
-
-class XmlRecutRefusal(ValueError):
-    """Raised when the transform hits something it must not guess about."""
-
 
 @dataclass
 class RecutReport:
@@ -89,11 +67,6 @@ class RecutReport:
     clips_shifted: int
     markers_dropped: int
     removed_frames: int = 0
-
-
-def _text(el, tag, default=None):
-    child = el.find(tag)
-    return child.text if child is not None and child.text is not None else default
 
 
 def _timecode(frame: int, tb: Timebase) -> str:
@@ -108,21 +81,7 @@ def _timecode(frame: int, tb: Timebase) -> str:
 
 
 def _clip_name(clipitem: ET.Element) -> str:
-    return _text(clipitem, "name", clipitem.get("id", "?"))
-
-
-def _sequence_timebase(sequence: ET.Element) -> Timebase:
-    rate = sequence.find("rate")
-    if rate is None:
-        raise XmlRecutRefusal("sequence has no <rate> — cannot recut without a frame grid")
-    timebase_el = rate.find("timebase")
-    ntsc_el = rate.find("ntsc")
-    if timebase_el is None or timebase_el.text is None:
-        raise XmlRecutRefusal("sequence <rate> has no <timebase>")
-    timebase_int = int(timebase_el.text)
-    is_ntsc = (ntsc_el is not None and (ntsc_el.text or "").strip().upper() == "TRUE")
-    fps_num, fps_den = (timebase_int * 1000, 1001) if is_ntsc else (timebase_int, 1)
-    return Timebase(fps_num=fps_num, fps_den=fps_den)
+    return child_text(clipitem, "name", clipitem.get("id", "?"))
 
 
 def _cut_spans_frames(plan: CutPlan, tb: Timebase) -> list[tuple[int, int]]:
@@ -225,8 +184,8 @@ def _process_track(track: ET.Element, cuts: list[tuple[int, int]], tb: Timebase,
     for clipitem in list(track.findall("clipitem")):
         if clipitem.tag != "clipitem":
             continue
-        start = int(_text(clipitem, "start", "0"))
-        end = int(_text(clipitem, "end", "0"))
+        start = int(child_text(clipitem, "start", "0"))
+        end = int(child_text(clipitem, "end", "0"))
 
         if _overlapping_cut(start, end, cuts) is None:
             # Wholly outside every cut: shift left by whatever was removed before it.
@@ -246,8 +205,8 @@ def _process_track(track: ET.Element, cuts: list[tuple[int, int]], tb: Timebase,
             report.clips_removed += 1
             continue
 
-        in_ = int(_text(clipitem, "in", "0"))
-        out_ = int(_text(clipitem, "out", "0"))
+        in_ = int(child_text(clipitem, "in", "0"))
+        out_ = int(child_text(clipitem, "out", "0"))
         # Piece 0 keeps the original element/id; later pieces are clones with
         # a derived id, so a single-piece trim (the common case) is id-stable.
         pieces = [clipitem] + [
@@ -263,10 +222,10 @@ def _process_track(track: ET.Element, cuts: list[tuple[int, int]], tb: Timebase,
             piece.find("end").text = str(_shift_point(k_end, cuts))
             ticks_in_el = piece.find("pproTicksIn")
             if ticks_in_el is not None:
-                ticks_in_el.text = str(_frame_to_ticks(new_in, tb))
+                ticks_in_el.text = str(frame_to_ticks(new_in, tb))
             ticks_out_el = piece.find("pproTicksOut")
             if ticks_out_el is not None:
-                ticks_out_el.text = str(_frame_to_ticks(new_out, tb))
+                ticks_out_el.text = str(frame_to_ticks(new_out, tb))
             track.insert(pos + i, piece)
         report.clips_trimmed += len(keeps)
 
@@ -344,16 +303,16 @@ def _rebuild_links(sequence: ET.Element, orig_links: dict[str, set[str]]) -> Non
         if base_id not in orig_links:
             continue
 
-        c_start = int(_text(clip, "start", "0"))
-        c_end = int(_text(clip, "end", "0"))
+        c_start = int(child_text(clip, "start", "0"))
+        c_end = int(child_text(clip, "end", "0"))
         if c_end <= c_start:
             continue
 
         matching_links: list[tuple[str, str, int, int]] = []
         for tgt_base in orig_links[base_id]:
             for cand_elem, cand_type, cand_t_idx, cand_c_idx in pieces_by_base.get(tgt_base, []):
-                cand_start = int(_text(cand_elem, "start", "0"))
-                cand_end = int(_text(cand_elem, "end", "0"))
+                cand_start = int(child_text(cand_elem, "start", "0"))
+                cand_end = int(child_text(cand_elem, "end", "0"))
                 if max(c_start, cand_start) < min(c_end, cand_end):
                     matching_links.append((cand_elem.get("id"), cand_type, cand_t_idx, cand_c_idx))
 
@@ -396,7 +355,7 @@ def _refuse_unsupported_media(sequence: ET.Element) -> None:
     transition or nested sequence changes what "shift everything after" even
     means, so their mere presence is refused."""
     for transition in sequence.iter("transitionitem"):
-        start = _text(transition, "start", "?")
+        start = child_text(transition, "start", "?")
         raise XmlRecutRefusal(
             f"sequence contains a <transitionitem> at frame {start} — transitions "
             f"are not supported by this transform, refusing rather than guessing"
@@ -441,11 +400,11 @@ def recut(source_xml: str, plan: CutPlan, *,
     if sequence is None:
         raise XmlRecutRefusal("no <sequence> element found in source XML")
 
-    tb = _sequence_timebase(sequence)
+    tb = sequence_timebase(sequence)
 
     _refuse_unsupported_media(sequence)
 
-    cuts = scoped_cuts(plan, tb, int(_text(sequence, "duration", "0")), frame_range)
+    cuts = scoped_cuts(plan, tb, int(child_text(sequence, "duration", "0")), frame_range)
     if not cuts:
         if frame_range is not None:
             return source_xml, RecutReport(0, 0, 0, 0, 0)
@@ -527,15 +486,6 @@ def _check_duration_guard(sequence_duration_frames: int, mixdown_duration_ms: in
         )
 
 
-def range_window_frames(tb: Timebase, seq_frames: int, frame_range: tuple[int, int],
-                        pad_seconds: float = 2.0) -> tuple[int, int]:
-    """Sequence-frame window ``[lo, hi]`` = the In/Out range plus ``pad_seconds``
-    of context each side, clamped to the sequence. The pad is defined in seconds
-    so the recognizer gets the same context at any frame rate."""
-    pad = int(round(pad_seconds * tb.fps_num / tb.fps_den))
-    return max(0, frame_range[0] - pad), min(seq_frames, frame_range[1] + pad)
-
-
 def shift_plan(plan: CutPlan, offset_ms: int) -> CutPlan:
     """Move a plan built on a trimmed mixdown back onto the sequence timeline."""
     return replace(plan, spans=[
@@ -614,10 +564,10 @@ def main(argv: list[str] | None = None) -> int:
     sequence = root.find("sequence")
     if sequence is None:
         raise SystemExit("no <sequence> element found in source XML")
-    tb = _sequence_timebase(sequence)
+    tb = sequence_timebase(sequence)
     # recut() refuses these whatever the plan says; say so before extraction and ASR.
     _refuse_unsupported_media(sequence)
-    seq_frames = int(_text(sequence, "duration", "0"))
+    seq_frames = int(child_text(sequence, "duration", "0"))
     frame_range = None
     if args.range_start_frame is not None or args.range_end_frame is not None:
         if args.range_start_frame is None or args.range_end_frame is None:

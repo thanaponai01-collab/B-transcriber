@@ -456,14 +456,14 @@ def test_real_captured_fixture_recuts_without_crashing():
     # Regression: pproTicksIn/Out must agree with the frame in/out on every
     # clip that carries them (real fixture clips do) — a real Premiere import
     # played silent audio when these two disagreed (see the dedicated test).
-    from cutdeck.xml_recut import _frame_to_ticks
+    from cutdeck.xml_sequence import frame_to_ticks
     for clip in root.iter("clipitem"):
         in_el, ticks_in_el = clip.find("in"), clip.find("pproTicksIn")
         out_el, ticks_out_el = clip.find("out"), clip.find("pproTicksOut")
         if in_el is not None and ticks_in_el is not None:
-            assert int(ticks_in_el.text) == _frame_to_ticks(int(in_el.text), tb)
+            assert int(ticks_in_el.text) == frame_to_ticks(int(in_el.text), tb)
         if out_el is not None and ticks_out_el is not None:
-            assert int(ticks_out_el.text) == _frame_to_ticks(int(out_el.text), tb)
+            assert int(ticks_out_el.text) == frame_to_ticks(int(out_el.text), tb)
     # Regression: exactly one full <file> listing may survive per file id.
     full_counts: dict = {}
     for file_el in root.iter("file"):

@@ -21,178 +21,25 @@ and does none of that. For a plain stacked-clip sequence with no effects
 Phase 0 note) that gap is negligible; for a heavily mixed sequence it would
 not be — pick the manual export path there instead.
 
-**Track selection:** one audio track is picked as the "reference" dialogue
-track for VAD (default: the first track that is switched on and has any
-clips). An explicit index is honored even when that track is switched off —
-the editor chose it, and a lav track muted in the mix is still the best
-thing to analyze. A sequence with several isolated mic tracks needs the
-editor to say which one carries the dialogue that should drive silence
-detection — this module does not guess by loudness or any other heuristic.
-
-``check_reference_audio`` runs the same selection plus the checks that can
-be made without decoding anything, so a job can be refused before ASR.
+Which track is the "reference" dialogue track, and where each clip's source
+media lives, is decided by ``cutdeck.xml_sequence`` — the same rules the
+helper's pre-ASR check and multi-cam sync use.
 """
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
 from fractions import Fraction
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree as ET
 
-from cutdeck.contracts import Timebase
-from cutdeck.xml_recut import (XmlRecutRefusal, _PPRO_TICKS_PER_SECOND, _sequence_timebase,
-                               _text, range_window_frames)
+from cutdeck.xml_sequence import (XmlRecutRefusal, child_text, clip_source_span_seconds,
+                                  range_window_frames, resolve_file_path, select_audio_track,
+                                  sequence_timebase)
 
 _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
-
-
-def _pathurl_to_path(pathurl: str) -> Path:
-    """Inverse of ``xml_export._pathurl`` — ``file://localhost/C%3A/...`` -> ``C:/...``."""
-    parsed = urlparse(pathurl)
-    raw = unquote(parsed.path)
-    if len(raw) >= 3 and raw[0] == "/" and raw[2] == ":":
-        raw = raw[1:]  # strip the leading '/' before a Windows drive letter
-    return Path(raw)
-
-
-def _resolve_file_path(sequence: ET.Element, file_id: str) -> Path:
-    """The real source path for a file id — found on whichever <file> element
-    carries the full listing (the one with a <pathurl> child)."""
-    for file_el in sequence.iter("file"):
-        if file_el.get("id") == file_id:
-            pathurl_el = file_el.find("pathurl")
-            if pathurl_el is not None and pathurl_el.text:
-                return _pathurl_to_path(pathurl_el.text)
-    raise XmlRecutRefusal(f"no <pathurl> found anywhere for file id {file_id!r} — "
-                           f"source media path unknown")
-
-
-def _clip_source_span_seconds(clipitem: ET.Element, tb: Timebase) -> tuple[float, float]:
-    """(in_seconds, out_seconds) in the SOURCE file's own timeline. Prefers
-    pproTicksIn/pproTicksOut (sub-frame precision) when present, falls back
-    to the frame-based <in>/<out> otherwise."""
-    ticks_in = clipitem.find("pproTicksIn")
-    ticks_out = clipitem.find("pproTicksOut")
-    if ticks_in is not None and ticks_in.text and ticks_out is not None and ticks_out.text:
-        return (int(ticks_in.text) / _PPRO_TICKS_PER_SECOND,
-                int(ticks_out.text) / _PPRO_TICKS_PER_SECOND)
-    in_frame = int(_text(clipitem, "in", "0"))
-    out_frame = int(_text(clipitem, "out", "0"))
-    return (float(Fraction(in_frame * tb.fps_den, tb.fps_num)),
-            float(Fraction(out_frame * tb.fps_den, tb.fps_num)))
-
-
-def _select_audio_track(sequence: ET.Element, audio_track_index: int | None) -> ET.Element:
-    audio = sequence.find("media/audio")
-    tracks = audio.findall("track") if audio is not None else []
-    if not tracks:
-        raise XmlRecutRefusal("sequence has no audio tracks to extract from")
-    if audio_track_index is not None:
-        if not 0 <= audio_track_index < len(tracks):
-            raise XmlRecutRefusal(
-                f"sequence has {len(tracks)} audio track(s), requested index "
-                f"{audio_track_index} (0-based)"
-            )
-        return tracks[audio_track_index]
-    with_clips = [track for track in tracks if track.findall("clipitem")]
-    if not with_clips:
-        raise XmlRecutRefusal("no audio track has any clips")
-    for track in with_clips:
-        if _text(track, "enabled", "TRUE") == "TRUE":
-            return track
-    raise XmlRecutRefusal("every audio track with clips is switched off; "
-                          "choose a Reference Audio track")
-
-
-def _enabled_clips(track: ET.Element) -> list[ET.Element]:
-    """Clipitems that contribute audio: enabled and naming a source file."""
-    return [clipitem for clipitem in track.findall("clipitem")
-            if _text(clipitem, "enabled", "TRUE") == "TRUE"
-            and clipitem.find("file") is not None
-            and clipitem.find("file").get("id") is not None]
-
-
-def _has_audio_stream(path: Path) -> bool | None:
-    """True/False from ffprobe, or None when ffprobe cannot answer (missing, unreadable)."""
-    if shutil.which("ffprobe") is None:
-        return None
-    result = subprocess.run(
-        ["ffprobe", "-v", "error", "-of", "json", "-show_entries", "stream=codec_type",
-         str(path)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if result.returncode != 0:
-        return None
-    try:
-        streams = json.loads(result.stdout).get("streams", [])
-    except ValueError:
-        return None
-    return any(stream.get("codec_type") == "audio" for stream in streams)
-
-
-def check_reference_audio(source_xml: str, audio_track_index: int | None = None) -> dict:
-    """Refuse, before any audio is extracted or transcribed, what ``extract_mixdown``
-    would fail on or silently get wrong. Returns what will be analyzed.
-
-    Checks: the reference track selection itself; every enabled clip names a
-    source file that exists and has an audio stream; a clip without
-    ``pproTicksIn``/``pproTicksOut`` has no ``<rate>`` of its own that differs
-    from the sequence's (``_clip_source_span_seconds`` would read its
-    ``<in>``/``<out>`` on the wrong frame grid). A source frame rate that
-    differs from the sequence is otherwise fine: extraction works in seconds.
-    """
-    sequence = ET.fromstring(source_xml).find("sequence")
-    if sequence is None:
-        raise XmlRecutRefusal("no <sequence> element found in source XML")
-    tb = _sequence_timebase(sequence)
-    audio = sequence.find("media/audio")
-    tracks = audio.findall("track") if audio is not None else []
-    track = _select_audio_track(sequence, audio_track_index)
-    clips = _enabled_clips(track)
-    if not clips:
-        raise XmlRecutRefusal("the reference audio track has no enabled clips")
-
-    files: list[Path] = []
-    for clipitem in clips:
-        path = _resolve_file_path(sequence, clipitem.find("file").get("id"))
-        if path not in files:
-            files.append(path)
-        has_ticks = clipitem.find("pproTicksIn") is not None
-        rate = clipitem.find("rate")
-        if not has_ticks and rate is not None:
-            clip_tb = _sequence_timebase(clipitem)
-            if clip_tb.fps_num * tb.fps_den != tb.fps_num * clip_tb.fps_den:
-                raise XmlRecutRefusal(
-                    f"clip {_text(clipitem, 'name', '?')!r} has its own frame rate and no "
-                    "tick positions, so its audio cannot be placed exactly")
-    for path in files:
-        if not path.is_file():
-            raise XmlRecutRefusal(f"source media is missing or offline: {path}")
-        if _has_audio_stream(path) is False:
-            raise XmlRecutRefusal(f"source media has no audio stream: {path}")
-    return {"xml_track": tracks.index(track), "track_name": _text(track, "name"),
-            "clip_count": len(clips), "files": [str(path) for path in files]}
-
-
-def reference_media_path(source_xml: str, audio_track_index: int | None = None) -> Path:
-    """The source media file backing the reference audio track's first real clip.
-
-    Lets callers place outputs beside the footage the cuts were derived from.
-    Track selection and the disabled-clip skip mirror ``extract_mixdown`` exactly,
-    so "the footage" always names the media that was actually analyzed rather than
-    whichever file the XML happens to list first.
-    """
-    sequence = ET.fromstring(source_xml).find("sequence")
-    if sequence is None:
-        raise XmlRecutRefusal("no <sequence> element found in source XML")
-    track = _select_audio_track(sequence, audio_track_index)
-    for clipitem in _enabled_clips(track):
-        return _resolve_file_path(sequence, clipitem.find("file").get("id"))
-    raise XmlRecutRefusal("no enabled clip on the reference audio track names a source file")
 
 
 def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None,
@@ -222,8 +69,8 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     if sequence is None:
         raise XmlRecutRefusal("no <sequence> element found in source XML")
 
-    tb = _sequence_timebase(sequence)
-    seq_frames = int(_text(sequence, "duration", "0"))
+    tb = sequence_timebase(sequence)
+    seq_frames = int(child_text(sequence, "duration", "0"))
     lo_f, hi_f = (0, seq_frames)
     if range_start_frame is not None:
         lo_f, hi_f = range_window_frames(tb, seq_frames, (range_start_frame, range_end_frame),
@@ -232,7 +79,7 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     win_hi_s = float(Fraction(hi_f * tb.fps_den, tb.fps_num))
     total_samples = int(round((win_hi_s - win_lo_s) * _WORKING_SAMPLE_RATE))
 
-    track = _select_audio_track(sequence, audio_track_index)
+    track = select_audio_track(sequence, audio_track_index)
 
     window = (win_lo_s, win_hi_s) if range_start_frame is not None else None
 
@@ -243,18 +90,18 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     tmp_dir = Path(tempfile.mkdtemp(prefix="cutdeck_extract_"))
     try:
         for i, clipitem in enumerate(track.findall("clipitem")):
-            if _text(clipitem, "enabled", "TRUE") != "TRUE":
+            if child_text(clipitem, "enabled", "TRUE") != "TRUE":
                 continue
             file_el = clipitem.find("file")
             if file_el is None or file_el.get("id") is None:
                 continue
-            src_path = _resolve_file_path(sequence, file_el.get("id"))
+            src_path = resolve_file_path(sequence, file_el.get("id"))
 
-            in_s, out_s = _clip_source_span_seconds(clipitem, tb)
+            in_s, out_s = clip_source_span_seconds(clipitem, tb)
             if out_s <= in_s:
                 continue
 
-            start_frame = int(_text(clipitem, "start", "0"))
+            start_frame = int(child_text(clipitem, "start", "0"))
             start_s = float(Fraction(start_frame * tb.fps_den, tb.fps_num))
             if window is not None:
                 # Trim the source span to the part of the clip inside the window.

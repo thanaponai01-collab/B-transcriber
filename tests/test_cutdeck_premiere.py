@@ -7,7 +7,8 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, CutSpan, Timebase
-from cutdeck.xml_recut import recut, _frame_to_ticks
+from cutdeck.xml_recut import recut
+from cutdeck.xml_sequence import frame_to_ticks
 from cutdeck.xml_bridge import XmlJobs, range_from_ticks, reference_audio_track, serve, VERSION
 
 
@@ -33,8 +34,8 @@ def source(ntsc=False):
 def context(ntsc=False):
     tb = Timebase(30000, 1001) if ntsc else Timebase(30, 1)
     return dict(project_id="project", sequence_id="sequence", sequence_name="Original",
-                in_ticks=str(_frame_to_ticks(60, tb)), out_ticks=str(_frame_to_ticks(120, tb)),
-                end_ticks=str(_frame_to_ticks(300, tb)), ticks_per_frame=str(_frame_to_ticks(1, tb)),
+                in_ticks=str(frame_to_ticks(60, tb)), out_ticks=str(frame_to_ticks(120, tb)),
+                end_ticks=str(frame_to_ticks(300, tb)), ticks_per_frame=str(frame_to_ticks(1, tb)),
                 audio_track=None, asr=True)
 
 
@@ -54,7 +55,7 @@ def test_scope_preserves_outside_content_and_shifts_all_tracks():
         clips = track.findall("clipitem")
         assert [(c.findtext("start"), c.findtext("end"), c.findtext("in"), c.findtext("out"))
                 for c in clips] == [("0", "60", "0", "60"), ("60", "240", "120", "300")]
-        assert clips[1].findtext("pproTicksIn") == str(_frame_to_ticks(120, Timebase(30, 1)))
+        assert clips[1].findtext("pproTicksIn") == str(frame_to_ticks(120, Timebase(30, 1)))
 
 
 def test_scope_no_cuts_is_unchanged():
@@ -304,7 +305,7 @@ def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
 
 def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypatch):
     from cutdeck import xml_bridge
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     monkeypatch.setattr(xml_bridge, "check_reference_audio", check_reference_audio)
     spawned = []
 

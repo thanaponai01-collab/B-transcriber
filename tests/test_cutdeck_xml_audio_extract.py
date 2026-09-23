@@ -237,19 +237,19 @@ def wav(tmp_path):
 
 
 def test_default_reference_skips_switched_off_track(tmp_path, wav):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     xml = _tracks_xml([(False, [(wav, "")]), (True, [(wav, "")])])
     assert check_reference_audio(xml)["xml_track"] == 1
 
 
 def test_default_reference_refuses_when_every_track_is_switched_off(tmp_path, wav):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     with pytest.raises(XmlRecutRefusal, match="switched off"):
         check_reference_audio(_tracks_xml([(False, [(wav, "")])]))
 
 
 def test_explicit_reference_is_honored_even_when_switched_off(tmp_path, wav):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     xml = _tracks_xml([(True, [(wav, "")]), (False, [(wav, "")])])
     checked = check_reference_audio(xml, 1)
     assert checked == {"xml_track": 1, "track_name": None, "clip_count": 1, "files": [str(wav)]}
@@ -257,7 +257,7 @@ def test_explicit_reference_is_honored_even_when_switched_off(tmp_path, wav):
 
 @pytest.mark.parametrize("index", [-1, 2])
 def test_negative_or_out_of_range_reference_refuses(tmp_path, wav, index):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     xml = _tracks_xml([(True, [(wav, "")]), (True, [(wav, "")])])
     with pytest.raises(XmlRecutRefusal, match="requested index"):
         check_reference_audio(xml, index)
@@ -266,7 +266,7 @@ def test_negative_or_out_of_range_reference_refuses(tmp_path, wav, index):
 
 
 def test_missing_source_media_refuses(tmp_path, wav):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     xml = _tracks_xml([(True, [(wav, ""), (tmp_path / "offline.wav", "")])])
     with pytest.raises(XmlRecutRefusal, match="missing or offline"):
         check_reference_audio(xml)
@@ -275,7 +275,7 @@ def test_missing_source_media_refuses(tmp_path, wav):
 def test_source_without_audio_stream_refuses(tmp_path):
     import shutil
     import subprocess
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         pytest.skip("ffmpeg/ffprobe not on PATH")
     silent_video = tmp_path / "picture_only.mp4"
@@ -286,7 +286,7 @@ def test_source_without_audio_stream_refuses(tmp_path):
 
 
 def test_clip_on_another_frame_grid_without_ticks_refuses(tmp_path, wav):
-    from cutdeck.xml_audio_extract import check_reference_audio
+    from cutdeck.xml_sequence import check_reference_audio
     own_rate = "<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>"
     with pytest.raises(XmlRecutRefusal, match="own frame rate"):
         check_reference_audio(_tracks_xml([(True, [(wav, own_rate)])]))

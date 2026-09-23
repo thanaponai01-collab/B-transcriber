@@ -19,8 +19,8 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
-from cutdeck.xml_audio_extract import check_reference_audio, reference_media_path
-from cutdeck.xml_recut import XmlRecutRefusal, _sequence_timebase, _PPRO_TICKS_PER_SECOND
+from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
+                                  check_reference_audio, reference_media_path, sequence_timebase)
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
@@ -38,36 +38,12 @@ def parse_progress(line: str) -> dict | None:
     return {"pct": min(int(match.group(1)), 100), "stage": match.group(2).strip()}
 
 
-def _track_groups(source_xml: str) -> list[int]:
-    """The first XML track index of each Premiere audio track.
-
-    Real exports expand each stereo track into two XML tracks. Treating A2
-    as XML index 1 would silently analyze A1 again. Verify the grouping.
-    """
-    tracks = ET.fromstring(source_xml).findall("sequence/media/audio/track")
-    groups = []
-    index = 0
-    while index < len(tracks):
-        track = tracks[index]
-        count = int(track.get("totalExplodedTrackCount", "1"))
-        if count < 1 or index + count > len(tracks):
-            raise ValueError("Cannot map the selected audio track from this export")
-        for channel in range(count):
-            item = tracks[index + channel]
-            if (int(item.get("currentExplodedTrackIndex", "0")) != channel
-                    or int(item.get("totalExplodedTrackCount", "1")) != count):
-                raise ValueError("Audio channel grouping in the export is inconsistent")
-        groups.append(index)
-        index += count
-    return groups
-
-
 def reference_audio_track(source_xml: str, request: dict) -> int | None:
     """Map Premiere's logical track to FCP7's exploded channel tracks."""
     selected = request.get("audio_track")
     if selected is None:
         return None  # Preserve the working command's default exactly.
-    groups = _track_groups(source_xml)
+    groups = audio_track_groups(source_xml)
     if len(groups) != request.get("audio_track_count") or not 0 <= selected < len(groups):
         raise ValueError("Export audio tracks differ from the timeline; refresh and try again")
     return groups[selected]
@@ -76,7 +52,7 @@ def reference_audio_track(source_xml: str, request: dict) -> int | None:
 def reference_label(source_xml: str, checked: dict) -> str:
     """What the status line says is being analyzed, in Premiere's own track names."""
     try:
-        track = f"A{_track_groups(source_xml).index(checked['xml_track']) + 1}"
+        track = f"A{audio_track_groups(source_xml).index(checked['xml_track']) + 1}"
     except ValueError:
         track = f"XML audio track {checked['xml_track'] + 1}"
     files = checked["files"]
@@ -135,8 +111,8 @@ def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
     sequence = ET.fromstring(source_xml).find("sequence")
     if sequence is None:
         raise ValueError("Export contains no sequence")
-    tb = _sequence_timebase(sequence)
-    tick_num = _PPRO_TICKS_PER_SECOND * tb.fps_den
+    tb = sequence_timebase(sequence)
+    tick_num = PPRO_TICKS_PER_SECOND * tb.fps_den
     duration = int(sequence.findtext("duration", "0"))
 
     def frame(key):

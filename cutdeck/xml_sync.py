@@ -30,17 +30,14 @@ from cutdeck.sync import (
     extract_mono_audio,
     sync_clip_to_reference,
 )
-from cutdeck.xml_audio_extract import (
-    _clip_source_span_seconds,
-    _resolve_file_path,
-    _select_audio_track,
-)
-from cutdeck.xml_recut import (
+from cutdeck.xml_sequence import (
     XmlRecutRefusal,
-    _PPRO_TICKS_PER_SECOND,
-    _frame_to_ticks,
-    _sequence_timebase,
-    _text,
+    child_text,
+    clip_source_span_seconds,
+    frame_to_ticks,
+    resolve_file_path,
+    select_audio_track,
+    sequence_timebase,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,8 +112,8 @@ def _build_reference_audio(
     """
     import numpy as np
 
-    track = _select_audio_track(sequence, ref_track_idx)
-    clipitems = [c for c in track.findall("clipitem") if _text(c, "enabled", "TRUE") == "TRUE"]
+    track = select_audio_track(sequence, ref_track_idx)
+    clipitems = [c for c in track.findall("clipitem") if child_text(c, "enabled", "TRUE") == "TRUE"]
     if not clipitems:
         raise XmlRecutRefusal(f"Reference audio track (index {ref_track_idx}) has no enabled clips.")
 
@@ -126,19 +123,19 @@ def _build_reference_audio(
     if ref_file_el is None or ref_file_el.get("id") is None:
         raise XmlRecutRefusal("First clip on reference audio track has no file element.")
     ref_file_id = ref_file_el.get("id")
-    ref_in_frame = int(_text(ref_first, "in", "0"))
+    ref_in_frame = int(child_text(ref_first, "in", "0"))
     ref_group_key = (ref_file_id, ref_in_frame)
 
     # Reference audio is extracted from the primary reference clip's media file
-    ref_file_path = _resolve_file_path(sequence, ref_file_id)
-    in_s, out_s = _clip_source_span_seconds(ref_first, tb)
+    ref_file_path = resolve_file_path(sequence, ref_file_id)
+    in_s, out_s = clip_source_span_seconds(ref_first, tb)
     dur_s = max(0.0, out_s - in_s)
 
     # Extract reference audio
     ref_clip_audio = audio_extractor(ref_file_path, start_s=in_s, duration_s=dur_s, sample_rate=sample_rate)
 
     # Place in a sequence-timeline buffer starting at this clip's timeline start
-    start_frame = int(_text(ref_first, "start", "0"))
+    start_frame = int(child_text(ref_first, "start", "0"))
     start_s = float(Fraction(start_frame * tb.fps_den, tb.fps_num))
     offset_samples = int(round(start_s * sample_rate))
     total_samples = offset_samples + len(ref_clip_audio) + sample_rate
@@ -168,8 +165,8 @@ def sync_sequence_xml(
     if seq is None:
         raise XmlRecutRefusal("No <sequence> element found in source XML.")
 
-    tb = _sequence_timebase(seq)
-    orig_name = _text(seq, "name", "Sequence")
+    tb = sequence_timebase(seq)
+    orig_name = child_text(seq, "name", "Sequence")
 
     # 1. Build reference audio timeline and identify the reference group
     ref_audio, ref_group_key = _build_reference_audio(
@@ -188,8 +185,8 @@ def sync_sequence_xml(
             if file_el is None or file_el.get("id") is None:
                 continue
             f_id = file_el.get("id")
-            f_path = _resolve_file_path(seq, f_id)
-            in_s, out_s = _clip_source_span_seconds(clip, tb)
+            f_path = resolve_file_path(seq, f_id)
+            in_s, out_s = clip_source_span_seconds(clip, tb)
             ref = ClipItemRef(
                 element=clip,
                 track_type="video",
@@ -197,10 +194,10 @@ def sync_sequence_xml(
                 clip_id=clip.get("id", ""),
                 file_id=f_id,
                 file_path=f_path,
-                in_frame=int(_text(clip, "in", "0")),
-                out_frame=int(_text(clip, "out", "0")),
-                start_frame=int(_text(clip, "start", "0")),
-                end_frame=int(_text(clip, "end", "0")),
+                in_frame=int(child_text(clip, "in", "0")),
+                out_frame=int(child_text(clip, "out", "0")),
+                start_frame=int(child_text(clip, "start", "0")),
+                end_frame=int(child_text(clip, "end", "0")),
                 in_s=in_s,
                 out_s=out_s,
             )
@@ -212,8 +209,8 @@ def sync_sequence_xml(
             if file_el is None or file_el.get("id") is None:
                 continue
             f_id = file_el.get("id")
-            f_path = _resolve_file_path(seq, f_id)
-            in_s, out_s = _clip_source_span_seconds(clip, tb)
+            f_path = resolve_file_path(seq, f_id)
+            in_s, out_s = clip_source_span_seconds(clip, tb)
             ref = ClipItemRef(
                 element=clip,
                 track_type="audio",
@@ -221,10 +218,10 @@ def sync_sequence_xml(
                 clip_id=clip.get("id", ""),
                 file_id=f_id,
                 file_path=f_path,
-                in_frame=int(_text(clip, "in", "0")),
-                out_frame=int(_text(clip, "out", "0")),
-                start_frame=int(_text(clip, "start", "0")),
-                end_frame=int(_text(clip, "end", "0")),
+                in_frame=int(child_text(clip, "in", "0")),
+                out_frame=int(child_text(clip, "out", "0")),
+                start_frame=int(child_text(clip, "start", "0")),
+                end_frame=int(child_text(clip, "end", "0")),
                 in_s=in_s,
                 out_s=out_s,
             )
@@ -334,10 +331,10 @@ def sync_sequence_xml(
 
             ticks_in = el.find("pproTicksIn")
             if ticks_in is not None:
-                ticks_in.text = str(_frame_to_ticks(clip.in_frame, tb))
+                ticks_in.text = str(frame_to_ticks(clip.in_frame, tb))
             ticks_out = el.find("pproTicksOut")
             if ticks_out is not None:
-                ticks_out.text = str(_frame_to_ticks(clip.out_frame, tb))
+                ticks_out.text = str(frame_to_ticks(clip.out_frame, tb))
 
     # 8. Rebuild Tracks: Vertical Stacking for Video & Complete Preservation of Audio
     # Video: Each angle group gets its own Video Track (V1, V2, V3...)
