@@ -49,9 +49,9 @@ const finding = (id, question, answer, evidence) => ({ id, question, answer, evi
 /* Reads whatever a TickTime-like object will give up, without assuming a shape. */
 function readTick(value) {
   if (value === null || value === undefined) return { present: false, ticks: null, seconds: null };
-  const raw = value.ticks !== undefined ? value.ticks : value;
+  const raw = value && value.ticks !== undefined ? value.ticks : value;
   let exact = null;
-  try { exact = ticks(raw, "tick").toString(); } catch (_) { exact = null; }
+  try { exact = ticks(value, "tick").toString(); } catch (_) { exact = null; }
   return { present: true, ticks: exact, raw: String(raw),
     seconds: typeof value.seconds === "number" ? value.seconds : null };
 }

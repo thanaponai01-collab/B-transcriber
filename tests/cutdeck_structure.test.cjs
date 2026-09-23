@@ -19,12 +19,7 @@ const KNOWN_EXCEPTIONS = {
     { file: "timeline/componentAccess.js", move: 5 },
   ],
   // (b) 254016000000 / TICKS_PER_SECOND = allowed only in host/ticks.js
-  ticks: [
-    { file: "timelineRange.js", move: 3 },
-    { file: "timeline/nativeSync.js", move: 3 },
-    { file: "syncProbe.js", move: 3 },
-    { file: "timeline/adjustmentLayer.js", move: 3 },
-  ],
+  ticks: [],
   // (c) Layer direction: parse every require("./…") and fail when lower layer requires higher layer
   layerDirection: [
     { from: "timeline/componentAccess.js", to: "timeline/adjustmentLayer.js", move: 5 },

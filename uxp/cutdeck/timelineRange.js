@@ -23,7 +23,8 @@
 
    See docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md section 6. */
 
-const TICKS_PER_SECOND = 254016000000n;
+const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
+const ticks = toTicks;
 
 /* Premiere's Out point convention is UNVERIFIED on this host.
 
@@ -35,20 +36,6 @@ const TICKS_PER_SECOND = 254016000000n;
    guessing, so no code path can silently pick a convention. */
 const OUT_CONVENTION = null;
 const OUT_CONVENTIONS = ["exclusive", "inclusive"];
-
-/* Accepts what the host and localStorage actually hand us — a decimal string, a
-   safe integer, or a BigInt — and rejects everything that would carry drift in. */
-function ticks(value, what) {
-  const label = what || "tick value";
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) throw new Error(`${label} is not a whole number of ticks: ${value}`);
-    if (!Number.isSafeInteger(value)) throw new Error(`${label} exceeds exact Number range; pass it as a string: ${value}`);
-    return BigInt(value);
-  }
-  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return BigInt(value.trim());
-  throw new Error(`${label} is not an exact tick value: ${JSON.stringify(value)}`);
-}
 
 const serialize = (value) => value.toString();
 

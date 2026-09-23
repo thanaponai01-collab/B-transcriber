@@ -21,15 +21,12 @@
 
 const { attempt, finding, formatFindings } = require("./capabilityProbe.js");
 const { runInTransaction } = require("./timeline/componentAccess.js");
+const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
 // Shared with native Sync, which owns them.
-const { readSequence, groupUnits } = require("./timeline/nativeSync.js");
+const { readSequence, groupUnits, baseName } = require("./timeline/nativeSync.js");
 
-const TICKS_PER_SECOND = 254016000000n;
 const SPEED_CLONES = 100;
 const TEST_SUFFIX = " — CutDeck sync test";
-
-const big = (t) => BigInt(String(t && t.ticks !== undefined ? t.ticks : t).split(".")[0]);
-const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 
 const startingAt = (clips, start) => clips.filter((c) => c.start === start);
 const trackList = (clips) => [...new Set(clips.map((c) => c.track + 1))].join(", ");
@@ -116,8 +113,8 @@ async function probeSyncMoves(ppro, deps = {}) {
     .find((u) => u.video.track === unit.video.track && u.video.start === unit.video.start && u.video.path === unit.video.path);
   if (!cu) { add("copy-read", "Does the copy hold the same clip?", "no — stopped", c0Read.ok ? null : c0Read); return stop(); }
 
-  const ticksPerFrame = big(await copy.getTimebase());
-  const endTicks = big(await copy.getEndTime());
+  const ticksPerFrame = toTicks(await copy.getTimebase());
+  const endTicks = toTicks(await copy.getEndTime());
   const toFrame = (t) => ((t + ticksPerFrame - 1n) / ticksPerFrame) * ticksPerFrame;
   const target = toFrame(endTicks + TICKS_PER_SECOND);
   const offset = target - cu.video.start;

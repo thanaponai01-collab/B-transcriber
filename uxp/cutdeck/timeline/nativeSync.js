@@ -17,12 +17,11 @@
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
 const { runInTransaction } = require("./componentAccess.js");
+const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 
-const TICKS_PER_SECOND = 254016000000n;
 const SYNCED_SUFFIX = "_Synced";
 const POLL_MS = 1500;
 
-const big = (t) => BigInt(String(t && t.ticks !== undefined ? t.ticks : t).split(".")[0]);
 const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 
 async function listClips(ppro, seq, kind) {
@@ -35,8 +34,8 @@ async function listClips(ppro, seq, kind) {
     const track = await (video ? seq.getVideoTrack(t) : seq.getAudioTrack(t));
     const items = (track && (await track.getTrackItems(clipType, false))) || [];
     for (const item of items) {
-      clips.push({ item, kind, track: t, start: big(await item.getStartTime()),
-        end: big(await item.getEndTime()), inPoint: big(await item.getInPoint()) });
+      clips.push({ item, kind, track: t, start: toTicks(await item.getStartTime()),
+        end: toTicks(await item.getEndTime()), inPoint: toTicks(await item.getInPoint()) });
     }
   }
   return { count, clips };
@@ -236,7 +235,7 @@ async function syncSequence(ppro, deps) {
   if (!clips.length) throw new Error("No clips with a media file on this sequence. Nothing to sync.");
   const plan = await waitForPlan(deps.rpc, clips, deps);
 
-  const ticksPerFrame = big(await source.getTimebase());
+  const ticksPerFrame = toTicks(await source.getTimebase());
   const byId = new Map(plan.placements.map((p) => [p.id, p]));
   const tracks = assignTracks(clips, clips.map((c) => {
     const p = byId.get(c.id);
@@ -264,4 +263,4 @@ async function syncSequence(ppro, deps) {
 }
 
 module.exports = { syncSequence, readSequence, groupUnits, groupClips, assignTracks, startTicks,
-  checkPlacement, formatReport, SYNCED_SUFFIX, TICKS_PER_SECOND };
+  checkPlacement, formatReport, SYNCED_SUFFIX, TICKS_PER_SECOND, baseName };

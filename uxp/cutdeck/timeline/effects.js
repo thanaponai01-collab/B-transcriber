@@ -42,11 +42,7 @@ const {
   unwrapKeyframeValue,
   runInTransaction,
 } = require("./componentAccess.js");
-
-function tickCount(tickTime) {
-  const raw = tickTime && tickTime.ticks !== undefined ? tickTime.ticks : tickTime;
-  return BigInt(String(raw).split(".")[0]);
-}
+const { toTicks } = require("../host/ticks.js");
 
 /* Captured point params (Anchor Point, Position) read back as plain [x, y] arrays, but
    createKeyframe only accepts a real PointF for them — an array throws "Illegal Parameter type"
@@ -78,7 +74,7 @@ async function readKeyframes(param, inPointTicks) {
       try { mode = await kf.getTemporalInterpolationMode(); } catch (_) { mode = null; }
     }
     keyframes.push({
-      offsetTicks: (tickCount(t) - inPointTicks).toString(),
+      offsetTicks: (toTicks(t) - inPointTicks).toString(),
       value: unwrapKeyframeValue(kf),
       mode: typeof mode === "number" ? mode : null,
     });
@@ -128,7 +124,7 @@ async function captureEffectFromTrackItem(ppro, trackItem) {
       let varying = false;
       try { varying = typeof param.isTimeVarying === "function" && !!(await param.isTimeVarying()); } catch (_) { varying = false; }
       if (varying) {
-        if (inPointTicks === null) inPointTicks = tickCount(await trackItem.getInPoint());
+        if (inPointTicks === null) inPointTicks = toTicks(await trackItem.getInPoint());
         entry.keyframes = await readKeyframes(param, inPointTicks);
         if (entry.keyframes.length) animatedCount++;
       }
@@ -235,7 +231,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   if (animated.length === 0) return { warnings };
 
   const TickTime = ppro.TickTime;
-  const targetIn = tickCount(await trackItem.getInPoint());
+  const targetIn = toTicks(await trackItem.getInPoint());
 
   // Phase 3: turn keyframing on (the stopwatch). Its own transaction, so the params are
   // time-varying before any keyframe is added to them.
@@ -281,7 +277,7 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
   // keyframe the stopwatch added on its own, a dropped one — is reported, not assumed away.
   for (const { p, param, label } of animated) {
     try {
-      const got = ((await param.getKeyframeListAsTickTimes()) || []).map((t) => tickCount(t).toString());
+      const got = ((await param.getKeyframeListAsTickTimes()) || []).map((t) => toTicks(t).toString());
       const want = placeKeyframes(p.keyframes, targetIn);
       if (got.length !== want.length || want.some((w) => !got.includes(w))) {
         warn(`${label}: expected keyframes at ${want.join(", ")} but found ${got.join(", ") || "none"}.`);

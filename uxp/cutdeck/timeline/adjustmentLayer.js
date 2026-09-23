@@ -1,4 +1,5 @@
 const ppro = require("premierepro");
+const { toTicksOr, makeTickTime } = require("../host/ticks.js");
 
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
 // Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47.
@@ -325,31 +326,6 @@ async function createAdjustmentLayerForSequence(project, width, height, ticksPer
   );
 }
 
-// Exact tick converter handling TickTime objects, decimal strings, numbers, and BigInt
-function toBigIntTicks(val) {
-  if (val === null || val === undefined) return 0n;
-  if (typeof val === "bigint") return val;
-  if (typeof val === "object") {
-    if (val.ticks !== undefined) return toBigIntTicks(val.ticks);
-    if (typeof val.getSeconds === "function") {
-      return BigInt(Math.round(val.getSeconds() * 254016000000));
-    }
-    if (typeof val.seconds === "number") {
-      return BigInt(Math.round(val.seconds * 254016000000));
-    }
-  }
-  const s = String(val).trim();
-  if (!s) return 0n;
-  const intPart = s.split(".")[0];
-  try {
-    return BigInt(intPart);
-  } catch (_) {
-    const n = parseFloat(s);
-    if (!isNaN(n)) return BigInt(Math.round(n));
-    return 0n;
-  }
-}
-
 // Label color index mapping for Premiere Pro clips
 function getLabelIndex(colorName) {
   const map = {
@@ -361,22 +337,6 @@ function getLabelIndex(colorName) {
   if (!colorName) return 1;
   const key = String(colorName).toLowerCase();
   return map[key] !== undefined ? map[key] : 1;
-}
-
-// Exact TickTime maker
-function makeTickTimeFn(ppro) {
-  const TickTime = ppro.TickTime;
-  if (!TickTime) return null;
-  const names = ["createWithTicks", "createWithTickcount", "createWithTickCount"];
-  for (const n of names) {
-    if (typeof TickTime[n] === "function") {
-      return (val) => TickTime[n](val.toString());
-    }
-  }
-  if (typeof TickTime.createWithSeconds === "function") {
-    return (val) => TickTime.createWithSeconds(Number(val) / 254016000000);
-  }
-  return (val) => new TickTime(Number(val) / 254016000000);
 }
 
 // Safe helper to get clip track items (never throws if Constants or arguments differ)
@@ -530,8 +490,8 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
       for (const it of items) {
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-        const itIn = toBigIntTicks(sTime);
-        const itOut = toBigIntTicks(eTime);
+        const itIn = toTicksOr(sTime, 0n);
+        const itOut = toTicksOr(eTime, 0n);
         if (itOut > startTicks && itIn < endTicks) {
           console.log(`findSmartStackTrack: V${v + 1} collides with query [${startTicks},${endTicks}) — ` +
             `item "${it.name || "?"}" is [${itIn},${itOut})`);
@@ -565,8 +525,8 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
       for (const it of items) {
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-        const itIn = toBigIntTicks(sTime);
-        const itOut = toBigIntTicks(eTime);
+        const itIn = toTicksOr(sTime, 0n);
+        const itOut = toTicksOr(eTime, 0n);
         if (itOut > startTicks && itIn < endTicks) {
           console.log(`findSmartStackTrack: V${candidate + 1} collides with query [${startTicks},${endTicks}) during refine — ` +
             `item "${it.name || "?"}" is [${itIn},${itOut})`);
@@ -596,8 +556,8 @@ async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks) {
   for (const it of items) {
     const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
     const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-    const itIn = toBigIntTicks(sTime);
-    const itOut = toBigIntTicks(eTime);
+    const itIn = toTicksOr(sTime, 0n);
+    const itOut = toTicksOr(eTime, 0n);
     if (itOut > startTicks && itIn < endTicks) {
       console.log(`isTrackRangeClear: V${trackIndex + 1} collides with query [${startTicks},${endTicks}) — ` +
         `item "${it.name || "?"}" is [${itIn},${itOut})`);
@@ -673,12 +633,12 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   } catch (_) {}
 
   const tpfStr = await seq.getTimebase();
-  const tpf = toBigIntTicks(tpfStr) || 10594584000n;
+  const tpf = toTicksOr(tpfStr, 10594584000n);
 
   let ctiTicks = 0n;
   try {
     const cti = await seq.getPlayerPosition();
-    ctiTicks = toBigIntTicks(cti);
+    ctiTicks = toTicksOr(cti, 0n);
   } catch (_) {
     ctiTicks = 0n;
   }
@@ -696,8 +656,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       const it = sc.item;
       const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
       const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-      const sTicks = toBigIntTicks(sTime);
-      const eTicks = toBigIntTicks(eTime);
+      const sTicks = toTicksOr(sTime, 0n);
+      const eTicks = toTicksOr(eTime, 0n);
       if (eTicks > sTicks) {
         rawClipsWithTimes.push({ track: sc.track, startTicks: sTicks, endTicks: eTicks });
       }
@@ -825,8 +785,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       try {
         const inPoint = await seq.getInPoint();
         const outPoint = await seq.getOutPoint();
-        inTicks = toBigIntTicks(inPoint);
-        outTicks = toBigIntTicks(outPoint);
+        inTicks = toTicksOr(inPoint, 0n);
+        outTicks = toTicksOr(outPoint, 0n);
       } catch (_) {}
 
       if (outTicks > inTicks && inTicks >= 0n) {
@@ -871,8 +831,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       try {
         const inPoint = await seq.getInPoint();
         const outPoint = await seq.getOutPoint();
-        inTicks = toBigIntTicks(inPoint);
-        outTicks = toBigIntTicks(outPoint);
+        inTicks = toTicksOr(inPoint, 0n);
+        outTicks = toTicksOr(outPoint, 0n);
       } catch (_) {}
 
       if (outTicks > inTicks && inTicks >= 0n) {
@@ -894,7 +854,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     }
   }
 
-  const tickTime = makeTickTimeFn(ppro);
+  const tickTime = makeTickTime(ppro);
   if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
 
   let alItem = await findAdjustmentLayerItem(project, seq);
@@ -1156,7 +1116,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
         if (trackItems && trackItems.length > 0) {
           for (const it of trackItems) {
             const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
-            const sTicks = toBigIntTicks(sTime);
+            const sTicks = toTicksOr(sTime, 0n);
             const diff = sTicks > p.startTicks ? (sTicks - p.startTicks) : (p.startTicks - sTicks);
             if (diff <= (tpf * 2n)) {
               let trimOk = false;
@@ -1190,7 +1150,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
               let actualEndTicks = null;
               try {
                 const eTimeAfter = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-                actualEndTicks = toBigIntTicks(eTimeAfter);
+                actualEndTicks = toTicksOr(eTimeAfter, null);
               } catch (_) {}
               console.log("Adjustment Layer trim result:", {
                 trimOk,
