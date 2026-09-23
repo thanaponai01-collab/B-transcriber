@@ -230,12 +230,10 @@ class XmlJobs:
                 raise ValueError("CutDeck is processing a job; it restarts once that finishes")
             self.restarting = True
             return {"restarting": True}
-        if kind == "prepare" or kind == "prepare_sync":
+        if kind == "prepare":
             job_id, folder = self._allocate()
-            is_sync = (kind == "prepare_sync")
-            context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count")
-            if not is_sync:
-                context_keys += ("in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
+            context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count",
+                            "in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
             context = {key: req.get(key) for key in context_keys}
             if not all(isinstance(context[k], str) and context[k] for k in
                        ("project_id", "sequence_id", "sequence_name")):
@@ -243,16 +241,13 @@ class XmlJobs:
             track = context["audio_track"]
             if track is not None and (type(track) is not int or track < 0):
                 raise ValueError("Audio track must be a non-negative index")
-            if not is_sync and type(context["asr"]) is not bool:
+            if type(context["asr"]) is not bool:
                 raise ValueError("Speech protection must be true or false")
-            result_name = f"{context['sequence_name']}_Synced" if is_sync else f"{context['sequence_name']} — CutDeck {job_id[:8]}"
-            out_filename = "synced.xml" if is_sync else "rough_cut.xml"
-            log_filename = "sync.log" if is_sync else "process.log"
-            job = {"job_id": job_id, "job_type": "sync" if is_sync else "cut", "state": "prepared", "context": context,
+            job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
                    "source_path": str(folder / "source.xml"),
-                   "output_path": str(folder / out_filename),
-                   "result_name": result_name,
-                   "log_path": str(folder / log_filename)}
+                   "output_path": str(folder / "rough_cut.xml"),
+                   "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
+                   "log_path": str(folder / "process.log")}
             self.jobs[job_id] = job
             self._save(job)
             return dict(job)
@@ -291,7 +286,7 @@ class XmlJobs:
             raise ValueError("Unknown job; start a new operation")
         if kind == "status":
             return dict(job)
-        if kind == "start" or kind == "start_sync":
+        if kind == "start":
             if job["state"] != "prepared":
                 return dict(job)  # duplicate request must never run a second time
             if self.active:
@@ -310,11 +305,6 @@ class XmlJobs:
         raise ValueError("Unknown request type")
 
     def _start(self, job: dict, source_xml: str) -> dict:
-        if job.get("job_type") == "sync":
-            job["xml_audio_track"] = reference_audio_track(source_xml, job["context"]) if job["context"].get("audio_track") is not None else 0
-            job["output_path"] = str(result_path(job, source_xml))
-            job["state"] = "running"
-            return self._launch(job, self._run_sync(job))
         start, end = range_from_ticks(source_xml, job["context"])
         job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
         # Only now does the export exist, so only now is the footage location known.
@@ -482,46 +472,6 @@ class XmlJobs:
         finally:
             self.active = None
             self._save(job)
-
-    async def _run_sync(self, job):
-        try:
-            source = Path(job["source_path"])
-            source_xml = source.read_text(encoding="utf-8-sig")
-            ref_track = job.get("xml_audio_track") or 0
-
-            from cutdeck.xml_sync import sync_sequence_xml
-            synced_xml, report = await asyncio.to_thread(
-                sync_sequence_xml,
-                source_xml,
-                ref_track_idx=ref_track,
-            )
-
-            out_path = Path(job["output_path"])
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n' + synced_xml,
-                encoding="utf-8",
-            )
-
-            job["report"] = {
-                "sequence_name": report.sequence_name,
-                "total_groups": report.total_groups,
-                "synced_groups": report.synced_groups,
-                "unsynced_groups": report.unsynced_groups,
-                "unsynced_reasons": report.unsynced_reasons,
-            }
-            job["state"] = "ready"
-        except asyncio.CancelledError:
-            job["state"] = "failed"
-            job["message"] = "Helper stopped during sync; start a new sync"
-            raise
-        except Exception as exc:
-            job["state"] = "failed"
-            job["message"] = str(exc)
-        finally:
-            self.active = None
-            self._save(job)
-
 
 
 async def serve(jobs: XmlJobs, port: int = PORT):

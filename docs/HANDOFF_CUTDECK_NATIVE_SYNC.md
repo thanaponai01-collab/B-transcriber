@@ -5,7 +5,15 @@
 API gate), `uxp/cutdeck/README.md`, and this file. Rough Cut is out of scope and keeps its XML
 route.
 
-## Status (2026-09-23): A and B built, waiting on the live run
+## Status (2026-09-23): A, B and C done
+
+**Part C done 2026-09-23** after the user's live acceptance: `prepare_sync` / `start_sync` /
+`_run_sync` removed from the helper, `cutdeck/xml_sync.py` and its tests deleted, `prepareSync`
+(and the `exportAndStart` split it needed) removed from `workflow.js`, `follow`'s sync branch
+removed. `cutdeck/sync.py` stays; note `sync_clip_to_reference` / `SyncResult` in it are now used
+only by their own tests.
+
+### Build notes (A and B)
 
 - **A, done:** `plan_sync` job in `cutdeck/xml_bridge.py` (`VERSION` is now `cutdeck-xml-2`);
   `plan_sync(..., progress=)` plus `SyncPlan.media_duration_s` (each file's audio length, which

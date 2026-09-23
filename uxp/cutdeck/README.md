@@ -63,12 +63,18 @@ when that isn't set up, not as a replacement for it.
 3. Leave the **Speech + Silence** preset selected for aggressive silence
    cutting with ASR protection for short speech. **Silence Only** skips ASR,
    just like the existing command's `-NoAsr` switch.
-4. Click **Rough Cut In–Out**, or **Sync Multi-Cam** for a multi-camera sync
-   using the same In/Out and Reference Audio. CutDeck creates a sequence
+4. Click **Rough Cut In–Out**. CutDeck creates a sequence
    named `Your sequence — CutDeck <job identifier>` and opens it, filed in a
    **`CutDeck` bin in the Project panel** (created once, on first use, at the
    project root — every result after that lands in the same bin instead of
    scattering at the root).
+
+**Sync** needs no marks or Reference Audio. Lay every camera's clips and the recorder's
+files in a row on one sequence and click Sync. The helper matches each clip by its own
+audio; the panel copies the sequence to `Your sequence_Synced` and, in one step (one
+Ctrl+Z), puts each synced clip on its own video and audio tracks. Clips that match nothing
+sit flat on the first tracks after a 30 s gap, and the status line says why. Your
+sequence is not edited, and Sync refuses to run on a `_Synced` copy.
 
 The diagnostics drawer (gear icon, top right) holds the read-only timing
 probe, the connection probe, and copy-status.
@@ -140,7 +146,7 @@ Stop it with Ctrl+C in its window when finished.
 
 ## Verification status
 
-Automated tests cover exact CFR/NTSC range conversion, scoped XML cuts and sync,
+Automated tests cover exact CFR/NTSC range conversion, scoped XML cuts,
 stereo-track mapping, unchanged no-cut output, CLI reports, worker errors,
 duplicate starts, real WebSocket reconnection, and panel import identity checks.
 

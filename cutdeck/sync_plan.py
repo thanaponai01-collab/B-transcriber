@@ -5,7 +5,7 @@ the user's flat timeline, this decides each clip's start, the panel places them 
 Pure — no Premiere, no XML; media is read through an injected `loader` so every shooting
 scenario is testable with synthetic audio.
 
-Unlike xml_sync.py (one reference clip; anything not overlapping it fails), clips are placed
+Unlike the retired XML sync (one reference clip; anything not overlapping it failed), clips are placed
 through overlaps: the longest clip anchors a session, every clip that matches the session's
 audio so far joins it, and the session's audio grows with each one — so a camera that only
 overlaps another camera, or a recorder split into several files, still lands. Clips that

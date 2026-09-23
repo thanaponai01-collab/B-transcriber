@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # restarted helper answers "Unknown job" instead.
 MCP_STATE = {"prepared": "queued", "running": "running", "ready": "succeeded",
              "no_cuts": "succeeded", "failed": "failed"}
-_KIND = {"cut": "rough_cut_xml", "transcribe": "transcribe", "sync": "sync"}
+_KIND = {"cut": "rough_cut_xml", "transcribe": "transcribe"}
 
 
 def write_json(path: Path, value: dict) -> None:

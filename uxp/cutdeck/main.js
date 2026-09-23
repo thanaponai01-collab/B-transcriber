@@ -190,18 +190,11 @@ async function follow(job) {
   if (job.state === "failed") { clearJob(); setStatus(job.message, "error"); throw new Error(job.message); }
   if (job.state === "no_cuts") { clearJob(); setStatus("No cuts found inside this range. Your sequence is unchanged.", "ready"); return; }
   if (job.state !== "ready") { setStatus("Job error: " + job.state, "error"); throw new Error("Job is not ready: " + job.state); }
-  const sync = job.job_type === "sync";
-  setStatus(sync ? "Opening synchronized multi-cam sequence…" : "Opening your rough cut in Premiere…", "busy");
+  setStatus("Opening your rough cut in Premiere…", "busy");
   const saved = lastJob() || {};
   await workflow.importResult(ppro, job, saved.importAttempted,
     () => save({ ...saved, ...job, importAttempted: true }));
   clearJob();
-  if (sync) {
-    const rep = job.report || {};
-    const unsynced = rep.unsynced_groups > 0 ? ` ${rep.unsynced_groups} placed at end.` : "";
-    setStatus(`Multi-cam sync complete (${rep.synced_groups || 0} angles).${unsynced}\nOpened ${job.result_name}\nSaved ${job.output_path}`, "ready");
-    return;
-  }
   const note = job.output_note ? `\n${job.output_note}` : "";
   setStatus(`${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.`
     + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`, "ready");

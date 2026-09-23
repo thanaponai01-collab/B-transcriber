@@ -24,14 +24,15 @@ does, when it does it, and what it tells the panel.
 - **Panel** (`uxp/cutdeck/workflow.js`, `main.js` `doCut` / `doSync` / `follow`):
   1. `capture` reads the In/Out ticks, the sequence end, the timebase and the audio track
      *count*.
-  2. It sends `prepare` or `prepare_sync` to the helper.
+  2. It sends `prepare` to the helper.
   3. `exportAsFinalCutProXML` writes the whole sequence to the helper's `source_path`.
   4. It sends `start`, polls `status` every 1.5 s, then `importResult` imports the result into the
      `CutDeck` bin with an identity check.
 - **Helper** (`cutdeck/xml_bridge.py` `XmlJobs`) resolves the reference audio track
   (`reference_audio_track`), converts ticks to frames (`range_from_ticks`), and picks the output
   path beside the footage (`result_path`). It then runs `python -m cutdeck.xml_recut` as a
-  subprocess (`_run`, about line 280), or `_run_sync` for multi-cam. Jobs run one at a time
+  subprocess (`_run`). Multi-cam Sync is native since 2026-09-23 (`plan_sync`, see
+  HANDOFF_CUTDECK_NATIVE_SYNC.md). Jobs run one at a time
   because of the GPU.
 - **`cutdeck/xml_recut.py`** extracts a mixdown from the XML (`xml_audio_extract.py`), then
   runs VAD, optional ASR, rules and a surgical XML rewrite.
