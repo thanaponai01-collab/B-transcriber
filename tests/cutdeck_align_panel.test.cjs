@@ -404,7 +404,7 @@ test("entrypoints.setup is guarded, and runs after the main panel is already bou
 // --- Phase 1 wiring: the read-only transform display is reachable from the real entry point -
 
 test("main.js requires the transform host-discovery and geometry modules", () => {
-  assert.match(mainJs, /require\("\.\/timeline\/componentAccess\.js"\)/);
+  assert.match(mainJs, /require\("\.\/host\/trackItems\.js"\)/);
   assert.match(mainJs, /require\("\.\/transform\/params\.js"\)/);
   assert.match(mainJs, /require\("\.\/transform\/geometry\.js"\)/);
 });

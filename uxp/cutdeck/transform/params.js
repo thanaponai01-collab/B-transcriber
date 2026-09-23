@@ -22,7 +22,7 @@
 // No geometry (normalized-to-pixel conversion lives in transform/geometry.js, which is pure
 // and does not touch premierepro) and no DOM.
 
-const { unwrapKeyframeValue } = require("../timeline/componentAccess.js");
+const { unwrapKeyframeValue } = require("../host/components.js");
 
 const MOTION_MATCH_NAME = "AE.ADBE Motion";
 

@@ -11,7 +11,7 @@ const panel = require("./core/panel.js");
 const alignPanel = require("./core/alignPanel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
 const effects = require("./timeline/effects.js");
-const componentAccess = require("./timeline/componentAccess.js");
+const trackItems = require("./host/trackItems.js");
 const transformParams = require("./transform/params.js");
 const transformGeometry = require("./transform/geometry.js");
 const { activeProjectAndSequence } = require("./host/project.js");
@@ -534,7 +534,7 @@ function describeField(entry, isPoint, frameSize) {
 async function readAlignTransform(seq) {
   if (!seq) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
 
-  const items = await componentAccess.getSelectedTrackItems(seq);
+  const items = await trackItems.getSelectedTrackItems(seq);
   if (items.length === 0) {
     return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
   }

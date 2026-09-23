@@ -35,12 +35,14 @@
 // docs/research/cutdeck-transform-panel-plan.md Part 2). Re-exported below for callers that
 // already import them from here.
 const {
-  FIXED_EFFECT_DISPLAY_NAMES,
-  isFixedComponent,
   getSelectedTrackItems,
   getFirstSelectedTrackItem,
+} = require("../host/trackItems.js");
+const {
+  FIXED_EFFECT_DISPLAY_NAMES,
+  isFixedComponent,
   unwrapKeyframeValue,
-} = require("./componentAccess.js");
+} = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { runTransaction } = require("../host/project.js");
 

@@ -1,38 +1,34 @@
-/* timeline/componentAccess.js — lifted out of timeline/effects.js once transform/params.js
-   became a second consumer of the same selection lookup and value unwrap (Phase 1 of
-   docs/research/cutdeck-transform-panel-plan.md, Part 2). These tests pin down the one real
-   bug fix in the lift: the old isTrackItemSelected fallback tried `.isSelected` as a function
-   then a property, and never `getIsSelected()` — the only getter Adobe actually declares
-   (confirmed live on this build, transform-panel-plan.md Part 1a: `typeof item.getIsSelected`
-   is "function", `item.isSelected` is `undefined`). That bug meant the per-track selection
-   fallback silently returned false for every item whenever seq.getSelection() was the thing
-   that failed. */
+/* host/components.js & host/trackItems.js — split out of timeline/componentAccess.js
+   as part of Move 5 (issue #53, docs/arch-design-cutdeck-panel.md).
+   Tests component helpers, keyframe value unwrapping, track item access, and selection. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const componentAccess = require("../uxp/cutdeck/timeline/componentAccess.js");
+const components = require("../uxp/cutdeck/host/components.js");
+const trackItems = require("../uxp/cutdeck/host/trackItems.js");
 
 // --- isTrackItemSelected --------------------------------------------------------------------
 
 test("isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not", async () => {
   const item = { getIsSelected: () => Promise.resolve(true) };
-  assert.equal(await componentAccess.isTrackItemSelected(item), true);
+  assert.equal(await trackItems.isTrackItemSelected(item), true);
 });
 
 test("isTrackItemSelected returns false, not throws, when getIsSelected() rejects", async () => {
   const item = { getIsSelected: () => Promise.reject(new Error("boom")) };
-  assert.equal(await componentAccess.isTrackItemSelected(item), false);
+  assert.equal(await trackItems.isTrackItemSelected(item), false);
 });
 
 test("isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent", async () => {
   const item = { isSelected: () => Promise.resolve(true) };
-  assert.equal(await componentAccess.isTrackItemSelected(item), true);
+  assert.equal(await trackItems.isTrackItemSelected(item), true);
 });
 
 test("isTrackItemSelected falls back to a plain isSelected/selected property last", async () => {
-  assert.equal(await componentAccess.isTrackItemSelected({ isSelected: true }), true);
-  assert.equal(await componentAccess.isTrackItemSelected({ selected: true }), true);
-  assert.equal(await componentAccess.isTrackItemSelected({}), false);
+  assert.equal(await trackItems.isTrackItemSelected({ isSelected: true }), true);
+  assert.equal(await trackItems.isTrackItemSelected({ selected: true }), true);
+  assert.equal(await trackItems.isTrackItemSelected({}), false);
+  assert.equal(await trackItems.isTrackItemSelected(null), false);
 });
 
 // --- getSelectedTrackItems -------------------------------------------------------------------
@@ -40,7 +36,7 @@ test("isTrackItemSelected falls back to a plain isSelected/selected property las
 test("getSelectedTrackItems prefers seq.getSelection() when it returns items", async () => {
   const items = [{ name: "a" }, { name: "b" }];
   const seq = { getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve(items) }) };
-  assert.deepEqual(await componentAccess.getSelectedTrackItems(seq), items);
+  assert.deepEqual(await trackItems.getSelectedTrackItems(seq), items);
 });
 
 test("getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route", async () => {
@@ -53,57 +49,128 @@ test("getSelectedTrackItems falls back to a per-track scan using the FIXED getIs
     getVideoTrack: () => Promise.resolve(track),
     getAudioTrackCount: () => Promise.resolve(0),
   };
-  const items = await componentAccess.getSelectedTrackItems(seq);
+  const items = await trackItems.getSelectedTrackItems(seq);
   assert.deepEqual(items, [selected]);
 });
 
 test("getFirstSelectedTrackItem returns null when nothing is selected", async () => {
   const seq = { getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([]) }) };
-  assert.equal(await componentAccess.getFirstSelectedTrackItem(seq), null);
+  assert.equal(await trackItems.getFirstSelectedTrackItem(seq), null);
 });
 
 test("getSelectedTrackItems returns [] for a null sequence, never throws", async () => {
-  assert.deepEqual(await componentAccess.getSelectedTrackItems(null), []);
+  assert.deepEqual(await trackItems.getSelectedTrackItems(null), []);
+});
+
+// --- getTrackClipItemsOrThrow & getTrackClipItems -------------------------------------------
+
+test("getTrackClipItemsOrThrow returns items from track.getTrackItems", async () => {
+  const items = [{ name: "clip1" }];
+  const track = { getTrackItems: () => Promise.resolve(items) };
+  const result = await trackItems.getTrackClipItemsOrThrow(track);
+  assert.deepEqual(result, items);
+});
+
+test("getTrackClipItemsOrThrow passes CLIP constant from ppro when available", async () => {
+  const calls = [];
+  const track = {
+    getTrackItems: (type, selectedOnly) => {
+      calls.push({ type, selectedOnly });
+      return Promise.resolve([{ name: "c" }]);
+    },
+  };
+  const ppro = { Constants: { TrackItemType: { CLIP: 42 } } };
+  const result = await trackItems.getTrackClipItemsOrThrow(track, ppro);
+  assert.equal(calls[0].type, 42);
+  assert.equal(calls[0].selectedOnly, false);
+  assert.equal(result.length, 1);
+});
+
+test("getTrackClipItemsOrThrow falls back across multiple signatures on failure", async () => {
+  let callCount = 0;
+  const track = {
+    getTrackItems: (arg) => {
+      callCount++;
+      if (callCount === 1) throw new Error("first fail");
+      return Promise.resolve([{ name: "recovered" }]);
+    },
+  };
+  const result = await trackItems.getTrackClipItemsOrThrow(track);
+  assert.equal(result.length, 1);
+  assert.equal(callCount, 2);
+});
+
+test("getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty", async () => {
+  const track = {
+    getTrackItems: () => { throw new Error("track unreadable"); },
+  };
+  await assert.rejects(
+    () => trackItems.getTrackClipItemsOrThrow(track),
+    /track unreadable/
+  );
+});
+
+test("getTrackClipItems returns [] when getTrackClipItemsOrThrow throws", async () => {
+  const track = {
+    getTrackItems: () => { throw new Error("track unreadable"); },
+  };
+  const result = await trackItems.getTrackClipItems(track);
+  assert.deepEqual(result, []);
+});
+
+// --- getSelectedVideoClips -------------------------------------------------------------------
+
+test("getSelectedVideoClips excludes Audio clips and Adjustment Layers", async () => {
+  const videoClip1 = { name: "Footage A", mediaType: "Video", getIsSelected: () => Promise.resolve(true) };
+  const adjLayer = { name: "Adjustment Layer 1", mediaType: "Video", getIsSelected: () => Promise.resolve(true) };
+  const audioClip = { name: "Footage A Audio", mediaType: "Audio", getIsSelected: () => Promise.resolve(true) };
+
+  const trackV0 = { getTrackItems: () => Promise.resolve([videoClip1, adjLayer]) };
+  const trackA0 = { getTrackItems: () => Promise.resolve([audioClip]) };
+
+  const seq = {
+    getSelection: () => Promise.resolve({
+      getTrackItems: () => Promise.resolve([videoClip1, adjLayer, audioClip]),
+    }),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve(trackV0),
+    getAudioTrackCount: () => Promise.resolve(1),
+    getAudioTrack: () => Promise.resolve(trackA0),
+  };
+
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].item, videoClip1);
+  assert.equal(results[0].track, 0);
+});
+
+test("getSelectedVideoClips returns [] for null sequence or empty selection", async () => {
+  assert.deepEqual(await trackItems.getSelectedVideoClips(null, null), []);
+  const seq = { getSelection: () => Promise.resolve(null), getVideoTrackCount: () => Promise.resolve(0), getAudioTrackCount: () => Promise.resolve(0) };
+  assert.deepEqual(await trackItems.getSelectedVideoClips(null, seq), []);
 });
 
 // --- unwrapKeyframeValue -----------------------------------------------------------------
 
 test("unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper", () => {
-  assert.deepEqual(componentAccess.unwrapKeyframeValue({ value: { value: [0.5, 0.5] } }), [0.5, 0.5]);
-  assert.equal(componentAccess.unwrapKeyframeValue({ value: { value: 100 } }), 100);
+  assert.deepEqual(components.unwrapKeyframeValue({ value: { value: [0.5, 0.5] } }), [0.5, 0.5]);
+  assert.equal(components.unwrapKeyframeValue({ value: { value: 100 } }), 100);
 });
 
 test("unwrapKeyframeValue leaves an already-plain value alone", () => {
-  assert.deepEqual(componentAccess.unwrapKeyframeValue({ value: [0.5, 0.5] }), [0.5, 0.5]);
+  assert.deepEqual(components.unwrapKeyframeValue({ value: [0.5, 0.5] }), [0.5, 0.5]);
 });
 
 test("unwrapKeyframeValue tolerates a missing keyframe", () => {
-  assert.equal(componentAccess.unwrapKeyframeValue(null), null);
-  assert.equal(componentAccess.unwrapKeyframeValue(undefined), null);
+  assert.equal(components.unwrapKeyframeValue(null), null);
+  assert.equal(components.unwrapKeyframeValue(undefined), null);
 });
 
 // --- isFixedComponent ----------------------------------------------------------------------
 
 test("isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively", () => {
-  assert.equal(componentAccess.isFixedComponent("Motion"), true);
-  assert.equal(componentAccess.isFixedComponent(" opacity "), true);
-  assert.equal(componentAccess.isFixedComponent("Time Remapping"), true);
-  assert.equal(componentAccess.isFixedComponent("Gaussian Blur"), false);
-});
-
-// --- runInTransaction ----------------------------------------------------------------------
-
-test("runInTransaction runs through project.lockedAccess when the host provides it", () => {
-  const calls = [];
-  const project = {
-    lockedAccess: (run) => { calls.push("locked"); run(); },
-    executeTransaction: (fn, label) => { calls.push(label); fn({ addAction: () => true }); return true; },
-  };
-  componentAccess.runInTransaction(project, "CutDeck: Test", () => {});
-  assert.deepEqual(calls, ["locked", "CutDeck: Test"]);
-});
-
-test("runInTransaction throws when executeTransaction reports failure", () => {
-  const project = { executeTransaction: () => false };
-  assert.throws(() => componentAccess.runInTransaction(project, "CutDeck: Test", () => {}), /Test/);
+  assert.equal(components.isFixedComponent("Motion"), true);
+  assert.equal(components.isFixedComponent(" opacity "), true);
+  assert.equal(components.isFixedComponent("Time Remapping"), true);
+  assert.equal(components.isFixedComponent("Gaussian Blur"), false);
 });

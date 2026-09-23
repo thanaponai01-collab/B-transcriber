@@ -17,9 +17,7 @@ const KNOWN_EXCEPTIONS = {
   // (b) 254016000000 / TICKS_PER_SECOND = allowed only in host/ticks.js
   ticks: [],
   // (c) Layer direction: parse every require("./…") and fail when lower layer requires higher layer
-  layerDirection: [
-    { from: "timeline/componentAccess.js", to: "timeline/adjustmentLayer.js", move: 5 },
-  ],
+  layerDirection: [],
   // (d) require("premierepro") at module scope allowed only in main.js
   premiereproModuleScope: [
     { file: "timeline/adjustmentLayer.js", move: 9 },
@@ -164,13 +162,13 @@ function extractRequires(source) {
 //            timeline/adjustmentLayer.js, timeline/alPlacement.js, timeline/alLibrary.js,
 //            timeline/alProject.js, timeline/alSeedData.js, timeline/effects.js,
 //            timeline/nativeSync.js, transform/*
-// L4 Host: host/*, timeline/componentAccess.js
+// L4 Host: host/*
 function getLayer(relPath) {
   const norm = relPath.replace(/\\/g, "/");
   if (norm === "main.js") return 0;
   if (norm === "core/panel.js" || norm === "core/alignPanel.js" || norm === "core/progressText.js") return 1;
   if (norm.startsWith("features/")) return 2;
-  if (norm.startsWith("host/") || norm === "timeline/componentAccess.js") return 4;
+  if (norm.startsWith("host/")) return 4;
   return 3; // domain
 }
 

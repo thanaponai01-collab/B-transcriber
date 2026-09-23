@@ -7,6 +7,11 @@ const {
   getOrCreateBin,
   activeProjectAndSequence,
 } = require("../host/project.js");
+const {
+  getTrackClipItems,
+  getTrackClipItemsOrThrow,
+  getSelectedVideoClips,
+} = require("../host/trackItems.js");
 
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
 // Owned by uxp/cutdeck/main.js via placeAdjustmentLayersOnTimeline(); see issue #47.
@@ -295,136 +300,6 @@ function getLabelIndex(colorName) {
   return map[key] !== undefined ? map[key] : 1;
 }
 
-// Safe helper to get clip track items (never throws if Constants or arguments differ)
-async function getTrackClipItems(track) {
-  try {
-    return await getTrackClipItemsOrThrow(track);
-  } catch (_) {
-    return [];
-  }
-}
-
-// Same lookup, but rethrows the last error instead of masking "couldn't read this
-// track" as "this track is empty" — callers that use the result to avoid colliding
-// with existing clips (findSmartStackTrack) must be able to tell the difference,
-// since treating an unreadable track as empty risks overwriting real footage on it.
-async function getTrackClipItemsOrThrow(track) {
-  if (!track || typeof track.getTrackItems !== "function") return [];
-  const clipType = (ppro.Constants && ppro.Constants.TrackItemType && ppro.Constants.TrackItemType.CLIP !== undefined)
-    ? ppro.Constants.TrackItemType.CLIP
-    : 1;
-  let lastErr = null;
-  try {
-    const items = await track.getTrackItems(clipType, false);
-    if (items && Array.isArray(items)) return items;
-  } catch (e) { lastErr = e; }
-  try {
-    const items = await track.getTrackItems(1, false);
-    if (items && Array.isArray(items)) return items;
-  } catch (e) { lastErr = e; }
-  try {
-    const items = await track.getTrackItems();
-    if (items && Array.isArray(items)) return items;
-  } catch (e) { lastErr = e; }
-  throw lastErr || new Error("getTrackItems returned no usable result");
-}
-
-// Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers)
-async function getSelectedTimelineClips(seq) {
-  let rawItems = [];
-  try {
-    if (typeof seq.getSelection === "function") {
-      const sel = await seq.getSelection();
-      if (sel) {
-        if (typeof sel.getTrackItems === "function") {
-          const items = await sel.getTrackItems();
-          if (items && items.length > 0) rawItems = items;
-        } else if (Array.isArray(sel)) {
-          rawItems = sel;
-        } else if (Array.isArray(sel.items)) {
-          rawItems = sel.items;
-        }
-      }
-    }
-  } catch (e) {
-    console.log("seq.getSelection() check:", e);
-  }
-
-  // Fallback: search video tracks for selected clips
-  if (rawItems.length === 0) {
-    try {
-      const trackCount = await seq.getVideoTrackCount();
-      for (let v = 0; v < trackCount; v++) {
-        const track = await seq.getVideoTrack(v);
-        const items = await getTrackClipItems(track);
-        if (items && items.length > 0) {
-          for (const it of items) {
-            let isSel = false;
-            if (typeof it.isSelected === "function") {
-              try { isSel = await it.isSelected(); } catch (_) {}
-            } else if (it.isSelected !== undefined) {
-              isSel = !!it.isSelected;
-            } else if (it.selected !== undefined) {
-              isSel = !!it.selected;
-            }
-            if (isSel) rawItems.push(it);
-          }
-        }
-      }
-    } catch (e) {
-      console.log("fallback track scan failed:", e);
-    }
-  }
-
-  if (!rawItems || rawItems.length === 0) return [];
-
-  // Filter: ONLY include Video clips (exclude Audio clips and Adjustment Layers!)
-  // In Premiere, linked selection selects Audio clips which may span longer cuts than Video!
-  // Also record which video track each item lives on — callers need to tell V1 (the
-  // canvas real footage lives on) apart from a duplicate clip sitting on a higher track.
-  const videoClips = [];
-  const videoItemsTrackMap = new Map();
-
-  try {
-    const trackCount = await seq.getVideoTrackCount();
-    for (let v = 0; v < trackCount; v++) {
-      const track = await seq.getVideoTrack(v);
-      const vItems = await getTrackClipItems(track);
-      if (vItems) {
-        for (const vi of vItems) {
-          videoItemsTrackMap.set(vi, v);
-        }
-      }
-    }
-  } catch (_) {}
-
-  for (const it of rawItems) {
-    if (!it) continue;
-
-    // 1. Ignore Adjustment Layers themselves
-    const name = it.name ? it.name.toLowerCase() : "";
-    if (name.includes("adjustment") || name.startsWith("adj_")) {
-      continue;
-    }
-
-    // 2. Check explicit mediaType
-    if (it.mediaType === "Audio" || it.mediaType === 2 || it.mediaType === "AUDIO") {
-      continue;
-    }
-    if (ppro.AudioClipTrackItem && it instanceof ppro.AudioClipTrackItem) {
-      continue;
-    }
-
-    // 3. Verify item belongs to a Video Track (if videoItemsTrackMap was populated)
-    if (videoItemsTrackMap.size > 0 && !videoItemsTrackMap.has(it)) {
-      continue; // Audio clip on A1/A2, ignore!
-    }
-
-    videoClips.push({ item: it, track: videoItemsTrackMap.has(it) ? videoItemsTrackMap.get(it) : -1 });
-  }
-
-  return videoClips;
-}
 
 // Robust UXP helper to determine collision-free track using Smart Stacking
 async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
@@ -434,7 +309,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
     const track = await seq.getVideoTrack(v);
     let items;
     try {
-      items = await getTrackClipItemsOrThrow(track);
+      items = await getTrackClipItemsOrThrow(track, ppro);
     } catch (e) {
       // Could not verify V(v+1) is actually empty — assume it's occupied rather than
       // risk overwriting real clips we failed to see (see getTrackClipItemsOrThrow).
@@ -471,7 +346,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1) {
     let items;
     let trackHasCollision = false;
     try {
-      items = await getTrackClipItemsOrThrow(track);
+      items = await getTrackClipItemsOrThrow(track, ppro);
     } catch (e) {
       console.log(`findSmartStackTrack: could not read V${candidate + 1} items during safety scan, assuming occupied:`, e);
       candidate++;
@@ -508,7 +383,7 @@ async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks) {
   const trackCount = await seq.getVideoTrackCount();
   if (trackIndex >= trackCount) return true; // track doesn't exist yet — nothing to collide with
   const track = await seq.getVideoTrack(trackIndex);
-  const items = await getTrackClipItemsOrThrow(track);
+  const items = await getTrackClipItemsOrThrow(track, ppro);
   for (const it of items) {
     const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
     const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
@@ -604,7 +479,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   const mode = options.mode || "span";
 
   // Check if user has clips selected on timeline
-  const selectedClips = await getSelectedTimelineClips(seq);
+  const selectedClips = await getSelectedVideoClips(ppro, seq);
   const rawClipsWithTimes = [];
   for (const sc of selectedClips) {
     try {
@@ -1043,7 +918,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       const freshSeq2 = await freshProject.getActiveSequence();
       const targetTrackObj = await freshSeq2.getVideoTrack(Number(targetTrack));
       if (targetTrackObj) {
-        const trackItems = await getTrackClipItems(targetTrackObj);
+        const trackItems = await getTrackClipItems(targetTrackObj, ppro);
         if (trackItems && trackItems.length > 0) {
           for (const it of trackItems) {
             const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;

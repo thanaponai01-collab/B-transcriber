@@ -18,6 +18,7 @@
 
 const { runTransaction, activeProjectAndSequence } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
+const { getTrackClipItems } = require("../host/trackItems.js");
 
 const SYNCED_SUFFIX = "_Synced";
 const POLL_MS = 1500;
@@ -27,12 +28,10 @@ const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 async function listClips(ppro, seq, kind) {
   const video = kind === "video";
   const count = await (video ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
-  const types = ppro.Constants && ppro.Constants.TrackItemType;
-  const clipType = types && types.CLIP !== undefined ? types.CLIP : 1;
   const clips = [];
   for (let t = 0; t < count; t++) {
     const track = await (video ? seq.getVideoTrack(t) : seq.getAudioTrack(t));
-    const items = (track && (await track.getTrackItems(clipType, false))) || [];
+    const items = track ? await getTrackClipItems(track, ppro) : [];
     for (const item of items) {
       clips.push({ item, kind, track: t, start: toTicks(await item.getStartTime()),
         end: toTicks(await item.getEndTime()), inPoint: toTicks(await item.getInPoint()) });
