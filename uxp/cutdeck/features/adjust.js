@@ -142,6 +142,7 @@ function createAdjustFeature({
   }
 
   function applySettingChange(patch) {
+    if (!patch || typeof patch !== "object") return;
     if (Object.prototype.hasOwnProperty.call(patch, "audioTrack")) {
       ctl.state.audioTrack = patch.audioTrack;
     }

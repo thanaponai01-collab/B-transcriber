@@ -76,6 +76,7 @@ test("adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates statu
 
   assert.equal(placeArgs.mode, "transition");
   assert.equal(placeArgs.frames, 16);
+  assert.equal(placeArgs.clamp, false);
   assert.equal(ctl.state.status.level, "ready");
   assert.match(ctl.state.status.text, /Added 2 cut transition ALs \(16f 50\/50\) on V3/);
 });

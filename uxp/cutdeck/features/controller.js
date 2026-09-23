@@ -29,7 +29,8 @@ function createController({ render, initialState = {} }) {
         state.status = { text: "Ready", level: "ready" };
       }
     } catch (error) {
-      state.status = { text: error.message || String(error), level: "error" };
+      const text = (error && error.message) || String(error);
+      state.status = { text, level: "error" };
       console.error(error);
     } finally {
       state.busy = false;
