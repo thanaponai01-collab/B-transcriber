@@ -221,7 +221,7 @@ subsequence-extraction question. Until Phase 0 reports, no backend is chosen and
 node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
-`workflow.js` contains the Premiere operations; `core/rpc.js` (mirrored from `panel/core/`, shared with the CEP panel) owns the helper socket and
+`workflow.js` contains the Premiere operations; `core/rpc.js` owns the helper socket and
 its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
 existing CLI in a subprocess.
 The helper on port 7891 is the one server to start (`Start CutDeck.cmd`). The split probe
@@ -266,7 +266,7 @@ the source media? It also records this build's interpolation-mode numbers (Linea
 ### Quick-effect preset buttons (Adj & FX page)
 
 Below the Adjustment Layer card, up to `MAX_QUICK_PRESETS` (currently 9, in
-`panel/core/panel.js`) captured presets each get their own button, laid out as a 3x3 grid of
+`core/panel.js`) captured presets each get their own button, laid out as a 3x3 grid of
 small buttons. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Layer card itself
 (span / per-clip / 50-50 cut transition) — clicking one both places the AL that way AND
 applies that preset's real captured effect to every AL it just placed, via
@@ -281,7 +281,7 @@ and saves it to its own `localStorage` key (`cutdeck.fx.presets`), separate from
 `cutdeck.adj.settings` so a bad/oversized preset can't corrupt core settings.
 
 Below the Capture row, every captured preset gets a rename/remove row
-(`#fx-preset-manage-list`, `panel/core/panel.js`'s `renderPresetManageList`/
+(`#fx-preset-manage-list`, `core/panel.js`'s `renderPresetManageList`/
 `bindPresetManage`): edit the text field (renames on blur/Enter) or click × (removes it and its
 quick-effect button immediately — no confirmation, same as every other destructive action in
 this panel). Rename/remove are plain `localStorage` writes, not Premiere calls, so they're

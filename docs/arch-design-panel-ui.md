@@ -1,8 +1,10 @@
 # CutDeck UXP panel — UI audit & module design
 
-> **Superseded note (issue #41, landed):** `cep/` has been deleted — UXP is now the only panel.
-> Every comparison against "the CEP copy" below is historical (this audit predates the deletion);
-> the "One panel or two" decision resolved to (b), and the HELD move at the end of this doc is moot.
+> **Superseded note (issues #41, #49):** `cep/` and the `panel/core/` mirror have been
+> deleted — UXP is now the only panel, and UI source files live directly in `uxp/cutdeck/core/`
+> (issue #49). Every comparison against "the CEP copy" or mention of `panel/core/` below is
+> historical (this audit predates the deletions); the "One panel or two" decision resolved
+> to (b), and the HELD move at the end of this doc is moot.
 
 **Scope.** The UXP panel's user interface: `uxp/cutdeck/index.html` and the DOM-touching parts of
 `uxp/cutdeck/main.js`, with `cep/cutdeck/client/` compared at the class/id level as the rival copy.

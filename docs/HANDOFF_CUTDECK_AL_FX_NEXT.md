@@ -102,6 +102,6 @@ and whether swap and strip need a modifier key or a confirmation.
   silently. Verify names against the d.ts.
 - **Read Premiere's own log** for runtime errors:
   `%APPDATA%\Adobe\Premiere Pro\Logs\UXPLogs_*.log`.
-- **Keep `panel/core/*` as the source.** Edit there, then run `scripts/sync_panel_core.py`.
-  Only `core/panel.js` may touch the DOM (see `tests/panel_ui_contract.test.cjs`).
+- **Edit `uxp/cutdeck/core/*` in place.** There is no mirror (issue #49).
+  Only `core/panel.js` and `core/alignPanel.js` may touch the DOM (see `tests/panel_ui_contract.test.cjs`).
 - **Tests:** `node --test tests/*.cjs` gave 190 passing tests at handoff time.

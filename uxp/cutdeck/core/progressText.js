@@ -1,5 +1,4 @@
-/* Status line shown while the helper processes a cut job, shared by the CEP and UXP panels
- * (source of truth: panel/core/progressText.js; run scripts/sync_panel_core.py after editing). */
+/* Status line shown while the helper processes a cut job. */
 
 (function (global) {
   const SUFFIX = "cuts stay inside marked In/Out.";

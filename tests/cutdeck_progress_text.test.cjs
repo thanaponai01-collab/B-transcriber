@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { progressText, FALLBACK } = require("../panel/core/progressText.js");
+const { progressText, FALLBACK } = require("../uxp/cutdeck/core/progressText.js");
 
 test("shows the stage and percentage the helper reported", () => {
   assert.equal(
@@ -39,7 +39,7 @@ test("percentage is rounded and clamped to 0-100", () => {
 test("CEP script tag exposes the window global the panel reads", () => {
   const sandbox = { window: undefined };
   const source = require("node:fs").readFileSync(
-    require("node:path").join(__dirname, "../panel/core/progressText.js"), "utf8");
+    require("node:path").join(__dirname, "../uxp/cutdeck/core/progressText.js"), "utf8");
   new Function("module", "window", source.replace("typeof window !== \"undefined\" ? window : globalThis", "window"))(undefined, sandbox);
   assert.equal(typeof sandbox.CutDeckProgressText.progressText, "function");
 });

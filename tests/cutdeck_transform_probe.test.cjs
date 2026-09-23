@@ -326,7 +326,7 @@ test("the transform report renders the real probe output as text", async () => {
 
 test("the Check Transform menu item is wired through to the probe", () => {
   const html = read("uxp/cutdeck/index.html");
-  const panelJs = read("panel/core/panel.js");
+  const panelJs = read("uxp/cutdeck/core/panel.js");
   const mainJs = read("uxp/cutdeck/main.js");
 
   // reachable: the control exists in the document the panel actually loads

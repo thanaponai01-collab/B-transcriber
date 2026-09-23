@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.join(__dirname, "..");
-const panelJsPath = path.join(root, "panel", "core", "panel.js");
+const panelJsPath = path.join(root, "uxp", "cutdeck", "core", "panel.js");
 const panelJsSource = fs.readFileSync(panelJsPath, "utf8");
 const uxpHtmlPath = path.join(root, "uxp", "cutdeck", "index.html");
 const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
@@ -54,12 +54,10 @@ test(`getElementById/classList/textContent/addEventListener appear in no panel f
   assert.deepEqual(offenders, [], `DOM touches found outside the UI seam: ${offenders}`);
 });
 
-test("every seam file named in the allowlist actually exists in both source and mirror", () => {
+test("every seam file named in the allowlist actually exists", () => {
   // Guards the allowlist itself: a typo here would silently exempt nothing (harmless) or, on a
   // rename, silently exempt a file that no longer exists while the real one goes unchecked.
   for (const rel of UI_SEAM_FILES) {
-    const name = path.basename(rel);
-    assert.ok(fs.existsSync(path.join(root, "panel", "core", name)), `panel/core/${name} missing`);
     assert.ok(fs.existsSync(path.join(root, "uxp", "cutdeck", rel)), `uxp/cutdeck/${rel} missing`);
   }
 });
@@ -89,8 +87,8 @@ test("panel.render is idempotent: a second call with the same state mutates noth
   global.document = document;
   global.window = { location: { reload: () => {} } };
   global.navigator = {};
-  delete require.cache[require.resolve("../panel/core/panel.js")];
-  const panel = require("../panel/core/panel.js");
+  delete require.cache[require.resolve("../uxp/cutdeck/core/panel.js")];
+  const panel = require("../uxp/cutdeck/core/panel.js");
 
   const fixtureState = {
     sequence: { name: "Sequence 1", inSeconds: 12.5, outSeconds: 45.75, audioTrackCount: 2 },

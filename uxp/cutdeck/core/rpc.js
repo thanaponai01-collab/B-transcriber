@@ -1,5 +1,4 @@
-/* Helper transport, shared by the CEP and UXP panels (source of truth: panel/core/rpc.js;
-   run scripts/sync_panel_core.py after editing). Connects to the CutDeck Python helper on
+/* Helper transport for the CutDeck panel. Connects to the CutDeck Python helper on
    ws://127.0.0.1:7891.
 
    Premiere can deny the socket on a cold start with "Permission denied to the url

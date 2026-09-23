@@ -1,15 +1,12 @@
 /* Design tokens for the CutDeck panel UI. This file owns every color used in the panel —
    background/border/text/stroke/accent-color must reference a token here, never a literal
-   hex value in a panel's own markup or the mirrors of this file.
+   hex value in a panel's own markup.
 
    Source: lifted from uxp/cutdeck/index.html's inline <style> block (93 unique hex colors,
    132 uses, 0 variables — see issue #44). Values that were near-duplicate drift on the same
    surface/line/text role (e.g. four different greys all meaning "hover surface") were merged
    into one token; values with a distinct role were kept distinct even when only used once,
-   so a hover border never becomes invisible against its own background.
-
-   uxp/cutdeck/core/theme.css and cep/cutdeck/client/core/theme.css are generated mirrors —
-   edit only this file, then run scripts/sync_panel_core.py. */
+   so a hover border never becomes invisible against its own background. */
 
 :root {
   /* Surfaces: bg-0 deepest inset panel -> bg-4 strongest hover/pressed */

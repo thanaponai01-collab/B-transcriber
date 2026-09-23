@@ -24,7 +24,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const manifest = JSON.parse(read("uxp/cutdeck/manifest.json"));
 const html = read("uxp/cutdeck/index.html");
 const mainJs = read("uxp/cutdeck/main.js");
-const alignJsPath = path.join(root, "panel", "core", "alignPanel.js");
+const alignJsPath = path.join(root, "uxp", "cutdeck", "core", "alignPanel.js");
 
 // --- manifest ------------------------------------------------------------------------------
 
@@ -83,7 +83,7 @@ test("the transform panel's ids do not collide with the Cut & Sync panel's", () 
   const source = fs.readFileSync(alignJsPath, "utf8");
   const alignIds = [...source.matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]);
   const panelIds = new Set(
-    [...fs.readFileSync(path.join(root, "panel", "core", "panel.js"), "utf8")
+    [...fs.readFileSync(path.join(root, "uxp", "cutdeck", "core", "panel.js"), "utf8")
       .matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]));
   const collisions = alignIds.filter((id) => panelIds.has(id));
   assert.deepEqual(collisions, [], `both seams claim these ids: ${collisions}`);
@@ -156,8 +156,8 @@ function makeStub() {
 }
 
 function loadAlignPanel() {
-  delete require.cache[require.resolve("../panel/core/alignPanel.js")];
-  return require("../panel/core/alignPanel.js");
+  delete require.cache[require.resolve("../uxp/cutdeck/core/alignPanel.js")];
+  return require("../uxp/cutdeck/core/alignPanel.js");
 }
 
 /* Stands in for the rootNode Premiere hands show(). It must reparent the way a real
