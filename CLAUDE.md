@@ -4,6 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Full file-by-file system spec, structure, and workflow: see [SYSTEM_SPEC.md](SYSTEM_SPEC.md).
 
+## Rules (read first)
+
+1. **Invoke `/karpathy-guidelines` before writing, reviewing, or refactoring code.**
+   Surgical changes, no overcomplication, stated assumptions, verifiable success criteria.
+
+2. **Prove an Adobe API exists before writing code that uses it.** Before writing
+   anything for the UXP panel (`uxp/cutdeck/`) or any Premiere / UXP call, look the
+   API up and confirm it is really there — never write it from memory:
+   - Premiere UXP: Adobe's official typings — `npm pack @adobe/premierepro@26.2.1`
+     into the scratchpad, read `package/src/premierepro.d.ts` (more complete than the
+     developer.adobe.com class pages).
+   - UXP platform (storage, shell, network, etc.): the Adobe UXP docs source,
+     `github.com/AdobeDocs/uxp` (`src/pages/uxp-api/reference-js/`) — some
+     developer.adobe.com pages for it now 404.
+   - Typings don't give numeric enum values or runtime semantics (e.g. keyframe time
+     frames) — those still need a live probe in Premiere before being relied on.
+
+   Say in the change which source confirmed the API. **If the feature does not exist
+   in UXP, don't fake or approximate it in the panel — build it in the CutDeck helper**
+   (`python -m cutdeck.xml_bridge`, `ws://127.0.0.1:7891`; exposed to agents via the
+   MCP server `cutdeck/mcp_server.py`), and have the panel call it over `core/rpc.js`.
+
 ## Commands
 
 ```bash
