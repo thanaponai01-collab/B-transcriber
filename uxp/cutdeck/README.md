@@ -1,6 +1,6 @@
 # CutDeck for Premiere — XML workflow
 
-**Role: production.** This is the only CutDeck panel — `cep/cutdeck` was retired (issue #41) once Adobe confirmed CEP's retirement and the live acceptance gate (issue #38) passed. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
+**Role: production.** This is the only CutDeck panel. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
 
 Mark **In / Out** on the timeline, click **Rough Cut In–Out**, and continue in
 a newly imported sequence. CutDeck automatically exports and imports XML using
@@ -49,8 +49,7 @@ coexist.
 `Start CutDeck.cmd` as a Windows Scheduled Task that runs at login, instead
 of relying on the panel's launch-on-click fallback above. It avoids the
 one-time consent prompt entirely, and the helper is simply already there
-every session — the same tradeoff CEP's silent auto-spawn makes, without
-needing `child_process`. The panel's own launch (previous step) exists for
+every session, without needing launch-on-click consent prompts. The panel's own launch (previous step) exists for
 when that isn't set up, not as a replacement for it.
 
 ## Use
@@ -167,50 +166,14 @@ keyframed effects at split points can be refused; speed changes are not validate
 by the existing transformer. XML recutting removes link groups, so synchronized
 clip positions do not imply linked selections when dragging clips afterward.
 
-## Native assembly (in progress — Phase 0/1 only)
+## Layout
 
-A second, separate workflow is being built alongside the XML one: mark In/Out and
-append that range to a reusable rough-cut sequence, with no export, no import and
-no helper. See `docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md`. What exists today:
+The panel follows the layered architecture and conventions defined in [docs/arch-design-cutdeck-panel.md](../../docs/arch-design-cutdeck-panel.md):
 
-- `timelineRange.js` — normalizes Premiere's marks into an exact half-open
-  `[in, outExclusive)` interval in BigInt ticks.
-- `assemblyPlan.js` — pure intersection and placement math (handoff section 6).
-- `capabilityProbe.js` — Phase 0 probe 1, behind the **Check Premiere timing
-  (read-only)** button.
-
-No production code path mutates a timeline yet. (The `assembleProbe.js` mutation
-probe from issue #25 was retired unrun on 2026-09-21: the XML recut route made
-native assembly of the *Mark/Apply* kind unnecessary.)
-
-### Run the timing probe (a gesture waiting on a human)
-
-`timelineRange.OUT_CONVENTION` is deliberately `null`, and every call throws until
-it is set. Adobe's reference does not say whether `Sequence.getOutPoint()` names
-the last **included** frame or the first **excluded** one, and guessing is wrong by
-exactly one frame on every single add — invisible once, obvious after fifty.
-
-1. Open any sequence. The helper does **not** need to be running.
-2. Set In and Out **on the same frame** (press `I` then `O` without moving the
-   playhead). This is the crispest test; any range also works.
-3. Click **Check Premiere timing (read-only)**. Nothing is created or changed.
-4. Read the VERDICT line, and cross-check `durationIfExclusive` /
-   `durationIfInclusive` against the duration Premiere itself shows in the Program
-   Monitor. Whichever matches is this build's convention.
-5. Set `OUT_CONVENTION` in `timelineRange.js` to `"exclusive"` or `"inclusive"`,
-   and record the full report (it is also in the UXP Developer Tool console as
-   JSON) on issue #25.
-
-The same report answers the rest of probe 1 in passing: the true ticks-per-frame
-and whether it divides 254016000000 exactly at a known rate, what an unset mark
-returns on this build, whether `getZeroPoint` exists, and whether this UXP runtime
-supports BigInt at all.
-
-### Still not built
-
-Phase 0 probes 4-6 (sequence insertion, undo/failure, 50 repeats) and the
-subsequence-extraction question. Until Phase 0 reports, no backend is chosen and
-`assemblyHost.js` / `assemblySession.js` do not exist.
+- **UI Seams (`core/`):** `core/panel.js` and `core/alignPanel.js` own all DOM access under a pure `render(state)` / `bind(intents)` contract. Styling is tokenized in `core/theme.css`.
+- **Composition & Controllers (`main.js`):** Composition root wiring UI intents to feature actions and host operations.
+- **Timeline & Host (`timeline/`, `transform/`):** Resolution detection, adjustment layer creation/placement, keyframe capture/apply, and native transform geometry.
+- **Conventions:** Layer rule (Composition → UI → features → domain → host → `premierepro`), single owner per host concern, direct in-place editing under `uxp/cutdeck/core/` (no source mirror). See the module table and conventions in `docs/arch-design-cutdeck-panel.md`.
 
 ## Development
 

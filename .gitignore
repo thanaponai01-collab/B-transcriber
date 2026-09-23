@@ -66,3 +66,6 @@ transcribe/finetune/lora_out/
 # Environment
 .env
 .env.*
+
+# UXP package output
+uxp/cutdeck/package/
