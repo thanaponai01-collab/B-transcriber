@@ -1,9 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRpc } = require("../uxp/cutdeck/core/rpc.js");
+const fs = require("node:fs");
+const path = require("node:path");
+const { createRpc, URL } = require("../uxp/cutdeck/core/rpc.js");
 
 /* Premiere's cold-start denial, thrown out of the WebSocket constructor. */
-const DENIED = "Permission denied to the url ws://127.0.0.1:7891. Manifest entry not found.";
+const DENIED = `Permission denied to the url ${URL}. Manifest entry not found.`;
 
 function fakeSocket() {
   const socket = {
@@ -100,3 +102,78 @@ test("each request opens and closes its own connection", async () => {
   assert.equal(h.attempts.length, 2);
   assert.ok(h.attempts.every((s) => s.closed));
 });
+
+test("rpc default URL is ws://localhost:7891 and is passed to createSocket", async () => {
+  assert.equal(URL, "ws://localhost:7891");
+
+  let connectedUrl = null;
+  const rpc = createRpc({
+    createSocket: (url) => {
+      connectedUrl = url;
+      const s = fakeSocket();
+      s.send = () => {
+        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true }) }), 0);
+      };
+      setTimeout(() => { if (s.onopen) s.onopen({}); }, 0);
+      return s;
+    },
+    attempts: 1,
+  });
+
+  const res = await rpc({ type: "ping" });
+  assert.deepEqual(res, { ok: true });
+  assert.equal(connectedUrl, "ws://localhost:7891");
+});
+
+test("createRpc allows custom url override", async () => {
+  let connectedUrl = null;
+  const custom = "ws://custom-helper:9999";
+  const rpc = createRpc({
+    url: custom,
+    createSocket: (url) => {
+      connectedUrl = url;
+      const s = fakeSocket();
+      s.send = () => {
+        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true }) }), 0);
+      };
+      setTimeout(() => { if (s.onopen) s.onopen({}); }, 0);
+      return s;
+    },
+    attempts: 1,
+  });
+
+  const res = await rpc({ type: "ping" });
+  assert.deepEqual(res, { ok: true });
+  assert.equal(connectedUrl, custom);
+});
+
+test("manifest.json network permissions strictly match rpc URL and contain no invalid IP literals", () => {
+  const manifestPath = path.join(__dirname, "..", "uxp", "cutdeck", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const domains = manifest.requiredPermissions.network.domains;
+
+  assert.ok(Array.isArray(domains), "network.domains must be an array, not a string or 'all'");
+  assert.notEqual(domains, "all");
+  assert.ok(domains.includes(URL), `network.domains must include rpc default URL ${URL}`);
+  assert.equal(domains.length, 1, "network.domains must be narrowed to the single needed helper URL");
+
+  // Invariant: UXP drops IP literals because _hasAValidTopLevelDomain uses tldjs with /localhost/.
+  // Assert no entry uses raw IPv4 syntax (e.g. 127.0.0.1).
+  for (const d of domains) {
+    assert.doesNotMatch(d, /\d+\.\d+\.\d+\.\d+/, "manifest domain must not use IP literals");
+  }
+});
+
+test("retired socket probe files and registrations do not exist", () => {
+  const probePath = path.join(__dirname, "..", "uxp", "cutdeck", "probe.js");
+  assert.equal(fs.existsSync(probePath), false, "probe.js must be deleted");
+
+  const { PROBES } = require("../uxp/cutdeck/features/probes.js");
+  assert.equal(PROBES.some((p) => p.id === "socket"), false, "PROBES must not contain socket probe");
+
+  const htmlPath = path.join(__dirname, "..", "uxp", "cutdeck", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.doesNotMatch(html, /id=["']socketprobe["']/, "index.html must not contain socketprobe element");
+  assert.doesNotMatch(html, /data-probe=["']socket["']/, "index.html must not contain data-probe='socket'");
+});
+
