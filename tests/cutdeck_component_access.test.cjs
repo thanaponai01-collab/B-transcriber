@@ -173,4 +173,52 @@ test("isFixedComponent matches Premiere's own fixed effects, case- and whitespac
   assert.equal(components.isFixedComponent(" opacity "), true);
   assert.equal(components.isFixedComponent("Time Remapping"), true);
   assert.equal(components.isFixedComponent("Gaussian Blur"), false);
+  assert.equal(components.isFixedComponent(null), false);
+  assert.equal(components.isFixedComponent(""), false);
 });
+
+// --- Hostile & Edge Case Tests -------------------------------------------------------------
+
+test("getTrackClipItemsOrThrow returns [] for null or malformed track", async () => {
+  assert.deepEqual(await trackItems.getTrackClipItemsOrThrow(null), []);
+  assert.deepEqual(await trackItems.getTrackClipItemsOrThrow({}), []);
+  assert.deepEqual(await trackItems.getTrackClipItemsOrThrow({ getTrackItems: "not a func" }), []);
+});
+
+test("getSelectedTrackItems gracefully handles seq.getSelection returning non-array items", async () => {
+  const seq = {
+    getSelection: () => Promise.resolve({ items: "invalid" }),
+    getVideoTrackCount: () => Promise.resolve(0),
+    getAudioTrackCount: () => Promise.resolve(0),
+  };
+  const items = await trackItems.getSelectedTrackItems(seq);
+  assert.deepEqual(items, []);
+});
+
+test("getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance", async () => {
+  class MockAudioClip {}
+  const audioItem = new MockAudioClip();
+  audioItem.name = "Audio Stem";
+  audioItem.getIsSelected = () => Promise.resolve(true);
+
+  const videoItem = { name: "Footage", mediaType: "Video", getIsSelected: () => Promise.resolve(true) };
+
+  const seq = {
+    getSelection: () => Promise.resolve([audioItem, videoItem]),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve({ getTrackItems: () => Promise.resolve([videoItem]) }),
+  };
+
+  const ppro = { AudioClipTrackItem: MockAudioClip };
+  const result = await trackItems.getSelectedVideoClips(ppro, seq);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].item, videoItem);
+});
+
+test("unwrapKeyframeValue handles nested nulls and primitives safely", () => {
+  assert.equal(components.unwrapKeyframeValue({ value: null }), null);
+  assert.equal(components.unwrapKeyframeValue({ value: { value: null } }), null);
+  assert.equal(components.unwrapKeyframeValue({ value: 42 }), 42);
+  assert.equal(components.unwrapKeyframeValue({ value: "text" }), "text");
+});
+
