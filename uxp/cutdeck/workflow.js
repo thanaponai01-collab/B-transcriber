@@ -1,5 +1,5 @@
 /* Host operations kept separate from UI so identity and import behavior can be tested. */
-const VERSION = "cutdeck-xml-1";
+const VERSION = "cutdeck-xml-2";
 const guid = (object) => object.guid.toString();
 
 async function capture(ppro) {

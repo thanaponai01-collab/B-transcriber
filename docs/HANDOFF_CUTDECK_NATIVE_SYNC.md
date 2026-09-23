@@ -5,6 +5,38 @@
 API gate), `uxp/cutdeck/README.md`, and this file. Rough Cut is out of scope and keeps its XML
 route.
 
+## Status (2026-09-23): A and B built, waiting on the live run
+
+- **A, done:** `plan_sync` job in `cutdeck/xml_bridge.py` (`VERSION` is now `cutdeck-xml-2`);
+  `plan_sync(..., progress=)` plus `SyncPlan.media_duration_s` (each file's audio length, which
+  the read-back uses as "the file's length"). Tests: `tests/test_cutdeck_plan_sync_bridge.py`.
+  The 200-clip socket test with ~200-char paths is ~54 KB of the 64 KB limit, so **300 clips only
+  fit with shorter paths**.
+- **B, done:** `uxp/cutdeck/timeline/nativeSync.js`, wired to the Sync button in `main.js`;
+  `readSequence`/`groupUnits` moved there from `syncProbe.js`. The Audio Track picker now sits
+  under Rough Cut. Tests: `tests/cutdeck_native_sync.test.cjs`.
+- **No separate probe was built.** Sync only ever edits the `_Synced` copy, and its read-back
+  names each of the four unknowns below if it goes wrong ("did not land", "N ticks off",
+  "other item(s) on the copy", audio count). The first live run is the probe. No fallbacks
+  (one transaction per clip, place-then-move) are written: add one only if the read-back
+  shows it's needed.
+- `workflow.prepareSync` and `follow`'s sync branch are unused by the button now; part C
+  removes them.
+- **Live 2026-09-23:** the first run failed with "The script object is no longer valid": a
+  `createEmptySelection` selection is only valid inside its callback (Adobe's
+  eslint-plugin-premierepro rule `no-empty-selection-escape`). Fixed by building the selection and
+  the remove action inside that callback, within the transaction. The re-run worked (user report).
+  Still to confirm before part C: the result matches the user's manual sync on a real shoot, and
+  one Ctrl+Z undoes it. **Confirmed by the user the same day**: placement, links, one Ctrl+Z.
+- **Live 2026-09-23, Renfest shoot:** an unrelated clip (HOST SEGMENTS) was "synced" on top of the
+  interviews: coarse PSR 9-12 is chance level against a 37-min session, one piece passed, and the
+  planner fell back to the coarse start when the fine match refused it. Fixed: the fine match
+  must confirm (stepping up to `FINE_TRIES` windows across the overlap), or the clip is unmatched.
+- **User requests, same day:** clips that can't sync lie flat on the first V/A tracks after a
+  `UNPLACED_GAP_S` (30 s) gap, spaced by their whole file; and every panel start restarts the
+  helper (`restart` request: the helper spawns its own replacement; refused mid-job, skipped
+  while a job waits to be resumed).
+
 ## Why this exists
 
 Today's Sync exports the sequence as FCP7 XML, re-stacks it in the helper (`cutdeck/xml_sync.py`)

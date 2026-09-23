@@ -5,6 +5,7 @@ const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
 const syncProbe = require("./syncProbe.js");
+const nativeSync = require("./timeline/nativeSync.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
 const alignPanel = require("./core/alignPanel.js");
@@ -125,7 +126,21 @@ const rpc = createRpc({
   onRetry: (attempt, total) => setStatus(`Connecting to helper… attempt ${attempt} of ${total}.`, "busy"),
 });
 
+// Every panel start restarts a running helper so edited helper code takes effect — unless a
+// previous job still waits to be resumed: that job lives only in the running helper's memory.
+// Quiet: no retry messages. Anything that needs the helper waits for this first, so it can't
+// launch a second helper while the first is replacing itself.
+const quietRpc = createRpc({});
+let helperRestart = Promise.resolve();
+function restartHelperOnStart() {
+  if (lastJob()) return;
+  helperRestart = helperStart.restartHelper({ rpc: quietRpc, version: workflow.VERSION })
+    .then((outcome) => console.log("CutDeck helper on panel start:", outcome))
+    .catch((error) => setStatus(error.message, "error"));
+}
+
 async function ensureHelper() {
+  await helperRestart;
   return helperStart.ensureHelperRunning({
     rpc,
     version: workflow.VERSION,
@@ -307,13 +322,14 @@ async function doCut() {
   await follow(job);
 }
 
+// Native Sync: the helper matches every clip by its own audio, the panel places them in a
+// <name>_Synced copy. No XML, and no Audio Track setting (that is Rough Cut's).
 async function doSync() {
   if (lastJob()) throw new Error("Resume or dismiss the previous job before starting another operation.");
-  await ensureHelper();
-  const snap = await doRefresh();
-  setStatus("Exporting sequence XML for multi-camera sync…", "busy");
-  const job = await workflow.prepareSync(ppro, rpc, snap, { audio_track: state.audioTrack }, save);
-  await follow(job);
+  const result = await nativeSync.syncSequence(ppro, {
+    rpc, ensureHelper, onStatus: (text) => setStatus(text, "busy"),
+  });
+  setStatus(result.text, result.problems.length ? "error" : "ready");
 }
 
 async function doResume() {
@@ -662,6 +678,7 @@ try {
 const savedJob = lastJob();
 state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 panel.render(state);
+restartHelperOnStart();
 
 // Load presets from the linked folder, then automatically read and display timeline marks.
 // A preset-folder problem must outlive the "Ready" that the mark refresh would otherwise

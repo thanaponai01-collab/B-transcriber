@@ -24,7 +24,7 @@ from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
-VERSION = "cutdeck-xml-1"
+VERSION = "cutdeck-xml-2"  # -2: plan_sync (native Sync)
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -170,6 +170,41 @@ def _rough_cut_arguments(req: dict) -> dict:
                 start_frame=start_frame, end_frame=end_frame)
 
 
+def _plan_sync_clips(req: dict) -> list:
+    """Validate a `plan_sync` request's clips; nothing runs on a bad one."""
+    from cutdeck.sync_plan import ClipInput
+    clips = req.get("clips")
+    if not isinstance(clips, list) or not clips:
+        raise ValueError("plan_sync needs a non-empty list of clips")
+    result, seen = [], set()
+    for clip in clips:
+        if not isinstance(clip, dict):
+            raise ValueError("Each clip must be an object")
+        clip_id, duration = clip.get("id"), clip.get("duration_s")
+        if not isinstance(clip_id, str) or not clip_id or clip_id in seen:
+            raise ValueError("Each clip needs a unique, non-empty string id")
+        if type(duration) not in (int, float) or not 0 < duration < 1e6:
+            raise ValueError(f"Clip {clip_id}: duration_s must be a positive number of seconds")
+        seen.add(clip_id)
+        result.append(ClipInput(clip_id, Path(_input_file(clip.get("path"))), float(duration)))
+    return result
+
+
+def _load_audio(path, sample_rate, start_s, duration_s):
+    """sync_plan's Loader argument order, over cutdeck.sync's keyword-only extractor."""
+    from cutdeck.sync import extract_mono_audio
+    return extract_mono_audio(path, start_s=start_s, duration_s=duration_s, sample_rate=sample_rate)
+
+
+def plan_to_json(plan) -> dict:
+    return {"placements": [{"id": p.clip_id, "status": p.status, "start_s": p.start_s,
+                            "session": p.session, "matched_to": p.matched_to,
+                            "confidence": p.confidence, "drift_ms": p.drift_ms, "reason": p.reason,
+                            "media_duration_s": plan.media_duration_s.get(p.clip_id)}
+                           for p in plan.placements],
+            "sessions": plan.sessions, "duration_s": plan.duration_s}
+
+
 class XmlJobs:
     def __init__(self, directory: Path):
         self.directory = directory.resolve()
@@ -177,6 +212,8 @@ class XmlJobs:
         self.jobs: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
         self.active: str | None = None
+        self.restarting = False
+        self.stop = asyncio.Event()  # set once a `restart` reply has been sent
 
     async def dispatch(self, req: dict) -> dict:
         if not isinstance(req, dict):
@@ -185,7 +222,14 @@ class XmlJobs:
         if kind == "hello":
             if req.get("version") != VERSION:
                 raise ValueError("Panel/helper version mismatch")
-            return {"version": VERSION}
+            return {"version": VERSION, "pid": os.getpid()}
+        if kind == "restart":
+            # The panel asks on every start so edited helper code is picked up. Jobs live in this
+            # process's memory, so never while one runs.
+            if self.active:
+                raise ValueError("CutDeck is processing a job; it restarts once that finishes")
+            self.restarting = True
+            return {"restarting": True}
         if kind == "prepare" or kind == "prepare_sync":
             job_id, folder = self._allocate()
             is_sync = (kind == "prepare_sync")
@@ -220,6 +264,13 @@ class XmlJobs:
                    "result_path": str(folder / "result.json"),
                    "log_path": str(folder / "process.log")}
             return self._launch(job, self._run_transcribe(job))
+        if kind == "plan_sync":
+            clips = _plan_sync_clips(req)
+            job_id, folder = self._allocate()
+            job = {"job_id": job_id, "job_type": "plan_sync", "state": "running",
+                   "clips": [{"id": c.id, "path": str(c.path), "duration_s": c.duration_s} for c in clips],
+                   "progress": {"pct": 0, "stage": "Reading audio"}}
+            return self._launch(job, self._run_plan_sync(job, clips))
         if kind == "submit_rough_cut":
             arguments = _rough_cut_arguments(req)
             job_id, folder = self._allocate()
@@ -412,6 +463,26 @@ class XmlJobs:
             self.active = None
             self._save(job)
 
+    async def _run_plan_sync(self, job, clips):
+        def progress(done, total, stage):  # runs on the worker thread; one dict swap is atomic
+            job["progress"] = {"pct": round(100 * done / total) if total else 0,
+                               "stage": f"{stage} {done}/{total}"}
+        try:
+            from cutdeck.sync_plan import plan_sync
+            plan = await asyncio.to_thread(plan_sync, clips, _load_audio, progress)
+            job["plan"] = plan_to_json(plan)
+            job["state"] = "ready"
+        except asyncio.CancelledError:
+            job["state"] = "failed"
+            job["message"] = "Helper stopped during sync; start a new sync"
+            raise
+        except Exception as exc:
+            job["state"] = "failed"
+            job["message"] = f"Sync matching failed: {exc}"
+        finally:
+            self.active = None
+            self._save(job)
+
     async def _run_sync(self, job):
         try:
             source = Path(job["source_path"])
@@ -464,10 +535,22 @@ async def serve(jobs: XmlJobs, port: int = PORT):
             except Exception as exc:
                 response = {"ok": False, "message": str(exc)}
             await socket.send(json.dumps(response, ensure_ascii=False))
+            if jobs.restarting:
+                jobs.stop.set()
 
     # Reject ordinary website origins; the local UXP client has no web origin.
     return await ws_serve(connection, "127.0.0.1", port,
                           origins=[None, "null", "file://"], max_size=65536)
+
+
+def spawn_replacement(port: int, jobs_dir: Path):
+    """Start a fresh helper, detached and windowless, that outlives this one."""
+    log = open(jobs_dir / "helper.log", "ab")
+    extra = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+             if os.name == "nt" else {"start_new_session": True})
+    subprocess.Popen([sys.executable, "-m", "cutdeck.xml_bridge", "--port", str(port), "--jobs-dir", str(jobs_dir)],
+                     cwd=ROOT, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                     stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **extra)
 
 
 def main():
@@ -482,7 +565,10 @@ def main():
         server = await serve(jobs, args.port)
         print(f"CutDeck ready on ws://127.0.0.1:{args.port}", flush=True)
         async with server:
-            await asyncio.Future()
+            await jobs.stop.wait()
+            server.close()
+            await server.wait_closed()  # free the port before the replacement binds it
+        spawn_replacement(args.port, jobs.directory)
 
     try:
         asyncio.run(run())

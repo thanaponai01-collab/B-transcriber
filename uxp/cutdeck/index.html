@@ -133,14 +133,7 @@
 
   <!-- PAGE 1: CUT & SYNC -->
   <div id="view-edit" class="view-panel">
-    <div class="control-group">
-      <label class="control-label" for="audio">Audio Track</label>
-      <select id="audio" data-act="audio">
-        <option value="" selected>Auto</option>
-      </select>
-    </div>
-
-    <div id="sync" class="btn-primary" role="button" data-act="sync">
+    <div id="sync" class="btn-primary" role="button" data-act="sync" title="Matches every clip by its own audio and lays each on its own tracks in a copy named &lt;sequence&gt;_Synced. Your sequence is not edited. The Audio Track setting below is for Rough Cut only.">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
       </svg>
@@ -151,6 +144,13 @@
       <div class="section-line"></div>
       <span class="section-tag">Rough Cut</span>
       <div class="section-line"></div>
+    </div>
+
+    <div class="control-group">
+      <label class="control-label" for="audio">Audio Track</label>
+      <select id="audio" data-act="audio">
+        <option value="" selected>Auto</option>
+      </select>
     </div>
 
     <div class="control-group">

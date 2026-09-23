@@ -21,6 +21,8 @@
 
 const { attempt, finding, formatFindings } = require("./capabilityProbe.js");
 const { runInTransaction } = require("./timeline/componentAccess.js");
+// Shared with native Sync, which owns them.
+const { readSequence, groupUnits } = require("./timeline/nativeSync.js");
 
 const TICKS_PER_SECOND = 254016000000n;
 const SPEED_CLONES = 100;
@@ -28,52 +30,6 @@ const TEST_SUFFIX = " — CutDeck sync test";
 
 const big = (t) => BigInt(String(t && t.ticks !== undefined ? t.ticks : t).split(".")[0]);
 const baseName = (p) => String(p || "").split(/[\\/]/).pop();
-
-async function listClips(ppro, seq, kind) {
-  const video = kind === "video";
-  const count = await (video ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
-  const types = ppro.Constants && ppro.Constants.TrackItemType;
-  const clipType = types && types.CLIP !== undefined ? types.CLIP : 1;
-  const clips = [];
-  for (let t = 0; t < count; t++) {
-    const track = await (video ? seq.getVideoTrack(t) : seq.getAudioTrack(t));
-    const items = (track && (await track.getTrackItems(clipType, false))) || [];
-    for (const item of items) {
-      clips.push({ item, kind, track: t, start: big(await item.getStartTime()),
-        end: big(await item.getEndTime()), inPoint: big(await item.getInPoint()) });
-    }
-  }
-  return { count, clips };
-}
-
-async function mediaPath(ppro, item) {
-  const projectItem = await item.getProjectItem();
-  const clip = ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
-  return clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
-}
-
-async function readSequence(ppro, seq) {
-  const video = await listClips(ppro, seq, "video");
-  const audio = await listClips(ppro, seq, "audio");
-  for (const c of [...video.clips, ...audio.clips]) {
-    const read = await attempt("getMediaFilePath", () => mediaPath(ppro, c.item));
-    c.path = read.ok ? read.value : null;
-  }
-  return { videoTracks: video.count, audioTracks: audio.count, video: video.clips, audio: audio.clips };
-}
-
-/* A camera clip = one video item plus every audio item from the same file at the same start and
-   source In. The API cannot read links, so this is how native Sync will group them too. */
-function groupUnits(video, audio) {
-  const key = (c) => `${c.path}|${c.start}|${c.inPoint}`;
-  const audioByKey = new Map();
-  for (const a of audio) {
-    if (!a.path) continue;
-    if (!audioByKey.has(key(a))) audioByKey.set(key(a), []);
-    audioByKey.get(key(a)).push(a);
-  }
-  return video.filter((v) => v.path).map((v) => ({ video: v, audio: audioByKey.get(key(v)) || [] }));
-}
 
 const startingAt = (clips, start) => clips.filter((c) => c.start === start);
 const trackList = (clips) => [...new Set(clips.map((c) => c.track + 1))].join(", ");

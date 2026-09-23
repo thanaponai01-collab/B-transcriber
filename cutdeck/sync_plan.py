@@ -40,14 +40,18 @@ MIN_DURATION_S = 0.5
 MIN_RMS = 1e-4
 FINE_WINDOW_S = 20.0
 FINE_MARGIN_S = 0.1
+FINE_TRIES = 6  # fine windows tried across the overlap before a coarse match counts as chance
 COARSE_CHUNK_S = 60.0
 MAX_DRIFT_PPM = 500.0  # widens the fine search with distance from where the coarse match was made
 DRIFT_CHECK_MIN_OVERLAP_S = 60.0
 DRIFT_WARN_MS = 20.0
 SESSION_GAP_S = 2.0
+UNPLACED_GAP_S = 30.0  # between the last synced session and the clips that could not be synced
 
 # loader(path, sample_rate, start_s, duration_s) -> mono float32. start/duration None = whole file.
 Loader = Callable[[Path, int, Optional[float], Optional[float]], np.ndarray]
+# progress(done, total, stage): "Reading audio" per clip read, then "Matching" per clip tried.
+Progress = Callable[[int, int, str], None]
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,8 @@ class SyncPlan:
     placements: list[Placement]
     sessions: int
     duration_s: float
+    # Length of each readable clip's audio, whole file: what a full-length placement must span.
+    media_duration_s: dict[str, float] = field(default_factory=dict)
 
     @property
     def unplaced(self) -> list[Placement]:
@@ -165,9 +171,20 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
     other, other_start = clips[best], session.starts[best]
     o0, o1 = _overlap(coarse, coarse + clip.duration_s, other_start, other_start + other.duration_s)
     margin = lambda at: FINE_MARGIN_S + abs(at - (coarse + matched_at)) * MAX_DRIFT_PPM * 1e-6
-    start = _fine_start(loader, clip, other, other_start, coarse, o0, margin(o0))
+    # The overlap may open on silence, so step through it until a fine window confirms.
+    start, at = None, o0
+    for _ in range(FINE_TRIES):
+        if at > o1 - MIN_DURATION_S:
+            break
+        start = _fine_start(loader, clip, other, other_start, coarse, at, margin(at))
+        if start is not None:
+            break
+        at += FINE_WINDOW_S
     if start is None:
-        start = coarse
+        # A coarse peak the fine match cannot confirm is chance. Live 2026-09-23: unrelated audio
+        # scored coarse PSR 9-12 against a 37-minute session, one piece passed, and falling back
+        # to the coarse start "synced" it on top of the interviews.
+        return None
     drift_ms = None
     if o1 - o0 >= DRIFT_CHECK_MIN_OVERLAP_S:
         late_at = o1 - FINE_WINDOW_S
@@ -179,17 +196,21 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
                      else f"drifts {drift_ms:+.0f} ms across the overlap — check the end")
 
 
-def plan_sync(clips: Sequence[ClipInput], loader: Loader) -> SyncPlan:
+def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Progress] = None) -> SyncPlan:
     """Place every clip. Input order is the user's timeline order and orders the sessions."""
+    report = progress or (lambda done, total, stage: None)
     rejected: dict[str, Placement] = {}
     usable: dict[str, _Clip] = {}
+    media: dict[str, float] = {}
     for order, c in enumerate(clips):
+        report(order, len(clips), "Reading audio")
         try:
             coarse = np.asarray(loader(c.path, COARSE_RATE, None, None), dtype=np.float32)
         except Exception as exc:  # no audio stream, offline, unreadable: this clip only
             rejected[c.id] = Placement(c.id, "no_audio", 0.0, reason=f"no usable audio ({exc})")
             continue
         duration = len(coarse) / COARSE_RATE
+        media[c.id] = duration
         if duration < MIN_DURATION_S:
             rejected[c.id] = Placement(c.id, "too_short", 0.0, reason="too short to match")
         elif float(np.sqrt(np.mean(coarse.astype(np.float64) ** 2))) < MIN_RMS:
@@ -200,18 +221,20 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader) -> SyncPlan:
     pending = sorted(usable.values(), key=lambda c: (-c.duration_s, c.order))
     sessions: list[_Session] = []
     while pending:
+        report(len(usable) - len(pending), len(usable), "Matching")
         anchor = pending.pop(0)
         session = _Session({anchor.input.id: 0.0}, {anchor.input.id: Placement(anchor.input.id, "anchor", 0.0)})
-        progress = True
-        while progress:  # a clip that fails now may match once the session has grown
-            progress = False
+        grew = True
+        while grew:  # a clip that fails now may match once the session has grown
+            grew = False
             for clip in list(pending):
                 placed = _try_place(clip, session, usable, loader)
                 if placed is not None:
                     session.starts[clip.input.id] = placed.start_s
                     session.found[clip.input.id] = placed
                     pending.remove(clip)
-                    progress = True
+                    grew = True
+                    report(len(usable) - len(pending), len(usable), "Matching")
         if len(session.starts) == 1:
             rejected[anchor.input.id] = Placement(anchor.input.id, "unmatched", 0.0,
                                                   reason="its audio matched no other clip")
@@ -230,11 +253,16 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader) -> SyncPlan:
             result[cid] = Placement(cid, p.status, start, n, p.matched_to, p.confidence, p.drift_ms, p.reason)
             end = max(end, start + usable[cid].duration_s)
         cursor = end + SESSION_GAP_S
+    # Unplaced clips sit in a row on shared tracks, after a gap wide enough to see. The panel places
+    # whole files, so each is spaced by the longer of its timeline length and its file's.
+    length = lambda c: max(c.duration_s, media.get(c.id, 0.0))
+    if sessions:
+        cursor += UNPLACED_GAP_S - SESSION_GAP_S
     for c in clips:
         if c.id in rejected:
             p = rejected[c.id]
             result[c.id] = Placement(c.id, p.status, cursor, reason=p.reason)
-            cursor += c.duration_s + SESSION_GAP_S
-    duration = max((p.start_s + next(c.duration_s for c in clips if c.id == p.clip_id) for p in result.values()),
+            cursor += length(c) + SESSION_GAP_S
+    duration = max((p.start_s + length(next(c for c in clips if c.id == p.clip_id)) for p in result.values()),
                    default=0.0)
-    return SyncPlan([result[c.id] for c in clips], len(sessions), duration)
+    return SyncPlan([result[c.id] for c in clips], len(sessions), duration, media)

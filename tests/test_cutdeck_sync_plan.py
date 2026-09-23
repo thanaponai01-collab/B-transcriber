@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cutdeck.sync_plan import COARSE_RATE, FINE_RATE, SESSION_GAP_S, ClipInput, plan_sync
+from cutdeck.sync_plan import COARSE_RATE, FINE_RATE, SESSION_GAP_S, UNPLACED_GAP_S, ClipInput, plan_sync
 
 SR = FINE_RATE
 TOL_S = 0.001
@@ -224,3 +224,53 @@ def test_audio_is_read_whole_only_at_the_coarse_rate():
     assert all(st is None and d is None for r, st, d in calls if r == COARSE_RATE)
     fine = [d for r, st, d in calls if r == FINE_RATE]
     assert fine and max(fine) <= 21
+
+
+# 9. Live 2026-09-23: an unrelated clip's coarse pieces scored PSR 9-12 against a long session
+#    and one passed by chance. The fine match refused it; the clip must go to the back, not be
+#    "synced" on top of the others at the coarse guess.
+def test_a_chance_coarse_peak_the_fine_match_refuses_is_unmatched(monkeypatch):
+    from cutdeck import sync_plan
+    s, ev, other = Shoot(), event(60, seed=13), event(30, seed=14)
+    s.clip("cam", ev, "ev", 0, 60)
+    s.clip("host", other, "other", 0, 30)
+    real = sync_plan.correlate_gcc_phat_detail
+
+    def chance_peak(ref, clip, rate):
+        offset, psr, runner_up = real(ref, clip, rate)
+        if rate == COARSE_RATE and psr < sync_plan.MIN_PSR:  # the live numbers, at a place that overlaps
+            return 10.0, 11.9, 0.78
+        return offset, psr, runner_up
+
+    monkeypatch.setattr(sync_plan, "correlate_gcc_phat_detail", chance_peak)
+    got = by_id(s.plan())
+    assert got["host"].status == "unmatched", got["host"]
+    assert got["host"].start_s >= 60
+
+
+# 10. A real match whose overlap opens on silence: the fine match steps along until it hears the
+#     shared sound, rather than calling the clip unmatched.
+def test_overlap_that_opens_on_silence_still_syncs():
+    s, ev = Shoot(), event(100, seed=15)
+    ev[30 * SR:55 * SR] = 0.0  # 25 s where nobody talks: each mic hears only its own noise
+    s.clip("rec", ev, "ev", 0, 100)
+    s.clip("cam", ev, "ev", 30, 90)
+    plan = s.plan()
+    assert_session_true(plan, s, ["rec", "cam"])
+
+
+# 11. The clips that could not be synced sit apart from the synced ones, in a row, each spaced
+#     by its whole file: the panel places full files on shared tracks, so a clip trimmed on the
+#     timeline must not run into the next one.
+def test_unplaced_clips_follow_a_visible_gap_spaced_by_their_whole_file():
+    import dataclasses
+    s, ev = Shoot(), event(60, seed=16)
+    s.clip("cam", ev, "ev", 0, 60)
+    s.clip("rec", ev, "ev", 10, 50)
+    s.clip("trimmed", event(40, seed=17), "a", 0, 40)
+    s.clip("other", event(20, seed=18), "b", 0, 20)
+    s.clips = [dataclasses.replace(c, duration_s=5.0) if c.id == "trimmed" else c for c in s.clips]
+    got = by_id(s.plan())
+    assert got["trimmed"].status == got["other"].status == "unmatched"
+    assert got["trimmed"].start_s == pytest.approx(60 + UNPLACED_GAP_S, abs=TOL_S)
+    assert got["other"].start_s == pytest.approx(got["trimmed"].start_s + 40 + SESSION_GAP_S, abs=0.01)

@@ -25,7 +25,7 @@ def test_xml_jobs_prepare_sync(tmp_path):
 
         # Hello check
         hello_res = await jobs.dispatch({"type": "hello", "version": VERSION})
-        assert hello_res == {"version": VERSION}
+        assert hello_res["version"] == VERSION
 
         # Prepare sync request
         req = {
