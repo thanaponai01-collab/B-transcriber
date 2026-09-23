@@ -156,7 +156,7 @@ function extractRequires(source) {
 // L1 UI: core/panel.js, core/alignPanel.js, core/progressText.js
 // L2 Features: features/*
 // L3 Domain: workflow.js, helperStart.js, core/rpc.js, presetStore.js, timelineRange.js,
-//            capabilityProbe.js, syncProbe.js, probe.js, assemblyPlan.js, probes/*,
+//            capabilityProbe.js, syncProbe.js, probe.js, probes/*,
 //            timeline/adjustmentLayer.js, timeline/alPlacement.js, timeline/alLibrary.js,
 //            timeline/alProject.js, timeline/alSeedData.js, timeline/effects.js,
 //            timeline/nativeSync.js, transform/*
