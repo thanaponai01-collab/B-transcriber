@@ -12,15 +12,21 @@ const effects = require("./timeline/effects.js");
 const componentAccess = require("./timeline/componentAccess.js");
 const transformParams = require("./transform/params.js");
 const transformGeometry = require("./transform/geometry.js");
+const { createPresetStore, CACHE_KEY: FX_PRESETS_KEY } = require("./presetStore.js");
 
 const KEY = "cutdeck.xml.lastJob";
 const SETTINGS_KEY = "cutdeck.adj.settings";
-// Custom effect presets get their OWN storage key, deliberately not folded into
-// cutdeck.adj.settings: saveSettingsToStorage rewrites its entire blob on every minor setting
-// change (frame count, color, ...), and a corrupt/oversized preset would otherwise silently
-// wipe core settings back to DEFAULT_SETTINGS on the next load (see loadSettingsFromStorage's
-// catch below). A separate key isolates both problems.
-const FX_PRESETS_KEY = "cutdeck.fx.presets";
+// Custom effect presets get their OWN storage key (FX_PRESETS_KEY, owned by presetStore.js),
+// deliberately not folded into cutdeck.adj.settings: saveSettingsToStorage rewrites its entire
+// blob on every minor setting change (frame count, color, ...), and a corrupt/oversized preset
+// would otherwise silently wipe core settings back to DEFAULT_SETTINGS on the next load (see
+// loadSettingsFromStorage's catch below). A separate key isolates both problems. With a preset
+// folder linked, that key is only a cache of the folder's cutdeck-presets.json — every edit
+// goes through presetStore.update().
+const presetStore = createPresetStore({
+  localFileSystem: require("uxp").storage.localFileSystem,
+  storage: localStorage,
+});
 
 const DEFAULT_SETTINGS = {
   frames: 16,
@@ -43,6 +49,8 @@ const state = {
   audioTrack: null,
   settings: loadSettingsFromStorage(),
   customPresets: loadCustomPresets(),
+  // Where presets are saved: { path: null | folder native path, error: null | message }.
+  presetFile: { path: null, error: null },
   job: null,
   busy: false,
   status: { text: "Ready", level: "ready" },
@@ -62,6 +70,8 @@ function saveSettingsToStorage(s) {
   } catch (_) {}
 }
 
+// First paint only, from the cache — loadPresets() at startup replaces it with the linked
+// folder's file when one is set.
 function loadCustomPresets() {
   try {
     const saved = JSON.parse(localStorage.getItem(FX_PRESETS_KEY) || "null");
@@ -70,10 +80,25 @@ function loadCustomPresets() {
     return [];
   }
 }
-function saveCustomPresets(list) {
-  try {
-    localStorage.setItem(FX_PRESETS_KEY, JSON.stringify(list));
-  } catch (_) {}
+async function loadPresets() {
+  const res = await presetStore.load();
+  state.customPresets = res.presets;
+  state.presetFile = { path: res.path, error: res.error };
+  if (res.error) setStatus(`Presets: ${res.error}`, "error");
+  else panel.render(state);
+}
+
+async function editPresets(edit) {
+  state.customPresets = await presetStore.update(edit);
+  state.presetFile = { path: presetStore.path, error: null };
+}
+
+async function doChoosePresetFolder() {
+  const res = await presetStore.chooseFolder();
+  if (!res) return;
+  state.customPresets = res.presets;
+  state.presetFile = { path: res.path, error: null };
+  setStatus(`Presets now saved to ${res.path}. Choose the same synced folder on your other machines to share them.`, "ready");
 }
 
 function lastJob() {
@@ -249,19 +274,17 @@ async function doApplyPreset(presetId, mode) {
   setStatus(`Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
 }
 
-// Local-storage-only edits, no Premiere call — same synchronous-intent pattern as
-// applySettingChange below, not wrapped in act() (nothing to be "busy" about).
-function doRemovePreset(presetId) {
+// No Premiere call, but a file write when a preset folder is linked — so these run through
+// act() like everything else that can fail.
+async function doRemovePreset(presetId) {
   const preset = state.customPresets.find((p) => p.id === presetId);
-  state.customPresets = state.customPresets.filter((p) => p.id !== presetId);
-  saveCustomPresets(state.customPresets);
+  await editPresets((list) => list.filter((p) => p.id !== presetId));
   setStatus(preset ? `Removed "${preset.name}".` : "Removed.", "ready");
 }
 
-function doRenamePreset(presetId, name) {
+async function doRenamePreset(presetId, name) {
   if (!state.customPresets.some((p) => p.id === presetId)) return;
-  state.customPresets = state.customPresets.map((p) => (p.id === presetId ? { ...p, name } : p));
-  saveCustomPresets(state.customPresets);
+  await editPresets((list) => list.map((p) => (p.id === presetId ? { ...p, name } : p)));
   setStatus(`Renamed to "${name}".`, "ready");
 }
 
@@ -369,8 +392,7 @@ async function handleProbe(name, payload) {
     console.log("CutDeck captured preset:", JSON.stringify(captured, null, 2));
     const id = `fx-${Date.now().toString(36)}`;
     const preset = { id, name: label, components: captured.components };
-    state.customPresets = [...state.customPresets, preset];
-    saveCustomPresets(state.customPresets);
+    await editPresets((list) => [...list, preset]);
     panel.render(state);
 
     const names = captured.components.map((c) => c.displayName || c.matchName).join(", ");
@@ -415,8 +437,9 @@ panel.bind({
   onCutMode: (mode) => { state.cutMode = mode; panel.render(state); },
   onAdjust: (mode) => act(() => doAdjust(mode)),
   onApplyPreset: (presetId, mode) => act(() => doApplyPreset(presetId, mode)),
-  onRemovePreset: (presetId) => doRemovePreset(presetId),
-  onRenamePreset: (presetId, name) => doRenamePreset(presetId, name),
+  onRemovePreset: (presetId) => act(() => doRemovePreset(presetId)),
+  onRenamePreset: (presetId, name) => act(() => doRenamePreset(presetId, name)),
+  onChoosePresetFolder: () => act(doChoosePresetFolder),
   onSettingChange: (patch) => applySettingChange(patch),
   onProbe: (name, payload) => act(() => handleProbe(name, payload)),
 });
@@ -607,12 +630,14 @@ const savedJob = lastJob();
 state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 panel.render(state);
 
-// Automatically read and display timeline marks
+// Load presets from the linked folder, then automatically read and display timeline marks.
+// A preset-folder problem must outlive the "Ready" that the mark refresh would otherwise
+// paint straight over it.
 setTimeout(async () => {
+  await loadPresets();
   try {
     await doRefresh();
-    setStatus("Ready", "ready");
-  } catch (_) {
-    setStatus("Ready", "ready");
-  }
+  } catch (_) { /* no sequence open yet — the refresh icon retries */ }
+  if (state.presetFile.error) setStatus(`Presets: ${state.presetFile.error}`, "error");
+  else setStatus("Ready", "ready");
 }, 50);

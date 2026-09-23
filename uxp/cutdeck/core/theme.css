@@ -732,6 +732,18 @@
   .fx-capture-row .setting-input {
     flex: 1;
   }
+  .fx-preset-folder-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .fx-preset-folder-path {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .fx-preset-folder-path.error { color: var(--fg-1); }
   /* Flexbox, not CSS Grid: two different Grid-based approaches here (aspect-ratio, then a
      fixed grid-auto-rows height) both produced 0x0 tiles in this UXP build's embedded
      browser, confirmed live via getBoundingClientRect(). Every other button row in this

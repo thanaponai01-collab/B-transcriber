@@ -320,6 +320,14 @@
         <!-- Rename (edit the text, then click away or press Enter) or remove (×) any captured
              preset. Empty when no presets are captured yet. -->
         <div id="fx-preset-manage-list" class="fx-preset-manage-list"></div>
+        <!-- Where presets are saved: a cutdeck-presets.json in a folder you pick (pick a synced
+             folder to share presets across machines), or this machine only. See presetStore.js. -->
+        <div class="fx-preset-folder-row">
+          <div id="fx-preset-folder-path" class="setting-subtext fx-preset-folder-path"></div>
+          <div id="btn-preset-folder" class="btn-secondary" role="button" data-act="btn-preset-folder" title="Save presets as cutdeck-presets.json in a folder you choose">
+            Choose folder…
+          </div>
+        </div>
       </div>
 
       <!-- Tool Shortcuts & Reference Guide -->

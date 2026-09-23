@@ -260,6 +260,15 @@ this panel). Rename/remove are plain `localStorage` writes, not Premiere calls, 
 wired directly through `main.js`'s `onRenamePreset`/`onRemovePreset` intents rather than
 `act()`.
 
+**Where presets are saved** (Settings > Presets > **Choose folder…**, `presetStore.js`): pick a
+folder and presets live in `cutdeck-presets.json` there. Pick a synced folder (OneDrive,
+Dropbox) and choose the same folder on each machine to share one preset list; linking a
+folder that already has presets merges them with this machine's. With no folder chosen,
+presets stay in this plugin install's `localStorage` only, which a reinstall or a switch
+between source-load and the packaged `.ccx` does not carry over. Every edit re-reads the file
+before writing, so one machine never erases another machine's newer presets, and a
+`cutdeck-presets.json` that isn't valid is reported and left untouched, never overwritten.
+
 **v1 is static-value effects only — no keyframes/animation**: a captured Keyframe's
 `TickTime` convention (clip-relative vs. sequence-relative) isn't documented anywhere in
 Adobe's reference, so animated presets (the old Zoom In/Whip Pan/Camera Shake-style names)

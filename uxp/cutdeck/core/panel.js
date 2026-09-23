@@ -225,6 +225,17 @@
     setHidden($("dismiss"), !job);
   }
 
+  // Where presets are saved (Settings > Presets): the linked folder, or this machine only.
+  function renderPresetFile(presetFile) {
+    const info = presetFile || {};
+    const el = $("fx-preset-folder-path");
+    setText(el, info.path
+      ? (info.error ? `Unreachable: ${info.path}` : info.path)
+      : "This machine only — choose a synced folder to back up and share presets.");
+    if (el) el.classList.toggle("error", !!info.error);
+    setText($("btn-preset-folder"), info.path ? "Change…" : "Choose folder…");
+  }
+
   function renderBusy(busy) {
     document.querySelectorAll("[data-act]").forEach((el) => {
       if (busy) {
@@ -250,6 +261,7 @@
     renderSettings(state.settings);
     renderPresetButtons(state.customPresets);
     renderPresetManageList(state.customPresets);
+    renderPresetFile(state.presetFile);
     renderJobBanner(state.job);
     renderBusy(state.busy);
   }
@@ -464,6 +476,11 @@
     }
   }
 
+  function bindPresetFolder(intents) {
+    const btn = $("btn-preset-folder");
+    if (btn) btn.addEventListener("click", () => intents.onChoosePresetFolder());
+  }
+
   function bindAdjustmentButtons(intents) {
     const adjBtn = $("btn-adj");
     if (adjBtn) {
@@ -504,6 +521,7 @@
     bindPresetButtons(intents);
     bindPresetManage(intents);
     bindCapturePreset(intents);
+    bindPresetFolder(intents);
     bindAdjustmentButtons(intents);
     bindProbes(intents);
   }
