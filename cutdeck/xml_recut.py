@@ -615,6 +615,8 @@ def main(argv: list[str] | None = None) -> int:
     if sequence is None:
         raise SystemExit("no <sequence> element found in source XML")
     tb = _sequence_timebase(sequence)
+    # recut() refuses these whatever the plan says; say so before extraction and ASR.
+    _refuse_unsupported_media(sequence)
     seq_frames = int(_text(sequence, "duration", "0"))
     frame_range = None
     if args.range_start_frame is not None or args.range_end_frame is not None:

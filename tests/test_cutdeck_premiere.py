@@ -11,6 +11,15 @@ from cutdeck.xml_recut import recut, _frame_to_ticks
 from cutdeck.xml_bridge import XmlJobs, range_from_ticks, reference_audio_track, serve, VERSION
 
 
+@pytest.fixture(autouse=True)
+def _media_check_stub(monkeypatch):
+    """These tests drive the job with the xml_recut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
+    from cutdeck import xml_bridge
+    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+
+
 def source(ntsc=False):
     tracks = "".join(f'<track><clipitem id="v{i}"><name>angle</name><start>0</start>'
                      '<end>300</end><in>0</in><out>300</out><pproTicksIn>0</pproTicksIn>'
@@ -275,3 +284,64 @@ def test_no_cuts_leaves_nothing_in_the_media_folder(tmp_path, monkeypatch):
     assert result["state"] == "no_cuts"
     assert not Path(result["output_path"]).exists()
     assert list((footage / "CutDeck").glob("*.xml")) == []
+
+
+# --- refusals before the expensive part (issue #28) ------------------------------
+
+def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
+    async def scenario():
+        jobs = XmlJobs(tmp_path)
+        job = await jobs.dispatch({"type": "prepare", **{**context(), "in_ticks": "1"}})
+        Path(job["source_path"]).write_text(source(), encoding="utf-8")
+        request = {"type": "start", "job_id": job["job_id"]}
+        started = await jobs.dispatch(request)
+        assert started["state"] == "failed"
+        assert started["message"].startswith("Cannot start: in_ticks is not aligned")
+        assert (await jobs.dispatch(request))["state"] == "failed"  # never retried
+        assert jobs.active is None and not jobs.tasks
+    asyncio.run(scenario())
+
+
+def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypatch):
+    from cutdeck import xml_bridge
+    from cutdeck.xml_audio_extract import check_reference_audio
+    monkeypatch.setattr(xml_bridge, "check_reference_audio", check_reference_audio)
+    spawned = []
+
+    async def spawn(*args, **kwargs):
+        spawned.append(args)
+        raise AssertionError("worker must not start")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+
+    async def scenario():
+        jobs = XmlJobs(tmp_path / "jobs")
+        job = await jobs.dispatch({"type": "prepare", **context()})
+        Path(job["source_path"]).write_text(source_with_audio(tmp_path / "offline.mp4"),
+                                            encoding="utf-8")
+        await jobs.dispatch({"type": "start", "job_id": job["job_id"]})
+        await asyncio.gather(*jobs.tasks)
+        return await jobs.dispatch({"type": "status", "job_id": job["job_id"]})
+    status = asyncio.run(scenario())
+    assert status["state"] == "failed"
+    assert status["message"].startswith("Cannot analyze this sequence: source media is missing")
+    assert not spawned
+
+
+def test_reference_label_uses_premiere_track_numbers():
+    from cutdeck.xml_bridge import reference_label
+    stereo = ('<track totalExplodedTrackCount="2" currentExplodedTrackIndex="{0}"/>')
+    xml = ('<xmeml><sequence><media><audio>' + stereo.format(0) + stereo.format(1)
+           + stereo.format(0) + stereo.format(1) + '</audio></media></sequence></xmeml>')
+    checked = {"xml_track": 2, "files": [r"D:\shoot\lav.wav", r"D:\shoot\lav2.wav"]}
+    assert reference_label(xml, checked) == "A2 (lav.wav +1 more)"
+    assert reference_label(xml, {**checked, "xml_track": 3}) == "XML audio track 4 (lav.wav +1 more)"
+
+
+def test_failure_detail_is_the_exception_line_not_the_stack(tmp_path):
+    from cutdeck.xml_bridge import failure_detail
+    log = tmp_path / "process.log"
+    log.write_text("PROGRESS:5:Extracting audio\nTraceback (most recent call last):\n"
+                   '  File "x.py", line 1, in <module>\n    boom()\n'
+                   "RuntimeError: ffmpeg failed extracting D:\a.mov\n\n", encoding="utf-8")
+    assert failure_detail(str(log)) == "RuntimeError: ffmpeg failed extracting D:\a.mov"
+    assert failure_detail(str(tmp_path / "absent.log")) is None

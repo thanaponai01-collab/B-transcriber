@@ -8,6 +8,15 @@ test("shows the stage and percentage the helper reported", () => {
     "Transcribing speech… 35% — cuts stay inside marked In/Out.");
 });
 
+test("names the analyzed reference audio once the helper reports it", () => {
+  assert.equal(
+    progressText({ progress: { pct: 35, stage: "Transcribing speech" }, reference: "A2 (interview.wav)" }),
+    "Transcribing speech… 35% — analyzing A2 (interview.wav); cuts stay inside marked In/Out.");
+  assert.equal(
+    progressText({ progress: { pct: 35, stage: "s" }, reference: 7 }),
+    "s… 35% — cuts stay inside marked In/Out.");
+});
+
 test("falls back to the static message before any phase is reported", () => {
   assert.equal(progressText({ state: "running" }), FALLBACK);
   assert.equal(progressText(undefined), FALLBACK);

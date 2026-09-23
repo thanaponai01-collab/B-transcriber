@@ -10,6 +10,15 @@ from cutdeck.xml_bridge import XmlJobs, VERSION
 SAMPLE_XML_PATH = Path(__file__).parent / "fixtures" / "cutdeck_recut_sample_scrubbed.xml"
 
 
+@pytest.fixture(autouse=True)
+def _media_check_stub(monkeypatch):
+    """These tests drive the job with the xml_recut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
+    from cutdeck import xml_bridge
+    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+
+
 def test_xml_jobs_prepare_sync(tmp_path):
     async def _test():
         jobs = XmlJobs(tmp_path)
@@ -126,7 +135,7 @@ json.dump({{'cuts_applied': 0}}, open(report, 'w'))
         status = {}
         for _ in range(200):
             status = await jobs.dispatch({"type": "status", "job_id": prep["job_id"]})
-            if "progress" in status:
+            if status.get("progress", {}).get("pct") == 50:  # past the helper's own media check
                 break
             await asyncio.sleep(0.05)
         assert status["state"] == "running"
@@ -183,7 +192,7 @@ print('boom', file=sys.stderr, flush=True)
 sys.exit(3)
 """
     jobs, status, _ = _run_cut_with_fake_child(tmp_path, monkeypatch, script)
-    assert status["state"] == "failed" and "exit 3" in status["message"]
+    assert status["state"] == "failed" and "exit 3): boom." in status["message"]
     assert status["progress"] == {"pct": 40, "stage": "Detecting speech"}
     assert "boom" in Path(status["log_path"]).read_text(encoding="utf-8")
     assert jobs.active is None

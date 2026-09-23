@@ -89,10 +89,17 @@ audio), the result falls back to the job folder and the panel says so rather tha
 failing the cut. A run that finds no cuts leaves nothing in your media folder.
 
 The source sequence is never edited. Material before In is preserved; material
-after Out shifts earlier by the removed duration across all tracks. The entire
-sequence audio is still analyzed, preserving the existing analysis context.
-In/Out only limits the final cuts. A short selected range therefore does not yet
-make a long sequence fast to analyze.
+after Out shifts earlier by the removed duration across all tracks. Only the
+In/Out range plus 2 seconds each side is extracted and analyzed, so a short range
+on a long sequence is fast.
+
+Before any audio is extracted, the helper checks the export and refuses clearly:
+the Reference Audio track (with no choice made, the first track that is switched
+on and has clips; a track you pick is used even if it is switched off), missing or
+offline source media, source media with no audio stream, transitions and nested
+sequences. While it runs, the status line names the track and file being analyzed
+(for example `A2 (interview.wav)`). If processing fails, the message quotes the
+error from `process.log` instead of only an exit code.
 
 The helper maps Premiere stereo tracks to their expanded XML channel groups.
 Audio extraction otherwise has the same behavior and limitations as the existing

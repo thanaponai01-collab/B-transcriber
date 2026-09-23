@@ -22,14 +22,20 @@ Phase 0 note) that gap is negligible; for a heavily mixed sequence it would
 not be — pick the manual export path there instead.
 
 **Track selection:** one audio track is picked as the "reference" dialogue
-track for VAD (default: the first enabled track with any clips). A sequence
-with several isolated mic tracks needs the editor to say which one carries
-the dialogue that should drive silence detection — this module does not
-guess by loudness or any other heuristic.
+track for VAD (default: the first track that is switched on and has any
+clips). An explicit index is honored even when that track is switched off —
+the editor chose it, and a lav track muted in the mix is still the best
+thing to analyze. A sequence with several isolated mic tracks needs the
+editor to say which one carries the dialogue that should drive silence
+detection — this module does not guess by loudness or any other heuristic.
+
+``check_reference_audio`` runs the same selection plus the checks that can
+be made without decoding anything, so a job can be refused before ASR.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -87,16 +93,89 @@ def _select_audio_track(sequence: ET.Element, audio_track_index: int | None) -> 
     if not tracks:
         raise XmlRecutRefusal("sequence has no audio tracks to extract from")
     if audio_track_index is not None:
-        if audio_track_index >= len(tracks):
+        if not 0 <= audio_track_index < len(tracks):
             raise XmlRecutRefusal(
                 f"sequence has {len(tracks)} audio track(s), requested index "
                 f"{audio_track_index} (0-based)"
             )
         return tracks[audio_track_index]
-    for track in tracks:
-        if track.findall("clipitem"):
+    with_clips = [track for track in tracks if track.findall("clipitem")]
+    if not with_clips:
+        raise XmlRecutRefusal("no audio track has any clips")
+    for track in with_clips:
+        if _text(track, "enabled", "TRUE") == "TRUE":
             return track
-    raise XmlRecutRefusal("no audio track has any clips")
+    raise XmlRecutRefusal("every audio track with clips is switched off; "
+                          "choose a Reference Audio track")
+
+
+def _enabled_clips(track: ET.Element) -> list[ET.Element]:
+    """Clipitems that contribute audio: enabled and naming a source file."""
+    return [clipitem for clipitem in track.findall("clipitem")
+            if _text(clipitem, "enabled", "TRUE") == "TRUE"
+            and clipitem.find("file") is not None
+            and clipitem.find("file").get("id") is not None]
+
+
+def _has_audio_stream(path: Path) -> bool | None:
+    """True/False from ffprobe, or None when ffprobe cannot answer (missing, unreadable)."""
+    if shutil.which("ffprobe") is None:
+        return None
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-of", "json", "-show_entries", "stream=codec_type",
+         str(path)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        return None
+    try:
+        streams = json.loads(result.stdout).get("streams", [])
+    except ValueError:
+        return None
+    return any(stream.get("codec_type") == "audio" for stream in streams)
+
+
+def check_reference_audio(source_xml: str, audio_track_index: int | None = None) -> dict:
+    """Refuse, before any audio is extracted or transcribed, what ``extract_mixdown``
+    would fail on or silently get wrong. Returns what will be analyzed.
+
+    Checks: the reference track selection itself; every enabled clip names a
+    source file that exists and has an audio stream; a clip without
+    ``pproTicksIn``/``pproTicksOut`` has no ``<rate>`` of its own that differs
+    from the sequence's (``_clip_source_span_seconds`` would read its
+    ``<in>``/``<out>`` on the wrong frame grid). A source frame rate that
+    differs from the sequence is otherwise fine: extraction works in seconds.
+    """
+    sequence = ET.fromstring(source_xml).find("sequence")
+    if sequence is None:
+        raise XmlRecutRefusal("no <sequence> element found in source XML")
+    tb = _sequence_timebase(sequence)
+    audio = sequence.find("media/audio")
+    tracks = audio.findall("track") if audio is not None else []
+    track = _select_audio_track(sequence, audio_track_index)
+    clips = _enabled_clips(track)
+    if not clips:
+        raise XmlRecutRefusal("the reference audio track has no enabled clips")
+
+    files: list[Path] = []
+    for clipitem in clips:
+        path = _resolve_file_path(sequence, clipitem.find("file").get("id"))
+        if path not in files:
+            files.append(path)
+        has_ticks = clipitem.find("pproTicksIn") is not None
+        rate = clipitem.find("rate")
+        if not has_ticks and rate is not None:
+            clip_tb = _sequence_timebase(clipitem)
+            if clip_tb.fps_num * tb.fps_den != tb.fps_num * clip_tb.fps_den:
+                raise XmlRecutRefusal(
+                    f"clip {_text(clipitem, 'name', '?')!r} has its own frame rate and no "
+                    "tick positions, so its audio cannot be placed exactly")
+    for path in files:
+        if not path.is_file():
+            raise XmlRecutRefusal(f"source media is missing or offline: {path}")
+        if _has_audio_stream(path) is False:
+            raise XmlRecutRefusal(f"source media has no audio stream: {path}")
+    return {"xml_track": tracks.index(track), "track_name": _text(track, "name"),
+            "clip_count": len(clips), "files": [str(path) for path in files]}
 
 
 def reference_media_path(source_xml: str, audio_track_index: int | None = None) -> Path:
@@ -111,13 +190,8 @@ def reference_media_path(source_xml: str, audio_track_index: int | None = None) 
     if sequence is None:
         raise XmlRecutRefusal("no <sequence> element found in source XML")
     track = _select_audio_track(sequence, audio_track_index)
-    for clipitem in track.findall("clipitem"):
-        if _text(clipitem, "enabled", "TRUE") != "TRUE":
-            continue
-        file_el = clipitem.find("file")
-        if file_el is None or file_el.get("id") is None:
-            continue
-        return _resolve_file_path(sequence, file_el.get("id"))
+    for clipitem in _enabled_clips(track):
+        return _resolve_file_path(sequence, clipitem.find("file").get("id"))
     raise XmlRecutRefusal("no enabled clip on the reference audio track names a source file")
 
 
@@ -128,8 +202,8 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     source media, writing it to ``out_wav``. Returns ``out_wav``.
 
     ``audio_track_index`` (0-based): which ``<track>`` under ``<media><audio>``
-    to use as the reference dialogue track. Defaults to the first track that
-    has any clips. Disabled clips (``<enabled>FALSE</enabled>``) are skipped
+    to use as the reference dialogue track. Defaults to the first switched-on
+    track that has any clips. Disabled clips (``<enabled>FALSE</enabled>``) are skipped
     — silence, same as they'd be muted in a real Premiere render.
 
     ``range_start_frame``/``range_end_frame`` (sequence frames, both or neither):

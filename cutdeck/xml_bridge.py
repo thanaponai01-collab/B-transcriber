@@ -19,7 +19,7 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
-from cutdeck.xml_audio_extract import reference_media_path
+from cutdeck.xml_audio_extract import check_reference_audio, reference_media_path
 from cutdeck.xml_recut import XmlRecutRefusal, _sequence_timebase, _PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,15 +38,12 @@ def parse_progress(line: str) -> dict | None:
     return {"pct": min(int(match.group(1)), 100), "stage": match.group(2).strip()}
 
 
-def reference_audio_track(source_xml: str, request: dict) -> int | None:
-    """Map Premiere's logical track to FCP7's exploded channel tracks.
+def _track_groups(source_xml: str) -> list[int]:
+    """The first XML track index of each Premiere audio track.
 
     Real exports expand each stereo track into two XML tracks. Treating A2
     as XML index 1 would silently analyze A1 again. Verify the grouping.
     """
-    selected = request.get("audio_track")
-    if selected is None:
-        return None  # Preserve the working command's default exactly.
     tracks = ET.fromstring(source_xml).findall("sequence/media/audio/track")
     groups = []
     index = 0
@@ -62,9 +59,44 @@ def reference_audio_track(source_xml: str, request: dict) -> int | None:
                 raise ValueError("Audio channel grouping in the export is inconsistent")
         groups.append(index)
         index += count
+    return groups
+
+
+def reference_audio_track(source_xml: str, request: dict) -> int | None:
+    """Map Premiere's logical track to FCP7's exploded channel tracks."""
+    selected = request.get("audio_track")
+    if selected is None:
+        return None  # Preserve the working command's default exactly.
+    groups = _track_groups(source_xml)
     if len(groups) != request.get("audio_track_count") or not 0 <= selected < len(groups):
         raise ValueError("Export audio tracks differ from the timeline; refresh and try again")
     return groups[selected]
+
+
+def reference_label(source_xml: str, checked: dict) -> str:
+    """What the status line says is being analyzed, in Premiere's own track names."""
+    try:
+        track = f"A{_track_groups(source_xml).index(checked['xml_track']) + 1}"
+    except ValueError:
+        track = f"XML audio track {checked['xml_track'] + 1}"
+    files = checked["files"]
+    more = f" +{len(files) - 1} more" if len(files) > 1 else ""
+    return f"{track} ({Path(files[0]).name}{more})"
+
+
+_LOG_NOISE = re.compile(r"PROGRESS:|Traceback \(most recent call last\)|\s")
+
+
+def failure_detail(log_path: str) -> str | None:
+    """The last meaningful line of a child's log: the exception or refusal, not a stack frame."""
+    try:
+        lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines[-200:]):
+        if line.strip() and not _LOG_NOISE.match(line):
+            return line.strip()[:300]
+    return None
 
 
 _ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
@@ -239,19 +271,30 @@ class XmlJobs:
                 raise ValueError("CutDeck is already processing a sequence")
             source = Path(job["source_path"])
             source_xml = source.read_text(encoding="utf-8-sig")
-            if job.get("job_type") == "sync":
-                job["xml_audio_track"] = reference_audio_track(source_xml, job["context"]) if job["context"].get("audio_track") is not None else 0
-                job["output_path"] = str(result_path(job, source_xml))
-                job["state"] = "running"
-                return self._launch(job, self._run_sync(job))
-            start, end = range_from_ticks(source_xml, job["context"])
-            job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
-            # Only now does the export exist, so only now is the footage location known.
-            job["output_path"] = str(result_path(job, source_xml))
-            job["range_frames"] = [start, end]
-            job["state"] = "running"
-            return self._launch(job, self._run(job))
+            try:
+                return self._start(job, source_xml)
+            except (ValueError, XmlRecutRefusal, ET.ParseError) as exc:
+                # A refusal is final for this export: fail the job so the panel shows
+                # why and clears it, instead of offering to resume a start that can't run.
+                job["state"] = "failed"
+                job["message"] = f"Cannot start: {exc}"
+                self._save(job)
+                return dict(job)
         raise ValueError("Unknown request type")
+
+    def _start(self, job: dict, source_xml: str) -> dict:
+        if job.get("job_type") == "sync":
+            job["xml_audio_track"] = reference_audio_track(source_xml, job["context"]) if job["context"].get("audio_track") is not None else 0
+            job["output_path"] = str(result_path(job, source_xml))
+            job["state"] = "running"
+            return self._launch(job, self._run_sync(job))
+        start, end = range_from_ticks(source_xml, job["context"])
+        job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
+        # Only now does the export exist, so only now is the footage location known.
+        job["output_path"] = str(result_path(job, source_xml))
+        job["range_frames"] = [start, end]
+        job["state"] = "running"
+        return self._launch(job, self._run(job))
 
     def _allocate(self) -> tuple[str, Path]:
         """Claim the one GPU slot's next job folder, or refuse if the helper is busy."""
@@ -282,7 +325,15 @@ class XmlJobs:
         try:
             folder = self.directory / job["job_id"]
             report_path = folder / "report.json"
-            args = [sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
+            job["progress"] = {"pct": 2, "stage": "Checking source media"}
+            source_xml = Path(job["source_path"]).read_text(encoding="utf-8-sig")
+            try:
+                checked = await asyncio.to_thread(
+                    check_reference_audio, source_xml, job["xml_audio_track"])
+            except XmlRecutRefusal as exc:
+                raise RuntimeError(f"Cannot analyze this sequence: {exc}") from None
+            job["reference"] = reference_label(source_xml, checked)
+            args =[sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
                     "--out", job["output_path"], "--report", str(report_path),
                     "--config", str(ROOT / "transcribe/config.yaml"), "--no-save-plan"]
             if job.get("preset", "aggressive") == "aggressive":
@@ -310,7 +361,10 @@ class XmlJobs:
                         job["progress"] = progress
                 code = await process.wait()
             if code:
-                raise RuntimeError(f"CutDeck processing failed (exit {code}). See {job['log_path']}")
+                detail = failure_detail(job["log_path"])
+                raise RuntimeError(f"CutDeck processing failed (exit {code})"
+                                   + (f": {detail}" if detail else "")
+                                   + f". See {job['log_path']}")
             report = json.loads(report_path.read_text(encoding="utf-8"))
             job["report"] = report
             job["state"] = "ready" if report["cuts_applied"] else "no_cuts"

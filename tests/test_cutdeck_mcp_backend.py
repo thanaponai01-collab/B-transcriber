@@ -10,6 +10,15 @@ from cutdeck.xml_bridge import XmlJobs, serve
 
 SAMPLE_XML = Path(__file__).parent / "fixtures" / "cutdeck_recut_sample_scrubbed.xml"
 
+
+@pytest.fixture(autouse=True)
+def _media_check_stub(monkeypatch):
+    """These tests drive the job with the xml_recut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
+    from cutdeck import xml_bridge
+    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+
 _FAKE_WORKER = (
     "import json, sys, pathlib;"
     "f = pathlib.Path(sys.argv[1]);"
