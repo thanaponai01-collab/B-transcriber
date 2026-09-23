@@ -355,7 +355,7 @@
         window.location.reload();
       });
     }
-    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe", "keyframeprobe", "alcreateprobe"].forEach((id) => {
+    ["socketprobe", "copystatus", "timingprobe", "motionprobe", "effectprobe", "transformprobe", "keyframeprobe", "alcreateprobe", "syncmovesprobe"].forEach((id) => {
       const el = $(id);
       if (el && overflowMenu) {
         el.addEventListener("click", () => overflowMenu.classList.remove("open"));
@@ -510,6 +510,8 @@
     if (keyframe) keyframe.addEventListener("click", () => intents.onProbe("keyframe"));
     const alCreate = $("alcreateprobe");
     if (alCreate) alCreate.addEventListener("click", () => intents.onProbe("alcreate"));
+    const syncMoves = $("syncmovesprobe");
+    if (syncMoves) syncMoves.addEventListener("click", () => intents.onProbe("syncmoves"));
   }
 
   function bind(intents) {

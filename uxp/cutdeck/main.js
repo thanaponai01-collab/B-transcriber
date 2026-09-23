@@ -4,6 +4,7 @@ const { createRpc } = require("./core/rpc.js");
 const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
+const syncProbe = require("./syncProbe.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
 const alignPanel = require("./core/alignPanel.js");
@@ -373,6 +374,13 @@ async function handleProbe(name, payload) {
     const report = await capability.probeCreateAdjustmentLayer(ppro);
     console.log("CutDeck AL creation probe", JSON.stringify(report, null, 2));
     setStatus(capability.formatCreateAdjustmentLayerReport(report), "ready");
+    return;
+  }
+  if (name === "syncmoves") {
+    setStatus("Copying this sequence, then testing clip moves on the copy…", "busy");
+    const report = await syncProbe.probeSyncMoves(ppro);
+    console.log("CutDeck sync moves probe", JSON.stringify(report, (k, v) => (typeof v === "bigint" ? v.toString() : v), 2));
+    setStatus(syncProbe.formatSyncMovesReport(report), "ready");
     return;
   }
   if (name === "transform") {

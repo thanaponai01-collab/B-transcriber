@@ -1089,4 +1089,5 @@ module.exports = {
   probeTransformParams, formatTransformReport,
   probeKeyframeTiming, formatKeyframeReport, classifyKeyframeReference,
   formatFindings, describeParamValue, looksLikeTransformComponent,
+  attempt, finding,
 };
