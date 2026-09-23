@@ -4,19 +4,31 @@ const { createRpc } = require("./core/rpc.js");
 const { progressText } = require("./core/progressText.js");
 const probe = require("./probe.js");
 const capability = require("./capabilityProbe.js");
+const syncProbe = require("./syncProbe.js");
+const nativeSync = require("./timeline/nativeSync.js");
 const helperStart = require("./helperStart.js");
 const panel = require("./core/panel.js");
+const alignPanel = require("./core/alignPanel.js");
 const timeline = require("./timeline/adjustmentLayer.js");
 const effects = require("./timeline/effects.js");
+const componentAccess = require("./timeline/componentAccess.js");
+const transformParams = require("./transform/params.js");
+const transformGeometry = require("./transform/geometry.js");
+const { createPresetStore, CACHE_KEY: FX_PRESETS_KEY } = require("./presetStore.js");
 
 const KEY = "cutdeck.xml.lastJob";
 const SETTINGS_KEY = "cutdeck.adj.settings";
-// Custom effect presets get their OWN storage key, deliberately not folded into
-// cutdeck.adj.settings: saveSettingsToStorage rewrites its entire blob on every minor setting
-// change (frame count, color, ...), and a corrupt/oversized preset would otherwise silently
-// wipe core settings back to DEFAULT_SETTINGS on the next load (see loadSettingsFromStorage's
-// catch below). A separate key isolates both problems.
-const FX_PRESETS_KEY = "cutdeck.fx.presets";
+// Custom effect presets get their OWN storage key (FX_PRESETS_KEY, owned by presetStore.js),
+// deliberately not folded into cutdeck.adj.settings: saveSettingsToStorage rewrites its entire
+// blob on every minor setting change (frame count, color, ...), and a corrupt/oversized preset
+// would otherwise silently wipe core settings back to DEFAULT_SETTINGS on the next load (see
+// loadSettingsFromStorage's catch below). A separate key isolates both problems. With a preset
+// folder linked, that key is only a cache of the folder's per-preset files — every edit goes
+// through presetStore.add / rename / remove.
+const presetStore = createPresetStore({
+  localFileSystem: require("uxp").storage.localFileSystem,
+  storage: localStorage,
+});
 
 const DEFAULT_SETTINGS = {
   frames: 16,
@@ -39,6 +51,8 @@ const state = {
   audioTrack: null,
   settings: loadSettingsFromStorage(),
   customPresets: loadCustomPresets(),
+  // Where presets are saved: { path: null | folder native path, error: null | message }.
+  presetFile: { path: null, error: null },
   job: null,
   busy: false,
   status: { text: "Ready", level: "ready" },
@@ -58,6 +72,8 @@ function saveSettingsToStorage(s) {
   } catch (_) {}
 }
 
+// First paint only, from the cache — loadPresets() at startup replaces it with the linked
+// folder's file when one is set.
 function loadCustomPresets() {
   try {
     const saved = JSON.parse(localStorage.getItem(FX_PRESETS_KEY) || "null");
@@ -66,10 +82,25 @@ function loadCustomPresets() {
     return [];
   }
 }
-function saveCustomPresets(list) {
-  try {
-    localStorage.setItem(FX_PRESETS_KEY, JSON.stringify(list));
-  } catch (_) {}
+async function loadPresets() {
+  const res = await presetStore.load();
+  state.customPresets = res.presets;
+  state.presetFile = { path: res.path, error: res.error };
+  if (res.error) setStatus(`Presets: ${res.error}`, "error");
+  else panel.render(state);
+}
+
+async function editPresets(op) {
+  state.customPresets = await op;
+  state.presetFile = { path: presetStore.path, error: null };
+}
+
+async function doChoosePresetFolder() {
+  const res = await presetStore.chooseFolder();
+  if (!res) return;
+  state.customPresets = res.presets;
+  state.presetFile = { path: res.path, error: null };
+  setStatus(`Presets now saved to ${res.path}. Choose the same synced folder on your other machines to share them.`, "ready");
 }
 
 function lastJob() {
@@ -95,7 +126,21 @@ const rpc = createRpc({
   onRetry: (attempt, total) => setStatus(`Connecting to helper… attempt ${attempt} of ${total}.`, "busy"),
 });
 
+// Every panel start restarts a running helper so edited helper code takes effect — unless a
+// previous job still waits to be resumed: that job lives only in the running helper's memory.
+// Quiet: no retry messages. Anything that needs the helper waits for this first, so it can't
+// launch a second helper while the first is replacing itself.
+const quietRpc = createRpc({});
+let helperRestart = Promise.resolve();
+function restartHelperOnStart() {
+  if (lastJob()) return;
+  helperRestart = helperStart.restartHelper({ rpc: quietRpc, version: workflow.VERSION })
+    .then((outcome) => console.log("CutDeck helper on panel start:", outcome))
+    .catch((error) => setStatus(error.message, "error"));
+}
+
 async function ensureHelper() {
+  await helperRestart;
   return helperStart.ensureHelperRunning({
     rpc,
     version: workflow.VERSION,
@@ -145,18 +190,11 @@ async function follow(job) {
   if (job.state === "failed") { clearJob(); setStatus(job.message, "error"); throw new Error(job.message); }
   if (job.state === "no_cuts") { clearJob(); setStatus("No cuts found inside this range. Your sequence is unchanged.", "ready"); return; }
   if (job.state !== "ready") { setStatus("Job error: " + job.state, "error"); throw new Error("Job is not ready: " + job.state); }
-  const sync = job.job_type === "sync";
-  setStatus(sync ? "Opening synchronized multi-cam sequence…" : "Opening your rough cut in Premiere…", "busy");
+  setStatus("Opening your rough cut in Premiere…", "busy");
   const saved = lastJob() || {};
   await workflow.importResult(ppro, job, saved.importAttempted,
     () => save({ ...saved, ...job, importAttempted: true }));
   clearJob();
-  if (sync) {
-    const rep = job.report || {};
-    const unsynced = rep.unsynced_groups > 0 ? ` ${rep.unsynced_groups} placed at end.` : "";
-    setStatus(`Multi-cam sync complete (${rep.synced_groups || 0} angles).${unsynced}\nOpened ${job.result_name}\nSaved ${job.output_path}`, "ready");
-    return;
-  }
   const note = job.output_note ? `\n${job.output_note}` : "";
   setStatus(`${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.`
     + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`, "ready");
@@ -175,7 +213,8 @@ function onAdjLayerSequenceName(name) {
 // detected, so a wrong pick is visible immediately instead of only showing up visually.
 function describeSequenceMatch(res) {
   if (!res || !res.sequenceWidth || !res.sequenceHeight) return "";
-  return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}`;
+  const created = res.createdAdjustmentLayer ? ` (created "${res.createdAdjustmentLayer}" in CutDeck > ADJ & FX)` : "";
+  return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}${created}`;
 }
 
 async function doAdjust(mode) {
@@ -237,27 +276,32 @@ async function doApplyPreset(presetId, mode) {
   setStatus(`Applying [${preset.name}] to ${res.placedItems.length} AL(s)…`, "busy");
   const project = await ppro.Project.getActiveProject();
   let appliedCount = 0;
+  const warnings = [];
   for (const item of res.placedItems) {
-    await effects.applyCapturedPreset(ppro, project, item, preset);
+    const applied = await effects.applyCapturedPreset(ppro, project, item, preset);
+    warnings.push(...applied.warnings);
     appliedCount++;
   }
 
-  setStatus(`Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}!`, "ready");
+  const done = `Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}`;
+  if (warnings.length) {
+    setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:\n${warnings.slice(0, 6).join("\n")}`, "error");
+  } else {
+    setStatus(`${done}!`, "ready");
+  }
 }
 
-// Local-storage-only edits, no Premiere call — same synchronous-intent pattern as
-// applySettingChange below, not wrapped in act() (nothing to be "busy" about).
-function doRemovePreset(presetId) {
+// No Premiere call, but a file write when a preset folder is linked — so these run through
+// act() like everything else that can fail.
+async function doRemovePreset(presetId) {
   const preset = state.customPresets.find((p) => p.id === presetId);
-  state.customPresets = state.customPresets.filter((p) => p.id !== presetId);
-  saveCustomPresets(state.customPresets);
+  await editPresets(presetStore.remove(presetId));
   setStatus(preset ? `Removed "${preset.name}".` : "Removed.", "ready");
 }
 
-function doRenamePreset(presetId, name) {
+async function doRenamePreset(presetId, name) {
   if (!state.customPresets.some((p) => p.id === presetId)) return;
-  state.customPresets = state.customPresets.map((p) => (p.id === presetId ? { ...p, name } : p));
-  saveCustomPresets(state.customPresets);
+  await editPresets(presetStore.rename(presetId, name));
   setStatus(`Renamed to "${name}".`, "ready");
 }
 
@@ -271,13 +315,14 @@ async function doCut() {
   await follow(job);
 }
 
+// Native Sync: the helper matches every clip by its own audio, the panel places them in a
+// <name>_Synced copy. No XML, and no Audio Track setting (that is Rough Cut's).
 async function doSync() {
   if (lastJob()) throw new Error("Resume or dismiss the previous job before starting another operation.");
-  await ensureHelper();
-  const snap = await doRefresh();
-  setStatus("Exporting sequence XML for multi-camera sync…", "busy");
-  const job = await workflow.prepareSync(ppro, rpc, snap, { audio_track: state.audioTrack }, save);
-  await follow(job);
+  const result = await nativeSync.syncSequence(ppro, {
+    rpc, ensureHelper, onStatus: (text) => setStatus(text, "busy"),
+  });
+  setStatus(result.text, result.problems.length ? "error" : "ready");
 }
 
 async function doResume() {
@@ -326,6 +371,34 @@ async function handleProbe(name, payload) {
     setStatus(capability.formatEffectChainReport(report), "ready");
     return;
   }
+  if (name === "keyframe") {
+    setStatus("Reading the selected clip's keyframes against the playhead…", "busy");
+    const report = await capability.probeKeyframeTiming(ppro);
+    console.log("CutDeck keyframe timing probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatKeyframeReport(report), "ready");
+    return;
+  }
+  if (name === "alcreate") {
+    setStatus("Generating an Adjustment Layer at this sequence's size and importing it…", "busy");
+    const report = await capability.probeCreateAdjustmentLayer(ppro);
+    console.log("CutDeck AL creation probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatCreateAdjustmentLayerReport(report), "ready");
+    return;
+  }
+  if (name === "syncmoves") {
+    setStatus("Copying this sequence, then testing clip moves on the copy…", "busy");
+    const report = await syncProbe.probeSyncMoves(ppro);
+    console.log("CutDeck sync moves probe", JSON.stringify(report, (k, v) => (typeof v === "bigint" ? v.toString() : v), 2));
+    setStatus(syncProbe.formatSyncMovesReport(report), "ready");
+    return;
+  }
+  if (name === "transform") {
+    setStatus("Reading the selected clip's real Motion/Transform params, units and source dimensions…", "busy");
+    const report = await capability.probeTransformParams(ppro);
+    console.log("CutDeck transform params probe", JSON.stringify(report, null, 2));
+    setStatus(capability.formatTransformReport(report), "ready");
+    return;
+  }
   if (name === "socket") {
     setStatus("Probing which socket URLs this Premiere build permits…", "busy");
     const { report, written } = await probe.run();
@@ -358,13 +431,15 @@ async function handleProbe(name, payload) {
     console.log("CutDeck captured preset:", JSON.stringify(captured, null, 2));
     const id = `fx-${Date.now().toString(36)}`;
     const preset = { id, name: label, components: captured.components };
-    state.customPresets = [...state.customPresets, preset];
-    saveCustomPresets(state.customPresets);
+    await editPresets(presetStore.add(preset));
     panel.render(state);
 
     const names = captured.components.map((c) => c.displayName || c.matchName).join(", ");
+    const animatedNote = captured.animatedCount
+      ? ` ${captured.animatedCount} keyframed param${captured.animatedCount === 1 ? "" : "s"} included.`
+      : "";
     setStatus(
-      `Captured "${label}" — ${captured.components.length} effect${captured.components.length === 1 ? "" : "s"}: ${names}.`,
+      `Captured "${label}" — ${captured.components.length} effect${captured.components.length === 1 ? "" : "s"}: ${names}.${animatedNote}`,
       "ready"
     );
     return;
@@ -404,22 +479,208 @@ panel.bind({
   onCutMode: (mode) => { state.cutMode = mode; panel.render(state); },
   onAdjust: (mode) => act(() => doAdjust(mode)),
   onApplyPreset: (presetId, mode) => act(() => doApplyPreset(presetId, mode)),
-  onRemovePreset: (presetId) => doRemovePreset(presetId),
-  onRenamePreset: (presetId, name) => doRenamePreset(presetId, name),
+  onRemovePreset: (presetId) => act(() => doRemovePreset(presetId)),
+  onRenamePreset: (presetId, name) => act(() => doRenamePreset(presetId, name)),
+  onChoosePresetFolder: () => act(doChoosePresetFolder),
   onSettingChange: (patch) => applySettingChange(patch),
   onProbe: (name, payload) => act(() => handleProbe(name, payload)),
 });
 
+// --- second panel: Transform & Align (manifest entrypoint cutdeck.align.panel) -------------
+//
+// Premiere gives a plugin ONE main HTML document however many panel entrypoints it declares —
+// there is no per-entrypoint "main" field. So the transform panel is a container inside
+// index.html that entrypoints.setup()'s show() hook moves into the root Premiere creates for
+// it. See core/alignPanel.js's header.
+//
+// Its own small state, deliberately not folded into `state`: the two panels are separate
+// surfaces with separate status lines, and sharing one would mean every Cut & Sync status
+// message also overwrote whatever the transform panel was showing. Keeping them apart also
+// means this whole block can be reverted without touching a single existing render call.
+const alignState = { sequence: null, transform: null, busy: false, status: { text: "Ready", level: "ready" } };
+
+function renderAlign() {
+  alignPanel.render(alignState);
+}
+function setAlignStatus(text, level = "ready") {
+  alignState.status = { text, level };
+  renderAlign();
+}
+
+// --- Phase 1: read-only Position/Scale/Rotation/Anchor Point display -----------------------
+//
+// Turns transform/params.js's raw per-field reads into the shape core/alignPanel.js renders.
+// Position is normalized to the SEQUENCE frame and Anchor Point to the clip's SOURCE frame
+// (transform-panel-plan.md Part 1a), so each needs transform/geometry.js's pixel conversion
+// against its own frame; Scale and Rotation are
+// already the numbers Effect Controls displays. An animated param (isTimeVarying === true) is
+// reported as `animated: true` with no value — the plan requires it be skipped with a visible
+// explanation, never silently shown as a possibly-wrong static number.
+function describeField(entry, isPoint, frameSize) {
+  if (!entry) return { known: false };
+  if (entry.isTimeVarying) return { known: true, animated: true };
+  if (isPoint) {
+    const px = frameSize
+      ? transformGeometry.normalizedToFramePixels(entry.value, frameSize.width, frameSize.height)
+      : null;
+    return px ? { known: true, animated: false, x: px.x, y: px.y } : { known: false };
+  }
+  return typeof entry.value === "number" ? { known: true, animated: false, value: entry.value } : { known: false };
+}
+
+// Reads the currently selected track item's Motion component and returns the display-ready
+// shape core/alignPanel.js's renderTransform expects. `seq` may be null (no sequence open).
+// Never throws — every failure path (no sequence, nothing selected, no readable Transform)
+// returns `{ available: false, reason }` instead, per Phase 1's Definition of Done: a clip
+// with no readable Transform shows "unavailable", not zeros.
+async function readAlignTransform(seq) {
+  if (!seq) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
+
+  const items = await componentAccess.getSelectedTrackItems(seq);
+  if (items.length === 0) {
+    return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
+  }
+  const item = items[0];
+  const clipName = (item.name || "(unnamed)") + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
+
+  const transform = await transformParams.readTransform(item);
+  if (!transform) {
+    return { clipName, available: false, reason: "This item has no readable Transform.", fields: null };
+  }
+
+  const frameSize = await transformParams.readSequenceFrameSize(seq);
+  // Anchor Point is converted against the SOURCE frame, never the sequence frame as a
+  // fallback — that would print a confidently wrong number on any clip whose source differs
+  // from the sequence. Pixel aspect is deliberately NOT applied: a live run on a 1280x720 clip
+  // interpreted as 2.0 PAR stored an Effect Controls anchor of 100,200 as [100/1280, 200/720],
+  // so the anchor is in the source's stored pixels whatever its aspect (plan Part 1a).
+  const anchorFrame = await transformParams.readSourceFrameSize(ppro, item);
+  const fields = {
+    position: describeField(transform.position, true, frameSize),
+    scale: describeField(transform.scale, false, frameSize),
+    rotation: describeField(transform.rotation, false, frameSize),
+    anchor: describeField(transform.anchorPoint, true, anchorFrame),
+  };
+  return { clipName, available: true, reason: null, fields };
+}
+
+async function readAlignState() {
+  const project = await ppro.Project.getActiveProject();
+  const seq = project ? await project.getActiveSequence() : null;
+  return {
+    sequence: seq ? { name: seq.name || "(unnamed)" } : null,
+    transform: await readAlignTransform(seq),
+  };
+}
+
+// Same act() shape as the main panel's: one job at a time, errors land in the status line.
+async function actAlign(fn) {
+  if (alignState.busy) return;
+  alignState.busy = true;
+  alignState.status = { text: "Processing…", level: "busy" };
+  renderAlign();
+  try {
+    await fn();
+    if (alignState.status.level === "busy") alignState.status = { text: "Ready", level: "ready" };
+  } catch (error) {
+    alignState.status = { text: error.message || String(error), level: "error" };
+    console.error(error);
+  } finally {
+    alignState.busy = false;
+    renderAlign();
+  }
+}
+
+async function refreshAlignSequence() {
+  const next = await readAlignState();
+  alignState.sequence = next.sequence;
+  alignState.transform = next.transform;
+  renderAlign();
+}
+
+// Keeps the transform display "live" (phase table: "Read-only display... live") the way Effect
+// Controls itself does, without a selection-changed event to hook — Adobe's UXP declarations
+// expose none for Premiere. Unlike refreshAlignSequence (wrapped in actAlign for the explicit
+// "Click to refresh" action), this never touches alignState.busy/status: a poll tick must not
+// flicker the busy spinner or disable controls every 600ms, and a poll error (e.g. no project
+// open, which is normal steady state) must not spam the status line — it's logged and skipped.
+let alignPollTimer = null;
+async function pollAlignTransform() {
+  if (alignState.busy) return;
+  try {
+    const next = await readAlignState();
+    alignState.sequence = next.sequence;
+    alignState.transform = next.transform;
+    renderAlign();
+  } catch (error) {
+    console.error("CutDeck: transform poll failed", error);
+  }
+}
+function startAlignPolling() {
+  if (alignPollTimer) return;
+  alignPollTimer = setInterval(pollAlignTransform, 600);
+}
+
+alignPanel.bind({
+  onRefresh: () => actAlign(refreshAlignSequence),
+  onProbe: (name) => actAlign(async () => {
+    await refreshAlignSequence();
+    setAlignStatus("Reading this clip's real Motion/Transform params, units and source dimensions…", "busy");
+    const report = await capability.probeTransformParams(ppro);
+    console.log("CutDeck transform params probe", JSON.stringify(report, null, 2));
+    setAlignStatus(capability.formatTransformReport(report), "ready");
+  }),
+});
+
+// Registering panels is what makes the SECOND entrypoint work; the first keeps its existing
+// behavior because its content is already static in the document and its show() hook does
+// nothing. Guarded, and placed after the main panel is fully bound and rendered, so that a
+// build where entrypoints.setup() is absent or throws still gets a fully working Cut & Sync
+// panel — the shipped tool must not regress to add a new one.
+//
+// No hide()/destroy() hooks: Adobe documents both as "not working as expected yet" in
+// Premiere, so depending on them would be depending on something known broken. The container
+// simply stays where show() put it.
+try {
+  const { entrypoints } = require("uxp");
+  entrypoints.setup({
+    panels: {
+      "cutdeck.panel": {
+        show() {},
+      },
+      "cutdeck.align.panel": {
+        show(rootNode) {
+          if (!alignPanel.mount(rootNode)) {
+            console.error("CutDeck: could not mount #view-transform into the transform panel root.");
+            return;
+          }
+          renderAlign();
+          refreshAlignSequence().catch((error) => {
+            setAlignStatus(error.message || String(error), "error");
+          });
+          startAlignPolling();
+        },
+      },
+    },
+  });
+} catch (error) {
+  // The Cut & Sync panel is unaffected — it is already bound and rendered above.
+  console.error("CutDeck: entrypoints.setup() failed; the Transform panel will not open.", error);
+}
+
 const savedJob = lastJob();
 state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 panel.render(state);
+restartHelperOnStart();
 
-// Automatically read and display timeline marks
+// Load presets from the linked folder, then automatically read and display timeline marks.
+// A preset-folder problem must outlive the "Ready" that the mark refresh would otherwise
+// paint straight over it.
 setTimeout(async () => {
+  await loadPresets();
   try {
     await doRefresh();
-    setStatus("Ready", "ready");
-  } catch (_) {
-    setStatus("Ready", "ready");
-  }
+  } catch (_) { /* no sequence open yet — the refresh icon retries */ }
+  if (state.presetFile.error) setStatus(`Presets: ${state.presetFile.error}`, "error");
+  else setStatus("Ready", "ready");
 }, 50);

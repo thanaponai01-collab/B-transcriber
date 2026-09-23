@@ -210,3 +210,85 @@ def test_recut_range_matches_full_mixdown_and_guard_rejects_wrong_length(tmp_pat
     sf.write(str(wrong), audio[: 8 * sr], sr)
     with pytest.raises(xml_recut.DurationMismatch):
         run("wrong.xml", str(wrong))
+
+
+# --- reference track selection and the pre-ASR source check (issue #28) --------
+
+def _tracks_xml(tracks, fps: int = 30) -> str:
+    """tracks: list of (track_enabled, clips); a clip is (media_path, extra_clipitem_xml)."""
+    body = ""
+    for t, (enabled, clips) in enumerate(tracks):
+        items = "".join(
+            f'<clipitem id="a{t}_{i}"><name>c{t}_{i}</name><start>0</start><end>30</end>'
+            f'<in>0</in><out>30</out>{extra}<file id="f{t}_{i}">'
+            f'<pathurl>{_pathurl(path)}</pathurl></file></clipitem>'
+            for i, (path, extra) in enumerate(clips))
+        body += f"<track>{items}<enabled>{'TRUE' if enabled else 'FALSE'}</enabled></track>"
+    return (f'<xmeml><sequence id="s"><duration>30</duration><rate><timebase>{fps}</timebase>'
+            f'<ntsc>FALSE</ntsc></rate><name>T</name><media><audio>{body}</audio></media>'
+            '</sequence></xmeml>')
+
+
+@pytest.fixture
+def wav(tmp_path):
+    path = tmp_path / "dialogue.wav"
+    _tone_wav(path, 1.0, 440.0)
+    return path
+
+
+def test_default_reference_skips_switched_off_track(tmp_path, wav):
+    from cutdeck.xml_sequence import check_reference_audio
+    xml = _tracks_xml([(False, [(wav, "")]), (True, [(wav, "")])])
+    assert check_reference_audio(xml)["xml_track"] == 1
+
+
+def test_default_reference_refuses_when_every_track_is_switched_off(tmp_path, wav):
+    from cutdeck.xml_sequence import check_reference_audio
+    with pytest.raises(XmlRecutRefusal, match="switched off"):
+        check_reference_audio(_tracks_xml([(False, [(wav, "")])]))
+
+
+def test_explicit_reference_is_honored_even_when_switched_off(tmp_path, wav):
+    from cutdeck.xml_sequence import check_reference_audio
+    xml = _tracks_xml([(True, [(wav, "")]), (False, [(wav, "")])])
+    checked = check_reference_audio(xml, 1)
+    assert checked == {"xml_track": 1, "track_name": None, "clip_count": 1, "files": [str(wav)]}
+
+
+@pytest.mark.parametrize("index", [-1, 2])
+def test_negative_or_out_of_range_reference_refuses(tmp_path, wav, index):
+    from cutdeck.xml_sequence import check_reference_audio
+    xml = _tracks_xml([(True, [(wav, "")]), (True, [(wav, "")])])
+    with pytest.raises(XmlRecutRefusal, match="requested index"):
+        check_reference_audio(xml, index)
+    with pytest.raises(XmlRecutRefusal, match="requested index"):
+        extract_mixdown(xml, str(tmp_path / "out.wav"), index)
+
+
+def test_missing_source_media_refuses(tmp_path, wav):
+    from cutdeck.xml_sequence import check_reference_audio
+    xml = _tracks_xml([(True, [(wav, ""), (tmp_path / "offline.wav", "")])])
+    with pytest.raises(XmlRecutRefusal, match="missing or offline"):
+        check_reference_audio(xml)
+
+
+def test_source_without_audio_stream_refuses(tmp_path):
+    import shutil
+    import subprocess
+    from cutdeck.xml_sequence import check_reference_audio
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        pytest.skip("ffmpeg/ffprobe not on PATH")
+    silent_video = tmp_path / "picture_only.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc=duration=1:size=64x64:rate=30", str(silent_video)], check=True)
+    with pytest.raises(XmlRecutRefusal, match="no audio stream"):
+        check_reference_audio(_tracks_xml([(True, [(silent_video, "")])]))
+
+
+def test_clip_on_another_frame_grid_without_ticks_refuses(tmp_path, wav):
+    from cutdeck.xml_sequence import check_reference_audio
+    own_rate = "<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>"
+    with pytest.raises(XmlRecutRefusal, match="own frame rate"):
+        check_reference_audio(_tracks_xml([(True, [(wav, own_rate)])]))
+    ticked = own_rate + "<pproTicksIn>0</pproTicksIn><pproTicksOut>254016000000</pproTicksOut>"
+    assert check_reference_audio(_tracks_xml([(True, [(wav, ticked)])]))["clip_count"] == 1

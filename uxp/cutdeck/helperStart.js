@@ -45,7 +45,7 @@ async function findHelperScript() {
 async function ensureHelperRunning(options) {
   const opts = options || {};
   const rpc = opts.rpc;
-  const version = opts.version || "cutdeck-xml-1";
+  const version = opts.version || "cutdeck-xml-2";
   const onStatus = opts.onStatus || (() => {});
   const now = opts.now || Date.now;
   const sleep = opts.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -96,4 +96,33 @@ async function ensureHelperRunning(options) {
     + (lastError ? lastError.message : "timed out"));
 }
 
-module.exports = { ensureHelperRunning, findHelperScript, deriveHelperScriptPath };
+/* Asks a running helper to replace itself with a fresh process, so helper code edited since it
+   started is picked up (the helper spawns its successor: no launch prompt). Waits until a
+   helper with a different pid answers. Returns what happened; never launches one itself. */
+async function restartHelper(options) {
+  const { rpc, version } = options;
+  const now = options.now || Date.now;
+  const sleep = options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  let before;
+  try {
+    before = await rpc({ type: "hello", version });
+  } catch (_) {
+    return "not-running";
+  }
+  try {
+    await rpc({ type: "restart" });
+  } catch (error) {
+    return "kept: " + error.message; // busy with a job, or a helper too old to restart itself
+  }
+  const startTime = now();
+  while (now() - startTime < (options.timeoutMs || 15000)) {
+    await sleep(options.pollMs || 300);
+    try {
+      const reply = await rpc({ type: "hello", version });
+      if (reply && reply.pid !== before.pid) return "restarted";
+    } catch (_) { /* the new one is still starting */ }
+  }
+  throw new Error("The CutDeck helper did not come back after restarting. Run Start CutDeck.cmd.");
+}
+
+module.exports = { ensureHelperRunning, restartHelper, findHelperScript, deriveHelperScriptPath };

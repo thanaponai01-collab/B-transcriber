@@ -104,8 +104,24 @@ def correlate_gcc_phat(
                       Negative: clip starts BEFORE reference start.
             psr: Peak-to-Sidelobe Ratio (confidence score).
     """
+    offset_s, psr, _ = correlate_gcc_phat_detail(ref_audio, clip_audio, sample_rate)
+    return offset_s, psr
+
+
+def correlate_gcc_phat_detail(
+    ref_audio: np.ndarray,
+    clip_audio: np.ndarray,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
+) -> tuple[float, float, float]:
+    """`correlate_gcc_phat`, plus how close the runner-up match came.
+
+    Returns (offset_s, psr, runner_up): runner_up is the highest correlation outside the
+    +/-50 ms peak window divided by the peak (0..1). Near 1.0 means two places match about
+    equally well — repeated sound, a music loop — so the offset is not trustworthy however
+    high the PSR is.
+    """
     if len(ref_audio) == 0 or len(clip_audio) == 0:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
 
     n_ref = len(ref_audio)
     n_clip = len(clip_audio)
@@ -134,7 +150,10 @@ def correlate_gcc_phat(
     # Convert circular FFT index to linear lag
     # Index 0 .. n_ref-1: positive lags (clip starts after ref)
     # Index n_fft - n_clip + 1 .. n_fft - 1: negative lags (clip starts before ref)
-    if peak_idx > n_fft // 2:
+    # Split at n_ref, not n_fft // 2: positive lags reach n_ref - 1, which is past the midpoint
+    # whenever n_ref + n_clip sits just under a power of two (a clip starting late was read as
+    # a large negative offset; regression test in tests/test_cutdeck_sync_audio.py).
+    if peak_idx >= n_ref:
         lag_samples = peak_idx - n_fft
     else:
         lag_samples = peak_idx
@@ -160,10 +179,12 @@ def correlate_gcc_phat(
         mean_sidelobe = float(np.mean(sidelobes))
         std_sidelobe = float(np.std(sidelobes))
         psr = (peak_val - mean_sidelobe) / (std_sidelobe + 1e-12)
+        runner_up = float(np.max(sidelobes)) / peak_val if peak_val > 0 else 1.0
     else:
         psr = 0.0
+        runner_up = 1.0
 
-    return offset_s, max(0.0, psr)
+    return offset_s, max(0.0, psr), max(0.0, runner_up)
 
 
 def sync_clip_to_reference(

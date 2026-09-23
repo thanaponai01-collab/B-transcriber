@@ -69,6 +69,34 @@
           </svg>
           <span>Check Effect Chain</span>
         </div>
+        <div id="transformprobe" class="dropdown-item" role="button" data-act="transformprobe">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="1"/>
+            <circle cx="12" cy="12" r="1.5"/>
+            <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
+          </svg>
+          <span>Check Transform</span>
+        </div>
+        <div id="keyframeprobe" class="dropdown-item" role="button" data-act="keyframeprobe" title="Read-only. Select one clip with a keyframe at the playhead first.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l5 9-5 9-5-9z"/>
+          </svg>
+          <span>Check Keyframes</span>
+        </div>
+        <div id="alcreateprobe" class="dropdown-item" role="button" data-act="alcreateprobe" title="Adds one item: imports an Adjustment Layer sized to the active sequence into CutDeck &gt; ADJ &amp; FX.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M12 9v6M9 12h6"/>
+          </svg>
+          <span>Try Creating AL</span>
+        </div>
+        <div id="syncmovesprobe" class="dropdown-item" role="button" data-act="syncmovesprobe" title="Copies the active sequence, then tests moving one camera clip and its audio on the copy. Your sequence is not edited.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7h10M4 12h14M4 17h7"/>
+            <path d="M17 14l3 3-3 3"/>
+          </svg>
+          <span>Test Sync Moves</span>
+        </div>
         <div class="dropdown-divider"></div>
         <div id="menu-item-reload" class="dropdown-item" role="button" data-act="menu-item-reload">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -105,14 +133,7 @@
 
   <!-- PAGE 1: CUT & SYNC -->
   <div id="view-edit" class="view-panel">
-    <div class="control-group">
-      <label class="control-label" for="audio">Audio Track</label>
-      <select id="audio" data-act="audio">
-        <option value="" selected>Auto</option>
-      </select>
-    </div>
-
-    <div id="sync" class="btn-primary" role="button" data-act="sync">
+    <div id="sync" class="btn-primary" role="button" data-act="sync" title="Matches every clip by its own audio and lays each on its own tracks in a copy named &lt;sequence&gt;_Synced. Your sequence is not edited. The Audio Track setting below is for Rough Cut only.">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
       </svg>
@@ -123,6 +144,13 @@
       <div class="section-line"></div>
       <span class="section-tag">Rough Cut</span>
       <div class="section-line"></div>
+    </div>
+
+    <div class="control-group">
+      <label class="control-label" for="audio">Audio Track</label>
+      <select id="audio" data-act="audio">
+        <option value="" selected>Auto</option>
+      </select>
     </div>
 
     <div class="control-group">
@@ -172,6 +200,73 @@
   <div class="status-card">
     <div id="status-icon" class="status-icon"></div>
     <div id="status" role="status">Ready</div>
+  </div>
+
+  <!-- ============================================================================
+       SECOND PANEL: Transform & Align (manifest entrypoint cutdeck.align.panel)
+
+       Premiere gives a plugin one main HTML document however many panel entrypoints
+       it declares — there is no per-entrypoint "main". So this is the transform
+       panel's container, living in the shared document and moved into its own panel
+       root by core/alignPanel.js's mount(), called from the entrypoints.setup()
+       show() hook in main.js. It ships hidden so it never flashes inside the Cut &
+       Sync panel before its own panel is opened.
+       ============================================================================ -->
+  <div id="view-transform" hidden>
+    <div class="header">
+      <div class="brand"><span>Transform &amp; Align</span></div>
+    </div>
+
+    <div id="align-seq-card" class="sequence-card" role="button" data-act="align-refresh" title="Click to refresh">
+      <div id="align-sequence">No sequence open</div>
+    </div>
+
+    <!-- Phase 1: read-only display of the selected clip's Position/Scale/Rotation/Anchor
+         Point, kept live by a background poll (see main.js's pollAlignTransform) and refreshed
+         immediately by clicking the sequence card above. -->
+    <div class="control-group">
+      <div id="align-transform-clip" class="control-label">No sequence open</div>
+      <div id="align-transform-reason" class="setting-subtext" hidden>Select a clip on the timeline.</div>
+      <div id="align-transform-fields" class="transform-fields" hidden>
+        <div class="transform-field-label">Position</div>
+        <div id="align-position" class="transform-field-value">—</div>
+        <div class="transform-field-label">Scale</div>
+        <div id="align-scale" class="transform-field-value">—</div>
+        <div class="transform-field-label">Rotation</div>
+        <div id="align-rotation" class="transform-field-value">—</div>
+        <div class="transform-field-label">Anchor Point</div>
+        <div id="align-anchor" class="transform-field-value">—</div>
+      </div>
+    </div>
+
+    <div class="section-divider">
+      <div class="section-line"></div>
+      <span class="section-tag">Phase 0</span>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="control-group">
+      <div class="setting-subtext">
+        Select one clip on the timeline, then read its real Motion/Transform components,
+        parameter indexes, value shapes and source dimensions from this build. Read-only —
+        it creates, inserts and deletes nothing. Run it once per clip shape: source matching
+        the sequence, source not matching, non-square pixels, an Adjustment Layer, a graphic.
+      </div>
+    </div>
+
+    <div id="align-probe" class="btn-primary" role="button" data-act="align-probe">
+      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="1"/>
+        <circle cx="12" cy="12" r="1.5"/>
+        <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
+      </svg>
+      Check Transform
+    </div>
+
+    <div class="status-card">
+      <div id="align-status-icon" class="status-icon"></div>
+      <div id="align-status" role="status">Ready</div>
+    </div>
   </div>
 
   <!-- Settings Modal (Opened by Settings in Dropdown Menu) -->
@@ -245,6 +340,14 @@
         <!-- Rename (edit the text, then click away or press Enter) or remove (×) any captured
              preset. Empty when no presets are captured yet. -->
         <div id="fx-preset-manage-list" class="fx-preset-manage-list"></div>
+        <!-- Where presets are saved: one <preset name>.json per preset in a folder you pick (pick a synced
+             folder to share presets across machines), or this machine only. See presetStore.js. -->
+        <div class="fx-preset-folder-row">
+          <div id="fx-preset-folder-path" class="setting-subtext fx-preset-folder-path"></div>
+          <div id="btn-preset-folder" class="btn-secondary" role="button" data-act="btn-preset-folder" title="Save each preset as its own .json file, named after it, in a folder you choose">
+            Choose folder…
+          </div>
+        </div>
       </div>
 
       <!-- Tool Shortcuts & Reference Guide -->

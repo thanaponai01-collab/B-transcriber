@@ -313,3 +313,18 @@ def test_cli_emits_progress_lines_the_bridge_can_parse(mixdown_path, sequence_xm
     assert pcts == sorted(set(pcts)), "progress must only move forward"
     assert [p["stage"] for p in progress][-2:] == ["Calculating cut spans", "Rewriting sequence XML"]
     assert pcts[-1] == 95
+
+
+def test_transition_refused_before_any_audio_work(tmp_path, monkeypatch):
+    """recut() refuses transitions whatever the plan; the CLI must not transcribe first."""
+    xml = _sequence_xml(195).replace(
+        "<enabled>TRUE</enabled>",
+        "<transitionitem><start>90</start><end>100</end></transitionitem><enabled>TRUE</enabled>", 1)
+    seq_path = tmp_path / "seq.xml"
+    seq_path.write_text(xml, encoding="utf-8")
+
+    def no_ingest(*args, **kwargs):
+        raise AssertionError("ingest ran before the structural refusal")
+    monkeypatch.setattr(ingest_mod, "ingest", no_ingest)
+    with pytest.raises(xml_recut.XmlRecutRefusal, match="transitionitem"):
+        xml_recut.main([str(seq_path), "--asr", "--job-id", "1"])

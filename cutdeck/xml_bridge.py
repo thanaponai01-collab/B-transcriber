@@ -19,12 +19,12 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
-from cutdeck.xml_audio_extract import reference_media_path
-from cutdeck.xml_recut import XmlRecutRefusal, _sequence_timebase, _PPRO_TICKS_PER_SECOND
+from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
+                                  check_reference_audio, reference_media_path, sequence_timebase)
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
-VERSION = "cutdeck-xml-1"
+VERSION = "cutdeck-xml-2"  # -2: plan_sync (native Sync)
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -39,32 +39,40 @@ def parse_progress(line: str) -> dict | None:
 
 
 def reference_audio_track(source_xml: str, request: dict) -> int | None:
-    """Map Premiere's logical track to FCP7's exploded channel tracks.
-
-    Real exports expand each stereo track into two XML tracks. Treating A2
-    as XML index 1 would silently analyze A1 again. Verify the grouping.
-    """
+    """Map Premiere's logical track to FCP7's exploded channel tracks."""
     selected = request.get("audio_track")
     if selected is None:
         return None  # Preserve the working command's default exactly.
-    tracks = ET.fromstring(source_xml).findall("sequence/media/audio/track")
-    groups = []
-    index = 0
-    while index < len(tracks):
-        track = tracks[index]
-        count = int(track.get("totalExplodedTrackCount", "1"))
-        if count < 1 or index + count > len(tracks):
-            raise ValueError("Cannot map the selected audio track from this export")
-        for channel in range(count):
-            item = tracks[index + channel]
-            if (int(item.get("currentExplodedTrackIndex", "0")) != channel
-                    or int(item.get("totalExplodedTrackCount", "1")) != count):
-                raise ValueError("Audio channel grouping in the export is inconsistent")
-        groups.append(index)
-        index += count
+    groups = audio_track_groups(source_xml)
     if len(groups) != request.get("audio_track_count") or not 0 <= selected < len(groups):
         raise ValueError("Export audio tracks differ from the timeline; refresh and try again")
     return groups[selected]
+
+
+def reference_label(source_xml: str, checked: dict) -> str:
+    """What the status line says is being analyzed, in Premiere's own track names."""
+    try:
+        track = f"A{audio_track_groups(source_xml).index(checked['xml_track']) + 1}"
+    except ValueError:
+        track = f"XML audio track {checked['xml_track'] + 1}"
+    files = checked["files"]
+    more = f" +{len(files) - 1} more" if len(files) > 1 else ""
+    return f"{track} ({Path(files[0]).name}{more})"
+
+
+_LOG_NOISE = re.compile(r"PROGRESS:|Traceback \(most recent call last\)|\s")
+
+
+def failure_detail(log_path: str) -> str | None:
+    """The last meaningful line of a child's log: the exception or refusal, not a stack frame."""
+    try:
+        lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines[-200:]):
+        if line.strip() and not _LOG_NOISE.match(line):
+            return line.strip()[:300]
+    return None
 
 
 _ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
@@ -103,8 +111,8 @@ def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
     sequence = ET.fromstring(source_xml).find("sequence")
     if sequence is None:
         raise ValueError("Export contains no sequence")
-    tb = _sequence_timebase(sequence)
-    tick_num = _PPRO_TICKS_PER_SECOND * tb.fps_den
+    tb = sequence_timebase(sequence)
+    tick_num = PPRO_TICKS_PER_SECOND * tb.fps_den
     duration = int(sequence.findtext("duration", "0"))
 
     def frame(key):
@@ -162,6 +170,41 @@ def _rough_cut_arguments(req: dict) -> dict:
                 start_frame=start_frame, end_frame=end_frame)
 
 
+def _plan_sync_clips(req: dict) -> list:
+    """Validate a `plan_sync` request's clips; nothing runs on a bad one."""
+    from cutdeck.sync_plan import ClipInput
+    clips = req.get("clips")
+    if not isinstance(clips, list) or not clips:
+        raise ValueError("plan_sync needs a non-empty list of clips")
+    result, seen = [], set()
+    for clip in clips:
+        if not isinstance(clip, dict):
+            raise ValueError("Each clip must be an object")
+        clip_id, duration = clip.get("id"), clip.get("duration_s")
+        if not isinstance(clip_id, str) or not clip_id or clip_id in seen:
+            raise ValueError("Each clip needs a unique, non-empty string id")
+        if type(duration) not in (int, float) or not 0 < duration < 1e6:
+            raise ValueError(f"Clip {clip_id}: duration_s must be a positive number of seconds")
+        seen.add(clip_id)
+        result.append(ClipInput(clip_id, Path(_input_file(clip.get("path"))), float(duration)))
+    return result
+
+
+def _load_audio(path, sample_rate, start_s, duration_s):
+    """sync_plan's Loader argument order, over cutdeck.sync's keyword-only extractor."""
+    from cutdeck.sync import extract_mono_audio
+    return extract_mono_audio(path, start_s=start_s, duration_s=duration_s, sample_rate=sample_rate)
+
+
+def plan_to_json(plan) -> dict:
+    return {"placements": [{"id": p.clip_id, "status": p.status, "start_s": p.start_s,
+                            "session": p.session, "matched_to": p.matched_to,
+                            "confidence": p.confidence, "drift_ms": p.drift_ms, "reason": p.reason,
+                            "media_duration_s": plan.media_duration_s.get(p.clip_id)}
+                           for p in plan.placements],
+            "sessions": plan.sessions, "duration_s": plan.duration_s}
+
+
 class XmlJobs:
     def __init__(self, directory: Path):
         self.directory = directory.resolve()
@@ -169,6 +212,8 @@ class XmlJobs:
         self.jobs: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
         self.active: str | None = None
+        self.restarting = False
+        self.stop = asyncio.Event()  # set once a `restart` reply has been sent
 
     async def dispatch(self, req: dict) -> dict:
         if not isinstance(req, dict):
@@ -177,13 +222,18 @@ class XmlJobs:
         if kind == "hello":
             if req.get("version") != VERSION:
                 raise ValueError("Panel/helper version mismatch")
-            return {"version": VERSION}
-        if kind == "prepare" or kind == "prepare_sync":
+            return {"version": VERSION, "pid": os.getpid()}
+        if kind == "restart":
+            # The panel asks on every start so edited helper code is picked up. Jobs live in this
+            # process's memory, so never while one runs.
+            if self.active:
+                raise ValueError("CutDeck is processing a job; it restarts once that finishes")
+            self.restarting = True
+            return {"restarting": True}
+        if kind == "prepare":
             job_id, folder = self._allocate()
-            is_sync = (kind == "prepare_sync")
-            context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count")
-            if not is_sync:
-                context_keys += ("in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
+            context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count",
+                            "in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
             context = {key: req.get(key) for key in context_keys}
             if not all(isinstance(context[k], str) and context[k] for k in
                        ("project_id", "sequence_id", "sequence_name")):
@@ -191,16 +241,13 @@ class XmlJobs:
             track = context["audio_track"]
             if track is not None and (type(track) is not int or track < 0):
                 raise ValueError("Audio track must be a non-negative index")
-            if not is_sync and type(context["asr"]) is not bool:
+            if type(context["asr"]) is not bool:
                 raise ValueError("Speech protection must be true or false")
-            result_name = f"{context['sequence_name']}_Synced" if is_sync else f"{context['sequence_name']} — CutDeck {job_id[:8]}"
-            out_filename = "synced.xml" if is_sync else "rough_cut.xml"
-            log_filename = "sync.log" if is_sync else "process.log"
-            job = {"job_id": job_id, "job_type": "sync" if is_sync else "cut", "state": "prepared", "context": context,
+            job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
                    "source_path": str(folder / "source.xml"),
-                   "output_path": str(folder / out_filename),
-                   "result_name": result_name,
-                   "log_path": str(folder / log_filename)}
+                   "output_path": str(folder / "rough_cut.xml"),
+                   "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
+                   "log_path": str(folder / "process.log")}
             self.jobs[job_id] = job
             self._save(job)
             return dict(job)
@@ -212,6 +259,13 @@ class XmlJobs:
                    "result_path": str(folder / "result.json"),
                    "log_path": str(folder / "process.log")}
             return self._launch(job, self._run_transcribe(job))
+        if kind == "plan_sync":
+            clips = _plan_sync_clips(req)
+            job_id, folder = self._allocate()
+            job = {"job_id": job_id, "job_type": "plan_sync", "state": "running",
+                   "clips": [{"id": c.id, "path": str(c.path), "duration_s": c.duration_s} for c in clips],
+                   "progress": {"pct": 0, "stage": "Reading audio"}}
+            return self._launch(job, self._run_plan_sync(job, clips))
         if kind == "submit_rough_cut":
             arguments = _rough_cut_arguments(req)
             job_id, folder = self._allocate()
@@ -232,26 +286,32 @@ class XmlJobs:
             raise ValueError("Unknown job; start a new operation")
         if kind == "status":
             return dict(job)
-        if kind == "start" or kind == "start_sync":
+        if kind == "start":
             if job["state"] != "prepared":
                 return dict(job)  # duplicate request must never run a second time
             if self.active:
                 raise ValueError("CutDeck is already processing a sequence")
             source = Path(job["source_path"])
             source_xml = source.read_text(encoding="utf-8-sig")
-            if job.get("job_type") == "sync":
-                job["xml_audio_track"] = reference_audio_track(source_xml, job["context"]) if job["context"].get("audio_track") is not None else 0
-                job["output_path"] = str(result_path(job, source_xml))
-                job["state"] = "running"
-                return self._launch(job, self._run_sync(job))
-            start, end = range_from_ticks(source_xml, job["context"])
-            job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
-            # Only now does the export exist, so only now is the footage location known.
-            job["output_path"] = str(result_path(job, source_xml))
-            job["range_frames"] = [start, end]
-            job["state"] = "running"
-            return self._launch(job, self._run(job))
+            try:
+                return self._start(job, source_xml)
+            except (ValueError, XmlRecutRefusal, ET.ParseError) as exc:
+                # A refusal is final for this export: fail the job so the panel shows
+                # why and clears it, instead of offering to resume a start that can't run.
+                job["state"] = "failed"
+                job["message"] = f"Cannot start: {exc}"
+                self._save(job)
+                return dict(job)
         raise ValueError("Unknown request type")
+
+    def _start(self, job: dict, source_xml: str) -> dict:
+        start, end = range_from_ticks(source_xml, job["context"])
+        job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
+        # Only now does the export exist, so only now is the footage location known.
+        job["output_path"] = str(result_path(job, source_xml))
+        job["range_frames"] = [start, end]
+        job["state"] = "running"
+        return self._launch(job, self._run(job))
 
     def _allocate(self) -> tuple[str, Path]:
         """Claim the one GPU slot's next job folder, or refuse if the helper is busy."""
@@ -282,7 +342,15 @@ class XmlJobs:
         try:
             folder = self.directory / job["job_id"]
             report_path = folder / "report.json"
-            args = [sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
+            job["progress"] = {"pct": 2, "stage": "Checking source media"}
+            source_xml = Path(job["source_path"]).read_text(encoding="utf-8-sig")
+            try:
+                checked = await asyncio.to_thread(
+                    check_reference_audio, source_xml, job["xml_audio_track"])
+            except XmlRecutRefusal as exc:
+                raise RuntimeError(f"Cannot analyze this sequence: {exc}") from None
+            job["reference"] = reference_label(source_xml, checked)
+            args =[sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
                     "--out", job["output_path"], "--report", str(report_path),
                     "--config", str(ROOT / "transcribe/config.yaml"), "--no-save-plan"]
             if job.get("preset", "aggressive") == "aggressive":
@@ -310,7 +378,10 @@ class XmlJobs:
                         job["progress"] = progress
                 code = await process.wait()
             if code:
-                raise RuntimeError(f"CutDeck processing failed (exit {code}). See {job['log_path']}")
+                detail = failure_detail(job["log_path"])
+                raise RuntimeError(f"CutDeck processing failed (exit {code})"
+                                   + (f": {detail}" if detail else "")
+                                   + f". See {job['log_path']}")
             report = json.loads(report_path.read_text(encoding="utf-8"))
             job["report"] = report
             job["state"] = "ready" if report["cuts_applied"] else "no_cuts"
@@ -382,33 +453,14 @@ class XmlJobs:
             self.active = None
             self._save(job)
 
-    async def _run_sync(self, job):
+    async def _run_plan_sync(self, job, clips):
+        def progress(done, total, stage):  # runs on the worker thread; one dict swap is atomic
+            job["progress"] = {"pct": round(100 * done / total) if total else 0,
+                               "stage": f"{stage} {done}/{total}"}
         try:
-            source = Path(job["source_path"])
-            source_xml = source.read_text(encoding="utf-8-sig")
-            ref_track = job.get("xml_audio_track") or 0
-
-            from cutdeck.xml_sync import sync_sequence_xml
-            synced_xml, report = await asyncio.to_thread(
-                sync_sequence_xml,
-                source_xml,
-                ref_track_idx=ref_track,
-            )
-
-            out_path = Path(job["output_path"])
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n' + synced_xml,
-                encoding="utf-8",
-            )
-
-            job["report"] = {
-                "sequence_name": report.sequence_name,
-                "total_groups": report.total_groups,
-                "synced_groups": report.synced_groups,
-                "unsynced_groups": report.unsynced_groups,
-                "unsynced_reasons": report.unsynced_reasons,
-            }
+            from cutdeck.sync_plan import plan_sync
+            plan = await asyncio.to_thread(plan_sync, clips, _load_audio, progress)
+            job["plan"] = plan_to_json(plan)
             job["state"] = "ready"
         except asyncio.CancelledError:
             job["state"] = "failed"
@@ -416,11 +468,10 @@ class XmlJobs:
             raise
         except Exception as exc:
             job["state"] = "failed"
-            job["message"] = str(exc)
+            job["message"] = f"Sync matching failed: {exc}"
         finally:
             self.active = None
             self._save(job)
-
 
 
 async def serve(jobs: XmlJobs, port: int = PORT):
@@ -434,10 +485,22 @@ async def serve(jobs: XmlJobs, port: int = PORT):
             except Exception as exc:
                 response = {"ok": False, "message": str(exc)}
             await socket.send(json.dumps(response, ensure_ascii=False))
+            if jobs.restarting:
+                jobs.stop.set()
 
     # Reject ordinary website origins; the local UXP client has no web origin.
     return await ws_serve(connection, "127.0.0.1", port,
                           origins=[None, "null", "file://"], max_size=65536)
+
+
+def spawn_replacement(port: int, jobs_dir: Path):
+    """Start a fresh helper, detached and windowless, that outlives this one."""
+    log = open(jobs_dir / "helper.log", "ab")
+    extra = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+             if os.name == "nt" else {"start_new_session": True})
+    subprocess.Popen([sys.executable, "-m", "cutdeck.xml_bridge", "--port", str(port), "--jobs-dir", str(jobs_dir)],
+                     cwd=ROOT, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                     stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **extra)
 
 
 def main():
@@ -452,7 +515,10 @@ def main():
         server = await serve(jobs, args.port)
         print(f"CutDeck ready on ws://127.0.0.1:{args.port}", flush=True)
         async with server:
-            await asyncio.Future()
+            await jobs.stop.wait()
+            server.close()
+            await server.wait_closed()  # free the port before the replacement binds it
+        spawn_replacement(args.port, jobs.directory)
 
     try:
         asyncio.run(run())

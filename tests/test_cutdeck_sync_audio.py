@@ -126,3 +126,18 @@ def test_sync_unrelated_audio_low_confidence(timebase_30):
     assert res.is_synced is False
     assert res.reason == "low_confidence"
     assert res.confidence < 10.0
+
+
+def test_correlate_clip_starting_past_half_the_fft_buffer():
+    """Regression (2026-09-24): a clip starting late in the reference was read as a large
+    NEGATIVE offset. The lag split used n_fft // 2; valid positive lags run to len(ref) - 1,
+    which is past n_fft // 2 whenever len(ref) + len(clip) sits just under a power of two."""
+    sr = 2000
+    rng = np.random.default_rng(5)
+    ref_audio = rng.standard_normal(120 * sr).astype(np.float32)  # 240000 + 16000 -> n_fft 262144
+    clip_audio = ref_audio[71 * sr:79 * sr]
+
+    detected_offset, psr = correlate_gcc_phat(ref_audio, clip_audio, sr)
+
+    assert abs(detected_offset - 71.0) < 0.001
+    assert psr > 20.0

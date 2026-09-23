@@ -113,3 +113,47 @@ test("deriveHelperScriptPath tolerates a trailing slash", () => {
 test("deriveHelperScriptPath rejects a path that isn't the plugin's own folder", () => {
   assert.throws(() => deriveHelperScriptPath("D:\\repo\\somewhere\\else"), /repo root/);
 });
+
+// restartHelper: every panel start asks a running helper to replace itself (fresh code).
+const { restartHelper } = require("../uxp/cutdeck/helperStart.js");
+
+test("restartHelper waits until a helper with a new pid answers", async () => {
+  let pid = 100;
+  let hellos = 0;
+  const calls = [];
+  const rpc = async (req) => {
+    calls.push(req.type);
+    if (req.type === "restart") { pid = 0; return { restarting: true }; }
+    hellos++;
+    if (pid === 0 && hellos < 4) throw new Error("Cannot reach CutDeck helper.");
+    if (pid === 0) pid = 200;
+    return { version: "cutdeck-xml-2", pid };
+  };
+  assert.equal(await restartHelper({ rpc, version: "cutdeck-xml-2", ...fakeClock() }), "restarted");
+  assert.deepEqual(calls.slice(0, 2), ["hello", "restart"]);
+});
+
+test("restartHelper does nothing when no helper is running", async () => {
+  const calls = [];
+  const rpc = async (req) => { calls.push(req.type); throw new Error("Cannot reach CutDeck helper."); };
+  assert.equal(await restartHelper({ rpc, version: "v", ...fakeClock() }), "not-running");
+  assert.deepEqual(calls, ["hello"], "never asks to restart, never launches");
+});
+
+test("restartHelper keeps a busy (or too old) helper", async () => {
+  const rpc = async (req) => {
+    if (req.type === "restart") throw new Error("CutDeck is processing a job; it restarts once that finishes");
+    return { version: "v", pid: 1 };
+  };
+  assert.match(await restartHelper({ rpc, version: "v", ...fakeClock() }), /^kept: CutDeck is processing a job/);
+});
+
+test("restartHelper says so when no helper comes back", async () => {
+  const rpc = async (req) => {
+    if (req.type === "restart") return { restarting: true };
+    if (rpc.asked) throw new Error("Cannot reach CutDeck helper.");
+    rpc.asked = true;
+    return { version: "v", pid: 1 };
+  };
+  await assert.rejects(restartHelper({ rpc, version: "v", ...fakeClock() }), /did not come back/);
+});

@@ -16,6 +16,9 @@
     "clipboard": "readAndWrite",
     "launchProcess": {
       "extensions": [".cmd", ".vbs"]
+    },
+    "ipc": {
+      "enablePluginCommunication": true
     }
   },
   "entrypoints": [
@@ -36,6 +39,43 @@
       "preferredDockedSize": {
         "width": 340,
         "height": 520
+      },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/icon.svg",
+          "scale": [
+            1,
+            2
+          ],
+          "theme": [
+            "darkest",
+            "dark",
+            "medium",
+            "lightest",
+            "light"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "panel",
+      "id": "cutdeck.align.panel",
+      "label": {
+        "default": "CutDeck Transform"
+      },
+      "minimumSize": {
+        "width": 260,
+        "height": 380
+      },
+      "preferredFloatingSize": {
+        "width": 300,
+        "height": 460
+      },
+      "preferredDockedSize": {
+        "width": 300,
+        "height": 460
       },
       "icons": [
         {

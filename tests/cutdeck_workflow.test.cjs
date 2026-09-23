@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { capture, prepare, prepareSync, importResult, getOrCreateCutDeckBin } = require("../uxp/cutdeck/workflow.js");
+const { capture, prepare, importResult, getOrCreateCutDeckBin } = require("../uxp/cutdeck/workflow.js");
 
 function fixture() {
   const source = { guid: { toString: () => "source" }, name: "Interview",
@@ -57,23 +57,6 @@ test("failed export never starts processing", async () => {
   await assert.rejects(prepare(f.ppro, async (r) => { calls.push(r.type); return f.job; },
     await capture(f.ppro), {}, () => {}), /could not export/);
   assert.deepEqual(calls, ["hello", "prepare"]);
-});
-test("prepareSync runs hello, prepare_sync, start in order and checkpoints the export", async () => {
-  const f = fixture(); const calls = [], saved = [];
-  const rpc = async (r) => { calls.push(r.type); return r.type === "start" ? { state: "running" } : { ...f.job }; };
-  const result = await prepareSync(f.ppro, rpc, await capture(f.ppro), { audio_track: 0 }, (j) => saved.push({ ...j }));
-  assert.deepEqual(calls, ["hello", "prepare_sync", "start"]);
-  assert.equal(result.state, "running");
-  assert.equal(saved[0].exported, undefined);
-  assert.equal(saved[1].exported, true);
-  assert.equal(saved[2].state, "running");
-});
-test("failed export never starts a sync", async () => {
-  const f = fixture(); const calls = [];
-  f.ppro.ProjectConverter.exportAsFinalCutProXML = async () => false;
-  await assert.rejects(prepareSync(f.ppro, async (r) => { calls.push(r.type); return f.job; },
-    await capture(f.ppro), {}, () => {}), /could not export/);
-  assert.deepEqual(calls, ["hello", "prepare_sync"]);
 });
 test("switching projects prevents import", async () => {
   const f = fixture(); f.project.guid.toString = () => "other";

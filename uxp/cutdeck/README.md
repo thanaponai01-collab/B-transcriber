@@ -63,12 +63,18 @@ when that isn't set up, not as a replacement for it.
 3. Leave the **Speech + Silence** preset selected for aggressive silence
    cutting with ASR protection for short speech. **Silence Only** skips ASR,
    just like the existing command's `-NoAsr` switch.
-4. Click **Rough Cut In–Out**, or **Sync Multi-Cam** for a multi-camera sync
-   using the same In/Out and Reference Audio. CutDeck creates a sequence
+4. Click **Rough Cut In–Out**. CutDeck creates a sequence
    named `Your sequence — CutDeck <job identifier>` and opens it, filed in a
    **`CutDeck` bin in the Project panel** (created once, on first use, at the
    project root — every result after that lands in the same bin instead of
    scattering at the root).
+
+**Sync** needs no marks or Reference Audio. Lay every camera's clips and the recorder's
+files in a row on one sequence and click Sync. The helper matches each clip by its own
+audio; the panel copies the sequence to `Your sequence_Synced` and, in one step (one
+Ctrl+Z), puts each synced clip on its own video and audio tracks. Clips that match nothing
+sit flat on the first tracks after a 30 s gap, and the status line says why. Your
+sequence is not edited, and Sync refuses to run on a `_Synced` copy.
 
 The diagnostics drawer (gear icon, top right) holds the read-only timing
 probe, the connection probe, and copy-status.
@@ -89,10 +95,17 @@ audio), the result falls back to the job folder and the panel says so rather tha
 failing the cut. A run that finds no cuts leaves nothing in your media folder.
 
 The source sequence is never edited. Material before In is preserved; material
-after Out shifts earlier by the removed duration across all tracks. The entire
-sequence audio is still analyzed, preserving the existing analysis context.
-In/Out only limits the final cuts. A short selected range therefore does not yet
-make a long sequence fast to analyze.
+after Out shifts earlier by the removed duration across all tracks. Only the
+In/Out range plus 2 seconds each side is extracted and analyzed, so a short range
+on a long sequence is fast.
+
+Before any audio is extracted, the helper checks the export and refuses clearly:
+the Reference Audio track (with no choice made, the first track that is switched
+on and has clips; a track you pick is used even if it is switched off), missing or
+offline source media, source media with no audio stream, transitions and nested
+sequences. While it runs, the status line names the track and file being analyzed
+(for example `A2 (interview.wav)`). If processing fails, the message quotes the
+error from `process.log` instead of only an exit code.
 
 The helper maps Premiere stereo tracks to their expanded XML channel groups.
 Audio extraction otherwise has the same behavior and limitations as the existing
@@ -133,7 +146,7 @@ Stop it with Ctrl+C in its window when finished.
 
 ## Verification status
 
-Automated tests cover exact CFR/NTSC range conversion, scoped XML cuts and sync,
+Automated tests cover exact CFR/NTSC range conversion, scoped XML cuts,
 stereo-track mapping, unchanged no-cut output, CLI reports, worker errors,
 duplicate starts, real WebSocket reconnection, and panel import identity checks.
 
@@ -235,6 +248,21 @@ API references checked during implementation:
 - [AdobeDocs sample: effects.ts](https://github.com/AdobeDocs/uxp-premiere-pro-samples/blob/main/sample-panels/premiere-api/src/effects.ts) —
   the `executeTransaction`/`createInsertComponentAction` shape `effects.js` follows
 
+### Run the keyframe probe (gates animated presets)
+
+**Check Keyframes** (diagnostics drawer) is read-only. It answers the one thing blocking
+animated presets: are keyframe times counted from the sequence, the clip's first frame, or
+the source media? It also records this build's interpolation-mode numbers (Linear/Hold/Bezier).
+
+1. Pick a clip that starts **later than 0:00** on the timeline **and is trimmed at its head**
+   (its In point is not the media's first frame). Speed at 100%. Otherwise two readings
+   coincide and the probe correctly refuses a verdict.
+2. Select only that clip. In Effect Controls, turn on the Scale stopwatch so it keyframes at
+   the playhead. Move the playhead, add a second keyframe, right-click it > **Bezier**.
+3. Move the playhead **back onto the first keyframe** and click **Check Keyframes**.
+4. Read the VERDICT, then copy the full report (also JSON in the UDT console) somewhere
+   before animated presets are built on it.
+
 ### Quick-effect preset buttons (Adj & FX page)
 
 Below the Adjustment Layer card, up to `MAX_QUICK_PRESETS` (currently 9, in
@@ -260,7 +288,26 @@ this panel). Rename/remove are plain `localStorage` writes, not Premiere calls, 
 wired directly through `main.js`'s `onRenamePreset`/`onRemovePreset` intents rather than
 `act()`.
 
-**v1 is static-value effects only — no keyframes/animation**: a captured Keyframe's
+**Where presets are saved** (Settings > Presets > **Choose folder…**, `presetStore.js`): pick a
+folder and each preset is its own file there, named after it (`Zoom In.json`). Pick a synced
+folder (OneDrive, Dropbox) and choose the same folder on each machine to share one library;
+linking a folder writes in any of this machine's presets it doesn't already have. Removing a
+preset (×) moves its file into a `Removed` subfolder, never deletes it. Other `.json` files in
+the folder are ignored; a CutDeck preset file that can't be read is reported and left
+untouched. An older single `cutdeck-presets.json` is split into per-preset files on load and
+renamed to `.migrated`. With no folder chosen, presets stay in this plugin install's
+`localStorage` only.
+
+**Animated presets:** Capture includes keyframes. Each keyframe is stored as an offset from the
+captured clip's first frame and replayed at the same offset from each Adjustment Layer's
+start, with its Linear/Hold/Bezier interpolation. It is not stretched to fit, so a 5-frame zoom
+stays 5 frames long. This rests on the **Check Keyframes** result from Premiere 26.5
+(keyframe times are relative to source media). Position/Anchor Point interpolation can't be
+read (Premiere's `PointKeyframe` has no getter), so those keep Premiere's default. After
+applying, CutDeck reads the keyframes back and names any that didn't land as captured.
+Premiere's own Motion is still skipped, so animate the **Transform** effect, not Motion.
+
+**Historical note (before Check Keyframes ran):** a captured Keyframe's
 `TickTime` convention (clip-relative vs. sequence-relative) isn't documented anywhere in
 Adobe's reference, so animated presets (the old Zoom In/Whip Pan/Camera Shake-style names)
 are a deliberate later step, gated on the **Check Effect Chain** probe (diagnostics drawer)
