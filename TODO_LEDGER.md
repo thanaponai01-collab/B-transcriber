@@ -7,6 +7,12 @@ Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
   clean, **57 s** vs ~67 s before (user's recollection of the previous run, not a timed A/B).
   ~15% wall time for a 43% cut in host reads (75,950 → 43,395 on the 432-cut fake), so the
   edit transactions, not the reads, are most of the time now. Baseline for the next pass.
+- **Rough Cut per-step timing (`616bb04`)**, same clip, 61 s total: split at cut edges **34.9**
+  (~17k clone actions in one transaction — Premiere's own cost, near the floor with this API),
+  reads between steps **16.3** (almost all the two reads after the razor, ~8,700 pieces),
+  read-back 5.3, remove 2.7, open copy 1.9, close gaps 0.7, the rest <0.1. Follow-up: those two
+  reads now skip end/In where their step doesn't use them (fake host 43,395 → 30,415 reads);
+  live time not yet re-measured.
 - **Transform panel (`f6b1154`)**: a global `SequenceEvent.ACTIVATED` listener fires on sequence
   switch; a global `SELECTION_CHANGED` does **not** — it must be attached to the sequence
   (`EventManager.addEventListener(seq, …)`), which fires on clip click. No poll needed.

@@ -89,7 +89,9 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     }));
     return 1;
   };
-  const read = () => timed("reads", () => readSequence(ppro, copy, { paths: false })); // positions only
+  // Positions only. The two reads after the razor see every piece (~8,700 on a 1,735-cut run,
+  // 16 s live), so they read just what their step uses.
+  const read = (fields = {}) => timed("reads", () => readSequence(ppro, copy, { paths: false, ...fields }));
   const all = (seq) => [...seq.video, ...seq.audio];
   const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
@@ -139,7 +141,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   steps += tx("split at cut edges", razor);
 
   // 4. remove everything inside a cut, and the fillers — per media type.
-  seq = await read();
+  seq = await read({ inPoint: false });
   const inside = (c) => c.start >= park || cuts.some(([a, b]) => a <= c.start && c.end <= b);
   const doomed = all(seq).filter(inside);
   if (doomed.length) {
@@ -160,7 +162,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   }
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
-  seq = await read();
+  seq = await read({ end: false, inPoint: false });
   const moves = all(seq).map((c) => ({ c, by: shiftFor(c.start, cuts) })).filter((m) => m.by > 0n)
     .sort((x, y) => (x.c.start < y.c.start ? -1 : x.c.start > y.c.start ? 1 : 0));
   steps += tx("close gaps", moves.map(({ c, by }) => () => c.item.createMoveAction(tick(-by))));

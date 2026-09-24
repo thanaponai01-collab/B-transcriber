@@ -25,7 +25,7 @@ const POLL_MS = 1500;
 
 const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 
-async function listClips(ppro, seq, kind) {
+async function listClips(ppro, seq, kind, { end = true, inPoint = true } = {}) {
   const video = kind === "video";
   const count = await (video ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
   const clips = [];
@@ -34,7 +34,8 @@ async function listClips(ppro, seq, kind) {
     const items = track ? await getTrackClipItems(track, ppro) : [];
     for (const item of items) {
       clips.push({ item, kind, track: t, start: toTicks(await item.getStartTime()),
-        end: toTicks(await item.getEndTime()), inPoint: toTicks(await item.getInPoint()) });
+        end: end ? toTicks(await item.getEndTime()) : undefined,
+        inPoint: inPoint ? toTicks(await item.getInPoint()) : undefined });
     }
   }
   return { count, clips };
@@ -48,10 +49,11 @@ async function mediaPath(ppro, item) {
 
 /* Every clip item on the sequence, each with the file behind it (null when it has none).
    `paths: false` skips the file lookup (2 host calls per clip) for reads that only need
-   positions — c.path is then undefined. */
-async function readSequence(ppro, seq, { paths = true } = {}) {
-  const video = await listClips(ppro, seq, "video");
-  const audio = await listClips(ppro, seq, "audio");
+   positions — c.path is then undefined; `end: false` / `inPoint: false` likewise skip those
+   (1 call each per clip). */
+async function readSequence(ppro, seq, { paths = true, end = true, inPoint = true } = {}) {
+  const video = await listClips(ppro, seq, "video", { end, inPoint });
+  const audio = await listClips(ppro, seq, "audio", { end, inPoint });
   if (paths) {
     for (const c of [...video.clips, ...audio.clips]) {
       try { c.path = await mediaPath(ppro, c.item); } catch (_) { c.path = null; }
