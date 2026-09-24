@@ -165,6 +165,26 @@ test("getSelectedVideoClips trusts isAdjustmentLayer() over the clip name", asyn
   assert.deepEqual(results.map((r) => r.item), [footageNamedAdj]);
 });
 
+test("getSelectedVideoClips reads only the video tracks getTrackIndex() names", async () => {
+  const sel = () => Promise.resolve(true);
+  const onV2 = { name: "B-roll", getTrackIndex: () => Promise.resolve(1), getIsSelected: sel };
+  const audioA1 = { name: "Mic", getTrackIndex: () => Promise.resolve(0), getIsSelected: sel };
+  const reads = [];
+  const tracks = [
+    { getTrackItems: () => Promise.resolve([{ name: "V1 clip" }]) },
+    { getTrackItems: () => Promise.resolve([onV2]) },
+    { getTrackItems: () => Promise.resolve([]) },
+  ];
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([onV2, audioA1]) }),
+    getVideoTrackCount: () => Promise.resolve(3),
+    getVideoTrack: (v) => { reads.push(v); return Promise.resolve(tracks[v]); },
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => [r.item, r.track]), [[onV2, 1]]);
+  assert.deepEqual(reads.sort(), [0, 1]); // V3 never read; audio's index 0 read but it isn't on V1
+});
+
 test("getSelectedVideoClips returns [] for null sequence or empty selection", async () => {
   assert.deepEqual(await trackItems.getSelectedVideoClips(null, null), []);
   const seq = { getSelection: () => Promise.resolve(null), getVideoTrackCount: () => Promise.resolve(0), getAudioTrackCount: () => Promise.resolve(0) };

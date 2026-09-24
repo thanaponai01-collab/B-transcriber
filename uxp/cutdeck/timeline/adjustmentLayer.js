@@ -456,19 +456,27 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   let colorPending = true;
   let trackCount = trackCountBefore;
   for (const [durTicks, idxs] of groups) {
-    if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
-      try {
-        runTransaction(freshProject, "CutDeck: Set Adjustment Layer Length", (compound) => {
-          const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
-          if (inOut) compound.addAction(inOut);
-          // The color label is on the same shared project item — ride along once per run.
-          if (colorPending && typeof clipItem.createSetColorLabelAction === "function") {
-            const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
-            if (colorAction) compound.addAction(colorAction);
-          }
-        });
-        colorPending = false;
-      } catch (_) {}
+    // The length must land before placing: an overwrite with the old marks can run past the
+    // range checked clear and overwrite footage (TODO_LEDGER.md P2). So refuse, don't skip.
+    try {
+      if (!clipItem || typeof clipItem.createSetInOutPointsAction !== "function") {
+        throw new Error("the Adjustment Layer item has no In/Out call");
+      }
+      runTransaction(freshProject, "CutDeck: Set Adjustment Layer Length", (compound) => {
+        const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
+        if (!inOut || !compound.addAction(inOut)) throw new Error("In/Out action was rejected");
+        // The color label is on the same shared project item — ride along once per run.
+        if (colorPending && typeof clipItem.createSetColorLabelAction === "function") {
+          const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
+          if (colorAction) compound.addAction(colorAction);
+        }
+      });
+      colorPending = false;
+    } catch (e) {
+      throw new Error(
+        `Could not set the Adjustment Layer length — stopped before placing this batch, so no footage ` +
+        `was overwritten. (${e && e.message ? e.message : e})`
+      );
     }
 
     // One placement per new track, in track order, each its own transaction.
@@ -493,6 +501,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     const p = placements[pIdx];
     const targetTrack = targets[pIdx];
     let verified = false;
+    let lengthErr = null;
     try {
       const targetTrackObj = await seqAfter.getVideoTrack(Number(targetTrack));
       const trackItems = targetTrackObj ? await getTrackClipItems(targetTrackObj, ppro) : [];
@@ -506,12 +515,14 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
             const eTimeAfter = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
             actualEndTicks = toTicksOr(eTimeAfter, null);
           } catch (_) {}
-          if (actualEndTicks === null || actualEndTicks > p.endTicks + tpf) {
-            console.log("Adjustment Layer length off:", {
-              requestedEndTicks: p.endTicks.toString(),
-              actualEndTicks: actualEndTicks !== null ? actualEndTicks.toString() : null,
-            });
+          if (actualEndTicks !== null && actualEndTicks > p.endTicks + tpf) {
+            lengthErr = new Error(
+              `The Adjustment Layer on V${targetTrack + 1} came out longer than asked and may ` +
+              `cover footage past its range. Undo this placement (Edit > Undo History) and check ` +
+              `the timeline. (end ${actualEndTicks} vs ${p.endTicks} ticks)`
+            );
           }
+          if (actualEndTicks === null) console.log("Adjustment Layer length unreadable on V" + (targetTrack + 1));
           verified = true;
           placedItems.push(it);
           break;
@@ -520,6 +531,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     } catch (err) {
       console.log("Adjustment Layer placement check failed:", err);
     }
+    if (lengthErr) throw lengthErr;
 
     if (!verified) {
       throw new Error(

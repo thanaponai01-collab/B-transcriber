@@ -128,17 +128,26 @@ async function getSelectedVideoClips(ppro, seq) {
   const videoClips = [];
   const videoItemsTrackMap = new Map();
 
+  // getTrackIndex() is declared on VideoClipTrackItem/AudioClipTrackItem (@adobe/premierepro
+  // 26.2.1 d.ts), so only the video tracks the selection names are read, not every track.
+  // An audio clip's index is an audio-track index, so membership is still checked on the
+  // video track read. Falls back to scanning every video track where it's missing.
+  const readVideoTrack = async (v) => {
+    const track = await seq.getVideoTrack(v);
+    const vItems = await getTrackClipItems(track, ppro);
+    for (const vi of vItems || []) videoItemsTrackMap.set(vi, v);
+  };
   try {
     const trackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
-    for (let v = 0; v < trackCount; v++) {
-      const track = await seq.getVideoTrack(v);
-      const vItems = await getTrackClipItems(track, ppro);
-      if (vItems) {
-        for (const vi of vItems) {
-          videoItemsTrackMap.set(vi, v);
-        }
-      }
+    let indices = new Set();
+    for (const it of rawItems) {
+      if (!it || typeof it.getTrackIndex !== "function") { indices = null; break; }
+      let idx;
+      try { idx = await it.getTrackIndex(); } catch (_) { indices = null; break; }
+      if (Number.isInteger(idx) && idx >= 0 && idx < trackCount) indices.add(idx);
     }
+    const toRead = indices || Array.from({ length: trackCount }, (_, v) => v);
+    for (const v of toRead) await readVideoTrack(v);
   } catch (_) {}
 
   for (const it of rawItems) {
