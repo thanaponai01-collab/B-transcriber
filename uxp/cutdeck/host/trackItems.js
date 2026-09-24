@@ -14,17 +14,21 @@ async function getTrackClipItemsOrThrow(track, ppro) {
     ? ppro.Constants.TrackItemType.CLIP
     : 1;
   let lastErr = null;
+  // Premiere has been seen returning null entries in this list (2026-09-24, crashed
+  // findSmartStackTrack on an AL placement) — a null has no position, so drop it here
+  // where every caller routes through, instead of crashing each caller on it.
+  const usable = (items) => items.filter((it) => it != null);
   try {
     const items = await track.getTrackItems(clipType, false);
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems(1, false);
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems();
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   throw lastErr || new Error("getTrackItems returned no usable result");
 }

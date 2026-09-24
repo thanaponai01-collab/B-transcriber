@@ -118,6 +118,13 @@ test("getTrackClipItems returns [] when getTrackClipItemsOrThrow throws", async 
   assert.deepEqual(result, []);
 });
 
+test("getTrackClipItems drops null entries Premiere returns", async () => {
+  const clip = { name: "A" };
+  const track = { getTrackItems: () => Promise.resolve([null, clip, undefined]) };
+  assert.deepEqual(await trackItems.getTrackClipItems(track), [clip]);
+  assert.deepEqual(await trackItems.getTrackClipItemsOrThrow(track), [clip]);
+});
+
 // --- getSelectedVideoClips -------------------------------------------------------------------
 
 test("getSelectedVideoClips excludes Audio clips and Adjustment Layers", async () => {

@@ -392,7 +392,8 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   // AL of that length. The length (the AL item's In/Out marks) must be its OWN transaction,
   // committed before the overwrite is built — in one compound the overwrite still reads the
   // old marks (TODO_LEDGER.md P2; confirmed 2026-09-21 it destroyed real footage). So
-  // "every cut" mode (one length) is 2 Ctrl+Z; span / per-clip add 2 per distinct length.
+  // "every cut" mode (one length) is 2 Ctrl+Z, plus 1 per new track it has to create;
+  // span / per-clip add 2 per distinct length.
   mark('gate');
   const groups = new Map();
   placements.forEach((p, i) => {
@@ -400,8 +401,60 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     if (!groups.has(d)) groups.set(d, []);
     groups.get(d).push(i);
   });
+  // Premiere has no add-track call: a track is created only by placing onto the index
+  // equal to the current track count, one track at a time. Several placements onto
+  // not-yet-existing tracks in ONE transaction failed live (2026-09-24: "could not find
+  // the one for V10"). So renumber new tracks to follow on from the last existing one,
+  // create each with its own single placement, then batch everything else.
+  const trackCountBefore = await freshSeq.getVideoTrackCount();
+  // Numbers are handed out in the order the commit loop below reaches them, so every
+  // new track is exactly the current track count when its first placement lands.
+  const renumber = new Map();
+  for (const idxs of groups.values()) {
+    for (const i of [...idxs].sort((x, y) => targets[x] - targets[y])) {
+      const t = targets[i];
+      if (t >= trackCountBefore && !renumber.has(t)) renumber.set(t, trackCountBefore + renumber.size);
+    }
+  }
+  for (let i = 0; i < targets.length; i++) {
+    if (renumber.has(targets[i])) targets[i] = renumber.get(targets[i]);
+  }
+  targetTracksSet.clear();
+  for (const t of targets) targetTracksSet.add(t + 1);
+
   const editor = await ppro.SequenceEditor.getEditor(freshSeq);
+  const placeAll = (label, idxs) => runTransaction(freshProject, label, (compound) => {
+    if (!placeItem) throw new Error("No Adjustment Layer item was available to place.");
+    for (const i of idxs) {
+      const tStart = tickTime(placements[i].startTicks);
+      const track = Number(targets[i]);
+      // Overwrite only: an index equal to the track count creates the track (proven by
+      // the Sync probe). No ripple insert — it would shift clips after tStart.
+      let action = null;
+      let lastErr = null;
+      for (const fn of [
+        () => editor.createOverwriteItemAction(placeItem, tStart, track, -1),
+        () => editor.createOverwriteItemAction(placeItem, tStart, track, 0),
+      ]) {
+        try {
+          action = fn();
+          if (action) break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!action) {
+        const name = placeItem?.name || alItem?.name || "unknown";
+        throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", V-Track: V${track + 1})`);
+      }
+      if (!compound.addAction(action)) {
+        throw new Error("addAction returned false");
+      }
+    }
+  });
+
   let colorPending = true;
+  let trackCount = trackCountBefore;
   for (const [durTicks, idxs] of groups) {
     if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
       try {
@@ -418,35 +471,17 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
       } catch (_) {}
     }
 
-    runTransaction(freshProject, `CutDeck: Place ${idxs.length} Adjustment Layer(s)`, (compound) => {
-      if (!placeItem) throw new Error("No Adjustment Layer item was available to place.");
-      for (const i of idxs) {
-        const tStart = tickTime(placements[i].startTicks);
-        const track = Number(targets[i]);
-        // Overwrite only: an index equal to the track count creates the track (proven by
-        // the Sync probe). No ripple insert — it would shift clips after tStart.
-        let action = null;
-        let lastErr = null;
-        for (const fn of [
-          () => editor.createOverwriteItemAction(placeItem, tStart, track, -1),
-          () => editor.createOverwriteItemAction(placeItem, tStart, track, 0),
-        ]) {
-          try {
-            action = fn();
-            if (action) break;
-          } catch (e) {
-            lastErr = e;
-          }
-        }
-        if (!action) {
-          const name = placeItem?.name || alItem?.name || "unknown";
-          throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", V-Track: V${track + 1})`);
-        }
-        if (!compound.addAction(action)) {
-          throw new Error("addAction returned false");
-        }
+    // One placement per new track, in track order, each its own transaction.
+    const rest = [];
+    for (const i of [...idxs].sort((a, b) => targets[a] - targets[b])) {
+      if (targets[i] === trackCount) {
+        placeAll("CutDeck: Place Adjustment Layer (new track)", [i]);
+        trackCount++;
+      } else {
+        rest.push(i);
       }
-    });
+    }
+    if (rest.length) placeAll(`CutDeck: Place ${rest.length} Adjustment Layer(s)`, rest);
   }
 
   mark('commit');
