@@ -102,7 +102,8 @@ function createRoughCutFeature({
     const seconds = Number(r.removedTicks * 10n / TICKS_PER_SECOND) / 10;
     ctl.setStatus(`${r.cuts} cuts · ${seconds.toFixed(1)} seconds removed, cut in ${r.elapsedSeconds.toFixed(0)} s.\nOpened ${r.name}`
       + (r.splits ? `\n${r.splits} clips were split: the pieces' audio is not linked to their video (select both to move them).` : "")
-      + `\nChecked clip by clip. Undo takes ${r.steps} Ctrl+Z; your original sequence is untouched.`, "ready");
+      + `\nChecked clip by clip. Undo takes ${r.steps} Ctrl+Z; your original sequence is untouched.`
+      + (r.timings ? `\nTime: ${Object.entries(r.timings).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(" · ")} s` : ""), "ready");
   }
 
   async function doCut() {

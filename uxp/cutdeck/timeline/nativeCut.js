@@ -69,7 +69,7 @@ async function readItems(ppro, seq, cuts) {
         clip under it, so the kept pieces are the original clip, effects and all,
      4. remove everything now lying inside a cut (the fillers too),
      5. move every survivor left by what was removed before it. */
-async function applyPlan(ppro, project, copy, items, cuts, tpf) {
+async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn()) {
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   const editor = () => ppro.SequenceEditor.getEditor(copy);
   // Actions must be CREATED inside the transaction callback — built outside it, Premiere throws
@@ -77,7 +77,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
   // of builders, not actions.
   const tx = (label, builders) => {
     if (!builders.length) return 0;
-    runTransaction(project, `CutDeck: ${label}`, (compound) => {
+    timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
       builders.forEach((build, i) => {
         const where = `${label}: action ${i + 1} of ${builders.length}${build.what ? ` (${build.what})` : ""}`;
         let action, added;
@@ -86,10 +86,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
         try { added = compound.addAction(action); } catch (e) { throw new Error(`${where} was refused: ${e.message}`); }
         if (!added) throw new Error(`${where}: addAction returned false`);
       });
-    });
+    }));
     return 1;
   };
-  const read = () => readSequence(ppro, copy, { paths: false }); // positions only
+  const read = () => timed("reads", () => readSequence(ppro, copy, { paths: false })); // positions only
   const all = (seq) => [...seq.video, ...seq.audio];
   const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
@@ -145,7 +145,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
   if (doomed.length) {
     steps += 1;
     const MT = ppro.Constants.MediaType;
-    runTransaction(project, "CutDeck: remove cut pieces", (compound) => {
+    timed("remove cut pieces", () => runTransaction(project, "CutDeck: remove cut pieces", (compound) => {
       for (const kind of ["video", "audio"]) {
         const these = doomed.filter((c) => c.kind === kind);
         if (!these.length) continue;
@@ -156,7 +156,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
         });
         if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
       }
-    });
+    }));
   }
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
@@ -169,8 +169,20 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
 
 /* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
 async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
+  // Seconds per step, summed by label, so a slow run shows where its time went.
+  const timings = {};
+  // Works for sync steps (transactions: errors must throw where they happen) and async reads.
+  const timed = (label, fn) => {
+    const t = Date.now();
+    const done = () => { timings[label] = (timings[label] || 0) + (Date.now() - t) / 1000; };
+    let out;
+    try { out = fn(); } catch (e) { done(); throw e; }
+    if (out && typeof out.then === "function") return out.finally(done);
+    done();
+    return out;
+  };
   const cuts = cutsToTicks(cutsJson, await source.getTimebase());
-  const before = await readItems(ppro, source, cuts);
+  const before = await timed("read source", () => readItems(ppro, source, cuts));
   const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
   if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
 
@@ -200,11 +212,13 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const plan = planCutApply(items, cuts);
   let steps, actual;
   try {
-    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()));
-    actual = (await readItems(ppro, copy, null)).items;
+    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+    actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
   } finally {
-    await project.openSequence(copy);
-    await project.setActiveSequence(copy);
+    await timed("open copy", async () => {
+      await project.openSequence(copy);
+      await project.setActiveSequence(copy);
+    });
   }
   const elapsedSeconds = (Date.now() - started) / 1000;
   const problems = verifyReadBack(items, plan, actual);
@@ -213,7 +227,8 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
       + "It is left open for inspection; your original sequence is untouched.");
   }
   const splits = plan.edits.filter((e) => e.op === "split").length;
-  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds };
+  console.log("CutDeck rough cut timings (s):", timings);
+  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
 }
 
 module.exports = { applyNativeCut, applyPlan, readItems };

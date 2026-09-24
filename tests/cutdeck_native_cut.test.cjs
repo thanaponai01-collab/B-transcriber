@@ -189,5 +189,7 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   // Review 2026-09-24: this was 75,950 before (7 full reads, flags and paths on each). Middle
   // reads now skip paths, flags are read only under a cut, the copy is not pre-read.
   console.log(`scale test host reads: ${h.hostReads}`);
+  assert.deepEqual(Object.keys(r.timings).sort(), ["close gaps", "make razor fillers", "open copy", "read source",
+    "read-back", "reads", "remove cut pieces", "split at cut edges", "trim razor fillers"]);
   assert.ok(h.hostReads < 60000, `host reads ${h.hostReads}`);
 });
