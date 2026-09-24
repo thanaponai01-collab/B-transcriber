@@ -1,5 +1,16 @@
 # TODO_LEDGER
 
+## CutDeck panel review follow-ups — live results — 2026-09-24
+
+Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
+- **Rough Cut read speed (`3b6f801`)**: `tiw_Synced`, 1735 cuts, 2878.2 s removed, read-back
+  clean, **57 s** vs ~67 s before (user's recollection of the previous run, not a timed A/B).
+  ~15% wall time for a 43% cut in host reads (75,950 → 43,395 on the 432-cut fake), so the
+  edit transactions, not the reads, are most of the time now. Baseline for the next pass.
+- **Transform panel (`f6b1154`)**: a global `SequenceEvent.ACTIVATED` listener fires on sequence
+  switch; a global `SELECTION_CHANGED` does **not** — it must be attached to the sequence
+  (`EventManager.addEventListener(seq, …)`), which fires on clip click. No poll needed.
+
 ## CutDeck native rough cut — Phase 0 probes P1–P5 PASSED live — 2026-09-24
 
 Handoff: docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md. Probe: "Test Native Cut"
