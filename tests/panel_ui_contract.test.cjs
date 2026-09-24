@@ -44,7 +44,9 @@ test(`getElementById/classList/textContent/addEventListener appear in no panel f
   })(uxpDir);
 
   const seamPaths = UI_SEAM_FILES.map((rel) => path.resolve(path.join(uxpDir, rel)));
-  const domPatterns = [/getElementById\(/, /\.classList\b/, /\.textContent\b/, /\baddEventListener\(/];
+  // A DOM addEventListener takes the event name first ("click"); Premiere's
+  // EventManager.addEventListener(target, event, handler) takes an object, and is not a DOM touch.
+  const domPatterns = [/getElementById\(/, /\.classList\b/, /\.textContent\b/, /\baddEventListener\(\s*["'`]/];
   const offenders = [];
   for (const file of jsFiles) {
     if (seamPaths.includes(path.resolve(file))) continue;
