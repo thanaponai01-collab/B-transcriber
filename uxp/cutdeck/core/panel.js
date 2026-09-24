@@ -486,6 +486,23 @@
         intents.onAdjust(mode);
       });
     }
+
+    const matteBtn = $("btn-matte");
+    if (matteBtn) {
+      matteBtn.addEventListener("click", (e) => {
+        let mode = "span";
+        if (e.shiftKey) mode = "transition";
+        else if (e.ctrlKey || e.metaKey) mode = "per_clip";
+        if (intents.onColorMatte) intents.onColorMatte(mode);
+      });
+    }
+
+    const holdBtn = $("btn-hold");
+    if (holdBtn) {
+      holdBtn.addEventListener("click", () => {
+        if (intents.onAddFrameHold) intents.onAddFrameHold();
+      });
+    }
   }
 
   function bindProbes(intents) {

@@ -100,6 +100,8 @@ panel.bind({
   onTab: (name) => { mainCtl.state.tab = name; mainCtl.render(); },
   onCutMode: roughCut.onCutMode,
   onAdjust: adjust.onAdjust,
+  onColorMatte: adjust.onColorMatte,
+  onAddFrameHold: adjust.onAddFrameHold,
   onApplyPreset: adjust.onApplyPreset,
   onRemovePreset: presets.onRemovePreset,
   onRenamePreset: presets.onRenamePreset,

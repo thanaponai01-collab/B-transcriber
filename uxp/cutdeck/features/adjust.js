@@ -46,8 +46,18 @@ function saveSettings(storage, s) {
 
 function describeSequenceMatch(res) {
   if (!res || !res.sequenceWidth || !res.sequenceHeight) return "";
-  const created = res.createdAdjustmentLayer ? ` (created "${res.createdAdjustmentLayer}" in CutDeck > ADJ & FX)` : "";
+  const created = res.createdAdjustmentLayer
+    ? ` (created "${res.createdAdjustmentLayer}" in CutDeck > ADJ & FX)`
+    : res.createdColorMatte
+      ? ` (created "${res.createdColorMatte}" in CutDeck > ADJ & FX)`
+      : "";
   return ` — sequence ${res.sequenceWidth}×${res.sequenceHeight}${created}`;
+}
+
+let defaultFrameHold;
+function getFrameHold() {
+  if (!defaultFrameHold) defaultFrameHold = require("../timeline/frameHold.js");
+  return defaultFrameHold;
 }
 
 function createAdjustFeature({
@@ -56,12 +66,16 @@ function createAdjustFeature({
   storage = typeof localStorage !== "undefined" ? localStorage : null,
   timeline,
   effects,
+  frameHold,
 }) {
   function getTl() {
     return timeline || getTimeline();
   }
   function getFx() {
     return effects || getEffects();
+  }
+  function getFh() {
+    return frameHold || getFrameHold();
   }
 
   function onAdjLayerSequenceName(name) {
@@ -104,6 +118,48 @@ function createAdjustFeature({
         : `Fitted Adjustment Layer on V${res.targetTrack}${seqNote}!`;
     }
     ctl.setStatus(msg, "ready");
+  }
+
+  async function doColorMatte(mode) {
+    const s = ctl.state.settings || DEFAULT_SETTINGS;
+    if (mode === "transition") {
+      ctl.setStatus(`Detecting cuts and placing 50/50 Color Mattes (${s.frames}f)…`, "busy");
+    } else if (mode === "per_clip") {
+      ctl.setStatus("Placing separate Color Matte per clip…", "busy");
+    } else {
+      ctl.setStatus("Spanning Color Matte over selection…", "busy");
+    }
+
+    const res = await getTl().placeColorMattesOnTimeline(ppro, {
+      mode,
+      frames: s.frames,
+      clamp: s.clamp !== false,
+      color: s.color,
+      onSequenceName: onAdjLayerSequenceName,
+    });
+
+    const seqNote = describeSequenceMatch(res);
+    let msg = "";
+    if (mode === "transition") {
+      msg = res.placedCount > 1
+        ? `Added ${res.placedCount} cut transition Color Mattes (${s.frames}f 50/50) on V${res.targetTrack}${seqNote}!`
+        : `Placed 50/50 cut transition Color Matte (${res.frames}f) on V${res.targetTrack}${seqNote}!`;
+    } else if (mode === "per_clip") {
+      msg = res.placedCount > 1
+        ? `Added ${res.placedCount} separate Color Mattes (1 per clip) on V${res.targetTrack}${seqNote}!`
+        : `Fitted Color Matte over clip on V${res.targetTrack}${seqNote}!`;
+    } else {
+      msg = res.selectedCount > 1
+        ? `Spanned ${res.selectedCount} selected clips with 1 Color Matte on V${res.targetTrack}${seqNote}!`
+        : `Fitted Color Matte on V${res.targetTrack}${seqNote}!`;
+    }
+    ctl.setStatus(msg, "ready");
+  }
+
+  async function doAddFrameHold() {
+    ctl.setStatus("Adding Frame Hold at playhead…", "busy");
+    const res = await getFh().addFrameHold(ppro);
+    ctl.setStatus(`Placed Frame Hold on V${res.targetTrack} (${res.holdSecs}s hold, original clip untouched)!`, "ready");
   }
 
   async function doApplyPreset(presetId, mode) {
@@ -163,9 +219,13 @@ function createAdjustFeature({
 
   return {
     onAdjust: (mode) => ctl.act(() => doAdjust(mode)),
+    onColorMatte: (mode) => ctl.act(() => doColorMatte(mode)),
+    onAddFrameHold: () => ctl.act(() => doAddFrameHold()),
     onApplyPreset: (presetId, mode) => ctl.act(() => doApplyPreset(presetId, mode)),
     onSettingChange: (patch) => applySettingChange(patch),
     doAdjust,
+    doColorMatte,
+    doAddFrameHold,
     doApplyPreset,
     applySettingChange,
   };

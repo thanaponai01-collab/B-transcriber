@@ -168,29 +168,28 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   const mark = (name) => { const now = Date.now(); phases[name] = now - tLast; tLast = now; };
   const finish = () => {
     console.log(`CutDeck: applied preset to ${trackItems.length} item(s) in ${Date.now() - t0} ms`, phases);
+    // Explicitly release arrays to free native C++ proxy handles in V8
+    targets.length = 0;
+    pairs.length = 0;
+    animated.length = 0;
     return { warnings };
   };
-  const targets = [];
-  for (const trackItem of trackItems) {
+
+  const targets = await Promise.all(trackItems.map(async (trackItem) => {
     if (!trackItem || typeof trackItem.getComponentChain !== "function") {
       throw new Error("This track item has no component chain to add an effect to.");
     }
     const chain = await trackItem.getComponentChain();
     if (!chain) throw new Error("Could not read this item's effect chain.");
-    // Component creation is async (VideoFilterFactory.createComponent returns a Promise) but
-    // project.executeTransaction's callback must be synchronous (same constraint every other
-    // mutation in this plugin works under) — so every component is created up front, and only
-    // the synchronous insert actions happen inside the first transaction.
-    const created = [];
-    for (const comp of preset.components) {
+    const created = await Promise.all(preset.components.map(async (comp) => {
       const newComponent = await ppro.VideoFilterFactory.createComponent(comp.matchName);
       if (!newComponent) {
         throw new Error(`Premiere would not recreate "${comp.displayName || comp.matchName}".`);
       }
-      created.push({ component: newComponent, spec: comp });
-    }
-    targets.push({ trackItem, chain, startIndex: chain.getComponentCount(), created });
-  }
+      return { component: newComponent, spec: comp };
+    }));
+    return { trackItem, chain, startIndex: chain.getComponentCount(), created };
+  }));
 
   mark("create components");
   // Phase 1: insert every component. Confirmed at runtime: the object VideoFilterFactory.
@@ -214,7 +213,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   // getParam), and pair every captured param with its live counterpart once.
   mark("insert");
   const pairs = [];
-  for (const t of targets) {
+  await Promise.all(targets.map(async (t) => {
     const liveChain = await t.trackItem.getComponentChain();
     t.created.forEach(({ spec }, k) => {
       const name = spec.displayName || spec.matchName;
@@ -231,7 +230,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
         pairs.push({ p, param, label, t });
       }
     });
-  }
+  }));
   const animated = pairs.filter(({ p }) => Array.isArray(p.keyframes) && p.keyframes.length > 0);
 
   mark("fetch params");
@@ -259,9 +258,9 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   if (animated.length === 0) return finish();
 
   const TickTime = ppro.TickTime;
-  for (const t of targets) {
+  await Promise.all(targets.map(async (t) => {
     if (animated.some((a) => a.t === t)) t.targetIn = toTicks(await t.trackItem.getInPoint());
-  }
+  }));
 
   mark("read In points");
   // Phase 3: turn keyframing on (the stopwatch). Its own transaction, so the params are
@@ -309,7 +308,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   mark("interpolation");
   // Read back: the keyframe list must be exactly the captured times. Anything else — an extra
   // keyframe the stopwatch added on its own, a dropped one — is reported, not assumed away.
-  for (const { p, param, label, t } of animated) {
+  await Promise.all(animated.map(async ({ p, param, label, t }) => {
     try {
       const got = ((await param.getKeyframeListAsTickTimes()) || []).map((x) => toTicks(x).toString());
       const want = placeKeyframes(p.keyframes, t.targetIn);
@@ -319,7 +318,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
     } catch (e) {
       warn(`could not read back keyframes of ${label}: ${e && e.message}`);
     }
-  }
+  }));
   mark("read-back");
   return finish();
 }

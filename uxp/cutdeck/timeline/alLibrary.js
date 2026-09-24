@@ -29,7 +29,7 @@ async function getOrCreateAdjBin(project) {
 // Only bins with exactly that name holding exactly one non-bin item are touched, so nothing
 // the user made is ever moved or removed. Failure is logged, never thrown: the AL still works
 // from inside the wrapper.
-const IMPORT_WRAPPER_NAME = /^CutDeck \d+x\d+\.prproj$/;
+const IMPORT_WRAPPER_NAME = /^CutDeck (?:Color Matte )?\d+x\d+\.prproj$/;
 
 async function listWrappers(bin) {
   const found = [];
@@ -273,6 +273,125 @@ async function createAdjustmentLayerForSequence(project, width, height, ticksPer
   );
 }
 
+let cmProject;
+function getCmProject() {
+  if (!cmProject) cmProject = require("./cmProject.js");
+  return cmProject;
+}
+
+// Find Color Matte in project panel or active timeline, matching active sequence dimensions
+async function findColorMatteItem(project, seq, ppro) {
+  if (!project || typeof project.getRootItem !== "function") return null;
+  const root = await project.getRootItem();
+  if (!root) return null;
+
+  let targetWidth = null;
+  let targetHeight = null;
+  try {
+    if (seq && typeof seq.getSettings === "function") {
+      const st = await seq.getSettings();
+      const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
+      if (rect && rect.width && rect.height) {
+        targetWidth = rect.width;
+        targetHeight = rect.height;
+      }
+    }
+  } catch (_) {}
+
+  // 1. Canonical home: Project panel > CutDeck > ADJ & FX
+  try {
+    const adjBin = await getOrCreateAdjBin(project);
+    await flattenImportWrappers(project, adjBin);
+    const items = (await asBinLike(adjBin).getItems()) || [];
+    const candidates = items.filter((it) => it.type !== 2 && it.name && (
+      it.name.toLowerCase().includes("matte") || it.name.toLowerCase().includes("color")
+    ));
+    const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
+    if (picked) return picked;
+  } catch (_) {}
+
+  // 2. Fallback: search the whole project
+  async function getFolderChildren(folder) {
+    if (typeof folder.getItems === "function") {
+      try { return await folder.getItems(); } catch (_) {}
+    }
+    if (ppro && ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
+      try {
+        const bin = ppro.FolderItem.cast(folder);
+        if (bin && typeof bin.getItems === "function") {
+          return await bin.getItems();
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  const allCandidates = [];
+  async function search(folder) {
+    const items = await getFolderChildren(folder);
+    if (!items || !items.length) return;
+
+    for (const it of items) {
+      const isBin = it.type === 2 || typeof it.getItems === "function" ||
+        (ppro && ppro.FolderItem && typeof ppro.FolderItem.cast === "function" && ppro.FolderItem.cast(it) !== null);
+
+      if (isBin) {
+        await search(it);
+        continue;
+      }
+
+      if (it.type !== 2 && it.name) {
+        const lower = it.name.toLowerCase();
+        if (
+          lower.includes("color matte") ||
+          lower.includes("matte") ||
+          lower.startsWith("cm_") ||
+          lower.startsWith("matte_")
+        ) {
+          allCandidates.push(it);
+        }
+      }
+    }
+  }
+
+  await search(root);
+  return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
+}
+
+// Automatically creates a Color Matte .prproj at the sequence's exact size and imports it into CutDeck > ADJ & FX
+async function createColorMatteForSequence(project, width, height, ticksPerFrame) {
+  const w = Math.round(Number(width));
+  const h = Math.round(Number(height));
+  const { bytes, name } = getCmProject().buildColorMattePrproj({
+    width: w,
+    height: h,
+    ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null,
+  });
+  const filePath = await writeTempFile(`CutDeck Color Matte ${w}x${h}.prproj`, bytes);
+  const adjBin = asBinLike(await getOrCreateAdjBin(project));
+  const imported = await project.importFiles([filePath], true, adjBin, false);
+  console.log(`CutDeck Color Matte create: importFiles(${filePath}) returned`, imported);
+
+  await flattenImportWrappers(project, adjBin);
+  const items = (await adjBin.getItems()) || [];
+  const direct = items.find((it) => it.type !== 2 && it.name === name);
+  if (direct) return direct;
+  for (const it of items) {
+    if (it.type !== 2) continue;
+    const children = (await asBinLike(it).getItems()) || [];
+    const nested = children.find((c) => c.type !== 2 && c.name === name);
+    if (nested) {
+      console.log(`CutDeck Color Matte create: "${name}" landed inside the "${it.name}" bin`);
+      return nested;
+    }
+  }
+  throw new Error(
+    `Tried to create "${name}" automatically (import returned ${imported}), but it did not appear in ` +
+    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > Color Matte at ` +
+    `${w}x${h}, name it "${w}x${h}", and drag it into that folder.`
+  );
+}
+
 module.exports = {
   ADJ_BIN_NAME,
   getOrCreateAdjBin,
@@ -280,6 +399,8 @@ module.exports = {
   detectResolutionFromMetadata,
   pickBestCandidate,
   findAdjustmentLayerItem,
+  findColorMatteItem,
   writeTempFile,
   createAdjustmentLayerForSequence,
+  createColorMatteForSequence,
 };
