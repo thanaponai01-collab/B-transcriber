@@ -97,6 +97,125 @@ async function isTrackSpanClear(seq, trackIndex, startTicks, endTicks, ppro) {
   }
 }
 
+// Locates the imported frame item across the project with retries for asynchronous indexing,
+// checking the Frame Holds bin, the project root bin, and any sub-bins.
+// If found outside the Frame Holds bin, moves it into Frame Holds via transaction.
+async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin, fileName, fullPath, ppro) {
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  const tsMatch = fileName.match(/CutDeck_Hold_(\d+)/);
+  const timestampStr = tsMatch ? tsMatch[1] : "";
+
+  function matchesItem(it) {
+    if (!it || it.type === 2) return false;
+    const n = it.name || "";
+    if (n === fileName || n === baseName) return true;
+    if (timestampStr && n.includes(timestampStr)) return true;
+    if (n.startsWith("CutDeck_Hold_") && n.includes(baseName)) return true;
+    return false;
+  }
+
+  async function getBinItems(bin) {
+    if (!bin) return [];
+    if (typeof bin.getItems === "function") {
+      try { return (await bin.getItems()) || []; } catch (_) {}
+    }
+    const b = asBinLike(bin);
+    if (b && typeof b.getItems === "function") {
+      try { return (await b.getItems()) || []; } catch (_) {}
+    }
+    return [];
+  }
+
+  async function searchFolderRecursive(bin) {
+    const items = await getBinItems(bin);
+    for (const it of items) {
+      if (matchesItem(it)) return { item: it, parent: bin };
+      if (it.type === 2) {
+        const found = await searchFolderRecursive(it);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  let located = null;
+  // Retry loop: up to 6 attempts (0ms, 60ms, 120ms, 180ms, 240ms, 300ms) for async import indexing
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt > 0) {
+      await sleep(60);
+    }
+
+    // 1. Check inside CutDeck > Frame Holds bin directly
+    const holdItems = await getBinItems(folderBin);
+    const inHold = holdItems.find(matchesItem);
+    if (inHold) {
+      located = { item: inHold, parent: folderBin, inHoldBin: true };
+      break;
+    }
+
+    // 2. Check rootItem directly (common Premiere fallback if targetBin was bypassed)
+    let root = null;
+    try { root = await project.getRootItem(); } catch (_) {}
+    if (root) {
+      const rootItems = await getBinItems(root);
+      const inRoot = rootItems.find(matchesItem);
+      if (inRoot) {
+        located = { item: inRoot, parent: root, inHoldBin: false };
+        break;
+      }
+
+      // 3. Search anywhere in project
+      const anyMatch = await searchFolderRecursive(root);
+      if (anyMatch) {
+        const isAlreadyInHold = (anyMatch.parent === folderBin || anyMatch.parent === rawHoldBin || (anyMatch.parent && anyMatch.parent.name === FRAME_HOLD_BIN_NAME));
+        located = { item: anyMatch.item, parent: anyMatch.parent, inHoldBin: isAlreadyInHold };
+        break;
+      }
+    }
+  }
+
+  if (!located || !located.item) {
+    return null;
+  }
+
+  // If found outside CutDeck > Frame Holds bin, move it in
+  if (!located.inHoldBin && folderBin) {
+    try {
+      let moveTarget = located.item;
+      if (ppro && ppro.ProjectItem && typeof ppro.ProjectItem.cast === "function") {
+        try {
+          const casted = ppro.ProjectItem.cast(moveTarget);
+          if (casted) moveTarget = casted;
+        } catch (_) {}
+      }
+
+      let sourceBin = located.parent;
+      if (!sourceBin && typeof moveTarget.getParentBin === "function") {
+        try { sourceBin = moveTarget.getParentBin(); } catch (_) {}
+      }
+      const sourceFolder = asBinLike(sourceBin);
+
+      runTransaction(project, "CutDeck: move Frame Hold into bin", (compound) => {
+        let moveAction = null;
+        if (sourceFolder && typeof sourceFolder.createMoveItemAction === "function") {
+          try { moveAction = sourceFolder.createMoveItemAction(moveTarget, folderBin); } catch (_) {}
+        }
+        if (!moveAction && typeof folderBin.createMoveItemAction === "function") {
+          try { moveAction = folderBin.createMoveItemAction(moveTarget, folderBin); } catch (_) {}
+        }
+        if (moveAction) compound.addAction(moveAction);
+      });
+      console.log(`CutDeck: moved "${fileName}" into CutDeck > ${FRAME_HOLD_BIN_NAME}`);
+    } catch (moveErr) {
+      console.warn("CutDeck: could not move item to Frame Holds bin (will place on timeline anyway):", moveErr);
+    }
+  }
+
+  return located.item;
+}
+
 // Adds a frame hold 1 layer above the clip under the playhead
 async function addFrameHold(ppro, options = {}) {
   const t0 = Date.now();
@@ -187,36 +306,59 @@ async function addFrameHold(ppro, options = {}) {
   const sep = folderPath.includes("\\") ? "\\" : "/";
   const fullPath = folderPath.endsWith(sep) ? (folderPath + fileName) : (folderPath + sep + fileName);
 
-  const holdBin = asBinLike(await getOrCreateFrameHoldBin(project));
-  const imported = await project.importFiles([fullPath], true, holdBin, false);
+  const rawHoldBin = await getOrCreateFrameHoldBin(project);
+  const folderBin = asBinLike(rawHoldBin);
+
+  // Cast target bin to ProjectItem if supported by Premiere Pro UXP
+  let targetBinProjectItem = rawHoldBin;
+  if (ppro.ProjectItem && typeof ppro.ProjectItem.cast === "function") {
+    try {
+      const casted = ppro.ProjectItem.cast(rawHoldBin);
+      if (casted) targetBinProjectItem = casted;
+    } catch (_) {}
+  }
+
+  const imported = await project.importFiles([fullPath], true, targetBinProjectItem, false);
   console.log(`CutDeck FrameHold: importFiles(${fullPath}) returned`, imported);
 
-  // Locate imported item in bin
-  const baseName = fileName.replace(/\.png$/i, "");
-  const items = (await holdBin.getItems()) || [];
-  const holdItem = items.find((it) => it.type !== 2 && (it.name === fileName || it.name === baseName));
+  // Locate imported item with retry loop and auto-move fallback
+  const holdItem = await locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin, fileName, fullPath, ppro);
   if (!holdItem) {
-    throw new Error(`Exported frame "${fileName}" was imported but could not be located in CutDeck > ${FRAME_HOLD_BIN_NAME}.`);
+    throw new Error(`Exported frame "${fileName}" was imported but could not be located in project.`);
   }
 
   let clipItem = holdItem;
   if (typeof holdItem.getProjectItem === "function") {
-    clipItem = await holdItem.getProjectItem();
-  }
-  const placeItem = clipItem;
-  if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
     try {
-      const casted = ppro.ClipProjectItem.cast(clipItem);
-      if (casted) clipItem = casted;
+      const p = await holdItem.getProjectItem();
+      if (p) clipItem = p;
+    } catch (_) {}
+  }
+  let placeItem = clipItem;
+  if (ppro.ProjectItem && typeof ppro.ProjectItem.cast === "function") {
+    try {
+      const casted = ppro.ProjectItem.cast(clipItem);
+      if (casted) placeItem = casted;
     } catch (_) {}
   }
 
   // Set In/Out duration in its own transaction (Rule: P2 marks committed before overwrite)
-  if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
-    runTransaction(project, "CutDeck: Set Frame Hold Duration", (compound) => {
-      const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(holdDurationTicks));
-      if (inOut) compound.addAction(inOut);
-    });
+  let clipProjectItem = clipItem;
+  if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+    try {
+      const casted = ppro.ClipProjectItem.cast(clipItem);
+      if (casted) clipProjectItem = casted;
+    } catch (_) {}
+  }
+  if (clipProjectItem && typeof clipProjectItem.createSetInOutPointsAction === "function") {
+    try {
+      runTransaction(project, "CutDeck: Set Frame Hold Duration", (compound) => {
+        const inOut = clipProjectItem.createSetInOutPointsAction(tickTime(0n), tickTime(holdDurationTicks));
+        if (inOut) compound.addAction(inOut);
+      });
+    } catch (e) {
+      console.warn("CutDeck: createSetInOutPointsAction warning:", e);
+    }
   }
 
   // Place on target track (up 1 layer)
@@ -247,6 +389,29 @@ async function addFrameHold(ppro, options = {}) {
     }
   });
 
+  // Ensure placed clip duration on sequence matches holdEndTicks if supported
+  try {
+    const trackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
+    if (targetTrack < trackCount) {
+      const track = await seq.getVideoTrack(targetTrack);
+      const trackItems = await getTrackClipItems(track, ppro);
+      for (const ti of trackItems || []) {
+        const sTime = typeof ti.getStartTime === "function" ? await ti.getStartTime() : ti.startTime;
+        if (toTicksOr(sTime, -1n) === holdStartTicks) {
+          const eTime = typeof ti.getEndTime === "function" ? await ti.getEndTime() : ti.endTime;
+          const currentEnd = toTicksOr(eTime, 0n);
+          if (currentEnd !== holdEndTicks && typeof ti.createSetEndAction === "function") {
+            runTransaction(project, "CutDeck: Adjust Frame Hold End", (comp) => {
+              const setEnd = ti.createSetEndAction(tickTime(holdEndTicks));
+              if (setEnd) comp.addAction(setEnd);
+            });
+          }
+          break;
+        }
+      }
+    }
+  } catch (_) {}
+
   const holdSecs = (Number(holdDurationTicks) / Number(TICKS_PER_SECOND)).toFixed(1);
   console.log(`CutDeck: placed Frame Hold on V${targetTrack + 1} (${holdSecs}s) in ${Date.now() - t0} ms`);
 
@@ -264,5 +429,6 @@ module.exports = {
   addFrameHold,
   findClipAtPlayhead,
   getOrCreateFrameHoldBin,
+  locateAndOrganizeImportedHoldItem,
   FRAME_HOLD_BIN_NAME,
 };

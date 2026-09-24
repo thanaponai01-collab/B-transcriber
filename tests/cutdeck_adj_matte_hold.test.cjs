@@ -356,6 +356,109 @@ test("frameHold: addFrameHold executes non-destructive freeze frame on track abo
   assert.equal(overwriteAction.act.time.ticks, String(2n * TICKS_PER_SEC));
 });
 
+test("frameHold: handles Premiere importing file into rootItem instead of targetBin and auto-moves to Frame Holds", async () => {
+  const exportedFrames = [];
+  const placedActions = [];
+
+  const mockClip = {
+    startTime: { ticks: "0" },
+    endTime: { ticks: String(5n * TICKS_PER_SEC) },
+    getStartTime: async () => ({ ticks: "0" }),
+    getEndTime: async () => ({ ticks: String(5n * TICKS_PER_SEC) }),
+    getName: async () => "Clip_RootFallback.mp4",
+    name: "Clip_RootFallback.mp4",
+    getIsSelected: async () => false,
+  };
+
+  const mockTrack1 = {
+    getTrackItems: async () => [mockClip],
+    trackIndex: 0,
+  };
+  const mockTrack2 = {
+    getTrackItems: async () => [],
+    trackIndex: 1,
+  };
+
+  const mockSeq = {
+    getTimebase: async () => "10594584000",
+    getPlayerPosition: async () => ({ ticks: String(2n * TICKS_PER_SEC) }),
+    getVideoTrackCount: async () => 2,
+    getVideoTrack: async (idx) => (idx === 0 ? mockTrack1 : mockTrack2),
+    getSettings: async () => ({
+      getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+    }),
+  };
+
+  const holdBin = mockBin("Frame Holds", []);
+  const cutdeckBin = mockBin("CutDeck", [holdBin]);
+  const rootBin = mockBin("Root", [cutdeckBin]);
+
+  const project = {
+    getActiveSequence: async () => mockSeq,
+    getRootItem: async () => rootBin,
+    executeTransaction: (build, label) => {
+      build({
+        addAction: (act) => {
+          placedActions.push({ label, act });
+          return typeof act === "function" ? act() : true;
+        },
+      });
+      return true;
+    },
+    // Emulate Premiere bug: ignores targetBin and dumps file into rootItem
+    importFiles: async (paths, suppressUI, targetBin) => {
+      const fileName = paths[0].split(/[\\/]/).pop();
+      const stillItem = {
+        name: fileName,
+        type: 1,
+        createSetInOutPointsAction: (inPoint, outPoint) => ({ type: "setInOut", inPoint, outPoint }),
+      };
+      rootBin.items.push(stillItem);
+      return true;
+    },
+  };
+
+  const fakePpro = {
+    Project: { getActiveProject: async () => project },
+    Sequence: { getActiveSequence: async () => mockSeq },
+    TickTime: {
+      createWithTicks: (ticks) => ({ ticks: String(ticks) }),
+    },
+    Exporter: {
+      exportSequenceFrame: async (seq, time, fileName, folderPath, width, height) => {
+        exportedFrames.push({ time, fileName, folderPath, width, height });
+        return true;
+      },
+    },
+    SequenceEditor: {
+      getEditor: async () => ({
+        createOverwriteItemAction: (item, time, trackIndex) => ({
+          type: "overwrite",
+          item,
+          time,
+          trackIndex,
+        }),
+      }),
+    },
+    Constants: {
+      TrackItemType: { CLIP: "TrackItemType.CLIP" },
+      MediaType: { VIDEO: "MediaType.VIDEO" },
+    },
+  };
+
+  const res = await frameHold.addFrameHold(fakePpro);
+
+  assert.equal(res.success, true);
+  assert.equal(res.sourceTrack, 1);
+  assert.equal(res.targetTrack, 2);
+
+  // Check that the item was found and moved from root into holdBin
+  const movedAction = placedActions.find((a) => a.label === "CutDeck: move Frame Hold into bin");
+  assert.ok(movedAction, "Should trigger transaction to move item into Frame Holds bin");
+  assert.equal(holdBin.items.length, 1, "Hold item should now be in Frame Holds bin");
+  assert.equal(rootBin.items.find((i) => i.name.startsWith("CutDeck_Hold_")), undefined, "Item should no longer be in root");
+});
+
 // ============================================================================
 // 4. adjustmentLayer.js (RAM and O(N) Efficiency Optimization)
 // ============================================================================
