@@ -125,13 +125,9 @@ function createAdjustFeature({
 
     ctl.setStatus(`Applying [${preset.name}] to ${res.placedItems.length} AL(s)…`, "busy");
     const project = await ppro.Project.getActiveProject();
-    let appliedCount = 0;
-    const warnings = [];
-    for (const item of res.placedItems) {
-      const applied = await getFx().applyCapturedPreset(ppro, project, item, preset);
-      warnings.push(...applied.warnings);
-      appliedCount++;
-    }
+    // One transaction per phase across every AL: at most 5 Ctrl+Z, not 5 per AL.
+    const { warnings } = await getFx().applyCapturedPresetToAll(ppro, project, res.placedItems, preset);
+    const appliedCount = res.placedItems.length;
 
     const done = `Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}`;
     if (warnings.length) {

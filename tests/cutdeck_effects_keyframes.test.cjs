@@ -182,3 +182,25 @@ test("point values ([x, y] as captured) are written as PointF, other values pass
   assert.equal(effects.toParamValue(host, true), true);
   assert.deepEqual(effects.toParamValue(host, [1, 2, 3]), [1, 2, 3], "not a 2D point");
 });
+
+test("applyCapturedPresetToAll: 3 ALs, still 5 transactions, each AL keyed at its own In point", async () => {
+  const preset = { components: [{ matchName: "AE.ADBE Geometry2", displayName: "Transform", params: [
+    { index: 1, displayName: "Scale", value: 100, keyframes: [
+      { offsetTicks: "0", value: 100, mode: 0 },
+      { offsetTicks: f(5).toString(), value: 120, mode: 5 },
+    ] },
+    { index: 2, displayName: "Rotation", value: 15 },
+  ] }] };
+  const targets = [trackItem([], 10), trackItem([], 200), trackItem([], 3000)];
+  const proj = project();
+  const { warnings } = await effects.applyCapturedPresetToAll(ppro(), proj, targets, preset);
+
+  assert.deepEqual(warnings, []);
+  assert.equal(proj.labels.length, 5, "one transaction per phase, not per AL");
+  for (const [t, inF] of [[targets[0], 10], [targets[1], 200], [targets[2], 3000]]) {
+    const [, scale, rotation] = [0, 1, 2].map((i) => t.chain.list[0].getParam(i));
+    assert.equal(t.chain.list.length, 1, "exactly one component inserted per AL");
+    assert.equal(rotation.state.value, 15);
+    assert.deepEqual([...scale.state.keys.keys()], [f(inF).toString(), f(inF + 5).toString()]);
+  }
+});
