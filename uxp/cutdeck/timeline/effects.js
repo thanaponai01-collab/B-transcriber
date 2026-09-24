@@ -161,6 +161,15 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   }
   const warnings = [];
   const warn = (msg) => { warnings.push(msg); console.warn("CutDeck: " + msg); };
+  // Per-phase timing, ms since the previous mark (as placeAdjustmentLayersOnTimeline logs).
+  const t0 = Date.now();
+  const phases = {};
+  let tLast = t0;
+  const mark = (name) => { const now = Date.now(); phases[name] = now - tLast; tLast = now; };
+  const finish = () => {
+    console.log(`CutDeck: applied preset to ${trackItems.length} item(s) in ${Date.now() - t0} ms`, phases);
+    return { warnings };
+  };
   const targets = [];
   for (const trackItem of trackItems) {
     if (!trackItem || typeof trackItem.getComponentChain !== "function") {
@@ -183,6 +192,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
     targets.push({ trackItem, chain, startIndex: chain.getComponentCount(), created });
   }
 
+  mark("create components");
   // Phase 1: insert every component. Confirmed at runtime: the object VideoFilterFactory.
   // createComponent() returns is a VideoFilterComponent, not the chain's Component class — it
   // has no getParam ("component.getParam is not a function"), so its params cannot be touched
@@ -202,6 +212,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
 
   // Re-fetch each just-inserted component from the chain as a real Component (which does have
   // getParam), and pair every captured param with its live counterpart once.
+  mark("insert");
   const pairs = [];
   for (const t of targets) {
     const liveChain = await t.trackItem.getComponentChain();
@@ -223,6 +234,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   }
   const animated = pairs.filter(({ p }) => Array.isArray(p.keyframes) && p.keyframes.length > 0);
 
+  mark("fetch params");
   // Phase 2: static values, for every param that isn't animated.
   runTransaction(project, "CutDeck: Apply Captured Preset (values)", (compound) => {
     for (const { p, param, label } of pairs) {
@@ -243,19 +255,22 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
     }
   });
 
-  if (animated.length === 0) return { warnings };
+  mark("values");
+  if (animated.length === 0) return finish();
 
   const TickTime = ppro.TickTime;
   for (const t of targets) {
     if (animated.some((a) => a.t === t)) t.targetIn = toTicks(await t.trackItem.getInPoint());
   }
 
+  mark("read In points");
   // Phase 3: turn keyframing on (the stopwatch). Its own transaction, so the params are
   // time-varying before any keyframe is added to them.
   runTransaction(project, "CutDeck: Apply Captured Preset (enable keyframes)", (compound) => {
     for (const { param } of animated) compound.addAction(param.createSetTimeVaryingAction(true));
   });
 
+  mark("enable keyframes");
   // Phase 4: the keyframes themselves, at each target's In point + captured offset.
   runTransaction(project, "CutDeck: Apply Captured Preset (keyframes)", (compound) => {
     for (const { p, param, label, t } of animated) {
@@ -272,6 +287,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
     }
   });
 
+  mark("keyframes");
   // Phase 5: interpolation (Linear / Hold / Bezier), where it was readable at capture.
   const withMode = animated.filter(({ p }) => p.keyframes.some((k) => typeof k.mode === "number"));
   if (withMode.length) {
@@ -290,6 +306,7 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
     });
   }
 
+  mark("interpolation");
   // Read back: the keyframe list must be exactly the captured times. Anything else — an extra
   // keyframe the stopwatch added on its own, a dropped one — is reported, not assumed away.
   for (const { p, param, label, t } of animated) {
@@ -303,8 +320,8 @@ async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
       warn(`could not read back keyframes of ${label}: ${e && e.message}`);
     }
   }
-
-  return { warnings };
+  mark("read-back");
+  return finish();
 }
 
 module.exports = {
