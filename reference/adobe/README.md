@@ -29,11 +29,9 @@ grep -rl "createEmptySelection" reference/adobe/docs reference/adobe/samples   #
 ## Check the panel against it
 
 ```bash
-npm ci --prefix tools/adobe        # once per machine: installs TypeScript for the tools
-node tools/adobe/check-api.mjs     # fails on any member name no Adobe source explains
+node --test tests/*.cjs            # includes the check; installs the tools on first run
+node tools/adobe/check-api.mjs     # the check alone (needs the tools: npm ci --prefix tools/adobe)
 ```
-
-`tests/cutdeck_adobe_api.test.cjs` runs the same check under `node --test tests/*.cjs`.
 
 ## Update
 

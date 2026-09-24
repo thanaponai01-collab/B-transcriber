@@ -1,7 +1,9 @@
 /* Every member name the UXP panel reads must exist in Adobe's typings or docs
    (reference/adobe/), JS/DOM built-ins, CutDeck's own code or the helper's reply fields.
    A name found in none of them was written from memory: CLAUDE.md rule 2, as a test.
-   Runs tools/adobe/check-api.mjs, which needs TypeScript: `npm ci --prefix tools/adobe` once. */
+   Runs tools/adobe/check-api.mjs, which needs TypeScript. On a machine that lacks it, the first
+   run installs it (`npm ci --prefix tools/adobe`, pinned by its lockfile), so nobody has to
+   remember that step. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -14,7 +16,12 @@ const script = path.join(root, "tools", "adobe", "check-api.mjs");
 
 function check(extraArgs = []) {
   if (!fs.existsSync(path.join(root, "tools", "adobe", "node_modules", "typescript"))) {
-    assert.fail("TypeScript is not installed for the API check. Run: npm ci --prefix tools/adobe");
+    try {
+      execFileSync("npm", ["ci", "--prefix", path.join(root, "tools", "adobe")],
+        { stdio: "pipe", shell: process.platform === "win32" });
+    } catch (error) {
+      assert.fail(`Could not install TypeScript for the API check. Run: npm ci --prefix tools/adobe\n${error.stderr || error.message}`);
+    }
   }
   return JSON.parse(execFileSync(process.execPath, [script, "--json", ...extraArgs], { encoding: "utf8" }));
 }

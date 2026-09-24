@@ -472,7 +472,7 @@ data. `classify_cluster`'s `llm_fn` contract is stable and mirrors
 `reconcile.py`/`llm_reconcile.py` closely enough that wiring a real adapter
 in later — once `cutdeck/eval/` exists to gate it on real footage, per this
 handoff's own closing line — is a self-contained follow-up, not a redesign.
-Heed the transcriber's 2026-07-16 LLM-reconciler result (`CLAUDE.md`) when
+Heed the transcriber's 2026-07-16 LLM-reconciler result (`docs/ENGINES.md`) when
 that adapter is built: randomize candidate slot order from day one, and gate
 activation on the eval harness, never a spot check.
 
@@ -495,7 +495,7 @@ Original spec notes, still accurate:
 - The Jaccard>0.55 prefilter operates on **segments**, which after Phase 4 are the real keep/cut atoms — the classifier now slots into a pass that already thinks in segments rather than bolting onto interval arithmetic.
 - Retake markers (`cut.retake_markers`, already in `config.yaml:189`) are a **deterministic pre-pass in `rules.py`**. The LLM only resolves *how far back* the retake reaches. Do not let it decide *whether* a marker is a marker.
 - The select-only discipline is non-negotiable: ids must be a subset of input ids, every id covered, assertion-enforced, no timecodes in the decision space, never rewrites text. Mirror `pipeline/reconcile.py`.
-- **Heed the LLM reconciler result** (`CLAUDE.md`, 2026-07-16): `qwen2.5:3b-instruct` was not good enough to beat a degenerate heuristic on the transcriber's tiebreak task, and positional bias had to be fixed before that was even measurable. Randomize candidate order in the prompt from day one, and gate activation on the eval harness — not on it looking sensible in a spot check.
+- **Heed the LLM reconciler result** (`docs/ENGINES.md`, 2026-07-16): `qwen2.5:3b-instruct` was not good enough to beat a degenerate heuristic on the transcriber's tiebreak task, and positional bias had to be fixed before that was even measurable. Randomize candidate order in the prompt from day one, and gate activation on the eval harness — not on it looking sensible in a spot check.
 
 ---
 
