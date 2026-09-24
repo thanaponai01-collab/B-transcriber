@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # restarted helper answers "Unknown job" instead.
 MCP_STATE = {"prepared": "queued", "running": "running", "ready": "succeeded",
              "no_cuts": "succeeded", "failed": "failed"}
-_KIND = {"cut": "rough_cut_xml", "transcribe": "transcribe"}
+_KIND = {"cut": "rough_cut", "transcribe": "transcribe"}
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -37,10 +37,12 @@ class Backend:
 
     def capabilities(self) -> dict:
         return {
-            "version": "1", "tools": ["transcribe", "rough_cut_xml"],
+            "version": "2", "tools": ["transcribe", "rough_cut"],
             "live_premiere_control": False,
             "rough_cut_input": "Exported FCP7 sequence XML with accessible source media",
-            "rough_cut_output": "New XML file; import into Premiere separately",
+            "rough_cut_output": ("Cut list: [start_frame, end_frame) spans on the sequence frame "
+                                 "grid plus ticks_per_frame; the CutDeck panel's Rough Cut applies "
+                                 "these natively. No XML is written."),
             "transcript_timing": "Phrase cues in milliseconds relative to input media",
             "job_states": ["queued", "running", "succeeded", "failed", "interrupted"],
             "serial_processing": True,
@@ -100,8 +102,11 @@ class Backend:
             result.update(cues=cues[offset:offset + limit], total_cues=len(cues), offset=offset,
                           next_offset=offset + limit if offset + limit < len(cues) else None)
         elif job.get("job_type") == "cut":
-            result = {"kind": "rough_cut_xml", "output_path": job["output_path"],
-                      "report": job.get("report"), "import_required": True}
+            cuts = job.get("cuts") or {"cuts_frames": [], "report": job.get("report")}
+            result = {"kind": "rough_cut", "cuts_frames": cuts.get("cuts_frames", []),
+                      "ticks_per_frame": cuts.get("ticks_per_frame"),
+                      "sequence_duration_frames": cuts.get("sequence_duration_frames"),
+                      "report": cuts.get("report")}
         else:
             return view
         return {"job_id": job_id, "state": "succeeded", **result}

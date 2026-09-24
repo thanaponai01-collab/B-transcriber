@@ -148,7 +148,7 @@ def test_failure_is_reported_and_frees_the_slot(tmp_path, monkeypatch):
 def test_version_bump_is_shared_with_the_panel(tmp_path):
     """A panel that sends plan_sync to an old helper must be refused at hello, not mid-job."""
     workflow = (Path(__file__).parent.parent / "uxp" / "cutdeck" / "workflow.js").read_text(encoding="utf-8")
-    assert VERSION == "cutdeck-xml-2"
+    assert int(VERSION.rsplit("-", 1)[1]) >= 2  # plan_sync arrived in -2
     assert f'const VERSION = "{VERSION}";' in workflow
 
     async def _test():

@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { capture, prepare, importResult, getOrCreateCutDeckBin } = require("../uxp/cutdeck/workflow.js");
+const { capture, prepare } = require("../uxp/cutdeck/workflow.js");
+const { getOrCreateBin } = require("../uxp/cutdeck/host/project.js");
+const getOrCreateCutDeckBin = (project) => getOrCreateBin(project, ["CutDeck"]);
 
 function fixture() {
   const source = { guid: { toString: () => "source" }, name: "Interview",
@@ -13,10 +15,11 @@ function fixture() {
   let rootItems = [];
   let binsCreated = 0;
   const importTargets = [];
-  const root = {
-    getItems: async () => rootItems,
-    createBinAction: (name, makeUnique) => ({ __createBin: true, name, makeUnique }),
-  };
+  const makeBin = (name, items) => ({ name,
+    getItems: async () => items,
+    createBinAction: (child, makeUnique) => ({ __createBin: true, name: child, makeUnique, into: items }),
+  });
+  const root = makeBin(undefined, rootItems);
   const project = { guid: {toString: () => "project"},
     getActiveSequence: async () => source, getSequences: async () => sequences,
     getRootItem: async () => root,
@@ -25,7 +28,7 @@ function fixture() {
         addAction: (action) => {
           if (action && action.__createBin) {
             binsCreated++;
-            rootItems.push({ name: action.name });
+            action.into.push(makeBin(action.name, []));
             return true;
           }
           return false;
@@ -57,30 +60,6 @@ test("failed export never starts processing", async () => {
   await assert.rejects(prepare(f.ppro, async (r) => { calls.push(r.type); return f.job; },
     await capture(f.ppro), {}, () => {}), /could not export/);
   assert.deepEqual(calls, ["hello", "prepare"]);
-});
-test("switching projects prevents import", async () => {
-  const f = fixture(); f.project.guid.toString = () => "other";
-  await assert.rejects(importResult(f.ppro, f.job, false, () => {}), /original project/);
-  assert.equal(f.imports(), 0);
-});
-test("resume opens an already imported result without duplicating it", async () => {
-  const f = fixture(); let marked = false;
-  await importResult(f.ppro, f.job, false, () => { marked = true; });
-  assert.ok(marked);
-  await importResult(f.ppro, f.job, true, () => {});
-  assert.equal(f.imports(), 1);
-});
-test("unconfirmed earlier import cannot silently import twice", async () => {
-  const f = fixture();
-  await assert.rejects(importResult(f.ppro, f.job, true, () => {}), /previous import/);
-  assert.equal(f.imports(), 0);
-});
-test("result import lands in the CutDeck bin, created on first use", async () => {
-  const f = fixture();
-  await importResult(f.ppro, f.job, false, () => {});
-  assert.equal(f.binsCreated(), 1);
-  assert.deepEqual(f.rootItems(), [{ name: "CutDeck" }]);
-  assert.equal(f.importTargets[0].name, "CutDeck");
 });
 test("a second call reuses the existing CutDeck bin instead of creating another", async () => {
   const f = fixture();

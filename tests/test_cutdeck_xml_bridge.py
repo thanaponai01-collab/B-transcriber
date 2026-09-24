@@ -43,19 +43,19 @@ print('PROGRESS:50:Transcribing speech', flush=True)
 print('a plain log line', flush=True)
 while not pathlib.Path({str(go)!r}).exists():
     time.sleep(0.02)
-report = sys.argv[sys.argv.index('--report') + 1]
-json.dump({{'cuts_applied': 0}}, open(report, 'w'))
+cuts = sys.argv[sys.argv.index('--cuts-json') + 1]
+json.dump({{'cuts_frames': [], 'ticks_per_frame': '1', 'sequence_duration_frames': 1,
+           'report': {{'cuts_applied': 0}}}}, open(cuts, 'w'))
 """
     real_exec = asyncio.create_subprocess_exec
 
     def fake_exec(*args, **kwargs):
-        return real_exec(sys.executable, "-u", "-c", fake, *args[args.index("--report") - 1:], **kwargs)
+        return real_exec(sys.executable, "-u", "-c", fake, *args[4:], **kwargs)
 
     monkeypatch.setattr(xml_bridge.asyncio, "create_subprocess_exec", fake_exec)
     # Only _run's subprocess handling is under test, not the export-dependent lookups.
     monkeypatch.setattr(xml_bridge, "range_from_ticks", lambda *_: (0, 10))
     monkeypatch.setattr(xml_bridge, "reference_audio_track", lambda *_: None)
-    monkeypatch.setattr(xml_bridge, "result_path", lambda job, _xml: Path(job["output_path"]))
 
     async def _test():
         jobs = XmlJobs(tmp_path / "jobs")
@@ -87,7 +87,8 @@ json.dump({{'cuts_applied': 0}}, open(report, 'w'))
 
 
 def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
-    """Drive one cut job whose xml_recut child is `script`; return (jobs, final status)."""
+    """Drive one cut job whose xml_recut child is `script` (given the real child's
+    arguments in sys.argv); return (jobs, final status)."""
     import sys
     from cutdeck import xml_bridge
 
@@ -95,14 +96,13 @@ def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
     spawned = []
 
     async def spawn(*a, **k):
-        proc = await real_exec(sys.executable, "-u", "-c", script, **k)
+        proc = await real_exec(sys.executable, "-u", "-c", script, *a[4:], **k)
         spawned.append(proc)
         return proc
 
     monkeypatch.setattr(xml_bridge.asyncio, "create_subprocess_exec", spawn)
     monkeypatch.setattr(xml_bridge, "range_from_ticks", lambda *_: (0, 10))
     monkeypatch.setattr(xml_bridge, "reference_audio_track", lambda *_: None)
-    monkeypatch.setattr(xml_bridge, "result_path", lambda job, _xml: Path(job["output_path"]))
 
     async def _drive():
         jobs = XmlJobs(tmp_path / "jobs")
@@ -145,3 +145,40 @@ time.sleep(60)
     assert status["state"] == "failed"
     assert jobs.active is None
     assert child_returncode is not None, "child still running after the job failed"
+
+
+_NATIVE_CHILD = """
+import json, sys
+path = sys.argv[sys.argv.index('--cuts-json') + 1]
+cuts = json.loads(sys.argv[-1])
+json.dump({'cuts_frames': cuts, 'ticks_per_frame': '8475667200', 'sequence_duration_frames': 300,
+           'report': {'cuts_applied': len(cuts), 'removed_frames': 0, 'reasons': []}},
+          open(path, 'w'))
+"""
+
+
+@pytest.mark.parametrize("cuts, state", [([[10, 20]], "ready"), ([], "no_cuts")])
+def test_panel_jobs_return_a_cut_list_and_write_no_xml(tmp_path, monkeypatch, cuts, state):
+    """The panel's XML output route is retired: every panel job is native."""
+    import json
+    script = _NATIVE_CHILD.replace("sys.argv[-1]", repr(json.dumps(cuts)))
+    _, status, _ = _run_cut_with_fake_child(tmp_path, monkeypatch, script)
+    assert status["output"] == "native"
+    assert status["state"] == state
+    assert status["cuts"]["cuts_frames"] == cuts
+    assert status["report"]["cuts_applied"] == len(cuts)
+    assert "output_path" not in status
+    assert not list(Path(status["log_path"]).parent.glob("*.xml")) or         [p.name for p in Path(status["log_path"]).parent.glob("*.xml")] == ["source.xml"]
+
+
+@pytest.mark.skipif(__import__("os").name != "nt", reason="Windows console flags")
+def test_restarted_helper_gets_a_hidden_console_not_none(tmp_path, monkeypatch):
+    """A DETACHED_PROCESS helper has no console, so each ffmpeg/ffprobe it runs pops a visible
+    console window (reproduced 2026-09-24). CREATE_NO_WINDOW gives it a hidden one to inherit."""
+    import subprocess
+    from cutdeck import xml_bridge
+    seen = {}
+    monkeypatch.setattr(xml_bridge.subprocess, "Popen", lambda *a, **k: seen.update(k))
+    xml_bridge.spawn_replacement(7891, tmp_path)
+    assert seen["creationflags"] & subprocess.CREATE_NO_WINDOW
+    assert not seen["creationflags"] & subprocess.DETACHED_PROCESS

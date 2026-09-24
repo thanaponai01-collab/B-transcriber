@@ -1,10 +1,13 @@
-# CutDeck for Premiere — XML workflow
+# CutDeck for Premiere
 
 **Role: production.** This is the only CutDeck panel. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
 
-Mark **In / Out** on the timeline, click **Rough Cut In–Out**, and continue in
-a newly imported sequence. CutDeck automatically exports and imports XML using
-the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
+Mark **In / Out** on the timeline and click **Rough Cut**. CutDeck exports the
+sequence as XML for the helper to analyse, then cuts a **copy** of your sequence
+with live Premiere edits (effects and keyframes kept), files it under
+**CutDeck ▸ Rough Cuts** and opens it. Your sequence is never edited. Split clips'
+audio comes out unlinked from their video. Undo takes up to 5 Ctrl+Z. The old XML
+*import* route is retired (docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md). No MCP is involved.
 
 ## First-time setup
 
@@ -125,14 +128,12 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
   cannot run hidden or pass arguments — if `Start CutDeck.cmd` itself has a problem
   (no Python found, a broken `.venv`), its console window says so. Run it manually
   once to see the real error.
-- **Switched projects:** return to the original project and resume. The helper
-  never imports into whichever unrelated project happens to be active.
-- **Helper restarted:** its live job list is reset. Existing files remain in
-  `output/premiere/<job identifier>/`. Start a new job, or recover a completed
-  `rough_cut.xml` using the existing manual workflow.
-- **Import not confirmed:** inspect Premiere's Project panel for the unique result
-  name. Resume opens an already imported matching result rather than importing
-  it twice. If the result cannot be identified, automatic re-import stops.
+- **Switched sequences:** the cut is only applied to the sequence it was analysed
+  from. Open it again and click Rough Cut (it resumes the pending job).
+- **Helper restarted:** its live job list is reset and the pending job clears
+  itself. Existing files remain in `output/premiere/<job identifier>/`. Start a new job.
+- **Cut doesn't match the plan:** the copy is left open for inspection and the
+  status names the first mismatched clip. Your original sequence is untouched.
 - **Dismiss last job:** clears the panel's recovery entry so you can start again.
   It does not cancel a running analysis or remove job files.
 - **Processing failed:** inspect `process.log` in the job folder. `job.json` and

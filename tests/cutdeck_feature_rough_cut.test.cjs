@@ -12,56 +12,25 @@ function createMockStorage(initial = {}) {
   };
 }
 
-test("roughCut.follow: running -> ready invokes importResult and clears job", async () => {
+test("roughCut.follow: a ready job from the retired XML route is cleared with a clear message", async () => {
   const ctl = createController({ render: () => {} });
-  const storage = createMockStorage({
-    [KEY]: JSON.stringify({ job_id: "job-1", state: "running" }),
-  });
+  const storage = createMockStorage({ [KEY]: JSON.stringify({ job_id: "job-1", state: "running" }) });
+  const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc: async () => {}, storage, pollDelay: 0 });
+  await assert.rejects(roughCut.follow({ job_id: "job-1", state: "ready", output_path: "/tmp/cuts.xml" }),
+    /old XML Rough Cut, which is retired/);
+  assert.equal(storage.getItem(KEY), null);
+});
 
-  let importCalled = false;
-  const fakePpro = {};
-  const fakeWorkflow = require("../uxp/cutdeck/workflow.js");
-  const origImportResult = fakeWorkflow.importResult;
-  fakeWorkflow.importResult = async (ppro, job, attempted, onAttempt) => {
-    importCalled = true;
-    onAttempt();
-  };
-
-  try {
-    let pollCount = 0;
-    const fakeRpc = async (req) => {
-      if (req.type === "status") {
-        pollCount++;
-        if (pollCount === 1) return { job_id: "job-1", state: "running", progress: 0.5 };
-        return {
-          job_id: "job-1",
-          state: "ready",
-          report: { cuts_applied: 5, removed_ms: 3200 },
-          result_name: "CutDeck_RoughCut",
-          output_path: "/tmp/cuts.xml",
-        };
-      }
-      throw new Error(`Unexpected rpc: ${req.type}`);
-    };
-
-    const roughCut = createRoughCutFeature({
-      ppro: fakePpro,
-      ctl,
-      rpc: fakeRpc,
-      storage,
-      pollDelay: 0,
-    });
-
-    await roughCut.follow({ job_id: "job-1", state: "running" });
-
-    assert.equal(importCalled, true);
-    assert.equal(storage.getItem(KEY), null, "Job should be cleared from storage on success");
-    assert.equal(ctl.state.job, null);
-    assert.equal(ctl.state.status.level, "ready");
-    assert.match(ctl.state.status.text, /5 cuts · 3\.2 seconds removed/);
-  } finally {
-    fakeWorkflow.importResult = origImportResult;
-  }
+test("roughCut.follow: a native job for a sequence that isn't open cuts nothing and stays resumable", async () => {
+  const ctl = createController({ render: () => {} });
+  const job = { job_id: "job-9", state: "ready", output: "native", cuts: { cuts_frames: [[1, 2]], ticks_per_frame: "1" },
+    context: { sequence_id: "seq-1", sequence_name: "Shoot" } };
+  const storage = createMockStorage({ [KEY]: JSON.stringify(job) });
+  const other = { guid: { toString: () => "other" } };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => other }) } };
+  const roughCut = createRoughCutFeature({ ppro, ctl, rpc: async () => {}, storage, pollDelay: 0 });
+  await assert.rejects(roughCut.follow({ ...job }), /Open "Shoot" to cut it/);
+  assert.notEqual(storage.getItem(KEY), null);
 });
 
 test("roughCut.follow: no_cuts clears job without importing", async () => {
@@ -107,20 +76,21 @@ test("roughCut.follow: failed clears job and throws", async () => {
   assert.equal(ctl.state.status.level, "error");
 });
 
-test("roughCut.onCut: blocks when unresumed job is in storage", async () => {
+test("roughCut.onCut: a pending job is resumed, not replaced by a new one", async () => {
   const ctl = createController({ render: () => {} });
   const storage = createMockStorage({
-    [KEY]: JSON.stringify({ job_id: "job-4", state: "prepared" }),
+    [KEY]: JSON.stringify({ job_id: "job-4", state: "running" }),
   });
-
+  const calls = [];
   const roughCut = createRoughCutFeature({
     ppro: {},
     ctl,
-    rpc: async () => {},
+    rpc: async (req) => { calls.push(req.type); return req.type === "status" ? { job_id: "job-4", state: "no_cuts" } : {}; },
     storage,
   });
 
   await roughCut.onCut();
-  assert.equal(ctl.state.status.level, "error");
-  assert.match(ctl.state.status.text, /Resume the previous job/);
+  assert.deepEqual(calls, ["hello", "status"], "must resume job-4, never prepare a new job");
+  assert.equal(storage.getItem(KEY), null);
+  assert.match(ctl.state.status.text, /No cuts found/);
 });

@@ -232,20 +232,3 @@ def check_reference_audio(source_xml: str, audio_track_index: int | None = None)
             raise XmlRecutRefusal(f"source media has no audio stream: {path}")
     return {"xml_track": tracks.index(track), "track_name": child_text(track, "name"),
             "clip_count": len(clips), "files": [str(path) for path in files]}
-
-
-def reference_media_path(source_xml: str, audio_track_index: int | None = None) -> Path:
-    """The source media file backing the reference audio track's first real clip.
-
-    Lets callers place outputs beside the footage the cuts were derived from.
-    Track selection and the disabled-clip skip mirror ``extract_mixdown`` exactly,
-    so "the footage" always names the media that was actually analyzed rather than
-    whichever file the XML happens to list first.
-    """
-    sequence = ET.fromstring(source_xml).find("sequence")
-    if sequence is None:
-        raise XmlRecutRefusal("no <sequence> element found in source XML")
-    track = select_audio_track(sequence, audio_track_index)
-    for clipitem in enabled_clips(track):
-        return resolve_file_path(sequence, clipitem.find("file").get("id"))
-    raise XmlRecutRefusal("no enabled clip on the reference audio track names a source file")

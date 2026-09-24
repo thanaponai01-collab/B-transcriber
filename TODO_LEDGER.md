@@ -1,5 +1,65 @@
 # TODO_LEDGER
 
+## CutDeck native rough cut — Phase 0 probes P1–P5 PASSED live — 2026-09-24
+
+Handoff: docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md. Probe: "Test Native Cut"
+(`uxp/cutdeck/roughCutProbe.js`), run twice on `tiw_Synced` (29.97 fps, 1920x1080,
+camera clip = 1 video + 4 audio, keyframed effect). Premiere 26.5 (installed build per the
+2026-09-15 entry; not re-read by the probe).
+
+Run 1 found (then designed around):
+- `TrackItem.createSetEndAction` throws "script object is no longer valid" (video and audio). **Unusable.**
+- `createCloneTrackItemAction` onto the clip's own track OVERWRITES what is there. Never clone in place.
+- `createSetInPointAction` on a track item = HEAD TRIM (start and media In move together, end fixed).
+- `createOverwriteItemAction` rejects a `ClipProjectItem.cast(...)` object ("Invalid parameter.");
+  pass the plain `getProjectItem()` result.
+
+Run 2, all PASS:
+- **P2**: project-item `createSetInOutPointsAction` + overwrite places exactly the marked span, but
+  only as TWO transactions — in one compound the overwrite still sees the old marks. Marks restored OK.
+- **P5**: `createMoveAction` is RELATIVE (shift by; negative works). **Linked audio does NOT follow**
+  (0 of 4) — move every audio item yourself. `createRemoveItemsAction(ripple=false, VIDEO)` removes the
+  video only, leaves a gap, nothing else shifts, audio stays (8 → 8).
+- **P3 split**: clone each item (video + every audio, alignToVideo=false) into free space past the
+  end → `SetInPoint` head-trims the clone → `SetOutPoint` tail-trims the original → move the clone back
+  by −offset. Result exact to 0 ticks, 4 of 4 audio, nothing else touched. 4 undo steps.
+- **P4**: both pieces keep effects (2) with keyframes at identical media time.
+- **P1**: `createSequenceFromMedia` matches footage (tpf, frame size) and pre-places the whole clip
+  (1 V + 4 A) — Route B must remove it first.
+
+User checks (same day): playback across the split has **no jump** (picture and sound continuous).
+The split's second piece is **NOT linked** to its audio (clones are separate items; the API
+cannot link). Route A's split pieces therefore come out unlinked — decide before Phase 4:
+accept + say so in the UI, or rebuild split pieces via marks + overwrite (P2: lands linked,
+but drops effects/keyframes). **Decided: clone route, unlinked pieces stated in the UI.**
+
+Phase 2 (Mark Cuts review) PASSED live 2026-09-24 on `tiw_Synced`: 432 ranged Comment markers,
+839.0 s — same as the XML route's 432 cuts / 839.1 s; one Ctrl+Z removed all; user confirms the
+markers span what they would cut. `Markers.createAddMarkerAction` + read-back proven.
+
+Phase 4 first live run 2026-09-24: failed before any edit with "The script object is no longer
+valid." from `createCloneTrackItemAction` — the actions were created OUTSIDE the
+`executeTransaction` callback. **Rule: create every Action inside the transaction callback.** Fixed in `timeline/nativeCut.js`; the test fake now enforces the rule.
+
+Phase 4 live run 2 (2026-09-24): the park-a-full-clone-per-piece split made ~431 full-length
+(~25 min) clones per track on `tiw_Synced` (432 cuts); pieces went missing ("piece on video
+track 1 not found to trim"), copy flooded with duplicates. **Redesigned: overwrite as razor** —
+one 1-frame filler per track, cloned onto every cut edge inside a clip, then remove everything
+inside cuts, then move.
+
+Phase 4 live run 3 (2026-09-24): **PASSED** on `tiw_Synced` (432 cuts). Read-back clean,
+keyframed effect and Transform still animate, audio split with the video, 5 undo steps. So an
+overwrite landing inside a clip does keep both sides. Split pieces' audio is NOT linked to
+the video (user-checked) — the status line says so.
+
+Phase 6 (2026-09-24, user accepted native on real footage): panel XML output route retired.
+Rough Cut = native only; Mark Cuts / Native Cut buttons and `timeline/cutMarkers.js` removed;
+`workflow.importResult`, `xml_bridge.result_path`, `xml_sequence.reference_media_path` deleted.
+Helper VERSION -> cutdeck-xml-3. Same day: MCP `rough_cut_xml` -> `rough_cut`, returning the cut
+list (capabilities version 2); the helper's XML-output branch is gone. `xml_recut` CLI `--out` kept
+(manual use + test oracle). Open: Phase 5 (Route B), Phase 6 (retire
+the XML output after a release with both).
+
 ## Premiere XML panel — 2026-09-15
 
 User selected the existing working XML method with automatic UXP export/import,

@@ -1,6 +1,6 @@
 /* Host operations kept separate from UI so identity and import behavior can be tested. */
-const { CUTDECK_BIN_NAME, getOrCreateBin, activeProjectAndSequence } = require("./host/project.js");
-const VERSION = "cutdeck-xml-2";
+const { activeProjectAndSequence } = require("./host/project.js");
+const VERSION = "cutdeck-xml-3";
 const guid = (object) => object.guid.toString();
 
 async function capture(ppro) {
@@ -39,40 +39,4 @@ async function prepare(ppro, rpc, snapshot, options, save) {
   return started;
 }
 
-// Kept as an alias for tests and backward compatibility; delegates to host/project.js
-const getOrCreateCutDeckBin = (project) => getOrCreateBin(project, [CUTDECK_BIN_NAME]);
-
-async function importResult(ppro, job, previousAttempt, markAttempt) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project || guid(project) !== job.context.project_id) {
-    throw new Error("Return to the original project, then resume this job to open the result.");
-  }
-  const before = await project.getSequences();
-  if (!before.some((s) => guid(s) === job.context.sequence_id)) {
-    throw new Error("The source sequence is no longer in this project. The result XML is saved for recovery.");
-  }
-  const existing = before.filter((s) => s.name === job.result_name && guid(s) !== job.context.sequence_id);
-  let result;
-  if (existing.length === 1) {
-    result = existing[0];
-  } else {
-    if (previousAttempt || existing.length > 1) {
-      throw new Error("A previous import could not be confirmed. Check the Project panel before importing again. Result: " + job.output_path);
-    }
-    const ids = new Set(before.map(guid));
-    markAttempt();
-    const targetBin = await getOrCreateCutDeckBin(project);
-    const imported = await project.importFiles([job.output_path], true, targetBin, false);
-    if (!imported) throw new Error("Premiere did not confirm the XML import. Check the Project panel. Result: " + job.output_path);
-    const after = await project.getSequences();
-    const matches = after.filter((s) => !ids.has(guid(s)) && s.name === job.result_name);
-    if (matches.length !== 1) throw new Error("Could not identify the imported sequence. Check the Project panel for " + job.result_name);
-    result = matches[0];
-  }
-  if (!await project.openSequence(result) || !await project.setActiveSequence(result)) {
-    throw new Error("Result imported. Open this sequence from the Project panel: " + job.result_name);
-  }
-  return result;
-}
-
-module.exports = { VERSION, capture, prepare, importResult, getOrCreateCutDeckBin };
+module.exports = { VERSION, capture, prepare };

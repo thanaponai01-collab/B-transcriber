@@ -328,3 +328,35 @@ def test_transition_refused_before_any_audio_work(tmp_path, monkeypatch):
     monkeypatch.setattr(ingest_mod, "ingest", no_ingest)
     with pytest.raises(xml_recut.XmlRecutRefusal, match="transitionitem"):
         xml_recut.main([str(seq_path), "--asr", "--job-id", "1"])
+
+
+def test_cuts_json_equals_scoped_cuts_and_writes_no_xml(mixdown_path, sequence_xml_path, tmp_path):
+    """Native rough cut (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 3.1): the cut list the panel
+    applies is exactly the scoped_cuts the XML route would have applied."""
+    import json
+    out = tmp_path / "cuts.json"
+    xml_argv = [str(sequence_xml_path), mixdown_path, "--no-save-plan",
+                "--range-start-frame", "30", "--range-end-frame", "180"]
+    assert xml_recut.main(xml_argv + ["--cuts-json", str(out)]) == 0
+    assert not sequence_xml_path.with_name("seq_cut.xml").exists()
+    data = json.loads(out.read_text())
+
+    report = tmp_path / "report.json"
+    xml_recut.main(xml_argv + ["--report", str(report)])
+    xml_report = json.loads(report.read_text())
+
+    cuts = data["cuts_frames"]
+    assert cuts and all(30 <= a < b <= 180 for a, b in cuts)
+    assert all(b1 <= a2 for (_, b1), (a2, _) in zip(cuts, cuts[1:]))
+    assert data["report"]["cuts_applied"] == xml_report["cuts_applied"] == len(cuts)
+    assert data["report"]["removed_frames"] == xml_report["removed_frames"]
+    assert data["ticks_per_frame"] == str(254016000000 // 30)
+    assert data["sequence_duration_frames"] == 195
+
+
+def test_ticks_per_frame_is_exact_or_refused():
+    from cutdeck.contracts import Timebase
+    from cutdeck.xml_sequence import XmlRecutRefusal
+    assert xml_recut.ticks_per_frame(Timebase(fps_num=30000, fps_den=1001)) == 8475667200
+    with pytest.raises(XmlRecutRefusal):
+        xml_recut.ticks_per_frame(Timebase(fps_num=254016000001, fps_den=1))

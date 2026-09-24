@@ -109,14 +109,14 @@ def test_real_fixture_audio_grouping():
     assert reference_audio_track(xml, {"audio_track": 1, "audio_track_count": count}) == 2
 
 
-def test_job_runs_existing_cli_once_and_publishes_named_result(tmp_path, monkeypatch):
+def test_job_runs_existing_cli_once_and_returns_the_cut_list(tmp_path, monkeypatch):
     calls = []
 
     async def subprocess_stub(*args, **kwargs):
         calls.append(args)
-        Path(args[args.index("--out") + 1]).write_text(source(), encoding="utf-8")
-        Path(args[args.index("--report") + 1]).write_text(
-            json.dumps({"cuts_applied": 1, "removed_ms": 2000}), encoding="utf-8")
+        Path(args[args.index("--cuts-json") + 1]).write_text(json.dumps(
+            {"cuts_frames": [[70, 80]], "ticks_per_frame": "1", "sequence_duration_frames": 300,
+             "report": {"cuts_applied": 1, "removed_frames": 10, "reasons": []}}), encoding="utf-8")
 
         class Process:
             stdout = EmptyStdout()
@@ -139,10 +139,8 @@ def test_job_runs_existing_cli_once_and_publishes_named_result(tmp_path, monkeyp
         await asyncio.gather(*jobs.tasks)
         result = await jobs.dispatch({"type": "status", "job_id": job["job_id"]})
         assert result["state"] == "ready"
-        seq = ET.parse(job["output_path"]).find("sequence")
-        assert seq.findtext("name") == job["result_name"]
-        assert seq.find("uuid") is None
-        assert seq.get("id") != "original"
+        assert result["cuts"]["cuts_frames"] == [[70, 80]]
+        assert "--out" not in calls[0]
         assert len(calls) == 1
         assert "--asr" in calls[0] and "--no-save-plan" in calls[0]
         assert calls[0][calls[0].index("--range-start-frame") + 1] == "60"
@@ -189,7 +187,7 @@ def test_real_socket_handles_bad_input_and_reconnect(tmp_path):
     asyncio.run(scenario())
 
 
-# --- result placement beside the footage ---------------------------------------
+# --- sources with real media paths ----------------------------------------------
 
 def source_with_audio(media_path, name="Original"):
     """Same shape as source(), plus one audio clip naming a real media file."""
@@ -203,88 +201,6 @@ def source_with_audio(media_path, name="Original"):
             '<start>0</start><end>300</end><in>0</in><out>300</out>'
             f'<file id="f0"><pathurl>{_pathurl(media_path)}</pathurl></file>'
             '</clipitem></track></audio></media></sequence></xmeml>')
-
-
-def run_to_completion(tmp_path, source_xml, report, sequence_name="Original", monkeypatch=None):
-    """Drive one job through the helper with the CLI stubbed out."""
-    async def subprocess_stub(*args, **kwargs):
-        Path(args[args.index("--out") + 1]).write_text(source_xml, encoding="utf-8")
-        Path(args[args.index("--report") + 1]).write_text(json.dumps(report), encoding="utf-8")
-
-        class Process:
-            stdout = EmptyStdout()
-
-            async def wait(self):
-                return 0
-        return Process()
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", subprocess_stub)
-
-    async def scenario():
-        jobs = XmlJobs(tmp_path / "jobs")
-        ctx = {**context(), "sequence_name": sequence_name}
-        job = await jobs.dispatch({"type": "prepare", **ctx})
-        Path(job["source_path"]).write_text(source_xml, encoding="utf-8")
-        await jobs.dispatch({"type": "start", "job_id": job["job_id"]})
-        await asyncio.gather(*jobs.tasks)
-        return await jobs.dispatch({"type": "status", "job_id": job["job_id"]})
-    return asyncio.run(scenario())
-
-
-def test_result_lands_in_a_cutdeck_folder_beside_the_footage(tmp_path, monkeypatch):
-    footage = tmp_path / "CFD 94"
-    footage.mkdir()
-    media = footage / "interview_A.mp4"
-    media.write_bytes(b"")
-    result = run_to_completion(tmp_path, source_with_audio(media),
-                               {"cuts_applied": 1, "removed_ms": 2000}, monkeypatch=monkeypatch)
-    assert result["state"] == "ready"
-    written = Path(result["output_path"])
-    assert written.parent == footage / "CutDeck"
-    assert written.name == f"{result['result_name']}.xml"
-    assert written.is_file()
-    assert "output_note" not in result
-    # Only the result moves; the job folder keeps the export and its records.
-    job_folder = Path(result["source_path"]).parent
-    assert (job_folder / "source.xml").is_file() and (job_folder / "job.json").is_file()
-    assert not (footage / "CutDeck" / "source.xml").exists()
-
-
-def test_unresolvable_footage_falls_back_to_the_job_folder(tmp_path, monkeypatch):
-    # source() has no audio track at all, so the footage cannot be located.
-    result = run_to_completion(tmp_path, source(),
-                               {"cuts_applied": 1, "removed_ms": 2000}, monkeypatch=monkeypatch)
-    assert result["state"] == "ready"
-    assert Path(result["output_path"]).parent == Path(result["source_path"]).parent
-    assert "no audio tracks" in result["output_note"]
-
-
-def test_illegal_sequence_name_characters_are_stripped_from_the_filename(tmp_path, monkeypatch):
-    footage = tmp_path / "CFD 94"
-    footage.mkdir()
-    media = footage / "interview_A.mp4"
-    media.write_bytes(b"")
-    name = 'A/B:C*D?"E'
-    result = run_to_completion(tmp_path, source_with_audio(media, name),
-                               {"cuts_applied": 1, "removed_ms": 2000},
-                               sequence_name=name, monkeypatch=monkeypatch)
-    written = Path(result["output_path"])
-    assert written.is_file()
-    assert not set(written.stem) & set(r'<>:"/\|?*')
-    # The sequence keeps its real name inside the XML; only the file name is cleaned.
-    assert ET.parse(written).find("sequence").findtext("name") == result["result_name"]
-
-
-def test_no_cuts_leaves_nothing_in_the_media_folder(tmp_path, monkeypatch):
-    footage = tmp_path / "CFD 94"
-    footage.mkdir()
-    media = footage / "interview_A.mp4"
-    media.write_bytes(b"")
-    result = run_to_completion(tmp_path, source_with_audio(media),
-                               {"cuts_applied": 0, "removed_ms": 0}, monkeypatch=monkeypatch)
-    assert result["state"] == "no_cuts"
-    assert not Path(result["output_path"]).exists()
-    assert list((footage / "CutDeck").glob("*.xml")) == []
 
 
 # --- refusals before the expensive part (issue #28) ------------------------------

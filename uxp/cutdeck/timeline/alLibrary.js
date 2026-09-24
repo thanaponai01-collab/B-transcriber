@@ -10,7 +10,7 @@ const {
 } = require("../host/project.js");
 const alProject = require("./alProject.js");
 
-// Same top-level bin workflow.js's getOrCreateCutDeckBin creates/reuses for Cut/Sync
+// Same top-level CutDeck bin rough cuts are filed under (CutDeck > Rough Cuts) for Cut/Sync
 // results — deliberately the SAME name, so this is one shared folder tree in the Project
 // panel, not a second one. ADJ_BIN_NAME is the canonical, unambiguous home for the
 // Adjustment Layer: dropping it there means CutDeck finds it instantly on any sequence,

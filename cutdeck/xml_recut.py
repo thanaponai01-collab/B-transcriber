@@ -49,8 +49,8 @@ from dataclasses import dataclass, replace
 from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, Timebase
-from cutdeck.xml_sequence import (XmlRecutRefusal, child_text, frame_to_ticks, range_window_frames,
-                                  sequence_timebase)
+from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, child_text,
+                                  frame_to_ticks, range_window_frames, sequence_timebase)
 from transcribe.timebase import ms_to_frame
 
 # Tags that, if found *keyframed* on a clipitem straddling a cut boundary,
@@ -499,6 +499,31 @@ def frame_to_ms_int(frame: int, tb: Timebase) -> int:
     return int(round(frame_to_ms(frame, tb)))
 
 
+def ticks_per_frame(tb: Timebase) -> int:
+    """Premiere ticks per frame, exact. The panel does all cut math in integer ticks,
+    so a frame rate whose frame isn't a whole number of ticks is refused."""
+    per_frame, remainder = divmod(PPRO_TICKS_PER_SECOND * tb.fps_den, tb.fps_num)
+    if remainder:
+        raise XmlRecutRefusal(f"frame rate {tb.fps_num}/{tb.fps_den} is not a whole number "
+                              f"of Premiere ticks per frame")
+    return per_frame
+
+
+def write_cuts_json(path, plan: CutPlan, cuts: list[tuple[int, int]], tb: Timebase,
+                    seq_frames: int) -> None:
+    """The native-apply contract (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 3.1): the same
+    ``scoped_cuts`` the XML recut would apply, in sequence frames."""
+    import json
+    reasons = sorted({s.reason for s in plan.spans if s.action == CUT and s.reason})
+    path.write_text(json.dumps({
+        "cuts_frames": [[a, b] for a, b in cuts],
+        "ticks_per_frame": str(ticks_per_frame(tb)),
+        "sequence_duration_frames": seq_frames,
+        "report": {"cuts_applied": len(cuts), "removed_frames": sum(b - a for a, b in cuts),
+                   "reasons": reasons},
+    }), encoding="utf-8")
+
+
 def _deep_update(base: dict, overlay: dict) -> None:
     """Recursively apply ``overlay``'s keys onto ``base``, in place."""
     for key, value in (overlay or {}).items():
@@ -547,6 +572,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--range-start-frame", type=int)
     ap.add_argument("--range-end-frame", type=int)
     ap.add_argument("--report", help="write a machine-readable JSON result")
+    ap.add_argument("--cuts-json", help="write the scoped cut list in sequence frames for the "
+                                        "panel to apply natively, and skip writing the recut XML")
     ap.add_argument("--no-save-plan", action="store_true",
                     help="skip cut-plan persistence (the Premiere helper keeps its own job files)")
     ap.add_argument("--asr", action="store_true",
@@ -695,6 +722,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(f"{n_cut} cut spans, {cut_ms} ms to remove of {plan.duration_ms} ms "
               f"({seq_frames} frames declared in sequence XML)")
+        return 0
+
+    if args.cuts_json:
+        write_cuts_json(Path(args.cuts_json), plan, cuts, tb, seq_frames)
+        print(f"wrote {args.cuts_json}: {n_cut} cuts, {cut_ms} ms to remove")
         return 0
 
     _progress(95, "Rewriting sequence XML")

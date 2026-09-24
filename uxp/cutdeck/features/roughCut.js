@@ -1,7 +1,12 @@
-// Owns the XML rough cut job lifecycle (capture, prepare, follow, import) and job persistence.
+// Owns the rough cut job lifecycle (capture, prepare, follow, native apply) and job persistence.
+// The helper analyses an XML export of the sequence; the cuts are applied natively to a copy
+// (timeline/nativeCut.js). The XML *output* route is retired (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
 // Must not know: the DOM, UI panels, Adjustment Layer or Effects logic.
 
 const workflow = require("../workflow.js");
+const { applyNativeCut } = require("../timeline/nativeCut.js");
+const { activeProjectAndSequence } = require("../host/project.js");
+const { TICKS_PER_SECOND } = require("../host/ticks.js");
 
 const KEY = "cutdeck.xml.lastJob";
 
@@ -75,26 +80,38 @@ function createRoughCutFeature({
       ctl.setStatus("Job error: " + job.state, "error");
       throw new Error("Job is not ready: " + job.state);
     }
-    ctl.setStatus("Opening your rough cut in Premiere…", "busy");
-    const saved = readSavedJob() || {};
-    await workflow.importResult(
-      ppro,
-      job,
-      saved.importAttempted,
-      () => save({ ...saved, ...job, importAttempted: true })
-    );
+    if (job.output !== "native") {
+      // Started before the XML output route was retired; there is no cut list to apply.
+      clearJob();
+      throw new Error("That job was started with the old XML Rough Cut, which is retired. Start a new Rough Cut.");
+    }
+    await nativeCut(job);
+  }
+
+  // The cuts are applied natively to a copy of the analysed sequence.
+  async function nativeCut(job) {
+    const { project, sequence } = await activeProjectAndSequence(ppro, {
+      sequenceErrorMessage: `Open "${job.context.sequence_name}" to cut it, then Resume.`,
+    });
+    if (sequence.guid.toString() !== job.context.sequence_id) {
+      throw new Error(`Open "${job.context.sequence_name}" to cut it, then Resume.`);
+    }
+    ctl.setStatus("Cutting a copy of your sequence in Premiere…", "busy");
+    const r = await applyNativeCut(ppro, project, sequence, job.cuts, job.result_name);
     clearJob();
-    const note = job.output_note ? `\n${job.output_note}` : "";
-    ctl.setStatus(
-      `${job.report.cuts_applied} cuts · ${(job.report.removed_ms / 1000).toFixed(1)} seconds removed.`
-      + `\nOpened ${job.result_name}\nSaved ${job.output_path}${note}`,
-      "ready"
-    );
+    const seconds = Number(r.removedTicks * 10n / TICKS_PER_SECOND) / 10;
+    ctl.setStatus(`${r.cuts} cuts · ${seconds.toFixed(1)} seconds removed.\nOpened ${r.name}`
+      + (r.splits ? `\n${r.splits} clips were split: the pieces' audio is not linked to their video (select both to move them).` : "")
+      + `\nChecked clip by clip. Undo takes ${r.steps} Ctrl+Z; your original sequence is untouched.`, "ready");
   }
 
   async function doCut() {
+    // A pending job is finished first, never silently replaced: the cut button resumes it, so
+    // recovery never depends on the job banner being visible.
     if (readSavedJob()) {
-      throw new Error("Resume the previous job before starting another rough cut.");
+      ctl.setStatus("Finishing the previous job first…", "busy");
+      await doResume();
+      return;
     }
     if (ensureHelper) await ensureHelper();
     const snap = await doRefresh();
@@ -133,13 +150,8 @@ function createRoughCutFeature({
   }
 
   async function doDismiss() {
-    const saved = readSavedJob();
     clearJob();
-    ctl.setStatus(
-      "Previous job dismissed. Any running analysis continues in the helper. Saved result location:\n"
-      + (saved ? saved.output_path : ""),
-      "ready"
-    );
+    ctl.setStatus("Previous job dismissed. Any running analysis continues in the helper.", "ready");
   }
 
   return {

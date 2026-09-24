@@ -3,6 +3,7 @@
 
 const capability = require("../capabilityProbe.js");
 const syncProbe = require("../syncProbe.js");
+const roughCutProbe = require("../roughCutProbe.js");
 
 const PROBES = [
   {
@@ -58,6 +59,14 @@ const PROBES = [
     format: (report) => syncProbe.formatSyncMovesReport(report),
     logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
     logLabel: "CutDeck sync moves probe",
+  },
+  {
+    id: "nativecut",
+    startText: "Copying this sequence, then testing native cut edits (P1-P5) on the copy…",
+    run: (ppro) => roughCutProbe.probeNativeCut(ppro),
+    format: (report) => roughCutProbe.formatNativeCutReport(report),
+    logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
+    logLabel: "CutDeck native cut probe",
   },
 ];
 

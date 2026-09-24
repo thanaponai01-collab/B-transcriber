@@ -20,11 +20,11 @@ import uuid
 from xml.etree import ElementTree as ET
 
 from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
-                                  check_reference_audio, reference_media_path, sequence_timebase)
+                                  check_reference_audio, sequence_timebase)
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
-VERSION = "cutdeck-xml-2"  # -2: plan_sync (native Sync)
+VERSION = "cutdeck-xml-3"  # -2: plan_sync (native Sync); -3: panel rough cuts are native only
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -73,37 +73,6 @@ def failure_detail(log_path: str) -> str | None:
         if line.strip() and not _LOG_NOISE.match(line):
             return line.strip()[:300]
     return None
-
-
-_ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
-
-
-def _safe_filename(name: str) -> str:
-    """Premiere sequence names are free text; file names are not."""
-    cleaned = "".join("-" if c in _ILLEGAL_FILENAME_CHARS or ord(c) < 32 else c for c in name)
-    return cleaned.strip(" .") or "rough_cut"
-
-
-def result_path(job: dict, source_xml: str) -> Path:
-    """Where the finished rough cut is written: a ``CutDeck`` folder beside the footage.
-
-    The editor works out of the media folder, so the file they import belongs there
-    rather than inside this repo. Only the result moves — ``source.xml``, the log and
-    the reports stay in the job folder, keeping media folders clean and recovery in
-    one place.
-
-    Falls back to the job folder when the media cannot be located or written to. A
-    rough cut saved in the wrong place is recoverable; one that never gets written
-    because the media sits on a disconnected drive is not.
-    """
-    try:
-        media = reference_media_path(source_xml, job["xml_audio_track"])
-        folder = media.parent / "CutDeck"
-        folder.mkdir(parents=True, exist_ok=True)
-        return folder / f"{_safe_filename(job['result_name'])}.xml"
-    except (XmlRecutRefusal, OSError) as exc:
-        job["output_note"] = f"Saved in the job folder instead of beside the footage: {exc}"
-        return Path(job["source_path"]).parent / "rough_cut.xml"
 
 
 def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
@@ -245,9 +214,11 @@ class XmlJobs:
                 raise ValueError("Speech protection must be true or false")
             job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
                    "source_path": str(folder / "source.xml"),
-                   "output_path": str(folder / "rough_cut.xml"),
                    "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
-                   "log_path": str(folder / "process.log")}
+                   "log_path": str(folder / "process.log"),
+                   # The panel cuts natively from this list; the XML output route is retired
+                   # for the panel (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
+                   "output": "native"}
             self.jobs[job_id] = job
             self._save(job)
             return dict(job)
@@ -269,13 +240,11 @@ class XmlJobs:
         if kind == "submit_rough_cut":
             arguments = _rough_cut_arguments(req)
             job_id, folder = self._allocate()
-            job = {"job_id": job_id, "job_type": "cut", "kind": "rough_cut_xml",
+            job = {"job_id": job_id, "job_type": "cut", "kind": "rough_cut", "output": "native",
                    "state": "running", "arguments": arguments,
                    "context": {"asr": arguments["speech_protection"]},
                    "preset": arguments["preset"],
                    "source_path": arguments["sequence_xml"],
-                   "output_path": str(folder / "rough_cut.xml"),
-                   "result_name": f"{Path(arguments['sequence_xml']).stem} — CutDeck {job_id[:8]}",
                    "xml_audio_track": arguments["audio_track"],
                    "log_path": str(folder / "process.log")}
             if arguments["start_frame"] is not None:
@@ -307,8 +276,6 @@ class XmlJobs:
     def _start(self, job: dict, source_xml: str) -> dict:
         start, end = range_from_ticks(source_xml, job["context"])
         job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
-        # Only now does the export exist, so only now is the footage location known.
-        job["output_path"] = str(result_path(job, source_xml))
         job["range_frames"] = [start, end]
         job["state"] = "running"
         return self._launch(job, self._run(job))
@@ -341,7 +308,6 @@ class XmlJobs:
         process = None
         try:
             folder = self.directory / job["job_id"]
-            report_path = folder / "report.json"
             job["progress"] = {"pct": 2, "stage": "Checking source media"}
             source_xml = Path(job["source_path"]).read_text(encoding="utf-8-sig")
             try:
@@ -350,8 +316,11 @@ class XmlJobs:
             except XmlRecutRefusal as exc:
                 raise RuntimeError(f"Cannot analyze this sequence: {exc}") from None
             job["reference"] = reference_label(source_xml, checked)
-            args =[sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
-                    "--out", job["output_path"], "--report", str(report_path),
+            # Every job returns the native cut list; nothing writes XML any more
+            # (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
+            cuts_path = folder / "cuts.json"
+            args = [sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
+                    "--cuts-json", str(cuts_path),
                     "--config", str(ROOT / "transcribe/config.yaml"), "--no-save-plan"]
             if job.get("preset", "aggressive") == "aggressive":
                 args += ["--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")]
@@ -382,26 +351,10 @@ class XmlJobs:
                 raise RuntimeError(f"CutDeck processing failed (exit {code})"
                                    + (f": {detail}" if detail else "")
                                    + f". See {job['log_path']}")
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-            job["report"] = report
-            job["state"] = "ready" if report["cuts_applied"] else "no_cuts"
-            if job["state"] == "no_cuts":
-                # A no-cut result just copies the source; don't leave it sitting in
-                # the editor's media folder. The job folder's own copy is kept.
-                output = Path(job["output_path"])
-                if output.parent != folder:
-                    output.unlink(missing_ok=True)
-            if job["state"] == "ready":
-                path = Path(job["output_path"])
-                root = ET.fromstring(path.read_text(encoding="utf-8"))
-                seq = root.find("sequence")
-                seq.find("name").text = job["result_name"]
-                seq.set("id", "cutdeck-" + job["job_id"])
-                # Avoid reusing Premiere's exported sequence identity on import.
-                for identity in list(seq.findall("uuid")):
-                    seq.remove(identity)
-                path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n'
-                                + ET.tostring(root, encoding="unicode"), encoding="utf-8")
+            cuts = json.loads(cuts_path.read_text(encoding="utf-8"))
+            job["cuts"] = cuts
+            job["report"] = cuts["report"]
+            job["state"] = "ready" if cuts["cuts_frames"] else "no_cuts"
         except asyncio.CancelledError:
             if process and process.returncode is None:
                 process.terminate()
@@ -494,9 +447,13 @@ async def serve(jobs: XmlJobs, port: int = PORT):
 
 
 def spawn_replacement(port: int, jobs_dir: Path):
-    """Start a fresh helper, detached and windowless, that outlives this one."""
+    """Start a fresh helper, windowless, that outlives this one.
+
+    CREATE_NO_WINDOW, not DETACHED_PROCESS: a detached helper has no console at all, so every
+    console tool it runs (ffmpeg/ffprobe) gets a NEW visible window from Windows. With a hidden
+    console of its own, its children inherit that instead and nothing pops up."""
     log = open(jobs_dir / "helper.log", "ab")
-    extra = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+    extra = ({"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
              if os.name == "nt" else {"start_new_session": True})
     subprocess.Popen([sys.executable, "-m", "cutdeck.xml_bridge", "--port", str(port), "--jobs-dir", str(jobs_dir)],
                      cwd=ROOT, env={**os.environ, "PYTHONIOENCODING": "utf-8"},
