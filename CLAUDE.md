@@ -12,9 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **Prove an Adobe API exists before writing code that uses it.** Before writing
    anything for the UXP panel (`uxp/cutdeck/`) or any Premiere / UXP call, look the
    API up and confirm it is really there — never write it from memory:
-   - Premiere UXP: Adobe's official typings — `npm pack @adobe/premierepro@26.2.1`
-     into the scratchpad, read `package/src/premierepro.d.ts` (more complete than the
-     developer.adobe.com class pages).
+   - Premiere UXP: Adobe's official typings — `npm pack @adobe/premierepro@26.5.1`
+     (matches the installed Premiere 26.5) into the scratchpad, read
+     `package/src/premierepro.d.ts` (more complete than the developer.adobe.com class
+     pages). The manifest's `minVersion` is 26.2.0, so an API new in 26.5 is not
+     available on 26.2–26.4.
    - UXP platform (storage, shell, network, etc.): the Adobe UXP docs source,
      `github.com/AdobeDocs/uxp` (`src/pages/uxp-api/reference-js/`) — some
      developer.adobe.com pages for it now 404.
