@@ -11,17 +11,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 2. **Prove an Adobe API exists before writing code that uses it.** Before writing
    anything for the UXP panel (`uxp/cutdeck/`) or any Premiere / UXP call, look the
-   API up and confirm it is really there — never write it from memory:
-   - Premiere UXP: Adobe's official typings — `npm pack @adobe/premierepro@26.5.1`
-     (matches the installed Premiere 26.5) into the scratchpad, read
-     `package/src/premierepro.d.ts` (more complete than the developer.adobe.com class
-     pages). The manifest's `minVersion` is 26.2.0, so an API new in 26.5 is not
-     available on 26.2–26.4.
-   - UXP platform (storage, shell, network, etc.): the Adobe UXP docs source,
-     `github.com/AdobeDocs/uxp` (`src/pages/uxp-api/reference-js/`) — some
-     developer.adobe.com pages for it now 404.
+   API up and confirm it is really there — never write it from memory. Everything is
+   in the repo, pinned (`reference/adobe/README.md`); nothing needs downloading:
+   - **`docs/PREMIERE_FACTS.md` first**: what each API actually did when run live
+     (catches, BROKEN, ABSENT, proven enum values). Add a row after every live run.
+   - **`reference/adobe/api/premierepro.txt`** / **`api/uxp.txt`**: every declared
+     member, one line (`grep "^SequenceEditor\." …`), generated from Adobe's typings
+     (`@adobe/premierepro@26.5.1`, the installed Premiere; `@adobe/cc-ext-uxp-types`).
+     `NOT IN 26.2.1` marks APIs missing at the manifest's `minVersion` 26.2.0.
+   - `reference/adobe/docs/` (Adobe's `uxp-premiere-pro` docs: Premiere classes and
+     the UXP platform) and `reference/adobe/samples/` (Adobe's own sample panels).
    - Typings don't give numeric enum values or runtime semantics (e.g. keyframe time
-     frames) — those still need a live probe in Premiere before being relied on.
+     frames; `InterpolationMode` is really LINEAR 0 / HOLD 4 / BEZIER 5): live-probe.
+   - `node tools/adobe/check-api.mjs` (and `tests/cutdeck_adobe_api.test.cjs`) fails
+     on any member name no Adobe source explains. First run: `npm ci --prefix tools/adobe`.
+   - Test fakes: build on `tests/fakes/premiere.cjs`, which enforces the proven rules
+     and is checked against the typings.
 
    Say in the change which source confirmed the API. **If the feature does not exist
    in UXP, don't fake or approximate it in the panel — build it in the CutDeck helper**

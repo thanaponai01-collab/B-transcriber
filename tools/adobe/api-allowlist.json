@@ -1,0 +1,7 @@
+{
+  "_note": "Member names the panel reads that no Adobe typings/docs, built-in, CutDeck code or helper field explains. Each needs a reason. check-api.mjs lists entries that later became known elsewhere so they can be removed.",
+  "names": {
+    "isSelected": "NOT an Adobe API. Deliberate probe/fallback, guarded by typeof: live probe proved `item.isSelected` is undefined and getIsSelected() is the real getter (transform-panel-plan.md Part 1a; host/trackItems.js comment). Kept only as a compatibility guess; never relied on.",
+    "copyText": "NOT an Adobe API: written from memory. features/probes.js falls back to uxp.clipboard.copyText when navigator.clipboard.writeText is missing; neither the UXP typings nor the docs have it (Adobe documents navigator.clipboard.setContent / writeText). Unreachable while writeText exists. Remove this entry when that fallback is fixed."
+  }
+}

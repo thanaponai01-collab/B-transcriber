@@ -1,0 +1,13 @@
+{
+  "name": "cutdeck-adobe-reference",
+  "private": true,
+  "description": "Keeps the local Adobe API reference (reference/adobe/) and checks the UXP panel against it.",
+  "scripts": {
+    "refresh": "node refresh.mjs",
+    "index": "node build-index.mjs",
+    "check": "node check-api.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "_note": "Pinned sources for reference/adobe/. Change a pin here, then run `node tools/adobe/refresh.mjs`.",
+  "typings": [
+    { "package": "@adobe/premierepro", "version": "26.5.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.5.1.d.ts", "why": "installed Premiere is 26.5" },
+    { "package": "@adobe/premierepro", "version": "26.2.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.2.1.d.ts", "why": "manifest minVersion is 26.2.0; anything absent here is 26.3+ only" },
+    { "package": "@adobe/cc-ext-uxp-types", "version": "7.3.1", "file": "uxp/index.d.ts", "saveAs": "uxp-7.3.1.d.ts", "why": "UXP platform: storage, shell, network, xmp, os, fs" }
+  ],
+  "repos": [
+    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro", "sha": "b79ff3b47a7675681aeacf5328b3c16b39dcd583", "from": "src/pages", "saveAs": "docs", "why": "Premiere class reference (ppro-reference/) + UXP platform reference for Premiere (uxp-api/) + guides and recipes" },
+    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro-samples", "sha": "1f32dfd7b82074f6ece33f8c6ce9e89995378f7f", "from": ".", "saveAs": "samples", "why": "Adobe's own working sample panels: real call patterns" }
+  ],
+  "keepExtensions": [".md", ".ts", ".tsx", ".js", ".jsx", ".json", ".html", ".css", ".yml", ".yaml", ".txt"],
+  "licenseFiles": ["LICENSE", "COPYRIGHT"]
+}
