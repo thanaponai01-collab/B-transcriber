@@ -29,9 +29,19 @@ function runTransaction(project, label, build) {
   if (!project) throw new Error("Open a Premiere project first.");
   let ok = false;
   let thrown = null;
+  // Live 2026-09-24: identical transactions took 1 ms on one run and 28 s on another, cause not
+  // yet caught. Any transaction over 0.5 s logs where its time went: lock wait / until our
+  // callback runs / our callback / commit.
+  const t0 = Date.now();
+  let t1 = t0, t2 = t0, t3 = t0;
+  const timedBuild = (compound) => {
+    t2 = Date.now();
+    try { return build(compound); } finally { t3 = Date.now(); }
+  };
   const run = () => {
+    t1 = Date.now();
     try {
-      ok = project.executeTransaction(build, label);
+      ok = project.executeTransaction(timedBuild, label);
     } catch (e) {
       thrown = e;
     }
@@ -40,6 +50,11 @@ function runTransaction(project, label, build) {
     project.lockedAccess(run);
   } else {
     run();
+  }
+  const t4 = Date.now();
+  if (t4 - t0 > 500) {
+    console.log(`CutDeck slow transaction "${label}" ${t4 - t0} ms: lock wait ${t1 - t0}, ` +
+      `until callback ${(t2 > t1 ? t2 : t1) - t1}, callback ${t3 - t2}, commit ${t4 - (t3 > t1 ? t3 : t1)}`);
   }
   if (!ok) throw thrown || new Error(`Could not complete "${label}".`);
 }
