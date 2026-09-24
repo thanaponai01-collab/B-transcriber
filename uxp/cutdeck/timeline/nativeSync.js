@@ -46,12 +46,16 @@ async function mediaPath(ppro, item) {
   return clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
 }
 
-/* Every clip item on the sequence, each with the file behind it (null when it has none). */
-async function readSequence(ppro, seq) {
+/* Every clip item on the sequence, each with the file behind it (null when it has none).
+   `paths: false` skips the file lookup (2 host calls per clip) for reads that only need
+   positions — c.path is then undefined. */
+async function readSequence(ppro, seq, { paths = true } = {}) {
   const video = await listClips(ppro, seq, "video");
   const audio = await listClips(ppro, seq, "audio");
-  for (const c of [...video.clips, ...audio.clips]) {
-    try { c.path = await mediaPath(ppro, c.item); } catch (_) { c.path = null; }
+  if (paths) {
+    for (const c of [...video.clips, ...audio.clips]) {
+      try { c.path = await mediaPath(ppro, c.item); } catch (_) { c.path = null; }
+    }
   }
   return { videoTracks: video.count, audioTracks: audio.count, video: video.clips, audio: audio.clips };
 }

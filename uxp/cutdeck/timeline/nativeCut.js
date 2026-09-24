@@ -14,7 +14,7 @@
 const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("./nativeSync.js");
-const { cutsToTicks, planCutApply, verifyReadBack, shiftFor } = require("./cutPlanApply.js");
+const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, overlapsCut } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 
@@ -23,12 +23,16 @@ const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
 const asPlanItem = (c, extra = {}) => ({ id: itemKey(c), name: c.path ? String(c.path).split(/[\\/]/).pop() : "clip",
   mediaType: kindOf(c), track: c.track, startTicks: c.start, endTicks: c.end, inTicks: c.inPoint, ...extra });
 
-/* Everything the planner's whole-plan refusal needs, read from the host. */
-async function readItems(ppro, seq) {
+/* Everything the planner's whole-plan refusal needs, read from the host. The refusal only
+   looks at clips a cut lands inside, so speed/reversed/nested/multicam (up to 5 host calls
+   each) are read for those alone; `cuts: null` skips them and the transitions entirely, for
+   a read-back that only needs positions. */
+async function readItems(ppro, seq, cuts) {
   const s = await readSequence(ppro, seq);
   const items = [];
   for (const c of [...s.video, ...s.audio]) {
     let speed = 1, reversed = false, isNested = false, isMulticam = false;
+    if (!cuts || !overlapsCut(c.start, c.end, cuts)) { items.push(asPlanItem(c, { raw: c })); continue; }
     try { speed = await c.item.getSpeed(); } catch (_) { /* not reported: treat as normal */ }
     try { reversed = !!(await c.item.isSpeedReversed()); } catch (_) { /* idem */ }
     try {
@@ -39,6 +43,7 @@ async function readItems(ppro, seq) {
     items.push(asPlanItem(c, { speed, reversed, isNested, isMulticam, raw: c }));
   }
   const transitions = [];
+  if (!cuts) return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
   const type = ppro.Constants.TrackItemType.TRANSITION;
   for (const [kind, count, get] of [["video", s.videoTracks, (i) => seq.getVideoTrack(i)], ["audio", s.audioTracks, (i) => seq.getAudioTrack(i)]]) {
     for (let t = 0; t < count; t++) {
@@ -84,7 +89,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
     });
     return 1;
   };
-  const read = () => readSequence(ppro, copy);
+  const read = () => readSequence(ppro, copy, { paths: false }); // positions only
   const all = (seq) => [...seq.video, ...seq.audio];
   const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
@@ -165,7 +170,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
 /* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
 async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const cuts = cutsToTicks(cutsJson, await source.getTimebase());
-  const before = await readItems(ppro, source);
+  const before = await readItems(ppro, source, cuts);
   const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
   if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
 
@@ -189,13 +194,14 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
   });
   const started = Date.now();
-  let items, plan, steps, actual;
+  // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
+  // each item on the copy by position and throws if one is not there.
+  const items = before.items;
+  const plan = planCutApply(items, cuts);
+  let steps, actual;
   try {
-    items = (await readItems(ppro, copy)).items;
-    plan = planCutApply(items, cuts);
-    if (plan.refusal) throw new Error(`Cannot cut natively: ${plan.refusal}`);
     steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()));
-    actual = (await readItems(ppro, copy)).items;
+    actual = (await readItems(ppro, copy, null)).items;
   } finally {
     await project.openSequence(copy);
     await project.setActiveSequence(copy);

@@ -66,10 +66,12 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [] } = {}) {
       for (const x of a.items) if ((a.mt === 2) === (x.kind === "video")) { const l = trackOf(a.seq, x); l.splice(l.indexOf(x), 1); }
     } else throw new Error(`unknown action ${a.type}`);
   };
+  let hostReads = 0; // every per-clip read the panel makes
+  const n = (v) => { hostReads++; return v; };
   const wrapItem = (r) => ({ _raw: r,
-    getStartTime: async () => ({ ticks: r.start.toString() }), getEndTime: async () => ({ ticks: r.end.toString() }),
-    getInPoint: async () => ({ ticks: r.in.toString() }), getSpeed: async () => speedOf(r), isSpeedReversed: async () => 0,
-    getProjectItem: async () => ({ getMediaFilePath: async () => r.path, isSequence: async () => false, isMulticamClip: async () => false }),
+    getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: r.end.toString() }),
+    getInPoint: async () => n({ ticks: r.in.toString() }), getSpeed: async () => n(speedOf(r)), isSpeedReversed: async () => n(0),
+    getProjectItem: async () => n({ getMediaFilePath: async () => n(r.path), isSequence: async () => n(false), isMulticamClip: async () => n(false) }),
     createMoveAction: (t) => act({ type: "move", raw: r, by: BigInt(t.ticks) }),
     createSetInPointAction: (t) => act({ type: "setIn", raw: r, t: BigInt(t.ticks) }),
     createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) });
@@ -120,7 +122,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [] } = {}) {
   };
   const rowsOf = (seq) => ["video", "audio"].flatMap((k) => seq.tracks[k].flatMap((t) =>
     t.map((r) => JSON.stringify([k, r.track, Number(r.start / TPF), Number(r.end / TPF), Number(r.in / TPF)])))).sort();
-  return { ppro, project, source: wrapSeq(src), src, sequences, rowsOf, clones, events, binPath, get transactions() { return transactions; } };
+  return { ppro, project, source: wrapSeq(src), src, sequences, rowsOf, clones, events, binPath, get transactions() { return transactions; }, get hostReads() { return hostReads; } };
 }
 
 test("golden: native apply on the captured synced stack equals the XML route's recut, source untouched", async () => {
@@ -184,4 +186,8 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "big")), want);
   const long = h.clones.filter((n) => n > TPF);
   assert.equal(long.length, 5, "only one full-length clone per track (the razor filler's source)");
+  // Review 2026-09-24: this was 75,950 before (7 full reads, flags and paths on each). Middle
+  // reads now skip paths, flags are read only under a cut, the copy is not pre-read.
+  console.log(`scale test host reads: ${h.hostReads}`);
+  assert.ok(h.hostReads < 60000, `host reads ${h.hostReads}`);
 });

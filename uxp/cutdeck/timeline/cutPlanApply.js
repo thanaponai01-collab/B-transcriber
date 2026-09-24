@@ -129,4 +129,4 @@ function verifyReadBack(items, plan, actual) {
   return problems;
 }
 
-module.exports = { cutsToTicks, shiftFor, keepSubranges, planCutApply, verifyReadBack };
+module.exports = { cutsToTicks, shiftFor, keepSubranges, overlapsCut, planCutApply, verifyReadBack };
