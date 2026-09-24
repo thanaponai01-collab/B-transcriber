@@ -453,3 +453,80 @@ test("no hide or destroy hook is registered", () => {
   assert.equal(/\bhide\s*\(/.test(setupBlock), false, "a hide() hook was registered");
   assert.equal(/\bdestroy\s*\(/.test(setupBlock), false, "a destroy() hook was registered");
 });
+
+// --- event-driven refresh (review 2026-09-24 item 2) ---------------------------------------
+
+function withFakeInterval(fn) {
+  const orig = global.setInterval;
+  const calls = [];
+  global.setInterval = (cb, ms) => { calls.push(ms); return calls.length; };
+  let out;
+  try { out = fn(calls); } catch (e) { global.setInterval = orig; throw e; }
+  return Promise.resolve(out).finally(() => { global.setInterval = orig; });
+}
+
+test("Transform panel attaches selection to the active sequence and moves it on switch", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  const seqA = { name: "A" }, seqB = { name: "B" };
+  let active = seqA;
+  const globals = {}, attached = [], removed = [];
+  const ppro = {
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
+    EventManager: {
+      addGlobalEventListener: (name, h) => { globals[name] = h; },
+      addEventListener: (target, name) => attached.push([target.name, name]),
+      removeEventListener: (target, name) => removed.push([target.name, name]),
+    },
+    Project: { getActiveProject: async () => ({ getActiveSequence: async () => active }) },
+  };
+  await withFakeInterval(async (calls) => {
+    const f = createAlignFeature({ ppro, ctl: { state: {}, render() {} } });
+    f.startPolling();
+    f.startPolling();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(Object.keys(globals), ["a"]); // no global SELECTION_CHANGED: it never fires live
+    assert.deepEqual(attached, [["A", "s"]]);
+    assert.deepEqual(calls, []); // events work: no poll at all
+    active = seqB;
+    globals.a();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(removed, [["A", "s"]]);
+    assert.deepEqual(attached, [["A", "s"], ["B", "s"]]);
+  });
+});
+
+test("Transform panel falls back to the fast poll without EventManager", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  await withFakeInterval((calls) => {
+    createAlignFeature({ ppro: {}, ctl: { state: {}, render() {} } }).startPolling();
+    assert.deepEqual(calls, [600]);
+  });
+});
+
+test("a burst of events collapses into at most two reads", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  let handler = null;
+  let reads = 0;
+  const ppro = {
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
+    EventManager: { addGlobalEventListener() {}, addEventListener: (t, name, h) => { handler = h; } },
+    Project: { getActiveProject: async () => { reads++; await new Promise((r) => setImmediate(r)); return { getActiveSequence: async () => seq }; } },
+  };
+  const seq = { name: "A" };
+  await withFakeInterval(async () => {
+    createAlignFeature({ ppro, ctl: { state: {}, render() {} } }).startPolling();
+    await new Promise((r) => setTimeout(r, 10));
+    reads = 0;
+    for (let i = 0; i < 10; i++) handler();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  assert.ok(reads >= 1 && reads <= 2, `expected 1-2 reads, got ${reads}`);
+});
+
+test("readAlignTransform names the clip via getName() (track items have no .name)", async () => {
+  const { readAlignTransform } = require("../uxp/cutdeck/features/align.js");
+  const item = { getName: async () => "Interview_A.mp4", getIsSelected: async () => true };
+  const seq = { getSelection: async () => ({ getTrackItems: async () => [item] }) };
+  const out = await readAlignTransform(seq, null);
+  assert.equal(out.clipName, "Interview_A.mp4");
+});

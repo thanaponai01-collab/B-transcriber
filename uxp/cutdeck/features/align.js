@@ -29,7 +29,12 @@ async function readAlignTransform(seq, ppro) {
     return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
   }
   const item = items[0];
-  const clipName = (item.name || "(unnamed)") + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
+  // Track items expose only getName() (@adobe/premierepro 26.2.1 d.ts), no `name` property.
+  let name = item.name;
+  if (!name && typeof item.getName === "function") {
+    try { name = await item.getName(); } catch (_) {}
+  }
+  const clipName = (name || "(unnamed)") + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
 
   const transform = await transformParams.readTransform(item);
   if (!transform) {
@@ -55,8 +60,49 @@ async function readAlignState(ppro) {
   };
 }
 
+// Without events the panel falls back to the old fast poll. With them there is no poll:
+// a Position drag in Effect Controls fires no event and shows on the next click or Refresh.
+const FAST_POLL_MS = 600;
+
+// Subscribes `handler` to selection changes and sequence switches. EventManager and
+// Constants.SequenceEvent {ACTIVATED, SELECTION_CHANGED} are in @adobe/premierepro 26.2.1
+// d.ts. Live (2026-09-24): a global ACTIVATED listener fires on sequence switch, but a
+// global SELECTION_CHANGED does not — so selection is attached to the active sequence and
+// moved on every switch. Returns false if unavailable.
+function subscribeSequenceEvents(ppro, handler) {
+  const em = ppro && ppro.EventManager;
+  const ev = ppro && ppro.Constants && ppro.Constants.SequenceEvent;
+  if (!em || typeof em.addGlobalEventListener !== "function" || typeof em.addEventListener !== "function" || !ev) {
+    return false;
+  }
+  let attached = null;
+  const attachToActive = async () => {
+    try {
+      const { sequence } = await activeProjectAndSequence(ppro, { requireProject: false, requireSequence: false });
+      if (sequence === attached) return;
+      if (attached && typeof em.removeEventListener === "function") {
+        try { em.removeEventListener(attached, ev.SELECTION_CHANGED, handler); } catch (_) {}
+      }
+      attached = sequence || null;
+      if (attached) em.addEventListener(attached, ev.SELECTION_CHANGED, handler);
+    } catch (error) {
+      console.error("CutDeck: could not attach selection listener", error);
+    }
+  };
+  try {
+    em.addGlobalEventListener(ev.ACTIVATED, () => { attachToActive(); handler(); });
+    attachToActive();
+    return true;
+  } catch (error) {
+    console.error("CutDeck: sequence event subscribe failed, polling instead", error);
+    return false;
+  }
+}
+
 function createAlignFeature({ ppro, ctl }) {
   let alignPollTimer = null;
+  let pollInFlight = false;
+  let pollAgain = false;
 
   async function refreshAlignSequence() {
     const next = await readAlignState(ppro);
@@ -65,21 +111,34 @@ function createAlignFeature({ ppro, ctl }) {
     ctl.render();
   }
 
+  // Coalesces bursts (a drag-select fires many events): one read at a time, plus one
+  // follow-up if more arrived meanwhile.
   async function pollAlignTransform() {
     if (ctl.state.busy) return;
+    if (pollInFlight) { pollAgain = true; return; }
+    pollInFlight = true;
     try {
-      const next = await readAlignState(ppro);
-      ctl.state.sequence = next.sequence;
-      ctl.state.transform = next.transform;
-      ctl.render();
+      do {
+        pollAgain = false;
+        const next = await readAlignState(ppro);
+        ctl.state.sequence = next.sequence;
+        ctl.state.transform = next.transform;
+        ctl.render();
+      } while (pollAgain);
     } catch (error) {
       console.error("CutDeck: transform poll failed", error);
+    } finally {
+      pollInFlight = false;
     }
   }
 
+  let started = false;
   function startAlignPolling() {
-    if (alignPollTimer) return;
-    alignPollTimer = setInterval(pollAlignTransform, 600);
+    if (started) return;
+    started = true;
+    if (!subscribeSequenceEvents(ppro, () => { pollAlignTransform(); })) {
+      alignPollTimer = setInterval(pollAlignTransform, FAST_POLL_MS);
+    }
   }
 
   return {
@@ -98,6 +157,7 @@ function createAlignFeature({ ppro, ctl }) {
 
 module.exports = {
   createAlignFeature,
+  subscribeSequenceEvents,
   describeField,
   readAlignTransform,
   readAlignState,
