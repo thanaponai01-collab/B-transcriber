@@ -73,7 +73,14 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
   const tx = (label, builders) => {
     if (!builders.length) return 0;
     runTransaction(project, `CutDeck: ${label}`, (compound) => {
-      for (const build of builders) if (!compound.addAction(build())) throw new Error(`addAction(${label}) returned false`);
+      builders.forEach((build, i) => {
+        const where = `${label}: action ${i + 1} of ${builders.length}${build.what ? ` (${build.what})` : ""}`;
+        let action, added;
+        try { action = build(); } catch (e) { throw new Error(`${where} failed to build: ${e.message}`); }
+        if (!action) throw new Error(`${where}: Premiere returned no action (${action})`);
+        try { added = compound.addAction(action); } catch (e) { throw new Error(`${where} was refused: ${e.message}`); }
+        if (!added) throw new Error(`${where}: addAction returned false`);
+      });
     });
     return 1;
   };
@@ -119,7 +126,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf) {
   for (const [key, at] of edges) {
     const f = findIn(seq, key, park);
     if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
-    for (const p of at) razor.push(() => editor().createCloneTrackItemAction(f.item, tick(p - park), 0, 0, false, false));
+    for (const p of at) {
+      razor.push(Object.assign(() => editor().createCloneTrackItemAction(f.item, tick(p - park), 0, 0, false, false),
+        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` }));
+    }
   }
   steps += tx("split at cut edges", razor);
 
@@ -171,29 +181,33 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
   });
   // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
-  // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515), and show it
-  // now, so the editor watches it being cut.
+  // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
+  // only once cut (or failed), so Premiere does not redraw it for every edit.
   const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
   runTransaction(project, "CutDeck: file rough cut", (compound) => {
     const parent = asBinLike(copyItem.getParentBin());
     if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
   });
-  await project.openSequence(copy);
-  await project.setActiveSequence(copy);
-
-  const items = (await readItems(ppro, copy)).items;
-  const plan = planCutApply(items, cuts);
-  if (plan.refusal) throw new Error(`Cannot cut natively: ${plan.refusal}`);
-  const steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()));
-
-  const actual = (await readItems(ppro, copy)).items;
+  const started = Date.now();
+  let items, plan, steps, actual;
+  try {
+    items = (await readItems(ppro, copy)).items;
+    plan = planCutApply(items, cuts);
+    if (plan.refusal) throw new Error(`Cannot cut natively: ${plan.refusal}`);
+    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()));
+    actual = (await readItems(ppro, copy)).items;
+  } finally {
+    await project.openSequence(copy);
+    await project.setActiveSequence(copy);
+  }
+  const elapsedSeconds = (Date.now() - started) / 1000;
   const problems = verifyReadBack(items, plan, actual);
   if (problems.length) {
     throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
       + "It is left open for inspection; your original sequence is untouched.");
   }
   const splits = plan.edits.filter((e) => e.op === "split").length;
-  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName };
+  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds };
 }
 
 module.exports = { applyNativeCut, applyPlan, readItems };

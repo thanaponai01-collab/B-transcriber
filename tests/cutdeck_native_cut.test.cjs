@@ -134,8 +134,8 @@ test("golden: native apply on the captured synced stack equals the XML route's r
   const copy = h.sequences.find((s) => s.name === "Shoot — CutDeck test");
   assert.deepEqual(h.rowsOf(copy), golden.after.map((x) => JSON.stringify(x)).sort());
   assert.deepEqual(h.binPath(copy), ["CutDeck", "Rough Cuts"]);
-  assert.ok(h.events.indexOf("open Shoot — CutDeck test") < h.events.indexOf("tx clone"),
-    "the new sequence is shown before it is cut");
+  assert.ok(h.events.lastIndexOf("open Shoot — CutDeck test") > h.events.lastIndexOf("tx clone"),
+    "the new sequence is shown only after it is cut (no redraw per edit)");
 });
 
 test("refuses before any edit: a sped-up clip under a cut", async () => {

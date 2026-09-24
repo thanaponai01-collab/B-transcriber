@@ -100,7 +100,7 @@ function createRoughCutFeature({
     const r = await applyNativeCut(ppro, project, sequence, job.cuts, job.result_name);
     clearJob();
     const seconds = Number(r.removedTicks * 10n / TICKS_PER_SECOND) / 10;
-    ctl.setStatus(`${r.cuts} cuts · ${seconds.toFixed(1)} seconds removed.\nOpened ${r.name}`
+    ctl.setStatus(`${r.cuts} cuts · ${seconds.toFixed(1)} seconds removed, cut in ${r.elapsedSeconds.toFixed(0)} s.\nOpened ${r.name}`
       + (r.splits ? `\n${r.splits} clips were split: the pieces' audio is not linked to their video (select both to move them).` : "")
       + `\nChecked clip by clip. Undo takes ${r.steps} Ctrl+Z; your original sequence is untouched.`, "ready");
   }

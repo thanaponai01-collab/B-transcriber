@@ -52,6 +52,12 @@ keyframed effect and Transform still animate, audio split with the video, 5 undo
 overwrite landing inside a clip does keep both sides. Split pieces' audio is NOT linked to
 the video (user-checked) — the status line says so.
 
+Rough Cut on `tiw_Synced2` (2026-09-24; 95 min, 3 V + 6 A tracks, 1735 cuts): failed at the razor
+step with "Illegal Parameter type" from `compound.addAction` while the copy was OPEN during the cut.
+Changed: the copy is cut closed and opened only at the end (as Native Sync already does). Then it
+PASSED twice (67 s, 64 s; read-back clean). Cause suspected (live redraw staling items), not proven.
+Step errors now name the step, action N of M, track, filler and edge time.
+
 Phase 6 (2026-09-24, user accepted native on real footage): panel XML output route retired.
 Rough Cut = native only; Mark Cuts / Native Cut buttons and `timeline/cutMarkers.js` removed;
 `workflow.importResult`, `xml_bridge.result_path`, `xml_sequence.reference_media_path` deleted.
