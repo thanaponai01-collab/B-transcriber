@@ -21,7 +21,6 @@ const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { getTrackClipItems } = require("../host/trackItems.js");
 
 const SYNCED_SUFFIX = "_Synced";
-const POLL_MS = 1500;
 
 const baseName = (p) => String(p || "").split(/[\\/]/).pop();
 
@@ -120,14 +119,14 @@ function startTicks(seconds, hasVideo, ticksPerFrame) {
   return ((ticks + ticksPerFrame / 2n) / ticksPerFrame) * ticksPerFrame;
 }
 
+/* The helper pushes the job's progress (rpc.watch); nothing polls. */
 async function waitForPlan(rpc, clips, deps) {
-  const sleep = deps.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const say = (job) => deps.onStatus(`Matching audio… ${(job.progress && job.progress.stage) || ""}`.trim());
   let job = await rpc({ type: "plan_sync", clips: clips.map((c) => ({
     id: c.id, path: c.path, duration_s: Number(c.duration) / Number(TICKS_PER_SECOND) })) });
-  while (job.state === "running") {
-    deps.onStatus(`Matching audio… ${(job.progress && job.progress.stage) || ""}`.trim());
-    await sleep(POLL_MS);
-    job = await rpc({ type: "status", job_id: job.job_id });
+  if (job.state === "running") {
+    say(job);
+    job = await rpc.watch(job.job_id, (update) => { if (update.state === "running") say(update); });
   }
   if (job.state !== "ready" || !job.plan) throw new Error(job.message || `Sync matching ended as ${job.state}.`);
   return job.plan;
@@ -231,7 +230,7 @@ function formatReport(name, plan, clips, skipped, problems) {
   return lines.join("\n");
 }
 
-/* deps: { rpc, ensureHelper, onStatus, sleep? }. Returns { text, problems }. */
+/* deps: { rpc, ensureHelper, onStatus }. Returns { text, problems }. */
 async function syncSequence(ppro, deps) {
   const { project, sequence: source } = await activeProjectAndSequence(ppro, {
     sequenceErrorMessage: "Open the sequence with your camera and recorder clips first.",
@@ -273,5 +272,5 @@ async function syncSequence(ppro, deps) {
   return { text: formatReport(name, plan, clips, skipped, problems), problems };
 }
 
-module.exports = { syncSequence, readSequence, groupUnits, groupClips, assignTracks, startTicks,
+module.exports = { syncSequence, readSequence, mediaPath, groupUnits, groupClips, assignTracks, startTicks,
   checkPlacement, formatReport, SYNCED_SUFFIX, TICKS_PER_SECOND, baseName };

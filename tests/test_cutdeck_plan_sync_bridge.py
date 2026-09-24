@@ -97,7 +97,8 @@ def test_places_clips_and_reports_progress(tmp_path, monkeypatch):
     assert saved["plan"] == plan
 
 
-def test_holds_the_one_job_slot(tmp_path, monkeypatch):
+def test_sync_holds_the_cpu_lane_not_the_gpu_lane(tmp_path, monkeypatch):
+    """Matching is CPU work: a second sync waits, a rough cut does not (arch-design-helper-v2 move 2)."""
     (a,) = _media(tmp_path, "A.mp4")
     release = threading.Event()
 
@@ -110,10 +111,14 @@ def test_holds_the_one_job_slot(tmp_path, monkeypatch):
     async def _test():
         jobs = XmlJobs(tmp_path / "jobs")
         first = await jobs.dispatch(_one_clip(a))
-        with pytest.raises(ValueError, match="already processing"):
+        with pytest.raises(ValueError, match="already matching a sync"):
             await jobs.dispatch(_one_clip(a))
-        with pytest.raises(ValueError, match="already processing"):
-            await jobs.dispatch({"type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "n"})
+        with pytest.raises(ValueError, match="processing a job"):
+            await jobs.dispatch({"type": "restart"})
+        assert jobs.active is None and jobs.cpu_active == first["job_id"]
+        # The GPU lane is free: a rough cut job can be prepared beside the running sync.
+        with pytest.raises(ValueError, match="identity"):
+            await jobs.dispatch({"type": "prepare"})  # refused for its own reasons, not the lane
         release.set()
         await asyncio.gather(*jobs.tasks)
         # An unreadable clip is a finding in the plan, not a failed job.

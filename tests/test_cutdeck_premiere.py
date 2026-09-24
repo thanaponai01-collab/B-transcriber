@@ -36,7 +36,11 @@ def context(ntsc=False):
     return dict(project_id="project", sequence_id="sequence", sequence_name="Original",
                 in_ticks=str(frame_to_ticks(60, tb)), out_ticks=str(frame_to_ticks(120, tb)),
                 end_ticks=str(frame_to_ticks(300, tb)), ticks_per_frame=str(frame_to_ticks(1, tb)),
-                audio_track=None, asr=True)
+                audio_track=None, asr=True, sequence={
+                    "ticks_per_frame": str(frame_to_ticks(1, tb)), "end_ticks": str(frame_to_ticks(300, tb)),
+                    "audio_tracks": [{"enabled": True, "clips": [{
+                        "path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0",
+                        "in_ticks": "0", "out_ticks": str(frame_to_ticks(300, tb))}]}]})
 
 
 def plan():

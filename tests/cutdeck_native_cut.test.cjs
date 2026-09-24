@@ -193,3 +193,26 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
     "read-back", "reads", "remove cut pieces", "split at cut edges", "trim razor fillers"]);
   assert.ok(h.hostReads < 35000, `host reads ${h.hostReads}`);
 });
+
+/* Live 2026-09-24: Premiere returned undefined for one clone of 7,650, and a rerun went through. */
+function flakyClones(h, failures) {
+  let calls = 0;
+  const getEditor = h.ppro.SequenceEditor.getEditor;
+  h.ppro.SequenceEditor.getEditor = (s) => {
+    const editor = getEditor(s);
+    return { ...editor, createCloneTrackItemAction: (...args) => (failures.has(++calls) ? undefined : editor.createCloneTrackItemAction(...args)) };
+  };
+}
+
+test("a clone Premiere returns empty once is asked for again, and the cut is still exact", async () => {
+  const h = fakeHost(golden.before);
+  flakyClones(h, new Set([30]));            // a razor clone (the 15 fillers take the first calls)
+  await applyNativeCut(h.ppro, h.project, h.source, golden, "retry");
+  assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "retry")), golden.after.map((x) => JSON.stringify(x)).sort());
+});
+
+test("a clone that stays empty still stops the cut, saying where", async () => {
+  const h = fakeHost(golden.before);
+  flakyClones(h, new Set([30, 31]));
+  await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /split at cut edges: action \d+ of \d+ .*returned no action \(undefined\), twice/);
+});

@@ -33,6 +33,12 @@ const PARAM_INDEX = {
   uniformScale: 3,
   rotation: 4,
   anchorPoint: 5,
+  // 6 Anti-flicker, then Crop Left/Top/Right/Bottom in percent (PREMIERE_FACTS "Motion param
+  // indices"). Phase 5's rendered bounds need the crop; nothing else here reads it.
+  cropLeft: 7,
+  cropTop: 8,
+  cropRight: 9,
+  cropBottom: 10,
 };
 
 // Searches the item's component chain for the real Motion component. Never throws: a missing
@@ -108,14 +114,20 @@ async function readParamField(component, index) {
 async function readTransform(item) {
   const component = await findMotionComponent(item);
   if (!component) return null;
-  const [position, scale, uniformScale, rotation, anchorPoint] = await Promise.all([
-    readParamField(component, PARAM_INDEX.position),
-    readParamField(component, PARAM_INDEX.scale),
-    readParamField(component, PARAM_INDEX.uniformScale),
-    readParamField(component, PARAM_INDEX.rotation),
-    readParamField(component, PARAM_INDEX.anchorPoint),
-  ]);
-  return { position, scale, uniformScale, rotation, anchorPoint };
+  const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint, cropLeft, cropTop, cropRight, cropBottom] =
+    await Promise.all([
+      readParamField(component, PARAM_INDEX.position),
+      readParamField(component, PARAM_INDEX.scale),
+      readParamField(component, PARAM_INDEX.scaleWidth),
+      readParamField(component, PARAM_INDEX.uniformScale),
+      readParamField(component, PARAM_INDEX.rotation),
+      readParamField(component, PARAM_INDEX.anchorPoint),
+      readParamField(component, PARAM_INDEX.cropLeft),
+      readParamField(component, PARAM_INDEX.cropTop),
+      readParamField(component, PARAM_INDEX.cropRight),
+      readParamField(component, PARAM_INDEX.cropBottom),
+    ]);
+  return { position, scale, scaleWidth, uniformScale, rotation, anchorPoint, cropLeft, cropTop, cropRight, cropBottom };
 }
 
 // The sequence's own frame size, read the same dual-route way capabilityProbe.js and
@@ -142,6 +154,23 @@ async function readSequenceFrameSize(seq) {
     }
   } catch (_) {}
   return null;
+}
+
+// The sequence's pixel aspect ratio as a number. getVideoPixelAspectRatio() returns a string
+// ("1:1", PREMIERE_FACTS "Sequence"), so parse "a:b"; a plain number string is accepted too.
+// Returns null when unreadable, never an assumed 1.
+async function readSequencePixelAspect(seq) {
+  if (!seq || typeof seq.getSettings !== "function") return null;
+  try {
+    const settings = await seq.getSettings();
+    if (!settings || typeof settings.getVideoPixelAspectRatio !== "function") return null;
+    const text = String(await settings.getVideoPixelAspectRatio());
+    const ratio = /^\s*([\d.]+)\s*:\s*([\d.]+)\s*$/.exec(text);
+    const value = ratio ? Number(ratio[1]) / Number(ratio[2]) : Number(text);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 // Parses the Project panel's Video Info text — "1280 x 720 (1.0)" for video,
@@ -183,12 +212,112 @@ async function readSourceFrameSize(ppro, item) {
   }
 }
 
+// A Premiere Graphic (text/shape layer) carries a "Vector Motion" component, matchName
+// AE.ADBE Graphic Group (Check Transform on a Graphic, 2026-09-24).
+const GRAPHIC_GROUP_MATCH_NAME = "AE.ADBE Graphic Group";
+
+async function isGraphic(item) {
+  if (!item || typeof item.getComponentChain !== "function") return false;
+  try {
+    const chain = await item.getComponentChain();
+    const count = chain && typeof chain.getComponentCount === "function" ? chain.getComponentCount() : 0;
+    for (let i = 0; i < count; i++) {
+      const component = chain.getComponentAtIndex(i);
+      if (component && (await component.getMatchName()) === GRAPHIC_GROUP_MATCH_NAME) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+// The frame Anchor Point is normalized to. For footage and stills: the source frame (above). A
+// Graphic has NO project item (Check Transform on a Graphic, 2026-09-24: "no project item"), so
+// there is no source size to read; its canvas is the sequence frame (default Anchor [0.5, 0.5]
+// with Position [0.5, 0.5] on the same run). That equivalence is the hypothesis the live check
+// confirms: the panel's Anchor Point must read 960, 540 on a default Graphic in a 1080p sequence,
+// same as Effect Controls. Anything else with no readable size still returns null.
+async function readAnchorFrameSize(ppro, item, seq) {
+  const source = await readSourceFrameSize(ppro, item);
+  if (source) return source;
+  if (!(await isGraphic(item))) return null;
+  const frame = await readSequenceFrameSize(seq);
+  return frame ? { width: frame.width, height: frame.height, pixelAspect: 1 } : null;
+}
+
+// A Graphic's own layers. Its Text layer (AE.ADBE Text, 22 params) carries the text's own
+// Transform, the one Premiere's Properties panel shows under the text: [2] Position, [3] Scale,
+// [4] Horizontal Scale, [5] Uniform, [6] Rotation, [8] Anchor Point (Check Transform on a
+// Graphic, 2026-09-24). Position AND Anchor Point are both stored as fractions of the Graphic's
+// canvas (the sequence frame): live [0.1120, 0.8700] = Properties 215.1, 939.6 and
+// [0.1120, -0.0327] = 215.1, -35.4 in 1920x1080, and a written Position read back as written.
+// Its Vector Motion (Graphic Group) has Motion's first six params in the same order.
+const TEXT_MATCH_NAME = "AE.ADBE Text";
+const TEXT_PARAM_INDEX = { position: 2, scale: 3, horizontalScale: 4, uniformScale: 5, rotation: 6, anchorPoint: 8 };
+const KNOWN_GRAPHIC_COMPONENTS = new Set(["AE.ADBE Opacity", MOTION_MATCH_NAME, GRAPHIC_GROUP_MATCH_NAME, TEXT_MATCH_NAME]);
+
+// Reads a Graphic's Vector Motion (scale, scale width, uniform, rotation) and every Text layer's
+// Position param. `onlyText` is false when the chain holds anything else (a shape layer, an
+// added effect), so a caller that moves text layers knows it would leave something behind.
+async function readGraphicLayers(item) {
+  const result = { vectorMotion: null, texts: [], onlyText: true, seen: [] };
+  let chain;
+  try { chain = await item.getComponentChain(); } catch (_) { return null; }
+  const count = chain && typeof chain.getComponentCount === "function" ? chain.getComponentCount() : 0;
+  for (let i = 0; i < count; i++) {
+    let component;
+    let matchName = null;
+    try {
+      component = chain.getComponentAtIndex(i);
+      matchName = component ? await component.getMatchName() : null;
+    } catch (_) {
+      result.onlyText = false;
+      continue;
+    }
+    result.seen.push(matchName);
+    if (!KNOWN_GRAPHIC_COMPONENTS.has(matchName)) result.onlyText = false;
+    if (matchName === GRAPHIC_GROUP_MATCH_NAME) {
+      const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint] = await Promise.all([
+        readParamField(component, PARAM_INDEX.position),
+        readParamField(component, PARAM_INDEX.scale),
+        readParamField(component, PARAM_INDEX.scaleWidth),
+        readParamField(component, PARAM_INDEX.uniformScale),
+        readParamField(component, PARAM_INDEX.rotation),
+        readParamField(component, PARAM_INDEX.anchorPoint),
+      ]);
+      result.vectorMotion = { position, scale, scaleWidth, uniformScale, rotation, anchorPoint };
+    } else if (matchName === TEXT_MATCH_NAME) {
+      const getParam = (i) => { try { return component.getParam(i); } catch (_) { return null; } };
+      const [position, scale, horizontalScale, uniformScale, rotation, anchorPoint] = await Promise.all([
+        readParamField(component, TEXT_PARAM_INDEX.position),
+        readParamField(component, TEXT_PARAM_INDEX.scale),
+        readParamField(component, TEXT_PARAM_INDEX.horizontalScale),
+        readParamField(component, TEXT_PARAM_INDEX.uniformScale),
+        readParamField(component, TEXT_PARAM_INDEX.rotation),
+        readParamField(component, TEXT_PARAM_INDEX.anchorPoint),
+      ]);
+      result.texts.push({
+        param: getParam(TEXT_PARAM_INDEX.position),
+        anchorParam: getParam(TEXT_PARAM_INDEX.anchorPoint),
+        position, scale, horizontalScale, uniformScale, rotation, anchorPoint,
+      });
+    }
+  }
+  if (result.texts.length === 0) result.onlyText = false;
+  return result;
+}
+
 module.exports = {
   MOTION_MATCH_NAME,
+  GRAPHIC_GROUP_MATCH_NAME,
+  TEXT_MATCH_NAME,
+  TEXT_PARAM_INDEX,
+  readGraphicLayers,
+  isGraphic,
+  readAnchorFrameSize,
   PARAM_INDEX,
   findMotionComponent,
   readTransform,
   readSequenceFrameSize,
+  readSequencePixelAspect,
   parseVideoInfoSize,
   readSourceFrameSize,
 };

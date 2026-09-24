@@ -1,11 +1,17 @@
-"""Local job service for CutDeck's processing tools: the one job owner.
+"""Local job service for CutDeck's processing tools: the one job owner, and the hub between
+its clients and Premiere (docs/arch-design-helper-v2.md).
 
 The UXP panel and the MCP server (`cutdeck.ai_backend`) are both clients of this
-socket, so there is one job_id space and one GPU lock.
-One subprocess at a time keeps GPU use serial and the socket responsive.
-Jobs survive panel disconnection; files remain in output/premiere for recovery.
-The client cannot choose commands. Panel jobs receive a unique export path; the
+socket, so there is one job_id space. GPU jobs (rough cut, transcribe) run one at a time;
+Sync matching runs in its own CPU lane beside them.
+Jobs survive panel disconnection and a helper restart (each job's job.json in output/premiere).
+The client cannot choose commands. Panel jobs receive a unique job folder; the
 MCP `submit_*` verbs take local input files but only ever write inside the job folder.
+
+Protocol: a request may carry an `id`, echoed on its reply; requests on one connection are
+answered as they finish, not in order. `watch` pushes {"event": "job"} updates for one job.
+The panel registers as the Premiere driver; `premiere` requests from any client are forwarded
+to it as {"call": ...} messages from a fixed command list, and its `driver_reply` answers them.
 """
 from __future__ import annotations
 
@@ -19,12 +25,20 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
+from cutdeck import frame_bounds, sequence_json
 from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
                                   check_reference_audio, sequence_timebase)
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
-VERSION = "cutdeck-xml-3"  # -2: plan_sync (native Sync); -3: panel rough cuts are native only
+VERSION = "cutdeck-xml-5"  # -2: plan_sync (native Sync); -3: panel rough cuts are native only; -4: frame_bounds
+# -5: v2 protocol (ids, watch, Premiere driver) and Rough Cut input as JSON
+MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
+TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
+# What the panel's driver may be asked to do, and how long each may take (apply_cuts edits
+# a copy of a long sequence: 1735 cuts took minutes live, ledger 09-24).
+DRIVER_COMMANDS = {"read_sequence": 60, "apply_cuts": 1800, "add_markers": 120}
+MAX_MARKERS = 5000
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -174,6 +188,50 @@ def plan_to_json(plan) -> dict:
             "sessions": plan.sessions, "duration_s": plan.duration_s}
 
 
+def _seconds_to_ticks(value, name: str) -> str:
+    if type(value) not in (int, float) or not 0 <= value < 1e6:
+        raise ValueError(f"{name} must be a number of seconds from 0")
+    return str(round(value * PPRO_TICKS_PER_SECOND))
+
+
+def _marker_arguments(args: dict) -> dict:
+    """Validate `add_markers`; the panel gets exact ticks, never float seconds."""
+    markers = args.get("markers")
+    if not isinstance(markers, list) or not 0 < len(markers) <= MAX_MARKERS:
+        raise ValueError(f"markers must be a list of 1 to {MAX_MARKERS} markers")
+    result = []
+    for marker in markers:
+        if not isinstance(marker, dict):
+            raise ValueError("Each marker must be an object")
+        name, comment = marker.get("name", ""), marker.get("comment", "")
+        if not isinstance(name, str) or len(name) > 200 or not isinstance(comment, str) or len(comment) > 2000:
+            raise ValueError("Marker name (max 200) and comment (max 2000) must be text")
+        result.append({"start_ticks": _seconds_to_ticks(marker.get("start_s"), "start_s"),
+                       "duration_ticks": _seconds_to_ticks(marker.get("duration_s", 0), "duration_s"),
+                       "name": name, "comment": comment})
+    return {"markers": result}
+
+
+class Client:
+    """One socket connection. Pushes (job events, driver calls) are sent from their own tasks,
+    so a slow client never holds up the job that produced them."""
+
+    def __init__(self, socket):
+        self.socket = socket
+        self._sends: set[asyncio.Task] = set()
+
+    def push(self, message: dict):
+        task = asyncio.ensure_future(self._send(message))
+        self._sends.add(task)
+        task.add_done_callback(self._sends.discard)
+
+    async def _send(self, message: dict):
+        try:
+            await self.socket.send(json.dumps(message, ensure_ascii=False))
+        except Exception:
+            pass  # a closed connection: its watchers and calls are dropped on disconnect
+
+
 class VersionMismatch(ValueError):
     """`hello` from a panel of another version. The reply still says what this helper is, so the
     panel can tell "outdated helper running" (restart it) from "no helper" (launch one)."""
@@ -189,11 +247,16 @@ class XmlJobs:
         self.directory.mkdir(parents=True, exist_ok=True)
         self.jobs: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
-        self.active: str | None = None
+        self.active: str | None = None  # the GPU lane: rough cut, transcribe
+        self.cpu_active: str | None = None  # the CPU lane: Sync matching
         self.restarting = False
         self.stop = asyncio.Event()  # set once a `restart` reply has been sent
+        self.watchers: dict[str, set[Client]] = {}
+        self.driver: Client | None = None
+        self.driver_commands: list[str] = []
+        self.calls: dict[str, tuple[Client, asyncio.Future]] = {}
 
-    async def dispatch(self, req: dict) -> dict:
+    async def dispatch(self, req: dict, client: Client | None = None) -> dict:
         if not isinstance(req, dict):
             raise ValueError("Expected an object")
         kind = req.get("type")
@@ -202,14 +265,32 @@ class XmlJobs:
                 raise VersionMismatch()
             return {"version": VERSION, "pid": os.getpid()}
         if kind == "restart":
-            # The panel asks on every start so edited helper code is picked up. Jobs live in this
-            # process's memory, so never while one runs.
-            if self.active:
+            # The panel asks on every start so edited helper code is picked up. A running job's
+            # child would be orphaned, so never while one runs.
+            if self.active or self.cpu_active:
                 raise ValueError("CutDeck is processing a job; it restarts once that finishes")
             self.restarting = True
             return {"restarting": True}
+        if kind == "register_driver":
+            if client is None:
+                raise ValueError("Only a connected panel can be the Premiere driver")
+            commands = req.get("commands")
+            if not isinstance(commands, list) or not set(commands) <= set(DRIVER_COMMANDS):
+                raise ValueError("Unknown driver commands")
+            self.driver, self.driver_commands = client, list(commands)
+            print(f"driver registered: {', '.join(commands)}", flush=True)
+            return {"registered": True}
+        if kind == "premiere_status":
+            return {"connected": self.driver is not None, "commands": list(self.driver_commands)}
+        if kind == "premiere":
+            return {"result": await self._call_driver(req)}
+        if kind == "watch":
+            job = self._job(req.get("job_id"))
+            if client is not None and job["state"] not in TERMINAL_STATES:
+                self.watchers.setdefault(job["job_id"], set()).add(client)
+            return dict(job)
         if kind == "prepare":
-            job_id, folder = self._allocate()
+            # Everything is checked before a job folder is claimed: a refused prepare leaves nothing.
             context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count",
                             "in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
             context = {key: req.get(key) for key in context_keys}
@@ -221,6 +302,11 @@ class XmlJobs:
                 raise ValueError("Audio track must be a non-negative index")
             if type(context["asr"]) is not bool:
                 raise ValueError("Speech protection must be true or false")
+            # The panel's native read of the audio tracks, instead of an XML export (move 6).
+            sequence = sequence_json.validate(req.get("sequence"))
+            job_id, folder = self._allocate()
+            (folder / "source.xml").write_text(
+                sequence_json.to_fcp7_xml(sequence, context["sequence_name"]), encoding="utf-8")
             job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
                    "source_path": str(folder / "source.xml"),
                    "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
@@ -241,11 +327,15 @@ class XmlJobs:
             return self._launch(job, self._run_transcribe(job))
         if kind == "plan_sync":
             clips = _plan_sync_clips(req)
-            job_id, folder = self._allocate()
+            job_id, folder = self._allocate("cpu")
             job = {"job_id": job_id, "job_type": "plan_sync", "state": "running",
                    "clips": [{"id": c.id, "path": str(c.path), "duration_s": c.duration_s} for c in clips],
                    "progress": {"pct": 0, "stage": "Reading audio"}}
-            return self._launch(job, self._run_plan_sync(job, clips))
+            return self._launch(job, self._run_plan_sync(job, clips), "cpu")
+        if kind == "frame_bounds":
+            # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
+            # thread, so other clients are answered while the PNGs are compared.
+            return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
         if kind == "submit_rough_cut":
             arguments = _rough_cut_arguments(req)
             job_id, folder = self._allocate()
@@ -259,9 +349,7 @@ class XmlJobs:
             if arguments["start_frame"] is not None:
                 job["range_frames"] = [arguments["start_frame"], arguments["end_frame"]]
             return self._launch(job, self._run(job))
-        job = self.jobs.get(req.get("job_id"))
-        if job is None:
-            raise ValueError("Unknown job; start a new operation")
+        job = self._job(req.get("job_id"))
         if kind == "status":
             return dict(job)
         if kind == "start":
@@ -289,10 +377,33 @@ class XmlJobs:
         job["state"] = "running"
         return self._launch(job, self._run(job))
 
-    def _allocate(self) -> tuple[str, Path]:
-        """Claim the one GPU slot's next job folder, or refuse if the helper is busy."""
-        if self.active:
+    def _job(self, job_id) -> dict:
+        """A job from memory, or from its job.json when an earlier helper made it. A job that
+        earlier helper was running died with it: it reads as `interrupted`, never as running."""
+        job = self.jobs.get(job_id)
+        if job is not None:
+            return job
+        path = (self.directory / job_id / "job.json"
+                if isinstance(job_id, str) and re.fullmatch(r"[0-9a-f]{32}", job_id) else None)
+        try:
+            job = json.loads(path.read_text(encoding="utf-8")) if path else None
+        except (OSError, ValueError):
+            job = None
+        if not isinstance(job, dict) or job.get("job_id") != job_id:
+            raise ValueError("Unknown job; start a new operation")
+        if job.get("state") == "running":
+            job["state"] = "interrupted"
+            job["message"] = "The CutDeck helper restarted while this job ran; start it again"
+            self._save(job)
+        self.jobs[job_id] = job
+        return job
+
+    def _allocate(self, lane: str = "gpu") -> tuple[str, Path]:
+        """Claim a lane's next job folder, or refuse if that lane is busy."""
+        if lane == "gpu" and self.active:
             raise ValueError("CutDeck is already processing a sequence")
+        if lane == "cpu" and self.cpu_active:
+            raise ValueError("CutDeck is already matching a sync")
         if len(self.jobs) >= 1000:
             raise ValueError("Restart the helper before creating more jobs")
         job_id = uuid.uuid4().hex
@@ -300,9 +411,12 @@ class XmlJobs:
         folder.mkdir()
         return job_id, folder
 
-    def _launch(self, job: dict, coroutine) -> dict:
+    def _launch(self, job: dict, coroutine, lane: str = "gpu") -> dict:
         self.jobs[job["job_id"]] = job
-        self.active = job["job_id"]
+        if lane == "gpu":
+            self.active = job["job_id"]
+        else:
+            self.cpu_active = job["job_id"]
         self._save(job)
         task = asyncio.create_task(coroutine)
         self.tasks.add(task)
@@ -312,6 +426,65 @@ class XmlJobs:
     def _save(self, job):
         (self.directory / job["job_id"] / "job.json").write_text(
             json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _notify(self, job):
+        """Push the job's current state to every connection watching it."""
+        done = job["state"] in TERMINAL_STATES
+        watchers = self.watchers.pop(job["job_id"], set()) if done else self.watchers.get(job["job_id"], set())
+        for client in watchers:
+            client.push({"event": "job", "job": dict(job)})
+
+    async def _call_driver(self, req: dict):
+        """Forward one fixed command to the panel and wait for its answer."""
+        command, args = req.get("command"), req.get("args") or {}
+        if command not in DRIVER_COMMANDS or not isinstance(args, dict):
+            raise ValueError(f"Unknown Premiere command; one of: {', '.join(DRIVER_COMMANDS)}")
+        driver = self.driver
+        if driver is None:
+            raise ValueError("No CutDeck panel is connected: open the CutDeck panel in Premiere")
+        if command not in self.driver_commands:
+            raise ValueError(f"The connected panel does not offer {command}; update the panel")
+        if command == "apply_cuts":
+            job = self._job(args.get("job_id"))
+            if job.get("job_type") != "cut" or job["state"] != "ready" or not job.get("cuts"):
+                raise ValueError("apply_cuts needs a finished rough cut job with cuts")
+            context = job.get("context") or {}
+            args = {"cuts": job["cuts"], "sequence_id": context.get("sequence_id"),
+                    "sequence_name": context.get("sequence_name"),
+                    "result_name": job.get("result_name") or f"CutDeck rough cut {job['job_id'][:8]}"}
+        elif command == "add_markers":
+            args = _marker_arguments(args)
+        else:
+            args = {}
+        call_id = uuid.uuid4().hex
+        future = asyncio.get_running_loop().create_future()
+        self.calls[call_id] = (driver, future)
+        driver.push({"call": call_id, "command": command, "args": args})
+        try:
+            return await asyncio.wait_for(future, DRIVER_COMMANDS[command])
+        except asyncio.TimeoutError:
+            raise ValueError(f"The CutDeck panel did not finish {command} in time") from None
+        finally:
+            self.calls.pop(call_id, None)
+
+    def driver_reply(self, req: dict):
+        entry = self.calls.get(req.get("call"))
+        if entry is None or entry[1].done():
+            return  # timed out, or not a call we made
+        if req.get("ok"):
+            entry[1].set_result(req.get("result"))
+        else:
+            entry[1].set_exception(ValueError(str(req.get("message") or "The CutDeck panel refused")))
+
+    def disconnect(self, client: Client):
+        for watchers in self.watchers.values():
+            watchers.discard(client)
+        if self.driver is client:
+            self.driver, self.driver_commands = None, []
+            print("driver disconnected", flush=True)
+        for driver, future in list(self.calls.values()):
+            if driver is client and not future.done():
+                future.set_exception(ValueError("The CutDeck panel disconnected before it answered"))
 
     async def _run(self, job):
         process = None
@@ -354,6 +527,7 @@ class XmlJobs:
                     progress = parse_progress(raw_line.decode("utf-8", errors="replace"))
                     if progress is not None:
                         job["progress"] = progress
+                        self._notify(job)
                 code = await process.wait()
             if code:
                 detail = failure_detail(job["log_path"])
@@ -381,6 +555,7 @@ class XmlJobs:
         finally:
             self.active = None
             self._save(job)
+            self._notify(job)
 
     async def _run_transcribe(self, job):
         """Whole-file ASR in the existing worker subprocess; its result.json is the record."""
@@ -414,11 +589,15 @@ class XmlJobs:
         finally:
             self.active = None
             self._save(job)
+            self._notify(job)
 
     async def _run_plan_sync(self, job, clips):
+        loop = asyncio.get_running_loop()
+
         def progress(done, total, stage):  # runs on the worker thread; one dict swap is atomic
             job["progress"] = {"pct": round(100 * done / total) if total else 0,
                                "stage": f"{stage} {done}/{total}"}
+            loop.call_soon_threadsafe(self._notify, job)
         try:
             from cutdeck.sync_plan import plan_sync
             plan = await asyncio.to_thread(plan_sync, clips, _load_audio, progress)
@@ -432,27 +611,55 @@ class XmlJobs:
             job["state"] = "failed"
             job["message"] = f"Sync matching failed: {exc}"
         finally:
-            self.active = None
+            self.cpu_active = None
             self._save(job)
+            self._notify(job)
 
 
 async def serve(jobs: XmlJobs, port: int = PORT):
     from websockets.asyncio.server import serve as ws_serve
 
+    async def answer(client: Client, raw):
+        req_id = None
+        try:
+            req = json.loads(raw)
+            if isinstance(req, dict):
+                req_id = req.get("id")
+                if req.get("type") == "driver_reply":
+                    jobs.driver_reply(req)  # an answer to a call we sent; it gets no reply
+                    return
+            response = {"ok": True, **await jobs.dispatch(req, client)}
+        except Exception as exc:
+            response = {"ok": False, "message": str(exc), **getattr(exc, "details", {})}
+        if req_id is not None:
+            response["id"] = req_id
+        try:
+            await client.socket.send(json.dumps(response, ensure_ascii=False))
+        except Exception:
+            return  # the client went away; what it asked for still happened
+        if jobs.restarting:
+            jobs.stop.set()
+
     async def connection(socket):
-        async for raw in socket:
-            try:
-                req = json.loads(raw)
-                response = {"ok": True, **await jobs.dispatch(req)}
-            except Exception as exc:
-                response = {"ok": False, "message": str(exc), **getattr(exc, "details", {})}
-            await socket.send(json.dumps(response, ensure_ascii=False))
-            if jobs.restarting:
-                jobs.stop.set()
+        # Each message is answered in its own task: a long `premiere` call or `frame_bounds`
+        # never holds up the `status` or `driver_reply` behind it on the same socket.
+        client = Client(socket)
+        answers: set[asyncio.Task] = set()
+        try:
+            async for raw in socket:
+                task = asyncio.create_task(answer(client, raw))
+                answers.add(task)
+                task.add_done_callback(answers.discard)
+        except Exception:
+            pass  # a dropped connection ends like a closed one
+        finally:
+            jobs.disconnect(client)
+            if answers:
+                await asyncio.wait(answers)
 
     # Reject ordinary website origins; the local UXP client has no web origin.
     return await ws_serve(connection, "127.0.0.1", port,
-                          origins=[None, "null", "file://"], max_size=65536)
+                          origins=[None, "null", "file://"], max_size=MAX_MESSAGE)
 
 
 def spawn_replacement(port: int, jobs_dir: Path):

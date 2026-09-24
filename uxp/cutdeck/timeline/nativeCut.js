@@ -81,8 +81,13 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       builders.forEach((build, i) => {
         const where = `${label}: action ${i + 1} of ${builders.length}${build.what ? ` (${build.what})` : ""}`;
         let action, added;
-        try { action = build(); } catch (e) { throw new Error(`${where} failed to build: ${e.message}`); }
-        if (!action) throw new Error(`${where}: Premiere returned no action (${action})`);
+        // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
+        // cut list went through on a rerun, so an empty result is asked for once more (still inside
+        // this callback, as required) before failing. The read-back still checks every piece.
+        for (let attempt = 0; attempt < 2 && !action; attempt++) {
+          try { action = build(); } catch (e) { throw new Error(`${where} failed to build: ${e.message}`); }
+        }
+        if (!action) throw new Error(`${where}: Premiere returned no action (${action}), twice`);
         try { added = compound.addAction(action); } catch (e) { throw new Error(`${where} was refused: ${e.message}`); }
         if (!added) throw new Error(`${where}: addAction returned false`);
       });

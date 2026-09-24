@@ -1,5 +1,6 @@
 // Owns the rough cut job lifecycle (capture, prepare, follow, native apply) and job persistence.
-// The helper analyses an XML export of the sequence; the cuts are applied natively to a copy
+// The helper analyses the audio tracks the panel reads natively (workflow.prepare; no XML export
+// since docs/arch-design-helper-v2.md move 6); the cuts are applied natively to a copy
 // (timeline/nativeCut.js). The XML *output* route is retired (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
 // Must not know: the DOM, UI panels, Adjustment Layer or Effects logic.
 
@@ -25,7 +26,6 @@ function createRoughCutFeature({
   rpc,
   ensureHelper,
   storage = typeof localStorage !== "undefined" ? localStorage : null,
-  pollDelay = 1500,
   progressText = () => "Processing sequence in helper… Cuts stay inside marked In/Out.",
 }) {
   function readSavedJob() {
@@ -60,13 +60,15 @@ function createRoughCutFeature({
     return snap;
   }
 
+  // The helper pushes the job's progress (rpc.watch); nothing polls.
   async function follow(job) {
-    while (job.state === "running") {
+    if (job.state === "running") {
       ctl.setStatus(progressText(job), "busy");
-      await new Promise((resolve) => setTimeout(resolve, pollDelay));
-      job = await rpc({ type: "status", job_id: job.job_id });
+      job = await rpc.watch(job.job_id, (update) => {
+        if (update.state === "running") ctl.setStatus(progressText(update), "busy");
+      });
     }
-    if (job.state === "failed") {
+    if (job.state === "failed" || job.state === "interrupted") {
       clearJob();
       ctl.setStatus(job.message, "error");
       throw new Error(job.message);

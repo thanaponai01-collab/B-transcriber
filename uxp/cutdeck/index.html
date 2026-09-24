@@ -211,59 +211,58 @@
        Sync panel before its own panel is opened.
        ============================================================================ -->
   <div id="view-transform" hidden>
+    <!-- Icon-only by design: every control explains itself in its tooltip. The one line of
+         text is the clip being edited, or why nothing can be. Layout is flexbox and margins
+         only: UXP has no CSS Grid and no `gap` (reference/adobe/docs/resources/recipes/
+         css-styling/index.md, uxp-api/reference-css/styles/). -->
     <div class="header">
-      <div class="brand"><span>Transform &amp; Align</span></div>
-    </div>
-
-    <div id="align-seq-card" class="sequence-card" role="button" data-act="align-refresh" title="Click to refresh">
-      <div id="align-sequence">No sequence open</div>
-    </div>
-
-    <!-- Phase 1: read-only display of the selected clip's Position/Scale/Rotation/Anchor
-         Point, kept live by a background poll (see main.js's pollAlignTransform) and refreshed
-         immediately by clicking the sequence card above. -->
-    <div class="control-group">
-      <div id="align-transform-clip" class="control-label">No sequence open</div>
-      <div id="align-transform-reason" class="setting-subtext" hidden>Select a clip on the timeline.</div>
-      <div id="align-transform-fields" class="transform-fields" hidden>
-        <div class="transform-field-label">Position</div>
-        <div id="align-position" class="transform-field-value">—</div>
-        <div class="transform-field-label">Scale</div>
-        <div id="align-scale" class="transform-field-value">—</div>
-        <div class="transform-field-label">Rotation</div>
-        <div id="align-rotation" class="transform-field-value">—</div>
-        <div class="transform-field-label">Anchor Point</div>
-        <div id="align-anchor" class="transform-field-value">—</div>
+      <div id="align-transform-clip" class="transform-clip">No sequence open</div>
+      <div class="header-actions">
+        <div id="align-refresh" class="icon-btn" role="button" data-act="align-refresh" title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 21v-5h-5"/></svg></div>
+        <div id="align-probe" class="icon-btn" role="button" data-act="align-probe" title="Check Transform: report this clip's Motion params (read-only)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
       </div>
     </div>
 
-    <div class="section-divider">
-      <div class="section-line"></div>
-      <span class="section-tag">Phase 0</span>
-      <div class="section-line"></div>
-    </div>
-
-    <div class="control-group">
-      <div class="setting-subtext">
-        Select one clip on the timeline, then read its real Motion/Transform components,
-        parameter indexes, value shapes and source dimensions from this build. Read-only —
-        it creates, inserts and deletes nothing. Run it once per clip shape: source matching
-        the sequence, source not matching, non-square pixels, an Adjustment Layer, a graphic.
+    <!-- Type a value and press Enter to set it; one Ctrl+Z undoes it. -->
+    <div id="align-transform-fields" class="transform-fields">
+      <div class="transform-row">
+        <div class="transform-field-icon" title="Position (px)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></div>
+        <div class="transform-field-inputs"><input type="text" id="align-position-x" class="transform-input" data-field="position-x" title="Position X (px)"><input type="text" id="align-position-y" class="transform-input" data-field="position-y" title="Position Y (px)"></div>
+      </div>
+      <div class="transform-row">
+        <div class="transform-field-icon" title="Scale (%)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6"/><path d="M20 4l-7 7M4 20l7-7"/></svg></div>
+        <div class="transform-field-inputs"><input type="text" id="align-scale" class="transform-input" data-field="scale" title="Scale (%)"></div>
+      </div>
+      <div class="transform-row">
+        <div class="transform-field-icon" title="Rotation (°)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></div>
+        <div class="transform-field-inputs"><input type="text" id="align-rotation" class="transform-input" data-field="rotation" title="Rotation (°)"></div>
+      </div>
+      <div class="transform-row">
+        <div class="transform-field-icon" title="Anchor Point (source px)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/></svg></div>
+        <div class="transform-field-inputs"><input type="text" id="align-anchor-x" class="transform-input" data-field="anchor-x" title="Anchor Point X (source px)"><input type="text" id="align-anchor-y" class="transform-input" data-field="anchor-y" title="Anchor Point Y (source px)"></div>
       </div>
     </div>
 
-    <div id="align-probe" class="btn-primary" role="button" data-act="align-probe">
-      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="4" y="4" width="16" height="16" rx="1"/>
-        <circle cx="12" cy="12" r="1.5"/>
-        <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
-      </svg>
-      Check Transform
+    <!-- Anchor: moves the anchor on the visible (cropped) picture and Position with it, so
+         the picture does not move. Align: lines the rendered bounds up with the sequence
+         frame. Both act on every selected clip, one Ctrl+Z. -->
+    <div class="transform-tools">
+      <div class="anchor-grid">
+        <div class="anchor-row"><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-left" title="Anchor top left, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top" title="Anchor top, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-right" title="Anchor top right, picture stays put"></div></div>
+        <div class="anchor-row"><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="left" title="Anchor left, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="center" title="Anchor center, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="right" title="Anchor right, picture stays put"></div></div>
+        <div class="anchor-row"><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-left" title="Anchor bottom left, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom" title="Anchor bottom, picture stays put"></div><div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-right" title="Anchor bottom right, picture stays put"></div></div>
+      </div>
+      <div class="transform-align">
+        <div class="align-row"><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="left" title="Align to frame: left"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="7" y="14" width="14" height="4" rx="1"/></svg></div><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="hcenter" title="Align to frame: horizontal center"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="5" y="14" width="14" height="4" rx="1"/></svg></div><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="right" title="Align to frame: right"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="3" y="14" width="14" height="4" rx="1"/></svg></div></div>
+        <div class="align-row"><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="top" title="Align to frame: top"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="7" width="4" height="14" rx="1"/></svg></div><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="vcenter" title="Align to frame: vertical center"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div><div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="bottom" title="Align to frame: bottom"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="3" width="4" height="14" rx="1"/></svg></div></div>
+      </div>
     </div>
 
-    <div class="status-card">
+    <!-- Quiet unless something went wrong or a clip was skipped. -->
+    <div id="align-status-card" class="status-card transform-status" hidden>
       <div id="align-status-icon" class="status-icon"></div>
       <div id="align-status" role="status">Ready</div>
+      <div id="align-copy" class="icon-btn" role="button" data-act="align-copy" title="Copy this report"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
     </div>
   </div>
 

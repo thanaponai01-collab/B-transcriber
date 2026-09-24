@@ -152,8 +152,13 @@ function fakeHelper(byName) {
       job = { job_id: "j1", state: "ready", plan: { placements, sessions: 1, duration_s: 100 } };
       return { job_id: "j1", state: "running", progress: { pct: 33, stage: "Reading audio 1/3" } };
     }
-    if (req.type === "status") return job;
     throw new Error(`unexpected ${req.type}`);
+  };
+  // The helper pushes the finished job to a watcher (arch-design-helper-v2 move 1); no polling.
+  rpc.watch = async (jobId, onUpdate) => {
+    calls.push({ type: "watch", job_id: jobId });
+    onUpdate({ job_id: jobId, state: "running", progress: { pct: 66, stage: "Matching 2/3" } });
+    return job;
   };
   return { rpc, calls };
 }
@@ -182,7 +187,7 @@ const PLAN = {
 async function run(host, helper, extra = {}) {
   const statuses = [];
   const result = await sync.syncSequence(host.ppro, { rpc: helper.rpc, ensureHelper: async () => {},
-    onStatus: (t) => statuses.push(t), sleep: async () => {}, ...extra });
+    onStatus: (t) => statuses.push(t), ...extra });
   return { ...result, statuses };
 }
 
@@ -219,6 +224,8 @@ test("places each clip on its own tracks at its planned start, in a _Synced copy
   assert.equal(items(copy, "video").length + items(copy, "audio").length, 6, "the originals were cleared");
 
   assert.ok(statuses.includes("Matching audio… Reading audio 1/3"));
+  assert.ok(statuses.includes("Matching audio… Matching 2/3"), "pushed progress reaches the status line");
+  assert.equal(helper.calls.filter((c) => c.type === "status").length, 0, "nothing polls");
   assert.match(text, /^3 synced in 1 session\./);
   assert.match(text, /Opened Shoot_Synced\. Ctrl\+Z once undoes the placing\./);
 });
@@ -289,8 +296,8 @@ test("read-back flags originals left behind on the copy", async () => {
 
 test("a failed match stops before any copy is made", async () => {
   const host = fakeHost({ files: FILES, timeline: TIMELINE });
-  const rpc = async (req) => (req.type === "plan_sync" ? { job_id: "j", state: "running" }
-    : { job_id: "j", state: "failed", message: "Sync matching failed: ffmpeg not found on PATH" });
+  const rpc = async () => ({ job_id: "j", state: "running" });
+  rpc.watch = async () => ({ job_id: "j", state: "failed", message: "Sync matching failed: ffmpeg not found on PATH" });
   await assert.rejects(run(host, { rpc }), /ffmpeg not found/);
   assert.equal(host.sequences.length, 1);
 });

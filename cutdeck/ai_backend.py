@@ -1,9 +1,10 @@
 """MCP-facing view of CutDeck's jobs; the jobs themselves live in the :7891 helper.
 
-`cutdeck.xml_bridge` owns every job (one job_id space, one GPU lock). This module
-only speaks to it over the same one-shot websocket exchange the UXP panel uses,
-and keeps the two things MCP promises its agents: the published capabilities and
-the job-state vocabulary, plus paged transcript results.
+`cutdeck.xml_bridge` owns every job (one job_id space, one GPU lane). This module
+only speaks to it over one-shot websocket exchanges, and keeps the two things MCP
+promises its agents: the published capabilities and the job-state vocabulary, plus
+paged transcript results. Live Premiere commands go through the same helper to the
+CutDeck panel, which must be open (docs/arch-design-helper-v2.md move 3).
 """
 from __future__ import annotations
 
@@ -15,11 +16,10 @@ from cutdeck.xml_bridge import PORT, VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The helper's states, in MCP's published vocabulary. `interrupted` stays in the
-# published list but the helper never emits it: it keeps jobs in memory, so a
-# restarted helper answers "Unknown job" instead.
+# The helper's states, in MCP's published vocabulary. `interrupted` is a job that was
+# running when its helper stopped (read back from its job.json by a restarted helper).
 MCP_STATE = {"prepared": "queued", "running": "running", "ready": "succeeded",
-             "no_cuts": "succeeded", "failed": "failed"}
+             "no_cuts": "succeeded", "failed": "failed", "interrupted": "interrupted"}
 _KIND = {"cut": "rough_cut", "transcribe": "transcribe"}
 
 
@@ -37,8 +37,11 @@ class Backend:
 
     def capabilities(self) -> dict:
         return {
-            "version": "2", "tools": ["transcribe", "rough_cut"],
-            "live_premiere_control": False,
+            "version": "3", "tools": ["transcribe", "rough_cut", "premiere_status",
+                                      "premiere_read_sequence", "premiere_apply_cuts",
+                                      "premiere_add_markers"],
+            "live_premiere_control": True,
+            "live_premiere_requires": "The CutDeck panel open in Premiere (premiere_status says)",
             "rough_cut_input": "Exported FCP7 sequence XML with accessible source media",
             "rough_cut_output": ("Cut list: [start_frame, end_frame) spans on the sequence frame "
                                  "grid plus ticks_per_frame; the CutDeck panel's Rough Cut applies "
@@ -69,7 +72,7 @@ class Backend:
                 "state": MCP_STATE[job["state"]], "log_path": job.get("log_path")}
         if job.get("arguments") is not None:
             view["arguments"] = job["arguments"]
-        if job["state"] == "failed":
+        if job["state"] in ("failed", "interrupted"):
             view["error"] = job.get("message", "Processing failed")
         return view
 
@@ -88,6 +91,14 @@ class Backend:
         if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id):
             raise ValueError("Unknown job_id")
         return self._view(await self._ask({"type": "status", "job_id": job_id}))
+
+    async def premiere_status(self) -> dict:
+        reply = await self._ask({"type": "premiere_status"})
+        return {"connected": reply["connected"], "commands": reply["commands"]}
+
+    async def premiere(self, command: str, args: dict | None = None):
+        """Run one fixed command in Premiere through the CutDeck panel; returns its result."""
+        return (await self._ask({"type": "premiere", "command": command, "args": args or {}}))["result"]
 
     async def result(self, job_id: str, offset: int = 0, limit: int = 100) -> dict:
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 500:

@@ -104,7 +104,8 @@ def test_one_gpu_lock_across_panel_and_mcp(tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="already processing"):
             await jobs.dispatch({"type": "prepare", "project_id": "p", "sequence_id": "s",
                                  "sequence_name": "n", "audio_track": None,
-                                 "audio_track_count": 1, "asr": False})
+                                 "audio_track_count": 1, "asr": False,
+                                 "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
         with pytest.raises(ValueError, match="already processing"):
             await backend.transcribe(str(media))
         for task in jobs.tasks:
@@ -176,7 +177,7 @@ def test_published_capabilities_vocabulary_is_unchanged():
 
 
 def test_state_mapping_covers_every_helper_state():
-    for helper_state in ("prepared", "running", "ready", "no_cuts", "failed"):
+    for helper_state in ("prepared", "running", "ready", "no_cuts", "failed", "interrupted"):
         assert xml_bridge_state(helper_state) in Backend(1).capabilities()["job_states"]
 
 

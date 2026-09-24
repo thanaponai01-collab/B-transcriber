@@ -18,6 +18,7 @@ const { createAdjustFeature, loadSettings } = require("./features/adjust.js");
 const { createPresetsFeature, loadCustomPresets } = require("./features/presets.js");
 const { createAlignFeature } = require("./features/align.js");
 const { createProbesFeature } = require("./features/probes.js");
+const { createDriver, keepRegistered } = require("./features/driver.js");
 
 const storage = typeof localStorage !== "undefined" ? localStorage : null;
 
@@ -76,7 +77,18 @@ const probes = createProbesFeature({
   uxp,
   onCapturePreset: presets.onCapturePreset,
 });
-const align = createAlignFeature({ ppro, ctl: alignCtl });
+const align = createAlignFeature({ ppro, ctl: alignCtl, uxp, rpc, ensureHelper });
+
+// The Premiere driver: MCP agents and scripts reach Premiere through the helper and this panel
+// (docs/arch-design-helper-v2.md move 3). Its own quiet connection, re-registered after drops.
+const driver = createDriver({ ppro, ctl: mainCtl });
+let driverRegistration = null;
+const driverRpc = createRpc({
+  attempts: 1,
+  onCall: (call) => driver.handle(call),
+  onClose: () => driverRegistration && driverRegistration.onClose(),
+});
+driverRegistration = keepRegistered({ rpc: driverRpc, version: workflow.VERSION, commands: driver.commands });
 
 // Main panel binding
 panel.bind({
@@ -101,6 +113,9 @@ panel.bind({
 alignPanel.bind({
   onRefresh: align.onRefresh,
   onProbe: align.onProbe,
+  onSetField: align.onSetField,
+  onAnchor: align.onAnchor,
+  onAlign: align.onAlign,
 });
 
 // Register panels with UXP entrypoints
@@ -133,6 +148,7 @@ const savedJob = roughCut.lastJob();
 mainCtl.state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 mainCtl.render();
 restartHelperOnStart();
+helperRestart.finally(() => driverRegistration.start());
 
 setTimeout(async () => {
   await presets.loadPresets();

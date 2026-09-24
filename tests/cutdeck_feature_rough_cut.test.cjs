@@ -15,7 +15,7 @@ function createMockStorage(initial = {}) {
 test("roughCut.follow: a ready job from the retired XML route is cleared with a clear message", async () => {
   const ctl = createController({ render: () => {} });
   const storage = createMockStorage({ [KEY]: JSON.stringify({ job_id: "job-1", state: "running" }) });
-  const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc: async () => {}, storage, pollDelay: 0 });
+  const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc: async () => {}, storage });
   await assert.rejects(roughCut.follow({ job_id: "job-1", state: "ready", output_path: "/tmp/cuts.xml" }),
     /old XML Rough Cut, which is retired/);
   assert.equal(storage.getItem(KEY), null);
@@ -28,7 +28,7 @@ test("roughCut.follow: a native job for a sequence that isn't open cuts nothing 
   const storage = createMockStorage({ [KEY]: JSON.stringify(job) });
   const other = { guid: { toString: () => "other" } };
   const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => other }) } };
-  const roughCut = createRoughCutFeature({ ppro, ctl, rpc: async () => {}, storage, pollDelay: 0 });
+  const roughCut = createRoughCutFeature({ ppro, ctl, rpc: async () => {}, storage });
   await assert.rejects(roughCut.follow({ ...job }), /Open "Shoot" to cut it/);
   assert.notEqual(storage.getItem(KEY), null);
 });
@@ -93,4 +93,35 @@ test("roughCut.onCut: a pending job is resumed, not replaced by a new one", asyn
   assert.deepEqual(calls, ["hello", "status"], "must resume job-4, never prepare a new job");
   assert.equal(storage.getItem(KEY), null);
   assert.match(ctl.state.status.text, /No cuts found/);
+});
+
+test("a running job is followed by pushed events, not status polling", async () => {
+  const ctl = createController({ render: () => {} });
+  const storage = createMockStorage({ [KEY]: JSON.stringify({ job_id: "job-5", state: "running" }) });
+  const calls = [];
+  const rpc = async (req) => { calls.push(req.type); return req.type === "status" ? { job_id: "job-5", state: "running", progress: { pct: 5, stage: "Detecting speech" } } : {}; };
+  const seen = [];
+  rpc.watch = async (jobId, onUpdate) => {
+    calls.push("watch");
+    onUpdate({ job_id: jobId, state: "running", progress: { pct: 50, stage: "Transcribing speech" } });
+    seen.push(ctl.state.status.text);
+    return { job_id: jobId, state: "no_cuts" };
+  };
+  const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc, storage, progressText: (job) => job.progress.stage });
+  await roughCut.onResumeJob();
+  assert.deepEqual(calls, ["hello", "status", "watch"]);
+  assert.deepEqual(seen, ["Transcribing speech"]);
+  assert.match(ctl.state.status.text, /No cuts found/);
+});
+
+test("a job the helper lost in a restart is cleared with its message", async () => {
+  const ctl = createController({ render: () => {} });
+  const storage = createMockStorage({ [KEY]: JSON.stringify({ job_id: "job-6", state: "running" }) });
+  const rpc = async (req) => (req.type === "status"
+    ? { job_id: "job-6", state: "interrupted", message: "The CutDeck helper restarted while this job ran; start it again" } : {});
+  const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc, storage });
+  await roughCut.onResumeJob();
+  assert.equal(storage.getItem(KEY), null);
+  assert.equal(ctl.state.status.level, "error");
+  assert.match(ctl.state.status.text, /restarted while this job ran/);
 });

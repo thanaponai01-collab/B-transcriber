@@ -62,7 +62,8 @@ json.dump({{'cuts_frames': [], 'ticks_per_frame': '1', 'sequence_duration_frames
         prep = await jobs.dispatch({
             "type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "Seq",
             "audio_track": None, "audio_track_count": 1, "asr": False,
-            "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1"})
+            "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1",
+            "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
         Path(prep["source_path"]).write_text(SAMPLE_XML_PATH.read_text(encoding="utf-8"), encoding="utf-8")
         started = await jobs.dispatch({"type": "start", "job_id": prep["job_id"]})
         assert started["state"] == "running" and "progress" not in started
@@ -109,7 +110,8 @@ def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
         prep = await jobs.dispatch({
             "type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "Seq",
             "audio_track": None, "audio_track_count": 1, "asr": False,
-            "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1"})
+            "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1",
+            "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
         Path(prep["source_path"]).write_text(SAMPLE_XML_PATH.read_text(encoding="utf-8"), encoding="utf-8")
         await jobs.dispatch({"type": "start", "job_id": prep["job_id"]})
         await asyncio.wait_for(asyncio.gather(*jobs.tasks), 30)
