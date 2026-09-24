@@ -1,9 +1,10 @@
 // Owns diagnostic probe dispatch for the main panel diagnostics drawer.
 // Must not know: the DOM, UI panels, Rough Cut or Sync job semantics.
 
-const capability = require("../capabilityProbe.js");
-const syncProbe = require("../syncProbe.js");
-const roughCutProbe = require("../roughCutProbe.js");
+// Probe modules (~100 KB together) load on first click, not at panel start.
+const capability = () => require("../capabilityProbe.js");
+const syncProbe = () => require("../syncProbe.js");
+const roughCutProbe = () => require("../roughCutProbe.js");
 
 const PROBES = [
   {
@@ -13,58 +14,58 @@ const PROBES = [
   {
     id: "timing",
     startText: "Reading this build's marks and timebase…",
-    run: (ppro) => capability.probeMarksAndTiming(ppro),
-    format: (report) => capability.formatReport(report),
+    run: (ppro) => capability().probeMarksAndTiming(ppro),
+    format: (report) => capability().formatReport(report),
     logLabel: "CutDeck capability probe",
   },
   {
     id: "motion",
     startText: "Reading the Adjustment Layer's live Motion component on this sequence…",
-    run: (ppro) => capability.probeAdjustmentLayerMotion(ppro),
-    format: (report) => capability.formatMotionReport(report),
+    run: (ppro) => capability().probeAdjustmentLayerMotion(ppro),
+    format: (report) => capability().formatMotionReport(report),
     logLabel: "CutDeck AL motion probe",
   },
   {
     id: "effect",
     startText: "Reading the selected item's real effect chain…",
-    run: (ppro) => capability.probeEffectChain(ppro),
-    format: (report) => capability.formatEffectChainReport(report),
+    run: (ppro) => capability().probeEffectChain(ppro),
+    format: (report) => capability().formatEffectChainReport(report),
     logLabel: "CutDeck effect chain probe",
   },
   {
     id: "transform",
     startText: "Reading the selected clip's real Motion/Transform params, units and source dimensions…",
-    run: (ppro) => capability.probeTransformParams(ppro),
-    format: (report) => capability.formatTransformReport(report),
+    run: (ppro) => capability().probeTransformParams(ppro),
+    format: (report) => capability().formatTransformReport(report),
     logLabel: "CutDeck transform params probe",
   },
   {
     id: "keyframe",
     startText: "Reading the selected clip's keyframes against the playhead…",
-    run: (ppro) => capability.probeKeyframeTiming(ppro),
-    format: (report) => capability.formatKeyframeReport(report),
+    run: (ppro) => capability().probeKeyframeTiming(ppro),
+    format: (report) => capability().formatKeyframeReport(report),
     logLabel: "CutDeck keyframe timing probe",
   },
   {
     id: "alcreate",
     startText: "Generating an Adjustment Layer at this sequence's size and importing it…",
-    run: (ppro) => capability.probeCreateAdjustmentLayer(ppro),
-    format: (report) => capability.formatCreateAdjustmentLayerReport(report),
+    run: (ppro) => capability().probeCreateAdjustmentLayer(ppro),
+    format: (report) => capability().formatCreateAdjustmentLayerReport(report),
     logLabel: "CutDeck AL creation probe",
   },
   {
     id: "syncmoves",
     startText: "Copying this sequence, then testing clip moves on the copy…",
-    run: (ppro) => syncProbe.probeSyncMoves(ppro),
-    format: (report) => syncProbe.formatSyncMovesReport(report),
+    run: (ppro) => syncProbe().probeSyncMoves(ppro),
+    format: (report) => syncProbe().formatSyncMovesReport(report),
     logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
     logLabel: "CutDeck sync moves probe",
   },
   {
     id: "nativecut",
     startText: "Copying this sequence, then testing native cut edits (P1-P5) on the copy…",
-    run: (ppro) => roughCutProbe.probeNativeCut(ppro),
-    format: (report) => roughCutProbe.formatNativeCutReport(report),
+    run: (ppro) => roughCutProbe().probeNativeCut(ppro),
+    format: (report) => roughCutProbe().formatNativeCutReport(report),
     logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
     logLabel: "CutDeck native cut probe",
   },
