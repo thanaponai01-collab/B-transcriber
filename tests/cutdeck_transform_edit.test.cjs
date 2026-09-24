@@ -13,7 +13,7 @@ const assert = require("node:assert/strict");
 const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
-const { setAnchor, alignToFrame, setField } = require("../uxp/cutdeck/features/align.js");
+const { setAnchor, alignToFrame, setField, readAlignTransform } = require("../uxp/cutdeck/features/align.js");
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 
@@ -136,7 +136,7 @@ function motionClip(name, o = {}) {
     const tp = [null, null, motionParam(pos, { point: true, keyframed: !!o.keyframedText }),
       motionParam(100), motionParam(100), motionParam(true), motionParam(0), motionParam(0),
       motionParam((o.textAnchors || [])[i] || [0, 0], { point: true })];
-    return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8] };
+    return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6] };
   });
   const extra = o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : [];
   const chain = o.graphic ? [motion, vm, ...texts, ...extra] : [motion];
@@ -145,6 +145,8 @@ function motionClip(name, o = {}) {
     params,
     texts: texts.map((t) => t.position),
     textAnchors: texts.map((t) => t.anchor),
+    textScales: texts.map((t) => t.scale),
+    textRotations: texts.map((t) => t.rotation),
     source: o.source || "1280 x 720 (1.0)",
     getComponentChain: () => Promise.resolve({ getComponentCount: () => chain.length, getComponentAtIndex: (i) => chain[i] }),
     getProjectItem: () => Promise.resolve(o.graphic ? null : { clipName: name }),
@@ -422,3 +424,208 @@ test("Anchor centre then Align left still lands the text's left edge on the fram
   await alignToFrame(ppro, "left", async () => TEXT_BOX);
   close(pt(g.texts[0]).x, 220 - 11, "moved left by the box's 11 px");
 });
+
+test("readAlignTransform on a text Graphic reads the text layer transform, not Motion", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  const seq = await (await ppro.Project.getActiveProject()).getActiveSequence();
+  const state = await readAlignTransform(seq, ppro);
+  assert.equal(state.available, true);
+  assert.equal(state.clipName, "Graphic");
+  // LIVE_TEXT: Position [215.1/1920, 939.6/1080], Anchor [215.1/1920, -35.4/1080]
+  close(state.fields.position.x, 215.1, "text position x");
+  close(state.fields.position.y, 939.6, "text position y");
+  close(state.fields.anchor.x, 215.1, "text anchor x");
+  close(state.fields.anchor.y, -35.4, "text anchor y");
+  assert.equal(state.fields.scale.value, 100);
+  assert.equal(state.fields.rotation.value, 0);
+});
+
+test("setField on a text Graphic writes to the text layer's params, leaving Motion untouched", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  const { ppro, undoSteps } = host([g]);
+  const result = await setField(ppro, "position-x", "300");
+  assert.equal(result.done, 1);
+  close(pt(g.texts[0]).x, 300, "text position x set to 300");
+  close(pt(g.texts[0]).y, 939.6, "text position y kept");
+  assert.deepEqual(g.params[0].value, [0.5, 0.5], "Motion Position untouched");
+
+  await setField(ppro, "scale", "125");
+  assert.equal(g.textScales[0].value, 125, "text scale set to 125");
+  assert.equal(g.params[1].value, 100, "Motion scale untouched");
+
+  await setField(ppro, "rotation", "20");
+  assert.equal(g.textRotations[0].value, 20, "text rotation set to 20");
+  assert.equal(g.params[4].value, 0, "Motion rotation untouched");
+
+  await setField(ppro, "anchor-x", "50");
+  close(pt(g.textAnchors[0]).x, 50, "text anchor x set to 50");
+  assert.deepEqual(g.params[5].value, [0.5, 0.5], "Motion anchor untouched");
+  assert.deepEqual(undoSteps, ["CutDeck: Set position-x", "CutDeck: Set scale", "CutDeck: Set rotation", "CutDeck: Set anchor-x"]);
+});
+
+test("setField on a Graphic with shapeLayer falls back to writing Motion", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true, shapeLayer: true }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  await setField(ppro, "scale", "80");
+  assert.equal(g.params[1].value, 80, "Motion scale updated");
+  assert.equal(g.textScales[0].value, 100, "text layer scale left untouched");
+});
+
+test("setField on a Graphic with keyframed text skips with explanation", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true, keyframedText: true }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  const result = await setField(ppro, "position-x", "300");
+  assert.equal(result.done, 0);
+  assert.match(result.skipped[0], /has this value keyframed/);
+  close(pt(g.texts[0]).x, 215.1, "text position untouched");
+});
+
+test("consecutive alignments and anchor changes on a Graphic use cached bounds with zero re-measurement", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  let measureCount = 0;
+  const measure = async () => {
+    measureCount++;
+    return TEXT_BOX;
+  };
+
+  // First action: measures the clip once
+  await alignToFrame(ppro, "left", measure);
+  assert.equal(measureCount, 1, "measured on first align");
+  // Box (11, 904 - 429, 991) shifted left by 11 px -> left lands at 0
+  close(pt(g.texts[0]).x, 215.1 - 11, "aligned left");
+
+  // Second action: Align right -> MUST USE CACHE, measureCount remains 1
+  await alignToFrame(ppro, "right", measure);
+  assert.equal(measureCount, 1, "did not re-measure for align right");
+  // Frame width is 1920, text width is 418 (429 - 11) -> right lands at 1920, left at 1502
+  // Position shifted from (215.1 - 11) by +1502 = 1706.1
+  close(pt(g.texts[0]).x, 215.1 - 11 + 1502, "aligned right");
+
+  // Third action: Anchor top-left -> MUST USE CACHE, measureCount remains 1
+  await setAnchor(ppro, "top-left", measure);
+  assert.equal(measureCount, 1, "did not re-measure for anchor change");
+
+  // Fourth action: Align center -> MUST USE CACHE, measureCount remains 1
+  await alignToFrame(ppro, "hcenter", measure);
+  assert.equal(measureCount, 1, "did not re-measure for align center");
+
+  // Changing scale via setField invalidates the cache for this clip
+  await setField(ppro, "scale", "150");
+  await alignToFrame(ppro, "left", measure);
+  assert.equal(measureCount, 2, "re-measured after scale change");
+});
+
+test("when measurement returns an unhideAction, it is committed atomically with the motion values in ONE transaction", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  let disabled = true;
+  g.createSetDisabledAction = (d) => fake.action(() => { disabled = d; });
+  const { ppro } = host([g]);
+
+  let unhideCalled = false;
+  const measure = async () => {
+    return {
+      bounds: TEXT_BOX,
+      unhideAction: (compound) => {
+        unhideCalled = true;
+        compound.addAction(g.createSetDisabledAction(false));
+      },
+    };
+  };
+
+  const result = await alignToFrame(ppro, "left", measure);
+  assert.equal(result.done, 1);
+  assert.equal(unhideCalled, true, "unhide action was executed as part of the compound transaction");
+  assert.equal(disabled, false, "clip is restored");
+});
+
+test("bounds cache hits even when clip object reference changes if key (track:start) matches", async () => {
+  const g1 = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  const g2 = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  g1.getTrackIndex = () => Promise.resolve(0);
+  g1.getStartTime = () => Promise.resolve(fake.tickTime(100));
+  g2.getTrackIndex = () => Promise.resolve(0);
+  g2.getStartTime = () => Promise.resolve(fake.tickTime(100));
+
+  let currentItem = g1;
+  const { project } = fake.createProject();
+  const seq = {
+    name: "Seq",
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([currentItem]) }),
+    getSettings: () => Promise.resolve({
+      getVideoFrameRect: () => Promise.resolve({ width: 1920, height: 1080 }),
+      getVideoPixelAspectRatio: () => Promise.resolve("1:1"),
+    }),
+  };
+  project.getActiveSequence = () => Promise.resolve(seq);
+  const ppro = {
+    PointF: fake.PointF,
+    Project: { getActiveProject: () => Promise.resolve(project) },
+  };
+
+  let measureCount = 0;
+  const measure = async () => {
+    measureCount++;
+    return TEXT_BOX;
+  };
+
+  await alignToFrame(ppro, "left", measure);
+  assert.equal(measureCount, 1);
+
+  // Now selection returns g2 (different object instance, but same track and start time)
+  g2.getComponentChain = g1.getComponentChain;
+  currentItem = g2;
+  await alignToFrame(ppro, "right", measure);
+  assert.equal(measureCount, 1, "reused cached bounds via key even though object reference changed");
+});
+
+test("alignToFrame hcenter on odd-width text does not decrease X by 0.5 on consecutive clicks", async () => {
+  // Live user scenario (UXPLogs 2026-09-24 22:43-22:48):
+  // Drawn bounds 520..1401 (width 881).
+  const LIVE_ODD_BOX = { left: 520, top: 383, right: 1401, bottom: 505 };
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.5, 0.5]] });
+  const { ppro } = host([g]);
+
+  await alignToFrame(ppro, "hcenter", async () => LIVE_ODD_BOX);
+  const firstX = g.texts[0].value[0];
+
+  // Second click: should be a no-op (shift 0), NOT decrease by 0.5px
+  await alignToFrame(ppro, "hcenter", async () => LIVE_ODD_BOX);
+  const secondX = g.texts[0].value[0];
+
+  assert.equal(secondX, firstX, "second align click should not shift position");
+});
+
+test("alignToFrame vcenter on odd-height text does not decrease Y on consecutive clicks", async () => {
+  // Odd height: 505 - 384 = 121px. Center is 444.5. Frame height 1080 -> center 540.
+  const LIVE_ODD_HEIGHT_BOX = { left: 520, top: 384, right: 1400, bottom: 505 };
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.5, 0.5]] });
+  const { ppro } = host([g]);
+
+  await alignToFrame(ppro, "vcenter", async () => LIVE_ODD_HEIGHT_BOX);
+  const firstY = g.texts[0].value[1];
+
+  // Second click: must be identical, not shifting by 0.5
+  await alignToFrame(ppro, "vcenter", async () => LIVE_ODD_HEIGHT_BOX);
+  const secondY = g.texts[0].value[1];
+
+  assert.equal(secondY, firstY, "second vertical align click should not shift position");
+});
+
+test("consecutive align clicks when already aligned do not add undo steps (noop)", async () => {
+  const UNCENTERED_BOX = { left: 100, top: 500, right: 300, bottom: 580 };
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.5, 0.5]] });
+  const { ppro, undoSteps } = host([g]);
+
+  await alignToFrame(ppro, "hcenter", async () => UNCENTERED_BOX);
+  assert.equal(undoSteps.length, 1, "first click adds one undo step");
+
+  await alignToFrame(ppro, "hcenter", async () => UNCENTERED_BOX);
+  assert.equal(undoSteps.length, 1, "second click is a noop and creates no additional undo step");
+});
+
+
+
+
+

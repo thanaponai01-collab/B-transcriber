@@ -325,3 +325,23 @@ def test_cli_without_a_helper_says_how_to_start_it(capsys):
         port = s.getsockname()[1]
     assert premiere_cli.main(["read_sequence", "--port", str(port)]) == 1
     assert "python -m cutdeck.xml_bridge" in capsys.readouterr().err
+
+
+def test_measure_text_via_helper(tmp_path):
+    async def body(port):
+        async with _connect(port) as ws:
+            await ws.send(json.dumps({
+                "id": 10,
+                "type": "measure_text",
+                "text": "Testing 123",
+                "font_size": 50,
+            }))
+            reply = await _recv(ws)
+            assert reply["id"] == 10
+            assert reply["ok"] is True
+            bounds = reply["bounds"]
+            assert bounds["width"] > 0
+            assert bounds["height"] > 0
+            assert bounds["advance"] > 0
+
+    asyncio.run(_with_helper(XmlJobs(tmp_path), body))

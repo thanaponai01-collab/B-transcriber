@@ -17,7 +17,7 @@ const { runTransaction } = require("../host/project.js");
 // `paramWrites` = [{ param, field, value, name }]: params the caller already holds (a Graphic's
 // text layer Position). Everything lands in ONE transaction, so one Ctrl+Z undoes the whole
 // batch. Throws before touching anything if a clip's Motion or a param can't be found.
-async function applyMotionValues(ppro, project, label, writes, paramWrites = []) {
+async function applyMotionValues(ppro, project, label, writes, paramWrites = [], extraActions = []) {
   const prepared = [];
   for (const w of writes) {
     const component = await findMotionComponent(w.item);
@@ -36,6 +36,10 @@ async function applyMotionValues(ppro, project, label, writes, paramWrites = [])
   }
 
   runTransaction(project, label, (compound) => {
+    for (const act of extraActions) {
+      if (typeof act === "function") act(compound);
+      else if (act) compound.addAction(act);
+    }
     for (const { param, field, value, name } of prepared) {
       const v = typeof value === "number" ? value : new ppro.PointF(value.x, value.y);
       const setAction = param.createSetValueAction(param.createKeyframe(v), true);

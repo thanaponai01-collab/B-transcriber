@@ -126,15 +126,15 @@ function renderedBounds(clip, rect) {
 
 const ALIGN_EDGES = ["left", "hcenter", "right", "top", "vcenter", "bottom"];
 
-// How far to move a clip so its rendered bounds line up with `frame`'s edge or centre.
 function alignShift(bounds, frame, edge) {
+  const zero = (v) => (Math.abs(v) < 1e-4 ? 0 : v);
   switch (edge) {
-    case "left": return { dx: -bounds.left, dy: 0 };
-    case "hcenter": return { dx: frame.width / 2 - (bounds.left + bounds.right) / 2, dy: 0 };
-    case "right": return { dx: frame.width - bounds.right, dy: 0 };
-    case "top": return { dx: 0, dy: -bounds.top };
-    case "vcenter": return { dx: 0, dy: frame.height / 2 - (bounds.top + bounds.bottom) / 2 };
-    case "bottom": return { dx: 0, dy: frame.height - bounds.bottom };
+    case "left": return { dx: zero(-bounds.left), dy: 0 };
+    case "hcenter": return { dx: zero(frame.width / 2 - (bounds.left + bounds.right) / 2), dy: 0 };
+    case "right": return { dx: zero(frame.width - bounds.right), dy: 0 };
+    case "top": return { dx: 0, dy: zero(-bounds.top) };
+    case "vcenter": return { dx: 0, dy: zero(frame.height / 2 - (bounds.top + bounds.bottom) / 2) };
+    case "bottom": return { dx: 0, dy: zero(frame.height - bounds.bottom) };
     default: return null;
   }
 }

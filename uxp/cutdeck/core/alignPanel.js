@@ -169,8 +169,20 @@
     }
     const el = container();
     if (!el || typeof el.querySelectorAll !== "function") return;
+    if (typeof el.addEventListener === "function") {
+      const triggerPoll = () => {
+        if (typeof intents.onPoll === "function") intents.onPoll();
+        else if (typeof intents.onRefresh === "function") intents.onRefresh();
+      };
+      el.addEventListener("pointerenter", triggerPoll);
+      el.addEventListener("focusin", triggerPoll);
+    }
     el.querySelectorAll("[data-anchor]").forEach((node) => {
-      node.addEventListener("click", () => intents.onAnchor(node.getAttribute("data-anchor")));
+      node.addEventListener("click", () => {
+        el.querySelectorAll("[data-anchor]").forEach((c) => c.classList.remove("active"));
+        node.classList.add("active");
+        intents.onAnchor(node.getAttribute("data-anchor"));
+      });
     });
     el.querySelectorAll("[data-align]").forEach((node) => {
       node.addEventListener("click", () => intents.onAlign(node.getAttribute("data-align")));

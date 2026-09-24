@@ -25,7 +25,7 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
-from cutdeck import frame_bounds, sequence_json
+from cutdeck import frame_bounds, sequence_json, text_properties
 from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
                                   check_reference_audio, sequence_timebase)
 
@@ -336,6 +336,18 @@ class XmlJobs:
             # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
             # thread, so other clients are answered while the PNGs are compared.
             return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
+        if kind == "measure_text":
+            text = req.get("text", "")
+            font = req.get("font_name", "")
+            size = float(req.get("font_size", 100.0))
+            scale_x = float(req.get("scale_x", 100.0))
+            scale_y = float(req.get("scale_y", 100.0))
+            bounds = text_properties.measure_text_bounds(text, font, size, scale_x, scale_y)
+            return {"bounds": bounds}
+        if kind == "text_properties":
+            project_path = _input_file(req.get("project_path"), ".prproj")
+            texts = await asyncio.to_thread(text_properties.extract_project_text_properties, project_path)
+            return {"texts": texts}
         if kind == "submit_rough_cut":
             arguments = _rough_cut_arguments(req)
             job_id, folder = self._allocate()

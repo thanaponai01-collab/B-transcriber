@@ -204,6 +204,20 @@
       });
     };
 
+    rpc.close = function close() {
+      if (socket) {
+        const s = socket;
+        socket = null;
+        s.onmessage = s.onerror = s.onclose = null;
+        try { s.close(); } catch (_) {}
+      }
+      for (const entry of pending.values()) {
+        clearTimer(entry.timer);
+      }
+      pending.clear();
+      watchers.clear();
+    };
+
     return rpc;
   }
 

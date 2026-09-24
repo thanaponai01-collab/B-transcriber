@@ -28,7 +28,7 @@ function describeField(entry, isPoint, frameSize) {
 async function readAlignTransform(seq, ppro) {
   if (!seq) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
 
-  const items = await trackItems.getSelectedTrackItems(seq);
+  const items = await trackItems.getSelectedTrackItems(seq, ppro);
   if (items.length === 0) {
     return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
   }
@@ -47,6 +47,23 @@ async function readAlignTransform(seq, ppro) {
 
   const frameSize = await transformParams.readSequenceFrameSize(seq);
   const anchorFrame = await transformParams.readAnchorFrameSize(ppro, item, seq);
+
+  // A Graphic with text: show the text layer's own transform (matching Effect Controls /
+  // Properties panel), leaving the fixed Motion container alone.
+  if (await transformParams.isGraphic(item)) {
+    const layers = await transformParams.readGraphicLayers(item);
+    if (layers && layers.texts && layers.texts.length > 0) {
+      const primaryText = layers.texts[0];
+      const fields = {
+        position: describeField(primaryText.position, true, frameSize),
+        scale: describeField(primaryText.scale, false, frameSize),
+        rotation: describeField(primaryText.rotation, false, frameSize),
+        anchor: describeField(primaryText.anchorPoint, true, anchorFrame),
+      };
+      return { clipName, available: true, reason: null, fields };
+    }
+  }
+
   const fields = {
     position: describeField(transform.position, true, frameSize),
     scale: describeField(transform.scale, false, frameSize),
@@ -69,12 +86,20 @@ async function readAlignState(ppro) {
 const staticValue = (entry) => (entry && !entry.isTimeVarying && entry.value !== null && entry.value !== undefined ? entry.value : null);
 
 // Every selected item that has a Motion effect, with its name and transform read.
-async function readSelectedMotionClips(seq) {
-  const items = await trackItems.getSelectedTrackItems(seq);
+async function readSelectedMotionClips(seq, ppro) {
+  const items = await trackItems.getSelectedTrackItems(seq, ppro);
   const clips = [];
   for (const item of items) {
     const transform = await transformParams.readTransform(item);
-    if (transform) clips.push({ item, transform, name: await trackItems.trackItemName(item, "(unnamed)") });
+    if (transform) {
+      let key = null;
+      try {
+        const start = typeof item.getStartTime === "function" ? (await item.getStartTime()).ticks : null;
+        const track = typeof item.getTrackIndex === "function" ? await item.getTrackIndex() : null;
+        if (start !== null && track !== null) key = `${track}:${start}`;
+      } catch (_) {}
+      clips.push({ item, key, transform, name: await trackItems.trackItemName(item, "(unnamed)") });
+    }
   }
   return clips;
 }
@@ -125,11 +150,10 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
 //
 // A Graphic's canvas is the whole frame, so its geometry says nothing about where its text is.
 // For a Graphic, `measure` (transform/frameBounds.js) finds the box its text is actually drawn
-// in, and the plan uses that (`model.drawn`, sequence px). That costs two frame saves and two
-// extra undo steps (the clip switched off and back on) per Graphic.
+// in, and the plan uses that (`model.drawn`, sequence px).
 async function editSelectedClips(ppro, label, plan, measure = null) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq);
+  const clips = await readSelectedMotionClips(seq, ppro);
   if (clips.length === 0) throw new Error("Select a clip on the timeline.");
   const seqFrame = await transformParams.readSequenceFrameSize(seq);
   if (!seqFrame) throw new Error("Could not read the sequence frame size.");
@@ -138,31 +162,88 @@ async function editSelectedClips(ppro, label, plan, measure = null) {
   const writes = [];
   const paramWrites = [];
   const skipped = [];
+  const clipBoundsUpdates = [];
+  const unhideActions = [];
   let done = 0;
-  for (const clip of clips) {
-    const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
-    if (m.skip) { skipped.push(m.skip); continue; }
-    if (await transformParams.isGraphic(clip.item)) {
-      if (!measure) { skipped.push(`"${clip.name}": a Graphic needs its text measured, which isn't available here.`); continue; }
-      try {
-        m.drawn = await measure({ project, seq, item: clip.item, frame: seqFrame });
-      } catch (error) {
-        skipped.push(`"${clip.name}": ${(error && error.message) || error}`);
+  try {
+    for (const clip of clips) {
+      const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
+      if (m.skip) { skipped.push(m.skip); continue; }
+      if (await transformParams.isGraphic(clip.item)) {
+        m.layers = await transformParams.readGraphicLayers(clip.item);
+        const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
+        let textScale = 100;
+        let textRot = 0;
+        let textPos = null;
+        if (isTextGraphic) {
+          const primaryText = m.layers.texts[0];
+          textScale = staticValue(primaryText.scale) || 100;
+          textRot = staticValue(primaryText.rotation) || 0;
+          textPos = transformGeometry.pointXY(staticValue(primaryText.position));
+        }
+        const cached = isTextGraphic ? frameBounds.getCachedBounds(clip.item, textScale, textRot, clip.key, textPos) : null;
+        if (cached) {
+          m.drawn = cached;
+        } else {
+          if (!measure) { skipped.push(`"${clip.name}": a Graphic needs its text measured, which isn't available here.`); continue; }
+          let measured = null;
+          try {
+            measured = await measure({ project, seq, item: clip.item, frame: seqFrame, keepDisabled: true });
+          } catch (error) {
+            skipped.push(`"${clip.name}": ${(error && error.message) || error}`);
+            continue;
+          }
+          const drawnBounds = measured && measured.bounds ? measured.bounds : (measured && typeof measured.left === "number" ? measured : null);
+          if (measured && measured.unhideAction) {
+            unhideActions.push(measured.unhideAction);
+          }
+          if (!drawnBounds) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
+          m.drawn = drawnBounds;
+          if (isTextGraphic) {
+            frameBounds.setCachedBounds(clip.item, m.drawn, textScale, textRot, clip.key, textPos);
+          }
+        }
+      }
+      const planned = plan(m, seqFrame);
+      if (planned.noop) {
+        done += 1;
         continue;
       }
-      if (!m.drawn) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
-      m.layers = await transformParams.readGraphicLayers(clip.item);
+      const boundsShift = planned.boundsShift || null;
+      delete planned.boundsShift;
+      if (planned.layerWrites) {
+        for (const w of planned.layerWrites) {
+          paramWrites.push(Object.assign({ name: clip.name }, w));
+          if (w.field === "text Position" && w.value) {
+            clipBoundsUpdates.push({ item: clip.item, dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0, key: clip.key, newPos: w.value });
+          }
+        }
+        done += 1;
+      } else {
+        writes.push({ item: clip.item, name: clip.name, values: planned });
+        done += 1;
+        if (boundsShift) {
+          clipBoundsUpdates.push({ item: clip.item, dx: boundsShift.dx, dy: boundsShift.dy, key: clip.key, newPos: planned.position || null });
+        }
+      }
     }
-    const planned = plan(m, seqFrame);
-    if (planned.layerWrites) {
-      for (const w of planned.layerWrites) paramWrites.push(Object.assign({ name: clip.name }, w));
-      done += 1;
-    } else {
-      writes.push({ item: clip.item, name: clip.name, values: planned });
-      done += 1;
+    if (done && (writes.length > 0 || paramWrites.length > 0 || unhideActions.length > 0)) {
+      await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites, unhideActions);
+    }
+    for (const u of clipBoundsUpdates) {
+      frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, u.newPos);
+    }
+  } finally {
+    if (unhideActions.length > 0 && !done) {
+      const { runTransaction } = require("../timeline/effects.js");
+      runTransaction(project, "CutDeck: restore clips", (compound) => {
+        for (const act of unhideActions) {
+          if (typeof act === "function") act(compound);
+          else if (act) compound.addAction(act);
+        }
+      });
     }
   }
-  if (done) await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites);
   // Text layer Position writes are not proven live yet: log before / written / read back, so one
   // run in Premiere shows whether the write took and in what units (UXPLogs).
   for (const w of paramWrites) {
@@ -312,10 +393,13 @@ async function alignToFrame(ppro, edge, measure = null) {
   return editSelectedClips(ppro, `CutDeck: Align ${edge}`, ({ model, source, crop, drawn, layers }, seqFrame) => {
     const bounds = drawn || transformGeometry.renderedBounds(model, transformGeometry.visibleSourceRect(source, crop));
     const { dx, dy } = transformGeometry.alignShift(bounds, seqFrame, edge);
+    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) {
+      return { noop: true };
+    }
     const layerWrites = drawn ? textLayerShift(layers, model, source, { x: dx, y: dy }) : null;
-    if (layerWrites) return { layerWrites };
+    if (layerWrites) return { layerWrites, boundsShift: { dx, dy } };
     const positionPx = { x: model.position.x + dx, y: model.position.y + dy };
-    return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height) };
+    return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height), boundsShift: { dx, dy } };
   }, measure);
 }
 
@@ -335,35 +419,110 @@ const EDIT_FIELDS = {
 async function setField(ppro, field, text) {
   const spec = EDIT_FIELDS[field];
   if (!spec) throw new Error(`Unknown field "${field}".`);
-  const typed = String(text).trim();
+  const typed = String(text).replace(/[%°]/g, "").trim();
   const number = Number(typed);
   if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
 
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq);
+  const clips = await readSelectedMotionClips(seq, ppro);
   if (clips.length === 0) throw new Error("Select a clip on the timeline.");
   const seqFrame = spec.param === "position" ? await transformParams.readSequenceFrameSize(seq) : null;
 
   const writes = [];
+  const paramWrites = [];
   const skipped = [];
+  let done = 0;
   for (const clip of clips) {
+    if (await transformParams.isGraphic(clip.item)) {
+      const layers = await transformParams.readGraphicLayers(clip.item);
+      if (layers && layers.onlyText && layers.texts.length > 0) {
+        let textSkipped = false;
+        for (const t of layers.texts) {
+          const entry = t[spec.param];
+          if (entry && entry.isTimeVarying) {
+            skipped.push(`"${clip.name}" has this value keyframed.`);
+            textSkipped = true;
+            break;
+          }
+        }
+        if (textSkipped) continue;
+
+        const frame = seqFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
+        if (!frame) {
+          skipped.push(`"${clip.name}": could not read its ${spec.param === "position" ? "sequence" : "source"} frame size.`);
+          continue;
+        }
+
+        let clipWrote = false;
+        let deltaPx = 0;
+        let lastNorm = null;
+        for (const t of layers.texts) {
+          if (spec.axis) {
+            const entry = t[spec.param];
+            const current = frame && transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
+            if (!current) continue;
+            deltaPx = number - current[spec.axis];
+            current[spec.axis] = number;
+            const norm = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
+            lastNorm = norm;
+            const targetParam = spec.param === "position" ? t.param : t.anchorParam;
+            if (targetParam) {
+              paramWrites.push({
+                param: targetParam,
+                field: `text ${spec.param}`,
+                value: norm,
+                name: clip.name,
+              });
+              clipWrote = true;
+            }
+          } else {
+            const targetParam = spec.param === "scale" ? t.scaleParam : (spec.param === "rotation" ? t.rotationParam : null);
+            if (targetParam) {
+              paramWrites.push({
+                param: targetParam,
+                field: `text ${spec.param}`,
+                value: number,
+                name: clip.name,
+              });
+              clipWrote = true;
+            }
+          }
+        }
+        if (clipWrote) {
+          done += 1;
+          if (spec.param === "position" && typeof deltaPx === "number") {
+            const dx = spec.axis === "x" ? deltaPx : 0;
+            const dy = spec.axis === "y" ? deltaPx : 0;
+            frameBounds.updateCachedBounds(clip.item, dx, dy, clip.key, lastNorm);
+          } else {
+            frameBounds.invalidateBounds(clip.item, clip.key);
+          }
+        }
+        continue;
+      }
+    }
+
     const entry = clip.transform[spec.param];
     if (entry && entry.isTimeVarying) { skipped.push(`"${clip.name}" has this value keyframed.`); continue; }
     let value = number;
     if (spec.axis) {
       const frame = seqFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
-      const current = frame && transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
-      if (!current) {
+      if (!frame) {
         skipped.push(`"${clip.name}": could not read its ${spec.param === "position" ? "sequence" : "source"} frame size.`);
         continue;
       }
+      const current = transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
+      if (!current) { skipped.push(`"${clip.name}": could not read its current ${spec.param}.`); continue; }
       current[spec.axis] = number;
       value = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
     }
     writes.push({ item: clip.item, name: clip.name, values: { [spec.param]: value } });
+    done += 1;
   }
-  if (writes.length) await transformApply.applyMotionValues(ppro, project, `CutDeck: Set ${field}`, writes);
-  return { done: writes.length, skipped };
+  if (writes.length || paramWrites.length) {
+    await transformApply.applyMotionValues(ppro, project, `CutDeck: Set ${field}`, writes, paramWrites);
+  }
+  return { done, skipped };
 }
 
 // Without events the panel falls back to the old fast poll. With them there is no poll:
@@ -405,7 +564,7 @@ function subscribeSequenceEvents(ppro, handler) {
   }
 }
 
-function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = null }) {
+function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = null, isMounted = null }) {
   // Copy uses the probes feature's clipboard code, against this panel's own status.
   const copier = createProbesFeature({ ppro, ctl, uxp });
   // Measuring a Graphic's text needs the helper (it compares the two saved frames).
@@ -417,8 +576,10 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let pollInFlight = false;
   let pollAgain = false;
 
+  let lastStateJson = "";
   async function refreshAlignSequence() {
     const next = await readAlignState(ppro);
+    lastStateJson = JSON.stringify(next);
     ctl.state.sequence = next.sequence;
     ctl.state.transform = next.transform;
     ctl.render();
@@ -428,15 +589,20 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   // follow-up if more arrived meanwhile.
   async function pollAlignTransform() {
     if (ctl.state.busy) return;
+    if (typeof isMounted === "function" && !isMounted()) return;
     if (pollInFlight) { pollAgain = true; return; }
     pollInFlight = true;
     try {
       do {
         pollAgain = false;
         const next = await readAlignState(ppro);
-        ctl.state.sequence = next.sequence;
-        ctl.state.transform = next.transform;
-        ctl.render();
+        const nextJson = JSON.stringify(next);
+        if (nextJson !== lastStateJson) {
+          lastStateJson = nextJson;
+          ctl.state.sequence = next.sequence;
+          ctl.state.transform = next.transform;
+          ctl.render();
+        }
       } while (pollAgain);
     } catch (error) {
       console.error("CutDeck: transform poll failed", error);
@@ -449,13 +615,15 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   function startAlignPolling() {
     if (started) return;
     started = true;
-    if (!subscribeSequenceEvents(ppro, () => { pollAlignTransform(); })) {
-      alignPollTimer = setInterval(pollAlignTransform, FAST_POLL_MS);
-    }
+    subscribeSequenceEvents(ppro, () => { pollAlignTransform(); });
+    alignPollTimer = setInterval(pollAlignTransform, FAST_POLL_MS);
   }
 
   return {
-    onRefresh: () => ctl.act(refreshAlignSequence),
+    onRefresh: () => ctl.act(async () => {
+      frameBounds.clearBoundsCache();
+      await refreshAlignSequence();
+    }),
     onSetField: (field, text) => ctl.act(async () => {
       let result;
       try {
@@ -486,6 +654,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       if (ctl.state.status.level === "ready") ctl.setStatus(ctl.state.status.text, "info");
     }),
     refresh: refreshAlignSequence,
+    poll: pollAlignTransform,
     startPolling: startAlignPolling,
     describeField,
     readAlignTransform: (seq) => readAlignTransform(seq, ppro),

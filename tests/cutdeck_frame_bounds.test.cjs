@@ -76,3 +76,87 @@ test("a clip that is already switched off is refused and left off", async () => 
   assert.equal(h.isDisabled(), true);
   assert.deepEqual(h.undoSteps, []);
 });
+
+test("when a clip is on track 0 (nothing underneath), it measures from a single frame with zero flicker and zero undo steps", async () => {
+  const { project, undoSteps } = fake.createProject();
+  let disabled = false;
+  const item = {
+    isDisabled: () => Promise.resolve(disabled),
+    getStartTime: () => Promise.resolve(fake.tickTime(10)),
+    getEndTime: () => Promise.resolve(fake.tickTime(100)),
+    getTrackIndex: () => Promise.resolve(0), // track 0 -> no tracks underneath!
+    createSetDisabledAction: (d) => fake.action(() => { disabled = d; }),
+  };
+  const seq = {
+    getPlayerPosition: () => Promise.resolve(fake.tickTime(50)),
+    getVideoTrackCount: () => Promise.resolve(3),
+  };
+  const written = [];
+  const ppro = { Exporter: { exportSequenceFrame: (s, t, name) => {
+    written.push(name);
+    return Promise.resolve(true);
+  } } };
+  const deleted = [];
+  const getEntry = (n) => Promise.resolve({
+    getMetadata: () => Promise.resolve({ size: 99 }),
+    delete: () => { deleted.push(n); return Promise.resolve(true); },
+  });
+  const uxp = { storage: { localFileSystem: { getTemporaryFolder: () => Promise.resolve({ nativePath: "C:\\Temp\\PluginData", getEntry }) } } };
+  const requests = [];
+  const rpc = (req) => { requests.push(req); return Promise.resolve({ bounds: { left: 11, top: 904, right: 429, bottom: 991 } }); };
+
+  const bounds = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT });
+  assert.deepEqual(bounds, { left: 11, top: 904, right: 429, bottom: 991 });
+  assert.equal(written.length, 1, "only 1 frame saved");
+  assert.equal(disabled, false, "never switched off");
+  assert.deepEqual(undoSteps, [], "zero undo steps on single-frame measure");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].off, undefined, "off frame is omitted");
+  assert.equal(deleted.length, 1, "temp file was cleaned up");
+});
+
+test("when keepDisabled is true and clips are underneath, returns unhideAction for atomic restore", async () => {
+  const { project, undoSteps } = fake.createProject();
+  let disabled = false;
+  const item = {
+    isDisabled: () => Promise.resolve(disabled),
+    getStartTime: () => Promise.resolve(fake.tickTime(10)),
+    getEndTime: () => Promise.resolve(fake.tickTime(100)),
+    getTrackIndex: () => Promise.resolve(1), // track 1
+    createSetDisabledAction: (d) => fake.action(() => { disabled = d; }),
+  };
+  const track0Item = {
+    isDisabled: () => Promise.resolve(false),
+    getStartTime: () => Promise.resolve(fake.tickTime(0)),
+    getEndTime: () => Promise.resolve(fake.tickTime(200)),
+  };
+  const seq = {
+    getPlayerPosition: () => Promise.resolve(fake.tickTime(50)),
+    getVideoTrackCount: () => Promise.resolve(2),
+    getVideoTrack: (idx) => Promise.resolve({
+      isMuted: () => Promise.resolve(false),
+      getTrackItems: () => Promise.resolve(idx === 0 ? [track0Item] : []),
+    }),
+  };
+  const written = [];
+  const ppro = { Exporter: { exportSequenceFrame: (s, t, name) => {
+    written.push(name);
+    return Promise.resolve(true);
+  } } };
+  const deleted = [];
+  const getEntry = (n) => Promise.resolve({
+    getMetadata: () => Promise.resolve({ size: 99 }),
+    delete: () => { deleted.push(n); return Promise.resolve(true); },
+  });
+  const uxp = { storage: { localFileSystem: { getTemporaryFolder: () => Promise.resolve({ nativePath: "C:\\Temp\\PluginData", getEntry }) } } };
+  const requests = [];
+  const rpc = (req) => { requests.push(req); return Promise.resolve({ bounds: { left: 11, top: 904, right: 429, bottom: 991 } }); };
+
+  const result = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT, keepDisabled: true });
+  assert.deepEqual(result.bounds, { left: 11, top: 904, right: 429, bottom: 991 });
+  assert.ok(result.unhideAction, "returns unhideAction");
+  assert.equal(deleted.length, 2, "both temp frames cleaned up");
+  project.executeTransaction(result.unhideAction, "CutDeck: restore");
+  assert.equal(disabled, false, "unhideAction restored clip inside transaction");
+});
+

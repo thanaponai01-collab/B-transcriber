@@ -297,6 +297,8 @@ async function readGraphicLayers(item) {
       result.texts.push({
         param: getParam(TEXT_PARAM_INDEX.position),
         anchorParam: getParam(TEXT_PARAM_INDEX.anchorPoint),
+        scaleParam: getParam(TEXT_PARAM_INDEX.scale),
+        rotationParam: getParam(TEXT_PARAM_INDEX.rotation),
         position, scale, horizontalScale, uniformScale, rotation, anchorPoint,
       });
     }

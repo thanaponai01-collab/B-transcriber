@@ -34,7 +34,7 @@ async function fileSize(folder, name) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Waits until `name` exists with the same non-zero size on two polls in a row, or throws.
-async function waitForFile(folder, name, { timeoutMs = 10000, intervalMs = 50 } = {}) {
+async function waitForFile(folder, name, { timeoutMs = 10000, intervalMs = 20 } = {}) {
   const t0 = Date.now();
   let last = null;
   while (Date.now() - t0 < timeoutMs) {
@@ -51,10 +51,50 @@ function joinPath(folderPath, name) {
   return folderPath.endsWith(sep) ? folderPath + name : folderPath + sep + name;
 }
 
+// Checks whether there are active (unmuted, enabled) video clips underneath `item` at `time`.
+// When false, the background behind the Graphic is empty/black, so we only need to export ONE
+// frame and NEVER disable the clip — completely eliminating screen flicker and undo steps.
+async function hasClipsUnderneath(seq, item, time) {
+  if (!seq || !item || typeof item.getTrackIndex !== "function") return true;
+  try {
+    const itemTrackIndex = await item.getTrackIndex();
+    if (itemTrackIndex <= 0) return false;
+    const atTicks = toTicks(time, "playhead");
+    const trackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : itemTrackIndex;
+    const limit = Math.min(itemTrackIndex, trackCount);
+    for (let t = 0; t < limit; t++) {
+      const track = await seq.getVideoTrack(t);
+      if (!track) continue;
+      if (typeof track.isMuted === "function" && (await track.isMuted())) continue;
+      if (typeof track.getTrackItems === "function") {
+        const trackItems = await track.getTrackItems();
+        for (const other of trackItems) {
+          if (typeof other.isDisabled === "function" && (await other.isDisabled())) continue;
+          const start = toTicks(await other.getStartTime(), "track item start");
+          const end = toTicks(await other.getEndTime(), "track item end");
+          if (atTicks >= start && atTicks < end) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  } catch (_) {
+    return true;
+  }
+}
+
+async function deleteEntry(folder, name) {
+  try {
+    const entry = await folder.getEntry(name);
+    if (entry && typeof entry.delete === "function") await entry.delete();
+  } catch (_) {}
+}
+
 // The clip's drawn box at the playhead, `{left, top, right, bottom}` in sequence pixels (right
 // and bottom exclusive), or null when it draws nothing there. Throws, with a sentence the
 // status bar can show, when the playhead is not over the clip or a frame can't be saved.
-async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, wait }) {
+async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, wait, keepDisabled = false }) {
   const time = await seq.getPlayerPosition();
   const at = toTicks(time, "playhead");
   const start = toTicks(await item.getStartTime(), "clip start");
@@ -73,26 +113,136 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
     await waitForFile(folder, name, wait);
   };
 
-  await save(onName);
-  runTransaction(project, "CutDeck: measure (hide clip)", (compound) => {
-    compound.addAction(item.createSetDisabledAction(true));
-  });
+  const hasUnderneath = await hasClipsUnderneath(seq, item, time);
+  let unhideAction = null;
+
   try {
-    await save(offName);
+    await save(onName);
+
+    if (hasUnderneath) {
+      runTransaction(project, "CutDeck: measure (hide clip)", (compound) => {
+        compound.addAction(item.createSetDisabledAction(true));
+      });
+      let offSaved = false;
+      try {
+        await save(offName);
+        offSaved = true;
+      } finally {
+        if (!offSaved || !keepDisabled) {
+          runTransaction(project, "CutDeck: measure (show clip)", (compound) => {
+            compound.addAction(item.createSetDisabledAction(false));
+          });
+        } else {
+          unhideAction = (compound) => compound.addAction(item.createSetDisabledAction(false));
+        }
+      }
+    }
+
+    const payload = {
+      type: "frame_bounds",
+      on: joinPath(folder.nativePath, onName),
+    };
+    if (hasUnderneath) {
+      payload.off = joinPath(folder.nativePath, offName);
+    }
+
+    const reply = await rpc(payload);
+    console.log("CutDeck measured bounds", JSON.stringify({ at: String(at), folder: folder.nativePath, bounds: reply && reply.bounds, singleFrame: !hasUnderneath }));
+    const bounds = reply ? reply.bounds : null;
+    if (keepDisabled) {
+      return { bounds, unhideAction };
+    }
+    return bounds;
   } finally {
-    runTransaction(project, "CutDeck: measure (show clip)", (compound) => {
-      compound.addAction(item.createSetDisabledAction(false));
-    });
+    deleteEntry(folder, onName);
+    if (hasUnderneath) deleteEntry(folder, offName);
   }
-  const reply = await rpc({
-    type: "frame_bounds",
-    on: joinPath(folder.nativePath, onName),
-    off: joinPath(folder.nativePath, offName),
-  });
-  // Logged with the playhead so a wrong box can be matched to the kept frame pair
-  // (cutdeck-bounds-last-on/off.png in `folder`).
-  console.log("CutDeck measured bounds", JSON.stringify({ at: String(at), folder: folder.nativePath, bounds: reply && reply.bounds }));
-  return reply ? reply.bounds : null;
 }
 
-module.exports = { measureDrawnBounds, waitForFile };
+// In-memory bounds cache: prevents repeating the slow frame export + clip disable/enable on
+// every subsequent alignment or anchor action. Dual WeakMap (object-reference) and bounded Map
+// (track:start key) ensures 100% cache hits across UXP proxy wrapper instances with capped memory.
+let boundsCache = new WeakMap();
+const boundedCache = new Map();
+const MAX_BOUNDED_ENTRIES = 50;
+
+function getCachedBounds(item, scale = 100, rotation = 0, key = null, position = null) {
+  let entry = null;
+  if (item && typeof item === "object") entry = boundsCache.get(item);
+  if (!entry && key && boundedCache.has(key)) {
+    entry = boundedCache.get(key);
+    if (entry && item && typeof item === "object") boundsCache.set(item, entry);
+  }
+  if (!entry) return null;
+  if (Math.abs(scale - entry.scale) > 0.1 || Math.abs(rotation - entry.rotation) > 0.1) {
+    if (item && typeof item === "object") boundsCache.delete(item);
+    if (key) boundedCache.delete(key);
+    return null;
+  }
+  if (position && entry.posX !== null && entry.posY !== null) {
+    if (Math.abs(position.x - entry.posX) > 1e-4 || Math.abs(position.y - entry.posY) > 1e-4) {
+      if (item && typeof item === "object") boundsCache.delete(item);
+      if (key) boundedCache.delete(key);
+      return null;
+    }
+  }
+  return { left: entry.left, top: entry.top, right: entry.right, bottom: entry.bottom };
+}
+
+function setCachedBounds(item, bounds, scale = 100, rotation = 0, key = null, position = null) {
+  if (!bounds) return;
+  const entry = {
+    left: Number(bounds.left),
+    top: Number(bounds.top),
+    right: Number(bounds.right),
+    bottom: Number(bounds.bottom),
+    scale: scale || 100,
+    rotation: rotation || 0,
+    posX: position && typeof position.x === "number" ? position.x : null,
+    posY: position && typeof position.y === "number" ? position.y : null,
+  };
+  if (item && typeof item === "object") boundsCache.set(item, entry);
+  if (key) {
+    if (boundedCache.size >= MAX_BOUNDED_ENTRIES) {
+      const oldest = boundedCache.keys().next().value;
+      boundedCache.delete(oldest);
+    }
+    boundedCache.set(key, entry);
+  }
+}
+
+function updateCachedBounds(item, dx = 0, dy = 0, key = null, newPos = null) {
+  let entry = item && typeof item === "object" ? boundsCache.get(item) : null;
+  if (!entry && key && boundedCache.has(key)) entry = boundedCache.get(key);
+  if (!entry) return;
+  entry.left += dx;
+  entry.right += dx;
+  entry.top += dy;
+  entry.bottom += dy;
+  if (newPos && typeof newPos.x === "number" && typeof newPos.y === "number") {
+    entry.posX = newPos.x;
+    entry.posY = newPos.y;
+  }
+}
+
+function invalidateBounds(item, key = null) {
+  if (item && typeof item === "object") boundsCache.delete(item);
+  if (key) boundedCache.delete(key);
+}
+
+function clearBoundsCache() {
+  boundsCache = new WeakMap();
+  boundedCache.clear();
+}
+
+module.exports = {
+  hasClipsUnderneath,
+  measureDrawnBounds,
+  waitForFile,
+  getCachedBounds,
+  setCachedBounds,
+  updateCachedBounds,
+  invalidateBounds,
+  clearBoundsCache,
+};
+

@@ -77,7 +77,7 @@ const probes = createProbesFeature({
   uxp,
   onCapturePreset: presets.onCapturePreset,
 });
-const align = createAlignFeature({ ppro, ctl: alignCtl, uxp, rpc, ensureHelper });
+const align = createAlignFeature({ ppro, ctl: alignCtl, uxp, rpc, ensureHelper, isMounted: () => alignPanel.isMounted() });
 
 // The Premiere driver: MCP agents and scripts reach Premiere through the helper and this panel
 // (docs/arch-design-helper-v2.md move 3). Its own quiet connection, re-registered after drops.
@@ -114,10 +114,12 @@ panel.bind({
 // Align panel binding
 alignPanel.bind({
   onRefresh: align.onRefresh,
+  onReset: align.onReset,
   onProbe: align.onProbe,
   onSetField: align.onSetField,
   onAnchor: align.onAnchor,
   onAlign: align.onAlign,
+  onPoll: align.poll,
 });
 
 // Register panels with UXP entrypoints
