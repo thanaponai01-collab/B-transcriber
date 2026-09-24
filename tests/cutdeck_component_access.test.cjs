@@ -144,6 +144,20 @@ test("getSelectedVideoClips excludes Audio clips and Adjustment Layers", async (
   assert.equal(results[0].track, 0);
 });
 
+test("getSelectedVideoClips trusts isAdjustmentLayer() over the clip name", async () => {
+  const sel = () => Promise.resolve(true);
+  const footageNamedAdj = { name: "adjustment_test.mp4", isAdjustmentLayer: () => Promise.resolve(false), getIsSelected: sel };
+  const renamedAL = { name: "Grade", isAdjustmentLayer: () => Promise.resolve(true), getIsSelected: sel };
+  const trackV0 = { getTrackItems: () => Promise.resolve([footageNamedAdj, renamedAL]) };
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([footageNamedAdj, renamedAL]) }),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve(trackV0),
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => r.item), [footageNamedAdj]);
+});
+
 test("getSelectedVideoClips returns [] for null sequence or empty selection", async () => {
   assert.deepEqual(await trackItems.getSelectedVideoClips(null, null), []);
   const seq = { getSelection: () => Promise.resolve(null), getVideoTrackCount: () => Promise.resolve(0), getAudioTrackCount: () => Promise.resolve(0) };

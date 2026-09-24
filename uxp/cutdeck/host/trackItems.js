@@ -140,10 +140,19 @@ async function getSelectedVideoClips(ppro, seq) {
   for (const it of rawItems) {
     if (!it) continue;
 
-    // 1. Ignore Adjustment Layers themselves
-    const name = it.name ? it.name.toLowerCase() : "";
-    if (name.includes("adjustment") || name.startsWith("adj_")) {
-      continue;
+    // 1. Ignore Adjustment Layers themselves. isAdjustmentLayer() is declared on
+    // VideoClipTrackItem/AudioClipTrackItem (@adobe/premierepro 26.2.1 d.ts); the name
+    // check is only a fallback where it's missing — by name, footage called
+    // "adjustment_test.mp4" is skipped and a renamed AL passes as footage.
+    if (typeof it.isAdjustmentLayer === "function") {
+      let isAL = false;
+      try { isAL = await it.isAdjustmentLayer(); } catch (_) {}
+      if (isAL) continue;
+    } else {
+      const name = it.name ? it.name.toLowerCase() : "";
+      if (name.includes("adjustment") || name.startsWith("adj_")) {
+        continue;
+      }
     }
 
     // 2. Check explicit mediaType

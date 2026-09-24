@@ -78,7 +78,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1, ppro
   // Refine past any occupied track using the exact intended span, same as the scan
   // above. (Previously padded to a 5s "safety window" to cover the placed clip's
   // untrimmed default duration — that's now confirmed unnecessary: the caller's own
-  // hard gate + Step 2 trim reliably lands each placement at its exact span before
+  // hard gate + the In/Out marks reliably land each placement at its exact span before
   // the next one is ever checked, so padding here only fragmented adjacent short
   // clips onto separate tracks instead of letting them share one.)
   while (candidate < trackCount) {
@@ -140,6 +140,11 @@ async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks, ppro) {
 
 // Robust UXP timeline placement routine (supporting multi-clip cut transitions and separate clip spans)
 async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
+  const t0 = Date.now();
+  // Per-phase timing: each mark records the ms spent since the previous one.
+  const phases = {};
+  let tLast = t0;
+  const mark = (name) => { const now = Date.now(); phases[name] = now - tLast; tLast = now; };
   const { project, sequence: seq } = await activeProjectAndSequence(ppro, {
     sequenceErrorMessage: "Open a sequence in Premiere first.",
   });
@@ -178,6 +183,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   const mode = options.mode || "span";
 
   // Check if user has clips selected on timeline
+  mark('setup');
   const selectedClips = await getSelectedVideoClips(ppro, seq);
   const rawClipsWithTimes = [];
   for (const sc of selectedClips) {
@@ -206,6 +212,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     } catch (_) {}
   }
 
+  mark('select');
   const placements = planPlacements({
     mode,
     spans: clipsWithTimes,
@@ -240,6 +247,10 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   if (typeof alItem.getProjectItem === "function") {
     clipItem = await alItem.getProjectItem();
   }
+  // createOverwriteItemAction rejects a ClipProjectItem.cast(...) object ("Invalid
+  // parameter", TODO_LEDGER.md native rough-cut run 1) — place the plain item. The cast
+  // is kept only for the ClipProjectItem-only calls (in/out marks, color label).
+  const placeItem = clipItem;
   if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
     try {
       const casted = ppro.ClipProjectItem.cast(clipItem);
@@ -272,6 +283,7 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   // each lane its own track — strictly above the previous lane's — guarantees
   // overlapping transitions always stack onto separate tracks instead of
   // colliding, without needing to re-detect the collision after the fact.
+  mark('plan');
   const laneOf = assignPlacementLanes(placements);
   const laneCount = placements.length > 0 ? Math.max(...laneOf) + 1 : 0;
   const laneTracks = new Array(laneCount).fill(1);
@@ -335,19 +347,23 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
     }
   }
 
+  if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
+    throw new Error("SequenceEditor is not supported in this Premiere build.");
+  }
+  const freshProject = await ppro.Project.getActiveProject();
+  const freshSeq = await freshProject.getActiveSequence();
+
+  mark('laneScan');
+  // Hard gate, for every placement BEFORE anything is committed: the exact span must be
+  // clear on its lane's track, and must not overlap another placement already claimed
+  // for that track in this run (they all land in one transaction below, so the sequence
+  // is not re-read in between). Normally the lane's track is already clear — it only
+  // walks further if content showed up that the lane scan didn't isolate.
+  const claimed = [];
+  const targets = [];
   for (let pIdx = 0; pIdx < placements.length; pIdx++) {
     const p = placements[pIdx];
-    const freshProject = await ppro.Project.getActiveProject();
-    const freshSeq = await freshProject.getActiveSequence();
-    const durTicks = p.endTicks - p.startTicks;
     let targetTrack = laneTracks[laneOf[pIdx]];
-
-    // Hard gate: re-verify the exact intended span is actually clear immediately
-    // before committing. Log evidence (2026-09-21) confirms Step 2's trim always
-    // lands exactly (trimHeld/trimOk true, actualEndTicks === requestedEndTicks every
-    // time) — there's no readback race to guard against here. This should normally
-    // find the lane's track already clear (it was clear across the whole lane's
-    // union span) — it only walks further if genuinely new content showed up.
     let guard = 0;
     while (guard < 32) {
       let clear;
@@ -359,65 +375,62 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
           `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
         );
       }
-      if (clear) break;
+      const collides = claimed.some((c) => c.track === targetTrack && c.start < p.endTicks && p.startTicks < c.end);
+      if (clear && !collides) break;
       targetTrack++;
       guard++;
     }
     if (guard >= 32) {
       throw new Error(`Could not find a clear track for "${p.name}" after checking 32 candidates — aborting.`);
     }
-
-    const trackCountNow = await freshSeq.getVideoTrackCount();
+    claimed.push({ track: targetTrack, start: p.startTicks, end: p.endTicks });
+    targets.push(targetTrack);
     targetTracksSet.add(targetTrack + 1);
+  }
 
-    if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
-      throw new Error("SequenceEditor is not supported in this Premiere build.");
-    }
-    const editor = await ppro.SequenceEditor.getEditor(freshSeq);
-    const tStart = tickTime(p.startTicks);
-
-    // Commit the source Adjustment Layer's in/out points as their OWN transaction,
-    // strictly before the overwrite below is even constructed — not queued into the
-    // same compound as the overwrite (the previous approach). See issue #25 (retired
-    // assemble route): a shared ClipProjectItem's setInOut can resolve
-    // against a stale value when paired with another action in one transaction: "Fall
-    // back to one transaction per span." Confirmed 2026-09-21 the same-transaction
-    // pairing is unsafe in practice — the overwrite read the item's STALE (much
-    // longer) length and destroyed real footage on the target track that Step 2's
-    // later trim can't undo (a trim only shrinks the AL clip; it doesn't restore what
-    // the overwrite already erased).
+  // Undo steps: per distinct AL length, one "set length" step, then one step placing every
+  // AL of that length. The length (the AL item's In/Out marks) must be its OWN transaction,
+  // committed before the overwrite is built — in one compound the overwrite still reads the
+  // old marks (TODO_LEDGER.md P2; confirmed 2026-09-21 it destroyed real footage). So
+  // "every cut" mode (one length) is 2 Ctrl+Z; span / per-clip add 2 per distinct length.
+  mark('gate');
+  const groups = new Map();
+  placements.forEach((p, i) => {
+    const d = p.endTicks - p.startTicks;
+    if (!groups.has(d)) groups.set(d, []);
+    groups.get(d).push(i);
+  });
+  const editor = await ppro.SequenceEditor.getEditor(freshSeq);
+  let colorPending = true;
+  for (const [durTicks, idxs] of groups) {
     if (clipItem && typeof clipItem.createSetInOutPointsAction === "function") {
       try {
-        runTransaction(freshProject, "CutDeck: Set Adjustment Layer Duration", (compound) => {
+        runTransaction(freshProject, "CutDeck: Set Adjustment Layer Length", (compound) => {
           const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
           if (inOut) compound.addAction(inOut);
+          // The color label is on the same shared project item — ride along once per run.
+          if (colorPending && typeof clipItem.createSetColorLabelAction === "function") {
+            const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
+            if (colorAction) compound.addAction(colorAction);
+          }
         });
+        colorPending = false;
       } catch (_) {}
     }
 
-    runTransaction(freshProject, "CutDeck: Place Adjustment Layer", (compound) => {
-      let action = null;
-      let lastErr = null;
-
-      if (clipItem) {
-        const attempts = [];
-        if (targetTrack >= trackCountNow) {
-          attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
-          attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
-        } else {
-          attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), -1));
-          attempts.push(() => editor.createInsertProjectItemAction(clipItem, tStart, Number(targetTrack), -1, false));
-        }
-        attempts.push(() => editor.createOverwriteItemAction(clipItem, tStart, Number(targetTrack), 0));
-        // clipItem is alItem after ClipProjectItem.cast() — that cast has been
-        // observed to make Premiere reject the placement with "Invalid parameter"
-        // in cases where the pre-cast item works fine. Fall back to it.
-        if (alItem && alItem !== clipItem) {
-          attempts.push(() => editor.createOverwriteItemAction(alItem, tStart, Number(targetTrack), -1));
-          attempts.push(() => editor.createInsertProjectItemAction(alItem, tStart, Number(targetTrack), -1, false));
-        }
-
-        for (const fn of attempts) {
+    runTransaction(freshProject, `CutDeck: Place ${idxs.length} Adjustment Layer(s)`, (compound) => {
+      if (!placeItem) throw new Error("No Adjustment Layer item was available to place.");
+      for (const i of idxs) {
+        const tStart = tickTime(placements[i].startTicks);
+        const track = Number(targets[i]);
+        // Overwrite only: an index equal to the track count creates the track (proven by
+        // the Sync probe). No ripple insert — it would shift clips after tStart.
+        let action = null;
+        let lastErr = null;
+        for (const fn of [
+          () => editor.createOverwriteItemAction(placeItem, tStart, track, -1),
+          () => editor.createOverwriteItemAction(placeItem, tStart, track, 0),
+        ]) {
           try {
             action = fn();
             if (action) break;
@@ -425,116 +438,67 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
             lastErr = e;
           }
         }
-
         if (!action) {
-          const name = clipItem?.name || alItem?.name || "unknown";
-          const type = clipItem?.type !== undefined ? clipItem.type : "unknown";
-          throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", Type: ${type}, V-Track: V${targetTrack + 1})`);
+          const name = placeItem?.name || alItem?.name || "unknown";
+          throw new Error(`Could not place: ${lastErr ? (lastErr.message || String(lastErr)) : "Invalid parameter"}. (Item: "${name}", V-Track: V${track + 1})`);
+        }
+        if (!compound.addAction(action)) {
+          throw new Error("addAction returned false");
         }
       }
-
-      if (!action) {
-        throw new Error(`No clipItem was available to place at V${targetTrack + 1}.`);
-      }
-
-      if (!compound.addAction(action)) {
-        throw new Error("addAction returned false");
-      }
     });
+  }
 
-    // Step 2: Trim the placed Adjustment Layer to exact duration (so it is NEVER 5 seconds!)
-    // Also doubles as placement verification — see `verified` below.
+  mark('commit');
+  // Verify every placement and read back its length. No trim step: the In/Out marks
+  // already set the exact length, and TrackItem.createSetEndAction throws "script object
+  // is no longer valid" (TODO_LEDGER.md native rough-cut run 1).
+  const seqAfter = await freshProject.getActiveSequence();
+  for (let pIdx = 0; pIdx < placements.length; pIdx++) {
+    const p = placements[pIdx];
+    const targetTrack = targets[pIdx];
     let verified = false;
     try {
-      const freshSeq2 = await freshProject.getActiveSequence();
-      const targetTrackObj = await freshSeq2.getVideoTrack(Number(targetTrack));
-      if (targetTrackObj) {
-        const trackItems = await getTrackClipItems(targetTrackObj, ppro);
-        if (trackItems && trackItems.length > 0) {
-          for (const it of trackItems) {
-            const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
-            const sTicks = toTicksOr(sTime, 0n);
-            const diff = sTicks > p.startTicks ? (sTicks - p.startTicks) : (p.startTicks - sTicks);
-            if (diff <= (tpf * 2n)) {
-              let trimOk = false;
-              let trimErr = null;
-              try {
-                runTransaction(freshProject, "CutDeck: Trim Adjustment Layer Duration", (compound) => {
-                  if (typeof it.createSetEndAction !== "function") {
-                    throw new Error("track item has no createSetEndAction");
-                  }
-                  const setEndAction = it.createSetEndAction(tickTime(p.endTicks));
-                  if (!setEndAction) {
-                    throw new Error("createSetEndAction returned falsy");
-                  }
-                  if (!compound.addAction(setEndAction)) {
-                    throw new Error("addAction(setEndAction) returned false");
-                  }
-                });
-                trimOk = true;
-              } catch (e) {
-                trimErr = e;
-              }
-
-              // Read back the real result — don't trust the API's claimed success,
-              // confirm the item's end time actually moved.
-              let actualEndTicks = null;
-              try {
-                const eTimeAfter = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-                actualEndTicks = toTicksOr(eTimeAfter, null);
-              } catch (_) {}
-              console.log("Adjustment Layer trim result:", {
-                trimOk,
-                trimErr: trimErr ? (trimErr.message || String(trimErr)) : null,
-                requestedEndTicks: p.endTicks.toString(),
-                actualEndTicks: actualEndTicks !== null ? actualEndTicks.toString() : null,
-                trimHeld: actualEndTicks !== null && actualEndTicks <= (p.endTicks + tpf)
-              });
-
-              // Set label color and name.
-              try {
-                if (clipItem && typeof clipItem.createSetColorLabelAction === "function") {
-                  try {
-                    runTransaction(freshProject, "CutDeck: Set Adjustment Layer Color Label", (compound) => {
-                      const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
-                      if (colorAction) compound.addAction(colorAction);
-                    });
-                  } catch (_) {}
-                }
-              } catch (_) {}
-              try {
-                if (p.name && typeof it.createSetNameAction === "function") {
-                  try {
-                    runTransaction(freshProject, "CutDeck: Name Adjustment Layer", (compound) => {
-                      const nameAction = it.createSetNameAction(p.name);
-                      if (!nameAction) throw new Error("createSetNameAction returned falsy");
-                      if (!compound.addAction(nameAction)) throw new Error("addAction(nameAction) returned false");
-                    });
-                  } catch (_) {}
-                }
-              } catch (_) {}
-              verified = true;
-              placedItems.push(it);
-              break;
-            }
+      const targetTrackObj = await seqAfter.getVideoTrack(Number(targetTrack));
+      const trackItems = targetTrackObj ? await getTrackClipItems(targetTrackObj, ppro) : [];
+      for (const it of trackItems || []) {
+        const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+        const sTicks = toTicksOr(sTime, 0n);
+        const diff = sTicks > p.startTicks ? (sTicks - p.startTicks) : (p.startTicks - sTicks);
+        if (diff <= (tpf * 2n)) {
+          let actualEndTicks = null;
+          try {
+            const eTimeAfter = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+            actualEndTicks = toTicksOr(eTimeAfter, null);
+          } catch (_) {}
+          if (actualEndTicks === null || actualEndTicks > p.endTicks + tpf) {
+            console.log("Adjustment Layer length off:", {
+              requestedEndTicks: p.endTicks.toString(),
+              actualEndTicks: actualEndTicks !== null ? actualEndTicks.toString() : null,
+            });
           }
+          verified = true;
+          placedItems.push(it);
+          break;
         }
       }
     } catch (err) {
-      console.log("Trimming duration failed:", err);
+      console.log("Adjustment Layer placement check failed:", err);
     }
 
     if (!verified) {
       throw new Error(
-        `Placed an Adjustment Layer on V${targetTrack + 1} but could not find it there afterward — ` +
-        `the edit may have landed on the wrong track instead of a clip you have. Check Edit > Undo History ` +
-        `and Ctrl+Z if anything looks wrong before placing more.`
+        `Placed Adjustment Layers but could not find the one for V${targetTrack + 1} afterward — ` +
+        `the edit may have landed on the wrong track. Undo this placement (Edit > Undo History) ` +
+        `and check the timeline before placing more.`
       );
     }
 
     placedCount++;
   }
 
+  mark('verify');
+  console.log(`CutDeck: placed ${placedCount} Adjustment Layer(s) in ${Date.now() - t0} ms`, phases);
   return {
     success: true,
     placedCount,
