@@ -91,6 +91,13 @@ test("a helper error reply resolves as a failure without reconnecting", async ()
   assert.equal(h.attempts.length, 1);
 });
 
+test("a helper error reply keeps its machine-readable code", async () => {
+  const h = harness(["open"]);
+  const pending = h.rpc({ type: "hello", version: "cutdeck-xml-9" });
+  (await ready(h, 1)).reply({ ok: false, code: "version_mismatch", message: "Panel/helper version mismatch" });
+  await assert.rejects(pending, (error) => error.code === "version_mismatch");
+});
+
 test("each request opens and closes its own connection", async () => {
   const h = harness(["open"]);
   let expected = 0;

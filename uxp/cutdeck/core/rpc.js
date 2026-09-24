@@ -65,7 +65,8 @@
       socket.onmessage = (event) => {
         try {
           const result = JSON.parse(event.data);
-          done(result.ok ? null : new Error(result.message), result);
+          // `code` lets callers branch on the failure kind without matching its wording.
+          done(result.ok ? null : Object.assign(new Error(result.message), { code: result.code }), result);
         } catch (error) { done(error); }
       };
       socket.onerror = () => done(new Error("Helper connection failed before it replied. Use Resume last job."));

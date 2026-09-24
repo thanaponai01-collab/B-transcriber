@@ -174,6 +174,15 @@ def plan_to_json(plan) -> dict:
             "sessions": plan.sessions, "duration_s": plan.duration_s}
 
 
+class VersionMismatch(ValueError):
+    """`hello` from a panel of another version. The reply still says what this helper is, so the
+    panel can tell "outdated helper running" (restart it) from "no helper" (launch one)."""
+
+    def __init__(self):
+        super().__init__("Panel/helper version mismatch")
+        self.details = {"code": "version_mismatch", "version": VERSION, "pid": os.getpid()}
+
+
 class XmlJobs:
     def __init__(self, directory: Path):
         self.directory = directory.resolve()
@@ -190,7 +199,7 @@ class XmlJobs:
         kind = req.get("type")
         if kind == "hello":
             if req.get("version") != VERSION:
-                raise ValueError("Panel/helper version mismatch")
+                raise VersionMismatch()
             return {"version": VERSION, "pid": os.getpid()}
         if kind == "restart":
             # The panel asks on every start so edited helper code is picked up. Jobs live in this
@@ -436,7 +445,7 @@ async def serve(jobs: XmlJobs, port: int = PORT):
                 req = json.loads(raw)
                 response = {"ok": True, **await jobs.dispatch(req)}
             except Exception as exc:
-                response = {"ok": False, "message": str(exc)}
+                response = {"ok": False, "message": str(exc), **getattr(exc, "details", {})}
             await socket.send(json.dumps(response, ensure_ascii=False))
             if jobs.restarting:
                 jobs.stop.set()
@@ -460,6 +469,20 @@ def spawn_replacement(port: int, jobs_dir: Path):
                      stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **extra)
 
 
+def _record_startup_failure(log: Path, message: str):
+    """A helper launched by Start CutDeck (Hidden).vbs has an invisible console, so say why it
+    stopped in helper.log, where the panel's start timeout points. A restarted helper's stderr
+    already is helper.log (spawn_replacement), so its traceback is enough there."""
+    try:
+        if log.exists() and os.path.samestat(os.fstat(sys.stderr.fileno()), log.stat()):
+            return
+    except (OSError, ValueError, AttributeError):
+        pass  # no usable stderr: write the line
+    import datetime
+    with open(log, "a", encoding="utf-8") as out:
+        out.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {message}\n")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="CutDeck Premiere XML helper")
@@ -469,7 +492,13 @@ def main():
 
     async def run():
         jobs = XmlJobs(args.jobs_dir)
-        server = await serve(jobs, args.port)
+        try:
+            server = await serve(jobs, args.port)
+        except OSError as exc:
+            _record_startup_failure(jobs.directory / "helper.log",
+                                    f"CutDeck could not listen on 127.0.0.1:{args.port}: {exc}. Another "
+                                    "CutDeck helper (or another program) already holds the port.")
+            raise
         print(f"CutDeck ready on ws://127.0.0.1:{args.port}", flush=True)
         async with server:
             await jobs.stop.wait()

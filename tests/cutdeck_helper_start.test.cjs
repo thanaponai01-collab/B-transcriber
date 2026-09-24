@@ -164,3 +164,82 @@ test("restartHelper says so when no helper comes back", async () => {
   };
   await assert.rejects(restartHelper({ rpc, version: "v", ...fakeClock() }), /did not come back/);
 });
+
+// A helper left running from before a VERSION bump holds the port but refuses `hello`. Launching
+// a second one is doomed (the port is taken), so both entry points must restart it in place.
+function staleHelper() {
+  const calls = [];
+  let version = "cutdeck-xml-2";
+  let pid = 100;
+  const rpc = async (req) => {
+    calls.push(req.type);
+    if (req.type === "restart") { version = null; return { restarting: true }; }
+    if (version === null) { version = "cutdeck-xml-3"; pid = 200; throw new Error("Cannot reach CutDeck helper."); }
+    if (req.version !== version) {
+      throw Object.assign(new Error("Panel/helper version mismatch"), { code: "version_mismatch" });
+    }
+    return { version, pid };
+  };
+  return { rpc, calls };
+}
+
+test("the mismatch is recognised by its code, not its wording", async () => {
+  const { rpc, calls } = staleHelper();
+  const reworded = async (req) => {
+    try { return await rpc(req); } catch (error) { error.message = "Versions differ"; throw error; }
+  };
+  assert.equal(await restartHelper({ rpc: reworded, version: "cutdeck-xml-3", ...fakeClock() }), "restarted");
+  assert.ok(calls.includes("restart"));
+});
+
+test("a helper from before the code field is still recognised by its message", async () => {
+  const rpc = async (req) => {
+    if (req.type === "restart") return { restarting: true };
+    if (rpc.restarted) return { version: "cutdeck-xml-3", pid: 2 };
+    if (rpc.asked) { rpc.restarted = true; throw new Error("Cannot reach CutDeck helper."); }
+    rpc.asked = true;
+    throw new Error("Panel/helper version mismatch");
+  };
+  assert.equal(await restartHelper({ rpc, version: "cutdeck-xml-3", ...fakeClock() }), "restarted");
+});
+
+test("the start timeout points at helper.log, where a hidden helper records why it failed", async () => {
+  const rpc = async () => { throw new Error("Cannot reach CutDeck helper."); };
+  await assert.rejects(
+    ensureHelperRunning({ rpc, shell: { openPath: async () => "" }, version: "v",
+      scriptPath: FAKE_SCRIPT_PATH, timeoutMs: 1000, ...fakeClock() }),
+    /output[\\/]premiere[\\/]helper\.log/
+  );
+});
+
+test("restartHelper restarts a helper still running an older version", async () => {
+  const { rpc, calls } = staleHelper();
+  assert.equal(await restartHelper({ rpc, version: "cutdeck-xml-3", ...fakeClock() }), "restarted");
+  assert.deepEqual(calls.slice(0, 2), ["hello", "restart"]);
+});
+
+test("ensureHelperRunning restarts a stale-version helper instead of launching a doomed second one", async () => {
+  const { rpc, calls } = staleHelper();
+  let openPathCalls = 0;
+  const shell = { openPath: async () => { openPathCalls++; return ""; } };
+  const clock = fakeClock();
+  const result = await ensureHelperRunning({
+    rpc, shell, version: "cutdeck-xml-3", scriptPath: FAKE_SCRIPT_PATH, ...clock,
+  });
+  assert.deepEqual(result, { started: true, alreadyRunning: false });
+  assert.equal(openPathCalls, 0);
+  assert.ok(clock.now() < 2000, `came up in ${clock.now()} ms, not after the 15 s launch timeout`);
+  assert.ok(calls.includes("restart"));
+});
+
+test("ensureHelperRunning names the reason when a stale-version helper is busy", async () => {
+  const rpc = async (req) => {
+    if (req.type === "restart") throw new Error("CutDeck is processing a job; it restarts once that finishes");
+    throw new Error("Panel/helper version mismatch");
+  };
+  const shell = { openPath: async () => "" };
+  await assert.rejects(
+    ensureHelperRunning({ rpc, shell, version: "cutdeck-xml-3", scriptPath: FAKE_SCRIPT_PATH, ...fakeClock() }),
+    /older CutDeck helper.*processing a job/
+  );
+});

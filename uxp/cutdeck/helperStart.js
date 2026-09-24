@@ -58,7 +58,14 @@ async function ensureHelperRunning(options) {
     if (reply && reply.version === version) {
       return { started: false, alreadyRunning: true };
     }
-  } catch (_) {
+  } catch (error) {
+    // An older helper holds the port, so a launched one would only exit: restart it in place.
+    if (isVersionMismatch(error)) {
+      const outcome = await restartHelper({ rpc, version, now, sleep });
+      if (outcome === "restarted") return { started: true, alreadyRunning: false };
+      throw new Error("An older CutDeck helper is still running and could not be restarted ("
+        + outcome + "). Close it and run Start CutDeck.cmd.");
+    }
     // Not running yet; launch it below.
   }
 
@@ -94,13 +101,22 @@ async function ensureHelperRunning(options) {
     }
   }
 
-  throw new Error("CutDeck helper did not start in time. Run Start CutDeck.cmd manually. Details: "
+  throw new Error("CutDeck helper did not start in time. See output\\premiere\\helper.log for why, "
+    + "or run Start CutDeck.cmd to watch it start. Details: "
     + (lastError ? lastError.message : "timed out"));
 }
 
 /* Asks a running helper to replace itself with a fresh process, so helper code edited since it
    started is picked up (the helper spawns its successor: no launch prompt). Waits until a
    helper with a different pid answers. Returns what happened; never launches one itself. */
+/* The helper tags this reply with code "version_mismatch". Helpers from before that tag
+   (cutdeck-xml-3 and older) only sent the message, which is frozen in their shipped code. */
+function isVersionMismatch(error) {
+  if (!error) return false;
+  if (error.code) return error.code === "version_mismatch";
+  return /version mismatch/i.test(error.message);
+}
+
 async function restartHelper(options) {
   const { rpc, version } = options;
   const now = options.now || Date.now;
@@ -108,8 +124,10 @@ async function restartHelper(options) {
   let before;
   try {
     before = await rpc({ type: "hello", version });
-  } catch (_) {
-    return "not-running";
+  } catch (error) {
+    // A helper from before a VERSION bump refuses hello but is running: restart it all the same.
+    if (!isVersionMismatch(error)) return "not-running";
+    before = { pid: null };
   }
   try {
     await rpc({ type: "restart" });
@@ -121,7 +139,7 @@ async function restartHelper(options) {
     await sleep(options.pollMs || 300);
     try {
       const reply = await rpc({ type: "hello", version });
-      if (reply && reply.pid !== before.pid) return "restarted";
+      if (reply && reply.version === version && reply.pid !== before.pid) return "restarted";
     } catch (_) { /* the new one is still starting */ }
   }
   throw new Error("The CutDeck helper did not come back after restarting. Run Start CutDeck.cmd.");
