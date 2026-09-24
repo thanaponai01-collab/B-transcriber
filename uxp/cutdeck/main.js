@@ -141,4 +141,13 @@ setTimeout(async () => {
   } catch (_) { /* no sequence open yet — the refresh icon retries */ }
   if (mainCtl.state.presetFile.error) mainCtl.setStatus(`Presets: ${mainCtl.state.presetFile.error}`, "error");
   else mainCtl.setStatus("Ready", "ready");
+  // The sequence card follows a sequence switch: global SequenceEvent.ACTIVATED fires on switch
+  // (PREMIERE_FACTS.md, live 2026-09-24). In/Out changes fire nothing, so the refresh icon stays.
+  try {
+    ppro.EventManager.addGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, () => {
+      roughCut.refresh().catch(() => { /* no sequence — the refresh icon retries */ });
+    });
+  } catch (error) {
+    console.error("CutDeck: sequence switch listener failed; use the refresh icon", error);
+  }
 }, 50);

@@ -98,16 +98,63 @@ test("a helper error reply keeps its machine-readable code", async () => {
   await assert.rejects(pending, (error) => error.code === "version_mismatch");
 });
 
-test("each request opens and closes its own connection", async () => {
-  const h = harness(["open"]);
-  let expected = 0;
-  for (const type of ["hello", "status"]) {
-    const pending = h.rpc({ type });
-    (await ready(h, ++expected)).reply({ ok: true });
-    await pending;
+/* Waits until `socket` has sent `n` requests. */
+async function sentCount(socket, n) {
+  for (let i = 0; i < 500; i++) {
+    if (socket.sent.length === n) return;
+    await new Promise((done) => setTimeout(done, 1));
   }
+  throw new Error(`socket sent ${socket.sent.length}, expected ${n}`);
+}
+
+test("requests reuse one open connection (the 1.5 s status poll opens no new sockets)", async () => {
+  const h = harness(["open"]);
+  const socket = await (async () => { const p = h.rpc({ type: "hello" }); const s = await ready(h, 1); s.reply({ ok: true }); await p; return s; })();
+  for (let i = 0; i < 3; i++) {
+    const pending = h.rpc({ type: "status" });
+    await sentCount(socket, i + 2);
+    socket.reply({ ok: true, n: i });
+    assert.deepEqual(await pending, { ok: true, n: i });
+  }
+  assert.equal(h.attempts.length, 1);
+  assert.equal(socket.closed, false);
+});
+
+test("a connection the helper closes while idle is reopened on the next call", async () => {
+  const h = harness(["open"]);
+  const first = h.rpc({ type: "restart" });
+  const s1 = await ready(h, 1);
+  s1.reply({ ok: true, restarting: true });
+  await first;
+  s1.onclose({});                            // helper exits after the restart reply
+  const second = h.rpc({ type: "hello" });
+  (await ready(h, 2)).reply({ ok: true });
+  assert.deepEqual(await second, { ok: true });
   assert.equal(h.attempts.length, 2);
-  assert.ok(h.attempts.every((s) => s.closed));
+});
+
+test("overlapping calls go out one at a time, each getting its own reply", async () => {
+  const h = harness(["open"]);
+  const a = h.rpc({ type: "hello" });
+  const b = h.rpc({ type: "status" });
+  const socket = await ready(h, 1);
+  await sentCount(socket, 1);                // b waits for a's reply before sending
+  socket.reply({ ok: true, for: "hello" });
+  await sentCount(socket, 2);
+  socket.reply({ ok: true, for: "status" });
+  assert.deepEqual(await a, { ok: true, for: "hello" });
+  assert.deepEqual(await b, { ok: true, for: "status" });
+  assert.equal(JSON.parse(socket.sent[1]).type, "status");
+});
+
+test("a failed call still lets the next call through", async () => {
+  const h = harness(["open"]);
+  const a = h.rpc({ type: "prepare" });
+  (await ready(h, 1)).onclose({});
+  await assert.rejects(a, /Resume last job/);
+  const b = h.rpc({ type: "hello" });
+  (await ready(h, 2)).reply({ ok: true });
+  assert.deepEqual(await b, { ok: true });
 });
 
 test("rpc default URL is ws://localhost:7891 and is passed to createSocket", async () => {
