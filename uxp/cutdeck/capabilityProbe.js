@@ -16,6 +16,7 @@
    surprise tells you less than the build it was probing. */
 
 const { TICKS_PER_SECOND, ticks, toFrames, normalizeSelection } = require("./timelineRange.js");
+const { trackItemName } = require("./host/trackItems.js");
 
 /* Every rate this project has actually met, from issue #25's job table. */
 const KNOWN_RATES = [
@@ -271,10 +272,10 @@ async function probeAdjustmentLayerMotion(ppro) {
   }
 
   add("found", "How many Adjustment Layer clips are on this sequence's timeline right now?", String(found.length),
-    { items: found.map((f) => `V${f.track}: "${f.item.name || "?"}"`) });
+    { items: await Promise.all(found.map(async (f) => `V${f.track}: "${await trackItemName(f.item, "?")}"`)) });
 
   for (const { item, track } of found) {
-    const label = `V${track} "${item.name || "?"}"`;
+    const label = `V${track} "${await trackItemName(item, "?")}"`;
 
     const mediaType = ppro.Constants && ppro.Constants.MediaType ? ppro.Constants.MediaType.VIDEO : undefined;
     const chainRead = await attempt(`getComponentChain(${label})`, () =>
@@ -389,7 +390,7 @@ async function probeEffectChain(ppro) {
   }
 
   for (const item of items) {
-    const label = item.name || "(unnamed)";
+    const label = await trackItemName(item, "(unnamed)");
     const chainRead = await attempt(`getComponentChain(${label})`, () =>
       (typeof item.getComponentChain === "function" ? item.getComponentChain() : null));
     if (!chainRead.ok || !chainRead.value) {
@@ -626,7 +627,7 @@ async function probeTransformParams(ppro) {
   }
 
   for (const item of items) {
-    const label = item.name || "(unnamed)";
+    const label = await trackItemName(item, "(unnamed)");
 
     // Adobe declares getIsSelected(); `isSelected` appears nowhere. Recorded per item so the
     // claim is evidenced on this build rather than inferred from the .d.ts alone.
@@ -838,7 +839,7 @@ async function probeKeyframeTiming(ppro) {
         "second one elsewhere set to Bezier, leave the playhead on the first, run again." });
   if (items.length !== 1) return stop();
   const item = items[0];
-  const label = item.name || "(unnamed)";
+  const label = await trackItemName(item, "(unnamed)");
 
   const startRead = await attempt("getStartTime", () => item.getStartTime());
   const endRead = await attempt("getEndTime", () => item.getEndTime());

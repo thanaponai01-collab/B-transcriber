@@ -263,3 +263,22 @@ test("unwrapKeyframeValue handles nested nulls and primitives safely", () => {
   assert.equal(components.unwrapKeyframeValue({ value: "text" }), "text");
 });
 
+
+test("trackItemName reads getName() — real track items have no .name", async () => {
+  assert.equal(await trackItems.trackItemName({ getName: async () => "A.mp4" }), "A.mp4");
+  assert.equal(await trackItems.trackItemName({ getName: async () => { throw new Error("x"); } }, "?"), "?");
+  assert.equal(await trackItems.trackItemName(null, "?"), "?");
+});
+
+test("name fallback for AL detection works when only getName() exists", async () => {
+  const sel = () => Promise.resolve(true);
+  const al = { getName: async () => "Adjustment Layer", getIsSelected: sel };
+  const clip = { getName: async () => "Footage", getIsSelected: sel };
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([al, clip]) }),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve({ getTrackItems: () => Promise.resolve([al, clip]) }),
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => r.item), [clip]);
+});

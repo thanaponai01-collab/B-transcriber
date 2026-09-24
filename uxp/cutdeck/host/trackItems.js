@@ -114,6 +114,17 @@ async function getFirstSelectedTrackItem(seq, ppro) {
   return items.length > 0 ? items[0] : null;
 }
 
+// A track item's display name. VideoClipTrackItem/AudioClipTrackItem have no `name`
+// property, only getName() (@adobe/premierepro 26.2.1 d.ts); `name` is kept for mocks.
+async function trackItemName(it, fallback = "") {
+  if (!it) return fallback;
+  if (it.name) return it.name;
+  if (typeof it.getName === "function") {
+    try { return (await it.getName()) || fallback; } catch (_) {}
+  }
+  return fallback;
+}
+
 // Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers).
 // Replaces today's adjustmentLayer.js getSelectedTimelineClips, built on getSelectedTrackItems.
 async function getSelectedVideoClips(ppro, seq) {
@@ -162,7 +173,7 @@ async function getSelectedVideoClips(ppro, seq) {
       try { isAL = await it.isAdjustmentLayer(); } catch (_) {}
       if (isAL) continue;
     } else {
-      const name = it.name ? it.name.toLowerCase() : "";
+      const name = (await trackItemName(it)).toLowerCase();
       if (name.includes("adjustment") || name.startsWith("adj_")) {
         continue;
       }
@@ -194,4 +205,5 @@ module.exports = {
   getSelectedTrackItems,
   getFirstSelectedTrackItem,
   getSelectedVideoClips,
+  trackItemName,
 };

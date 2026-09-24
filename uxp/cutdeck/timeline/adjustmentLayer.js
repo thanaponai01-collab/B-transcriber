@@ -8,6 +8,7 @@ const {
   getTrackClipItems,
   getTrackClipItemsOrThrow,
   getSelectedVideoClips,
+  trackItemName,
 } = require("../host/trackItems.js");
 const {
   assignPlacementLanes,
@@ -65,7 +66,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1, ppro
         const itOut = toTicksOr(eTime, 0n);
         if (itOut > startTicks && itIn < endTicks) {
           console.log(`findSmartStackTrack: V${v + 1} collides with query [${startTicks},${endTicks}) — ` +
-            `item "${it.name || "?"}" is [${itIn},${itOut})`);
+            `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
           if (v > highestOccupied) highestOccupied = v;
           break;
         }
@@ -100,7 +101,7 @@ async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1, ppro
         const itOut = toTicksOr(eTime, 0n);
         if (itOut > startTicks && itIn < endTicks) {
           console.log(`findSmartStackTrack: V${candidate + 1} collides with query [${startTicks},${endTicks}) during refine — ` +
-            `item "${it.name || "?"}" is [${itIn},${itOut})`);
+            `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
           trackHasCollision = true;
           break;
         }
@@ -131,7 +132,7 @@ async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks, ppro) {
     const itOut = toTicksOr(eTime, 0n);
     if (itOut > startTicks && itIn < endTicks) {
       console.log(`isTrackRangeClear: V${trackIndex + 1} collides with query [${startTicks},${endTicks}) — ` +
-        `item "${it.name || "?"}" is [${itIn},${itOut})`);
+        `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
       return false;
     }
   }

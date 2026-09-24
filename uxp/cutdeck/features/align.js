@@ -29,12 +29,7 @@ async function readAlignTransform(seq, ppro) {
     return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
   }
   const item = items[0];
-  // Track items expose only getName() (@adobe/premierepro 26.2.1 d.ts), no `name` property.
-  let name = item.name;
-  if (!name && typeof item.getName === "function") {
-    try { name = await item.getName(); } catch (_) {}
-  }
-  const clipName = (name || "(unnamed)") + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
+  const clipName = (await trackItems.trackItemName(item, "(unnamed)")) + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
 
   const transform = await transformParams.readTransform(item);
   if (!transform) {
