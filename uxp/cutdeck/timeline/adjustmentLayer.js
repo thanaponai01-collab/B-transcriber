@@ -42,101 +42,141 @@ function getLabelIndex(colorName) {
   return map[key] !== undefined ? map[key] : 1;
 }
 
-// Robust UXP helper to determine collision-free track using Smart Stacking
-async function findSmartStackTrack(seq, startTicks, endTicks, minTrack = 1, ppro) {
-  const trackCount = await seq.getVideoTrackCount();
-  let highestOccupied = 0;
-  for (let v = 0; v < trackCount; v++) {
-    const track = await seq.getVideoTrack(v);
-    let items;
-    try {
-      items = await getTrackClipItemsOrThrow(track, ppro);
-    } catch (e) {
-      // Could not verify V(v+1) is actually empty — assume it's occupied rather than
-      // risk overwriting real clips we failed to see (see getTrackClipItemsOrThrow).
-      console.log(`findSmartStackTrack: could not read V${v + 1} items, assuming occupied:`, e);
-      if (v > highestOccupied) highestOccupied = v;
-      continue;
-    }
-    if (items && items.length > 0) {
-      for (const it of items) {
-        const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
-        const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-        const itIn = toTicksOr(sTime, 0n);
-        const itOut = toTicksOr(eTime, 0n);
-        if (itOut > startTicks && itIn < endTicks) {
-          console.log(`findSmartStackTrack: V${v + 1} collides with query [${startTicks},${endTicks}) — ` +
-            `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
-          if (v > highestOccupied) highestOccupied = v;
-          break;
-        }
-      }
-    }
-  }
-
-  let candidate = Math.max(minTrack, highestOccupied + 1);
-
-  // Refine past any occupied track using the exact intended span, same as the scan
-  // above. (Previously padded to a 5s "safety window" to cover the placed clip's
-  // untrimmed default duration — that's now confirmed unnecessary: the caller's own
-  // hard gate + the In/Out marks reliably land each placement at its exact span before
-  // the next one is ever checked, so padding here only fragmented adjacent short
-  // clips onto separate tracks instead of letting them share one.)
-  while (candidate < trackCount) {
-    const track = await seq.getVideoTrack(candidate);
-    let items;
-    let trackHasCollision = false;
-    try {
-      items = await getTrackClipItemsOrThrow(track, ppro);
-    } catch (e) {
-      console.log(`findSmartStackTrack: could not read V${candidate + 1} items during safety scan, assuming occupied:`, e);
-      candidate++;
-      continue;
-    }
-    if (items && items.length > 0) {
-      for (const it of items) {
-        const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
-        const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-        const itIn = toTicksOr(sTime, 0n);
-        const itOut = toTicksOr(eTime, 0n);
-        if (itOut > startTicks && itIn < endTicks) {
-          console.log(`findSmartStackTrack: V${candidate + 1} collides with query [${startTicks},${endTicks}) during refine — ` +
-            `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
-          trackHasCollision = true;
-          break;
-        }
-      }
-    }
-    if (!trackHasCollision) {
-      break;
-    }
-    candidate++;
-  }
-  return candidate;
-}
-
-// Last-line defense, called immediately before the destructive action: re-reads the
-// exact target track/span with the strict (throw-on-unreadable) item lookup, right
-// before we commit to overwriting it. findSmartStackTrack's picks have been wrong in
-// practice, so this does not trust that result — it verifies it, one more time, with
-// nothing able to happen in between.
-async function isTrackRangeClear(seq, trackIndex, startTicks, endTicks, ppro) {
-  const trackCount = await seq.getVideoTrackCount();
-  if (trackIndex >= trackCount) return true; // track doesn't exist yet — nothing to collide with
+// Reads one video track's clip spans. Throws if the track can't be read — the caller
+// decides whether that means "occupied" or "abort" (see getTrackClipItemsOrThrow).
+async function readTrackSpans(seq, trackIndex, ppro) {
   const track = await seq.getVideoTrack(trackIndex);
   const items = await getTrackClipItemsOrThrow(track, ppro);
+  const spans = [];
   for (const it of items) {
     const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
     const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
-    const itIn = toTicksOr(sTime, 0n);
-    const itOut = toTicksOr(eTime, 0n);
-    if (itOut > startTicks && itIn < endTicks) {
-      console.log(`isTrackRangeClear: V${trackIndex + 1} collides with query [${startTicks},${endTicks}) — ` +
-        `item "${await trackItemName(it, "?")}" is [${itIn},${itOut})`);
-      return false;
+    spans.push({ start: toTicksOr(sTime, 0n), end: toTicksOr(eTime, 0n), it });
+  }
+  return spans;
+}
+
+function firstOverlap(spans, startTicks, endTicks) {
+  return spans.find((sp) => sp.end > startTicks && sp.start < endTicks) || null;
+}
+
+// Picks a video track index for every placement. Every track is read ONCE (an unreadable
+// one counts as occupied); lanes and the per-placement gate are decided on that snapshot;
+// then each chosen track is re-read right before the caller writes, and any change aborts.
+// Throws rather than risk overwriting footage.
+async function pickPlacementTracks(ppro, seq, placements) {
+  if (placements.length === 0) return [];
+  const trackCount = await seq.getVideoTrackCount();
+  const snapshot = [];
+  for (let v = 0; v < trackCount; v++) {
+    try {
+      snapshot.push(await readTrackSpans(seq, v, ppro));
+    } catch (e) {
+      // Could not verify V(v+1) is empty — treat it as occupied rather than risk
+      // overwriting real clips we failed to see.
+      console.log(`pickPlacementTracks: could not read V${v + 1} items, assuming occupied:`, e);
+      snapshot.push(null);
     }
   }
-  return true;
+  // Tracks past the end don't exist yet — nothing to collide with.
+  const isClear = (v, start, end) => v >= trackCount || (snapshot[v] !== null && !firstOverlap(snapshot[v], start, end));
+
+  // Pick one track per LANE (see assignPlacementLanes), clear across the union of every
+  // placement's span in that lane, not per-placement. This project can have real
+  // footage on tracks above V1 partway through the timeline (confirmed: a real
+  // clip sits on V2 mid-timeline in this project) — picking per placement
+  // means a placement over that stretch gets bumped to a higher track while
+  // others elsewhere don't, fragmenting one batch across many tracks for no
+  // reason. A track clear of the union is clear for every placement in the lane.
+  //
+  // Lanes matter because transition mode (Shift+Click) centers each AL on its
+  // own cut independently: cuts closer together than the requested frame width
+  // produce ALs whose spans genuinely overlap each other. Placements were
+  // previously always forced onto ONE shared track for the whole batch — two
+  // overlapping ones landed on the same track and each createOverwriteItemAction
+  // silently clipped the one placed just before it (confirmed 2026-09-22: tight
+  // cuts produced overwritten/fragmented ALs instead of stacking). Lanes are
+  // mutually non-overlapping by construction (assignPlacementLanes), so giving
+  // each lane its own track — strictly above the previous lane's — guarantees
+  // overlapping transitions always stack onto separate tracks instead of
+  // colliding, without needing to re-detect the collision after the fact.
+  const laneOf = assignPlacementLanes(placements);
+  const laneCount = Math.max(...laneOf) + 1;
+  const laneTracks = new Array(laneCount).fill(1);
+  let floorTrack = 1;
+  for (let lane = 0; lane < laneCount; lane++) {
+    let unionStart = null;
+    let unionEnd = null;
+    placements.forEach((p, i) => {
+      if (laneOf[i] !== lane) return;
+      if (unionStart === null || p.startTicks < unionStart) unionStart = p.startTicks;
+      if (unionEnd === null || p.endTicks > unionEnd) unionEnd = p.endTicks;
+    });
+    // Start above the highest track with anything in range (or unreadable), so a lane
+    // never lands under footage, then step past any track that still isn't clear.
+    let highestOccupied = 0;
+    for (let v = 0; v < trackCount; v++) {
+      if (!isClear(v, unionStart, unionEnd)) highestOccupied = v;
+    }
+    let laneTrack = Math.max(floorTrack, highestOccupied + 1);
+    while (!isClear(laneTrack, unionStart, unionEnd)) laneTrack++;
+    laneTracks[lane] = laneTrack;
+    // Next lane must stack strictly above this one: lanes exist specifically
+    // because their placements overlap each other in time, so two lanes must
+    // never share a track.
+    floorTrack = laneTrack + 1;
+  }
+
+  // Hard gate, for every placement BEFORE anything is committed: the exact span must be
+  // clear on its lane's track, and must not overlap another placement already claimed
+  // for that track in this run (they all land in one transaction, so the sequence is not
+  // re-read in between). Normally the lane's track is already clear.
+  const claimed = [];
+  const targets = [];
+  for (let pIdx = 0; pIdx < placements.length; pIdx++) {
+    const p = placements[pIdx];
+    let targetTrack = laneTracks[laneOf[pIdx]];
+    let guard = 0;
+    while (guard < 32) {
+      const collides = claimed.some((c) => c.track === targetTrack && c.start < p.endTicks && p.startTicks < c.end);
+      if (isClear(targetTrack, p.startTicks, p.endTicks) && !collides) break;
+      targetTrack++;
+      guard++;
+    }
+    if (guard >= 32) {
+      throw new Error(`Could not find a clear track for "${p.name}" after checking 32 candidates — aborting.`);
+    }
+    claimed.push({ track: targetTrack, start: p.startTicks, end: p.endTicks });
+    targets.push(targetTrack);
+  }
+
+  // Last-line defense, right before the caller writes: re-read each chosen track with the
+  // strict lookup and re-check every placement on it. The timeline can change during the
+  // awaits above; if it did, abort instead of trusting the snapshot.
+  for (const t of new Set(targets)) {
+    if (t >= trackCount) continue;
+    let spans;
+    try {
+      spans = await readTrackSpans(seq, t, ppro);
+    } catch (e) {
+      throw new Error(
+        `Could not verify V${t + 1} is empty before placing — ` +
+        `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
+      );
+    }
+    for (let pIdx = 0; pIdx < placements.length; pIdx++) {
+      if (targets[pIdx] !== t) continue;
+      const p = placements[pIdx];
+      const hit = firstOverlap(spans, p.startTicks, p.endTicks);
+      if (hit) {
+        throw new Error(
+          `V${t + 1} changed while placing: "${await trackItemName(hit.it, "?")}" now overlaps "${p.name}" — ` +
+          `aborting, nothing was placed. Try again.`
+        );
+      }
+    }
+  }
+  return targets;
 }
 
 // Robust UXP timeline placement routine (supporting multi-clip cut transitions and separate clip spans)
@@ -263,131 +303,13 @@ async function placeAdjustmentLayersOnTimeline(ppro, options = {}) {
   const placedItems = [];
   let placedCount = 0;
 
-  // Pick one track per LANE (see assignPlacementLanes), clear across every
-  // placement's span in that lane, not per-placement. This project can have real
-  // footage on tracks above V1 partway through the timeline (confirmed: a real
-  // clip sits on V2 mid-timeline in this project) — recomputing per placement
-  // means a placement over that stretch gets bumped to a higher track while
-  // others elsewhere don't, fragmenting one batch across many tracks for no
-  // reason. Scanning the union of a lane's planned spans finds a track
-  // guaranteed clear of whatever real content exists anywhere in that range, and
-  // every placement in that lane shares it.
-  //
-  // Lanes matter because transition mode (Shift+Click) centers each AL on its
-  // own cut independently: cuts closer together than the requested frame width
-  // produce ALs whose spans genuinely overlap each other. Placements were
-  // previously always forced onto ONE shared track for the whole batch — two
-  // overlapping ones landed on the same track and each createOverwriteItemAction
-  // silently clipped the one placed just before it (confirmed 2026-09-22: tight
-  // cuts produced overwritten/fragmented ALs instead of stacking). Lanes are
-  // mutually non-overlapping by construction (assignPlacementLanes), so giving
-  // each lane its own track — strictly above the previous lane's — guarantees
-  // overlapping transitions always stack onto separate tracks instead of
-  // colliding, without needing to re-detect the collision after the fact.
   mark('plan');
-  const laneOf = assignPlacementLanes(placements);
-  const laneCount = placements.length > 0 ? Math.max(...laneOf) + 1 : 0;
-  const laneTracks = new Array(laneCount).fill(1);
-
-  if (placements.length > 0) {
-    const batchProject = await ppro.Project.getActiveProject();
-    const batchSeq = await batchProject.getActiveSequence();
-
-    let floorTrack = 1;
-    for (let lane = 0; lane < laneCount; lane++) {
-      const laneIdxs = [];
-      for (let i = 0; i < placements.length; i++) {
-        if (laneOf[i] === lane) laneIdxs.push(i);
-      }
-      let unionStart = placements[laneIdxs[0]].startTicks;
-      let unionEnd = placements[laneIdxs[0]].endTicks;
-      for (const i of laneIdxs) {
-        if (placements[i].startTicks < unionStart) unionStart = placements[i].startTicks;
-        if (placements[i].endTicks > unionEnd) unionEnd = placements[i].endTicks;
-      }
-      let laneTrack = await findSmartStackTrack(batchSeq, unionStart, unionEnd, floorTrack, ppro);
-
-      // The union scan is a starting guess. Verify it against every individual
-      // placement's own exact span in this lane before placing anything — keep
-      // bumping and re-checking the whole lane until one track clears all of
-      // them, so the lane always lands on a single track instead of splitting
-      // when one placement's own narrow span still collides with something the
-      // union-level check didn't isolate precisely enough.
-      let laneGuard = 0;
-      outer:
-      while (laneGuard < 32) {
-        for (const i of laneIdxs) {
-          const p = placements[i];
-          let clear;
-          try {
-            clear = await isTrackRangeClear(batchSeq, laneTrack, p.startTicks, p.endTicks, ppro);
-          } catch (e) {
-            throw new Error(
-              `Could not verify V${laneTrack + 1} is empty for a group of overlapping cut transitions — ` +
-              `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
-            );
-          }
-          if (!clear) {
-            laneTrack++;
-            laneGuard++;
-            continue outer;
-          }
-        }
-        break; // every placement in this lane cleared this track
-      }
-      if (laneGuard >= 32) {
-        throw new Error("Could not find a track clear for a group of overlapping cut transitions after checking 32 candidates — aborting.");
-      }
-
-      laneTracks[lane] = laneTrack;
-      // Next lane must stack strictly above this one: lanes exist specifically
-      // because their placements overlap each other in time, so two lanes must
-      // never be allowed to share a track regardless of what findSmartStackTrack
-      // would otherwise pick.
-      floorTrack = laneTrack + 1;
-    }
-  }
-
   if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
     throw new Error("SequenceEditor is not supported in this Premiere build.");
   }
   const freshProject = await ppro.Project.getActiveProject();
   const freshSeq = await freshProject.getActiveSequence();
-
-  mark('laneScan');
-  // Hard gate, for every placement BEFORE anything is committed: the exact span must be
-  // clear on its lane's track, and must not overlap another placement already claimed
-  // for that track in this run (they all land in one transaction below, so the sequence
-  // is not re-read in between). Normally the lane's track is already clear — it only
-  // walks further if content showed up that the lane scan didn't isolate.
-  const claimed = [];
-  const targets = [];
-  for (let pIdx = 0; pIdx < placements.length; pIdx++) {
-    const p = placements[pIdx];
-    let targetTrack = laneTracks[laneOf[pIdx]];
-    let guard = 0;
-    while (guard < 32) {
-      let clear;
-      try {
-        clear = await isTrackRangeClear(freshSeq, targetTrack, p.startTicks, p.endTicks, ppro);
-      } catch (e) {
-        throw new Error(
-          `Could not verify V${targetTrack + 1} is empty before placing "${p.name}" — ` +
-          `aborting rather than risk overwriting real footage. (${e && e.message ? e.message : e})`
-        );
-      }
-      const collides = claimed.some((c) => c.track === targetTrack && c.start < p.endTicks && p.startTicks < c.end);
-      if (clear && !collides) break;
-      targetTrack++;
-      guard++;
-    }
-    if (guard >= 32) {
-      throw new Error(`Could not find a clear track for "${p.name}" after checking 32 candidates — aborting.`);
-    }
-    claimed.push({ track: targetTrack, start: p.startTicks, end: p.endTicks });
-    targets.push(targetTrack);
-    targetTracksSet.add(targetTrack + 1);
-  }
+  const targets = await pickPlacementTracks(ppro, freshSeq, placements);
 
   // Undo steps: per distinct AL length, one "set length" step, then one step placing every
   // AL of that length. The length (the AL item's In/Out marks) must be its OWN transaction,
@@ -577,8 +499,7 @@ module.exports = {
   resolveTopLayer,
   planPlacements,
   assignPlacementLanes,
-  findSmartStackTrack,
-  isTrackRangeClear,
+  pickPlacementTracks,
   getLabelIndex,
   CUTDECK_BIN_NAME,
   ADJ_BIN_NAME,

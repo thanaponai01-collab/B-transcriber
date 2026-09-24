@@ -6,7 +6,7 @@
 
 // Same lookup, but rethrows the last error instead of masking "couldn't read this
 // track" as "this track is empty" — callers that use the result to avoid colliding
-// with existing clips (findSmartStackTrack) must be able to tell the difference,
+// with existing clips (pickPlacementTracks) must be able to tell the difference,
 // since treating an unreadable track as empty risks overwriting real footage on it.
 async function getTrackClipItemsOrThrow(track, ppro) {
   if (!track || typeof track.getTrackItems !== "function") return [];
@@ -15,7 +15,7 @@ async function getTrackClipItemsOrThrow(track, ppro) {
     : 1;
   let lastErr = null;
   // Premiere has been seen returning null entries in this list (2026-09-24, crashed
-  // findSmartStackTrack on an AL placement) — a null has no position, so drop it here
+  // the AL track pick on a placement) — a null has no position, so drop it here
   // where every caller routes through, instead of crashing each caller on it.
   const usable = (items) => items.filter((it) => it != null);
   try {
