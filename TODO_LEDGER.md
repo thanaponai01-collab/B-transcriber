@@ -16,6 +16,21 @@ Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
 - **Transform panel (`f6b1154`)**: a global `SequenceEvent.ACTIVATED` listener fires on sequence
   switch; a global `SELECTION_CHANGED` does **not** — it must be attached to the sequence
   (`EventManager.addEventListener(seq, …)`), which fires on clip click. No poll needed.
+- **Adj & FX batching (`17798d8`, `dae8ddf`) — PASSED live**: 21 ALs placed and verified in
+  **410 ms** (gate 349, commit 11, verify 17, rest <20); preset applied to all 21 in 16 ms;
+  the whole run undid in **6–7 Ctrl+Z** (was ~5 per AL + up to 5 per AL for the preset, ~200).
+  So N overwrites after one committed In/Out in a single transaction work (the open P2 question).
+  User-checked: the preset's effects and keyframes landed on all 21.
+- **Rough Cut after the post-razor read trim (`1aa373b`)**: a *different* sequence of similar
+  duration, **1186 cuts, 3520.8 s removed, 32 s** (status line; 9 clips split, audio unlinked),
+  **29.9 s** summed steps: split at cut edges 17.4 (transaction:
+  callback 6.2, **commit 11.2** — Premiere's own), reads 7.0, read-back 3.3, remove 1.4 (commit
+  1.0), open copy 0.5, close gaps 0.4. Vs the 61 s `tiw_Synced` baseline: reads 16.3 → 7.0, but
+  split also halved (34.9 → 17.4), which the read change can't cause. Per cut: reads 9.4 → 5.9 ms
+  (−37%), but split also fell 20.1 → 14.7 ms, so the sequences differ beyond cut count (tracks).
+  Normalised to split time, reads fell ~14% (0.47 → 0.40 of split). So the read gain is real but
+  somewhere in 14–37%; a re-run on the 1735-cut sequence would pin it. A second run on the new
+  sequence repeated: split 18.5 s (commit 11.7), remove 1.4 s.
 
 ## CutDeck native rough cut — Phase 0 probes P1–P5 PASSED live — 2026-09-24
 
