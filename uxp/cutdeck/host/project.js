@@ -4,6 +4,7 @@
 
 const CUTDECK_BIN_NAME = "CutDeck";
 const ROUGH_CUTS_BIN_NAME = "Rough Cuts";
+const SYNCED_BIN_NAME = "Synced";
 
 // Resolves a folder-like item's createBinAction/getItems, casting to FolderItem when
 // the plain methods aren't directly present.
@@ -105,6 +106,7 @@ async function activeProjectAndSequence(ppro, { requireSequence = true, requireP
 module.exports = {
   CUTDECK_BIN_NAME,
   ROUGH_CUTS_BIN_NAME,
+  SYNCED_BIN_NAME,
   asBinLike,
   asBinLike,
   runTransaction,

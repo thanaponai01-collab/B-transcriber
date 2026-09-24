@@ -16,7 +16,7 @@
    onto not-yet-existing tracks in one transaction, overwrite at a between-frames time, and -1 as
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
-const { runTransaction, activeProjectAndSequence } = require("../host/project.js");
+const { runTransaction, activeProjectAndSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { getTrackClipItems } = require("../host/trackItems.js");
 
@@ -138,6 +138,13 @@ async function copySequence(project, source, name) {
   const item = await copy.getProjectItem();
   runTransaction(project, "CutDeck Sync: name copy", (compound) => {
     if (!compound.addAction(item.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
+  });
+  // File it under CutDeck > Synced, the same move nativeCut.js uses for Rough Cuts
+  // (FolderItem.createMoveItemAction d.ts:1271, ProjectItem.getParentBin d.ts:2515).
+  const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, SYNCED_BIN_NAME]));
+  runTransaction(project, "CutDeck Sync: file copy", (compound) => {
+    const parent = asBinLike(item.getParentBin());
+    if (!compound.addAction(parent.createMoveItemAction(item, bin))) throw new Error("addAction(move to bin) returned false");
   });
   return copy.guid.toString();
 }

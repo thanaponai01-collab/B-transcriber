@@ -40,17 +40,35 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
     getVideoTrack: async (i) => ({ getTrackItems: () => seq.video[i].map(wrapItem) }),
     getAudioTrack: async (i) => ({ getTrackItems: () => seq.audio[i].map(wrapItem) }),
     getTimebase: async () => TPF.toString(),
-    getProjectItem: async () => ({ createSetNameAction: (n) => ({ type: "rename", seq, name: n }) }),
+    getProjectItem: async () => ({ _seq: seq, createSetNameAction: (n) => ({ type: "rename", seq, name: n }),
+      getParentBin: () => binOf(seq) }),
     createCloneAction: () => ({ type: "cloneSeq", seq }),
     _seq: seq,
   });
 
+  // Project panel: bins hold sequences (by seq object) and child bins.
+  const makeBin = (name) => { const b = { name, items: [] };
+    b.getItems = async () => b.items;
+    b.createBinAction = (child) => ({ type: "bin", into: b, name: child });
+    b.createMoveItemAction = (pi, to) => ({ type: "moveItem", from: b, pi, to });
+    return b; };
+  const rootBin = makeBin("root");
+  rootBin.items.push(original);
+  const binOf = (seq) => { const walk = (b) => (b.items.includes(seq) ? b : b.items.filter((x) => x.items).map(walk).find(Boolean)); return walk(rootBin) || rootBin; };
+  const binPath = (seq) => { const walk = (b, path) => (b.items.includes(seq) ? path : b.items.filter((x) => x.items).map((x) => walk(x, [...path, x.name])).find(Boolean)); return walk(rootBin, []); };
+
   const apply = (a, limits) => {
-    if (a.type === "cloneSeq") {
+    if (a.type === "bin") {
+      a.into.items.push(makeBin(a.name));
+    } else if (a.type === "moveItem") {
+      if (!a.from.items.includes(a.pi._seq)) throw new Error("move must be called on the item's parent");
+      a.from.items = a.from.items.filter((x) => x !== a.pi._seq); a.to.items.push(a.pi._seq);
+    } else if (a.type === "cloneSeq") {
       const copy = makeSeq(`${a.seq.name} Copy`);
       copy.video = a.seq.video.map((t) => t.map((r) => ({ ...r })));
       copy.audio = a.seq.audio.map((t) => t.map((r) => ({ ...r })));
       sequences.push(copy);
+      binOf(a.seq).items.push(copy);
     } else if (a.type === "rename") {
       a.seq.name = a.name;
     } else if (a.type === "remove") {
@@ -72,6 +90,7 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
   };
   let transactions = 0;
   const project = {
+    getRootItem: async () => rootBin,
     getActiveSequence: async () => wrapSeq(sequences[0]),
     getSequences: async () => sequences.map(wrapSeq),
     opened: null,
@@ -118,7 +137,7 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
     },
   };
   const snapshot = () => JSON.stringify(original, (k, v) => (typeof v === "bigint" ? v.toString() : v));
-  return { ppro, project, sequences, original, snapshot, get transactions() { return transactions; } };
+  return { ppro, project, sequences, original, snapshot, binPath, get transactions() { return transactions; } };
 }
 
 /* A helper that answers plan_sync from a {file name: placement} table, running once first. */
@@ -180,7 +199,9 @@ test("places each clip on its own tracks at its planned start, in a _Synced copy
   const copy = host.sequences[1];
   assert.equal(copy.name, "Shoot_Synced");
   assert.equal(host.project.opened, "Shoot_Synced");
-  assert.equal(host.transactions, 3, "copy, rename, then ONE transaction for all the placing");
+  assert.deepEqual(host.binPath(copy), ["CutDeck", "Synced"], "the copy is filed under CutDeck > Synced");
+  assert.deepEqual(host.binPath(host.original), [], "the user's sequence stays where it was");
+  assert.equal(host.transactions, 6, "copy, rename, 2 bins, file, then ONE transaction for all the placing");
 
   const request = helper.calls.find((c) => c.type === "plan_sync");
   assert.deepEqual(request.clips.map((c) => [c.id, c.path.split("/").pop(), c.duration_s]),
