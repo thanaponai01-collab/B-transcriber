@@ -1,157 +1,41 @@
-"""cutdeck/text_properties.py — extracts text and typography properties from Premiere Pro projects.
+"""cutdeck/text_properties.py — text layers from a saved Premiere project, and text measuring.
 
 Premiere Pro's UXP and ExtendScript APIs do not expose the 'Source Text' parameter
-(AE.ADBE Text param 0) to scripts or plugins (getStartValue() resolves empty and
-ExtendScript returns a binary U+0164 char; see docs/research/cutdeck-text-graphic-properties.md).
-
-However, the saved .prproj file stores complete text properties inside gzip-compressed XML:
-    <Component ...>
-      <MatchName>AE.ADBE Text</MatchName>
-      <ComponentParams>
-        <ArbVideoComponentParam>
-          <ParamName>Source Text</ParamName>
-          <StartKeyframeValue>...base64...</StartKeyframeValue>
-        </ArbVideoComponentParam>
-      </ComponentParams>
-    </Component>
-
-This module decodes the base64-encoded binary stream from ArbVideoComponentParam
-to extract the text string, PostScript font name, and typography metadata.
+(AE.ADBE Text param 0): getStartValue() resolves empty (see docs/PREMIERE_FACTS.md). The saved
+.prproj holds it, and cutdeck.prproj_reader decodes it; this module lists those text layers and
+measures text with the real font outlines.
 """
 
 from __future__ import annotations
 
-import base64
-import gzip
-import io
 import os
 import re
-import struct
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 from PIL import ImageFont
 
-
-def decompress_prproj(data: bytes) -> str:
-    """Decompresses .prproj gzip bytes into an XML string.
-    If the data is already plain XML, decodes as utf-8 directly."""
-    if data[:2] == b"\x1f\x8b":
-        return gzip.decompress(data).decode("utf-8", errors="replace")
-    return data.decode("utf-8", errors="replace")
-
-
-def parse_source_text_blob(blob: bytes) -> dict[str, Any]:
-    """Parses Premiere's ArbVideoComponentParam binary blob for Source Text.
-
-    The binary stream contains:
-    - Text content (ASCII / UTF-8 / UTF-16 runs)
-    - PostScript font identifier (e.g. 'LucidaCalligraphy-Italic', 'Arial-BoldMT')
-    - Font size and style attributes
-    """
-    result: dict[str, Any] = {
-        "text": "",
-        "font_name": None,
-        "font_size": None,
-        "raw_length": len(blob),
-    }
-    if not blob:
-        return result
-
-    # 1. Look for PostScript font names: typically alphanumeric + hyphens (e.g. Arial-BoldMT, LucidaCalligraphy-Italic)
-    # They often appear with length prefix or null-termination in ASCII.
-    font_pattern = re.compile(rb"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)")
-    font_matches = font_pattern.findall(blob)
-    if font_matches:
-        # Longest match or first typical PostScript name
-        result["font_name"] = font_matches[0].decode("ascii", errors="ignore")
-
-    # 2. Extract printable text strings (UTF-16 LE and UTF-8 / ASCII)
-    # UTF-16LE: ASCII (byte + 0x00) or Thai (byte + 0x0e)
-    utf16_pattern = re.compile(rb"(?:(?:[\x20-\x7e]\x00)|(?:[\x00-\xff]\x0e)){2,}")
-    utf16_matches = utf16_pattern.findall(blob)
-    extracted_texts = []
-    for m in utf16_matches:
-        try:
-            decoded = m.decode("utf-16le", errors="ignore").strip()
-            if len(decoded) > 1 and decoded != result["font_name"]:
-                extracted_texts.append(decoded)
-        except Exception:
-            pass
-
-    # Fallback to UTF-8 / ASCII text runs
-    if not extracted_texts:
-        ascii_matches = re.findall(rb"(?:[\x20-\x7e]|\xe0[\xb8-\xb9][\x80-\xbf]){2,}", blob)
-        for m in ascii_matches:
-            try:
-                decoded = m.decode("utf-8", errors="ignore").strip()
-                if len(decoded) > 1 and decoded != result["font_name"]:
-                    extracted_texts.append(decoded)
-            except Exception:
-                pass
-
-    if extracted_texts:
-        # Choose the most plausible text content (non-font string)
-        result["text"] = max(extracted_texts, key=len)
-
-    return result
-
-
-def extract_graphic_texts_from_xml(xml_content: str) -> list[dict[str, Any]]:
-    """Extracts all text graphic layers from a decompressed .prproj XML string."""
-    try:
-        root = ET.fromstring(xml_content)
-    except ET.ParseError as e:
-        raise ValueError(f"Invalid Premiere project XML: {e}") from e
-
-    texts = []
-    # Search for all Component elements with MatchName == 'AE.ADBE Text'
-    for comp in root.iter("Component"):
-        match_name_el = comp.find("MatchName")
-        if match_name_el is None or match_name_el.text != "AE.ADBE Text":
-            continue
-
-        comp_name_el = comp.find("DisplayName")
-        comp_name = comp_name_el.text if comp_name_el is not None else "Text"
-
-        # Search for ArbVideoComponentParam with ParamName == 'Source Text'
-        for arb in comp.iter("ArbVideoComponentParam"):
-            param_name_el = arb.find("ParamName")
-            if param_name_el is None or param_name_el.text != "Source Text":
-                continue
-
-            val_el = arb.find("StartKeyframeValue")
-            if val_el is None or not val_el.text:
-                continue
-
-            raw_b64 = val_el.text.strip()
-            try:
-                blob = base64.b64decode(raw_b64)
-            except Exception:
-                continue
-
-            parsed = parse_source_text_blob(blob)
-            texts.append({
-                "component_name": comp_name,
-                "text": parsed["text"],
-                "font_name": parsed["font_name"],
-                "raw_length": parsed["raw_length"],
-            })
-
-    return texts
+from cutdeck.prproj_reader import read_project
 
 
 def extract_project_text_properties(prproj_path: str | Path) -> list[dict[str, Any]]:
-    """Reads a .prproj file directly and extracts all text graphic properties."""
+    """One entry per text clip in a saved .prproj: where it is, its string, font and size."""
     path = Path(prproj_path)
     if not path.is_file():
         raise FileNotFoundError(f"Project file not found: {path}")
-
-    raw_bytes = path.read_bytes()
-    xml_str = decompress_prproj(raw_bytes)
-    return extract_graphic_texts_from_xml(xml_str)
+    out = []
+    for seq in read_project(path)["sequences"]:
+        for track in seq["video_tracks"]:
+            for clip in track["clips"]:
+                for effect in clip["effects"]:
+                    if effect.get("text"):
+                        out.append({
+                            "sequence": seq["name"], "track": track["index"],
+                            "clip": clip["name"], "start": clip["start"], "end": clip["end"],
+                            **effect["text"],
+                        })
+    return out
 
 
 def tokenize_font(name: str) -> set[str]:

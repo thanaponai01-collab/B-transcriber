@@ -1,102 +1,46 @@
 """tests/test_cutdeck_text_properties.py — tests for cutdeck/text_properties.py"""
 
-import base64
 import gzip
+import json
 from pathlib import Path
 
 import pytest
 
 from cutdeck.text_properties import (
-    decompress_prproj,
-    extract_graphic_texts_from_xml,
     extract_project_text_properties,
     measure_text_bounds,
-    parse_source_text_blob,
     resolve_font_file,
     tokenize_font,
 )
 
 
-def test_decompress_prproj_plain_and_gzip():
-    plain = "<PremiereData></PremiereData>".encode("utf-8")
-    assert decompress_prproj(plain) == "<PremiereData></PremiereData>"
+_BLOB = json.loads((Path(__file__).parent / "fixtures" / "source_text_blobs.json").read_text())["T6_thai"]
 
-    gzipped = gzip.compress(plain)
-    assert decompress_prproj(gzipped) == "<PremiereData></PremiereData>"
-
-
-def test_parse_source_text_blob_extracts_font_and_text():
-    # Build a simulated binary buffer with PostScript font name and text
-    font_bytes = b"LucidaCalligraphy-Italic\x00"
-    text_content = "Hello World".encode("utf-16le")
-    blob = b"\x00\x01\x02\x03" + font_bytes + b"\x04\x05" + text_content + b"\x00\x00"
-
-    parsed = parse_source_text_blob(blob)
-    assert parsed["font_name"] == "LucidaCalligraphy-Italic"
-    assert parsed["text"] == "Hello World"
-    assert parsed["raw_length"] == len(blob)
-
-
-def test_extract_graphic_texts_from_xml():
-    # Create sample binary blob and base64 encode it
-    font_bytes = b"THSarabunNew-Bold\x00"
-    text_content = "วิดีโอทดสอบ 2026".encode("utf-16le")
-    blob = b"\xaa\xbb" + font_bytes + b"\xcc\xdd" + text_content + b"\x00\x00"
-    b64_val = base64.b64encode(blob).decode("ascii")
-
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+PROJECT = f"""<?xml version="1.0" encoding="UTF-8" ?>
 <PremiereData Version="3">
-  <Component>
-    <DisplayName>Title Text</DisplayName>
-    <MatchName>AE.ADBE Text</MatchName>
-    <ComponentParams>
-      <ArbVideoComponentParam>
-        <ParamName>Source Text</ParamName>
-        <StartKeyframeValue>{b64_val}</StartKeyframeValue>
-      </ArbVideoComponentParam>
-    </ComponentParams>
-  </Component>
-  <Component>
-    <DisplayName>Motion</DisplayName>
-    <MatchName>AE.ADBE Motion</MatchName>
-  </Component>
+  <Sequence ObjectUID="s"><TrackGroups><TrackGroup Index="0"><First>v</First><Second ObjectRef="1"/></TrackGroup></TrackGroups><Name>Main</Name></Sequence>
+  <VideoTrackGroup ObjectID="1"><TrackGroup><Tracks><Track Index="0" ObjectURef="t"/></Tracks></TrackGroup></VideoTrackGroup>
+  <VideoClipTrack ObjectUID="t"><ClipTrack><Track><Index>0</Index></Track>
+    <ClipItems><TrackItems><TrackItem Index="0" ObjectRef="2"/></TrackItems></ClipItems></ClipTrack></VideoClipTrack>
+  <VideoClipTrackItem ObjectID="2"><ClipTrackItem><ComponentOwner><Components ObjectRef="3"/></ComponentOwner>
+    <TrackItem><End>254016000000</End></TrackItem><SubClip ObjectRef="4"/></ClipTrackItem></VideoClipTrackItem>
+  <VideoComponentChain ObjectID="3"><ComponentChain><Components><Component Index="0" ObjectRef="5"/></Components></ComponentChain></VideoComponentChain>
+  <VideoFilterComponent ObjectID="5"><Component><DisplayName>Text</DisplayName><Params><Param Index="0" ObjectRef="6"/></Params></Component>
+    <MatchName>AE.ADBE Text</MatchName></VideoFilterComponent>
+  <ArbVideoComponentParam ObjectID="6"><Name>Source Text</Name><StartKeyframeValue Encoding="base64">{_BLOB}</StartKeyframeValue></ArbVideoComponentParam>
+  <SubClip ObjectID="4"><Name>Graphic</Name></SubClip>
 </PremiereData>"""
 
-    results = extract_graphic_texts_from_xml(xml)
-    assert len(results) == 1
-    assert results[0]["component_name"] == "Title Text"
-    assert results[0]["font_name"] == "THSarabunNew-Bold"
-    assert results[0]["text"] == "วิดีโอทดสอบ 2026"
 
-
-def test_extract_project_text_properties_file(tmp_path: Path):
-    font_bytes = b"Arial-BoldMT\x00"
-    text_content = "Sub-title text".encode("utf-16le")
-    blob = b"\x01\x02" + font_bytes + b"\x03" + text_content
-    b64_val = base64.b64encode(blob).decode("ascii")
-
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<PremiereData Version="3">
-  <Component>
-    <DisplayName>Text 1</DisplayName>
-    <MatchName>AE.ADBE Text</MatchName>
-    <ComponentParams>
-      <ArbVideoComponentParam>
-        <ParamName>Source Text</ParamName>
-        <StartKeyframeValue>{b64_val}</StartKeyframeValue>
-      </ArbVideoComponentParam>
-    </ComponentParams>
-  </Component>
-</PremiereData>"""
-
+def test_extract_project_text_properties(tmp_path: Path):
     prproj_file = tmp_path / "test_project.prproj"
-    prproj_file.write_bytes(gzip.compress(xml.encode("utf-8")))
+    prproj_file.write_bytes(gzip.compress(PROJECT.encode("utf-8")))
 
-    extracted = extract_project_text_properties(prproj_file)
-    assert len(extracted) == 1
-    assert extracted[0]["component_name"] == "Text 1"
-    assert extracted[0]["font_name"] == "Arial-BoldMT"
-    assert extracted[0]["text"] == "Sub-title text"
+    (got,) = extract_project_text_properties(prproj_file)
+    assert {k: got[k] for k in ("sequence", "track", "clip", "start", "end", "text", "font", "size")} == {
+        "sequence": "Main", "track": 0, "clip": "Graphic", "start": 0.0, "end": 1.0,
+        "text": "สวัสดี", "font": "Sarabun-Regular", "size": 100.0,
+    }
 
     with pytest.raises(FileNotFoundError):
         extract_project_text_properties(tmp_path / "non_existent.prproj")

@@ -14,8 +14,10 @@ This module only reads. It never writes a project.
 from __future__ import annotations
 
 import argparse
+import base64
 import gzip
 import json
+import struct
 import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -39,6 +41,11 @@ class _Objects:
             key = el.get("ObjectID") or el.get("ObjectUID")
             if key:
                 self.by_id[key] = el
+        # Premiere writes an identical binary once; later copies are empty, keyed by BinaryHash.
+        self.blobs: dict[str, str] = {
+            el.get("BinaryHash"): el.text
+            for el in root.iter("StartKeyframeValue") if el.text and el.text.strip()
+        }
 
     def ref(self, el: ET.Element | None) -> ET.Element | None:
         """Follow an element's ObjectRef/ObjectURef to its object."""
@@ -62,6 +69,111 @@ def _bool(value: str | None) -> bool:
     return value == "true"
 
 
+def _u32(b: bytes, o: int) -> int:
+    return struct.unpack_from("<I", b, o)[0]
+
+
+def _fb_table(b: bytes, pos: int) -> dict[int, int]:
+    """FlatBuffer table at ``pos`` -> {field index: absolute position of the field}."""
+    vt = pos - struct.unpack_from("<i", b, pos)[0]
+    size = struct.unpack_from("<H", b, vt)[0]
+    fields = {}
+    for k in range((size - 4) // 2):
+        off = struct.unpack_from("<H", b, vt + 4 + 2 * k)[0]
+        if off:
+            fields[k] = pos + off
+    return fields
+
+
+def _fb_target(b: bytes, slot: int) -> int:
+    return slot + _u32(b, slot)
+
+
+def _fb_string(b: bytes, slot: int) -> str:
+    t = _fb_target(b, slot)
+    return b[t + 4:t + 4 + _u32(b, t)].decode("utf-8")
+
+
+def _fb_vector(b: bytes, slot: int) -> list[int]:
+    v = _fb_target(b, slot)
+    return [v + 4 + 4 * i for i in range(_u32(b, v))]
+
+
+# Premiere leaves a field out at its default; 100 is the default font size (T1/T6, 2026-09-25).
+_DEFAULT_TEXT_SIZE = 100.0
+
+
+def _fb_float(b: bytes, fields: dict[int, int], index: int, default: float) -> float:
+    return struct.unpack_from("<f", b, fields[index])[0] if index in fields else default
+
+
+def _fb_rgb(b: bytes, slot: int) -> list[int]:
+    """A colour table: one byte per channel (f0 R, f1 G, f2 B); a channel left out is 255."""
+    ch = _fb_table(b, _fb_target(b, slot))
+    return [b[ch[i]] if i in ch else 255 for i in range(3)]
+
+
+# Document f4 (omitted = left). 2 = centre was confirmed; 1 = right is inferred: it is the only other
+# alignment that was set (left is the omitted default).
+_ALIGNMENT = {0: "left", 1: "right", 2: "center"}
+
+
+def parse_source_text(blob: bytes) -> dict:
+    """Decode an ``ArbVideoComponentParam`` "Source Text" blob (a FlatBuffer, layout mapped
+    from real Premiere 26 saves): root f0 -> document; document f0 = runs, f1 = font names;
+    a run's f0 = its text, f1 = its style table. In the style table f0 is the index into the
+    font names (omitted = 0), f1 the size (float, omitted = 100), f8 the tracking (float),
+    f14 the faux-bold flag, f2 the fill colour, f4 the stroke colour (colour tables) with f5 its
+    on flag and f6 the stroke width (float, default 4), f15 faux italic, f16 underline. Document
+    f4 is the alignment, f6 the leading (float) and f11 the shadow flag.
+
+    ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's."""
+    doc = _fb_table(blob, _fb_target(blob, _fb_table(blob, _fb_target(blob, 12))[0]))
+    fonts = [_fb_string(blob, slot) for slot in _fb_vector(blob, doc[1])]
+    runs = []
+    for slot in _fb_vector(blob, doc[0]):
+        run = _fb_table(blob, _fb_target(blob, slot))
+        style = _fb_table(blob, _fb_target(blob, run[1]))
+        runs.append({
+            "text": _fb_string(blob, run[0]),
+            "font": fonts[_u32(blob, style[0]) if 0 in style else 0],
+            "size": _fb_float(blob, style, 1, _DEFAULT_TEXT_SIZE),
+            "tracking": _fb_float(blob, style, 8, 0.0),
+            "bold": 14 in style and blob[style[14]] == 1,
+            "italic": 15 in style and blob[style[15]] == 1,
+            "underline": 16 in style and blob[style[16]] == 1,
+            "fill": _fb_rgb(blob, style[2]) if 2 in style else [255, 255, 255],
+            # Style f4 keeps a stroke colour even when the stroke is off; f5 is the on flag.
+            "stroke": _fb_rgb(blob, style[4]) if 4 in style and 5 in style and blob[style[5]] == 1 else None,
+            "stroke_width": _fb_float(blob, style, 6, 4.0),
+        })
+    return {"text": "".join(r["text"] for r in runs), "font": runs[0]["font"],
+            "size": runs[0]["size"], "leading": _fb_float(blob, doc, 6, 0.0),
+            "alignment": _ALIGNMENT.get(_u32(blob, doc[4]) if 4 in doc else 0),
+            "shadow": 11 in doc and blob[doc[11]] == 1, "runs": runs}
+
+
+def _b64(text: str) -> bytes:
+    return base64.b64decode(text)  # tolerates the stray non-base64 byte Premiere writes
+
+
+def _text_of(objs: _Objects, comp: ET.Element) -> dict | None:
+    """The Source Text of an ``AE.ADBE Text`` component, plus its keyframes if it has any."""
+    for p in comp.findall("Component/Params/Param"):
+        param = objs.ref(p)
+        if param is None or param.tag != "ArbVideoComponentParam" or _text(param, "Name") != "Source Text":
+            continue
+        start = param.find("StartKeyframeValue")
+        out = parse_source_text(_b64(start.text or objs.blobs[start.get("BinaryHash")]))
+        stamps = [e.split(",", 1) for e in (_text(param, "Keyframes") or "").split(";") if e]
+        if stamps:
+            out["keyframes"] = [
+                {"time": _seconds(t), "text": parse_source_text(_b64(v))["text"]} for t, v in stamps
+            ]
+        return out
+    return None
+
+
 def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
     chain = objs.ref(track_item.find("ClipTrackItem/ComponentOwner/Components"))
     out = []
@@ -73,11 +185,14 @@ def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
         body = comp.find("Component")
         if body is None:
             body = comp.find("AudioComponent/Component")
-        out.append({
+        effect = {
             "name": _text(body, "DisplayName"),
             "match_name": _text(comp, "MatchName"),
             "bypass": _bool(_text(body, "Bypass")),
-        })
+        }
+        if effect["match_name"] == "AE.ADBE Text":
+            effect["text"] = _text_of(objs, comp)
+        out.append(effect)
     return out
 
 
@@ -111,6 +226,10 @@ def _track_item(objs: _Objects, item: ET.Element) -> dict:
     if clip is not None:
         out.update(_source(objs, clip))
     out["effects"] = _effects(objs, item)
+    for effect in out["effects"]:
+        # Source Text keyframe times are source time: seconds into an untrimmed clip = time - source_in.
+        for key in (effect.get("text") or {}).get("keyframes", []):
+            key["clip_time"] = key["time"] - out["source_in"]
     return out
 
 
