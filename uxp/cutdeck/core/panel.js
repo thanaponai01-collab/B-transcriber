@@ -500,7 +500,9 @@
     const holdBtn = $("btn-hold");
     if (holdBtn) {
       holdBtn.addEventListener("click", (e) => {
-        const withoutExport = !(e && (e.altKey || e.shiftKey));
+        // Normal click: Automated Freeze Frame (saved in project CutDeck folder)
+        // Alt-click or Shift-click: Timeline Clone (let it finish in Premiere)
+        const withoutExport = Boolean(e && (e.altKey || e.shiftKey));
         if (intents.onAddFrameHold) intents.onAddFrameHold({ withoutExport });
       });
     }

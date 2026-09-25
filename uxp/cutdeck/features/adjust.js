@@ -157,13 +157,14 @@ function createAdjustFeature({
   }
 
   async function doAddFrameHold(options = {}) {
-    const withoutExport = options.withoutExport !== false;
-    ctl.setStatus(withoutExport ? "Cloning clip to track above at playhead…" : "Adding Frame Hold at playhead…", "busy");
+    const withoutExport = options.withoutExport === true;
+    ctl.setStatus(withoutExport ? "Cloning clip to track above at playhead…" : "Exporting and placing Frame Hold…", "busy");
     const res = await getFh().addFrameHold(ppro, { ...options, withoutExport });
     if (res && res.withoutExport) {
       ctl.setStatus(`Hold clip placed on V${res.targetTrack} & selected! In Premiere: Right-click > Add Frame Hold to finish.`, "ready");
     } else if (res) {
-      ctl.setStatus(`Placed Frame Hold on V${res.targetTrack} (${res.holdSecs}s hold, original clip untouched)!`, "ready");
+      const locationNote = res.inProjectFolder ? "saved in project CutDeck folder" : "original clip untouched";
+      ctl.setStatus(`Placed Frame Hold on V${res.targetTrack} (${res.holdSecs}s hold, ${locationNote})!`, "ready");
     }
     return res;
   }

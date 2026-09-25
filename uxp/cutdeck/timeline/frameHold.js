@@ -103,11 +103,11 @@ async function isTrackSpanClear(seq, trackIndex, startTicks, endTicks, ppro) {
 
 async function fileSize(folder, name) {
   try {
-    if (!folder || typeof folder.getEntry !== "function") return 1;
+    if (!folder || typeof folder.getEntry !== "function") return null;
     const entry = await folder.getEntry(name);
     if (!entry) return null;
     const meta = await entry.getMetadata();
-    return meta && typeof meta.size === "number" ? meta.size : null;
+    return meta && typeof meta.size === "number" && meta.size > 0 ? meta.size : null;
   } catch (_) {
     return null;
   }
@@ -115,18 +115,145 @@ async function fileSize(folder, name) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Waits until `name` exists with the same non-zero size on two polls in a row, or times out.
+// Waits until `name` exists with the same non-zero size on consecutive polls, or times out.
 // Resolves the race condition where exportSequenceFrame returns before the file is flushed to disk.
-async function waitForFile(folder, name, { timeoutMs = 8000, intervalMs = 25 } = {}) {
+async function waitForFile(folder, name, { timeoutMs = 10000, intervalMs = 30 } = {}) {
   const t0 = Date.now();
   let last = null;
+  let matches = 0;
   while (Date.now() - t0 < timeoutMs) {
     const size = await fileSize(folder, name);
-    if (size && (last === null || size === last)) return size;
-    last = size;
+    if (size !== null) {
+      if (last !== null && size === last) {
+        matches++;
+        if (matches >= 2) return size;
+      } else {
+        matches = 0;
+        last = size;
+      }
+    }
     await sleep(intervalMs);
   }
   return null;
+}
+
+// Resolves the folder for exported frame holds:
+// Prefers creating and using a "CutDeck" subfolder right beside the .prproj project file,
+// so that when the project directory is moved to another computer or disk, the hold media moves with it.
+// Falls back to the UXP temporary folder if the project is unsaved or the project folder cannot be written.
+async function getHoldExportFolder(project) {
+  const uxp = require("uxp");
+  const fs = uxp.storage.localFileSystem;
+
+  // 1. Try to find the active project file's directory
+  let projPath = null;
+  try {
+    if (project && typeof project.path === "string") {
+      projPath = project.path;
+    }
+  } catch (_) {}
+
+  if (projPath && typeof projPath === "string" && projPath.trim()) {
+    try {
+      let cleanPath = projPath.trim();
+      // Strip Windows extended-path prefixes like \\?\ or \\.\ or //?/
+      if (cleanPath.startsWith("\\\\?\\") || cleanPath.startsWith("\\\\.\\")) {
+        cleanPath = cleanPath.slice(4);
+      } else if (cleanPath.startsWith("//?/") || cleanPath.startsWith("??/")) {
+        cleanPath = cleanPath.slice(4);
+      }
+      cleanPath = cleanPath.replace(/\\/g, "/");
+
+      const lastSlash = cleanPath.lastIndexOf("/");
+      if (lastSlash > 0) {
+        const projectDir = cleanPath.slice(0, lastSlash);
+        if (typeof fs.getEntryWithUrl === "function") {
+          const fileUrl = "file:/" + projectDir.replace(/^\/+/, "");
+          const projFolder = await fs.getEntryWithUrl(fileUrl);
+          if (projFolder && projFolder.isFolder) {
+            let cutdeckFolder = null;
+            try {
+              cutdeckFolder = await projFolder.getEntry("CutDeck");
+            } catch (_) {}
+            if (!cutdeckFolder && typeof projFolder.createFolder === "function") {
+              try {
+                cutdeckFolder = await projFolder.createFolder("CutDeck");
+              } catch (_) {}
+            }
+            if (cutdeckFolder && cutdeckFolder.isFolder) {
+              const sep = projPath.includes("\\") ? "\\" : "/";
+              const nativeDir = projectDir.replace(/\//g, sep);
+              const nativePath = cutdeckFolder.nativePath || (nativeDir + sep + "CutDeck");
+              return { folder: cutdeckFolder, folderPath: nativePath, inProjectFolder: true };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("CutDeck: could not create CutDeck folder in project directory, falling back to temp folder:", err);
+    }
+  }
+
+  // 2. Fallback to temporary folder (e.g. if project is unsaved)
+  const tempFolder = await fs.getTemporaryFolder();
+  return { folder: tempFolder, folderPath: tempFolder.nativePath, inProjectFolder: false };
+}
+
+// Temporarily mutes video tracks (and caption tracks) other than the target clip's track
+// so that exportSequenceFrame captures ONLY the target video clip on a transparent background,
+// rather than flattening the entire composite frame (which freezes all other video/captions).
+async function isolateClipTrackForExport(seq, itemTrackIndex) {
+  if (!seq) return [];
+  const tracksMuted = [];
+
+  // 1. Mute all video tracks other than itemTrackIndex
+  try {
+    const videoTrackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
+    for (let t = 0; t < videoTrackCount; t++) {
+      if (t === itemTrackIndex) continue;
+      try {
+        const track = await seq.getVideoTrack(t);
+        if (track && typeof track.isMuted === "function" && typeof track.setMute === "function") {
+          const wasMuted = await track.isMuted();
+          if (!wasMuted) {
+            await track.setMute(true);
+            tracksMuted.push(track);
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  // 2. Mute caption tracks if any
+  try {
+    const captionTrackCount = typeof seq.getCaptionTrackCount === "function" ? await seq.getCaptionTrackCount() : 0;
+    for (let c = 0; c < captionTrackCount; c++) {
+      try {
+        const cTrack = await seq.getCaptionTrack(c);
+        if (cTrack && typeof cTrack.isMuted === "function" && typeof cTrack.setMute === "function") {
+          const wasMuted = await cTrack.isMuted();
+          if (!wasMuted) {
+            await cTrack.setMute(true);
+            tracksMuted.push(cTrack);
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return tracksMuted;
+}
+
+// Restores previously muted tracks back to unmuted state
+async function restoreIsolatedTracks(tracksMuted) {
+  if (!Array.isArray(tracksMuted)) return;
+  for (const track of tracksMuted) {
+    try {
+      if (track && typeof track.setMute === "function") {
+        await track.setMute(false);
+      }
+    } catch (_) {}
+  }
 }
 
 // Locates the imported frame item across the project with retries for asynchronous indexing,
@@ -182,8 +309,8 @@ async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin,
   }
 
   let located = null;
-  // Retry loop: up to 15 attempts (0ms, 100ms, 200ms... up to ~1.5s) for async import indexing
-  for (let attempt = 0; attempt < 15; attempt++) {
+  // Retry loop: up to 25 attempts (0ms, 100ms, 200ms... up to ~2.5s) for async import indexing
+  for (let attempt = 0; attempt < 25; attempt++) {
     if (attempt > 0) {
       await sleep(100);
     }
@@ -202,6 +329,17 @@ async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin,
     let root = null;
     try { root = await project.getRootItem(); } catch (_) {}
     if (root) {
+      // Fast path: native Premiere Pro media path matching if supported
+      if (typeof root.findItemsMatchingMediaPath === "function") {
+        try {
+          const matched = await root.findItemsMatchingMediaPath(fileName);
+          if (matched && matched.length > 0) {
+            located = { item: matched[0], parent: root, inHoldBin: false };
+            break;
+          }
+        } catch (_) {}
+      }
+
       const rootItems = await getBinItems(root);
       for (const it of rootItems) {
         if (await matchesItemAsync(it)) {
@@ -289,8 +427,11 @@ async function addFrameHold(ppro, options = {}) {
   const clipName = await trackItemName(clip.item, "Clip");
 
   // Determine hold start & duration
-  const holdStartTicks = ctiTicks;
-  let holdDurationTicks = clip.endTicks > ctiTicks ? (clip.endTicks - ctiTicks) : (tpf * 48n);
+  let holdStartTicks = ctiTicks;
+  if (ctiTicks < clip.startTicks || ctiTicks >= clip.endTicks) {
+    holdStartTicks = clip.startTicks;
+  }
+  let holdDurationTicks = clip.endTicks > holdStartTicks ? (clip.endTicks - holdStartTicks) : (tpf * 48n);
   if (holdDurationTicks <= 0n) holdDurationTicks = tpf * 48n; // fallback at least ~2 seconds
   const holdEndTicks = holdStartTicks + holdDurationTicks;
 
@@ -434,33 +575,46 @@ async function addFrameHold(ppro, options = {}) {
     throw new Error("Exporter.exportSequenceFrame is not supported in this Premiere build.");
   }
 
-  const uxp = require("uxp");
-  const tempFolder = await uxp.storage.localFileSystem.getTemporaryFolder();
-  const folderPath = tempFolder.nativePath;
+  const { folder: exportFolder, folderPath, inProjectFolder } = await getHoldExportFolder(project);
   const fileName = `CutDeck_Hold_${Date.now()}.png`;
 
   const tickTime = makeTickTime(ppro);
   if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
 
-  const exported = await ppro.Exporter.exportSequenceFrame(
-    seq,
-    ctiTime,
-    fileName,
-    folderPath,
-    width,
-    height
-  );
-  if (!exported) {
-    throw new Error("Premiere failed to export frame at playhead.");
+  const exportTicks = (ctiTicks >= clip.startTicks && ctiTicks < clip.endTicks) ? ctiTicks : clip.startTicks;
+  const exportTime = tickTime(exportTicks);
+
+  let mutedTracks = null;
+  try {
+    mutedTracks = await isolateClipTrackForExport(seq, sourceTrack);
+    const exported = await ppro.Exporter.exportSequenceFrame(
+      seq,
+      exportTime,
+      fileName,
+      folderPath,
+      width,
+      height
+    );
+    if (!exported) {
+      throw new Error("Premiere failed to export frame at playhead.");
+    }
+  } finally {
+    if (mutedTracks) {
+      await restoreIsolatedTracks(mutedTracks);
+    }
   }
 
   // CRITICAL PREMIERE FACT (from PREMIERE_FACTS.md line 93):
   // ppro.Exporter.exportSequenceFrame returns true ~100ms BEFORE the file
   // is flushed to disk. We MUST wait for non-zero file size on disk before
   // calling importFiles or Premiere receives a 0-byte file and silently fails to ingest.
-  if (tempFolder && typeof tempFolder.getEntry === "function") {
-    await waitForFile(tempFolder, fileName, { timeoutMs: 8000, intervalMs: 25 });
+  if (exportFolder && typeof exportFolder.getEntry === "function") {
+    const flushed = await waitForFile(exportFolder, fileName, { timeoutMs: 10000, intervalMs: 30 });
+    if (!flushed) {
+      throw new Error(`Premiere export of "${fileName}" timed out before the file was ready on disk.`);
+    }
   }
+  await sleep(60);
 
   // Import into CutDeck > Frame Holds bin
   const sep = folderPath.includes("\\") ? "\\" : "/";
@@ -469,16 +623,7 @@ async function addFrameHold(ppro, options = {}) {
   const rawHoldBin = await getOrCreateFrameHoldBin(project);
   const folderBin = asBinLike(rawHoldBin);
 
-  // Cast target bin to ProjectItem if supported by Premiere Pro UXP
-  let targetBinProjectItem = rawHoldBin;
-  if (ppro.ProjectItem && typeof ppro.ProjectItem.cast === "function") {
-    try {
-      const casted = ppro.ProjectItem.cast(rawHoldBin);
-      if (casted) targetBinProjectItem = casted;
-    } catch (_) {}
-  }
-
-  const imported = await project.importFiles([fullPath], true, targetBinProjectItem, false);
+  const imported = await project.importFiles([fullPath], true, rawHoldBin, false);
   console.log(`CutDeck FrameHold: importFiles(${fullPath}) returned`, imported);
 
   // Locate imported item with retry loop and auto-move fallback
@@ -573,10 +718,13 @@ async function addFrameHold(ppro, options = {}) {
   } catch (_) {}
 
   const holdSecs = (Number(holdDurationTicks) / Number(TICKS_PER_SECOND)).toFixed(1);
-  console.log(`CutDeck: placed Frame Hold on V${targetTrack + 1} (${holdSecs}s) in ${Date.now() - t0} ms`);
+  console.log(`CutDeck: placed Frame Hold on V${targetTrack + 1} (${holdSecs}s, ${inProjectFolder ? "in project CutDeck folder" : "in temp folder"}) in ${Date.now() - t0} ms`);
 
   return {
     success: true,
+    withoutExport: false,
+    inProjectFolder,
+    filePath: fullPath,
     clipName,
     sourceTrack: sourceTrack + 1,
     targetTrack: targetTrack + 1,
@@ -590,5 +738,8 @@ module.exports = {
   findClipAtPlayhead,
   getOrCreateFrameHoldBin,
   locateAndOrganizeImportedHoldItem,
+  getHoldExportFolder,
+  isolateClipTrackForExport,
+  restoreIsolatedTracks,
   FRAME_HOLD_BIN_NAME,
 };

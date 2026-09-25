@@ -564,6 +564,117 @@ test("frameHold: addFrameHold with withoutExport: true clones clip 1 track up, t
   assert.equal(trimAction.act.inTime.ticks, String(12n * TICKS_PER_SEC));
 });
 
+test("frameHold: saves export frame in project CutDeck folder when project.path is available", async () => {
+  const projectDir = "C:\\Projects\\MyClientProject";
+  const projectFile = `${projectDir}\\MyClientProject.prproj`;
+  const cutdeckDir = `${projectDir}\\CutDeck`;
+
+  let createdFolderName = null;
+  const mockCutdeckFolder = {
+    isFolder: true,
+    nativePath: cutdeckDir,
+    getEntry: async () => ({
+      getMetadata: async () => ({ size: 1024 }),
+    }),
+  };
+
+  const mockProjectFolder = {
+    isFolder: true,
+    nativePath: projectDir,
+    getEntry: async (name) => (name === "CutDeck" ? mockCutdeckFolder : null),
+    createFolder: async (name) => {
+      createdFolderName = name;
+      return mockCutdeckFolder;
+    },
+  };
+
+  const originalGetEntryWithUrl = stubs.uxp.storage.localFileSystem.getEntryWithUrl;
+  stubs.uxp.storage.localFileSystem.getEntryWithUrl = async (url) => mockProjectFolder;
+
+  try {
+    const exportedFrames = [];
+    const mockClip = {
+      startTime: { ticks: "0" },
+      endTime: { ticks: String(5n * TICKS_PER_SEC) },
+      getName: async () => "ClipA.mp4",
+    };
+
+    const mockSeq = {
+      getTimebase: async () => String(TPF_24FPS),
+      getPlayerPosition: async () => ({ ticks: String(2n * TICKS_PER_SEC) }),
+      getVideoTrackCount: async () => 2,
+      getVideoTrack: async (idx) => ({
+        getTrackItems: async () => (idx === 0 ? [mockClip] : []),
+      }),
+      getSettings: async () => ({
+        getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+      }),
+    };
+
+    let importedPath = null;
+    const holdBin = mockBin("Frame Holds", []);
+    const cutdeckBin = mockBin("CutDeck", [holdBin]);
+    const rootBin = mockBin("Root", [cutdeckBin]);
+
+    const project = {
+      path: projectFile,
+      getActiveSequence: async () => mockSeq,
+      getRootItem: async () => rootBin,
+      executeTransaction: (build, label) => {
+        build({ addAction: () => true });
+        return true;
+      },
+      importFiles: async (paths, suppressUI, targetBin) => {
+        importedPath = paths[0];
+        const fileName = paths[0].split(/[\\/]/).pop();
+        const stillItem = {
+          name: fileName,
+          type: 1,
+          createSetInOutPointsAction: () => ({ type: "setInOut" }),
+        };
+        holdBin.items.push(stillItem);
+        return true;
+      },
+    };
+
+    const fakePpro = {
+      Project: { getActiveProject: async () => project },
+      Sequence: { getActiveSequence: async () => mockSeq },
+      TickTime: { createWithTicks: (ticks) => ({ ticks: String(ticks) }) },
+      Exporter: {
+        exportSequenceFrame: async (seq, time, fileName, folderPath, width, height) => {
+          exportedFrames.push({ time, fileName, folderPath, width, height });
+          return true;
+        },
+      },
+      SequenceEditor: {
+        getEditor: async () => ({
+          createOverwriteItemAction: (item, time, trackIndex) => ({
+            type: "overwrite",
+            item,
+            time,
+            trackIndex,
+          }),
+        }),
+      },
+      Constants: {
+        TrackItemType: { CLIP: "TrackItemType.CLIP" },
+        MediaType: { VIDEO: "MediaType.VIDEO" },
+      },
+    };
+
+    const res = await frameHold.addFrameHold(fakePpro, { withoutExport: false });
+
+    assert.equal(res.success, true);
+    assert.equal(res.inProjectFolder, true);
+    assert.ok(res.filePath.includes("CutDeck"), "File path should be inside CutDeck folder");
+    assert.equal(exportedFrames[0].folderPath, cutdeckDir);
+    assert.equal(importedPath.startsWith(cutdeckDir), true, "Imported file path should start with project CutDeck dir");
+  } finally {
+    stubs.uxp.storage.localFileSystem.getEntryWithUrl = originalGetEntryWithUrl;
+  }
+});
+
 // ============================================================================
 // 4. adjustmentLayer.js (RAM and O(N) Efficiency Optimization)
 // ============================================================================
@@ -917,5 +1028,130 @@ test("adjust feature: onAddFrameHold with withoutExport: true sets finish-in-Pre
   assert.equal(calledWith.withoutExport, true);
   assert.equal(ctl.state.status.level, "ready");
   assert.match(ctl.state.status.text, /Hold clip placed on V2 & selected! In Premiere: Right-click > Add Frame Hold to finish\./);
+});
+
+test("frameHold: isolateClipTrackForExport mutes only other video and caption tracks, and restoreIsolatedTracks restores them", async () => {
+  const muteStates = {
+    v0: false,
+    v1: false, // target track (1)
+    v2: true,  // already muted by user
+    c0: false, // caption track
+  };
+
+  const makeTrack = (key) => ({
+    isMuted: async () => muteStates[key],
+    setMute: async (val) => { muteStates[key] = val; return true; },
+  });
+
+  const seq = {
+    getVideoTrackCount: async () => 3,
+    getVideoTrack: async (idx) => makeTrack(`v${idx}`),
+    getCaptionTrackCount: async () => 1,
+    getCaptionTrack: async (idx) => makeTrack(`c${idx}`),
+  };
+
+  // Isolate track 1 (V2)
+  const muted = await frameHold.isolateClipTrackForExport(seq, 1);
+
+  // V0 should be muted
+  assert.equal(muteStates.v0, true, "V0 should be temporarily muted");
+  // V1 (target) should NOT be muted
+  assert.equal(muteStates.v1, false, "V1 (target) must remain unmuted");
+  // V2 was already muted by user, should stay muted
+  assert.equal(muteStates.v2, true, "V2 was already muted");
+  // C0 should be muted
+  assert.equal(muteStates.c0, true, "C0 should be temporarily muted");
+  // muted list should only contain V0 and C0 (not V1 or V2)
+  assert.equal(muted.length, 2, "Only V0 and C0 were newly muted");
+
+  // Restore
+  await frameHold.restoreIsolatedTracks(muted);
+  assert.equal(muteStates.v0, false, "V0 must be restored to unmuted");
+  assert.equal(muteStates.v1, false, "V1 must stay unmuted");
+  assert.equal(muteStates.v2, true, "V2 must remain muted as user had it");
+  assert.equal(muteStates.c0, false, "C0 must be restored to unmuted");
+});
+
+test("frameHold: addFrameHold isolates selected clip track during exportSequenceFrame", async () => {
+  let v0MutedDuringExport = null;
+  let v1MutedDuringExport = null;
+  const vTrackMutes = [false, false];
+
+  const clipV2 = {
+    startTime: { ticks: String(1n * TICKS_PER_SEC) },
+    endTime: { ticks: String(4n * TICKS_PER_SEC) },
+    getName: async () => "ReactionCam_V2.mp4",
+  };
+
+  const mockSeq = {
+    getTimebase: async () => String(TPF_24FPS),
+    getPlayerPosition: async () => ({ ticks: String(2n * TICKS_PER_SEC) }),
+    getVideoTrackCount: async () => 2,
+    getVideoTrack: async (idx) => ({
+      getTrackItems: async () => (idx === 1 ? [clipV2] : []),
+      isMuted: async () => vTrackMutes[idx],
+      setMute: async (m) => { vTrackMutes[idx] = m; return true; },
+    }),
+    getCaptionTrackCount: async () => 0,
+    getSettings: async () => ({
+      getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+    }),
+  };
+
+  const holdBin = mockBin("Frame Holds", []);
+  const cutdeckBin = mockBin("CutDeck", [holdBin]);
+  const rootBin = mockBin("Root", [cutdeckBin]);
+
+  const project = {
+    getActiveSequence: async () => mockSeq,
+    executeTransaction: (build) => {
+      build({ addAction: () => true });
+      return true;
+    },
+    importFiles: async (paths, suppressUI, targetBin) => {
+      const fileName = paths[0].split(/[\\/]/).pop();
+      const stillItem = {
+        name: fileName,
+        type: 1,
+        createSetInOutPointsAction: () => ({ type: "setInOut" }),
+      };
+      (targetBin || holdBin).items.push(stillItem);
+      return true;
+    },
+    getRootItem: async () => rootBin,
+  };
+
+  const ppro = {
+    Project: { getActiveProject: async () => project },
+    TickTime: { createWithTicks: (ticks) => ({ ticks: String(ticks) }) },
+    Exporter: {
+      exportSequenceFrame: async () => {
+        // Record mute state DURING export
+        v0MutedDuringExport = vTrackMutes[0];
+        v1MutedDuringExport = vTrackMutes[1];
+        return true;
+      },
+    },
+    SequenceEditor: {
+      getEditor: async () => ({
+        createOverwriteItemAction: () => () => true,
+      }),
+    },
+    Constants: {
+      TrackItemType: { CLIP: "TrackItemType.CLIP" },
+      MediaType: { VIDEO: "MediaType.VIDEO" },
+    },
+  };
+
+  const res = await frameHold.addFrameHold(ppro);
+
+  assert.equal(res.success, true);
+  assert.equal(res.sourceTrack, 2); // V2
+  // Verify that V1 (idx 0) was muted DURING exportSequenceFrame!
+  assert.equal(v0MutedDuringExport, true, "V1 (other track) must be muted during export");
+  // Verify that V2 (idx 1, selected clip) was NOT muted during export!
+  assert.equal(v1MutedDuringExport, false, "V2 (target clip track) must stay unmuted during export");
+  // Verify that V1 was restored to unmuted AFTER export!
+  assert.equal(vTrackMutes[0], false, "V1 must be restored to unmuted after export completes");
 });
 
