@@ -656,42 +656,48 @@ def main(argv: list[str] | None = None) -> int:
 
             from cutdeck.words import words_for_job
 
-            _progress(35, "Transcribing speech")
-            print("--asr: running the full ASR pipeline on the mixdown "
-                  "(this transcribes the whole mixdown — slower than silence-only)...")
             db_path = Path(args.db) if args.db else store._DEFAULT_DB
-            token_dicts = run_file(mixdown_wav, raw_config, db_path,
-                                   ingest_result=mixdown_result)
-            print(f"--asr: got {len(token_dicts)} tokens")
 
-            # run_file() resolves/creates its own job_id internally and never
-            # returns it — look it up by media path so the plan we save below
-            # references the job the tokens actually belong to, not args.job_id's
-            # default of 0 (which doesn't exist -> cut_plan FK violation).
+            # The mixdown is deterministic for one sequence + range, so its sha256
+            # is the cache key: a finished job for the same media, engine pair and
+            # pipeline version already holds the transcript — reuse it, 0 ASR passes.
+            from transcribe.pipeline import plan as planning
+            from transcribe.pipeline.run import PIPELINE_VERSION
+            engine_a, engine_b = planning.canonical_engine_names(raw_config)
             asr_conn = store.connect(db_path)
             try:
                 media_id = store.create_media(asr_conn, mixdown_wav)
-                job_row = store.get_latest_job_for_media(asr_conn, media_id)
+                cached = store.find_finished_job(
+                    asr_conn, media_id, engine_a, engine_b, PIPELINE_VERSION)
+                if cached is not None:
+                    print(f"--asr: reusing the transcript of job {cached.id} "
+                          "(same mixdown, engines and pipeline version)")
+                    words = words_for_job(asr_conn, cached.id)
+                    token_dicts = [dict(text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
+                                   for t in store.get_tokens(asr_conn, cached.id)]
+                    args.job_id = cached.id
             finally:
                 asr_conn.close()
-            if job_row is not None:
-                args.job_id = job_row.id
-                # Read the word timeline before the purge below drops
-                # engine_result.raw_words_json — filler/repeat cuts need it.
-                words_conn = store.connect(db_path)
+
+            if cached is None:
+                _progress(35, "Transcribing speech")
+                print("--asr: running the full ASR pipeline on the mixdown "
+                      "(this transcribes the whole mixdown — slower than silence-only)...")
+                token_dicts = run_file(mixdown_wav, raw_config, db_path,
+                                       ingest_result=mixdown_result)
+                # run_file() resolves/creates its own job_id internally and never
+                # returns it — look it up by media path so the plan we save below
+                # references the job the tokens actually belong to, not args.job_id's
+                # default of 0 (which doesn't exist -> cut_plan FK violation).
+                asr_conn = store.connect(db_path)
                 try:
-                    words = words_for_job(words_conn, job_row.id)
+                    job_row = store.get_latest_job_for_media(asr_conn, media_id)
+                    if job_row is not None:
+                        args.job_id = job_row.id
+                        words = words_for_job(asr_conn, job_row.id)
                 finally:
-                    words_conn.close()
-                if extracted_tmp is not None:
-                    # Our own temp mixdown is deleted below and can never be
-                    # resumed — keep the job row for cut_plan's FK, drop the
-                    # tokens/spans/engine results that would otherwise pile up.
-                    purge_conn = store.connect(db_path)
-                    try:
-                        store.purge_job_transcript_data(purge_conn, job_row.id)
-                    finally:
-                        purge_conn.close()
+                    asr_conn.close()
+            print(f"--asr: got {len(token_dicts)} tokens")
             # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
             # dicts run_file returns aren't attribute-accessible, so wrap them
             # rather than re-deriving the job id run_file already resolved
