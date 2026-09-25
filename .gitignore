@@ -73,3 +73,6 @@ uxp/cutdeck/package/
 
 # Node
 node_modules/
+
+# Local Premiere test projects read by cutdeck.prproj_reader (never committed)
+test_projects/
