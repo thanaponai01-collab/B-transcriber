@@ -77,7 +77,15 @@ const probes = createProbesFeature({
   uxp,
   onCapturePreset: presets.onCapturePreset,
 });
-const align = createAlignFeature({ ppro, ctl: alignCtl, uxp, rpc, ensureHelper, isMounted: () => alignPanel.isMounted() });
+const align = createAlignFeature({
+  ppro,
+  ctl: alignCtl,
+  uxp,
+  rpc,
+  ensureHelper,
+  isMounted: () => alignPanel.isMounted(),
+  isMainBusy: () => mainCtl.state.busy,
+});
 
 // The Premiere driver: MCP agents and scripts reach Premiere through the helper and this panel
 // (docs/arch-design-helper-v2.md move 3). Its own quiet connection, re-registered after drops.

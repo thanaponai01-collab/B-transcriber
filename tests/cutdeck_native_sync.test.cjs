@@ -41,6 +41,8 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
     getAudioTrack: async (i) => ({ getTrackItems: () => seq.audio[i].map(wrapItem) }),
     getTimebase: async () => TPF.toString(),
     getProjectItem: async () => ({ _seq: seq, createSetNameAction: (n) => ({ type: "rename", seq, name: n }),
+      getColorLabelIndex: async () => seq.colorLabelIndex !== undefined ? seq.colorLabelIndex : 5,
+      createSetColorLabelAction: (idx) => ({ type: "setColorLabel", seq, idx }),
       getParentBin: () => binOf(seq) }),
     createCloneAction: () => ({ type: "cloneSeq", seq }),
     _seq: seq,
@@ -71,6 +73,8 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
       binOf(a.seq).items.push(copy);
     } else if (a.type === "rename") {
       a.seq.name = a.name;
+    } else if (a.type === "setColorLabel") {
+      a.seq.colorLabelIndex = a.idx;
     } else if (a.type === "remove") {
       if (removeIgnored) return;
       for (const kind of ["video", "audio"]) a.seq[kind] = a.seq[kind].map((t) => t.filter((r) => !a.raws.includes(r)));
@@ -203,6 +207,7 @@ test("places each clip on its own tracks at its planned start, in a _Synced copy
   assert.equal(host.snapshot(), before, "the user's own sequence was edited");
   const copy = host.sequences[1];
   assert.equal(copy.name, "Shoot_Synced");
+  assert.equal(copy.colorLabelIndex, 5, "copy should preserve source sequence's color label");
   assert.equal(host.project.opened, "Shoot_Synced");
   assert.deepEqual(host.binPath(copy), ["CutDeck", "Synced"], "the copy is filed under CutDeck > Synced");
   assert.deepEqual(host.binPath(host.original), [], "the user's sequence stays where it was");

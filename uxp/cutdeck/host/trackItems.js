@@ -67,28 +67,23 @@ async function isTrackItemSelected(it) {
 // and is not restricted to video tracks either.
 async function getSelectedTrackItems(seq, ppro) {
   if (!seq) return [];
-  let rawItems = [];
   try {
     if (typeof seq.getSelection === "function") {
       const sel = await seq.getSelection();
       if (sel) {
         if (typeof sel.getTrackItems === "function") {
           const items = await sel.getTrackItems();
-          if (items && items.length > 0) rawItems = items;
+          if (items && Array.isArray(items)) return items;
         } else if (Array.isArray(sel)) {
-          rawItems = sel;
+          return sel;
         } else if (Array.isArray(sel.items)) {
-          rawItems = sel.items;
+          return sel.items;
         }
       }
     }
   } catch (_) {}
 
-  if (rawItems.length > 0) return rawItems;
-
-  // seq.getSelection() has already proven unreliable on this build once before (see
-  // getSelectedVideoClips, which needed the exact same fallback) — walk every video AND
-  // audio track's own items and ask each one directly whether it's selected.
+  // Fallback: only if seq.getSelection() threw, returned null, or had no usable items API
   const found = [];
   try {
     const videoCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;

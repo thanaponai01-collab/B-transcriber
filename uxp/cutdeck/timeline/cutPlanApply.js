@@ -23,14 +23,56 @@ function cutsToTicks(cutsJson, sequenceTicksPerFrame) {
   return cuts;
 }
 
+function createFastShiftFor(cuts) {
+  if (!cuts || !cuts.length) return () => 0n;
+  const n = cuts.length;
+  const pref = new Array(n + 1);
+  pref[0] = 0n;
+  for (let i = 0; i < n; i++) pref[i + 1] = pref[i] + (cuts[i][1] - cuts[i][0]);
+  return function fastShift(t) {
+    let low = 0, high = n - 1, best = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (cuts[mid][0] <= t) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (best === -1) return 0n;
+    const [a, b] = cuts[best];
+    if (b <= t) return pref[best + 1];
+    return pref[best] + (t - a);
+  };
+}
+
 // Total ticks removed before `t` (a point inside a cut shifts to the cut's start).
 function shiftFor(t, cuts) {
+  if (!cuts || !cuts.length) return 0n;
+  if (cuts.length > 8) return createFastShiftFor(cuts)(t);
   let shift = 0n;
   for (const [a, b] of cuts) {
     if (b <= t) shift += b - a;
     else if (a < t) shift += t - a;
   }
   return shift;
+}
+
+function isInsideCut(start, end, cuts) {
+  if (!cuts || !cuts.length) return false;
+  let low = 0, high = cuts.length - 1, best = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (cuts[mid][0] <= start) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  if (best === -1) return false;
+  return cuts[best][1] >= end;
 }
 
 // [start, end) minus every overlapping cut, as the surviving sub-ranges in order.
@@ -48,7 +90,19 @@ function keepSubranges(start, end, cuts) {
 }
 
 function overlapsCut(start, end, cuts) {
-  return cuts.some(([a, b]) => a < end && b > start);
+  if (!cuts || !cuts.length) return false;
+  let low = 0, high = cuts.length - 1, best = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (cuts[mid][0] < end) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  if (best === -1) return false;
+  return cuts[best][1] > start;
 }
 
 function timecode(t) {
@@ -129,4 +183,4 @@ function verifyReadBack(items, plan, actual) {
   return problems;
 }
 
-module.exports = { cutsToTicks, shiftFor, keepSubranges, overlapsCut, planCutApply, verifyReadBack };
+module.exports = { cutsToTicks, shiftFor, createFastShiftFor, isInsideCut, keepSubranges, overlapsCut, planCutApply, verifyReadBack };

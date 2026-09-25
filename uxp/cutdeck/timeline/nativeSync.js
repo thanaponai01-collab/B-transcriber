@@ -31,19 +31,41 @@ async function listClips(ppro, seq, kind, { end = true, inPoint = true } = {}) {
   for (let t = 0; t < count; t++) {
     const track = await (video ? seq.getVideoTrack(t) : seq.getAudioTrack(t));
     const items = track ? await getTrackClipItems(track, ppro) : [];
-    for (const item of items) {
-      clips.push({ item, kind, track: t, start: toTicks(await item.getStartTime()),
-        end: end ? toTicks(await item.getEndTime()) : undefined,
-        inPoint: inPoint ? toTicks(await item.getInPoint()) : undefined });
-    }
+    if (!items.length) continue;
+    const trackClips = await Promise.all(items.map(async (item) => {
+      const [startTick, endTick, inPointTick] = await Promise.all([
+        item.getStartTime(),
+        end ? item.getEndTime() : null,
+        inPoint ? item.getInPoint() : null,
+      ]);
+      return {
+        item,
+        kind,
+        track: t,
+        start: toTicks(startTick),
+        end: end ? toTicks(endTick) : undefined,
+        inPoint: inPoint ? toTicks(inPointTick) : undefined,
+      };
+    }));
+    clips.push(...trackClips);
   }
   return { count, clips };
 }
 
 async function mediaPath(ppro, item) {
-  const projectItem = await item.getProjectItem();
-  const clip = ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
+  const projectItem = typeof item.getProjectItem === "function" ? await item.getProjectItem() : null;
+  const clip = ppro && ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
   return clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
+}
+
+async function mediaInfo(ppro, item) {
+  const projectItem = typeof item.getProjectItem === "function" ? await item.getProjectItem() : null;
+  const clip = ppro && ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
+  const path = clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
+  const colorLabel = projectItem && typeof projectItem.getColorLabelIndex === "function"
+    ? await projectItem.getColorLabelIndex()
+    : null;
+  return { projectItem, path, colorLabel };
 }
 
 /* Every clip item on the sequence, each with the file behind it (null when it has none).
@@ -51,12 +73,30 @@ async function mediaPath(ppro, item) {
    positions — c.path is then undefined; `end: false` / `inPoint: false` likewise skip those
    (1 call each per clip). */
 async function readSequence(ppro, seq, { paths = true, end = true, inPoint = true } = {}) {
-  const video = await listClips(ppro, seq, "video", { end, inPoint });
-  const audio = await listClips(ppro, seq, "audio", { end, inPoint });
+  const [video, audio] = await Promise.all([
+    listClips(ppro, seq, "video", { end, inPoint }),
+    listClips(ppro, seq, "audio", { end, inPoint }),
+  ]);
   if (paths) {
-    for (const c of [...video.clips, ...audio.clips]) {
-      try { c.path = await mediaPath(ppro, c.item); } catch (_) { c.path = null; }
+    const allClips = [...video.clips, ...audio.clips];
+    const cache = new Map();
+    for (const c of allClips) {
+      try {
+        let info = cache.get(c.item);
+        if (!info) {
+          info = await mediaInfo(ppro, c.item);
+          cache.set(c.item, info);
+        }
+        c.path = info.path;
+        c.projectItem = info.projectItem;
+        c.colorLabel = info.colorLabel;
+      } catch (_) {
+        c.path = null;
+        c.projectItem = null;
+        c.colorLabel = null;
+      }
     }
+    cache.clear();
   }
   return { videoTracks: video.count, audioTracks: audio.count, video: video.clips, audio: audio.clips };
 }
@@ -90,8 +130,19 @@ function groupClips(seq) {
   const clips = [...units, ...recorders.values()]
     .sort((x, y) => (first(x).start < first(y).start ? -1 : first(x).start > first(y).start ? 1
       : Number(!x.video) - Number(!y.video) || first(x).track - first(y).track))
-    .map((u, i) => ({ ...u, id: `c${i}`, key: unitKey(first(u)), path: first(u).path,
-      name: baseName(first(u).path), duration: first(u).end - first(u).start }));
+    .map((u, i) => {
+      const f = first(u);
+      return {
+        ...u,
+        id: `c${i}`,
+        key: unitKey(f),
+        path: f.path,
+        projectItem: f.projectItem || null,
+        colorLabel: f.colorLabel !== undefined ? f.colorLabel : null,
+        name: baseName(f.path),
+        duration: f.end - f.start,
+      };
+    });
   const skipped = [...seq.video, ...seq.audio].filter((c) => !c.path);
   return { clips, skipped };
 }
@@ -141,8 +192,15 @@ async function copySequence(project, source, name) {
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; stopped before placing anything.`);
   const copy = created[0];
   const item = await copy.getProjectItem();
+  const sourceItem = typeof source.getProjectItem === "function" ? await source.getProjectItem() : null;
+  const sourceColor = sourceItem && typeof sourceItem.getColorLabelIndex === "function"
+    ? await sourceItem.getColorLabelIndex()
+    : null;
   runTransaction(project, "CutDeck Sync: name copy", (compound) => {
     if (!compound.addAction(item.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
+    if (sourceColor !== null && typeof item.createSetColorLabelAction === "function") {
+      compound.addAction(item.createSetColorLabelAction(sourceColor));
+    }
   });
   // File it under CutDeck > Synced, the same move nativeCut.js uses for Rough Cuts
   // (FolderItem.createMoveItemAction d.ts:1271, ProjectItem.getParentBin d.ts:2515).
@@ -162,14 +220,15 @@ async function findSequence(project, id) {
 
 /* One transaction: clear the copy, then place every clip from its file. */
 async function placeAll(ppro, project, copy, targets) {
-  const now = await readSequence(ppro, copy);
-  const byKey = new Map(groupClips(now).clips.map((c) => [c.key, c]));
-  const moves = [];
   for (const t of targets) {
-    const here = byKey.get(t.clip.key);
-    if (!here) throw new Error(`${t.clip.name} is not in the copy; stopped before placing anything.`);
-    moves.push({ ...t, projectItem: await (here.video || here.audio[0]).item.getProjectItem() });
+    if (!t.projectItem) {
+      const lead = t.clip && (t.clip.video || (t.clip.audio && t.clip.audio[0]));
+      if (lead && lead.item && typeof lead.item.getProjectItem === "function") {
+        t.projectItem = await lead.item.getProjectItem();
+      }
+    }
   }
+  const now = await readSequence(ppro, copy, { paths: false, end: false, inPoint: false });
   const editor = ppro.SequenceEditor.getEditor(copy);
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   runTransaction(project, "CutDeck Sync", (compound) => {
@@ -182,12 +241,14 @@ async function placeAll(ppro, project, copy, targets) {
       cleared = compound.addAction(editor.createRemoveItemsAction(selection, false, ppro.Constants.MediaType.ANY));
     });
     if (!cleared) throw new Error("addAction(clear copy) returned false");
-    for (const m of moves) {
+    for (const m of targets) {
       if (!compound.addAction(editor.createOverwriteItemAction(m.projectItem, tick(m.start), m.tracks.video, m.tracks.audio))) {
         throw new Error(`addAction(place ${m.clip.name}) returned false`);
       }
     }
   });
+  now.video.length = 0;
+  now.audio.length = 0;
 }
 
 /* What landed, against what was planned. Problems are named per clip; nothing is fixed up. */
@@ -254,7 +315,7 @@ async function syncSequence(ppro, deps) {
   const targets = clips.map((clip, i) => {
     const p = byId.get(clip.id);
     if (!p) throw new Error(`The helper returned no place for ${clip.name}.`);
-    return { clip, tracks: tracks[i], start: startTicks(p.start_s, !!clip.video, ticksPerFrame),
+    return { clip, projectItem: clip.projectItem || null, tracks: tracks[i], start: startTicks(p.start_s, !!clip.video, ticksPerFrame),
       mediaTicks: p.media_duration_s === null || p.media_duration_s === undefined ? null
         : BigInt(Math.round(p.media_duration_s * Number(TICKS_PER_SECOND))) };
   });
@@ -269,7 +330,10 @@ async function syncSequence(ppro, deps) {
   const problems = checkPlacement(await readSequence(ppro, copy), targets, ticksPerFrame);
   await project.openSequence(copy);
   await project.setActiveSequence(copy);
-  return { text: formatReport(name, plan, clips, skipped, problems), problems };
+  const report = formatReport(name, plan, clips, skipped, problems);
+  targets.length = 0;
+  clips.length = 0;
+  return { text: report, problems };
 }
 
 module.exports = { syncSequence, readSequence, mediaPath, groupUnits, groupClips, assignTracks, startTicks,

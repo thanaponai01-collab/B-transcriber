@@ -14,7 +14,7 @@
 const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("./nativeSync.js");
-const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, overlapsCut } = require("./cutPlanApply.js");
+const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 
@@ -36,7 +36,7 @@ async function readItems(ppro, seq, cuts) {
     try { speed = await c.item.getSpeed(); } catch (_) { /* not reported: treat as normal */ }
     try { reversed = !!(await c.item.isSpeedReversed()); } catch (_) { /* idem */ }
     try {
-      const pi = ppro.ClipProjectItem.cast(await c.item.getProjectItem());
+      const pi = ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(await c.item.getProjectItem()) : await c.item.getProjectItem();
       if (pi && typeof pi.isSequence === "function") isNested = !!(await pi.isSequence());
       if (pi && typeof pi.isMulticamClip === "function") isMulticam = !!(await pi.isMulticamClip());
     } catch (_) { /* graphics / adjustment layers have no clip project item */ }
@@ -49,10 +49,21 @@ async function readItems(ppro, seq, cuts) {
     for (let t = 0; t < count; t++) {
       const track = await get(t);
       const found = track ? (await track.getTrackItems(type, false)) || [] : [];
-      for (const x of found) {
-        transitions.push({ id: `${kind}-transition-${t}`, name: "transition", mediaType: kind, track: t, isTransition: true,
-          startTicks: toTicks(await x.getStartTime()), endTicks: toTicks(await x.getEndTime()), inTicks: 0n });
-      }
+      if (!found.length) continue;
+      const trackTransitions = await Promise.all(found.map(async (x) => {
+        const [startTick, endTick] = await Promise.all([x.getStartTime(), x.getEndTime()]);
+        return {
+          id: `${kind}-transition-${t}`,
+          name: "transition",
+          mediaType: kind,
+          track: t,
+          isTransition: true,
+          startTicks: toTicks(startTick),
+          endTicks: toTicks(endTick),
+          inTicks: 0n,
+        };
+      }));
+      transitions.push(...trackTransitions);
     }
   }
   return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
@@ -77,20 +88,34 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   // of builders, not actions.
   const tx = (label, builders) => {
     if (!builders.length) return 0;
+    const ed = editor();
     timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
-      builders.forEach((build, i) => {
-        const where = `${label}: action ${i + 1} of ${builders.length}${build.what ? ` (${build.what})` : ""}`;
+      const len = builders.length;
+      for (let i = 0; i < len; i++) {
+        const build = builders[i];
         let action, added;
         // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
         // cut list went through on a rerun, so an empty result is asked for once more (still inside
         // this callback, as required) before failing. The read-back still checks every piece.
         for (let attempt = 0; attempt < 2 && !action; attempt++) {
-          try { action = build(); } catch (e) { throw new Error(`${where} failed to build: ${e.message}`); }
+          try { action = build(ed); } catch (e) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where} failed to build: ${e.message}`);
+          }
         }
-        if (!action) throw new Error(`${where}: Premiere returned no action (${action}), twice`);
-        try { added = compound.addAction(action); } catch (e) { throw new Error(`${where} was refused: ${e.message}`); }
-        if (!added) throw new Error(`${where}: addAction returned false`);
-      });
+        if (!action) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where}: Premiere returned no action (${action}), twice`);
+        }
+        try { added = compound.addAction(action); } catch (e) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where} was refused: ${e.message}`);
+        }
+        if (!added) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where}: addAction returned false`);
+        }
+      }
     }));
     return 1;
   };
@@ -123,13 +148,15 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   steps += tx("make razor fillers", [...sourceOf].map(([key, it]) => {
     const src = findIn(seq, key, it.startTicks);
     if (!src) throw new Error(`clip on ${key.replace("|", " track ")} vanished`);
-    return () => editor().createCloneTrackItemAction(src.item, tick(park - it.startTicks), 0, 0, false, false);
+    const dt = tick(park - it.startTicks);
+    return (ed) => (ed || editor()).createCloneTrackItemAction(src.item, dt, 0, 0, false, false);
   }));
   seq = await read();
   steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
     const f = findIn(seq, key, park);
     if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land`);
-    return () => f.item.createSetOutPointAction(tick(f.inPoint + tpf));
+    const dt = tick(f.inPoint + tpf);
+    return () => f.item.createSetOutPointAction(dt);
   }));
 
   // 3. razor: one filler clone per cut edge.
@@ -138,20 +165,24 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   for (const [key, at] of edges) {
     const f = findIn(seq, key, park);
     if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
+    const fItem = f.item;
     for (const p of at) {
-      razor.push(Object.assign(() => editor().createCloneTrackItemAction(f.item, tick(p - park), 0, 0, false, false),
+      const dt = tick(p - park);
+      razor.push(Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(fItem, dt, 0, 0, false, false),
         { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` }));
     }
   }
   steps += tx("split at cut edges", razor);
+  razor.length = 0;
 
   // 4. remove everything inside a cut, and the fillers — per media type.
   seq = await read({ inPoint: false });
-  const inside = (c) => c.start >= park || cuts.some(([a, b]) => a <= c.start && c.end <= b);
-  const doomed = all(seq).filter(inside);
+  const inside = (c) => c.start >= park || isInsideCut(c.start, c.end, cuts);
+  let doomed = all(seq).filter(inside);
   if (doomed.length) {
     steps += 1;
     const MT = ppro.Constants.MediaType;
+    const ed = editor();
     timed("remove cut pieces", () => runTransaction(project, "CutDeck: remove cut pieces", (compound) => {
       for (const kind of ["video", "audio"]) {
         const these = doomed.filter((c) => c.kind === kind);
@@ -159,18 +190,26 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
         let added = false;
         ppro.TrackItemSelection.createEmptySelection((selection) => {
           for (const c of these) selection.addItem(c.item, true);
-          added = compound.addAction(editor().createRemoveItemsAction(selection, false, kind === "video" ? MT.VIDEO : MT.AUDIO));
+          added = compound.addAction(ed.createRemoveItemsAction(selection, false, kind === "video" ? MT.VIDEO : MT.AUDIO));
         });
         if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
       }
     }));
+    doomed.length = 0;
+    doomed = null;
   }
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
   seq = await read({ end: false, inPoint: false });
-  const moves = all(seq).map((c) => ({ c, by: shiftFor(c.start, cuts) })).filter((m) => m.by > 0n)
+  const fastShift = createFastShiftFor(cuts);
+  const moves = all(seq).map((c) => ({ c, by: fastShift(c.start) })).filter((m) => m.by > 0n)
     .sort((x, y) => (x.c.start < y.c.start ? -1 : x.c.start > y.c.start ? 1 : 0));
-  steps += tx("close gaps", moves.map(({ c, by }) => () => c.item.createMoveAction(tick(-by))));
+  steps += tx("close gaps", moves.map(({ c, by }) => {
+    const dt = tick(-by);
+    return () => c.item.createMoveAction(dt);
+  }));
+  moves.length = 0;
+  seq = null;
   return steps;
 }
 
@@ -229,6 +268,9 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   }
   const elapsedSeconds = (Date.now() - started) / 1000;
   const problems = verifyReadBack(items, plan, actual);
+  before.items = null;
+  before.transitions = null;
+  actual = null;
   if (problems.length) {
     throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
       + "It is left open for inspection; your original sequence is untouched.");

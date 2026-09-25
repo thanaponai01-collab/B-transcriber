@@ -564,7 +564,7 @@ function subscribeSequenceEvents(ppro, handler) {
   }
 }
 
-function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = null, isMounted = null }) {
+function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = null, isMounted = null, isMainBusy = null }) {
   // Copy uses the probes feature's clipboard code, against this panel's own status.
   const copier = createProbesFeature({ ppro, ctl, uxp });
   // Measuring a Graphic's text needs the helper (it compares the two saved frames).
@@ -590,6 +590,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   // follow-up if more arrived meanwhile.
   async function pollAlignTransform() {
     if (ctl.state.busy) return;
+    if (typeof isMainBusy === "function" && isMainBusy()) return;
     if (typeof isMounted === "function" && !isMounted()) return;
     if (pollInFlight) { pollAgain = true; return; }
     pollInFlight = true;
