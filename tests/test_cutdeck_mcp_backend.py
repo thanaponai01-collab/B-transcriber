@@ -17,7 +17,7 @@ def _media_check_stub(monkeypatch):
     it runs first is covered in test_cutdeck_xml_audio_extract.py."""
     from cutdeck import xml_bridge
     monkeypatch.setattr(xml_bridge, "check_reference_audio",
-                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+                        lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 _FAKE_WORKER = (
     "import json, sys, pathlib;"

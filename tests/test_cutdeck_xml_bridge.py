@@ -7,7 +7,6 @@ import pytest
 
 from cutdeck.xml_bridge import XmlJobs
 
-SAMPLE_XML_PATH = Path(__file__).parent / "fixtures" / "cutdeck_recut_sample_scrubbed.xml"
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +15,7 @@ def _media_check_stub(monkeypatch):
     it runs first is covered in test_cutdeck_xml_audio_extract.py."""
     from cutdeck import xml_bridge
     monkeypatch.setattr(xml_bridge, "check_reference_audio",
-                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+                        lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 
 def test_parse_progress():
@@ -64,7 +63,6 @@ json.dump({{'cuts_frames': [], 'ticks_per_frame': '1', 'sequence_duration_frames
             "audio_track": None, "audio_track_count": 1, "asr": False,
             "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1",
             "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
-        Path(prep["source_path"]).write_text(SAMPLE_XML_PATH.read_text(encoding="utf-8"), encoding="utf-8")
         started = await jobs.dispatch({"type": "start", "job_id": prep["job_id"]})
         assert started["state"] == "running" and "progress" not in started
 
@@ -112,7 +110,6 @@ def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
             "audio_track": None, "audio_track_count": 1, "asr": False,
             "in_ticks": "0", "out_ticks": "1", "end_ticks": "1", "ticks_per_frame": "1",
             "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
-        Path(prep["source_path"]).write_text(SAMPLE_XML_PATH.read_text(encoding="utf-8"), encoding="utf-8")
         await jobs.dispatch({"type": "start", "job_id": prep["job_id"]})
         await asyncio.wait_for(asyncio.gather(*jobs.tasks), 30)
         status = await jobs.dispatch({"type": "status", "job_id": prep["job_id"]})
@@ -170,7 +167,7 @@ def test_panel_jobs_return_a_cut_list_and_write_no_xml(tmp_path, monkeypatch, cu
     assert status["cuts"]["cuts_frames"] == cuts
     assert status["report"]["cuts_applied"] == len(cuts)
     assert "output_path" not in status
-    assert not list(Path(status["log_path"]).parent.glob("*.xml")) or         [p.name for p in Path(status["log_path"]).parent.glob("*.xml")] == ["source.xml"]
+    assert not list(Path(status["log_path"]).parent.glob("*.xml"))
 
 
 @pytest.mark.skipif(__import__("os").name != "nt", reason="Windows console flags")

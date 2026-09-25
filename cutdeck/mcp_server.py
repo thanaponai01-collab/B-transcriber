@@ -48,8 +48,8 @@ def create_server(backend: Backend) -> FastMCP:
         are unchanged. Source media referenced by the XML must be accessible. The
         CutDeck panel's Rough Cut applies the same list natively in Premiere.
         preset: aggressive or standard. speech_protection enables ASR to protect
-        short speech. audio_track is a zero-based XML track (stereo channels may
-        be separate tracks), NOT a Premiere UI track number. Optional frame range
+        short speech. audio_track is a zero-based Premiere audio track (A1 is 0),
+        whatever its channel count. Optional frame range
         is [start_frame, end_frame), measured from the full sequence start. Audio
         is still analyzed over the full sequence; returned spans stay inside the range.
         """

@@ -26,9 +26,9 @@ import uuid
 from xml.etree import ElementTree as ET
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
-from cutdeck import frame_bounds, sequence_json, text_properties
-from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
-                                  check_reference_audio, sequence_timebase)
+from cutdeck import frame_bounds, sequence_model, text_properties
+from cutdeck.sequence_model import Sequence, check_reference_audio
+from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, XmlRecutRefusal
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
@@ -49,26 +49,21 @@ def parse_progress(line: str) -> dict | None:
     return {"pct": min(int(match.group(1)), 100), "stage": match.group(2).strip()}
 
 
-def reference_audio_track(source_xml: str, request: dict) -> int | None:
-    """Map Premiere's logical track to FCP7's exploded channel tracks."""
+def reference_audio_track(sequence: Sequence, request: dict) -> int | None:
+    """The Premiere audio track the panel chose, checked against the sequence that will be analysed."""
     selected = request.get("audio_track")
     if selected is None:
         return None  # Preserve the working command's default exactly.
-    groups = audio_track_groups(source_xml)
-    if len(groups) != request.get("audio_track_count") or not 0 <= selected < len(groups):
+    if len(sequence.tracks) != request.get("audio_track_count") or not 0 <= selected < len(sequence.tracks):
         raise ValueError("Export audio tracks differ from the timeline; refresh and try again")
-    return groups[selected]
+    return selected
 
 
-def reference_label(source_xml: str, checked: dict) -> str:
+def reference_label(checked: dict) -> str:
     """What the status line says is being analyzed, in Premiere's own track names."""
-    try:
-        track = f"A{audio_track_groups(source_xml).index(checked['xml_track']) + 1}"
-    except ValueError:
-        track = f"XML audio track {checked['xml_track'] + 1}"
     files = checked["files"]
     more = f" +{len(files) - 1} more" if len(files) > 1 else ""
-    return f"{track} ({Path(files[0]).name}{more})"
+    return f"A{checked['track'] + 1} ({Path(files[0]).name}{more})"
 
 
 _LOG_NOISE = re.compile(r"PROGRESS:|Traceback \(most recent call last\)|\s")
@@ -86,32 +81,27 @@ def failure_detail(log_path: str) -> str | None:
     return None
 
 
-def range_from_ticks(source_xml: str, request: dict) -> tuple[int, int]:
-    """Validate live sequence geometry against the export using exact integers."""
-    sequence = ET.fromstring(source_xml).find("sequence")
-    if sequence is None:
-        raise ValueError("Export contains no sequence")
-    tb = sequence_timebase(sequence)
-    tick_num = PPRO_TICKS_PER_SECOND * tb.fps_den
-    duration = int(sequence.findtext("duration", "0"))
+def range_from_ticks(sequence: Sequence, request: dict) -> tuple[int, int]:
+    """Validate live sequence geometry against the analysed sequence using exact integers."""
+    tick_num = sequence.ticks_per_frame
 
     def frame(key):
         value = request.get(key)
         if not isinstance(value, str) or not value.isdigit() or len(value) > 24:
             raise ValueError(f"Missing or invalid {key}; refresh the timeline range")
-        numerator = int(value) * tb.fps_num
-        result, remainder = divmod(numerator, tick_num)
+        result, remainder = divmod(int(value), tick_num)
         if remainder:
             raise ValueError(f"{key} is not aligned to the sequence frame grid")
         return result
 
+    duration = sequence.duration_frames
     start, end = frame("in_ticks"), frame("out_ticks")
     req_end = frame("end_ticks")
-    tb_fps = tb.fps_num / tb.fps_den
-    max_pad_frames = max(30, int(tb_fps * 5))
+    tb = sequence.timebase
+    max_pad_frames = max(30, int(tb.fps_num / tb.fps_den * 5))
     if abs(req_end - duration) > max_pad_frames:
         raise ValueError("Export duration differs from the captured full sequence; refusing to cut")
-    if int(request.get("ticks_per_frame", "0")) * tb.fps_num != tick_num:
+    if int(request.get("ticks_per_frame", "0")) != sequence.ticks_per_frame:
         raise ValueError("Export frame rate differs from the captured sequence")
     start = max(0, start)
     end = min(duration, end)
@@ -140,7 +130,7 @@ def _rough_cut_arguments(req: dict) -> dict:
     if type(speech_protection) is not bool:
         raise ValueError("speech_protection must be boolean")
     if audio_track is not None and (type(audio_track) is not int or audio_track < 0):
-        raise ValueError("audio_track must be a non-negative XML audio track index")
+        raise ValueError("audio_track must be a non-negative Premiere audio track index")
     if start_frame is not None or end_frame is not None:
         if (type(start_frame) is not int or type(end_frame) is not int
                 or not 0 <= start_frame < end_frame):
@@ -276,12 +266,11 @@ class XmlJobs:
             if type(context["asr"]) is not bool:
                 raise ValueError("Speech protection must be true or false")
             # The panel's native read of the audio tracks, instead of an XML export (move 6).
-            sequence = sequence_json.validate(req.get("sequence"))
+            sequence_model.from_panel_json(req.get("sequence"))
             job_id, folder = self._allocate()
-            (folder / "source.xml").write_text(
-                sequence_json.to_fcp7_xml(sequence, context["sequence_name"]), encoding="utf-8")
+            (folder / "sequence.json").write_text(json.dumps(req["sequence"]), encoding="utf-8")
             job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
-                   "source_path": str(folder / "source.xml"),
+                   "source_path": str(folder / "sequence.json"),
                    "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
                    "log_path": str(folder / "process.log"),
                    # The panel cuts natively from this list; the XML output route is retired
@@ -329,7 +318,7 @@ class XmlJobs:
                    "context": {"asr": arguments["speech_protection"]},
                    "preset": arguments["preset"],
                    "source_path": arguments["sequence_xml"],
-                   "xml_audio_track": arguments["audio_track"],
+                   "reference_track": arguments["audio_track"],
                    "log_path": str(folder / "process.log")}
             if arguments["start_frame"] is not None:
                 job["range_frames"] = [arguments["start_frame"], arguments["end_frame"]]
@@ -342,10 +331,8 @@ class XmlJobs:
                 return dict(job)  # duplicate request must never run a second time
             if self.active:
                 raise ValueError("CutDeck is already processing a sequence")
-            source = Path(job["source_path"])
-            source_xml = source.read_text(encoding="utf-8-sig")
             try:
-                return self._start(job, source_xml)
+                return self._start(job, sequence_model.load(job["source_path"]))
             except (ValueError, XmlRecutRefusal, ET.ParseError) as exc:
                 # A refusal is final for this export: fail the job so the panel shows
                 # why and clears it, instead of offering to resume a start that can't run.
@@ -355,9 +342,9 @@ class XmlJobs:
                 return dict(job)
         raise ValueError("Unknown request type")
 
-    def _start(self, job: dict, source_xml: str) -> dict:
-        start, end = range_from_ticks(source_xml, job["context"])
-        job["xml_audio_track"] = reference_audio_track(source_xml, job["context"])
+    def _start(self, job: dict, sequence: Sequence) -> dict:
+        start, end = range_from_ticks(sequence, job["context"])
+        job["reference_track"] = reference_audio_track(sequence, job["context"])
         job["range_frames"] = [start, end]
         job["state"] = "running"
         return self._launch(job, self._run(job))
@@ -465,13 +452,13 @@ class XmlJobs:
         try:
             folder = self.directory / job["job_id"]
             job["progress"] = {"pct": 2, "stage": "Checking source media"}
-            source_xml = Path(job["source_path"]).read_text(encoding="utf-8-sig")
             try:
+                sequence = sequence_model.load(job["source_path"])
                 checked = await asyncio.to_thread(
-                    check_reference_audio, source_xml, job["xml_audio_track"])
+                    check_reference_audio, sequence, job["reference_track"])
             except XmlRecutRefusal as exc:
                 raise RuntimeError(f"Cannot analyze this sequence: {exc}") from None
-            job["reference"] = reference_label(source_xml, checked)
+            job["reference"] = reference_label(checked)
             # Every job returns the native cut list; nothing writes XML any more
             # (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
             cuts_path = folder / "cuts.json"
@@ -485,8 +472,8 @@ class XmlJobs:
                 args += ["--range-start-frame", str(start), "--range-end-frame", str(end)]
             if job["context"]["asr"]:
                 args.append("--asr")
-            if job["xml_audio_track"] is not None:
-                args += ["--audio-track", str(job["xml_audio_track"])]
+            if job["reference_track"] is not None:
+                args += ["--audio-track", str(job["reference_track"])]
             env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             with open(job["log_path"], "wb") as log:
                 process = await asyncio.create_subprocess_exec(

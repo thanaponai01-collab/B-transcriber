@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, CutSpan, Timebase
+from cutdeck.sequence_model import from_fcp7_xml
 from cutdeck.xml_recut import recut
 from cutdeck.xml_sequence import frame_to_ticks
 from cutdeck.xml_bridge import XmlJobs, range_from_ticks, reference_audio_track, serve, VERSION
@@ -18,7 +19,7 @@ def _media_check_stub(monkeypatch):
     it runs first is covered in test_cutdeck_xml_audio_extract.py."""
     from cutdeck import xml_bridge
     monkeypatch.setattr(xml_bridge, "check_reference_audio",
-                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+                        lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 
 def source(ntsc=False):
@@ -76,24 +77,26 @@ def test_invalid_range_refused(bounds):
 
 @pytest.mark.parametrize("ntsc", [False, True])
 def test_ticks_use_exact_xml_frame_rate(ntsc):
-    assert range_from_ticks(source(ntsc), context(ntsc)) == (60, 120)
+    assert range_from_ticks(from_fcp7_xml(source(ntsc)), context(ntsc)) == (60, 120)
 
 
 @pytest.mark.parametrize("key,value", [("in_ticks", "1"), ("out_ticks", "0"),
                                       ("end_ticks", "0"), ("ticks_per_frame", "1")])
 def test_mismatched_live_geometry_refused(key, value):
     with pytest.raises(ValueError):
-        range_from_ticks(source(), {**context(), key: value})
+        range_from_ticks(from_fcp7_xml(source()), {**context(), key: value})
 
 
 def test_selected_stereo_track_maps_to_first_channel_of_correct_group():
     tracks = ''.join(f'<track currentExplodedTrackIndex="{channel}" totalExplodedTrackCount="2"/>'
                      for _ in range(3) for channel in range(2))
-    xml = f'<xmeml><sequence><media><audio>{tracks}</audio></media></sequence></xmeml>'
-    assert reference_audio_track(xml, {"audio_track": 1, "audio_track_count": 3}) == 2
-    assert reference_audio_track(xml, {"audio_track": 2, "audio_track_count": 3}) == 4
+    xml = (f'<xmeml><sequence><duration>300</duration><rate><timebase>30</timebase><ntsc>FALSE</ntsc></rate>'
+           f'<media><audio>{tracks}</audio></media></sequence></xmeml>')
+    sequence = from_fcp7_xml(xml)
+    assert [track.index for track in sequence.tracks] == [0, 1, 2]  # six channel tracks, three Premiere tracks
+    assert reference_audio_track(sequence, {"audio_track": 1, "audio_track_count": 3}) == 1
     with pytest.raises(ValueError, match="differ"):
-        reference_audio_track(xml, {"audio_track": 1, "audio_track_count": 4})
+        reference_audio_track(sequence, {"audio_track": 1, "audio_track_count": 4})
 
 
 class EmptyStdout:
@@ -110,7 +113,9 @@ def test_real_fixture_audio_grouping():
     xml = (Path(__file__).parent / "fixtures/cutdeck_recut_sample_scrubbed.xml").read_text(encoding="utf-8")
     tracks = ET.fromstring(xml).findall("sequence/media/audio/track")
     count = sum(t.get("currentExplodedTrackIndex", "0") == "0" for t in tracks)
-    assert reference_audio_track(xml, {"audio_track": 1, "audio_track_count": count}) == 2
+    sequence = from_fcp7_xml(xml)
+    assert len(sequence.tracks) == count
+    assert reference_audio_track(sequence, {"audio_track": 1, "audio_track_count": count}) == 1
 
 
 def test_job_runs_existing_cli_once_and_returns_the_cut_list(tmp_path, monkeypatch):
@@ -134,7 +139,6 @@ def test_job_runs_existing_cli_once_and_returns_the_cut_list(tmp_path, monkeypat
     async def scenario():
         jobs = XmlJobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **context()})
-        Path(job["source_path"]).write_text(source(), encoding="utf-8")
         request = {"type": "start", "job_id": job["job_id"]}
         assert (await jobs.dispatch(request))["state"] == "running"
         assert (await jobs.dispatch(request))["state"] == "running"
@@ -160,7 +164,6 @@ def test_worker_failure_releases_single_job_slot(tmp_path, monkeypatch):
     async def scenario():
         jobs = XmlJobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **context()})
-        Path(job["source_path"]).write_text(source(), encoding="utf-8")
         await jobs.dispatch({"type": "start", "job_id": job["job_id"]})
         await asyncio.gather(*jobs.tasks)
         result = await jobs.dispatch({"type": "status", "job_id": job["job_id"]})
@@ -213,7 +216,6 @@ def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
     async def scenario():
         jobs = XmlJobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **{**context(), "in_ticks": "1"}})
-        Path(job["source_path"]).write_text(source(), encoding="utf-8")
         request = {"type": "start", "job_id": job["job_id"]}
         started = await jobs.dispatch(request)
         assert started["state"] == "failed"
@@ -225,7 +227,7 @@ def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
 
 def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypatch):
     from cutdeck import xml_bridge
-    from cutdeck.xml_sequence import check_reference_audio
+    from cutdeck.sequence_model import check_reference_audio
     monkeypatch.setattr(xml_bridge, "check_reference_audio", check_reference_audio)
     spawned = []
 
@@ -236,9 +238,9 @@ def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypat
 
     async def scenario():
         jobs = XmlJobs(tmp_path / "jobs")
-        job = await jobs.dispatch({"type": "prepare", **context()})
-        Path(job["source_path"]).write_text(source_with_audio(tmp_path / "offline.mp4"),
-                                            encoding="utf-8")
+        offline = context()
+        offline["sequence"]["audio_tracks"][0]["clips"][0]["path"] = str(tmp_path / "offline.mp4")
+        job = await jobs.dispatch({"type": "prepare", **offline})
         await jobs.dispatch({"type": "start", "job_id": job["job_id"]})
         await asyncio.gather(*jobs.tasks)
         return await jobs.dispatch({"type": "status", "job_id": job["job_id"]})
@@ -250,12 +252,9 @@ def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypat
 
 def test_reference_label_uses_premiere_track_numbers():
     from cutdeck.xml_bridge import reference_label
-    stereo = ('<track totalExplodedTrackCount="2" currentExplodedTrackIndex="{0}"/>')
-    xml = ('<xmeml><sequence><media><audio>' + stereo.format(0) + stereo.format(1)
-           + stereo.format(0) + stereo.format(1) + '</audio></media></sequence></xmeml>')
-    checked = {"xml_track": 2, "files": [r"D:\shoot\lav.wav", r"D:\shoot\lav2.wav"]}
-    assert reference_label(xml, checked) == "A2 (lav.wav +1 more)"
-    assert reference_label(xml, {**checked, "xml_track": 3}) == "XML audio track 4 (lav.wav +1 more)"
+    checked = {"track": 1, "files": [r"D:\shoot\lav.wav", r"D:\shoot\lav2.wav"]}
+    assert reference_label(checked) == "A2 (lav.wav +1 more)"
+    assert reference_label({**checked, "files": [r"D:\shoot\lav.wav"]}) == "A2 (lav.wav)"
 
 
 def test_failure_detail_is_the_exception_line_not_the_stack(tmp_path):

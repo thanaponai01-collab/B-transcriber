@@ -49,6 +49,7 @@ from dataclasses import dataclass, replace
 from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, Timebase
+from cutdeck import sequence_model
 from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, child_text,
                                   frame_to_ticks, range_window_frames, sequence_timebase)
 from transcribe.timebase import ms_to_frame
@@ -547,15 +548,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Recut an exported FCP7 XML sequence against a silence-removal "
                      "plan built from its own audio mixdown (recut_sequence mode)."
     )
-    ap.add_argument("sequence_xml", help="the editor's own FCP7 XML export")
+    ap.add_argument("sequence_xml", help="the editor's own FCP7 XML export (or, with --cuts-json, "
+                                         "the helper's sequence.json)")
     ap.add_argument("mixdown_wav", nargs="?", default=None,
                      help="full-sequence audio mixdown (must span the whole sequence, "
                           "not an in/out range). Omit to auto-extract one straight from "
                           "the XML's own clipitems + source media instead (see "
                           "cutdeck/xml_audio_extract.py) — no Premiere export needed.")
     ap.add_argument("--audio-track", type=int, default=None,
-                     help="0-based audio track index to use as the reference dialogue "
-                          "track when auto-extracting (default: first track with clips). "
+                     help="0-based Premiere audio track index to use as the reference "
+                          "dialogue track when auto-extracting (default: first track with clips). "
                           "Ignored when mixdown_wav is given explicitly.")
     ap.add_argument("--out", default=None,
                      help="output .xml path (default: <sequence_xml>_cut.xml beside the input)")
@@ -586,15 +588,16 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     src = Path(args.sequence_xml)
-    source_xml = src.read_text(encoding="utf-8")
-    root = ET.fromstring(source_xml)
-    sequence = root.find("sequence")
-    if sequence is None:
-        raise SystemExit("no <sequence> element found in source XML")
-    tb = sequence_timebase(sequence)
-    # recut() refuses these whatever the plan says; say so before extraction and ASR.
-    _refuse_unsupported_media(sequence)
-    seq_frames = int(child_text(sequence, "duration", "0"))
+    seq = sequence_model.load(src)
+    source_xml = None
+    if src.suffix.lower() == ".xml":
+        source_xml = src.read_text(encoding="utf-8")
+        # recut() refuses these whatever the plan says; say so before extraction and ASR.
+        _refuse_unsupported_media(ET.fromstring(source_xml).find("sequence"))
+    elif not args.cuts_json:
+        ap.error("a sequence.json input only writes a cut list: pass --cuts-json")
+    tb = seq.timebase
+    seq_frames = seq.duration_frames
     frame_range = None
     if args.range_start_frame is not None or args.range_end_frame is not None:
         if args.range_start_frame is None or args.range_end_frame is None:
@@ -630,9 +633,9 @@ def main(argv: list[str] | None = None) -> int:
         _progress(5, "Extracting audio")
         extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         extracted_tmp.close()
-        print("no mixdown given — extracting one from the XML's own source media...")
+        print("no mixdown given — extracting one from the sequence's own source media...")
         mixdown_wav = extract_mixdown(
-            source_xml, extracted_tmp.name, args.audio_track,
+            seq, extracted_tmp.name, args.audio_track,
             range_start_frame=frame_range[0] if frame_range else None,
             range_end_frame=frame_range[1] if frame_range else None,
         )

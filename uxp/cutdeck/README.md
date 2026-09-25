@@ -96,7 +96,7 @@ D:\Footage\CFD 94  interview_A.mp4
 ```
 
 "Beside your footage" means the folder holding the media on the audio track that was
-analyzed — the same track the cuts come from. Only the result goes there; `source.xml`,
+analyzed — the same track the cuts come from. Only the result goes there; `sequence.json`,
 `job.json`, `report.json` and `process.log` stay in `output/premiere/<job identifier>/`.
 If the media cannot be located or written to (a disconnected drive, a sequence with no
 audio), the result falls back to the job folder and the panel says so rather than
