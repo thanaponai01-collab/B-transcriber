@@ -459,6 +459,111 @@ test("frameHold: handles Premiere importing file into rootItem instead of target
   assert.equal(rootBin.items.find((i) => i.name.startsWith("CutDeck_Hold_")), undefined, "Item should no longer be in root");
 });
 
+test("frameHold: addFrameHold with withoutExport: true clones clip 1 track up, trims In-point, and selects clip", async () => {
+  // Scenario: Clip on V1 from 0s to 5s with inPoint 10s. Playhead at 2s.
+  // Expectation:
+  // - Clones clip to V2 (vertical offset +1, timeOffset 0, audioOffset 0, alignToVideo false, isInsert false)
+  // - Finds cloned clip on V2
+  // - Head-trims cloned clip using createSetInPointAction to 10s + 2s = 12s
+  // - Selects cloned clip via TrackItemSelection.createEmptySelection and seq.setSelection
+  // - Returns withoutExport: true, targetTrack: 2, etc.
+  // - Does NOT export any frame or import any files.
+  const clipV1 = {
+    startTime: { ticks: String(0n * TICKS_PER_SEC) },
+    endTime: { ticks: String(5n * TICKS_PER_SEC) },
+    inPoint: { ticks: String(10n * TICKS_PER_SEC) },
+    getName: async () => "Interview_A01.mp4",
+  };
+
+  const clonedTrackClip = {
+    startTime: { ticks: String(0n * TICKS_PER_SEC) },
+    endTime: { ticks: String(5n * TICKS_PER_SEC) },
+    inPoint: { ticks: String(10n * TICKS_PER_SEC) },
+    createSetInPointAction: (inTime) => ({ type: "setInPoint", inTime }),
+  };
+
+  const executedActions = [];
+  let selectedClip = null;
+
+  const mockSeq = {
+    getTimebase: async () => String(TPF_24FPS),
+    getPlayerPosition: async () => ({ ticks: String(2n * TICKS_PER_SEC) }),
+    getVideoTrackCount: async () => 2,
+    getVideoTrack: async (idx) => ({
+      getTrackItems: async () => (idx === 0 ? [clipV1] : (cloneCallArgs ? [clonedTrackClip] : [])),
+    }),
+    setSelection: (sel) => {
+      selectedClip = sel;
+      return true;
+    },
+  };
+
+  const project = {
+    getActiveSequence: async () => mockSeq,
+    executeTransaction: (build, label) => {
+      build({
+        addAction: (act) => {
+          executedActions.push({ label, act });
+          return true;
+        },
+      });
+      return true;
+    },
+  };
+
+  let cloneCallArgs = null;
+  const fakePpro = {
+    Project: { getActiveProject: async () => project },
+    Sequence: { getActiveSequence: async () => mockSeq },
+    TickTime: {
+      createWithTicks: (ticks) => ({ ticks: String(ticks) }),
+    },
+    SequenceEditor: {
+      getEditor: async () => ({
+        createCloneTrackItemAction: (item, timeOffset, vOffset, aOffset, alignToVideo, isInsert) => {
+          cloneCallArgs = { item, timeOffset, vOffset, aOffset, alignToVideo, isInsert };
+          return { type: "cloneTrackItem" };
+        },
+      }),
+    },
+    TrackItemSelection: {
+      createEmptySelection: (cb) => {
+        let itemAdded = null;
+        cb({
+          addItem: (it) => { itemAdded = it; return true; },
+        });
+        return true;
+      },
+    },
+    Constants: {
+      TrackItemType: { CLIP: "TrackItemType.CLIP" },
+      MediaType: { VIDEO: "MediaType.VIDEO" },
+    },
+  };
+
+  const res = await frameHold.addFrameHold(fakePpro, { withoutExport: true });
+
+  assert.equal(res.success, true);
+  assert.equal(res.withoutExport, true);
+  assert.equal(res.sourceTrack, 1);
+  assert.equal(res.targetTrack, 2);
+  assert.equal(res.clipName, "Interview_A01.mp4");
+
+  // Verify clone action called with correct offsets
+  assert.ok(cloneCallArgs, "createCloneTrackItemAction should have been called");
+  assert.equal(cloneCallArgs.item, clipV1);
+  assert.equal(cloneCallArgs.vOffset, 1);
+  assert.equal(cloneCallArgs.aOffset, 0);
+  assert.equal(cloneCallArgs.isInsert, false);
+
+  // Verify head trim action
+  const trimAction = executedActions.find((a) => a.label === "CutDeck: Trim Cloned Frame Hold");
+  assert.ok(trimAction, "Should have executed head-trim transaction");
+  assert.equal(trimAction.act.type, "setInPoint");
+  // 10s + (2s - 0s) = 12s
+  assert.equal(trimAction.act.inTime.ticks, String(12n * TICKS_PER_SEC));
+});
+
 // ============================================================================
 // 4. adjustmentLayer.js (RAM and O(N) Efficiency Optimization)
 // ============================================================================
@@ -780,3 +885,37 @@ test("adjust feature: onAddFrameHold triggers addFrameHold and updates status", 
   assert.equal(ctl.state.status.level, "ready");
   assert.match(ctl.state.status.text, /Placed Frame Hold on V2 \(3\.5s hold, original clip untouched\)!/);
 });
+
+test("adjust feature: onAddFrameHold with withoutExport: true sets finish-in-Premiere status", async () => {
+  const ctl = createController({
+    render: () => {},
+    initialState: {},
+  });
+
+  let calledWith = null;
+  const fakeFrameHold = {
+    addFrameHold: async (ppro, opts) => {
+      calledWith = opts;
+      return {
+        success: true,
+        withoutExport: true,
+        sourceTrack: 1,
+        targetTrack: 2,
+        holdSecs: "3.0",
+      };
+    },
+  };
+
+  const adjust = createAdjustFeature({
+    ppro: {},
+    ctl,
+    frameHold: fakeFrameHold,
+  });
+
+  await adjust.onAddFrameHold({ withoutExport: true });
+
+  assert.equal(calledWith.withoutExport, true);
+  assert.equal(ctl.state.status.level, "ready");
+  assert.match(ctl.state.status.text, /Hold clip placed on V2 & selected! In Premiere: Right-click > Add Frame Hold to finish\./);
+});
+

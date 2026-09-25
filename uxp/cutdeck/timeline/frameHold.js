@@ -33,21 +33,24 @@ async function findClipAtPlayhead(ppro, seq, ctiTicks) {
         const it = sc.item;
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+        const inTime = typeof it.getInPoint === "function" ? await it.getInPoint() : it.inPoint;
         const sTicks = toTicksOr(sTime, 0n);
         const eTicks = toTicksOr(eTime, 0n);
         if (sTicks <= ctiTicks && ctiTicks < eTicks) {
-          return { item: it, track: sc.track, startTicks: sTicks, endTicks: eTicks };
+          return { item: it, track: sc.track, startTicks: sTicks, endTicks: eTicks, inTicks: toTicksOr(inTime, 0n) };
         }
       }
       // If selected clip doesn't span CTI, use the first selected clip
       const first = selected[0];
       const sTime = typeof first.item.getStartTime === "function" ? await first.item.getStartTime() : first.item.startTime;
       const eTime = typeof first.item.getEndTime === "function" ? await first.item.getEndTime() : first.item.endTime;
+      const inTime = typeof first.item.getInPoint === "function" ? await first.item.getInPoint() : first.item.inPoint;
       return {
         item: first.item,
         track: first.track,
         startTicks: toTicksOr(sTime, 0n),
         endTicks: toTicksOr(eTime, 0n),
+        inTicks: toTicksOr(inTime, 0n),
       };
     }
   } catch (_) {}
@@ -65,10 +68,11 @@ async function findClipAtPlayhead(ppro, seq, ctiTicks) {
         }
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+        const inTime = typeof it.getInPoint === "function" ? await it.getInPoint() : it.inPoint;
         const sTicks = toTicksOr(sTime, 0n);
         const eTicks = toTicksOr(eTime, 0n);
         if (sTicks <= ctiTicks && ctiTicks < eTicks) {
-          return { item: it, track: v, startTicks: sTicks, endTicks: eTicks };
+          return { item: it, track: v, startTicks: sTicks, endTicks: eTicks, inTicks: toTicksOr(inTime, 0n) };
         }
       }
     } catch (_) {}
@@ -97,6 +101,34 @@ async function isTrackSpanClear(seq, trackIndex, startTicks, endTicks, ppro) {
   }
 }
 
+async function fileSize(folder, name) {
+  try {
+    if (!folder || typeof folder.getEntry !== "function") return 1;
+    const entry = await folder.getEntry(name);
+    if (!entry) return null;
+    const meta = await entry.getMetadata();
+    return meta && typeof meta.size === "number" ? meta.size : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Waits until `name` exists with the same non-zero size on two polls in a row, or times out.
+// Resolves the race condition where exportSequenceFrame returns before the file is flushed to disk.
+async function waitForFile(folder, name, { timeoutMs = 8000, intervalMs = 25 } = {}) {
+  const t0 = Date.now();
+  let last = null;
+  while (Date.now() - t0 < timeoutMs) {
+    const size = await fileSize(folder, name);
+    if (size && (last === null || size === last)) return size;
+    last = size;
+    await sleep(intervalMs);
+  }
+  return null;
+}
+
 // Locates the imported frame item across the project with retries for asynchronous indexing,
 // checking the Frame Holds bin, the project root bin, and any sub-bins.
 // If found outside the Frame Holds bin, moves it into Frame Holds via transaction.
@@ -111,6 +143,17 @@ async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin,
     if (n === fileName || n === baseName) return true;
     if (timestampStr && n.includes(timestampStr)) return true;
     if (n.startsWith("CutDeck_Hold_") && n.includes(baseName)) return true;
+    return false;
+  }
+
+  async function matchesItemAsync(it) {
+    if (matchesItem(it)) return true;
+    if (it && typeof it.getMediaFilePath === "function") {
+      try {
+        const mp = await it.getMediaFilePath();
+        if (mp && (mp.includes(fileName) || mp.includes(baseName))) return true;
+      } catch (_) {}
+    }
     return false;
   }
 
@@ -129,8 +172,8 @@ async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin,
   async function searchFolderRecursive(bin) {
     const items = await getBinItems(bin);
     for (const it of items) {
-      if (matchesItem(it)) return { item: it, parent: bin };
-      if (it.type === 2) {
+      if (await matchesItemAsync(it)) return { item: it, parent: bin };
+      if (it.type === 2 || (ppro && ppro.FolderItem && typeof ppro.FolderItem.cast === "function" && ppro.FolderItem.cast(it) !== null)) {
         const found = await searchFolderRecursive(it);
         if (found) return found;
       }
@@ -138,33 +181,35 @@ async function locateAndOrganizeImportedHoldItem(project, rawHoldBin, folderBin,
     return null;
   }
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
   let located = null;
-  // Retry loop: up to 6 attempts (0ms, 60ms, 120ms, 180ms, 240ms, 300ms) for async import indexing
-  for (let attempt = 0; attempt < 6; attempt++) {
+  // Retry loop: up to 15 attempts (0ms, 100ms, 200ms... up to ~1.5s) for async import indexing
+  for (let attempt = 0; attempt < 15; attempt++) {
     if (attempt > 0) {
-      await sleep(60);
+      await sleep(100);
     }
 
     // 1. Check inside CutDeck > Frame Holds bin directly
     const holdItems = await getBinItems(folderBin);
-    const inHold = holdItems.find(matchesItem);
-    if (inHold) {
-      located = { item: inHold, parent: folderBin, inHoldBin: true };
-      break;
+    for (const it of holdItems) {
+      if (await matchesItemAsync(it)) {
+        located = { item: it, parent: folderBin, inHoldBin: true };
+        break;
+      }
     }
+    if (located) break;
 
     // 2. Check rootItem directly (common Premiere fallback if targetBin was bypassed)
     let root = null;
     try { root = await project.getRootItem(); } catch (_) {}
     if (root) {
       const rootItems = await getBinItems(root);
-      const inRoot = rootItems.find(matchesItem);
-      if (inRoot) {
-        located = { item: inRoot, parent: root, inHoldBin: false };
-        break;
+      for (const it of rootItems) {
+        if (await matchesItemAsync(it)) {
+          located = { item: it, parent: root, inHoldBin: false };
+          break;
+        }
       }
+      if (located) break;
 
       // 3. Search anywhere in project
       const anyMatch = await searchFolderRecursive(root);
@@ -263,6 +308,113 @@ async function addFrameHold(ppro, options = {}) {
     throw new Error("Could not find a clear track for the frame hold above the clip.");
   }
 
+  const withoutExport = options.withoutExport === true;
+  if (withoutExport) {
+    if (!ppro.SequenceEditor || typeof ppro.SequenceEditor.getEditor !== "function") {
+      throw new Error("SequenceEditor is not supported in this Premiere build.");
+    }
+    const editor = await ppro.SequenceEditor.getEditor(seq);
+    if (!editor || typeof editor.createCloneTrackItemAction !== "function") {
+      throw new Error("SequenceEditor.createCloneTrackItemAction is not supported in this Premiere build.");
+    }
+
+    const tickTime = makeTickTime(ppro);
+    if (!tickTime) throw new Error("Could not initialize Premiere TickTime constructor.");
+
+    const vOffset = targetTrack - sourceTrack;
+
+    // Step 1: Clone clip to targetTrack (V+1) spanning [clip.startTicks, clip.endTicks]
+    runTransaction(project, "CutDeck: Clone Clip for Frame Hold", (compound) => {
+      const cloneAction = editor.createCloneTrackItemAction(
+        clip.item,
+        tickTime(0n),
+        vOffset,
+        0,
+        false,
+        false
+      );
+      if (!cloneAction) {
+        throw new Error("editor.createCloneTrackItemAction returned null or rejected.");
+      }
+      if (!compound.addAction(cloneAction)) {
+        throw new Error("addAction(clone clip) returned false.");
+      }
+    });
+
+    // Step 2: Find the cloned item on targetTrack
+    let clonedClip = null;
+    try {
+      const track = await seq.getVideoTrack(targetTrack);
+      const items = await getTrackClipItems(track, ppro);
+      for (const it of items || []) {
+        const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+        const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
+        const sTicks = toTicksOr(sTime, -1n);
+        const eTicks = toTicksOr(eTime, -1n);
+        if (Math.abs(Number(sTicks - clip.startTicks)) <= 100 && Math.abs(Number(eTicks - clip.endTicks)) <= 100) {
+          clonedClip = it;
+          break;
+        }
+      }
+      if (!clonedClip && items && items.length > 0) {
+        for (const it of items) {
+          const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
+          const sTicks = toTicksOr(sTime, -1n);
+          if (sTicks >= clip.startTicks) {
+            clonedClip = it;
+            break;
+          }
+        }
+        if (!clonedClip) clonedClip = items[items.length - 1];
+      }
+    } catch (_) {}
+
+    // Step 3: If playhead is after clip.startTicks, head-trim the cloned clip to ctiTicks
+    if (clonedClip && ctiTicks > clip.startTicks) {
+      const deltaTicks = ctiTicks - clip.startTicks;
+      const targetInTicks = clip.inTicks + deltaTicks;
+      try {
+        if (typeof clonedClip.createSetInPointAction === "function") {
+          runTransaction(project, "CutDeck: Trim Cloned Frame Hold", (compound) => {
+            const trimAction = clonedClip.createSetInPointAction(tickTime(targetInTicks));
+            if (trimAction) compound.addAction(trimAction);
+          });
+        }
+      } catch (trimErr) {
+        console.warn("CutDeck: createSetInPointAction warning:", trimErr);
+      }
+    }
+
+    // Step 4: Select the cloned clip on the sequence so user can finish with native Frame Hold in Premiere
+    if (clonedClip && ppro.TrackItemSelection && typeof ppro.TrackItemSelection.createEmptySelection === "function") {
+      try {
+        ppro.TrackItemSelection.createEmptySelection((selection) => {
+          if (selection && typeof selection.addItem === "function") {
+            selection.addItem(clonedClip);
+            if (typeof seq.setSelection === "function") {
+              seq.setSelection(selection);
+            }
+          }
+        });
+      } catch (selErr) {
+        console.warn("CutDeck: setSelection warning:", selErr);
+      }
+    }
+
+    const holdSecs = (Number(holdDurationTicks) / Number(TICKS_PER_SECOND)).toFixed(1);
+    console.log(`CutDeck: placed Frame Hold clone on V${targetTrack + 1} (${holdSecs}s) in ${Date.now() - t0} ms`);
+
+    return {
+      success: true,
+      withoutExport: true,
+      clipName,
+      sourceTrack: sourceTrack + 1,
+      targetTrack: targetTrack + 1,
+      holdDurationTicks,
+      holdSecs,
+    };
+  }
+
   // Determine sequence frame size
   let width = 1920;
   let height = 1080;
@@ -300,6 +452,14 @@ async function addFrameHold(ppro, options = {}) {
   );
   if (!exported) {
     throw new Error("Premiere failed to export frame at playhead.");
+  }
+
+  // CRITICAL PREMIERE FACT (from PREMIERE_FACTS.md line 93):
+  // ppro.Exporter.exportSequenceFrame returns true ~100ms BEFORE the file
+  // is flushed to disk. We MUST wait for non-zero file size on disk before
+  // calling importFiles or Premiere receives a 0-byte file and silently fails to ingest.
+  if (tempFolder && typeof tempFolder.getEntry === "function") {
+    await waitForFile(tempFolder, fileName, { timeoutMs: 8000, intervalMs: 25 });
   }
 
   // Import into CutDeck > Frame Holds bin

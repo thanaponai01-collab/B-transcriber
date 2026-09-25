@@ -156,10 +156,16 @@ function createAdjustFeature({
     ctl.setStatus(msg, "ready");
   }
 
-  async function doAddFrameHold() {
-    ctl.setStatus("Adding Frame Hold at playhead…", "busy");
-    const res = await getFh().addFrameHold(ppro);
-    ctl.setStatus(`Placed Frame Hold on V${res.targetTrack} (${res.holdSecs}s hold, original clip untouched)!`, "ready");
+  async function doAddFrameHold(options = {}) {
+    const withoutExport = options.withoutExport !== false;
+    ctl.setStatus(withoutExport ? "Cloning clip to track above at playhead…" : "Adding Frame Hold at playhead…", "busy");
+    const res = await getFh().addFrameHold(ppro, { ...options, withoutExport });
+    if (res && res.withoutExport) {
+      ctl.setStatus(`Hold clip placed on V${res.targetTrack} & selected! In Premiere: Right-click > Add Frame Hold to finish.`, "ready");
+    } else if (res) {
+      ctl.setStatus(`Placed Frame Hold on V${res.targetTrack} (${res.holdSecs}s hold, original clip untouched)!`, "ready");
+    }
+    return res;
   }
 
   async function doApplyPreset(presetId, mode) {
@@ -220,7 +226,7 @@ function createAdjustFeature({
   return {
     onAdjust: (mode) => ctl.act(() => doAdjust(mode)),
     onColorMatte: (mode) => ctl.act(() => doColorMatte(mode)),
-    onAddFrameHold: () => ctl.act(() => doAddFrameHold()),
+    onAddFrameHold: (opts) => ctl.act(() => doAddFrameHold(opts)),
     onApplyPreset: (presetId, mode) => ctl.act(() => doApplyPreset(presetId, mode)),
     onSettingChange: (patch) => applySettingChange(patch),
     doAdjust,

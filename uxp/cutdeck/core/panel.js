@@ -499,8 +499,9 @@
 
     const holdBtn = $("btn-hold");
     if (holdBtn) {
-      holdBtn.addEventListener("click", () => {
-        if (intents.onAddFrameHold) intents.onAddFrameHold();
+      holdBtn.addEventListener("click", (e) => {
+        const withoutExport = !(e && (e.altKey || e.shiftKey));
+        if (intents.onAddFrameHold) intents.onAddFrameHold({ withoutExport });
       });
     }
   }
