@@ -41,11 +41,15 @@ const PARAM_INDEX = {
   cropBottom: 10,
 };
 
-// Searches the item's component chain for the real Motion component. Never throws: a missing
-// chain, a component that won't report its match name, or a host with no getComponentChain at
-// all are all "not found", same as capabilityProbe.js's looksLikeTransformComponent scan.
-async function findMotionComponent(item) {
+// In-memory component inspection cache per item: avoids traversing the component chain
+// multiple times per poll cycle (previously 4x per item per tick).
+let itemComponentCache = new WeakMap();
+
+async function inspectComponents(item) {
   if (!item || typeof item.getComponentChain !== "function") return null;
+  if (typeof item === "object" && itemComponentCache.has(item)) {
+    return itemComponentCache.get(item);
+  }
   let chain;
   try {
     chain = await item.getComponentChain();
@@ -53,7 +57,8 @@ async function findMotionComponent(item) {
     return null;
   }
   if (!chain || typeof chain.getComponentCount !== "function") return null;
-  const count = chain.getComponentCount();
+  const count = typeof chain.getComponentCount === "function" ? chain.getComponentCount() : 0;
+  const comps = [];
   for (let i = 0; i < count; i++) {
     let component;
     try {
@@ -64,13 +69,31 @@ async function findMotionComponent(item) {
     if (!component) continue;
     let matchName = null;
     try {
-      matchName = await component.getMatchName();
+      matchName = typeof component.getMatchName === "function" ? await component.getMatchName() : null;
     } catch (_) {
       continue;
     }
-    if (matchName === MOTION_MATCH_NAME) return component;
+    comps.push({ component, matchName, index: i });
   }
-  return null;
+  if (typeof item === "object") {
+    itemComponentCache.set(item, comps);
+  }
+  return comps;
+}
+
+function clearComponentCache(item = null) {
+  if (item && typeof item === "object") itemComponentCache.delete(item);
+  else itemComponentCache = new WeakMap();
+}
+
+// Searches the item's component chain for the real Motion component. Never throws: a missing
+// chain, a component that won't report its match name, or a host with no getComponentChain at
+// all are all "not found", same as capabilityProbe.js's looksLikeTransformComponent scan.
+async function findMotionComponent(item) {
+  const comps = await inspectComponents(item);
+  if (!comps) return null;
+  const entry = comps.find((c) => c.matchName === MOTION_MATCH_NAME);
+  return entry ? entry.component : null;
 }
 
 // Reads one param by index off an already-found component. Returns null when the param itself
@@ -217,16 +240,9 @@ async function readSourceFrameSize(ppro, item) {
 const GRAPHIC_GROUP_MATCH_NAME = "AE.ADBE Graphic Group";
 
 async function isGraphic(item) {
-  if (!item || typeof item.getComponentChain !== "function") return false;
-  try {
-    const chain = await item.getComponentChain();
-    const count = chain && typeof chain.getComponentCount === "function" ? chain.getComponentCount() : 0;
-    for (let i = 0; i < count; i++) {
-      const component = chain.getComponentAtIndex(i);
-      if (component && (await component.getMatchName()) === GRAPHIC_GROUP_MATCH_NAME) return true;
-    }
-  } catch (_) {}
-  return false;
+  const comps = await inspectComponents(item);
+  if (!comps) return false;
+  return comps.some((c) => c.matchName === GRAPHIC_GROUP_MATCH_NAME);
 }
 
 // The frame Anchor Point is normalized to. For footage and stills: the source frame (above). A
@@ -259,19 +275,9 @@ const KNOWN_GRAPHIC_COMPONENTS = new Set(["AE.ADBE Opacity", MOTION_MATCH_NAME, 
 // added effect), so a caller that moves text layers knows it would leave something behind.
 async function readGraphicLayers(item) {
   const result = { vectorMotion: null, texts: [], onlyText: true, seen: [] };
-  let chain;
-  try { chain = await item.getComponentChain(); } catch (_) { return null; }
-  const count = chain && typeof chain.getComponentCount === "function" ? chain.getComponentCount() : 0;
-  for (let i = 0; i < count; i++) {
-    let component;
-    let matchName = null;
-    try {
-      component = chain.getComponentAtIndex(i);
-      matchName = component ? await component.getMatchName() : null;
-    } catch (_) {
-      result.onlyText = false;
-      continue;
-    }
+  const comps = await inspectComponents(item);
+  if (!comps) return null;
+  for (const { component, matchName } of comps) {
     result.seen.push(matchName);
     if (!KNOWN_GRAPHIC_COMPONENTS.has(matchName)) result.onlyText = false;
     if (matchName === GRAPHIC_GROUP_MATCH_NAME) {
@@ -322,4 +328,5 @@ module.exports = {
   readSequencePixelAspect,
   parseVideoInfoSize,
   readSourceFrameSize,
+  clearComponentCache,
 };

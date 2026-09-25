@@ -585,6 +585,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     ctl.render();
   }
 
+  let emptyPollCount = 0;
   // Coalesces bursts (a drag-select fires many events): one read at a time, plus one
   // follow-up if more arrived meanwhile.
   async function pollAlignTransform() {
@@ -596,6 +597,12 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       do {
         pollAgain = false;
         const next = await readAlignState(ppro);
+        // Avoid flapping the UI to disabled on a transient 1-tick empty read during timeline selection transitions
+        if (!next.transform.available && ctl.state.transform && ctl.state.transform.available && emptyPollCount < 1) {
+          emptyPollCount++;
+          continue;
+        }
+        emptyPollCount = 0;
         const nextJson = JSON.stringify(next);
         if (nextJson !== lastStateJson) {
           lastStateJson = nextJson;

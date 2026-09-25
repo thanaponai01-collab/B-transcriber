@@ -51,7 +51,13 @@
   function setInput(el, value, placeholder, disabled) {
     if (!el) return;
     if (el.disabled !== disabled) el.disabled = disabled;
-    if (typeof el.setAttribute === "function") el.setAttribute("placeholder", placeholder);
+    if (typeof el.getAttribute === "function") {
+      if (el.getAttribute("placeholder") !== placeholder) {
+        if (typeof el.setAttribute === "function") el.setAttribute("placeholder", placeholder);
+      }
+    } else if (typeof el.setAttribute === "function") {
+      el.setAttribute("placeholder", placeholder);
+    }
     if (document.activeElement !== el && el.value !== value) el.value = value;
   }
   function renderInput(id, field, key, busy) {
@@ -123,7 +129,11 @@
     el.querySelectorAll("[data-act]").forEach((node) => {
       const off = !!busy || (!hasClip && node.getAttribute("data-needs-clip") !== null);
       if (node.disabled !== off) node.disabled = off;
-      node.classList.toggle("disabled", off);
+      if (node.classList && typeof node.classList.contains === "function") {
+        if (node.classList.contains("disabled") !== off) node.classList.toggle("disabled", off);
+      } else if (node.classList) {
+        node.classList.toggle("disabled", off);
+      }
     });
   }
 

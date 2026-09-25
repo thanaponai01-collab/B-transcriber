@@ -84,6 +84,49 @@ async function hasClipsUnderneath(seq, item, time) {
   }
 }
 
+// Temporarily mutes video tracks other than item's track (e.g. tracks underneath or above)
+// so that exportSequenceFrame can capture the Graphic item on a clean/transparent background
+// WITHOUT disabling the clip, burning undo steps, or flickering the clip on the timeline.
+async function muteOtherVideoTracks(seq, itemTrackIndex) {
+  if (!seq || typeof seq.getVideoTrackCount !== "function" || typeof seq.getVideoTrack !== "function") {
+    return null;
+  }
+  const tracksMuted = [];
+  try {
+    const trackCount = await seq.getVideoTrackCount();
+    for (let t = 0; t < trackCount; t++) {
+      if (t === itemTrackIndex) continue;
+      const track = await seq.getVideoTrack(t);
+      if (!track || typeof track.isMuted !== "function") return null;
+      const wasMuted = await track.isMuted();
+      if (!wasMuted) {
+        if (typeof track.setMute !== "function") {
+          throw new Error("setMute not available on track");
+        }
+        await track.setMute(true);
+        tracksMuted.push(track);
+      }
+    }
+    return tracksMuted;
+  } catch (_) {
+    for (const track of tracksMuted) {
+      try { await track.setMute(false); } catch (_) {}
+    }
+    return null;
+  }
+}
+
+async function restoreMutedTracks(tracksMuted) {
+  if (!Array.isArray(tracksMuted)) return;
+  for (const track of tracksMuted) {
+    try {
+      if (track && typeof track.setMute === "function") {
+        await track.setMute(false);
+      }
+    } catch (_) {}
+  }
+}
+
 async function deleteEntry(folder, name) {
   try {
     const entry = await folder.getEntry(name);
@@ -113,13 +156,23 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
     await waitForFile(folder, name, wait);
   };
 
+  const itemTrackIndex = typeof item.getTrackIndex === "function" ? await item.getTrackIndex() : null;
   const hasUnderneath = await hasClipsUnderneath(seq, item, time);
   let unhideAction = null;
+  let mutedTracks = null;
+  let singleFrame = !hasUnderneath;
+
+  if (hasUnderneath && itemTrackIndex !== null) {
+    mutedTracks = await muteOtherVideoTracks(seq, itemTrackIndex);
+    if (mutedTracks !== null) {
+      singleFrame = true;
+    }
+  }
 
   try {
     await save(onName);
 
-    if (hasUnderneath) {
+    if (hasUnderneath && !singleFrame) {
       runTransaction(project, "CutDeck: measure (hide clip)", (compound) => {
         compound.addAction(item.createSetDisabledAction(true));
       });
@@ -142,20 +195,23 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
       type: "frame_bounds",
       on: joinPath(folder.nativePath, onName),
     };
-    if (hasUnderneath) {
+    if (!singleFrame) {
       payload.off = joinPath(folder.nativePath, offName);
     }
 
     const reply = await rpc(payload);
-    console.log("CutDeck measured bounds", JSON.stringify({ at: String(at), folder: folder.nativePath, bounds: reply && reply.bounds, singleFrame: !hasUnderneath }));
+    console.log("CutDeck measured bounds", JSON.stringify({ at: String(at), folder: folder.nativePath, bounds: reply && reply.bounds, singleFrame }));
     const bounds = reply ? reply.bounds : null;
     if (keepDisabled) {
       return { bounds, unhideAction };
     }
     return bounds;
   } finally {
+    if (mutedTracks) {
+      await restoreMutedTracks(mutedTracks);
+    }
     deleteEntry(folder, onName);
-    if (hasUnderneath) deleteEntry(folder, offName);
+    if (!singleFrame) deleteEntry(folder, offName);
   }
 }
 
@@ -165,6 +221,7 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
 let boundsCache = new WeakMap();
 const boundedCache = new Map();
 const MAX_BOUNDED_ENTRIES = 50;
+const POS_TOLERANCE = 0.002; // ~2-4 pixels in 1080p, safely accommodates float32/64 representation drift
 
 function getCachedBounds(item, scale = 100, rotation = 0, key = null, position = null) {
   let entry = null;
@@ -180,7 +237,7 @@ function getCachedBounds(item, scale = 100, rotation = 0, key = null, position =
     return null;
   }
   if (position && entry.posX !== null && entry.posY !== null) {
-    if (Math.abs(position.x - entry.posX) > 1e-4 || Math.abs(position.y - entry.posY) > 1e-4) {
+    if (Math.abs(position.x - entry.posX) > POS_TOLERANCE || Math.abs(position.y - entry.posY) > POS_TOLERANCE) {
       if (item && typeof item === "object") boundsCache.delete(item);
       if (key) boundedCache.delete(key);
       return null;
@@ -219,9 +276,13 @@ function updateCachedBounds(item, dx = 0, dy = 0, key = null, newPos = null) {
   entry.right += dx;
   entry.top += dy;
   entry.bottom += dy;
-  if (newPos && typeof newPos.x === "number" && typeof newPos.y === "number") {
-    entry.posX = newPos.x;
-    entry.posY = newPos.y;
+  if (newPos) {
+    const px = typeof newPos.x === "number" ? newPos.x : (Array.isArray(newPos) ? newPos[0] : null);
+    const py = typeof newPos.y === "number" ? newPos.y : (Array.isArray(newPos) ? newPos[1] : null);
+    if (typeof px === "number" && typeof py === "number") {
+      entry.posX = px;
+      entry.posY = py;
+    }
   }
 }
 
