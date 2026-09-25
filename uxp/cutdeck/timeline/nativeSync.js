@@ -62,10 +62,18 @@ async function mediaInfo(ppro, item) {
   const projectItem = typeof item.getProjectItem === "function" ? await item.getProjectItem() : null;
   const clip = ppro && ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
   const path = clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
-  const colorLabel = projectItem && typeof projectItem.getColorLabelIndex === "function"
-    ? await projectItem.getColorLabelIndex()
-    : null;
-  return { projectItem, path, colorLabel };
+  const targetItem = clip || projectItem;
+  let colorLabel = null;
+  if (typeof item.getColorLabelIndex === "function") {
+    try { colorLabel = await item.getColorLabelIndex(); } catch (_) {}
+  }
+  if (colorLabel === null && targetItem && typeof targetItem.getColorLabelIndex === "function") {
+    try { colorLabel = await targetItem.getColorLabelIndex(); } catch (_) {}
+  }
+  if (colorLabel === null && projectItem && typeof projectItem.getColorLabelIndex === "function") {
+    try { colorLabel = await projectItem.getColorLabelIndex(); } catch (_) {}
+  }
+  return { projectItem: projectItem || clip, path, colorLabel };
 }
 
 /* Every clip item on the sequence, each with the file behind it (null when it has none).
@@ -132,13 +140,16 @@ function groupClips(seq) {
       : Number(!x.video) - Number(!y.video) || first(x).track - first(y).track))
     .map((u, i) => {
       const f = first(u);
+      const colorLabel = (f && f.colorLabel !== null && f.colorLabel !== undefined)
+        ? f.colorLabel
+        : (u.audio && u.audio[0] && u.audio[0].colorLabel !== undefined ? u.audio[0].colorLabel : null);
       return {
         ...u,
         id: `c${i}`,
         key: unitKey(f),
         path: f.path,
-        projectItem: f.projectItem || null,
-        colorLabel: f.colorLabel !== undefined ? f.colorLabel : null,
+        projectItem: f.projectItem || (u.audio && u.audio[0] && u.audio[0].projectItem) || null,
+        colorLabel: colorLabel !== undefined ? colorLabel : null,
         name: baseName(f.path),
         duration: f.end - f.start,
       };
@@ -183,7 +194,7 @@ async function waitForPlan(rpc, clips, deps) {
   return job.plan;
 }
 
-async function copySequence(project, source, name) {
+async function copySequence(project, source, name, targets = []) {
   const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
   runTransaction(project, "CutDeck Sync: copy sequence", (compound) => {
     if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
@@ -200,6 +211,14 @@ async function copySequence(project, source, name) {
     if (!compound.addAction(item.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
     if (sourceColor !== null && typeof item.createSetColorLabelAction === "function") {
       compound.addAction(item.createSetColorLabelAction(sourceColor));
+    }
+    for (const t of targets) {
+      if (t.clip && t.clip.colorLabel !== null && t.clip.colorLabel !== undefined && t.projectItem) {
+        if (typeof t.projectItem.createSetColorLabelAction === "function") {
+          const act = t.projectItem.createSetColorLabelAction(t.clip.colorLabel);
+          if (act) compound.addAction(act);
+        }
+      }
     }
   });
   // File it under CutDeck > Synced, the same move nativeCut.js uses for Rough Cuts
@@ -242,6 +261,12 @@ async function placeAll(ppro, project, copy, targets) {
     });
     if (!cleared) throw new Error("addAction(clear copy) returned false");
     for (const m of targets) {
+      if (m.clip && m.clip.colorLabel !== null && m.clip.colorLabel !== undefined && m.projectItem) {
+        if (typeof m.projectItem.createSetColorLabelAction === "function") {
+          const act = m.projectItem.createSetColorLabelAction(m.clip.colorLabel);
+          if (act) compound.addAction(act);
+        }
+      }
       if (!compound.addAction(editor.createOverwriteItemAction(m.projectItem, tick(m.start), m.tracks.video, m.tracks.audio))) {
         throw new Error(`addAction(place ${m.clip.name}) returned false`);
       }
@@ -322,12 +347,38 @@ async function syncSequence(ppro, deps) {
 
   const name = `${source.name}${SYNCED_SUFFIX}`;
   deps.onStatus(`Placing ${clips.length} clips in ${name}…`);
-  const copyId = await copySequence(project, source, name);
+  const copyId = await copySequence(project, source, name, targets);
   await placeAll(ppro, project, await findSequence(project, copyId), targets);
 
   // References go stale across transactions (#18): fetch the copy again before reading it.
   const copy = await findSequence(project, copyId);
-  const problems = checkPlacement(await readSequence(ppro, copy), targets, ticksPerFrame);
+  const placedClips = await readSequence(ppro, copy);
+  const problems = checkPlacement(placedClips, targets, ticksPerFrame);
+
+  // Restore clip color label if any placed clip (e.g. V1) reverted to default color
+  const colorFixActions = [];
+  for (const c of [...placedClips.video, ...placedClips.audio]) {
+    const isVid = c.kind === "video";
+    const t = targets.find((tgt) => (isVid ? tgt.tracks.video === c.track : tgt.tracks.audio <= c.track && c.track < tgt.tracks.audio + tgt.clip.audio.length) && tgt.clip.path === c.path);
+    if (t && t.clip.colorLabel !== null && t.clip.colorLabel !== undefined && c.colorLabel !== t.clip.colorLabel) {
+      if (typeof c.item.createSetColorLabelAction === "function") {
+        const act = c.item.createSetColorLabelAction(t.clip.colorLabel);
+        if (act) colorFixActions.push(act);
+      }
+      if (c.projectItem && typeof c.projectItem.createSetColorLabelAction === "function") {
+        const act = c.projectItem.createSetColorLabelAction(t.clip.colorLabel);
+        if (act) colorFixActions.push(act);
+      }
+    }
+  }
+  if (colorFixActions.length > 0) {
+    runTransaction(project, "CutDeck Sync: restore clip colors", (compound) => {
+      for (const act of colorFixActions) {
+        if (act) compound.addAction(act);
+      }
+    });
+  }
+
   await project.openSequence(copy);
   await project.setActiveSequence(copy);
   const report = formatReport(name, plan, clips, skipped, problems);

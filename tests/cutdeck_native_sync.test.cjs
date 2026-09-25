@@ -13,7 +13,7 @@ const TPF = 10160640000n; // 25 fps
 
 /* files: path -> { seconds, channels, video, markedSeconds? }. Overwrite lays down the whole file
    (or its Source Monitor marks) like a drag from the bin. Switches model hosts that misbehave. */
-function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransaction = false, removeIgnored = false }) {
+function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransaction = false, removeIgnored = false, defaultV1Color = false }) {
   let guidSeq = 0;
   const makeSeq = (name) => ({ name, id: `g${guidSeq++}`, video: [], audio: [] });
   const add = (seq, kind, track, raw) => {
@@ -21,16 +21,30 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
     seq[kind][track].push({ ...raw, track });
   };
   const original = makeSeq("Shoot");
-  for (const c of timeline) add(original, c.kind, c.track, { path: c.path, start: c.start, end: c.end, in: c.in || 0n });
+  for (const c of timeline) add(original, c.kind, c.track, { path: c.path, start: c.start, end: c.end, in: c.in || 0n, colorLabelIndex: c.colorLabelIndex });
   const sequences = [original];
 
-  const projectItem = (path) => ({ path, getMediaFilePath: async () => path });
+  const projectItems = new Map();
+  const getProjectItem = (path) => {
+    if (!projectItems.has(path)) {
+      const pi = {
+        path,
+        getMediaFilePath: async () => path,
+        getColorLabelIndex: async () => (files[path] && files[path].colorLabelIndex !== undefined ? files[path].colorLabelIndex : null),
+        createSetColorLabelAction: (idx) => ({ type: "setProjectItemColorLabel", path, idx }),
+      };
+      projectItems.set(path, pi);
+    }
+    return projectItems.get(path);
+  };
   const wrapItem = (raw) => ({
     _raw: raw,
     getStartTime: async () => ({ ticks: raw.start.toString() }),
     getEndTime: async () => ({ ticks: raw.end.toString() }),
     getInPoint: async () => ({ ticks: raw.in.toString() }),
-    getProjectItem: async () => projectItem(raw.path),
+    getProjectItem: async () => getProjectItem(raw.path),
+    getColorLabelIndex: async () => (raw.colorLabelIndex !== undefined ? raw.colorLabelIndex : (files[raw.path] && files[raw.path].colorLabelIndex !== undefined ? files[raw.path].colorLabelIndex : null)),
+    createSetColorLabelAction: (idx) => ({ type: "setTrackItemColorLabel", raw, idx }),
   });
   const wrapSeq = (seq) => ({
     get name() { return seq.name; },
@@ -75,6 +89,10 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
       a.seq.name = a.name;
     } else if (a.type === "setColorLabel") {
       a.seq.colorLabelIndex = a.idx;
+    } else if (a.type === "setProjectItemColorLabel") {
+      if (files[a.path]) files[a.path].colorLabelIndex = a.idx;
+    } else if (a.type === "setTrackItemColorLabel") {
+      a.raw.colorLabelIndex = a.idx;
     } else if (a.type === "remove") {
       if (removeIgnored) return;
       for (const kind of ["video", "audio"]) a.seq[kind] = a.seq[kind].map((t) => t.filter((r) => !a.raws.includes(r)));
@@ -82,12 +100,15 @@ function fakeHost({ files, timeline, snapAudio = false, oneNewTrackPerTransactio
       const f = files[a.path];
       const length = BigInt(Math.round((f.markedSeconds || f.seconds) * Number(SEC)));
       const allowed = (kind, index) => !oneNewTrackPerTransaction || index <= limits[kind];
-      if (f.video && a.v >= 0 && allowed("video", a.v)) add(a.seq, "video", a.v, { path: a.path, start: a.time, end: a.time + length, in: 0n });
+      const color = (files[a.path] && files[a.path].colorLabelIndex !== undefined) ? files[a.path].colorLabelIndex : undefined;
+      if (f.video && a.v >= 0 && allowed("video", a.v)) {
+        add(a.seq, "video", a.v, { path: a.path, start: a.time, end: a.time + length, in: 0n, colorLabelIndex: defaultV1Color && a.v === 0 ? 1 : color });
+      }
       let start = a.time;
       if (!f.video && snapAudio) start = (a.time / TPF) * TPF;
       if (a.a >= 0) {
         for (let ch = 0; ch < f.channels; ch++) {
-          if (allowed("audio", a.a + ch)) add(a.seq, "audio", a.a + ch, { path: a.path, start, end: start + length, in: 0n });
+          if (allowed("audio", a.a + ch)) add(a.seq, "audio", a.a + ch, { path: a.path, start, end: start + length, in: 0n, colorLabelIndex: color });
         }
       }
     }
@@ -331,4 +352,63 @@ test("groupClips: timeline order, recorder audio stands alone, same-file clips a
   assert.deepEqual(clips.map((c) => [c.id, c.name, String(c.video && c.video.start), c.audio.length]),
     [["c0", "cam.mp4", "0", 1], ["c1", "rec.wav", "null", 2], ["c2", "cam.mp4", "5", 1]]);
   assert.equal(skipped.length, 1);
+});
+
+test("preserves colorLabel on V1 and V2+ when clips have custom label colors in the bin", async () => {
+  const files = {
+    "D:/cam1/C0001.MP4": { ...FILES["D:/cam1/C0001.MP4"], colorLabelIndex: 6 },
+    "D:/cam2/C0101.MP4": { ...FILES["D:/cam2/C0101.MP4"], colorLabelIndex: 8 },
+    "D:/rec/ZOOM0001.WAV": { ...FILES["D:/rec/ZOOM0001.WAV"], colorLabelIndex: 14 },
+  };
+  const host = fakeHost({ files, timeline: TIMELINE });
+  const helper = fakeHelper(PLAN);
+  const { problems } = await run(host, helper);
+
+  assert.deepEqual(problems, []);
+  const copy = host.sequences[1];
+  const v1 = items(copy, "video").find((r) => r.track === 0);
+  const v2 = items(copy, "video").find((r) => r.track === 1);
+  const a3 = items(copy, "audio").find((r) => r.track === 3);
+
+  assert.ok(v1, "V1 video clip exists");
+  assert.ok(v2, "V2 video clip exists");
+  assert.ok(a3, "A3 audio clip exists");
+  assert.equal(v1.colorLabelIndex, 6, "V1 must preserve camera 1's color label");
+  assert.equal(v2.colorLabelIndex, 8, "V2 must preserve camera 2's color label");
+  assert.equal(a3.colorLabelIndex, 14, "A3 must preserve recorder's color label");
+});
+
+test("preserves colorLabel when set on source timeline trackItem (timeline override)", async () => {
+  const files = {
+    "D:/cam1/C0001.MP4": { ...FILES["D:/cam1/C0001.MP4"], colorLabelIndex: 1 },
+    "D:/cam2/C0101.MP4": { ...FILES["D:/cam2/C0101.MP4"], colorLabelIndex: 8 },
+    "D:/rec/ZOOM0001.WAV": { ...FILES["D:/rec/ZOOM0001.WAV"], colorLabelIndex: 14 },
+  };
+  const timeline = TIMELINE.map((c) => (c.path === "D:/cam1/C0001.MP4" ? { ...c, colorLabelIndex: 6 } : { ...c }));
+  const host = fakeHost({ files, timeline });
+  const helper = fakeHelper(PLAN);
+  const { problems } = await run(host, helper);
+
+  assert.deepEqual(problems, []);
+  const copy = host.sequences[1];
+  const v1 = items(copy, "video").find((r) => r.track === 0);
+  assert.ok(v1);
+  assert.equal(v1.colorLabelIndex, 6, "V1 must recognize timeline-level label color set by user");
+});
+
+test("restores V1 clip color if host placement resets V1 to default track color", async () => {
+  const files = {
+    "D:/cam1/C0001.MP4": { ...FILES["D:/cam1/C0001.MP4"], colorLabelIndex: 6 },
+    "D:/cam2/C0101.MP4": { ...FILES["D:/cam2/C0101.MP4"], colorLabelIndex: 8 },
+    "D:/rec/ZOOM0001.WAV": { ...FILES["D:/rec/ZOOM0001.WAV"], colorLabelIndex: 14 },
+  };
+  const host = fakeHost({ files, timeline: TIMELINE, defaultV1Color: true });
+  const helper = fakeHelper(PLAN);
+  const { problems } = await run(host, helper);
+
+  assert.deepEqual(problems, []);
+  const copy = host.sequences[1];
+  const v1 = items(copy, "video").find((r) => r.track === 0);
+  assert.ok(v1);
+  assert.equal(v1.colorLabelIndex, 6, "V1 color must be restored from 1 back to 6");
 });
