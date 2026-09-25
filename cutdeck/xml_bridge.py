@@ -25,6 +25,7 @@ import sys
 import uuid
 from xml.etree import ElementTree as ET
 
+from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
 from cutdeck import frame_bounds, sequence_json, text_properties
 from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups,
                                   check_reference_audio, sequence_timebase)
@@ -35,10 +36,6 @@ VERSION = "cutdeck-xml-5"  # -2: plan_sync (native Sync); -3: panel rough cuts a
 # -5: v2 protocol (ids, watch, Premiere driver) and Rough Cut input as JSON
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
 TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
-# What the panel's driver may be asked to do, and how long each may take (apply_cuts edits
-# a copy of a long sequence: 1735 cuts took minutes live, ledger 09-24).
-DRIVER_COMMANDS = {"read_sequence": 60, "apply_cuts": 1800, "add_markers": 120}
-MAX_MARKERS = 5000
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -188,30 +185,6 @@ def plan_to_json(plan) -> dict:
             "sessions": plan.sessions, "duration_s": plan.duration_s}
 
 
-def _seconds_to_ticks(value, name: str) -> str:
-    if type(value) not in (int, float) or not 0 <= value < 1e6:
-        raise ValueError(f"{name} must be a number of seconds from 0")
-    return str(round(value * PPRO_TICKS_PER_SECOND))
-
-
-def _marker_arguments(args: dict) -> dict:
-    """Validate `add_markers`; the panel gets exact ticks, never float seconds."""
-    markers = args.get("markers")
-    if not isinstance(markers, list) or not 0 < len(markers) <= MAX_MARKERS:
-        raise ValueError(f"markers must be a list of 1 to {MAX_MARKERS} markers")
-    result = []
-    for marker in markers:
-        if not isinstance(marker, dict):
-            raise ValueError("Each marker must be an object")
-        name, comment = marker.get("name", ""), marker.get("comment", "")
-        if not isinstance(name, str) or len(name) > 200 or not isinstance(comment, str) or len(comment) > 2000:
-            raise ValueError("Marker name (max 200) and comment (max 2000) must be text")
-        result.append({"start_ticks": _seconds_to_ticks(marker.get("start_s"), "start_s"),
-                       "duration_ticks": _seconds_to_ticks(marker.get("duration_s", 0), "duration_s"),
-                       "name": name, "comment": comment})
-    return {"markers": result}
-
-
 class Client:
     """One socket connection. Pushes (job events, driver calls) are sent from their own tasks,
     so a slow client never holds up the job that produced them."""
@@ -275,7 +248,7 @@ class XmlJobs:
             if client is None:
                 raise ValueError("Only a connected panel can be the Premiere driver")
             commands = req.get("commands")
-            if not isinstance(commands, list) or not set(commands) <= set(DRIVER_COMMANDS):
+            if not isinstance(commands, list) or not set(commands) <= set(COMMANDS):
                 raise ValueError("Unknown driver commands")
             self.driver, self.driver_commands = client, list(commands)
             print(f"driver registered: {', '.join(commands)}", flush=True)
@@ -449,31 +422,20 @@ class XmlJobs:
     async def _call_driver(self, req: dict):
         """Forward one fixed command to the panel and wait for its answer."""
         command, args = req.get("command"), req.get("args") or {}
-        if command not in DRIVER_COMMANDS or not isinstance(args, dict):
-            raise ValueError(f"Unknown Premiere command; one of: {', '.join(DRIVER_COMMANDS)}")
+        if command not in COMMANDS or not isinstance(args, dict):
+            raise ValueError(f"Unknown Premiere command; one of: {', '.join(COMMANDS)}")
         driver = self.driver
         if driver is None:
             raise ValueError("No CutDeck panel is connected: open the CutDeck panel in Premiere")
         if command not in self.driver_commands:
             raise ValueError(f"The connected panel does not offer {command}; update the panel")
-        if command == "apply_cuts":
-            job = self._job(args.get("job_id"))
-            if job.get("job_type") != "cut" or job["state"] != "ready" or not job.get("cuts"):
-                raise ValueError("apply_cuts needs a finished rough cut job with cuts")
-            context = job.get("context") or {}
-            args = {"cuts": job["cuts"], "sequence_id": context.get("sequence_id"),
-                    "sequence_name": context.get("sequence_name"),
-                    "result_name": job.get("result_name") or f"CutDeck rough cut {job['job_id'][:8]}"}
-        elif command == "add_markers":
-            args = _marker_arguments(args)
-        else:
-            args = {}
+        args = COMMANDS[command].prepare(args, self._job)
         call_id = uuid.uuid4().hex
         future = asyncio.get_running_loop().create_future()
         self.calls[call_id] = (driver, future)
         driver.push({"call": call_id, "command": command, "args": args})
         try:
-            return await asyncio.wait_for(future, DRIVER_COMMANDS[command])
+            return await asyncio.wait_for(future, COMMANDS[command].timeout_s)
         except asyncio.TimeoutError:
             raise ValueError(f"The CutDeck panel did not finish {command} in time") from None
         finally:

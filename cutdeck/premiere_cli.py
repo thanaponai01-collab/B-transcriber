@@ -18,28 +18,26 @@ from pathlib import Path
 import sys
 
 from cutdeck.ai_backend import Backend
+from cutdeck.driver_commands import COMMANDS
 from cutdeck.xml_bridge import PORT
 
 
 async def run(args, backend: Backend):
     if args.command == "status":
         return await backend.premiere_status()
-    if args.command == "read_sequence":
-        return await backend.premiere("read_sequence")
-    if args.command == "apply_cuts":
-        return await backend.premiere("apply_cuts", {"job_id": args.target})
-    markers = json.loads(Path(args.target).read_text(encoding="utf-8"))
-    return await backend.premiere("add_markers", {"markers": markers})
+    cli_target = COMMANDS[args.command].cli_target
+    return await backend.premiere(args.command, cli_target[1](args.target) if cli_target else {})
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Live Premiere commands through the CutDeck panel")
-    parser.add_argument("command", choices=["status", "read_sequence", "apply_cuts", "add_markers"])
+    parser.add_argument("command", choices=["status", *COMMANDS])
     parser.add_argument("target", nargs="?", help="job_id for apply_cuts; a JSON file for add_markers")
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args(argv)
-    if args.command in ("apply_cuts", "add_markers") and not args.target:
-        parser.error(f"{args.command} needs a {'job_id' if args.command == 'apply_cuts' else 'JSON file'}")
+    cli_target = COMMANDS[args.command].cli_target if args.command != "status" else None
+    if cli_target and not args.target:
+        parser.error(f"{args.command} needs a {cli_target[0]}")
     try:
         result = asyncio.run(run(args, Backend(args.port)))
     except (ValueError, RuntimeError, OSError) as exc:

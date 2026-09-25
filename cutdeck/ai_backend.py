@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import re
 
+from cutdeck.driver_commands import COMMANDS
 from cutdeck.xml_bridge import PORT, VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,8 +39,7 @@ class Backend:
     def capabilities(self) -> dict:
         return {
             "version": "3", "tools": ["transcribe", "rough_cut", "premiere_status",
-                                      "premiere_read_sequence", "premiere_apply_cuts",
-                                      "premiere_add_markers"],
+                                      *(f"premiere_{name}" for name in COMMANDS)],
             "live_premiere_control": True,
             "live_premiere_requires": "The CutDeck panel open in Premiere (premiere_status says)",
             "rough_cut_input": "Exported FCP7 sequence XML with accessible source media",
