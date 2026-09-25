@@ -6,7 +6,7 @@
 
 // Same lookup, but rethrows the last error instead of masking "couldn't read this
 // track" as "this track is empty" — callers that use the result to avoid colliding
-// with existing clips (findSmartStackTrack) must be able to tell the difference,
+// with existing clips (pickPlacementTracks) must be able to tell the difference,
 // since treating an unreadable track as empty risks overwriting real footage on it.
 async function getTrackClipItemsOrThrow(track, ppro) {
   if (!track || typeof track.getTrackItems !== "function") return [];
@@ -14,17 +14,21 @@ async function getTrackClipItemsOrThrow(track, ppro) {
     ? ppro.Constants.TrackItemType.CLIP
     : 1;
   let lastErr = null;
+  // Premiere has been seen returning null entries in this list (2026-09-24, crashed
+  // the AL track pick on a placement) — a null has no position, so drop it here
+  // where every caller routes through, instead of crashing each caller on it.
+  const usable = (items) => items.filter((it) => it != null);
   try {
     const items = await track.getTrackItems(clipType, false);
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems(1, false);
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   try {
     const items = await track.getTrackItems();
-    if (items && Array.isArray(items)) return items;
+    if (items && Array.isArray(items)) return usable(items);
   } catch (e) { lastErr = e; }
   throw lastErr || new Error("getTrackItems returned no usable result");
 }
@@ -63,28 +67,23 @@ async function isTrackItemSelected(it) {
 // and is not restricted to video tracks either.
 async function getSelectedTrackItems(seq, ppro) {
   if (!seq) return [];
-  let rawItems = [];
   try {
     if (typeof seq.getSelection === "function") {
       const sel = await seq.getSelection();
       if (sel) {
         if (typeof sel.getTrackItems === "function") {
           const items = await sel.getTrackItems();
-          if (items && items.length > 0) rawItems = items;
+          if (items && Array.isArray(items)) return items;
         } else if (Array.isArray(sel)) {
-          rawItems = sel;
+          return sel;
         } else if (Array.isArray(sel.items)) {
-          rawItems = sel.items;
+          return sel.items;
         }
       }
     }
   } catch (_) {}
 
-  if (rawItems.length > 0) return rawItems;
-
-  // seq.getSelection() has already proven unreliable on this build once before (see
-  // getSelectedVideoClips, which needed the exact same fallback) — walk every video AND
-  // audio track's own items and ask each one directly whether it's selected.
+  // Fallback: only if seq.getSelection() threw, returned null, or had no usable items API
   const found = [];
   try {
     const videoCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
@@ -110,6 +109,17 @@ async function getFirstSelectedTrackItem(seq, ppro) {
   return items.length > 0 ? items[0] : null;
 }
 
+// A track item's display name. VideoClipTrackItem/AudioClipTrackItem have no `name`
+// property, only getName() (@adobe/premierepro 26.2.1 d.ts); `name` is kept for mocks.
+async function trackItemName(it, fallback = "") {
+  if (!it) return fallback;
+  if (it.name) return it.name;
+  if (typeof it.getName === "function") {
+    try { return (await it.getName()) || fallback; } catch (_) {}
+  }
+  return fallback;
+}
+
 // Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers).
 // Replaces today's adjustmentLayer.js getSelectedTimelineClips, built on getSelectedTrackItems.
 async function getSelectedVideoClips(ppro, seq) {
@@ -124,26 +134,44 @@ async function getSelectedVideoClips(ppro, seq) {
   const videoClips = [];
   const videoItemsTrackMap = new Map();
 
+  // getTrackIndex() is declared on VideoClipTrackItem/AudioClipTrackItem (@adobe/premierepro
+  // 26.2.1 d.ts), so only the video tracks the selection names are read, not every track.
+  // An audio clip's index is an audio-track index, so membership is still checked on the
+  // video track read. Falls back to scanning every video track where it's missing.
+  const readVideoTrack = async (v) => {
+    const track = await seq.getVideoTrack(v);
+    const vItems = await getTrackClipItems(track, ppro);
+    for (const vi of vItems || []) videoItemsTrackMap.set(vi, v);
+  };
   try {
     const trackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
-    for (let v = 0; v < trackCount; v++) {
-      const track = await seq.getVideoTrack(v);
-      const vItems = await getTrackClipItems(track, ppro);
-      if (vItems) {
-        for (const vi of vItems) {
-          videoItemsTrackMap.set(vi, v);
-        }
-      }
+    let indices = new Set();
+    for (const it of rawItems) {
+      if (!it || typeof it.getTrackIndex !== "function") { indices = null; break; }
+      let idx;
+      try { idx = await it.getTrackIndex(); } catch (_) { indices = null; break; }
+      if (Number.isInteger(idx) && idx >= 0 && idx < trackCount) indices.add(idx);
     }
+    const toRead = indices || Array.from({ length: trackCount }, (_, v) => v);
+    for (const v of toRead) await readVideoTrack(v);
   } catch (_) {}
 
   for (const it of rawItems) {
     if (!it) continue;
 
-    // 1. Ignore Adjustment Layers themselves
-    const name = it.name ? it.name.toLowerCase() : "";
-    if (name.includes("adjustment") || name.startsWith("adj_")) {
-      continue;
+    // 1. Ignore Adjustment Layers themselves. isAdjustmentLayer() is declared on
+    // VideoClipTrackItem/AudioClipTrackItem (@adobe/premierepro 26.2.1 d.ts); the name
+    // check is only a fallback where it's missing — by name, footage called
+    // "adjustment_test.mp4" is skipped and a renamed AL passes as footage.
+    if (typeof it.isAdjustmentLayer === "function") {
+      let isAL = false;
+      try { isAL = await it.isAdjustmentLayer(); } catch (_) {}
+      if (isAL) continue;
+    } else {
+      const name = (await trackItemName(it)).toLowerCase();
+      if (name.includes("adjustment") || name.startsWith("adj_")) {
+        continue;
+      }
     }
 
     // 2. Check explicit mediaType
@@ -172,4 +200,5 @@ module.exports = {
   getSelectedTrackItems,
   getFirstSelectedTrackItem,
   getSelectedVideoClips,
+  trackItemName,
 };

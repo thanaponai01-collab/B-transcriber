@@ -16,6 +16,7 @@
    surprise tells you less than the build it was probing. */
 
 const { TICKS_PER_SECOND, ticks, toFrames, normalizeSelection } = require("./timelineRange.js");
+const { trackItemName } = require("./host/trackItems.js");
 
 /* Every rate this project has actually met, from issue #25's job table. */
 const KNOWN_RATES = [
@@ -271,10 +272,10 @@ async function probeAdjustmentLayerMotion(ppro) {
   }
 
   add("found", "How many Adjustment Layer clips are on this sequence's timeline right now?", String(found.length),
-    { items: found.map((f) => `V${f.track}: "${f.item.name || "?"}"`) });
+    { items: await Promise.all(found.map(async (f) => `V${f.track}: "${await trackItemName(f.item, "?")}"`)) });
 
   for (const { item, track } of found) {
-    const label = `V${track} "${item.name || "?"}"`;
+    const label = `V${track} "${await trackItemName(item, "?")}"`;
 
     const mediaType = ppro.Constants && ppro.Constants.MediaType ? ppro.Constants.MediaType.VIDEO : undefined;
     const chainRead = await attempt(`getComponentChain(${label})`, () =>
@@ -389,7 +390,7 @@ async function probeEffectChain(ppro) {
   }
 
   for (const item of items) {
-    const label = item.name || "(unnamed)";
+    const label = await trackItemName(item, "(unnamed)");
     const chainRead = await attempt(`getComponentChain(${label})`, () =>
       (typeof item.getComponentChain === "function" ? item.getComponentChain() : null));
     if (!chainRead.ok || !chainRead.value) {
@@ -466,10 +467,18 @@ function formatEffectChainReport(report) {
    Run it against, separately: a clip whose source matches the sequence, a clip whose source
    does NOT, a clip with non-square pixels, an Adjustment Layer, and a graphic. */
 const TRANSFORM_COMPONENT_HINTS = ["motion", "transform"];
+const GRAPHIC_TEXT_MATCH_NAME = "AE.ADBE Text";
 
 function looksLikeTransformComponent(displayName, matchName) {
   const haystack = `${displayName || ""} ${matchName || ""}`.toLowerCase();
   return TRANSFORM_COMPONENT_HINTS.some((hint) => haystack.indexOf(hint) !== -1);
+}
+
+// A value as text for the report, whatever its type: strings verbatim, objects as JSON.
+function clipText(value) {
+  let text;
+  try { text = typeof value === "string" ? value : JSON.stringify(value); } catch (_) { text = String(value); }
+  return text === undefined ? String(value) : text;
 }
 
 /* Records a param value the way the units question actually needs it: the unwrapped value
@@ -626,7 +635,7 @@ async function probeTransformParams(ppro) {
   }
 
   for (const item of items) {
-    const label = item.name || "(unnamed)";
+    const label = await trackItemName(item, "(unnamed)");
 
     // Adobe declares getIsSelected(); `isSelected` appears nowhere. Recorded per item so the
     // claim is evidenced on this build rather than inferred from the .d.ts alone.
@@ -671,7 +680,9 @@ async function probeTransformParams(ppro) {
       const displayName = (await attempt("getDisplayName", () => component.getDisplayName())).value || null;
       const matchName = (await attempt("getMatchName", () => component.getMatchName())).value || null;
       allComponents.push({ index: i, displayName, matchName });
-      if (looksLikeTransformComponent(displayName, matchName)) {
+      // A Graphic's Text layer (AE.ADBE Text) is read too: whether its params carry the text's
+      // own position/size is the open question for aligning text, not the whole canvas.
+      if (looksLikeTransformComponent(displayName, matchName) || matchName === GRAPHIC_TEXT_MATCH_NAME) {
         transformComponents.push({ index: i, displayName, matchName, component });
       }
     }
@@ -712,10 +723,24 @@ async function probeTransformParams(ppro) {
           ? await attempt("getStartValue", () => param.getStartValue())
           : { ok: false, error: "no getStartValue on this param" };
 
-        params.push(Object.assign(
+        const entry = Object.assign(
           { index: p, name, isTimeVarying: timeVaryingRead.ok ? timeVaryingRead.value : `error: ${timeVaryingRead.error}` },
           startRead.ok ? describeParamValue(startRead.value) : { present: false, error: startRead.error }
-        ));
+        );
+        // getStartValue() resolves EMPTY (no error) on a Graphic's Source Text, which holds the
+        // font and size the text's layout box (Premiere's blue box) depends on. Try the two
+        // other declared reads (api/premierepro.txt: ComponentParam.getValueAtTime,
+        // getKeyframePtr) at the playhead.
+        if (!entry.present) {
+          const at = await attempt("getPlayerPosition", () => seq.getPlayerPosition());
+          if (at.ok && at.value) {
+            const clip = (r) => (r.ok ? { ok: true, type: typeof r.value, text: clipText(r.value) } : r);
+            entry.valueAtTime = clip(await attempt("getValueAtTime", () => param.getValueAtTime(at.value)));
+            const ptr = await attempt("getKeyframePtr", () => param.getKeyframePtr(at.value));
+            entry.keyframePtr = ptr.ok && ptr.value ? clip({ ok: true, value: ptr.value.value }) : clip(ptr);
+          }
+        }
+        params.push(entry);
       }
 
       add("transformParams",
@@ -838,7 +863,7 @@ async function probeKeyframeTiming(ppro) {
         "second one elsewhere set to Bezier, leave the playhead on the first, run again." });
   if (items.length !== 1) return stop();
   const item = items[0];
-  const label = item.name || "(unnamed)";
+  const label = await trackItemName(item, "(unnamed)");
 
   const startRead = await attempt("getStartTime", () => item.getStartTime());
   const endRead = await attempt("getEndTime", () => item.getEndTime());

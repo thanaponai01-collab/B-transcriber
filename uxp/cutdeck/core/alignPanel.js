@@ -44,16 +44,37 @@
   function formatNum(n) {
     return (Math.round(n * 10) / 10).toString();
   }
-  function formatPoint(field) {
-    if (!field || !field.known) return "—";
-    if (field.animated) return "Animated (keyframed)";
-    return `${formatNum(field.x)}, ${formatNum(field.y)} px`;
+
+  // Phase 2: each value is an input. One that can't be edited safely (unread, or keyframed —
+  // the panel never flattens an animation) is empty, disabled, and says why in its placeholder.
+  // A field the user is typing in is never overwritten by a re-render.
+  function setInput(el, value, placeholder, disabled) {
+    if (!el) return;
+    if (el.disabled !== disabled) el.disabled = disabled;
+    if (typeof el.getAttribute === "function") {
+      if (el.getAttribute("placeholder") !== placeholder) {
+        if (typeof el.setAttribute === "function") el.setAttribute("placeholder", placeholder);
+      }
+    } else if (typeof el.setAttribute === "function") {
+      el.setAttribute("placeholder", placeholder);
+    }
+    if (document.activeElement !== el && el.value !== value) el.value = value;
   }
-  function formatScalar(field, unit) {
-    if (!field || !field.known) return "—";
-    if (field.animated) return "Animated (keyframed)";
-    return `${formatNum(field.value)}${unit}`;
+  function renderInput(id, field, key, busy) {
+    const el = $(id);
+    if (!field || !field.known) return setInput(el, "", "—", true);
+    if (field.animated) return setInput(el, "", "keyframed", true);
+    return setInput(el, formatNum(field[key]), "", !!busy);
   }
+
+  const INPUTS = [
+    ["align-position-x", "position", "x"],
+    ["align-position-y", "position", "y"],
+    ["align-scale", "scale", "value"],
+    ["align-rotation", "rotation", "value"],
+    ["align-anchor-x", "anchor", "x"],
+    ["align-anchor-y", "anchor", "y"],
+  ];
 
   // --- mount: move this panel's container into the root Premiere made for it ---------------
 
@@ -86,68 +107,60 @@
 
   // --- render: state -> screen -------------------------------------------------------------
 
+  // Quiet by default: the status bar shows only a problem ("error"), a skipped clip ("warn") or a
+  // report the user asked for ("info", the Check Transform probe).
   function renderStatus(status) {
     if (!status) return;
+    setHidden($("align-status-card"), !["error", "warn", "info"].includes(status.level));
     setText($("align-status"), status.text);
     const icon = $("align-status-icon");
     if (icon) {
       icon.classList.toggle("busy", status.level === "busy");
       icon.classList.toggle("error", status.level === "error");
+      icon.classList.toggle("warn", status.level === "warn");
     }
   }
 
-  function renderBusy(busy) {
+  // Every control is off while an action runs; the ones marked data-needs-clip are also off
+  // while there is no editable clip.
+  function renderBusy(busy, hasClip) {
     const el = container();
     if (!el || typeof el.querySelectorAll !== "function") return;
     el.querySelectorAll("[data-act]").forEach((node) => {
-      if (node.disabled !== !!busy) node.disabled = !!busy;
-      node.classList.toggle("disabled", !!busy);
+      const off = !!busy || (!hasClip && node.getAttribute("data-needs-clip") !== null);
+      if (node.disabled !== off) node.disabled = off;
+      if (node.classList && typeof node.classList.contains === "function") {
+        if (node.classList.contains("disabled") !== off) node.classList.toggle("disabled", off);
+      } else if (node.classList) {
+        node.classList.toggle("disabled", off);
+      }
     });
   }
 
-  // Phase 1: read-only display of the selected clip's Position/Scale/Rotation/Anchor Point
-  // (docs/research/cutdeck-transform-panel-plan.md). `transform` is null when there is no
-  // sequence to read; otherwise `{ clipName, available, reason, fields }` — `available: false`
-  // (no readable Motion component, or nothing selected) shows `reason` instead of the field
-  // grid, per the plan's Definition of Done: "a clip with no readable Transform shows
-  // 'unavailable' rather than zeros."
-  function renderTransform(transform) {
-    const clipEl = $("align-transform-clip");
-    const reasonEl = $("align-transform-reason");
-    const fieldsEl = $("align-transform-fields");
-
-    if (!transform) {
-      setText(clipEl, "No sequence open");
-      setHidden(reasonEl, true);
-      setHidden(fieldsEl, true);
-      return;
-    }
-
-    setText(clipEl, transform.clipName || "No clip selected");
-
-    if (!transform.available) {
-      setText(reasonEl, transform.reason || "Unavailable.");
-      setHidden(reasonEl, false);
-      setHidden(fieldsEl, true);
-      return;
-    }
-
-    setHidden(reasonEl, true);
-    setHidden(fieldsEl, false);
-    const fields = transform.fields || {};
-    setText($("align-position"), formatPoint(fields.position));
-    setText($("align-scale"), formatScalar(fields.scale, "%"));
-    setText($("align-rotation"), formatScalar(fields.rotation, "°"));
-    setText($("align-anchor"), formatPoint(fields.anchor));
+  // `transform` is null when there is no sequence to read; otherwise `{ clipName, available,
+  // reason, fields }`. The top line is the clip's name, or the reason nothing can be edited;
+  // the fields stay in place and go blank and disabled rather than showing zeros (the plan's
+  // Phase 1 Definition of Done). Returns whether there is an editable clip.
+  function renderTransform(transform, busy) {
+    const available = !!(transform && transform.available);
+    let line = "No sequence open";
+    if (transform) line = available ? (transform.clipName || "") : (transform.reason || "Unavailable.");
+    setText($("align-transform-clip"), line);
+    const fields = available ? (transform.fields || {}) : {};
+    for (const [id, name, key] of INPUTS) renderInput(id, fields[name], key, busy);
+    return available;
   }
 
   function render(state) {
     if (!state) return;
     current = state;
-    setText($("align-sequence"), state.sequence ? state.sequence.name : "No sequence open");
-    renderTransform(state.transform);
+    const clipEl = $("align-transform-clip");
+    if (clipEl && typeof clipEl.setAttribute === "function") {
+      clipEl.setAttribute("title", state.sequence ? state.sequence.name : "No sequence open");
+    }
+    const hasClip = renderTransform(state.transform, state.busy);
     renderStatus(state.status);
-    renderBusy(state.busy);
+    renderBusy(state.busy, hasClip);
   }
 
   // --- bind: listeners once, intents out ---------------------------------------------------
@@ -155,8 +168,35 @@
   function bind(intents) {
     const probe = $("align-probe");
     if (probe) probe.addEventListener("click", () => intents.onProbe("transform"));
-    const seqCard = $("align-seq-card");
-    if (seqCard) seqCard.addEventListener("click", () => intents.onRefresh());
+    const copy = $("align-copy");
+    if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
+    const refresh = $("align-refresh");
+    if (refresh) refresh.addEventListener("click", () => intents.onRefresh());
+
+    for (const [id] of INPUTS) {
+      const input = $(id);
+      if (input) input.addEventListener("change", (e) => intents.onSetField(input.getAttribute("data-field"), e.target.value));
+    }
+    const el = container();
+    if (!el || typeof el.querySelectorAll !== "function") return;
+    if (typeof el.addEventListener === "function") {
+      const triggerPoll = () => {
+        if (typeof intents.onPoll === "function") intents.onPoll();
+        else if (typeof intents.onRefresh === "function") intents.onRefresh();
+      };
+      el.addEventListener("pointerenter", triggerPoll);
+      el.addEventListener("focusin", triggerPoll);
+    }
+    el.querySelectorAll("[data-anchor]").forEach((node) => {
+      node.addEventListener("click", () => {
+        el.querySelectorAll("[data-anchor]").forEach((c) => c.classList.remove("active"));
+        node.classList.add("active");
+        intents.onAnchor(node.getAttribute("data-anchor"));
+      });
+    });
+    el.querySelectorAll("[data-align]").forEach((node) => {
+      node.addEventListener("click", () => intents.onAlign(node.getAttribute("data-align")));
+    });
   }
 
   const exportObj = { render, bind, mount, unmount, isMounted, CONTAINER_ID };

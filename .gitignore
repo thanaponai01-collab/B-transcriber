@@ -17,6 +17,7 @@ env/
 
 # Database
 *.db
+*.db.*
 *.sqlite3
 
 # pytest
@@ -69,3 +70,6 @@ transcribe/finetune/lora_out/
 
 # UXP package output
 uxp/cutdeck/package/
+
+# Node
+node_modules/

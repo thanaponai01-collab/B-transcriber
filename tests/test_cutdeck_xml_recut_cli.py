@@ -261,10 +261,78 @@ def _row_counts(db, job_id):
         conn.close()
 
 
-def test_asr_temp_mixdown_purges_bulk_rows_keeps_job(
+def test_asr_temp_mixdown_keeps_its_transcript_for_reuse(
         mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
     db, job = _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_xml_path, extracted=True)
-    assert _row_counts(db, job) == {"job": 1, "token": 0, "span": 0}
+    assert _row_counts(db, job) == {"job": 1, "token": 1, "span": 1}
+
+
+def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
+        mixdown_path, sequence_xml_path, monkeypatch, tmp_path):
+    """Issue #61: the second run reuses the finished job's transcript."""
+    import shutil
+
+    from cutdeck import xml_audio_extract
+    from transcribe.db import store
+    from transcribe.pipeline import run as run_mod
+    from transcribe.pipeline.plan import canonical_engine_names
+
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    calls = []
+
+    def fake_run_file(path, config, db_path, ingest_result=None):
+        calls.append(path)
+        conn = store.connect(db_path)
+        media_id = store.create_media(conn, path)
+        a, b = canonical_engine_names(config)
+        job_id = store.create_job(conn, media_id, a, b, run_mod.PIPELINE_VERSION)
+        store.bulk_create_tokens(conn, [dict(
+            job_id=job_id, idx=0, text="x", start_ms=0, end_ms=100, script="latin",
+            confidence=None, source_engine="a", speaker_id=None)])
+        store.update_job_phase(conn, job_id, "written")
+        store.update_job_status(conn, job_id, "done")
+        conn.close()
+        return [dict(text="x", start_ms=0, end_ms=100)]
+
+    def fake_extract(xml, out, track, **kw):
+        shutil.copy(mixdown_path, out)
+        return out
+
+    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    monkeypatch.setattr(xml_audio_extract, "extract_mixdown", fake_extract)
+    outs = []
+    for n in (1, 2):
+        out = tmp_path / f"cuts{n}.json"
+        assert xml_recut.main([str(sequence_xml_path), "--asr", "--job-id", "1",
+                               "--db", str(db), "--cuts-json", str(out)]) == 0
+        outs.append(out.read_bytes())
+    assert len(calls) == 1
+    assert outs[0] == outs[1]
+
+
+def test_find_finished_job_ignores_purged_and_mismatched_jobs(tmp_path):
+    from transcribe.db import store
+
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    conn = store.connect(db)
+    wav = tmp_path / "m.wav"
+    wav.write_bytes(b"abc")
+    media = store.create_media(conn, str(wav))
+    job = store.create_job(conn, media, "a", "b", "1")
+    store.bulk_create_tokens(conn, [dict(
+        job_id=job, idx=0, text="x", start_ms=0, end_ms=1, script="latin",
+        confidence=None, source_engine="a", speaker_id=None)])
+    assert store.find_finished_job(conn, media, "a", "b", "1") is None  # still running
+    store.update_job_phase(conn, job, "written")
+    store.update_job_status(conn, job, "done")
+    assert store.find_finished_job(conn, media, "a", "b", "1").id == job
+    assert store.find_finished_job(conn, media, "a", "c", "1") is None
+    assert store.find_finished_job(conn, media, "a", "b", "2") is None
+    store.purge_job_transcript_data(conn, job)
+    assert store.find_finished_job(conn, media, "a", "b", "1") is None
+    conn.close()
 
 
 def test_asr_caller_supplied_mixdown_keeps_rows(
@@ -328,3 +396,35 @@ def test_transition_refused_before_any_audio_work(tmp_path, monkeypatch):
     monkeypatch.setattr(ingest_mod, "ingest", no_ingest)
     with pytest.raises(xml_recut.XmlRecutRefusal, match="transitionitem"):
         xml_recut.main([str(seq_path), "--asr", "--job-id", "1"])
+
+
+def test_cuts_json_equals_scoped_cuts_and_writes_no_xml(mixdown_path, sequence_xml_path, tmp_path):
+    """Native rough cut (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 3.1): the cut list the panel
+    applies is exactly the scoped_cuts the XML route would have applied."""
+    import json
+    out = tmp_path / "cuts.json"
+    xml_argv = [str(sequence_xml_path), mixdown_path, "--no-save-plan",
+                "--range-start-frame", "30", "--range-end-frame", "180"]
+    assert xml_recut.main(xml_argv + ["--cuts-json", str(out)]) == 0
+    assert not sequence_xml_path.with_name("seq_cut.xml").exists()
+    data = json.loads(out.read_text())
+
+    report = tmp_path / "report.json"
+    xml_recut.main(xml_argv + ["--report", str(report)])
+    xml_report = json.loads(report.read_text())
+
+    cuts = data["cuts_frames"]
+    assert cuts and all(30 <= a < b <= 180 for a, b in cuts)
+    assert all(b1 <= a2 for (_, b1), (a2, _) in zip(cuts, cuts[1:]))
+    assert data["report"]["cuts_applied"] == xml_report["cuts_applied"] == len(cuts)
+    assert data["report"]["removed_frames"] == xml_report["removed_frames"]
+    assert data["ticks_per_frame"] == str(254016000000 // 30)
+    assert data["sequence_duration_frames"] == 195
+
+
+def test_ticks_per_frame_is_exact_or_refused():
+    from cutdeck.contracts import Timebase
+    from cutdeck.xml_sequence import XmlRecutRefusal
+    assert xml_recut.ticks_per_frame(Timebase(fps_num=30000, fps_den=1001)) == 8475667200
+    with pytest.raises(XmlRecutRefusal):
+        xml_recut.ticks_per_frame(Timebase(fps_num=254016000001, fps_den=1))

@@ -137,16 +137,20 @@ function makeStub() {
   const probe = el("align-probe");
   probe.setAttribute("data-act", "align-probe");
   container.appendChild(probe);
-  el("align-sequence");
+  const anchorCell = el("anchor-cell-test");
+  anchorCell.setAttribute("data-act", "align-anchor");
+  anchorCell.setAttribute("data-needs-clip", "");
+  container.appendChild(anchorCell);
+  el("align-refresh").setAttribute("data-act", "align-refresh");
+  el("align-status-card");
   el("align-status");
   el("align-status-icon");
   el("align-transform-clip");
-  el("align-transform-reason");
   el("align-transform-fields");
-  el("align-position");
-  el("align-scale");
-  el("align-rotation");
-  el("align-anchor");
+  for (const [id, field] of [["align-position-x", "position-x"], ["align-position-y", "position-y"],
+    ["align-scale", "scale"], ["align-rotation", "rotation"], ["align-anchor-x", "anchor-x"], ["align-anchor-y", "anchor-y"]]) {
+    el(id).setAttribute("data-field", field);
+  }
 
   const body = el("__body__");
   body.appendChild(container);
@@ -238,36 +242,63 @@ test("render is idempotent: a second call with the same state changes nothing fu
   delete global.document;
 });
 
-test("render writes the sequence name, the status, and disables controls while busy", () => {
+test("render puts the sequence name in the clip line's tooltip and disables every control while busy", () => {
   const { nodes, probe } = makeStub();
   const alignPanel = loadAlignPanel();
 
   alignPanel.render({ sequence: { name: "CFD 94" }, busy: true, status: { text: "Working…", level: "busy" } });
-  assert.equal(nodes.get("align-sequence").textContent, "CFD 94");
-  assert.equal(nodes.get("align-status").textContent, "Working…");
+  assert.equal(nodes.get("align-transform-clip").getAttribute("title"), "CFD 94");
   assert.equal(nodes.get("align-status-icon").className.includes("busy"), true);
   assert.equal(probe.disabled, true, "controls must be disabled while a job runs");
 
   alignPanel.render({ sequence: null, busy: false, status: { text: "Ready", level: "ready" } });
-  assert.equal(nodes.get("align-sequence").textContent, "No sequence open");
-  assert.equal(nodes.get("align-status-icon").className.includes("busy"), false);
+  assert.equal(nodes.get("align-transform-clip").getAttribute("title"), "No sequence open");
+  assert.equal(probe.disabled, false);
+  delete global.document;
+});
+
+test("the status bar stays hidden unless there is an error or a skipped clip", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const card = () => nodes.get("align-status-card").hidden;
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Ready", level: "ready" } });
+  assert.equal(card(), true);
+  alignPanel.render({ sequence: null, busy: true, status: { text: "Processing…", level: "busy" } });
+  assert.equal(card(), true);
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Skipped: x", level: "warn" } });
+  assert.equal(card(), false);
+  assert.equal(nodes.get("align-status").textContent, "Skipped: x");
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Open a sequence first.", level: "error" } });
+  assert.equal(card(), false);
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Transform report…", level: "info" } });
+  assert.equal(card(), false, "a Check Transform report must be visible");
+  delete global.document;
+});
+
+test("anchor and align controls are disabled while there is no editable clip; refresh and probe are not", () => {
+  const { nodes, probe } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const noClip = { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
+  alignPanel.render({ sequence: { name: "S" }, transform: noClip, busy: false, status: { text: "Ready", level: "ready" } });
+  assert.equal(nodes.get("anchor-cell-test").disabled, true);
+  assert.equal(nodes.get("align-refresh").disabled, false);
   assert.equal(probe.disabled, false);
   delete global.document;
 });
 
 // --- Phase 1: renderTransform (docs/research/cutdeck-transform-panel-plan.md) --------------
 
-test("renderTransform shows 'No sequence open' and hides both the reason and the field grid when transform is null", () => {
+test("renderTransform shows 'No sequence open' and blanks and disables every field when transform is null", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
   alignPanel.render({ sequence: null, transform: null, busy: false, status: { text: "Ready", level: "ready" } });
   assert.equal(nodes.get("align-transform-clip").textContent, "No sequence open");
-  assert.equal(nodes.get("align-transform-reason").hidden, true);
-  assert.equal(nodes.get("align-transform-fields").hidden, true);
+  assert.equal(nodes.get("align-scale").value, "");
+  assert.equal(nodes.get("align-scale").disabled, true);
   delete global.document;
 });
 
-test("renderTransform shows the reason and hides the field grid when the clip has no readable Transform", () => {
+test("renderTransform shows the reason in the clip line and disables the fields when the clip has no readable Transform", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
   alignPanel.render({
@@ -275,10 +306,8 @@ test("renderTransform shows the reason and hides the field grid when the clip ha
     transform: { clipName: "AudioOnly.wav", available: false, reason: "This item has no readable Transform.", fields: null },
     busy: false, status: { text: "Ready", level: "ready" },
   });
-  assert.equal(nodes.get("align-transform-clip").textContent, "AudioOnly.wav");
-  assert.equal(nodes.get("align-transform-reason").textContent, "This item has no readable Transform.");
-  assert.equal(nodes.get("align-transform-reason").hidden, false);
-  assert.equal(nodes.get("align-transform-fields").hidden, true);
+  assert.equal(nodes.get("align-transform-clip").textContent, "This item has no readable Transform.");
+  assert.equal(nodes.get("align-position-x").disabled, true);
   delete global.document;
 });
 
@@ -290,8 +319,7 @@ test("renderTransform shows 'Select a clip on the timeline.' when nothing is sel
     transform: { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null },
     busy: false, status: { text: "Ready", level: "ready" },
   });
-  assert.equal(nodes.get("align-transform-clip").textContent, "No clip selected");
-  assert.equal(nodes.get("align-transform-reason").textContent, "Select a clip on the timeline.");
+  assert.equal(nodes.get("align-transform-clip").textContent, "Select a clip on the timeline.");
   delete global.document;
 });
 
@@ -314,16 +342,14 @@ test("renderTransform formats Position/Scale/Rotation/Anchor to one decimal, mat
     busy: false, status: { text: "Ready", level: "ready" },
   });
   assert.equal(nodes.get("align-transform-clip").textContent, "Lowerthird 2026.png");
-  assert.equal(nodes.get("align-transform-fields").hidden, false);
-  assert.equal(nodes.get("align-transform-reason").hidden, true);
-  assert.equal(nodes.get("align-position").textContent, "-510.8, 44.9 px");
-  assert.equal(nodes.get("align-scale").textContent, "162%");
-  assert.equal(nodes.get("align-rotation").textContent, "0°");
-  assert.equal(nodes.get("align-anchor").textContent, "2, 60.5 px");
+  const values = ["align-position-x", "align-position-y", "align-scale", "align-rotation", "align-anchor-x", "align-anchor-y"]
+    .map((id) => nodes.get(id).value);
+  assert.deepEqual(values, ["-510.8", "44.9", "162", "0", "2", "60.5"]);
+  assert.equal(nodes.get("align-scale").disabled, false);
   delete global.document;
 });
 
-test("renderTransform shows 'Animated (keyframed)' for a time-varying field instead of a possibly-wrong static number", () => {
+test("renderTransform empties and disables a keyframed field instead of showing a possibly-wrong static number", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
   alignPanel.render({
@@ -341,8 +367,13 @@ test("renderTransform shows 'Animated (keyframed)' for a time-varying field inst
     },
     busy: false, status: { text: "Ready", level: "ready" },
   });
-  assert.equal(nodes.get("align-position").textContent, "Animated (keyframed)");
-  assert.equal(nodes.get("align-scale").textContent, "100%");
+  for (const id of ["align-position-x", "align-position-y"]) {
+    assert.equal(nodes.get(id).value, "");
+    assert.equal(nodes.get(id).disabled, true);
+    assert.equal(nodes.get(id).getAttribute("placeholder"), "keyframed");
+  }
+  assert.equal(nodes.get("align-scale").value, "100");
+  assert.equal(nodes.get("align-scale").disabled, false);
   delete global.document;
 });
 
@@ -364,8 +395,11 @@ test("renderTransform shows '—' for a field that could not be read at all", ()
     },
     busy: false, status: { text: "Ready", level: "ready" },
   });
-  assert.equal(nodes.get("align-position").textContent, "—");
-  assert.equal(nodes.get("align-rotation").textContent, "—");
+  for (const id of ["align-position-x", "align-rotation"]) {
+    assert.equal(nodes.get(id).value, "");
+    assert.equal(nodes.get(id).disabled, true);
+    assert.equal(nodes.get(id).getAttribute("placeholder"), "—");
+  }
   delete global.document;
 });
 
@@ -413,8 +447,9 @@ test("features/align.js requires the transform host-discovery and geometry modul
 test("Anchor Point is converted against the SOURCE frame, never the sequence frame", () => {
   // Part 1a: Anchor Point is normalized to the source, Position to the sequence. Converting
   // Anchor Point against frameSize printed 150, 300 for a 100, 200 anchor on a 720p clip.
-  assert.match(alignFeatureJs, /readSourceFrameSize\(ppro, item\)/);
-  assert.match(alignFeatureJs, /anchorFrame = await transformParams\.readSourceFrameSize\(ppro, item\)/);
+  // A Graphic has no project item, so its anchor frame falls back to the sequence frame
+  // (transform/params.js readAnchorFrameSize; behaviour covered in cutdeck_transform_params).
+  assert.match(alignFeatureJs, /anchorFrame = await transformParams\.readAnchorFrameSize\(ppro, item, seq\)/);
   assert.match(alignFeatureJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
   assert.match(alignFeatureJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
 });
@@ -452,4 +487,117 @@ test("no hide or destroy hook is registered", () => {
   const setupBlock = code.slice(setupAt);
   assert.equal(/\bhide\s*\(/.test(setupBlock), false, "a hide() hook was registered");
   assert.equal(/\bdestroy\s*\(/.test(setupBlock), false, "a destroy() hook was registered");
+});
+
+// --- event-driven refresh (review 2026-09-24 item 2) ---------------------------------------
+
+function withFakeInterval(fn) {
+  const orig = global.setInterval;
+  const calls = [];
+  global.setInterval = (cb, ms) => { calls.push(ms); return calls.length; };
+  let out;
+  try { out = fn(calls); } catch (e) { global.setInterval = orig; throw e; }
+  return Promise.resolve(out).finally(() => { global.setInterval = orig; });
+}
+
+test("Transform panel attaches selection to the active sequence and moves it on switch", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  const seqA = { name: "A" }, seqB = { name: "B" };
+  let active = seqA;
+  const globals = {}, attached = [], removed = [];
+  const ppro = {
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
+    EventManager: {
+      addGlobalEventListener: (name, h) => { globals[name] = h; },
+      addEventListener: (target, name) => attached.push([target.name, name]),
+      removeEventListener: (target, name) => removed.push([target.name, name]),
+    },
+    Project: { getActiveProject: async () => ({ getActiveSequence: async () => active }) },
+  };
+  await withFakeInterval(async (calls) => {
+    const f = createAlignFeature({ ppro, ctl: { state: {}, render() {} } });
+    f.startPolling();
+    f.startPolling();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(Object.keys(globals), ["a"]); // no global SELECTION_CHANGED: it never fires live
+    assert.deepEqual(attached, [["A", "s"]]);
+    assert.deepEqual(calls, [600]); // keeps heartbeat poll for timeline clicks where Premiere fires no event
+    active = seqB;
+    globals.a();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(removed, [["A", "s"]]);
+    assert.deepEqual(attached, [["A", "s"], ["B", "s"]]);
+  });
+});
+
+test("Transform panel falls back to the fast poll without EventManager", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  await withFakeInterval((calls) => {
+    createAlignFeature({ ppro: {}, ctl: { state: {}, render() {} } }).startPolling();
+    assert.deepEqual(calls, [600]);
+  });
+});
+
+test("a burst of events collapses into at most two reads", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  let handler = null;
+  let reads = 0;
+  const ppro = {
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
+    EventManager: { addGlobalEventListener() {}, addEventListener: (t, name, h) => { handler = h; } },
+    Project: { getActiveProject: async () => { reads++; await new Promise((r) => setImmediate(r)); return { getActiveSequence: async () => seq }; } },
+  };
+  const seq = { name: "A" };
+  await withFakeInterval(async () => {
+    createAlignFeature({ ppro, ctl: { state: {}, render() {} } }).startPolling();
+    await new Promise((r) => setTimeout(r, 10));
+    reads = 0;
+    for (let i = 0; i < 10; i++) handler();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  assert.ok(reads >= 1 && reads <= 2, `expected 1-2 reads, got ${reads}`);
+});
+
+test("readAlignTransform names the clip via getName() (track items have no .name)", async () => {
+  const { readAlignTransform } = require("../uxp/cutdeck/features/align.js");
+  const item = { getName: async () => "Interview_A.mp4", getIsSelected: async () => true };
+  const seq = { getSelection: async () => ({ getTrackItems: async () => [item] }) };
+  const out = await readAlignTransform(seq, null);
+  assert.equal(out.clipName, "Interview_A.mp4");
+});
+
+test("bind raises onSetField with the field name and typed text when an input changes", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const raised = [];
+  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField: (f, v) => raised.push([f, v]), onAnchor() {}, onAlign() {} });
+  nodes.get("align-anchor-y").listeners.change.forEach((fn) => fn({ target: { value: "12.5" } }));
+  assert.deepEqual(raised, [["anchor-y", "12.5"]]);
+  delete global.document;
+});
+
+test("a field the user is typing in is not overwritten by a re-render", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const typing = nodes.get("align-scale");
+  typing.value = "15";
+  global.document.activeElement = typing;
+  alignPanel.render({
+    sequence: { name: "S" },
+    transform: { clipName: "c", available: true, reason: null, fields: {
+      position: { known: true, animated: false, x: 1, y: 2 }, scale: { known: true, animated: false, value: 100 },
+      rotation: { known: true, animated: false, value: 0 }, anchor: { known: true, animated: false, x: 3, y: 4 } } },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+  assert.equal(typing.value, "15");
+  assert.equal(nodes.get("align-rotation").value, "0");
+  delete global.document;
+});
+
+test("index.html has nine anchor cells and six align buttons, each with a value the feature knows", () => {
+  const { ANCHOR_TARGETS, ALIGN_EDGES } = require("../uxp/cutdeck/transform/geometry.js");
+  const anchors = [...html.matchAll(/data-anchor="([^"]+)"/g)].map((m) => m[1]);
+  const edges = [...html.matchAll(/data-align="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...anchors].sort(), Object.keys(ANCHOR_TARGETS).sort());
+  assert.deepEqual([...edges].sort(), [...ALIGN_EDGES].sort());
 });

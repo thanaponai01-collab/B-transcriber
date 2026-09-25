@@ -202,6 +202,7 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Pro
     rejected: dict[str, Placement] = {}
     usable: dict[str, _Clip] = {}
     media: dict[str, float] = {}
+
     for order, c in enumerate(clips):
         report(order, len(clips), "Reading audio")
         try:
@@ -265,4 +266,6 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Pro
             cursor += length(c) + SESSION_GAP_S
     duration = max((p.start_s + length(next(c for c in clips if c.id == p.clip_id)) for p in result.values()),
                    default=0.0)
-    return SyncPlan([result[c.id] for c in clips], len(sessions), duration, media)
+    plan = SyncPlan([result[c.id] for c in clips], len(sessions), duration, media)
+    usable.clear()
+    return plan

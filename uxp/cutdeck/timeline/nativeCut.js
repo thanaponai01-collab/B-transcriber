@@ -1,0 +1,283 @@
+/* Native rough cut Route A (docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md 3.2): apply the helper's
+   cut list to a COPY of the editor's sequence with live Premiere edits, then prove it by
+   read-back. The source sequence is never edited.
+
+   Built only on what the "Test Native Cut" probe proved live (TODO_LEDGER 2026-09-24):
+     - createMoveAction is RELATIVE; linked audio does NOT follow, so every item moves itself.
+     - createRemoveItemsAction(ripple=false, <its media type>) removes just that item.
+     - createSetInPointAction trims the head, createSetOutPointAction the tail (media time).
+       createSetEndAction is broken on this build — never used.
+     - a clone OVERWRITES the time it lands on — used here as the razor (see applyPlan).
+     - items read before a transaction can go stale, so every step re-reads the copy.
+   Up to five undo steps, said in the status line. */
+
+const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
+const { readSequence } = require("./nativeSync.js");
+const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut } = require("./cutPlanApply.js");
+
+const CLONE_GAP = 2n * TICKS_PER_SECOND;
+
+const kindOf = (c) => c.kind; // "video" | "audio" from readSequence
+const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
+const asPlanItem = (c, extra = {}) => ({ id: itemKey(c), name: c.path ? String(c.path).split(/[\\/]/).pop() : "clip",
+  mediaType: kindOf(c), track: c.track, startTicks: c.start, endTicks: c.end, inTicks: c.inPoint, ...extra });
+
+/* Everything the planner's whole-plan refusal needs, read from the host. The refusal only
+   looks at clips a cut lands inside, so speed/reversed/nested/multicam (up to 5 host calls
+   each) are read for those alone; `cuts: null` skips them and the transitions entirely, for
+   a read-back that only needs positions. */
+async function readItems(ppro, seq, cuts) {
+  const s = await readSequence(ppro, seq);
+  const items = [];
+  for (const c of [...s.video, ...s.audio]) {
+    let speed = 1, reversed = false, isNested = false, isMulticam = false;
+    if (!cuts || !overlapsCut(c.start, c.end, cuts)) { items.push(asPlanItem(c, { raw: c })); continue; }
+    try { speed = await c.item.getSpeed(); } catch (_) { /* not reported: treat as normal */ }
+    try { reversed = !!(await c.item.isSpeedReversed()); } catch (_) { /* idem */ }
+    try {
+      const pi = ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(await c.item.getProjectItem()) : await c.item.getProjectItem();
+      if (pi && typeof pi.isSequence === "function") isNested = !!(await pi.isSequence());
+      if (pi && typeof pi.isMulticamClip === "function") isMulticam = !!(await pi.isMulticamClip());
+    } catch (_) { /* graphics / adjustment layers have no clip project item */ }
+    items.push(asPlanItem(c, { speed, reversed, isNested, isMulticam, raw: c }));
+  }
+  const transitions = [];
+  if (!cuts) return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
+  const type = ppro.Constants.TrackItemType.TRANSITION;
+  for (const [kind, count, get] of [["video", s.videoTracks, (i) => seq.getVideoTrack(i)], ["audio", s.audioTracks, (i) => seq.getAudioTrack(i)]]) {
+    for (let t = 0; t < count; t++) {
+      const track = await get(t);
+      const found = track ? (await track.getTrackItems(type, false)) || [] : [];
+      if (!found.length) continue;
+      const trackTransitions = await Promise.all(found.map(async (x) => {
+        const [startTick, endTick] = await Promise.all([x.getStartTime(), x.getEndTime()]);
+        return {
+          id: `${kind}-transition-${t}`,
+          name: "transition",
+          mediaType: kind,
+          track: t,
+          isTransition: true,
+          startTicks: toTicks(startTick),
+          endTicks: toTicks(endTick),
+          inTicks: 0n,
+        };
+      }));
+      transitions.push(...trackTransitions);
+    }
+  }
+  return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
+}
+
+/* Applies the cuts to `copy`, whose clips are `items`. Returns the undo-step count.
+
+   Splits use Premiere's own overwrite as the razor. Live run 2 (2026-09-24) showed the first
+   design — one full-length clone per extra piece, parked past the end — cannot scale: 432 cuts
+   on a 25-minute clip meant ~431 full-length clones per track, and pieces went missing. Instead:
+     1. one filler per track: clone that track's clip past the end,
+     2. trim it to ONE frame,
+     3. clone the filler onto every cut edge that falls inside a clip — an overwrite splits the
+        clip under it, so the kept pieces are the original clip, effects and all,
+     4. remove everything now lying inside a cut (the fillers too),
+     5. move every survivor left by what was removed before it. */
+async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn()) {
+  const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
+  const editor = () => ppro.SequenceEditor.getEditor(copy);
+  // Actions must be CREATED inside the transaction callback — built outside it, Premiere throws
+  // "The script object is no longer valid." (live run 2026-09-24). So each step passes a list
+  // of builders, not actions.
+  const tx = (label, builders) => {
+    if (!builders.length) return 0;
+    const ed = editor();
+    timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
+      const len = builders.length;
+      for (let i = 0; i < len; i++) {
+        const build = builders[i];
+        let action, added;
+        // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
+        // cut list went through on a rerun, so an empty result is asked for once more (still inside
+        // this callback, as required) before failing. The read-back still checks every piece.
+        for (let attempt = 0; attempt < 2 && !action; attempt++) {
+          try { action = build(ed); } catch (e) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where} failed to build: ${e.message}`);
+          }
+        }
+        if (!action) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where}: Premiere returned no action (${action}), twice`);
+        }
+        try { added = compound.addAction(action); } catch (e) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where} was refused: ${e.message}`);
+        }
+        if (!added) {
+          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+          throw new Error(`${where}: addAction returned false`);
+        }
+      }
+    }));
+    return 1;
+  };
+  // Positions only. The two reads after the razor see every piece (~8,700 on a 1,735-cut run,
+  // 16 s live), so they read just what their step uses.
+  const read = (fields = {}) => timed("reads", () => readSequence(ppro, copy, { paths: false, ...fields }));
+  const all = (seq) => [...seq.video, ...seq.audio];
+  const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
+  let steps = 0;
+
+  // Where each track needs a razor: every cut edge strictly inside a clip. The edge at b is cut
+  // by a one-frame filler ending there, so the filler itself lies inside the cut.
+  const edges = new Map(); // lane -> Set of filler starts
+  const sourceOf = new Map(); // lane -> an item on that track to make the filler from
+  for (const it of items) {
+    for (const [a, b] of cuts) {
+      if (!(a < it.endTicks && b > it.startTicks)) continue;
+      const at = new Set(edges.get(lane(it)) || []);
+      if (a > it.startTicks) at.add(a);
+      if (b < it.endTicks) at.add(b - tpf);
+      if (at.size) { edges.set(lane(it), at); if (!sourceOf.has(lane(it))) sourceOf.set(lane(it), it); }
+    }
+  }
+  const endNow = items.reduce((m, it) => (it.endTicks > m ? it.endTicks : m), 0n);
+  const park = ((endNow + CLONE_GAP) / tpf) * tpf;
+  const findIn = (seq, key, start) => all(seq).find((c) => lane(c) === key && c.start === start);
+
+  // 1-2. fillers: clone each lane's source clip to `park`, then trim it to one frame.
+  let seq = await read();
+  steps += tx("make razor fillers", [...sourceOf].map(([key, it]) => {
+    const src = findIn(seq, key, it.startTicks);
+    if (!src) throw new Error(`clip on ${key.replace("|", " track ")} vanished`);
+    const dt = tick(park - it.startTicks);
+    return (ed) => (ed || editor()).createCloneTrackItemAction(src.item, dt, 0, 0, false, false);
+  }));
+  seq = await read();
+  steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
+    const f = findIn(seq, key, park);
+    if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land`);
+    const dt = tick(f.inPoint + tpf);
+    return () => f.item.createSetOutPointAction(dt);
+  }));
+
+  // 3. razor: one filler clone per cut edge.
+  seq = await read();
+  const razor = [];
+  for (const [key, at] of edges) {
+    const f = findIn(seq, key, park);
+    if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
+    const fItem = f.item;
+    for (const p of at) {
+      const dt = tick(p - park);
+      razor.push(Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(fItem, dt, 0, 0, false, false),
+        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` }));
+    }
+  }
+  steps += tx("split at cut edges", razor);
+  razor.length = 0;
+
+  // 4. remove everything inside a cut, and the fillers — per media type.
+  seq = await read({ inPoint: false });
+  const inside = (c) => c.start >= park || isInsideCut(c.start, c.end, cuts);
+  let doomed = all(seq).filter(inside);
+  if (doomed.length) {
+    steps += 1;
+    const MT = ppro.Constants.MediaType;
+    const ed = editor();
+    timed("remove cut pieces", () => runTransaction(project, "CutDeck: remove cut pieces", (compound) => {
+      for (const kind of ["video", "audio"]) {
+        const these = doomed.filter((c) => c.kind === kind);
+        if (!these.length) continue;
+        let added = false;
+        ppro.TrackItemSelection.createEmptySelection((selection) => {
+          for (const c of these) selection.addItem(c.item, true);
+          added = compound.addAction(ed.createRemoveItemsAction(selection, false, kind === "video" ? MT.VIDEO : MT.AUDIO));
+        });
+        if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
+      }
+    }));
+    doomed.length = 0;
+    doomed = null;
+  }
+
+  // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
+  seq = await read({ end: false, inPoint: false });
+  const fastShift = createFastShiftFor(cuts);
+  const moves = all(seq).map((c) => ({ c, by: fastShift(c.start) })).filter((m) => m.by > 0n)
+    .sort((x, y) => (x.c.start < y.c.start ? -1 : x.c.start > y.c.start ? 1 : 0));
+  steps += tx("close gaps", moves.map(({ c, by }) => {
+    const dt = tick(-by);
+    return () => c.item.createMoveAction(dt);
+  }));
+  moves.length = 0;
+  seq = null;
+  return steps;
+}
+
+/* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
+async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
+  // Seconds per step, summed by label, so a slow run shows where its time went.
+  const timings = {};
+  // Works for sync steps (transactions: errors must throw where they happen) and async reads.
+  const timed = (label, fn) => {
+    const t = Date.now();
+    const done = () => { timings[label] = (timings[label] || 0) + (Date.now() - t) / 1000; };
+    let out;
+    try { out = fn(); } catch (e) { done(); throw e; }
+    if (out && typeof out.then === "function") return out.finally(done);
+    done();
+    return out;
+  };
+  const cuts = cutsToTicks(cutsJson, await source.getTimebase());
+  const before = await timed("read source", () => readItems(ppro, source, cuts));
+  const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
+  if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
+
+  const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
+  runTransaction(project, "CutDeck: copy sequence", (compound) => {
+    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
+  });
+  const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
+  if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; nothing was cut`);
+  const copy = created[0];
+  const copyItem = await copy.getProjectItem();
+  runTransaction(project, "CutDeck: name copy", (compound) => {
+    if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+  });
+  // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
+  // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
+  // only once cut (or failed), so Premiere does not redraw it for every edit.
+  const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
+  runTransaction(project, "CutDeck: file rough cut", (compound) => {
+    const parent = asBinLike(copyItem.getParentBin());
+    if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
+  });
+  const started = Date.now();
+  // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
+  // each item on the copy by position and throws if one is not there.
+  const items = before.items;
+  const plan = planCutApply(items, cuts);
+  let steps, actual;
+  try {
+    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+    actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
+  } finally {
+    await timed("open copy", async () => {
+      await project.openSequence(copy);
+      await project.setActiveSequence(copy);
+    });
+  }
+  const elapsedSeconds = (Date.now() - started) / 1000;
+  const problems = verifyReadBack(items, plan, actual);
+  before.items = null;
+  before.transitions = null;
+  actual = null;
+  if (problems.length) {
+    throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
+      + "It is left open for inspection; your original sequence is untouched.");
+  }
+  const splits = plan.edits.filter((e) => e.op === "split").length;
+  console.log("CutDeck rough cut timings (s):", timings);
+  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
+}
+
+module.exports = { applyNativeCut, applyPlan, readItems };

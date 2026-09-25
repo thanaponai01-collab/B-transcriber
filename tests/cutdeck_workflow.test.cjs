@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { capture, prepare, importResult, getOrCreateCutDeckBin } = require("../uxp/cutdeck/workflow.js");
+const { capture, prepare } = require("../uxp/cutdeck/workflow.js");
+const { getOrCreateBin } = require("../uxp/cutdeck/host/project.js");
+const getOrCreateCutDeckBin = (project) => getOrCreateBin(project, ["CutDeck"]);
 
 function fixture() {
   const source = { guid: { toString: () => "source" }, name: "Interview",
@@ -13,10 +15,11 @@ function fixture() {
   let rootItems = [];
   let binsCreated = 0;
   const importTargets = [];
-  const root = {
-    getItems: async () => rootItems,
-    createBinAction: (name, makeUnique) => ({ __createBin: true, name, makeUnique }),
-  };
+  const makeBin = (name, items) => ({ name,
+    getItems: async () => items,
+    createBinAction: (child, makeUnique) => ({ __createBin: true, name: child, makeUnique, into: items }),
+  });
+  const root = makeBin(undefined, rootItems);
   const project = { guid: {toString: () => "project"},
     getActiveSequence: async () => source, getSequences: async () => sequences,
     getRootItem: async () => root,
@@ -25,7 +28,7 @@ function fixture() {
         addAction: (action) => {
           if (action && action.__createBin) {
             binsCreated++;
-            rootItems.push({ name: action.name });
+            action.into.push(makeBin(action.name, []));
             return true;
           }
           return false;
@@ -51,36 +54,32 @@ test("captures exact tick strings and rejects missing marks", async () => {
   f.source.getOutPoint = async () => ({seconds: -1});
   await assert.rejects(capture(f.ppro), /valid timeline/);
 });
-test("failed export never starts processing", async () => {
-  const f = fixture(); const calls = [];
-  f.ppro.ProjectConverter.exportAsFinalCutProXML = async () => false;
-  await assert.rejects(prepare(f.ppro, async (r) => { calls.push(r.type); return f.job; },
-    await capture(f.ppro), {}, () => {}), /could not export/);
-  assert.deepEqual(calls, ["hello", "prepare"]);
-});
-test("switching projects prevents import", async () => {
-  const f = fixture(); f.project.guid.toString = () => "other";
-  await assert.rejects(importResult(f.ppro, f.job, false, () => {}), /original project/);
-  assert.equal(f.imports(), 0);
-});
-test("resume opens an already imported result without duplicating it", async () => {
-  const f = fixture(); let marked = false;
-  await importResult(f.ppro, f.job, false, () => { marked = true; });
-  assert.ok(marked);
-  await importResult(f.ppro, f.job, true, () => {});
-  assert.equal(f.imports(), 1);
-});
-test("unconfirmed earlier import cannot silently import twice", async () => {
-  const f = fixture();
-  await assert.rejects(importResult(f.ppro, f.job, true, () => {}), /previous import/);
-  assert.equal(f.imports(), 0);
-});
-test("result import lands in the CutDeck bin, created on first use", async () => {
-  const f = fixture();
-  await importResult(f.ppro, f.job, false, () => {});
-  assert.equal(f.binsCreated(), 1);
-  assert.deepEqual(f.rootItems(), [{ name: "CutDeck" }]);
-  assert.equal(f.importTargets[0].name, "CutDeck");
+/* An audio clip as the Premiere fake would give it: media-relative In/Out, sequence start. */
+function audioItem({ path, start, inPoint, outPoint, disabled = false }) {
+  return { getStartTime: async () => ({ ticks: start }), getInPoint: async () => ({ ticks: inPoint }),
+    getOutPoint: async () => ({ ticks: outPoint }), isDisabled: async () => disabled,
+    getProjectItem: async () => ({ getMediaFilePath: async () => path }) };
+}
+
+test("prepare sends the native audio-track read and never exports XML (move 6)", async () => {
+  const f = fixture(); const sent = []; const saved = [];
+  f.ppro.ProjectConverter.exportAsFinalCutProXML = async () => { throw new Error("must not export"); };
+  const a1 = [audioItem({ path: "D:/cam/A.mp4", start: "0", inPoint: "100", outPoint: "900" }),
+    audioItem({ path: null, start: "900", inPoint: "0", outPoint: "50", disabled: true })];
+  const tracks = [{ getTrackItems: () => a1, isMuted: async () => false },
+    { getTrackItems: () => [], isMuted: async () => { throw new Error("not on this build"); } }];
+  f.source.getAudioTrack = async (i) => tracks[i];
+  const rpc = async (r) => { sent.push(r); return r.type === "start" ? { state: "running" } : { ...f.job }; };
+  const started = await prepare(f.ppro, rpc, await capture(f.ppro), { asr: true }, (job) => saved.push(job));
+  assert.deepEqual(sent.map((r) => r.type), ["hello", "prepare", "start"]);
+  assert.deepEqual(sent[1].sequence, { ticks_per_frame: "10", end_ticks: "1000", audio_tracks: [
+    { enabled: true, clips: [
+      { path: "D:/cam/A.mp4", enabled: true, start_ticks: "0", in_ticks: "100", out_ticks: "900" },
+      { path: null, enabled: false, start_ticks: "900", in_ticks: "0", out_ticks: "50" }] },
+    { enabled: true, clips: [] }] });
+  assert.equal(sent[1].asr, true);
+  assert.equal(saved[0].exported, true, "Resume may start it: the helper already has the source");
+  assert.equal(started.state, "running");
 });
 test("a second call reuses the existing CutDeck bin instead of creating another", async () => {
   const f = fixture();

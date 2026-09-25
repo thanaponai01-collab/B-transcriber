@@ -159,7 +159,7 @@ function extractRequires(source) {
 //            capabilityProbe.js, syncProbe.js, probes/*,
 //            timeline/adjustmentLayer.js, timeline/alPlacement.js, timeline/alLibrary.js,
 //            timeline/alProject.js, timeline/alSeedData.js, timeline/effects.js,
-//            timeline/nativeSync.js, transform/*
+//            timeline/nativeSync.js, timeline/cutPlanApply.js, transform/*
 // L4 Host: host/*
 function getLayer(relPath) {
   const norm = relPath.replace(/\\/g, "/");

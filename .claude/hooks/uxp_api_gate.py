@@ -15,16 +15,20 @@ API_RE = re.compile(r"""require\(\s*["'](premierepro|uxp)["']\s*\)|\bppro\.""")
 
 CHECKLIST = (
     "CLAUDE.md rule 2 (UXP API gate): before writing UXP/Premiere code, prove every "
-    "Adobe API you are about to use exists.\n"
-    "1. Premiere UXP: `npm pack @adobe/premierepro@26.2.1` into the scratchpad and "
-    "read package/src/premierepro.d.ts.\n"
-    "2. UXP platform APIs: github.com/AdobeDocs/uxp (src/pages/uxp-api/reference-js/).\n"
-    "3. Enum numeric values / runtime semantics are not in the typings: live-probe them.\n"
-    "4. State which source confirmed each API.\n"
-    "5. If UXP lacks the feature, do NOT fake it in the panel: build it in the CutDeck "
+    "Adobe API you are about to use exists. Everything is local, no download needed:\n"
+    "1. docs/PREMIERE_FACTS.md: what each API really does live (catches, BROKEN, ABSENT).\n"
+    "2. reference/adobe/api/premierepro.txt and api/uxp.txt: every declared member, one "
+    "line each (grep '^ClassName\\.'); 'NOT IN 26.2.1' = needs Premiere 26.3+.\n"
+    "3. reference/adobe/docs/ (Adobe's docs) and reference/adobe/samples/ (Adobe's panels).\n"
+    "4. Enum numeric values / runtime semantics are not in the typings: live-probe them, "
+    "then add the result to docs/PREMIERE_FACTS.md.\n"
+    "5. State which source confirmed each API. `node tools/adobe/check-api.mjs` must pass.\n"
+    "6. If UXP lacks the feature, do NOT fake it in the panel: build it in the CutDeck "
     "helper (cutdeck/xml_bridge.py, ws://127.0.0.1:7891, MCP: cutdeck/mcp_server.py) "
     "and call it from the panel via core/rpc.js."
 )
+# Tooling that reads Adobe's API (the reference itself, its generators and checks) is not panel code.
+NOT_PANEL = ("tools/adobe/", "reference/adobe/")
 
 
 def new_text(tool_input):
@@ -35,7 +39,7 @@ def new_text(tool_input):
 
 def is_uxp(path, text):
     p = path.replace("\\", "/").lower()
-    if not p.endswith(CODE_EXT):
+    if not p.endswith(CODE_EXT) or any(d in p for d in NOT_PANEL):
         return False
     return "/uxp/" in p or p.startswith("uxp/") or bool(API_RE.search(text))
 

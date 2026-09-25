@@ -118,6 +118,13 @@ test("getTrackClipItems returns [] when getTrackClipItemsOrThrow throws", async 
   assert.deepEqual(result, []);
 });
 
+test("getTrackClipItems drops null entries Premiere returns", async () => {
+  const clip = { name: "A" };
+  const track = { getTrackItems: () => Promise.resolve([null, clip, undefined]) };
+  assert.deepEqual(await trackItems.getTrackClipItems(track), [clip]);
+  assert.deepEqual(await trackItems.getTrackClipItemsOrThrow(track), [clip]);
+});
+
 // --- getSelectedVideoClips -------------------------------------------------------------------
 
 test("getSelectedVideoClips excludes Audio clips and Adjustment Layers", async () => {
@@ -142,6 +149,40 @@ test("getSelectedVideoClips excludes Audio clips and Adjustment Layers", async (
   assert.equal(results.length, 1);
   assert.equal(results[0].item, videoClip1);
   assert.equal(results[0].track, 0);
+});
+
+test("getSelectedVideoClips trusts isAdjustmentLayer() over the clip name", async () => {
+  const sel = () => Promise.resolve(true);
+  const footageNamedAdj = { name: "adjustment_test.mp4", isAdjustmentLayer: () => Promise.resolve(false), getIsSelected: sel };
+  const renamedAL = { name: "Grade", isAdjustmentLayer: () => Promise.resolve(true), getIsSelected: sel };
+  const trackV0 = { getTrackItems: () => Promise.resolve([footageNamedAdj, renamedAL]) };
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([footageNamedAdj, renamedAL]) }),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve(trackV0),
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => r.item), [footageNamedAdj]);
+});
+
+test("getSelectedVideoClips reads only the video tracks getTrackIndex() names", async () => {
+  const sel = () => Promise.resolve(true);
+  const onV2 = { name: "B-roll", getTrackIndex: () => Promise.resolve(1), getIsSelected: sel };
+  const audioA1 = { name: "Mic", getTrackIndex: () => Promise.resolve(0), getIsSelected: sel };
+  const reads = [];
+  const tracks = [
+    { getTrackItems: () => Promise.resolve([{ name: "V1 clip" }]) },
+    { getTrackItems: () => Promise.resolve([onV2]) },
+    { getTrackItems: () => Promise.resolve([]) },
+  ];
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([onV2, audioA1]) }),
+    getVideoTrackCount: () => Promise.resolve(3),
+    getVideoTrack: (v) => { reads.push(v); return Promise.resolve(tracks[v]); },
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => [r.item, r.track]), [[onV2, 1]]);
+  assert.deepEqual(reads.sort(), [0, 1]); // V3 never read; audio's index 0 read but it isn't on V1
 });
 
 test("getSelectedVideoClips returns [] for null sequence or empty selection", async () => {
@@ -222,3 +263,22 @@ test("unwrapKeyframeValue handles nested nulls and primitives safely", () => {
   assert.equal(components.unwrapKeyframeValue({ value: "text" }), "text");
 });
 
+
+test("trackItemName reads getName() — real track items have no .name", async () => {
+  assert.equal(await trackItems.trackItemName({ getName: async () => "A.mp4" }), "A.mp4");
+  assert.equal(await trackItems.trackItemName({ getName: async () => { throw new Error("x"); } }, "?"), "?");
+  assert.equal(await trackItems.trackItemName(null, "?"), "?");
+});
+
+test("name fallback for AL detection works when only getName() exists", async () => {
+  const sel = () => Promise.resolve(true);
+  const al = { getName: async () => "Adjustment Layer", getIsSelected: sel };
+  const clip = { getName: async () => "Footage", getIsSelected: sel };
+  const seq = {
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([al, clip]) }),
+    getVideoTrackCount: () => Promise.resolve(1),
+    getVideoTrack: () => Promise.resolve({ getTrackItems: () => Promise.resolve([al, clip]) }),
+  };
+  const results = await trackItems.getSelectedVideoClips(null, seq);
+  assert.deepEqual(results.map((r) => r.item), [clip]);
+});

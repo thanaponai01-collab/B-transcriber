@@ -14,16 +14,15 @@ a render).
 
 **What this trades away, on purpose:** a real Premiere export bakes in
 whatever the sequence's mix actually does — gain automation, EQ, panning,
-crossfades. This module reads only what the XML states (``<in>``/``<out>``,
-or ``<pproTicksIn>``/``<pproTicksOut>`` when present for sub-frame accuracy)
+crossfades. This module reads only each clip's position and source In/Out (Premiere ticks)
 and does none of that. For a plain stacked-clip sequence with no effects
 (this project's real sequences, per ``docs/HANDOFF_CUTDECK_XML_RECUT.md``'s
 Phase 0 note) that gap is negligible; for a heavily mixed sequence it would
 not be — pick the manual export path there instead.
 
-Which track is the "reference" dialogue track, and where each clip's source
-media lives, is decided by ``cutdeck.xml_sequence`` — the same rules the
-helper's pre-ASR check and multi-cam sync use.
+Which track is the "reference" dialogue track is decided by
+``cutdeck.sequence_model.Sequence.reference_track`` — the same rule the helper's
+pre-ASR check uses.
 """
 
 from __future__ import annotations
@@ -33,25 +32,23 @@ import subprocess
 import tempfile
 from fractions import Fraction
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
-from cutdeck.xml_sequence import (XmlRecutRefusal, child_text, clip_source_span_seconds,
-                                  range_window_frames, resolve_file_path, select_audio_track,
-                                  sequence_timebase)
+from cutdeck.sequence_model import Sequence
+from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, range_window_frames
 
 _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
 
 
-def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None = None,
+def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | None = None,
                     range_start_frame: int | None = None, range_end_frame: int | None = None,
                     pad_seconds: float = 2.0) -> str:
-    """Build a sequence-timeline mono WAV from the XML's own clipitems +
+    """Build a sequence-timeline mono WAV from the sequence's own clips +
     source media, writing it to ``out_wav``. Returns ``out_wav``.
 
-    ``audio_track_index`` (0-based): which ``<track>`` under ``<media><audio>``
-    to use as the reference dialogue track. Defaults to the first switched-on
-    track that has any clips. Disabled clips (``<enabled>FALSE</enabled>``) are skipped
-    — silence, same as they'd be muted in a real Premiere render.
+    ``audio_track_index`` (0-based): which Premiere audio track to use as the
+    reference dialogue track. Defaults to the first switched-on track that has
+    any clips. Disabled clips are skipped — silence, same as they'd be muted
+    in a real Premiere render.
 
     ``range_start_frame``/``range_end_frame`` (sequence frames, both or neither):
     the WAV covers only ``range_window_frames(...)`` = the range plus
@@ -64,13 +61,8 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found on PATH — required to extract audio segments")
 
-    root = ET.fromstring(source_xml)
-    sequence = root.find("sequence")
-    if sequence is None:
-        raise XmlRecutRefusal("no <sequence> element found in source XML")
-
-    tb = sequence_timebase(sequence)
-    seq_frames = int(child_text(sequence, "duration", "0"))
+    tb = sequence.timebase
+    seq_frames = sequence.duration_frames
     lo_f, hi_f = (0, seq_frames)
     if range_start_frame is not None:
         lo_f, hi_f = range_window_frames(tb, seq_frames, (range_start_frame, range_end_frame),
@@ -79,7 +71,7 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     win_hi_s = float(Fraction(hi_f * tb.fps_den, tb.fps_num))
     total_samples = int(round((win_hi_s - win_lo_s) * _WORKING_SAMPLE_RATE))
 
-    track = select_audio_track(sequence, audio_track_index)
+    track = sequence.reference_track(audio_track_index)
 
     window = (win_lo_s, win_hi_s) if range_start_frame is not None else None
 
@@ -89,20 +81,13 @@ def extract_mixdown(source_xml: str, out_wav: str, audio_track_index: int | None
     buffer = np.zeros(total_samples, dtype=np.float32)
     tmp_dir = Path(tempfile.mkdtemp(prefix="cutdeck_extract_"))
     try:
-        for i, clipitem in enumerate(track.findall("clipitem")):
-            if child_text(clipitem, "enabled", "TRUE") != "TRUE":
+        for i, clip in enumerate(track.clips):
+            if not clip.enabled:
                 continue
-            file_el = clipitem.find("file")
-            if file_el is None or file_el.get("id") is None:
-                continue
-            src_path = resolve_file_path(sequence, file_el.get("id"))
-
-            in_s, out_s = clip_source_span_seconds(clipitem, tb)
-            if out_s <= in_s:
-                continue
-
-            start_frame = int(child_text(clipitem, "start", "0"))
-            start_s = float(Fraction(start_frame * tb.fps_den, tb.fps_num))
+            src_path = clip.media_path
+            in_s = clip.in_ticks / PPRO_TICKS_PER_SECOND
+            out_s = clip.out_ticks / PPRO_TICKS_PER_SECOND
+            start_s = clip.start_ticks / PPRO_TICKS_PER_SECOND
             if window is not None:
                 # Trim the source span to the part of the clip inside the window.
                 keep_lo = max(start_s, window[0])

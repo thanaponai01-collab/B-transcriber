@@ -149,67 +149,91 @@ async function captureEffectFromTrackItem(ppro, trackItem) {
 // onto trackItem's component chain. Returns { warnings: string[] }: anything that did not land
 // as captured, including a keyframe read-back that doesn't match.
 async function applyCapturedPreset(ppro, project, trackItem, preset) {
+  return applyCapturedPresetToAll(ppro, project, [trackItem], preset);
+}
+
+// Same, onto every item at once: each phase is ONE transaction across all items, so N ALs
+// cost at most 5 undo steps instead of 5 per AL (review 2026-09-24). The phases still commit
+// in order — an insert must land before its params exist to set.
+async function applyCapturedPresetToAll(ppro, project, trackItems, preset) {
   if (!preset || !Array.isArray(preset.components) || preset.components.length === 0) {
     throw new Error("This preset has no captured effect data.");
   }
-  if (!trackItem || typeof trackItem.getComponentChain !== "function") {
-    throw new Error("This track item has no component chain to add an effect to.");
-  }
   const warnings = [];
   const warn = (msg) => { warnings.push(msg); console.warn("CutDeck: " + msg); };
-  const chain = await trackItem.getComponentChain();
-  if (!chain) throw new Error("Could not read this item's effect chain.");
-  const startIndex = chain.getComponentCount();
+  // Per-phase timing, ms since the previous mark (as placeAdjustmentLayersOnTimeline logs).
+  const t0 = Date.now();
+  const phases = {};
+  let tLast = t0;
+  const mark = (name) => { const now = Date.now(); phases[name] = now - tLast; tLast = now; };
+  const finish = () => {
+    console.log(`CutDeck: applied preset to ${trackItems.length} item(s) in ${Date.now() - t0} ms`, phases);
+    // Explicitly release arrays to free native C++ proxy handles in V8
+    targets.length = 0;
+    pairs.length = 0;
+    animated.length = 0;
+    return { warnings };
+  };
 
-  // Component creation is async (VideoFilterFactory.createComponent returns a Promise) but
-  // project.executeTransaction's callback must be synchronous (same constraint every other
-  // mutation in this plugin works under) — so every component is created up front, and only
-  // the synchronous insert actions happen inside the first transaction.
-  const created = [];
-  for (const comp of preset.components) {
-    const newComponent = await ppro.VideoFilterFactory.createComponent(comp.matchName);
-    if (!newComponent) {
-      throw new Error(`Premiere would not recreate "${comp.displayName || comp.matchName}".`);
+  const targets = await Promise.all(trackItems.map(async (trackItem) => {
+    if (!trackItem || typeof trackItem.getComponentChain !== "function") {
+      throw new Error("This track item has no component chain to add an effect to.");
     }
-    created.push({ component: newComponent, spec: comp });
-  }
+    const chain = await trackItem.getComponentChain();
+    if (!chain) throw new Error("Could not read this item's effect chain.");
+    const created = await Promise.all(preset.components.map(async (comp) => {
+      const newComponent = await ppro.VideoFilterFactory.createComponent(comp.matchName);
+      if (!newComponent) {
+        throw new Error(`Premiere would not recreate "${comp.displayName || comp.matchName}".`);
+      }
+      return { component: newComponent, spec: comp };
+    }));
+    return { trackItem, chain, startIndex: chain.getComponentCount(), created };
+  }));
 
+  mark("create components");
   // Phase 1: insert every component. Confirmed at runtime: the object VideoFilterFactory.
   // createComponent() returns is a VideoFilterComponent, not the chain's Component class — it
   // has no getParam ("component.getParam is not a function"), so its params cannot be touched
   // before insertion. The insert must commit in its own transaction before a real,
   // param-capable Component exists to fetch back from the chain.
   runTransaction(project, "CutDeck: Apply Captured Preset (insert)", (compound) => {
-    let nextIndex = startIndex;
-    for (const { component, spec } of created) {
-      const insertAction = chain.createInsertComponentAction(component, nextIndex);
-      if (!insertAction) throw new Error(`Could not insert "${spec.displayName || spec.matchName}".`);
-      if (!compound.addAction(insertAction)) throw new Error("addAction(insert) returned false");
-      nextIndex++;
+    for (const { chain, startIndex, created } of targets) {
+      let nextIndex = startIndex;
+      for (const { component, spec } of created) {
+        const insertAction = chain.createInsertComponentAction(component, nextIndex);
+        if (!insertAction) throw new Error(`Could not insert "${spec.displayName || spec.matchName}".`);
+        if (!compound.addAction(insertAction)) throw new Error("addAction(insert) returned false");
+        nextIndex++;
+      }
     }
   });
 
   // Re-fetch each just-inserted component from the chain as a real Component (which does have
   // getParam), and pair every captured param with its live counterpart once.
-  const liveChain = await trackItem.getComponentChain();
+  mark("insert");
   const pairs = [];
-  created.forEach(({ spec }, k) => {
-    const name = spec.displayName || spec.matchName;
-    const liveComponent = liveChain.getComponentAtIndex(startIndex + k);
-    if (!liveComponent) {
-      warn(`could not re-fetch "${name}" after insert — its values are left at default.`);
-      return;
-    }
-    for (const p of (spec.params || [])) {
-      const label = `"${name}" param[${p.index}] (${p.displayName})`;
-      let param = null;
-      try { param = liveComponent.getParam(p.index); } catch (_) { param = null; }
-      if (!param) { warn(`getParam(${p.index}) returned nothing for "${name}" — left at default.`); continue; }
-      pairs.push({ p, param, label });
-    }
-  });
+  await Promise.all(targets.map(async (t) => {
+    const liveChain = await t.trackItem.getComponentChain();
+    t.created.forEach(({ spec }, k) => {
+      const name = spec.displayName || spec.matchName;
+      const liveComponent = liveChain.getComponentAtIndex(t.startIndex + k);
+      if (!liveComponent) {
+        warn(`could not re-fetch "${name}" after insert — its values are left at default.`);
+        return;
+      }
+      for (const p of (spec.params || [])) {
+        const label = `"${name}" param[${p.index}] (${p.displayName})`;
+        let param = null;
+        try { param = liveComponent.getParam(p.index); } catch (_) { param = null; }
+        if (!param) { warn(`getParam(${p.index}) returned nothing for "${name}" — left at default.`); continue; }
+        pairs.push({ p, param, label, t });
+      }
+    });
+  }));
   const animated = pairs.filter(({ p }) => Array.isArray(p.keyframes) && p.keyframes.length > 0);
 
+  mark("fetch params");
   // Phase 2: static values, for every param that isn't animated.
   runTransaction(project, "CutDeck: Apply Captured Preset (values)", (compound) => {
     for (const { p, param, label } of pairs) {
@@ -230,21 +254,26 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
     }
   });
 
-  if (animated.length === 0) return { warnings };
+  mark("values");
+  if (animated.length === 0) return finish();
 
   const TickTime = ppro.TickTime;
-  const targetIn = toTicks(await trackItem.getInPoint());
+  await Promise.all(targets.map(async (t) => {
+    if (animated.some((a) => a.t === t)) t.targetIn = toTicks(await t.trackItem.getInPoint());
+  }));
 
+  mark("read In points");
   // Phase 3: turn keyframing on (the stopwatch). Its own transaction, so the params are
   // time-varying before any keyframe is added to them.
   runTransaction(project, "CutDeck: Apply Captured Preset (enable keyframes)", (compound) => {
     for (const { param } of animated) compound.addAction(param.createSetTimeVaryingAction(true));
   });
 
-  // Phase 4: the keyframes themselves, at target In point + captured offset.
+  mark("enable keyframes");
+  // Phase 4: the keyframes themselves, at each target's In point + captured offset.
   runTransaction(project, "CutDeck: Apply Captured Preset (keyframes)", (compound) => {
-    for (const { p, param, label } of animated) {
-      const at = placeKeyframes(p.keyframes, targetIn);
+    for (const { p, param, label, t } of animated) {
+      const at = placeKeyframes(p.keyframes, t.targetIn);
       p.keyframes.forEach((k, i) => {
         try {
           const keyframe = param.createKeyframe(toParamValue(ppro, k.value));
@@ -257,12 +286,13 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
     }
   });
 
+  mark("keyframes");
   // Phase 5: interpolation (Linear / Hold / Bezier), where it was readable at capture.
   const withMode = animated.filter(({ p }) => p.keyframes.some((k) => typeof k.mode === "number"));
   if (withMode.length) {
     runTransaction(project, "CutDeck: Apply Captured Preset (interpolation)", (compound) => {
-      for (const { p, param, label } of withMode) {
-        const at = placeKeyframes(p.keyframes, targetIn);
+      for (const { p, param, label, t } of withMode) {
+        const at = placeKeyframes(p.keyframes, t.targetIn);
         p.keyframes.forEach((k, i) => {
           if (typeof k.mode !== "number") return;
           try {
@@ -275,21 +305,22 @@ async function applyCapturedPreset(ppro, project, trackItem, preset) {
     });
   }
 
+  mark("interpolation");
   // Read back: the keyframe list must be exactly the captured times. Anything else — an extra
   // keyframe the stopwatch added on its own, a dropped one — is reported, not assumed away.
-  for (const { p, param, label } of animated) {
+  await Promise.all(animated.map(async ({ p, param, label, t }) => {
     try {
-      const got = ((await param.getKeyframeListAsTickTimes()) || []).map((t) => toTicks(t).toString());
-      const want = placeKeyframes(p.keyframes, targetIn);
+      const got = ((await param.getKeyframeListAsTickTimes()) || []).map((x) => toTicks(x).toString());
+      const want = placeKeyframes(p.keyframes, t.targetIn);
       if (got.length !== want.length || want.some((w) => !got.includes(w))) {
         warn(`${label}: expected keyframes at ${want.join(", ")} but found ${got.join(", ") || "none"}.`);
       }
     } catch (e) {
       warn(`could not read back keyframes of ${label}: ${e && e.message}`);
     }
-  }
-
-  return { warnings };
+  }));
+  mark("read-back");
+  return finish();
 }
 
 module.exports = {
@@ -297,6 +328,7 @@ module.exports = {
   getFirstSelectedTrackItem,
   captureEffectFromTrackItem,
   applyCapturedPreset,
+  applyCapturedPresetToAll,
   placeKeyframes,
   toParamValue,
   isFixedComponent,

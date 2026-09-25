@@ -33,7 +33,7 @@ real model (Ollama, Anthropic, whatever) is a separate adapter — the same
 split ``llm_reconcile.py`` uses for the reconciler — and isn't built here:
 no eval baseline exists yet to gate it on (``cut.takes_llm_enabled`` stays
 ``false``), same discipline as every other new CutDeck behaviour in this
-handoff. See CLAUDE.md's 2026-07-16 LLM-reconciler note before wiring one:
+handoff. See docs/ENGINES.md's 2026-07-16 LLM-reconciler note before wiring one:
 randomize candidate order from day one, and gate activation on the eval
 harness, not a spot check.
 """

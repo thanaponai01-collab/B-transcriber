@@ -69,7 +69,6 @@ function createPresetsFeature({
     }
 
     const captured = await effects.captureEffectFromTrackItem(ppro, item);
-    console.log("CutDeck captured preset:", JSON.stringify(captured, null, 2));
     const id = `fx-${Date.now().toString(36)}`;
     const preset = { id, name: label, components: captured.components };
     if (presetStore) await editPresets(presetStore.add(preset));

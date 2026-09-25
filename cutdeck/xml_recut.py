@@ -49,8 +49,9 @@ from dataclasses import dataclass, replace
 from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, Timebase
-from cutdeck.xml_sequence import (XmlRecutRefusal, child_text, frame_to_ticks, range_window_frames,
-                                  sequence_timebase)
+from cutdeck import sequence_model
+from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, child_text,
+                                  frame_to_ticks, range_window_frames, sequence_timebase)
 from transcribe.timebase import ms_to_frame
 
 # Tags that, if found *keyframed* on a clipitem straddling a cut boundary,
@@ -499,6 +500,31 @@ def frame_to_ms_int(frame: int, tb: Timebase) -> int:
     return int(round(frame_to_ms(frame, tb)))
 
 
+def ticks_per_frame(tb: Timebase) -> int:
+    """Premiere ticks per frame, exact. The panel does all cut math in integer ticks,
+    so a frame rate whose frame isn't a whole number of ticks is refused."""
+    per_frame, remainder = divmod(PPRO_TICKS_PER_SECOND * tb.fps_den, tb.fps_num)
+    if remainder:
+        raise XmlRecutRefusal(f"frame rate {tb.fps_num}/{tb.fps_den} is not a whole number "
+                              f"of Premiere ticks per frame")
+    return per_frame
+
+
+def write_cuts_json(path, plan: CutPlan, cuts: list[tuple[int, int]], tb: Timebase,
+                    seq_frames: int) -> None:
+    """The native-apply contract (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 3.1): the same
+    ``scoped_cuts`` the XML recut would apply, in sequence frames."""
+    import json
+    reasons = sorted({s.reason for s in plan.spans if s.action == CUT and s.reason})
+    path.write_text(json.dumps({
+        "cuts_frames": [[a, b] for a, b in cuts],
+        "ticks_per_frame": str(ticks_per_frame(tb)),
+        "sequence_duration_frames": seq_frames,
+        "report": {"cuts_applied": len(cuts), "removed_frames": sum(b - a for a, b in cuts),
+                   "reasons": reasons},
+    }), encoding="utf-8")
+
+
 def _deep_update(base: dict, overlay: dict) -> None:
     """Recursively apply ``overlay``'s keys onto ``base``, in place."""
     for key, value in (overlay or {}).items():
@@ -522,15 +548,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Recut an exported FCP7 XML sequence against a silence-removal "
                      "plan built from its own audio mixdown (recut_sequence mode)."
     )
-    ap.add_argument("sequence_xml", help="the editor's own FCP7 XML export")
+    ap.add_argument("sequence_xml", help="the editor's own FCP7 XML export (or, with --cuts-json, "
+                                         "the helper's sequence.json)")
     ap.add_argument("mixdown_wav", nargs="?", default=None,
                      help="full-sequence audio mixdown (must span the whole sequence, "
                           "not an in/out range). Omit to auto-extract one straight from "
                           "the XML's own clipitems + source media instead (see "
                           "cutdeck/xml_audio_extract.py) — no Premiere export needed.")
     ap.add_argument("--audio-track", type=int, default=None,
-                     help="0-based audio track index to use as the reference dialogue "
-                          "track when auto-extracting (default: first track with clips). "
+                     help="0-based Premiere audio track index to use as the reference "
+                          "dialogue track when auto-extracting (default: first track with clips). "
                           "Ignored when mixdown_wav is given explicitly.")
     ap.add_argument("--out", default=None,
                      help="output .xml path (default: <sequence_xml>_cut.xml beside the input)")
@@ -547,6 +574,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--range-start-frame", type=int)
     ap.add_argument("--range-end-frame", type=int)
     ap.add_argument("--report", help="write a machine-readable JSON result")
+    ap.add_argument("--cuts-json", help="write the scoped cut list in sequence frames for the "
+                                        "panel to apply natively, and skip writing the recut XML")
     ap.add_argument("--no-save-plan", action="store_true",
                     help="skip cut-plan persistence (the Premiere helper keeps its own job files)")
     ap.add_argument("--asr", action="store_true",
@@ -559,15 +588,16 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     src = Path(args.sequence_xml)
-    source_xml = src.read_text(encoding="utf-8")
-    root = ET.fromstring(source_xml)
-    sequence = root.find("sequence")
-    if sequence is None:
-        raise SystemExit("no <sequence> element found in source XML")
-    tb = sequence_timebase(sequence)
-    # recut() refuses these whatever the plan says; say so before extraction and ASR.
-    _refuse_unsupported_media(sequence)
-    seq_frames = int(child_text(sequence, "duration", "0"))
+    seq = sequence_model.load(src)
+    source_xml = None
+    if src.suffix.lower() == ".xml":
+        source_xml = src.read_text(encoding="utf-8")
+        # recut() refuses these whatever the plan says; say so before extraction and ASR.
+        _refuse_unsupported_media(ET.fromstring(source_xml).find("sequence"))
+    elif not args.cuts_json:
+        ap.error("a sequence.json input only writes a cut list: pass --cuts-json")
+    tb = seq.timebase
+    seq_frames = seq.duration_frames
     frame_range = None
     if args.range_start_frame is not None or args.range_end_frame is not None:
         if args.range_start_frame is None or args.range_end_frame is None:
@@ -603,9 +633,9 @@ def main(argv: list[str] | None = None) -> int:
         _progress(5, "Extracting audio")
         extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         extracted_tmp.close()
-        print("no mixdown given — extracting one from the XML's own source media...")
+        print("no mixdown given — extracting one from the sequence's own source media...")
         mixdown_wav = extract_mixdown(
-            source_xml, extracted_tmp.name, args.audio_track,
+            seq, extracted_tmp.name, args.audio_track,
             range_start_frame=frame_range[0] if frame_range else None,
             range_end_frame=frame_range[1] if frame_range else None,
         )
@@ -629,42 +659,48 @@ def main(argv: list[str] | None = None) -> int:
 
             from cutdeck.words import words_for_job
 
-            _progress(35, "Transcribing speech")
-            print("--asr: running the full ASR pipeline on the mixdown "
-                  "(this transcribes the whole mixdown — slower than silence-only)...")
             db_path = Path(args.db) if args.db else store._DEFAULT_DB
-            token_dicts = run_file(mixdown_wav, raw_config, db_path,
-                                   ingest_result=mixdown_result)
-            print(f"--asr: got {len(token_dicts)} tokens")
 
-            # run_file() resolves/creates its own job_id internally and never
-            # returns it — look it up by media path so the plan we save below
-            # references the job the tokens actually belong to, not args.job_id's
-            # default of 0 (which doesn't exist -> cut_plan FK violation).
+            # The mixdown is deterministic for one sequence + range, so its sha256
+            # is the cache key: a finished job for the same media, engine pair and
+            # pipeline version already holds the transcript — reuse it, 0 ASR passes.
+            from transcribe.pipeline import plan as planning
+            from transcribe.pipeline.run import PIPELINE_VERSION
+            engine_a, engine_b = planning.canonical_engine_names(raw_config)
             asr_conn = store.connect(db_path)
             try:
                 media_id = store.create_media(asr_conn, mixdown_wav)
-                job_row = store.get_latest_job_for_media(asr_conn, media_id)
+                cached = store.find_finished_job(
+                    asr_conn, media_id, engine_a, engine_b, PIPELINE_VERSION)
+                if cached is not None:
+                    print(f"--asr: reusing the transcript of job {cached.id} "
+                          "(same mixdown, engines and pipeline version)")
+                    words = words_for_job(asr_conn, cached.id)
+                    token_dicts = [dict(text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
+                                   for t in store.get_tokens(asr_conn, cached.id)]
+                    args.job_id = cached.id
             finally:
                 asr_conn.close()
-            if job_row is not None:
-                args.job_id = job_row.id
-                # Read the word timeline before the purge below drops
-                # engine_result.raw_words_json — filler/repeat cuts need it.
-                words_conn = store.connect(db_path)
+
+            if cached is None:
+                _progress(35, "Transcribing speech")
+                print("--asr: running the full ASR pipeline on the mixdown "
+                      "(this transcribes the whole mixdown — slower than silence-only)...")
+                token_dicts = run_file(mixdown_wav, raw_config, db_path,
+                                       ingest_result=mixdown_result)
+                # run_file() resolves/creates its own job_id internally and never
+                # returns it — look it up by media path so the plan we save below
+                # references the job the tokens actually belong to, not args.job_id's
+                # default of 0 (which doesn't exist -> cut_plan FK violation).
+                asr_conn = store.connect(db_path)
                 try:
-                    words = words_for_job(words_conn, job_row.id)
+                    job_row = store.get_latest_job_for_media(asr_conn, media_id)
+                    if job_row is not None:
+                        args.job_id = job_row.id
+                        words = words_for_job(asr_conn, job_row.id)
                 finally:
-                    words_conn.close()
-                if extracted_tmp is not None:
-                    # Our own temp mixdown is deleted below and can never be
-                    # resumed — keep the job row for cut_plan's FK, drop the
-                    # tokens/spans/engine results that would otherwise pile up.
-                    purge_conn = store.connect(db_path)
-                    try:
-                        store.purge_job_transcript_data(purge_conn, job_row.id)
-                    finally:
-                        purge_conn.close()
+                    asr_conn.close()
+            print(f"--asr: got {len(token_dicts)} tokens")
             # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
             # dicts run_file returns aren't attribute-accessible, so wrap them
             # rather than re-deriving the job id run_file already resolved
@@ -695,6 +731,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(f"{n_cut} cut spans, {cut_ms} ms to remove of {plan.duration_ms} ms "
               f"({seq_frames} frames declared in sequence XML)")
+        return 0
+
+    if args.cuts_json:
+        write_cuts_json(Path(args.cuts_json), plan, cuts, tb, seq_frames)
+        print(f"wrote {args.cuts_json}: {n_cut} cuts, {cut_ms} ms to remove")
         return 0
 
     _progress(95, "Rewriting sequence XML")

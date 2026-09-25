@@ -17,7 +17,7 @@ def _media_check_stub(monkeypatch):
     it runs first is covered in test_cutdeck_xml_audio_extract.py."""
     from cutdeck import xml_bridge
     monkeypatch.setattr(xml_bridge, "check_reference_audio",
-                        lambda *_: {"xml_track": 0, "clip_count": 1, "files": ["clip.wav"]})
+                        lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 _FAKE_WORKER = (
     "import json, sys, pathlib;"
@@ -81,7 +81,7 @@ def test_mcp_started_rough_cut_is_visible_to_panel_status(tmp_path, monkeypatch)
     async def body(backend):
         started = await backend.rough_cut(str(source), speech_protection=False)
         job_id = started["job_id"]
-        assert started["kind"] == "rough_cut_xml"
+        assert started["kind"] == "rough_cut"
         assert started["state"] in {"running", "failed", "succeeded"}
         panel_view = await jobs.dispatch({"type": "status", "job_id": job_id})
         assert panel_view["job_id"] == job_id
@@ -104,7 +104,8 @@ def test_one_gpu_lock_across_panel_and_mcp(tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="already processing"):
             await jobs.dispatch({"type": "prepare", "project_id": "p", "sequence_id": "s",
                                  "sequence_name": "n", "audio_track": None,
-                                 "audio_track_count": 1, "asr": False})
+                                 "audio_track_count": 1, "asr": False,
+                                 "sequence": {"ticks_per_frame": "1", "end_ticks": "1", "audio_tracks": [{"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True, "start_ticks": "0", "in_ticks": "0", "out_ticks": "1"}]}]}})
         with pytest.raises(ValueError, match="already processing"):
             await backend.transcribe(str(media))
         for task in jobs.tasks:
@@ -176,7 +177,7 @@ def test_published_capabilities_vocabulary_is_unchanged():
 
 
 def test_state_mapping_covers_every_helper_state():
-    for helper_state in ("prepared", "running", "ready", "no_cuts", "failed"):
+    for helper_state in ("prepared", "running", "ready", "no_cuts", "failed", "interrupted"):
         assert xml_bridge_state(helper_state) in Backend(1).capabilities()["job_states"]
 
 
@@ -188,10 +189,10 @@ def xml_bridge_state(state):
 # --- correctness gate additions -------------------------------------------------
 
 _FAKE_RECUT = (
-    "import json, shutil, sys;"
-    "a = sys.argv; out = a[a.index('--out') + 1]; rep = a[a.index('--report') + 1];"
-    "shutil.copy(a[1], out);"
-    "json.dump({'cuts_applied': int(sys.argv[-1] == 'CUTS')}, open(rep, 'w'))"
+    "import json, sys;"
+    "a = sys.argv; out = a[a.index('--cuts-json') + 1]; cuts = [[10, 20]] if a[-1] == 'CUTS' else [];"
+    "json.dump({'cuts_frames': cuts, 'ticks_per_frame': '8467200000', 'sequence_duration_frames': 300,"
+    " 'report': {'cuts_applied': len(cuts), 'removed_frames': 10 * len(cuts), 'reasons': []}}, open(out, 'w'))"
 )
 
 
@@ -210,8 +211,7 @@ def _serve_recut(tmp_path, monkeypatch, cuts):
 
 
 def test_no_cuts_job_never_deletes_the_users_export(tmp_path, monkeypatch):
-    # Regression: the no_cuts cleanup unlinks output when it is outside the job folder.
-    # An MCP job's source lives in the user's folder; only the output may ever go.
+    # An MCP job's source lives in the user's folder: an input, never touched or removed.
     jobs = _serve_recut(tmp_path / "jobs", monkeypatch, cuts=False)
     source = tmp_path / "seq.xml"
     source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
@@ -221,13 +221,13 @@ def test_no_cuts_job_never_deletes_the_users_export(tmp_path, monkeypatch):
         await asyncio.gather(*jobs.tasks)
         assert (await jobs.dispatch({"type": "status", "job_id": job_id}))["state"] == "no_cuts"
         assert (await backend.status(job_id))["state"] == "succeeded"
-        assert source.exists()
-        assert (tmp_path / "jobs" / job_id / "rough_cut.xml").exists()
+        assert source.read_text(encoding="utf-8") == SAMPLE_XML.read_text(encoding="utf-8")
+        assert not list((tmp_path / "jobs" / job_id).glob("*.xml")), "no XML is written any more"
 
     asyncio.run(_with_helper(jobs, body))
 
 
-def test_cut_job_result_reports_output_and_report(tmp_path, monkeypatch):
+def test_cut_job_result_is_the_cut_list(tmp_path, monkeypatch):
     jobs = _serve_recut(tmp_path / "jobs", monkeypatch, cuts=True)
     source = tmp_path / "seq.xml"
     source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
@@ -239,8 +239,10 @@ def test_cut_job_result_reports_output_and_report(tmp_path, monkeypatch):
         assert running["state"] in {"running", "succeeded"}
         await asyncio.gather(*jobs.tasks)
         result = await backend.result(job_id)
-        assert result["report"]["cuts_applied"] == 1 and result["import_required"] is True
-        assert Path(result["output_path"]).parent == tmp_path / "jobs" / job_id
+        assert result["kind"] == "rough_cut"
+        assert result["cuts_frames"] == [[10, 20]] and result["ticks_per_frame"] == "8467200000"
+        assert result["report"]["cuts_applied"] == 1
+        assert "output_path" not in result
 
     asyncio.run(_with_helper(jobs, body))
 

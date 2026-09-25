@@ -144,7 +144,9 @@ test("features/align.js reuses transform probe from PROBES and runProbe", async 
   const transformEntry = PROBES.find((p) => p.id === "transform");
   assert.equal(statuses[0].text, transformEntry.startText);
   assert.equal(statuses[0].level, "busy");
-  assert.equal(statuses[statuses.length - 1].level, "ready");
+  // "info", not "ready": the Transform panel's status bar is quiet at "ready", and a report the
+  // user asked for must show.
+  assert.equal(statuses[statuses.length - 1].level, "info");
 });
 
 test("core/panel.js binds [data-probe] buttons to onProbe and closes overflow menu", () => {

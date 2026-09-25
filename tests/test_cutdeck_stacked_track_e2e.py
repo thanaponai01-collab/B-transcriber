@@ -20,7 +20,8 @@ import pytest
 
 from cutdeck import xml_recut
 from cutdeck.xml_bridge import reference_audio_track
-from cutdeck.xml_sequence import check_reference_audio, frame_to_ticks
+from cutdeck.sequence_model import check_reference_audio, from_fcp7_xml
+from cutdeck.xml_sequence import frame_to_ticks
 from cutdeck.contracts import Timebase
 from transcribe.pipeline import ingest as ingest_mod
 
@@ -118,8 +119,8 @@ def _tracks(sequence):
 
 def test_default_reference_is_the_switched_on_dialogue_track(export):
     source, _ = export
-    checked = check_reference_audio(source.read_text(encoding="utf-8"))
-    assert checked["xml_track"] == 2  # A2's left channel, not the switched-off A1
+    checked = check_reference_audio(from_fcp7_xml(source.read_text(encoding="utf-8")))
+    assert checked["track"] == 1  # A2, not the switched-off A1
     assert [Path(f).name for f in checked["files"]] == ["dialogue.wav"]
     assert checked["clip_count"] == 2
 
@@ -168,14 +169,13 @@ def test_default_run_preserves_unknown_xml_and_file_listings(tmp_path, export):
 
 
 def test_explicit_premiere_track_maps_through_channel_groups(tmp_path, export):
-    """The panel sends Premiere's logical track; the helper maps it to XML channel
-    tracks. Picking A1 (the switched-off music) is honored — and music never pauses,
+    """The panel sends Premiere's logical track; the helper reads it as that track. Picking A1 (the switched-off music) is honored — and music never pauses,
     so nothing is cut. Picking A2 gives the same result as the default."""
     source, _ = export
-    xml = source.read_text(encoding="utf-8")
-    a1 = reference_audio_track(xml, {"audio_track": 0, "audio_track_count": 2})
-    a2 = reference_audio_track(xml, {"audio_track": 1, "audio_track_count": 2})
-    assert (a1, a2) == (0, 2)
+    sequence = from_fcp7_xml(source.read_text(encoding="utf-8"))
+    a1 = reference_audio_track(sequence, {"audio_track": 0, "audio_track_count": 2})
+    a2 = reference_audio_track(sequence, {"audio_track": 1, "audio_track_count": 2})
+    assert (a1, a2) == (0, 1)
 
     _, report = _recut(tmp_path, export, "--audio-track", str(a1))
     assert report["cuts_applied"] == 0 and report["removed_frames"] == 0

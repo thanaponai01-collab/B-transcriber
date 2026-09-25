@@ -1,5 +1,103 @@
 # TODO_LEDGER
 
+## CutDeck panel review follow-ups — live results — 2026-09-24
+
+Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
+- **Rough Cut read speed (`3b6f801`)**: `tiw_Synced`, 1735 cuts, 2878.2 s removed, read-back
+  clean, **57 s** vs ~67 s before (user's recollection of the previous run, not a timed A/B).
+  ~15% wall time for a 43% cut in host reads (75,950 → 43,395 on the 432-cut fake), so the
+  edit transactions, not the reads, are most of the time now. Baseline for the next pass.
+- **Rough Cut per-step timing (`616bb04`)**, same clip, 61 s total: split at cut edges **34.9**
+  (~17k clone actions in one transaction — Premiere's own cost, near the floor with this API),
+  reads between steps **16.3** (almost all the two reads after the razor, ~8,700 pieces),
+  read-back 5.3, remove 2.7, open copy 1.9, close gaps 0.7, the rest <0.1. Follow-up: those two
+  reads now skip end/In where their step doesn't use them (fake host 43,395 → 30,415 reads);
+  live time not yet re-measured.
+- **Transform panel (`f6b1154`)**: a global `SequenceEvent.ACTIVATED` listener fires on sequence
+  switch; a global `SELECTION_CHANGED` does **not** — it must be attached to the sequence
+  (`EventManager.addEventListener(seq, …)`), which fires on clip click. No poll needed.
+- **Adj & FX batching (`17798d8`, `dae8ddf`) — PASSED live**: 21 ALs placed and verified in
+  **410 ms** (gate 349, commit 11, verify 17, rest <20); preset applied to all 21 in 16 ms;
+  the whole run undid in **6–7 Ctrl+Z** (was ~5 per AL + up to 5 per AL for the preset, ~200).
+  So N overwrites after one committed In/Out in a single transaction work (the open P2 question).
+  User-checked: the preset's effects and keyframes landed on all 21.
+- **Rough Cut after the post-razor read trim (`1aa373b`)**: a *different* sequence of similar
+  duration, **1186 cuts, 3520.8 s removed, 32 s** (status line; 9 clips split, audio unlinked),
+  **29.9 s** summed steps: split at cut edges 17.4 (transaction:
+  callback 6.2, **commit 11.2** — Premiere's own), reads 7.0, read-back 3.3, remove 1.4 (commit
+  1.0), open copy 0.5, close gaps 0.4. Vs the 61 s `tiw_Synced` baseline: reads 16.3 → 7.0, but
+  split also halved (34.9 → 17.4), which the read change can't cause. Per cut: reads 9.4 → 5.9 ms
+  (−37%), but split also fell 20.1 → 14.7 ms, so the sequences differ beyond cut count (tracks).
+  Normalised to split time, reads fell ~14% (0.47 → 0.40 of split). So the read gain is real but
+  somewhere in 14–37%; a re-run on the 1735-cut sequence would pin it. A second run on the new
+  sequence repeated: split 18.5 s (commit 11.7), remove 1.4 s.
+
+## CutDeck native rough cut — Phase 0 probes P1–P5 PASSED live — 2026-09-24
+
+Handoff: docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md. Probe: "Test Native Cut"
+(`uxp/cutdeck/roughCutProbe.js`), run twice on `tiw_Synced` (29.97 fps, 1920x1080,
+camera clip = 1 video + 4 audio, keyframed effect). Premiere 26.5 (installed build per the
+2026-09-15 entry; not re-read by the probe).
+
+Run 1 found (then designed around):
+- `TrackItem.createSetEndAction` throws "script object is no longer valid" (video and audio). **Unusable.**
+- `createCloneTrackItemAction` onto the clip's own track OVERWRITES what is there. Never clone in place.
+- `createSetInPointAction` on a track item = HEAD TRIM (start and media In move together, end fixed).
+- `createOverwriteItemAction` rejects a `ClipProjectItem.cast(...)` object ("Invalid parameter.");
+  pass the plain `getProjectItem()` result.
+
+Run 2, all PASS:
+- **P2**: project-item `createSetInOutPointsAction` + overwrite places exactly the marked span, but
+  only as TWO transactions — in one compound the overwrite still sees the old marks. Marks restored OK.
+- **P5**: `createMoveAction` is RELATIVE (shift by; negative works). **Linked audio does NOT follow**
+  (0 of 4) — move every audio item yourself. `createRemoveItemsAction(ripple=false, VIDEO)` removes the
+  video only, leaves a gap, nothing else shifts, audio stays (8 → 8).
+- **P3 split**: clone each item (video + every audio, alignToVideo=false) into free space past the
+  end → `SetInPoint` head-trims the clone → `SetOutPoint` tail-trims the original → move the clone back
+  by −offset. Result exact to 0 ticks, 4 of 4 audio, nothing else touched. 4 undo steps.
+- **P4**: both pieces keep effects (2) with keyframes at identical media time.
+- **P1**: `createSequenceFromMedia` matches footage (tpf, frame size) and pre-places the whole clip
+  (1 V + 4 A) — Route B must remove it first.
+
+User checks (same day): playback across the split has **no jump** (picture and sound continuous).
+The split's second piece is **NOT linked** to its audio (clones are separate items; the API
+cannot link). Route A's split pieces therefore come out unlinked — decide before Phase 4:
+accept + say so in the UI, or rebuild split pieces via marks + overwrite (P2: lands linked,
+but drops effects/keyframes). **Decided: clone route, unlinked pieces stated in the UI.**
+
+Phase 2 (Mark Cuts review) PASSED live 2026-09-24 on `tiw_Synced`: 432 ranged Comment markers,
+839.0 s — same as the XML route's 432 cuts / 839.1 s; one Ctrl+Z removed all; user confirms the
+markers span what they would cut. `Markers.createAddMarkerAction` + read-back proven.
+
+Phase 4 first live run 2026-09-24: failed before any edit with "The script object is no longer
+valid." from `createCloneTrackItemAction` — the actions were created OUTSIDE the
+`executeTransaction` callback. **Rule: create every Action inside the transaction callback.** Fixed in `timeline/nativeCut.js`; the test fake now enforces the rule.
+
+Phase 4 live run 2 (2026-09-24): the park-a-full-clone-per-piece split made ~431 full-length
+(~25 min) clones per track on `tiw_Synced` (432 cuts); pieces went missing ("piece on video
+track 1 not found to trim"), copy flooded with duplicates. **Redesigned: overwrite as razor** —
+one 1-frame filler per track, cloned onto every cut edge inside a clip, then remove everything
+inside cuts, then move.
+
+Phase 4 live run 3 (2026-09-24): **PASSED** on `tiw_Synced` (432 cuts). Read-back clean,
+keyframed effect and Transform still animate, audio split with the video, 5 undo steps. So an
+overwrite landing inside a clip does keep both sides. Split pieces' audio is NOT linked to
+the video (user-checked) — the status line says so.
+
+Rough Cut on `tiw_Synced2` (2026-09-24; 95 min, 3 V + 6 A tracks, 1735 cuts): failed at the razor
+step with "Illegal Parameter type" from `compound.addAction` while the copy was OPEN during the cut.
+Changed: the copy is cut closed and opened only at the end (as Native Sync already does). Then it
+PASSED twice (67 s, 64 s; read-back clean). Cause suspected (live redraw staling items), not proven.
+Step errors now name the step, action N of M, track, filler and edge time.
+
+Phase 6 (2026-09-24, user accepted native on real footage): panel XML output route retired.
+Rough Cut = native only; Mark Cuts / Native Cut buttons and `timeline/cutMarkers.js` removed;
+`workflow.importResult`, `xml_bridge.result_path`, `xml_sequence.reference_media_path` deleted.
+Helper VERSION -> cutdeck-xml-3. Same day: MCP `rough_cut_xml` -> `rough_cut`, returning the cut
+list (capabilities version 2); the helper's XML-output branch is gone. `xml_recut` CLI `--out` kept
+(manual use + test oracle). Open: Phase 5 (Route B), Phase 6 (retire
+the XML output after a release with both).
+
 ## Premiere XML panel — 2026-09-15
 
 User selected the existing working XML method with automatic UXP export/import,

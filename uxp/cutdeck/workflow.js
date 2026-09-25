@@ -1,6 +1,17 @@
-/* Host operations kept separate from UI so identity and import behavior can be tested. */
-const { CUTDECK_BIN_NAME, getOrCreateBin, activeProjectAndSequence } = require("./host/project.js");
-const VERSION = "cutdeck-xml-2";
+/* Host operations kept separate from UI so identity and import behavior can be tested.
+
+   Rough Cut input (docs/arch-design-helper-v2.md move 6): the audio tracks are read natively and
+   sent to the helper, which writes the FCP7 subset its analysis reads; nothing is exported.
+   Adobe APIs read here: Sequence.getAudioTrackCount/getAudioTrack, AudioTrack.isMuted,
+   AudioClipTrackItem.getStartTime/getInPoint/getOutPoint/isDisabled/getProjectItem,
+   ClipProjectItem.getMediaFilePath (reference/adobe/api/premierepro.txt:54-88,131,567-568).
+   getStartTime/getInPoint/getOutPoint (media-relative) and getMediaFilePath are proven live
+   (PREMIERE_FACTS "Track items", "Project items"); isMuted and audio isDisabled are not yet. */
+const { activeProjectAndSequence } = require("./host/project.js");
+const { toTicks } = require("./host/ticks.js");
+const { getTrackClipItems } = require("./host/trackItems.js");
+const { mediaPath } = require("./timeline/nativeSync.js");
+const VERSION = "cutdeck-xml-5";
 const guid = (object) => object.guid.toString();
 
 async function capture(ppro) {
@@ -20,59 +31,42 @@ async function capture(ppro) {
       ticks_per_frame: await sequence.getTimebase(), audio_track_count: await sequence.getAudioTrackCount() } };
 }
 
+/* A state read that fails counts as "on": a clip is left in the analysis rather than dropped. */
+async function isOff(read) {
+  try { return (await read()) === true; } catch (_) { return false; }
+}
+
+/* Every audio track's clips: file, sequence start, source In/Out (ticks as strings), on/off. */
+async function readAudioTracks(ppro, sequence, snapshotContext) {
+  const tracks = [];
+  for (let t = 0; t < snapshotContext.audio_track_count; t++) {
+    const track = await sequence.getAudioTrack(t);
+    const clips = [];
+    for (const item of track ? await getTrackClipItems(track, ppro) : []) {
+      let path = null;
+      try { path = await mediaPath(ppro, item); } catch (_) { /* nested sequence: no file */ }
+      clips.push({ path, enabled: !(await isOff(() => item.isDisabled())),
+        start_ticks: toTicks(await item.getStartTime()).toString(),
+        in_ticks: toTicks(await item.getInPoint()).toString(),
+        out_ticks: toTicks(await item.getOutPoint()).toString() });
+    }
+    tracks.push({ enabled: !(track && await isOff(() => track.isMuted())), clips });
+  }
+  return { ticks_per_frame: snapshotContext.ticks_per_frame, end_ticks: snapshotContext.end_ticks,
+    audio_tracks: tracks };
+}
+
 async function prepare(ppro, rpc, snapshot, options, save) {
   await rpc({ type: "hello", version: VERSION });
-  const job = await rpc({ type: "prepare", ...snapshot.context, ...options });
-  save(job);
-  if (!ppro.ProjectConverter || typeof ppro.ProjectConverter.exportAsFinalCutProXML !== "function") {
-    throw new Error("This Premiere build does not expose XML export. CutDeck requires Premiere 26.2 or later.");
-  }
-  const ok = await ppro.ProjectConverter.exportAsFinalCutProXML(snapshot.sequence, job.source_path, true);
-  if (!ok) throw new Error("Premiere could not export the sequence. No rough cut was started.");
-  // Record successful export before starting, allowing recovery from a lost start response.
+  const sequence = await readAudioTracks(ppro, snapshot.sequence, snapshot.context);
+  const job = await rpc({ type: "prepare", ...snapshot.context, ...options, sequence });
+  // The helper wrote the source from this read, so the job can start (and Resume can start it
+  // after a lost reply). `exported` keeps its name: saved jobs from before move 6 carry it.
   job.exported = true;
   save(job);
-  // The helper only settles output_path once it can read the export, so keep the
-  // recovery entry on the started job rather than the prepared one.
   const started = await rpc({ type: "start", job_id: job.job_id });
   save({ ...job, ...started });
   return started;
 }
 
-// Kept as an alias for tests and backward compatibility; delegates to host/project.js
-const getOrCreateCutDeckBin = (project) => getOrCreateBin(project, [CUTDECK_BIN_NAME]);
-
-async function importResult(ppro, job, previousAttempt, markAttempt) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project || guid(project) !== job.context.project_id) {
-    throw new Error("Return to the original project, then resume this job to open the result.");
-  }
-  const before = await project.getSequences();
-  if (!before.some((s) => guid(s) === job.context.sequence_id)) {
-    throw new Error("The source sequence is no longer in this project. The result XML is saved for recovery.");
-  }
-  const existing = before.filter((s) => s.name === job.result_name && guid(s) !== job.context.sequence_id);
-  let result;
-  if (existing.length === 1) {
-    result = existing[0];
-  } else {
-    if (previousAttempt || existing.length > 1) {
-      throw new Error("A previous import could not be confirmed. Check the Project panel before importing again. Result: " + job.output_path);
-    }
-    const ids = new Set(before.map(guid));
-    markAttempt();
-    const targetBin = await getOrCreateCutDeckBin(project);
-    const imported = await project.importFiles([job.output_path], true, targetBin, false);
-    if (!imported) throw new Error("Premiere did not confirm the XML import. Check the Project panel. Result: " + job.output_path);
-    const after = await project.getSequences();
-    const matches = after.filter((s) => !ids.has(guid(s)) && s.name === job.result_name);
-    if (matches.length !== 1) throw new Error("Could not identify the imported sequence. Check the Project panel for " + job.result_name);
-    result = matches[0];
-  }
-  if (!await project.openSequence(result) || !await project.setActiveSequence(result)) {
-    throw new Error("Result imported. Open this sequence from the Project panel: " + job.result_name);
-  }
-  return result;
-}
-
-module.exports = { VERSION, capture, prepare, importResult, getOrCreateCutDeckBin };
+module.exports = { VERSION, capture, prepare, readAudioTracks };

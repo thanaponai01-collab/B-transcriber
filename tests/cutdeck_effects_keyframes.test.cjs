@@ -12,10 +12,13 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const effects = require(path.join(__dirname, "..", "uxp", "cutdeck", "timeline", "effects.js"));
+// Shared fake: Actions must be made inside the transaction callback, point keyframes must be
+// PointF, and actions apply at commit (docs/PREMIERE_FACTS.md), the way Premiere behaved live.
+const fake = require("./fakes/premiere.cjs");
 
 const TPF = 8475667200n; // 29.97 fps, the rate of the live probe run
 const f = (n) => BigInt(n) * TPF;
-const tt = (ticks) => ({ ticks: String(ticks) });
+const tt = fake.tickTime;
 
 /* A param with real state: static value, time-varying flag, keyframes by tick string. */
 function liveParam(name, { value = 100, keyframes = null, pointParam = false } = {}) {
@@ -34,11 +37,11 @@ function liveParam(name, { value = 100, keyframes = null, pointParam = false } =
     isTimeVarying: () => state.varying,
     getKeyframeListAsTickTimes: () => [...state.keys.keys()].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)).map(tt),
     getKeyframePtr: (t) => makeKf(state.keys.get(String(t.ticks)).value, t.ticks),
-    createKeyframe: (v) => makeKf(v),
-    createSetValueAction: (kf) => ({ run: () => { state.value = kf.value.value; } }),
-    createSetTimeVaryingAction: (on) => ({ run: () => { state.varying = on; } }),
-    createAddKeyframeAction: (kf) => ({ run: () => state.keys.set(String(kf.position.ticks), { value: kf.value.value, mode: 0 }) }),
-    createSetInterpolationAtKeyframeAction: (t, mode) => ({ run: () => { state.keys.get(String(t.ticks)).mode = mode; } }),
+    createKeyframe: (v) => makeKf(pointParam ? fake.assertPointValue(v) : v), // reads give [x, y]; writes need PointF
+    createSetValueAction: (kf) => fake.action(() => { state.value = kf.value.value; }),
+    createSetTimeVaryingAction: (on) => fake.action(() => { state.varying = on; }),
+    createAddKeyframeAction: (kf) => fake.action(() => state.keys.set(String(kf.position.ticks), { value: kf.value.value, mode: 0 })),
+    createSetInterpolationAtKeyframeAction: (t, mode) => fake.action(() => { state.keys.get(String(t.ticks)).mode = mode; }),
   };
 }
 function component(displayName, matchName, params) {
@@ -54,27 +57,20 @@ function trackItem(components, inPointFrames) {
     list: components,
     getComponentCount: () => chain.list.length,
     getComponentAtIndex: (i) => chain.list[i],
-    createInsertComponentAction: (c, at) => ({ run: () => chain.list.splice(at, 0, c.materialize()) }),
+    createInsertComponentAction: (c, at) => fake.action(() => chain.list.splice(at, 0, c.materialize())),
   };
   return { chain, getComponentChain: () => Promise.resolve(chain), getInPoint: () => Promise.resolve(tt(f(inPointFrames))) };
 }
 function project() {
-  const labels = [];
-  return {
-    labels,
-    executeTransaction: (fn, label) => {
-      labels.push(label);
-      const actions = [];
-      fn({ addAction: (a) => { actions.push(a); return true; } });
-      actions.forEach((a) => a.run());
-      return true;
-    },
-  };
+  const { project: p, undoSteps } = fake.createProject();
+  p.labels = undoSteps;
+  return p;
 }
 /* createComponent returns a factory-side object; inserting it yields a fresh live component. */
 function ppro({ pointParam = false } = {}) {
   return {
-    TickTime: { createWithTicks: (s) => tt(s) },
+    TickTime: fake.TickTime,
+    PointF: fake.PointF,
     VideoFilterFactory: {
       createComponent: (matchName) => Promise.resolve({
         materialize: () => component("Transform", matchName, [
@@ -161,7 +157,7 @@ test("read-back reports keyframes that didn't land where captured (e.g. a stopwa
       const scale = comp.getParam(1);
       const enable = scale.createSetTimeVaryingAction;
       // Simulate Premiere dropping an extra keyframe at 0 when the stopwatch turns on.
-      scale.createSetTimeVaryingAction = (on) => ({ run: () => { enable(on).run(); scale.state.keys.set("0", { value: 1, mode: 0 }); } });
+      scale.createSetTimeVaryingAction = (on) => fake.action(() => { enable(on).run(); scale.state.keys.set("0", { value: 1, mode: 0 }); });
       return comp;
     };
     return c;
@@ -181,4 +177,26 @@ test("point values ([x, y] as captured) are written as PointF, other values pass
   assert.equal(effects.toParamValue(host, 100), 100);
   assert.equal(effects.toParamValue(host, true), true);
   assert.deepEqual(effects.toParamValue(host, [1, 2, 3]), [1, 2, 3], "not a 2D point");
+});
+
+test("applyCapturedPresetToAll: 3 ALs, still 5 transactions, each AL keyed at its own In point", async () => {
+  const preset = { components: [{ matchName: "AE.ADBE Geometry2", displayName: "Transform", params: [
+    { index: 1, displayName: "Scale", value: 100, keyframes: [
+      { offsetTicks: "0", value: 100, mode: 0 },
+      { offsetTicks: f(5).toString(), value: 120, mode: 5 },
+    ] },
+    { index: 2, displayName: "Rotation", value: 15 },
+  ] }] };
+  const targets = [trackItem([], 10), trackItem([], 200), trackItem([], 3000)];
+  const proj = project();
+  const { warnings } = await effects.applyCapturedPresetToAll(ppro(), proj, targets, preset);
+
+  assert.deepEqual(warnings, []);
+  assert.equal(proj.labels.length, 5, "one transaction per phase, not per AL");
+  for (const [t, inF] of [[targets[0], 10], [targets[1], 200], [targets[2], 3000]]) {
+    const [, scale, rotation] = [0, 1, 2].map((i) => t.chain.list[0].getParam(i));
+    assert.equal(t.chain.list.length, 1, "exactly one component inserted per AL");
+    assert.equal(rotation.state.value, 15);
+    assert.deepEqual([...scale.state.keys.keys()], [f(inF).toString(), f(inF + 5).toString()]);
+  }
 });

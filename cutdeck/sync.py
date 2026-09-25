@@ -87,7 +87,9 @@ def extract_mono_audio(
         err_msg = proc.stderr.decode("utf-8", errors="replace")[-500:]
         raise RuntimeError(f"ffmpeg extraction failed for {media_path}: {err_msg}")
 
-    return np.frombuffer(proc.stdout, dtype=np.float32)
+    audio = np.frombuffer(proc.stdout, dtype=np.float32).copy()
+    del proc
+    return audio
 
 
 def correlate_gcc_phat(

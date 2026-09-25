@@ -1,0 +1,52 @@
+---
+description: "There's a lot more to plugin development than what we've covered so far. For more advanced topics, please have a look at the resources section. Among other t..."
+title: Advanced Topics
+---
+
+# Advanced topics
+
+There's a lot more to plugin development than what we've covered so far. For more advanced topics, please have a look at the [resources section](../../resources/index.md). Among other things, you'll find information about:
+
+\<MiniResourceCard slots="image,heading,text,link" repeat="5" theme="lightest" inRow="2"/\>
+
+![Folder icon](file.jpg)
+
+#### File I/O
+
+Load/Save data from the FileSystem
+
+[File I/O](../../resources/recipes/filesystem-operations/index.md)
+
+![Network icon](network.jpg)
+
+#### Network I/O
+
+Make network requests to fetch data
+
+[Network I/O](../../resources/recipes/network/index.md)
+
+![Application window icon](ui.jpg)
+
+#### User Interface
+
+Add UI elements to your plugin
+
+[Adding User Interfaces](../../resources/fundamentals/user-interfaces/index.md)
+
+\<!--
+![Complex hierarchical component structure icon](react.jpg)
+
+#### React
+
+Use React to build highly interactive user interfaces
+[//]: # (TODO: Add right links)
+[React in UXP](#)
+--\>
+
+![Ellipsis](more.jpg)
+
+#### And much more
+
+See all the resources available
+
+[All resources](../../resources/index.md)

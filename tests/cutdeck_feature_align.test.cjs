@@ -63,3 +63,33 @@ test("align: onRefresh runs through controller and updates alignState", async ()
   assert.equal(ctl.state.busy, false);
   assert.equal(ctl.state.status.level, "ready");
 });
+
+test("align: poll skips reading if isMainBusy returns true", async () => {
+  let readCount = 0;
+  const ctl = createController({
+    render: () => {},
+    initialState: { sequence: null, transform: null },
+  });
+  const fakePpro = {
+    Project: {
+      getActiveProject: () => {
+        readCount++;
+        return { getActiveSequence: () => null };
+      },
+    },
+  };
+  let busy = true;
+  const align = createAlignFeature({
+    ppro: fakePpro,
+    ctl,
+    isMainBusy: () => busy,
+  });
+
+  await align.poll();
+  assert.equal(readCount, 0, "should not poll while main controller is busy");
+
+  busy = false;
+  await align.poll();
+  assert.equal(readCount, 1, "should poll once main controller is idle");
+});
+

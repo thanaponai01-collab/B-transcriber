@@ -1,6 +1,17 @@
 # HANDOFF — CutDeck: native rough cut (replace the XML *output* with live Premiere edits)
 
-**Status:** design + probe plan. Nothing here is built. Written 2026-09-23.
+**Status:** Phase 1 and Phase 3 built 2026-09-24 (`xml_recut --cuts-json`, bridge `output: "native"`,
+`timeline/cutPlanApply.js` + golden parity vs `recut()`). Phase 0 probes PASSED live 2026-09-24 (see TODO_LEDGER — SetEnd is
+unusable, audio never follows moves, splits are clone-past-end + head/tail trim + move back,
+marks+overwrite needs two transactions). Phase 2 (Mark Cuts review button, `timeline/cutMarkers.js`)
+PASSED live 2026-09-24 (432 markers = XML route's 432 cuts). **Decided 2026-09-24: Route A splits with the clone route
+(keeps effects; split pieces come out unlinked — say so in the status line).** Phase 4 (Native Cut (beta) button, `timeline/nativeCut.js`) PASSED
+live 2026-09-24 on tiw_Synced (432 cuts, effects/keyframes kept, 5 undo steps). Splits use overwrite-as-razor
+(1-frame filler per track cloned onto each cut edge), NOT section 3.2's clone-and-trim — see TODO_LEDGER.
+**Phase 6 done 2026-09-24:** the panel's XML output route is retired — Rough Cut is native only; Mark Cuts
+removed at the user's request. The MCP tool is now `rough_cut` and returns the same cut list (no XML);
+the helper writes no XML at all. `xml_recut`'s CLI XML writer stays as the manual tool and the golden test's oracle.
+Phases 5, 7 not started. Written 2026-09-23.
 **For:** Claude Code, working in `B-transcriber`.
 **Read first:** `CLAUDE.md` rule 2 (prove every Adobe API before use), `HANDOFF_CUTDECK_NATIVE_SYNC.md`
 (the pattern this copies: it retired XML Sync the same way), `HANDOFF_CUTDECK_XML_RECUT.md`

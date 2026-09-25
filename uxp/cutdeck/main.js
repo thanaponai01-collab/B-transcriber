@@ -18,6 +18,7 @@ const { createAdjustFeature, loadSettings } = require("./features/adjust.js");
 const { createPresetsFeature, loadCustomPresets } = require("./features/presets.js");
 const { createAlignFeature } = require("./features/align.js");
 const { createProbesFeature } = require("./features/probes.js");
+const { createDriver, keepRegistered } = require("./features/driver.js");
 
 const storage = typeof localStorage !== "undefined" ? localStorage : null;
 
@@ -76,7 +77,26 @@ const probes = createProbesFeature({
   uxp,
   onCapturePreset: presets.onCapturePreset,
 });
-const align = createAlignFeature({ ppro, ctl: alignCtl });
+const align = createAlignFeature({
+  ppro,
+  ctl: alignCtl,
+  uxp,
+  rpc,
+  ensureHelper,
+  isMounted: () => alignPanel.isMounted(),
+  isMainBusy: () => mainCtl.state.busy,
+});
+
+// The Premiere driver: MCP agents and scripts reach Premiere through the helper and this panel
+// (docs/arch-design-helper-v2.md move 3). Its own quiet connection, re-registered after drops.
+const driver = createDriver({ ppro, ctl: mainCtl });
+let driverRegistration = null;
+const driverRpc = createRpc({
+  attempts: 1,
+  onCall: (call) => driver.handle(call),
+  onClose: () => driverRegistration && driverRegistration.onClose(),
+});
+driverRegistration = keepRegistered({ rpc: driverRpc, version: workflow.VERSION, commands: driver.commands });
 
 // Main panel binding
 panel.bind({
@@ -88,6 +108,8 @@ panel.bind({
   onTab: (name) => { mainCtl.state.tab = name; mainCtl.render(); },
   onCutMode: roughCut.onCutMode,
   onAdjust: adjust.onAdjust,
+  onColorMatte: adjust.onColorMatte,
+  onAddFrameHold: adjust.onAddFrameHold,
   onApplyPreset: adjust.onApplyPreset,
   onRemovePreset: presets.onRemovePreset,
   onRenamePreset: presets.onRenamePreset,
@@ -100,7 +122,12 @@ panel.bind({
 // Align panel binding
 alignPanel.bind({
   onRefresh: align.onRefresh,
+  onReset: align.onReset,
   onProbe: align.onProbe,
+  onSetField: align.onSetField,
+  onAnchor: align.onAnchor,
+  onAlign: align.onAlign,
+  onPoll: align.poll,
 });
 
 // Register panels with UXP entrypoints
@@ -133,6 +160,7 @@ const savedJob = roughCut.lastJob();
 mainCtl.state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 mainCtl.render();
 restartHelperOnStart();
+helperRestart.finally(() => driverRegistration.start());
 
 setTimeout(async () => {
   await presets.loadPresets();
@@ -141,4 +169,13 @@ setTimeout(async () => {
   } catch (_) { /* no sequence open yet — the refresh icon retries */ }
   if (mainCtl.state.presetFile.error) mainCtl.setStatus(`Presets: ${mainCtl.state.presetFile.error}`, "error");
   else mainCtl.setStatus("Ready", "ready");
+  // The sequence card follows a sequence switch: global SequenceEvent.ACTIVATED fires on switch
+  // (PREMIERE_FACTS.md, live 2026-09-24). In/Out changes fire nothing, so the refresh icon stays.
+  try {
+    ppro.EventManager.addGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, () => {
+      roughCut.refresh().catch(() => { /* no sequence — the refresh icon retries */ });
+    });
+  } catch (error) {
+    console.error("CutDeck: sequence switch listener failed; use the refresh icon", error);
+  }
 }, 50);

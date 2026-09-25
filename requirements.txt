@@ -6,6 +6,7 @@ accelerate>=0.29.0
 librosa>=0.10.0
 soundfile>=0.12.0
 numpy>=1.26.0
+Pillow>=10.0   # cutdeck/frame_bounds.py: measures a Graphic's drawn box from two saved frames
 PyYAML>=6.0
 av>=13.0.0   # ingest.py video/m4a/broadcast-container decode path (_load_audio_av)
 

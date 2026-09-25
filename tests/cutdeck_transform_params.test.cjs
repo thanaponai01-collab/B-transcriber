@@ -213,3 +213,24 @@ test("readSourceFrameSize returns null, never throws, when the source size canno
   const rejecting = { Metadata: { getProjectColumnsMetadata: () => Promise.reject(new Error("boom")) } };
   assert.equal(await params.readSourceFrameSize(rejecting, itemWithProjectItem), null);
 });
+
+// --- readAnchorFrameSize: the frame Anchor Point is normalized to --------------------------------
+
+test("readAnchorFrameSize uses the source frame, falls back to the sequence frame only for a Graphic, else null", async () => {
+  const seq = { getSettings: () => Promise.resolve({ getVideoFrameRect: () => Promise.resolve({ width: 1920, height: 1080 }) }) };
+  const ppro = { Metadata: { getProjectColumnsMetadata: () => Promise.resolve(JSON.stringify([
+    { ColumnID: "Column.Intrinsic.VideoInfo", ColumnValue: "1280 x 720 (1.0)" }])) } };
+
+  const footage = Object.assign(itemWithComponents([motionComponent()]), { getProjectItem: () => Promise.resolve({}) });
+  assert.deepEqual(await params.readAnchorFrameSize(ppro, footage, seq), { width: 1280, height: 720, pixelAspect: 1 });
+
+  // Check Transform on a Graphic (2026-09-24): no project item; Opacity, Motion, Vector Motion, Text.
+  const graphic = Object.assign(itemWithComponents([
+    component("Opacity", "AE.ADBE Opacity", []), motionComponent(),
+    component("Vector Motion", "AE.ADBE Graphic Group", []), component("Text", "AE.ADBE Text", []),
+  ]), { getProjectItem: () => Promise.resolve(null) });
+  assert.deepEqual(await params.readAnchorFrameSize(ppro, graphic, seq), { width: 1920, height: 1080, pixelAspect: 1 });
+
+  const unknown = Object.assign(itemWithComponents([motionComponent()]), { getProjectItem: () => Promise.resolve(null) });
+  assert.equal(await params.readAnchorFrameSize(ppro, unknown, seq), null);
+});

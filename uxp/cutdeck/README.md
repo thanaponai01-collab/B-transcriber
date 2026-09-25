@@ -1,10 +1,19 @@
-# CutDeck for Premiere — XML workflow
+# CutDeck for Premiere
 
 **Role: production.** This is the only CutDeck panel. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
 
-Mark **In / Out** on the timeline, click **Rough Cut In–Out**, and continue in
-a newly imported sequence. CutDeck automatically exports and imports XML using
-the same processing command as `scripts/cut_xml.ps1`. No MCP is involved.
+Mark **In / Out** on the timeline and click **Rough Cut**. CutDeck reads the
+sequence's audio tracks and sends them to the helper to analyse (no XML export since
+docs/arch-design-helper-v2.md move 6), then cuts a **copy** of your sequence
+with live Premiere edits (effects and keyframes kept), files it under
+**CutDeck ▸ Rough Cuts** and opens it. Your sequence is never edited. Split clips'
+audio comes out unlinked from their video. Undo takes up to 5 Ctrl+Z. The old XML
+*import* route is retired (docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md).
+
+While the panel is open it is also the helper's **Premiere driver**: MCP agents
+(`premiere_*` tools) and scripts (`python -m cutdeck.premiere_cli status | read_sequence |
+apply_cuts <job_id> | add_markers <file.json>`) reach Premiere through it, with a fixed
+command list. A command is refused while the panel is busy with your own action.
 
 ## First-time setup
 
@@ -87,7 +96,7 @@ D:\Footage\CFD 94  interview_A.mp4
 ```
 
 "Beside your footage" means the folder holding the media on the audio track that was
-analyzed — the same track the cuts come from. Only the result goes there; `source.xml`,
+analyzed — the same track the cuts come from. Only the result goes there; `sequence.json`,
 `job.json`, `report.json` and `process.log` stay in `output/premiere/<job identifier>/`.
 If the media cannot be located or written to (a disconnected drive, a sequence with no
 audio), the result falls back to the job folder and the panel says so rather than
@@ -98,11 +107,12 @@ after Out shifts earlier by the removed duration across all tracks. Only the
 In/Out range plus 2 seconds each side is extracted and analyzed, so a short range
 on a long sequence is fast.
 
-Before any audio is extracted, the helper checks the export and refuses clearly:
-the Reference Audio track (with no choice made, the first track that is switched
-on and has clips; a track you pick is used even if it is switched off), missing or
-offline source media, source media with no audio stream, transitions and nested
-sequences. While it runs, the status line names the track and file being analyzed
+Before any audio is extracted, the helper checks the read and refuses clearly:
+the Reference Audio track (with no choice made, the first track that is not muted
+and has clips; a track you pick is used even if it is muted), missing or
+offline source media, source media with no audio stream, and audio clips with no
+media file (nested sequences). Transitions and nested clips where a cut lands are
+refused by the native cut. While it runs, the status line names the track and file being analyzed
 (for example `A2 (interview.wav)`). If processing fails, the message quotes the
 error from `process.log` instead of only an exit code.
 
@@ -125,22 +135,22 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
   cannot run hidden or pass arguments — if `Start CutDeck.cmd` itself has a problem
   (no Python found, a broken `.venv`), its console window says so. Run it manually
   once to see the real error.
-- **Switched projects:** return to the original project and resume. The helper
-  never imports into whichever unrelated project happens to be active.
-- **Helper restarted:** its live job list is reset. Existing files remain in
-  `output/premiere/<job identifier>/`. Start a new job, or recover a completed
-  `rough_cut.xml` using the existing manual workflow.
-- **Import not confirmed:** inspect Premiere's Project panel for the unique result
-  name. Resume opens an already imported matching result rather than importing
-  it twice. If the result cannot be identified, automatic re-import stops.
+- **Switched sequences:** the cut is only applied to the sequence it was analysed
+  from. Open it again and click Rough Cut (it resumes the pending job).
+- **Helper restarted:** its live job list is reset and the pending job clears
+  itself. Existing files remain in `output/premiere/<job identifier>/`. Start a new job.
+- **Cut doesn't match the plan:** the copy is left open for inspection and the
+  status names the first mismatched clip. Your original sequence is untouched.
 - **Dismiss last job:** clears the panel's recovery entry so you can start again.
   It does not cancel a running analysis or remove job files.
 - **Processing failed:** inspect `process.log` in the job folder. `job.json` and
   `report.json` record the captured range and result. Job files are retained;
   they are not automatically deleted.
 
-The helper serializes jobs to avoid loading multiple GPU analyses at once.
-It listens only on `127.0.0.1:7891` and accepts only predefined job operations.
+The helper runs one GPU job (rough cut, transcription) at a time; Sync matching runs
+beside it in its own lane. It listens only on `127.0.0.1:7891` and accepts only
+predefined job operations. Job progress is pushed to the panel (no polling), and a job
+still reads back after a helper restart (a job that was running reads as interrupted).
 Stop it with Ctrl+C in its window when finished.
 
 ## Verification status
@@ -184,8 +194,10 @@ The panel follows the layered architecture and conventions defined in [docs/arch
 node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
-`workflow.js` contains the Premiere operations; `core/rpc.js` owns the helper socket and
-its retry rule; `main.js` handles panel state. `cutdeck/xml_bridge.py` launches the
+`workflow.js` contains the Premiere operations; `core/rpc.js` owns the helper socket (request
+ids, pushed job events, incoming driver calls) and its retry rule; `features/driver.js` runs
+the helper's Premiere commands; `main.js` handles panel state. Protocol:
+docs/arch-design-helper-v2.md. `cutdeck/xml_bridge.py` launches the
 existing CLI in a subprocess.
 The helper on port 7891 is the one server to start (`Start CutDeck.cmd`). The split probe
 remains separate from this XML integration. (`bridge.py`, `live_clip.py` and `mark_export.py`

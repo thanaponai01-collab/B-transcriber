@@ -7,12 +7,17 @@ const { createRpc, URL } = require("../uxp/cutdeck/core/rpc.js");
 /* Premiere's cold-start denial, thrown out of the WebSocket constructor. */
 const DENIED = `Permission denied to the url ${URL}. Manifest entry not found.`;
 
+/* `reply` answers the oldest unanswered request with its id, as the v2 helper echoes it. */
 function fakeSocket() {
   const socket = {
-    sent: [], closed: false,
+    sent: [], closed: false, answered: 0,
     send(payload) { socket.sent.push(payload); },
     close() { socket.closed = true; },
-    reply(value) { socket.onmessage({ data: JSON.stringify(value) }); },
+    reply(value) {
+      const id = JSON.parse(socket.sent[socket.answered++]).id;
+      socket.onmessage({ data: JSON.stringify({ ...value, id }) });
+    },
+    push(value) { socket.onmessage({ data: JSON.stringify(value) }); },
   };
   return socket;
 }
@@ -91,16 +96,154 @@ test("a helper error reply resolves as a failure without reconnecting", async ()
   assert.equal(h.attempts.length, 1);
 });
 
-test("each request opens and closes its own connection", async () => {
+test("a helper error reply keeps its machine-readable code", async () => {
   const h = harness(["open"]);
-  let expected = 0;
-  for (const type of ["hello", "status"]) {
-    const pending = h.rpc({ type });
-    (await ready(h, ++expected)).reply({ ok: true });
-    await pending;
+  const pending = h.rpc({ type: "hello", version: "cutdeck-xml-9" });
+  (await ready(h, 1)).reply({ ok: false, code: "version_mismatch", message: "Panel/helper version mismatch" });
+  await assert.rejects(pending, (error) => error.code === "version_mismatch");
+});
+
+/* Waits until `socket` has sent `n` requests. */
+async function sentCount(socket, n) {
+  for (let i = 0; i < 500; i++) {
+    if (socket.sent.length === n) return;
+    await new Promise((done) => setTimeout(done, 1));
   }
+  throw new Error(`socket sent ${socket.sent.length}, expected ${n}`);
+}
+
+test("requests reuse one open connection", async () => {
+  const h = harness(["open"]);
+  const socket = await (async () => { const p = h.rpc({ type: "hello" }); const s = await ready(h, 1); s.reply({ ok: true }); await p; return s; })();
+  for (let i = 0; i < 3; i++) {
+    const pending = h.rpc({ type: "status" });
+    await sentCount(socket, i + 2);
+    socket.reply({ ok: true, n: i });
+    assert.deepEqual(await pending, { ok: true, n: i });
+  }
+  assert.equal(h.attempts.length, 1);
+  assert.equal(socket.closed, false);
+});
+
+test("a connection the helper closes while idle is reopened on the next call", async () => {
+  const h = harness(["open"]);
+  const first = h.rpc({ type: "restart" });
+  const s1 = await ready(h, 1);
+  s1.reply({ ok: true, restarting: true });
+  await first;
+  s1.onclose({});                            // helper exits after the restart reply
+  const second = h.rpc({ type: "hello" });
+  (await ready(h, 2)).reply({ ok: true });
+  assert.deepEqual(await second, { ok: true });
   assert.equal(h.attempts.length, 2);
-  assert.ok(h.attempts.every((s) => s.closed));
+});
+
+test("overlapping calls go out together on one socket and replies find them by id", async () => {
+  const h = harness(["open"]);
+  const a = h.rpc({ type: "frame_bounds" });
+  const b = h.rpc({ type: "status" });
+  const socket = await ready(h, 1);
+  await sentCount(socket, 2);                // b did not wait for a's reply
+  const [idA, idB] = socket.sent.map((raw) => JSON.parse(raw).id);
+  assert.notEqual(idA, idB);
+  socket.push({ ok: true, for: "status", id: idB });   // answered out of order
+  socket.push({ ok: true, for: "frame_bounds", id: idA });
+  assert.deepEqual(await a, { ok: true, for: "frame_bounds" });
+  assert.deepEqual(await b, { ok: true, for: "status" });
+  assert.equal(h.attempts.length, 1);
+});
+
+test("an old helper's reply without an id still answers the oldest call", async () => {
+  // A helper from before v2 refusing `hello` must be recognised, so the panel can restart it.
+  const h = harness(["open"]);
+  const pending = h.rpc({ type: "hello", version: "cutdeck-xml-5" });
+  const socket = await ready(h, 1);
+  socket.push({ ok: false, code: "version_mismatch", message: "Panel/helper version mismatch" });
+  await assert.rejects(pending, (error) => error.code === "version_mismatch");
+});
+
+test("watch follows pushed job events to the finished job", async () => {
+  const h = harness(["open"]);
+  const updates = [];
+  const done = h.rpc.watch("job1", (job) => updates.push(job.progress && job.progress.pct));
+  const socket = await ready(h, 1);
+  await sentCount(socket, 1);
+  assert.deepEqual(JSON.parse(socket.sent[0]), { type: "watch", job_id: "job1", id: 1 });
+  socket.reply({ ok: true, job_id: "job1", state: "running", progress: { pct: 10 } });
+  await new Promise((tick) => setTimeout(tick, 0));  // each socket message is its own event
+  socket.push({ event: "job", job: { job_id: "other", state: "ready" } });  // not ours
+  socket.push({ event: "job", job: { job_id: "job1", state: "running", progress: { pct: 60 } } });
+  socket.push({ event: "job", job: { job_id: "job1", state: "ready", cuts: { cuts_frames: [] } } });
+  const job = await done;
+  assert.equal(job.state, "ready");
+  assert.equal("ok" in job, false);
+  assert.deepEqual(updates, [10, 60, undefined]);
+  assert.equal(socket.sent.length, 1);        // no status polling
+});
+
+test("watching a job that already finished resolves from the reply", async () => {
+  const h = harness(["open"]);
+  const done = h.rpc.watch("job1");
+  const socket = await ready(h, 1);
+  await sentCount(socket, 1);
+  socket.reply({ ok: true, job_id: "job1", state: "failed", message: "no audio" });
+  assert.equal((await done).message, "no audio");
+});
+
+test("a dropped connection fails a watch instead of hanging", async () => {
+  const h = harness(["open"]);
+  const done = h.rpc.watch("job1");
+  const socket = await ready(h, 1);
+  await sentCount(socket, 1);
+  socket.reply({ ok: true, job_id: "job1", state: "running" });
+  socket.onclose({});
+  await assert.rejects(done, /Resume last job/);
+});
+
+test("a Premiere command from the helper is run by onCall and answered", async () => {
+  const socket = fakeSocket();
+  const closes = [];
+  const rpc = createRpc({
+    createSocket: () => { setTimeout(() => socket.onopen({}), 0); return socket; },
+    onCall: async (call) => {
+      if (call.command === "read_sequence") return { name: "Seq" };
+      throw new Error("CutDeck panel is busy");
+    },
+    onClose: () => closes.push(1),
+  });
+  const hello = rpc({ type: "hello" });
+  await sentCount(socket, 1);
+  socket.reply({ ok: true });
+  await hello;
+  socket.push({ call: "c1", command: "read_sequence", args: {} });
+  socket.push({ call: "c2", command: "apply_cuts", args: {} });
+  await sentCount(socket, 3);
+  const replies = socket.sent.slice(1).map((raw) => JSON.parse(raw));
+  assert.deepEqual(replies.find((r) => r.call === "c1"), { type: "driver_reply", call: "c1", ok: true, result: { name: "Seq" } });
+  assert.deepEqual(replies.find((r) => r.call === "c2"), { type: "driver_reply", call: "c2", ok: false, message: "CutDeck panel is busy" });
+  socket.onclose({});
+  assert.deepEqual(closes, [1]);             // the driver hears the drop, to reconnect
+});
+
+test("a connection that runs no commands refuses a call rather than ignoring it", async () => {
+  const h = harness(["open"]);
+  const hello = h.rpc({ type: "hello" });
+  const socket = await ready(h, 1);
+  socket.reply({ ok: true });
+  await hello;
+  socket.push({ call: "c1", command: "read_sequence", args: {} });
+  await sentCount(socket, 2);
+  assert.equal(JSON.parse(socket.sent[1]).ok, false);
+});
+
+test("a failed call still lets the next call through", async () => {
+  const h = harness(["open"]);
+  const a = h.rpc({ type: "prepare" });
+  (await ready(h, 1)).onclose({});
+  await assert.rejects(a, /Resume last job/);
+  const b = h.rpc({ type: "hello" });
+  (await ready(h, 2)).reply({ ok: true });
+  assert.deepEqual(await b, { ok: true });
 });
 
 test("rpc default URL is ws://localhost:7891 and is passed to createSocket", async () => {
@@ -111,8 +254,8 @@ test("rpc default URL is ws://localhost:7891 and is passed to createSocket", asy
     createSocket: (url) => {
       connectedUrl = url;
       const s = fakeSocket();
-      s.send = () => {
-        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true }) }), 0);
+      s.send = (raw) => {
+        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true, id: JSON.parse(raw).id }) }), 0);
       };
       setTimeout(() => { if (s.onopen) s.onopen({}); }, 0);
       return s;
@@ -133,8 +276,8 @@ test("createRpc allows custom url override", async () => {
     createSocket: (url) => {
       connectedUrl = url;
       const s = fakeSocket();
-      s.send = () => {
-        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true }) }), 0);
+      s.send = (raw) => {
+        setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify({ ok: true, id: JSON.parse(raw).id }) }), 0);
       };
       setTimeout(() => { if (s.onopen) s.onopen({}); }, 0);
       return s;

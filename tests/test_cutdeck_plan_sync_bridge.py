@@ -97,7 +97,8 @@ def test_places_clips_and_reports_progress(tmp_path, monkeypatch):
     assert saved["plan"] == plan
 
 
-def test_holds_the_one_job_slot(tmp_path, monkeypatch):
+def test_sync_holds_the_cpu_lane_not_the_gpu_lane(tmp_path, monkeypatch):
+    """Matching is CPU work: a second sync waits, a rough cut does not (arch-design-helper-v2 move 2)."""
     (a,) = _media(tmp_path, "A.mp4")
     release = threading.Event()
 
@@ -110,10 +111,14 @@ def test_holds_the_one_job_slot(tmp_path, monkeypatch):
     async def _test():
         jobs = XmlJobs(tmp_path / "jobs")
         first = await jobs.dispatch(_one_clip(a))
-        with pytest.raises(ValueError, match="already processing"):
+        with pytest.raises(ValueError, match="already matching a sync"):
             await jobs.dispatch(_one_clip(a))
-        with pytest.raises(ValueError, match="already processing"):
-            await jobs.dispatch({"type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "n"})
+        with pytest.raises(ValueError, match="processing a job"):
+            await jobs.dispatch({"type": "restart"})
+        assert jobs.active is None and jobs.cpu_active == first["job_id"]
+        # The GPU lane is free: a rough cut job can be prepared beside the running sync.
+        with pytest.raises(ValueError, match="identity"):
+            await jobs.dispatch({"type": "prepare"})  # refused for its own reasons, not the lane
         release.set()
         await asyncio.gather(*jobs.tasks)
         # An unreadable clip is a finding in the plan, not a failed job.
@@ -148,7 +153,7 @@ def test_failure_is_reported_and_frees_the_slot(tmp_path, monkeypatch):
 def test_version_bump_is_shared_with_the_panel(tmp_path):
     """A panel that sends plan_sync to an old helper must be refused at hello, not mid-job."""
     workflow = (Path(__file__).parent.parent / "uxp" / "cutdeck" / "workflow.js").read_text(encoding="utf-8")
-    assert VERSION == "cutdeck-xml-2"
+    assert int(VERSION.rsplit("-", 1)[1]) >= 2  # plan_sync arrived in -2
     assert f'const VERSION = "{VERSION}";' in workflow
 
     async def _test():

@@ -399,6 +399,29 @@ def find_resumable_job(
     return JobRow(**dict(row))
 
 
+def find_finished_job(
+    conn: sqlite3.Connection,
+    media_id: int,
+    engine_a: str,
+    engine_b: str,
+    pipeline_version: str,
+) -> Optional[JobRow]:
+    """The most recent completed job for this exact (media, engine pair, pipeline
+    version) that still holds its tokens — a transcript we can reuse instead of
+    running ASR again. The token check skips jobs whose bulk rows were purged
+    (`purge_job_transcript_data`): they are 'done' but empty."""
+    row = conn.execute(
+        "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
+        "AND pipeline_version = ? AND status = 'done' AND job_phase = 'written' "
+        "AND EXISTS (SELECT 1 FROM token WHERE token.job_id = job.id) "
+        "ORDER BY id DESC LIMIT 1",
+        (media_id, engine_a, engine_b, pipeline_version),
+    ).fetchone()
+    if row is None:
+        return None
+    return JobRow(**dict(row))
+
+
 def get_latest_job_for_media(conn: sqlite3.Connection, media_id: int) -> Optional[JobRow]:
     """Most recently created job for this media, regardless of status — for
     callers that ran run_file() in-process and only have the media path, not
