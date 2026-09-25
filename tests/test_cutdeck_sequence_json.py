@@ -82,6 +82,51 @@ def test_cuts_json_from_both_routes_matches_frame_for_frame(tmp_path):
     assert cuts["export.xml"]["cuts_frames"] == cuts["sequence.json"]["cuts_frames"]
 
 
+def test_a_job_prepared_before_the_upgrade_still_starts(tmp_path):
+    """A job folder from before `prepare` stored sequence.json holds only source.xml, state prepared.
+    It starts, and its cuts.json matches a job prepared today from the same sequence."""
+    tone = tmp_path / "tone.wav"
+    rate = 48000
+    audio = np.zeros(rate * 6, dtype=np.float32)
+    for second in (1, 4):
+        audio[rate * second:rate * (second + 1)] = 0.5 * np.sin(2 * np.pi * 440 * np.arange(rate) / rate)
+    sf.write(tone, audio, rate)
+    read = {"ticks_per_frame": str(TPF_30), "end_ticks": str(180 * TPF_30), "audio_tracks": [
+        {"enabled": True, "clips": [{"path": str(tone), "enabled": True, "start_ticks": "0",
+                                     "in_ticks": "0", "out_ticks": str(6 * PPRO_TICKS_PER_SECOND)}]}]}
+    context = {"project_id": "p", "sequence_id": "s", "sequence_name": "Seq", "audio_track": 0,
+               "audio_track_count": 1, "asr": False, "in_ticks": "0", "out_ticks": str(180 * TPF_30),
+               "end_ticks": str(180 * TPF_30), "ticks_per_frame": str(TPF_30)}
+    old_id = "a" * 32
+    old = tmp_path / "jobs" / old_id
+    old.mkdir(parents=True)
+    (old / "source.xml").write_text(_xml_export_of(read), encoding="utf-8")
+    (old / "job.json").write_text(json.dumps({
+        "job_id": old_id, "job_type": "cut", "state": "prepared", "context": context,
+        "source_path": str(old / "source.xml"), "result_name": "Seq", "log_path": str(old / "process.log"),
+        "output": "native"}), encoding="utf-8")
+
+    async def _finished(jobs, job_id):
+        for _ in range(600):
+            job = await jobs.dispatch({"type": "status", "job_id": job_id})
+            if job["state"] not in ("prepared", "running"):
+                return job
+            await asyncio.sleep(0.5)
+        raise AssertionError("the job did not finish")
+
+    async def _test():
+        jobs = XmlJobs(tmp_path / "jobs")  # a fresh helper: the old job is only on disk
+        started = await jobs.dispatch({"type": "start", "job_id": old_id})
+        assert started["state"] == "running", started
+        cuts_of_old = (await _finished(jobs, old_id))["cuts"]["cuts_frames"]
+        new = await jobs.dispatch({"type": "prepare", **context, "sequence": read})
+        await jobs.dispatch({"type": "start", "job_id": new["job_id"]})
+        assert cuts_of_old, "the silences between the tones should be cut"
+        assert cuts_of_old == (await _finished(jobs, new["job_id"]))["cuts"]["cuts_frames"]
+
+    asyncio.run(_test())
+
+
 def _xml_export_of(read: dict) -> str:
     """A minimal FCP7 export of a one-track panel read, as Premiere writes it (pproTicks, pathurl)."""
     from cutdeck.xml_export import _pathurl
