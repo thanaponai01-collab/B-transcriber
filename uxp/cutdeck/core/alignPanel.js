@@ -59,6 +59,20 @@
       el.setAttribute("placeholder", placeholder);
     }
     if (document.activeElement !== el && el.value !== value) el.value = value;
+    const wrap = el.parentElement;
+    if (wrap && typeof wrap.querySelector === "function") {
+      const valEl = wrap.querySelector(".val-text");
+      if (valEl) {
+        valEl.textContent = value || placeholder || "—";
+        if (valEl.classList && typeof valEl.classList.toggle === "function") {
+          valEl.classList.toggle("placeholder", !value && !!placeholder);
+          valEl.classList.toggle("disabled", disabled);
+        }
+      }
+      if (wrap.classList && typeof wrap.classList.toggle === "function") {
+        wrap.classList.toggle("disabled", disabled);
+      }
+    }
   }
   function renderInput(id, field, key, busy) {
     const el = $(id);
@@ -173,9 +187,131 @@
     const refresh = $("align-refresh");
     if (refresh) refresh.addEventListener("click", () => intents.onRefresh());
 
+    const scaleReset = $("align-scale-reset");
+    if (scaleReset) scaleReset.addEventListener("click", () => intents.onSetField("scale", "100"));
+    const rotReset = $("align-rotation-reset");
+    if (rotReset) rotReset.addEventListener("click", () => intents.onSetField("rotation", "0"));
+
     for (const [id] of INPUTS) {
       const input = $(id);
-      if (input) input.addEventListener("change", (e) => intents.onSetField(input.getAttribute("data-field"), e.target.value));
+      if (!input) continue;
+      const field = input.getAttribute("data-field");
+      input.addEventListener("change", (e) => intents.onSetField(field, e.target.value));
+
+      const wrap = input.parentElement;
+      const targetEl = wrap || input;
+      const valText = wrap && typeof wrap.querySelector === "function" ? wrap.querySelector(".val-text") : null;
+      const valUnit = wrap && typeof wrap.querySelector === "function" ? wrap.querySelector(".val-unit") : null;
+
+      function enterEditMode() {
+        if (input.disabled) return;
+        if (wrap && wrap.classList && typeof wrap.classList.add === "function") {
+          wrap.classList.add("active-editing");
+        }
+        setHidden(valText, true);
+        setHidden(valUnit, true);
+        setHidden(input, false);
+        if (typeof input.focus === "function") input.focus();
+        if (typeof input.select === "function") input.select();
+      }
+
+      function exitEditMode(commit) {
+        if (wrap && wrap.classList && typeof wrap.classList.contains === "function") {
+          if (!wrap.classList.contains("active-editing")) return;
+          wrap.classList.remove("active-editing");
+        }
+        setHidden(input, true);
+        setHidden(valText, false);
+        setHidden(valUnit, false);
+        if (valText) {
+          valText.textContent = input.value || (input.getAttribute && input.getAttribute("placeholder")) || "—";
+        }
+        if (commit) {
+          intents.onSetField(field, input.value);
+        }
+      }
+
+      // Scrubby slider: slide left/right on box to adjust value smoothly, or click to edit
+      if (typeof targetEl.addEventListener === "function") {
+        targetEl.addEventListener("pointerdown", (e) => {
+          if (input.disabled) return;
+          if (e.button !== undefined && e.button !== 0) return;
+          if (wrap && wrap.classList && typeof wrap.classList.contains === "function" && wrap.classList.contains("active-editing")) {
+            return;
+          }
+
+          if (typeof e.preventDefault === "function" && e.cancelable) e.preventDefault();
+          const startX = e.clientX;
+          const startVal = parseFloat(input.value) || 0;
+          let isDragging = false;
+
+          const onPointerMove = (me) => {
+            const dx = me.clientX - startX;
+            if (!isDragging && Math.abs(dx) >= 2) {
+              isDragging = true;
+              if (wrap && wrap.classList && typeof wrap.classList.add === "function") {
+                wrap.classList.add("active-scrub");
+              }
+              if (typeof document !== "undefined" && document.body) {
+                document.body.style.cursor = "ew-resize";
+              }
+            }
+            if (isDragging) {
+              const step = me.shiftKey ? 10 : (me.altKey || me.ctrlKey ? 0.1 : 1);
+              let nextVal = startVal + dx * step;
+              if (field === "scale") nextVal = Math.max(0, nextVal);
+              const formatted = formatNum(nextVal);
+              input.value = formatted;
+              if (valText) valText.textContent = formatted;
+            }
+          };
+
+          const onPointerUp = () => {
+            if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+              window.removeEventListener("pointermove", onPointerMove);
+              window.removeEventListener("pointerup", onPointerUp);
+            }
+            if (wrap && wrap.classList && typeof wrap.classList.remove === "function") {
+              wrap.classList.remove("active-scrub");
+            }
+            if (typeof document !== "undefined" && document.body) {
+              document.body.style.cursor = "";
+            }
+            if (isDragging) {
+              intents.onSetField(field, input.value);
+            } else {
+              enterEditMode();
+            }
+          };
+
+          if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+            window.addEventListener("pointermove", onPointerMove);
+            window.addEventListener("pointerup", onPointerUp);
+          }
+        });
+      }
+
+      if (typeof input.addEventListener === "function") {
+        input.addEventListener("blur", () => {
+          exitEditMode(true);
+        });
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            exitEditMode(true);
+          } else if (e.key === "Escape") {
+            input.value = formatNum(parseFloat(valText ? valText.textContent : input.value) || 0);
+            exitEditMode(false);
+          } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            if (typeof e.preventDefault === "function") e.preventDefault();
+            const step = e.shiftKey ? 10 : (e.altKey || e.ctrlKey ? 0.1 : 1);
+            const delta = e.key === "ArrowUp" ? step : -step;
+            let next = (parseFloat(input.value) || 0) + delta;
+            if (field === "scale") next = Math.max(0, next);
+            input.value = formatNum(next);
+            if (valText) valText.textContent = input.value;
+          }
+        });
+      }
     }
     const el = container();
     if (!el || typeof el.querySelectorAll !== "function") return;

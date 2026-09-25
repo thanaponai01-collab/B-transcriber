@@ -147,6 +147,8 @@ function makeStub() {
   el("align-status-icon");
   el("align-transform-clip");
   el("align-transform-fields");
+  el("align-scale-reset");
+  el("align-rotation-reset");
   for (const [id, field] of [["align-position-x", "position-x"], ["align-position-y", "position-y"],
     ["align-scale", "scale"], ["align-rotation", "rotation"], ["align-anchor-x", "anchor-x"], ["align-anchor-y", "anchor-y"]]) {
     el(id).setAttribute("data-field", field);
@@ -573,6 +575,17 @@ test("bind raises onSetField with the field name and typed text when an input ch
   alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField: (f, v) => raised.push([f, v]), onAnchor() {}, onAlign() {} });
   nodes.get("align-anchor-y").listeners.change.forEach((fn) => fn({ target: { value: "12.5" } }));
   assert.deepEqual(raised, [["anchor-y", "12.5"]]);
+  delete global.document;
+});
+
+test("clicking reset buttons raises onSetField with default values", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const raised = [];
+  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField: (f, v) => raised.push([f, v]), onAnchor() {}, onAlign() {} });
+  nodes.get("align-scale-reset").listeners.click.forEach((fn) => fn());
+  nodes.get("align-rotation-reset").listeners.click.forEach((fn) => fn());
+  assert.deepEqual(raised, [["scale", "100"], ["rotation", "0"]]);
   delete global.document;
 });
 

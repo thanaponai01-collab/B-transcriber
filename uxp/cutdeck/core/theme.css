@@ -884,98 +884,324 @@
     pointer-events: none;
   }
 
+  #view-transform {
+    padding: 10px 12px;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
   /* Transform & Align panel. Flexbox and margins only: UXP has no CSS Grid and no `gap`
      (reference/adobe/docs/uxp-api/reference-css/styles/). */
-  .transform-fields {
-    margin-top: 7px;
-    padding: 5px 8px;
+  .transform-clip-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     background: var(--bg-2);
     border: 1px solid var(--line-1);
     border-radius: 5px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+  }
+  .transform-clip-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    margin-right: 6px;
   }
   .transform-clip {
     flex: 1;
-    font-size: 10px;
-    color: var(--fg-2);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--fg-0);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 6px;
+    line-height: 1.2;
+  }
+
+  .transform-section {
+    margin-bottom: 8px;
+  }
+  .transform-fields {
+    padding: 2px 0;
+    background: transparent;
+    border: none;
+    box-sizing: border-box;
   }
   .transform-row {
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin: 2px 0;
+    margin: 4px 0;
+    height: 24px;
   }
-  .transform-field-icon {
-    display: flex;
-    color: var(--fg-3);
-  }
-  .transform-field-icon svg {
-    width: 13px;
-    height: 13px;
-    stroke: currentColor;
+  .transform-field-label {
+    width: 60px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--fg-2);
+    font-weight: 400;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
   }
   .transform-field-inputs {
     display: flex;
     flex-direction: row;
-    justify-content: flex-end;
+    align-items: center;
+    flex: 1;
+    margin-left: 6px;
   }
-  .transform-input {
-    width: 64px;
-    margin-left: 4px;
-    padding: 2px 5px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-1);
-    border-radius: 4px;
-    color: var(--fg-0);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 10.5px;
-    text-align: right;
+  .input-col {
+    flex: 1;
+    margin: 0 4px;
+    min-width: 0;
   }
-  .transform-tools {
+  .input-axis-wrap {
     display: flex;
     flex-direction: row;
-    align-items: flex-start;
-    margin-top: 8px;
+    align-items: center;
+    width: 100%;
+    height: 24px;
+    box-sizing: border-box;
+    background: var(--bg-0);
+    border: 1px solid var(--line-0);
+    border-radius: 4px;
+    padding: 0 8px;
+    cursor: ew-resize;
+    user-select: none;
+    transition: background 0.12s, border-color 0.12s;
   }
-  .transform-align { flex: 1; margin-left: 10px; }
-  .anchor-grid {
-    padding: 3px;
+  .input-axis-wrap:hover {
+    border-color: var(--line-1);
+    background: var(--bg-1);
+  }
+  .input-axis-wrap:hover .val-text {
+    color: var(--fg-white);
+  }
+  .input-axis-wrap.active-scrub {
+    border-color: var(--line-2);
+    background: var(--bg-1);
+  }
+  .input-axis-wrap.active-scrub .val-text {
+    color: var(--fg-white);
+  }
+  .input-axis-wrap.active-editing {
+    border-color: var(--line-2);
+    background: var(--bg-0);
+    cursor: text;
+  }
+  .input-axis-wrap.disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+  }
+  .val-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: var(--fg-0);
+    user-select: none;
+    cursor: ew-resize;
+    line-height: 22px;
+    white-space: nowrap;
+  }
+  .val-text.placeholder {
+    color: var(--fg-3);
+    font-style: italic;
+  }
+  .val-text.disabled {
+    color: var(--fg-3);
+    cursor: default;
+  }
+  .val-unit {
+    font-size: 10px;
+    color: var(--fg-2);
+    margin-left: 3px;
+    user-select: none;
+    cursor: ew-resize;
+    line-height: 22px;
+  }
+  .transform-input {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    margin: 0;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-width: 0 !important;
+    outline: none !important;
+    color: var(--fg-white);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    text-align: left;
+    line-height: 22px;
+  }
+  .transform-input:focus {
+    cursor: text;
+    background: transparent !important;
+  }
+  .transform-input::placeholder {
+    color: var(--fg-3);
+    font-style: italic;
+  }
+  .transform-input[hidden] {
+    display: none !important;
+  }
+  .val-text[hidden] {
+    display: none !important;
+  }
+  .val-unit[hidden] {
+    display: none !important;
+  }
+  .transform-reset-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 24px;
+    box-sizing: border-box;
+    background: var(--bg-0);
+    border: 1px solid var(--line-0);
+    border-radius: 4px;
+    color: var(--fg-2);
+    font-size: 10px;
+    font-weight: 400;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .transform-reset-btn:hover {
+    background: var(--bg-1);
+    color: var(--fg-white);
+    border-color: var(--line-1);
+  }
+  .transform-reset-btn:active {
+    background: var(--bg-2);
+  }
+
+  .transform-tools-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    margin-top: 4px;
+    margin-bottom: 8px;
+  }
+  .transform-tool-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     background: var(--bg-2);
     border: 1px solid var(--line-1);
     border-radius: 5px;
+    padding: 6px;
+  }
+  .tool-card-anchor {
+    align-items: center;
+  }
+  .tool-card-align {
+    flex: 1;
+    margin-left: 6px;
+  }
+  .anchor-grid {
+    display: flex;
+    flex-direction: column;
+    padding: 2px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-0);
+    border-radius: 4px;
   }
   .anchor-row {
     display: flex;
     flex-direction: row;
   }
   .anchor-cell {
-    width: 16px;
-    height: 16px;
-    margin: 2px;
+    width: 18px;
+    height: 18px;
+    margin: 1px;
     border: 1px solid var(--line-1);
     border-radius: 3px;
-    background: var(--bg-1);
+    background: var(--bg-2);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
   }
-  .anchor-cell:hover { border-color: var(--fg-2); }
+  .anchor-cell:hover {
+    border-color: var(--fg-2);
+    background: var(--bg-3);
+  }
+  .anchor-cell:hover .anchor-dot {
+    background: var(--fg-1);
+  }
+  .anchor-cell.active {
+    border-color: var(--fg-white);
+    background: var(--bg-4);
+  }
+  .anchor-cell.active .anchor-dot {
+    background: var(--fg-white);
+    width: 5px;
+    height: 5px;
+  }
+  .anchor-dot {
+    width: 3.5px;
+    height: 3.5px;
+    border-radius: 50%;
+    background: var(--fg-3);
+    pointer-events: none;
+    transition: background 0.12s, width 0.12s, height 0.12s;
+  }
+
+  .transform-align {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+  }
   .align-row {
     display: flex;
     flex-direction: row;
-    margin-bottom: 4px;
+    margin: 1px 0;
   }
   .align-btn {
     flex: 1;
-    margin-right: 4px;
-    padding: 5px 0;
-    background: var(--bg-2);
+    margin: 0 1px;
+    height: 28px;
+    background: var(--bg-1);
     border: 1px solid var(--line-1);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
-  .align-btn svg { width: 16px; height: 16px; }
-  .transform-status { height: auto; max-height: 160px; }
+  .align-btn:hover {
+    background: var(--bg-3);
+    border-color: var(--line-2);
+    color: var(--fg-white);
+  }
+  .align-btn:active {
+    background: var(--bg-4);
+  }
+  .align-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+  }
+
+  .transform-status {
+    height: auto;
+    max-height: 160px;
+    margin-top: 6px;
+  }
   #align-status {
     flex: 1;
     font-size: 10px;
