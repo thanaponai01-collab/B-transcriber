@@ -98,6 +98,44 @@ const driverRpc = createRpc({
 });
 driverRegistration = keepRegistered({ rpc: driverRpc, version: workflow.VERSION, commands: driver.commands });
 
+let sequenceActivatedListener = null;
+let tornDown = false;
+function teardown() {
+  if (tornDown) return;
+  tornDown = true;
+  try {
+    if (sequenceActivatedListener && ppro && ppro.EventManager && typeof ppro.EventManager.removeGlobalEventListener === "function") {
+      ppro.EventManager.removeGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, sequenceActivatedListener);
+      sequenceActivatedListener = null;
+    }
+  } catch (_) {}
+  try {
+    if (align && typeof align.stopPolling === "function") {
+      align.stopPolling();
+    }
+  } catch (_) {}
+  try {
+    if (driverRegistration && typeof driverRegistration.stop === "function") {
+      driverRegistration.stop();
+    }
+  } catch (_) {}
+  try {
+    if (driverRpc && typeof driverRpc.close === "function") {
+      driverRpc.close();
+    }
+  } catch (_) {}
+  try {
+    if (rpc && typeof rpc.close === "function") {
+      rpc.close();
+    }
+  } catch (_) {}
+  try {
+    if (quietRpc && typeof quietRpc.close === "function") {
+      quietRpc.close();
+    }
+  } catch (_) {}
+}
+
 // Main panel binding
 panel.bind({
   onRefresh: roughCut.onRefresh,
@@ -117,6 +155,7 @@ panel.bind({
   onCapturePreset: presets.onCapturePreset,
   onSettingChange: adjust.onSettingChange,
   onProbe: probes.onProbe,
+  onTeardown: teardown,
 });
 
 // Align panel binding
@@ -125,6 +164,8 @@ alignPanel.bind({
   onReset: align.onReset,
   onProbe: align.onProbe,
   onSetField: align.onSetField,
+  onSlideField: align.onSlideField,
+  onCommitField: align.onCommitField,
   onAnchor: align.onAnchor,
   onAlign: align.onAlign,
   onDistribute: align.onDistribute,
@@ -173,9 +214,10 @@ setTimeout(async () => {
   // The sequence card follows a sequence switch: global SequenceEvent.ACTIVATED fires on switch
   // (PREMIERE_FACTS.md, live 2026-09-24). In/Out changes fire nothing, so the refresh icon stays.
   try {
-    ppro.EventManager.addGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, () => {
+    sequenceActivatedListener = () => {
       roughCut.refresh().catch(() => { /* no sequence — the refresh icon retries */ });
-    });
+    };
+    ppro.EventManager.addGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, sequenceActivatedListener);
   } catch (error) {
     console.error("CutDeck: sequence switch listener failed; use the refresh icon", error);
   }

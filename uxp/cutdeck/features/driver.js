@@ -227,24 +227,34 @@ function createDriver({ ppro, ctl }) {
 
 /* Keeps the panel registered as the driver: registers on the driver's own connection, and
    again after any drop (a helper restart, or a helper started later), backing off 5 s → 30 s. */
-function keepRegistered({ rpc, version, commands, setTimer = setTimeout }) {
+function keepRegistered({ rpc, version, commands, setTimer = setTimeout, clearTimer = (typeof clearTimeout === "function" ? clearTimeout : null) }) {
   let delay = 5000;
   let timer = null;
+  let stopped = false;
   const later = () => {
-    if (timer) return;
+    if (stopped || timer) return;
     timer = setTimer(() => { timer = null; attempt(); }, delay);
     delay = Math.min(delay * 2, 30000);
   };
   async function attempt() {
+    if (stopped) return;
     try {
       await rpc({ type: "hello", version });
+      if (stopped) return;
       await rpc({ type: "register_driver", commands });
       delay = 5000;
     } catch (_) {
-      later();
+      if (!stopped) later();
     }
   }
-  return { start: attempt, onClose: later };
+  function stop() {
+    stopped = true;
+    if (timer) {
+      if (typeof clearTimer === "function") clearTimer(timer);
+      timer = null;
+    }
+  }
+  return { start: attempt, onClose: later, stop };
 }
 
 module.exports = { createDriver, keepRegistered, COMMANDS };

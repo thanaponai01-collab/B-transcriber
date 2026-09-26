@@ -495,11 +495,14 @@ test("no hide or destroy hook is registered", () => {
 
 function withFakeInterval(fn) {
   const orig = global.setInterval;
+  const origClear = global.clearInterval;
   const calls = [];
+  const cleared = [];
   global.setInterval = (cb, ms) => { calls.push(ms); return calls.length; };
+  global.clearInterval = (id) => { cleared.push(id); };
   let out;
-  try { out = fn(calls); } catch (e) { global.setInterval = orig; throw e; }
-  return Promise.resolve(out).finally(() => { global.setInterval = orig; });
+  try { out = fn(calls, cleared); } catch (e) { global.setInterval = orig; global.clearInterval = origClear; throw e; }
+  return Promise.resolve(out).finally(() => { global.setInterval = orig; global.clearInterval = origClear; });
 }
 
 test("Transform panel attaches selection to the active sequence and moves it on switch", async () => {
@@ -529,6 +532,34 @@ test("Transform panel attaches selection to the active sequence and moves it on 
     await new Promise((r) => setTimeout(r, 10));
     assert.deepEqual(removed, [["A", "s"]]);
     assert.deepEqual(attached, [["A", "s"], ["B", "s"]]);
+  });
+});
+
+
+test("stopPolling unregisters global and target listeners and clears interval", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  const seqA = { name: "A" };
+  const removedTarget = [];
+  const removedGlobals = [];
+  const ppro = {
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
+    EventManager: {
+      addGlobalEventListener: (name, h) => {},
+      addEventListener: (target, name) => {},
+      removeEventListener: (target, name) => removedTarget.push([target.name, name]),
+      removeGlobalEventListener: (name, h) => removedGlobals.push(name),
+    },
+    Project: { getActiveProject: async () => ({ getActiveSequence: async () => seqA }) },
+  };
+  await withFakeInterval(async (calls, cleared) => {
+    const f = createAlignFeature({ ppro, ctl: { state: {}, render() {} } });
+    f.startPolling();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(calls, [150]);
+    f.stopPolling();
+    assert.deepEqual(cleared, [1]);
+    assert.deepEqual(removedTarget, [["A", "s"]]);
+    assert.deepEqual(removedGlobals, ["a"]);
   });
 });
 
@@ -626,4 +657,70 @@ test("index.html's Phase 6 controls carry values the feature knows: two align ta
   for (const kind of kinds) {
     await assert.rejects(() => distribute({}, kind), (e) => !/Unknown distribution/.test(e.message));
   }
+});
+
+test("scrubby drag raises onSlideField with intermediate values and onCommitField on release", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const slideCalls = [];
+  const commitCalls = [];
+  const winListeners = {};
+  global.window = {
+    addEventListener: (type, fn) => { (winListeners[type] = winListeners[type] || []).push(fn); },
+    removeEventListener: (type, fn) => {
+      winListeners[type] = (winListeners[type] || []).filter((h) => h !== fn);
+    },
+  };
+
+  alignPanel.bind({
+    onProbe() {}, onRefresh() {}, onSetField() {},
+    onSlideField: (f, v) => slideCalls.push([f, v]),
+    onCommitField: (f, v) => commitCalls.push([f, v]),
+    onAnchor() {}, onAlign() {},
+  });
+
+  const scaleInput = nodes.get("align-scale");
+  scaleInput.value = "100";
+  // Pointerdown at x = 100
+  scaleInput.listeners.pointerdown[0]({ clientX: 100, button: 0, preventDefault() {} });
+
+  // Move by +10px (dx = 10, step = 1 -> nextVal = 110)
+  winListeners.pointermove[0]({ clientX: 110 });
+  assert.equal(scaleInput.value, "110");
+  assert.deepEqual(slideCalls, [["scale", "110"]]);
+
+  // Move by +20px (dx = 20 -> nextVal = 120)
+  winListeners.pointermove[0]({ clientX: 120 });
+  assert.equal(scaleInput.value, "120");
+  assert.deepEqual(slideCalls, [["scale", "110"], ["scale", "120"]]);
+
+  // Pointerup
+  winListeners.pointerup[0]();
+  assert.deepEqual(commitCalls, [["scale", "120"]]);
+
+  delete global.window;
+  delete global.document;
+});
+
+test("arrow keys raise onSlideField with stepped values", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const slideCalls = [];
+  alignPanel.bind({
+    onProbe() {}, onRefresh() {}, onSetField() {},
+    onSlideField: (f, v) => slideCalls.push([f, v]),
+    onAnchor() {}, onAlign() {},
+  });
+
+  const rotInput = nodes.get("align-rotation");
+  rotInput.value = "0";
+  rotInput.listeners.keydown[0]({ key: "ArrowUp", preventDefault() {} });
+  assert.equal(rotInput.value, "1");
+  assert.deepEqual(slideCalls, [["rotation", "1"]]);
+
+  rotInput.listeners.keydown[0]({ key: "ArrowDown", preventDefault() {} });
+  assert.equal(rotInput.value, "0");
+  assert.deepEqual(slideCalls, [["rotation", "1"], ["rotation", "0"]]);
+
+  delete global.document;
 });

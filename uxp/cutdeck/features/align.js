@@ -750,7 +750,7 @@ function subscribeSequenceEvents(ppro, handler) {
   const em = ppro && ppro.EventManager;
   const ev = ppro && ppro.Constants && ppro.Constants.SequenceEvent;
   if (!em || typeof em.addGlobalEventListener !== "function" || typeof em.addEventListener !== "function" || !ev) {
-    return false;
+    return null;
   }
   let attached = null;
   const attachToActive = async () => {
@@ -766,13 +766,22 @@ function subscribeSequenceEvents(ppro, handler) {
       console.error("CutDeck: could not attach selection listener", error);
     }
   };
+  const globalHandler = () => { attachToActive(); handler(); };
   try {
-    em.addGlobalEventListener(ev.ACTIVATED, () => { attachToActive(); handler(); });
+    em.addGlobalEventListener(ev.ACTIVATED, globalHandler);
     attachToActive();
-    return true;
+    return () => {
+      if (attached && typeof em.removeEventListener === "function") {
+        try { em.removeEventListener(attached, ev.SELECTION_CHANGED, handler); } catch (_) {}
+        attached = null;
+      }
+      if (typeof em.removeGlobalEventListener === "function") {
+        try { em.removeGlobalEventListener(ev.ACTIVATED, globalHandler); } catch (_) {}
+      }
+    };
   } catch (error) {
     console.error("CutDeck: sequence event subscribe failed, polling instead", error);
-    return false;
+    return null;
   }
 }
 
@@ -832,11 +841,40 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   }
 
   let started = false;
+  let unsubscribeEvents = null;
   function startAlignPolling() {
     if (started) return;
     started = true;
-    subscribeSequenceEvents(ppro, () => { pollAlignTransform(); });
+    unsubscribeEvents = subscribeSequenceEvents(ppro, () => { pollAlignTransform(); });
     alignPollTimer = setInterval(pollAlignTransform, FAST_POLL_MS);
+  }
+
+  function stopAlignPolling() {
+    started = false;
+    if (alignPollTimer !== null) {
+      clearInterval(alignPollTimer);
+      alignPollTimer = null;
+    }
+    if (typeof unsubscribeEvents === "function") {
+      unsubscribeEvents();
+      unsubscribeEvents = null;
+    }
+  }
+
+  function slideField(_field, _text) {
+    // Intermediate scrub updates stay in panel UI so dragging creates exactly one undo step in Premiere.
+  }
+
+  async function commitField(field, text) {
+    return ctl.act(async () => {
+      let result;
+      try {
+        result = await setField(ppro, field, text);
+      } finally {
+        await refreshAlignSequence();
+      }
+      ctl.setStatus(editSummary(`Set ${field}`, result), editLevel(result));
+    });
   }
 
   return {
@@ -853,6 +891,8 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       }
       ctl.setStatus(editSummary(`Set ${field}`, result), editLevel(result));
     }),
+    onSlideField: (field, text) => slideField(field, text),
+    onCommitField: (field, text) => commitField(field, text),
     onAnchor: (target) => ctl.act(async () => {
       const result = await setAnchor(ppro, target, measure);
       await refreshAlignSequence();
@@ -882,6 +922,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     refresh: refreshAlignSequence,
     poll: pollAlignTransform,
     startPolling: startAlignPolling,
+    stopPolling: stopAlignPolling,
     describeField,
     readAlignTransform: (seq) => readAlignTransform(seq, ppro),
     readAlignState: () => readAlignState(ppro),

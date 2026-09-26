@@ -146,3 +146,26 @@ test("keepRegistered registers, and registers again after a drop, backing off wh
   assert.deepEqual(sent.slice(-2), ["hello", "register_driver"]);
   assert.equal(timers.length, 0);
 });
+test("keepRegistered stop clears pending timers and halts further registration", async () => {
+  const sent = [];
+  const cleared = [];
+  const timers = [];
+  const rpc = async (req) => { sent.push(req.type); return { ok: true }; };
+  const reg = keepRegistered({
+    rpc,
+    version: "v",
+    commands: COMMANDS,
+    setTimer: (fn, ms) => {
+      const id = timers.length + 1;
+      timers.push({ id, fn, ms });
+      return id;
+    },
+    clearTimer: (id) => cleared.push(id),
+  });
+  reg.onClose();
+  assert.equal(timers.length, 1);
+  reg.stop();
+  assert.deepEqual(cleared, [1]);
+  reg.onClose();
+  assert.equal(timers.length, 1);
+});

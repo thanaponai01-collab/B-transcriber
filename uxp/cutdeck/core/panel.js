@@ -352,6 +352,9 @@
     if (reloadMenuItem) {
       reloadMenuItem.addEventListener("click", () => {
         if (overflowMenu) overflowMenu.classList.remove("open");
+        if (typeof intents.onTeardown === "function") {
+          try { intents.onTeardown(); } catch (_) {}
+        }
         window.location.reload();
       });
     }
@@ -535,6 +538,15 @@
     bindPresetFolder(intents);
     bindAdjustmentButtons(intents);
     bindProbes(intents);
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      const onWindowUnload = () => {
+        if (typeof intents.onTeardown === "function") {
+          try { intents.onTeardown(); } catch (_) {}
+        }
+      };
+      window.addEventListener("unload", onWindowUnload);
+      window.addEventListener("beforeunload", onWindowUnload);
+    }
   }
 
   const exportObj = { render, bind };

@@ -263,6 +263,9 @@
               const formatted = formatNum(nextVal);
               input.value = formatted;
               if (valText) valText.textContent = formatted;
+              if (typeof intents.onSlideField === "function") {
+                intents.onSlideField(field, formatted);
+              }
             }
           };
 
@@ -278,7 +281,11 @@
               document.body.style.cursor = "";
             }
             if (isDragging) {
-              intents.onSetField(field, input.value);
+              if (typeof intents.onCommitField === "function") {
+                intents.onCommitField(field, input.value);
+              } else {
+                intents.onSetField(field, input.value);
+              }
             } else {
               enterEditMode();
             }
@@ -309,6 +316,9 @@
             if (field === "scale") next = Math.max(0, next);
             input.value = formatNum(next);
             if (valText) valText.textContent = input.value;
+            if (typeof intents.onSlideField === "function") {
+              intents.onSlideField(field, input.value);
+            }
           }
         });
       }
