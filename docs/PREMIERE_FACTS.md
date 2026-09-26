@@ -139,6 +139,7 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | `VideoFilterFactory.createComponent()` result | CATCH | Declared as `{}`: no `getParam`. Insert, **commit**, then re-fetch the component from the chain to set params (two transactions). | transform-panel-plan Part 1 #4 |
 | Motion (fixed effect) in presets | CATCH | Skipped by presets; animate the **Transform** effect instead. | `uxp/cutdeck/README.md` |
 | Motion write via `createSetValueAction` (panel nine-point anchor, Position compensated) | WORKS | Takes on Motion (a fixed effect): Anchor and Position saved, one Ctrl+Z restores the exact original. All nine targets, on cropped 10/20/30/40 clips, scale {100 uniform, 50 × Width 80 non-uniform} × rotation {0, 90, 15}: saved anchor on the target, rendered picture moved 0.00 px by the panel's model (`Position + R(rot)·Scale·(p − Anchor)`, rotation clockwise, Uniform off: Scale = height, Scale Width = width). No jump in the Program Monitor (top-left, watched live). | `cutdeck.prproj_anchor_check`, `test_projects/t_*.prproj`, 2026-09-26 |
+| Motion write of typed Position X / Rotation / Scale (panel fields) | WORKS | Saved exactly as typed (700 px with Y untouched, 30°, 60%), one clip; three Ctrl+Z restore the original values. Effect Controls readout not reported. | `cutdeck.prproj_anchor_check`, `test_projects/p2_*.prproj`, 2026-09-26 |
 | clip geometry: align, distribute, rendered bounds | ABSENT | Not in the API at any version (grep); CutDeck does the geometry itself. | transform-panel-plan Part 1 |
 
 ## Markers, events
