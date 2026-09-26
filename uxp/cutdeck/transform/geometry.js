@@ -181,6 +181,36 @@ function distributeShifts(list, axis, mode) {
   return shifts;
 }
 
+// Distribute across the sequence frame along `axis` ("x" | "y"):
+// - "centers": centers are spaced evenly across the frame at (k + 1) * frameDim / (n + 1).
+// - "gaps": equal margin on outer edges and equal gaps between elements: gap = (frameDim - totalDim) / (n + 1).
+function distributeFrameShifts(list, frame, axis, mode) {
+  const [lo, hi] = axis === "x" ? ["left", "right"] : ["top", "bottom"];
+  const frameDim = axis === "x" ? frame.width : frame.height;
+  const centre = (b) => (b[lo] + b[hi]) / 2;
+  const order = list.map((_, i) => i).sort((a, b) => centre(list[a]) - centre(list[b]));
+  const shifts = list.map(() => 0);
+  const n = order.length;
+  if (n === 0) return shifts;
+
+  if (mode === "centers") {
+    const step = frameDim / (n + 1);
+    order.forEach((idx, k) => {
+      const targetCenter = (k + 1) * step;
+      shifts[idx] = zeroNear(targetCenter - centre(list[idx]));
+    });
+  } else {
+    const totalDim = order.reduce((sum, idx) => sum + (list[idx][hi] - list[idx][lo]), 0);
+    const gap = (frameDim - totalDim) / (n + 1);
+    let edge = gap;
+    order.forEach((idx) => {
+      shifts[idx] = zeroNear(edge - list[idx][lo]);
+      edge += (list[idx][hi] - list[idx][lo]) + gap;
+    });
+  }
+  return shifts;
+}
+
 module.exports = {
   pointXY,
   normalizedToFramePixels,
@@ -197,4 +227,5 @@ module.exports = {
   alignShiftTo,
   unionBounds,
   distributeShifts,
+  distributeFrameShifts,
 };

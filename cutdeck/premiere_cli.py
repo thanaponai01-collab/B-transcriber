@@ -32,7 +32,8 @@ async def run(args, backend: Backend):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Live Premiere commands through the CutDeck panel")
     parser.add_argument("command", choices=["status", *COMMANDS])
-    parser.add_argument("target", nargs="?", help="job_id for apply_cuts; a JSON file for add_markers")
+    parser.add_argument("target", nargs="?",
+                        help="job_id for apply_cuts; JSON file for add_markers; probe_name for run_probe")
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args(argv)
     cli_target = COMMANDS[args.command].cli_target if args.command != "status" else None

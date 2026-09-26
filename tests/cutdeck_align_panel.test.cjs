@@ -523,7 +523,7 @@ test("Transform panel attaches selection to the active sequence and moves it on 
     await new Promise((r) => setTimeout(r, 10));
     assert.deepEqual(Object.keys(globals), ["a"]); // no global SELECTION_CHANGED: it never fires live
     assert.deepEqual(attached, [["A", "s"]]);
-    assert.deepEqual(calls, [600]); // keeps heartbeat poll for timeline clicks where Premiere fires no event
+    assert.deepEqual(calls, [150]); // keeps heartbeat poll for timeline clicks where Premiere fires no event
     active = seqB;
     globals.a();
     await new Promise((r) => setTimeout(r, 10));
@@ -536,7 +536,7 @@ test("Transform panel falls back to the fast poll without EventManager", async (
   const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
   await withFakeInterval((calls) => {
     createAlignFeature({ ppro: {}, ctl: { state: {}, render() {} } }).startPolling();
-    assert.deepEqual(calls, [600]);
+    assert.deepEqual(calls, [150]);
   });
 });
 

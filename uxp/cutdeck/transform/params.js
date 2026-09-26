@@ -242,7 +242,7 @@ const GRAPHIC_GROUP_MATCH_NAME = "AE.ADBE Graphic Group";
 async function isGraphic(item) {
   const comps = await inspectComponents(item);
   if (!comps) return false;
-  return comps.some((c) => c.matchName === GRAPHIC_GROUP_MATCH_NAME);
+  return comps.some((c) => c.matchName === GRAPHIC_GROUP_MATCH_NAME || c.matchName === TEXT_MATCH_NAME);
 }
 
 // The frame Anchor Point is normalized to. For footage and stills: the source frame (above). A

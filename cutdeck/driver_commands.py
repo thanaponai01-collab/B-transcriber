@@ -68,6 +68,14 @@ def _marker_arguments(args: dict, jobs) -> dict:
     return {"markers": result}
 
 
+def _run_probe_arguments(args: dict, jobs) -> dict:
+    probe = args.get("probe")
+    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut"}
+    if not isinstance(probe, str) or probe not in valid:
+        raise ValueError(f"probe must be one of: {', '.join(sorted(valid))}")
+    return {"probe": probe}
+
+
 # apply_cuts edits a copy of a long sequence: 1735 cuts took minutes live (ledger 09-24).
 COMMANDS: dict[str, Command] = {
     "read_sequence": Command(60, _no_arguments, "Read the active sequence."),
@@ -77,4 +85,8 @@ COMMANDS: dict[str, Command] = {
     "add_markers": Command(120, _marker_arguments, "Add markers to the active sequence.",
                            ("JSON file", lambda target: {
                                "markers": json.loads(Path(target).read_text(encoding="utf-8"))})),
+    "run_probe": Command(300, _run_probe_arguments, "Run one diagnostic probe in live Premiere.",
+                         ("probe_name", lambda target: {"probe": target})),
+    "inspect_selection": Command(30, _no_arguments,
+                                 "Inspect the selected track item(s) on the active sequence in live Premiere."),
 }

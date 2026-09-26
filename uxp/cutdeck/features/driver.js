@@ -14,20 +14,66 @@ const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
 const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
+const { PROBES, runProbe } = require("./probes.js");
+const { getSelectedTrackItems, getTrackClipItems, trackItemName } = require("../host/trackItems.js");
+const {
+  readTransform,
+  readSourceFrameSize,
+  readSequenceFrameSize,
+  readSequencePixelAspect,
+  readGraphicLayers,
+  isGraphic,
+} = require("../transform/params.js");
 
-const COMMANDS = ["read_sequence", "apply_cuts", "add_markers"];
+const COMMANDS = ["read_sequence", "apply_cuts", "add_markers", "run_probe", "inspect_selection"];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
 
 function createDriver({ ppro, ctl }) {
   async function readSequence() {
-    const snap = await workflow.capture(ppro);
-    const c = snap.context;
-    return { name: c.sequence_name, sequence_id: c.sequence_id, project_id: c.project_id,
-      in_ticks: c.in_ticks, out_ticks: c.out_ticks, end_ticks: c.end_ticks,
-      in_seconds: snap.inSeconds, out_seconds: snap.outSeconds, end_seconds: seconds(c.end_ticks),
-      ticks_per_frame: c.ticks_per_frame, audio_track_count: c.audio_track_count,
-      video_track_count: await snap.sequence.getVideoTrackCount() };
+    const { project, sequence } = await activeProjectAndSequence(ppro, {
+      sequenceErrorMessage: "Open a sequence in Premiere first." });
+    let inTicks = null, outTicks = null, inSeconds = null, outSeconds = null;
+    try {
+      const inPt = await sequence.getInPoint();
+      if (inPt && Number.isFinite(inPt.seconds) && inPt.seconds >= 0) {
+        inTicks = inPt.ticks ? String(inPt.ticks) : String(inPt);
+        inSeconds = inPt.seconds;
+      }
+    } catch (_) {}
+    try {
+      const outPt = await sequence.getOutPoint();
+      if (outPt && Number.isFinite(outPt.seconds) && outPt.seconds >= 0) {
+        outTicks = outPt.ticks ? String(outPt.ticks) : String(outPt);
+        outSeconds = outPt.seconds;
+      }
+    } catch (_) {}
+    const endPt = await sequence.getEndTime();
+    const endTicks = endPt ? String(endPt.ticks ? endPt.ticks : endPt) : "0";
+    const tpf = await sequence.getTimebase();
+    const aCount = await sequence.getAudioTrackCount();
+    const vCount = await sequence.getVideoTrackCount();
+    let allSeqs = [];
+    try {
+      const seqs = await project.getSequences();
+      allSeqs = seqs.map((s) => s.name);
+    } catch (_) {}
+
+    return {
+      name: sequence.name,
+      sequence_id: sequence.guid.toString(),
+      project_id: project.guid.toString(),
+      in_ticks: inTicks,
+      out_ticks: outTicks,
+      end_ticks: endTicks,
+      in_seconds: inSeconds,
+      out_seconds: outSeconds,
+      end_seconds: seconds(endTicks),
+      ticks_per_frame: tpf,
+      audio_track_count: aCount,
+      video_track_count: vCount,
+      all_sequences: allSeqs,
+    };
   }
 
   /* A panel job names the sequence it analysed. A job from an XML file (MCP) doesn't, so its
@@ -70,7 +116,91 @@ function createDriver({ ppro, ctl }) {
     return { added: markers.length, undo_steps: 1 };
   }
 
-  const handlers = { read_sequence: readSequence, apply_cuts: applyCuts, add_markers: addMarkers };
+  async function runProbeCmd({ probe }) {
+    const entry = PROBES.find((p) => p.id === probe && !p.special);
+    if (!entry) throw new Error(`Unknown probe: ${probe}`);
+    const rawReport = await runProbe(entry, ppro, ctl);
+    const report = JSON.parse(JSON.stringify(rawReport, (k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    return { probe, report };
+  }
+
+  async function inspectSelection() {
+    const { sequence } = await activeProjectAndSequence(ppro, {
+      sequenceErrorMessage: "Open a sequence in Premiere first." });
+    let selectedItems = await getSelectedTrackItems(sequence, ppro);
+    if (!selectedItems || selectedItems.length === 0) {
+      selectedItems = [];
+      const vCount = typeof sequence.getVideoTrackCount === "function" ? await sequence.getVideoTrackCount() : 0;
+      for (let v = 0; v < vCount; v++) {
+        const trk = typeof sequence.getVideoTrack === "function" ? await sequence.getVideoTrack(v) : null;
+        const trkItems = trk ? await getTrackClipItems(trk, ppro) : [];
+        for (const it of trkItems) {
+          selectedItems.push(it);
+        }
+      }
+    }
+    const seqFrame = await readSequenceFrameSize(sequence);
+    const seqPixelAspect = await readSequencePixelAspect(sequence);
+
+    const items = [];
+    for (const item of selectedItems) {
+      const name = await trackItemName(item, "unnamed");
+      const transform = await readTransform(item);
+      const sourceSize = await readSourceFrameSize(ppro, item);
+      const graphic = isGraphic(item) ? await readGraphicLayers(item) : null;
+      let startTicks = null;
+      let endTicks = null;
+      let inTicks = null;
+      let outTicks = null;
+      try {
+        const s = await item.getStartTime();
+        startTicks = s ? String(s.ticks !== undefined ? s.ticks : s) : null;
+      } catch (_) {}
+      try {
+        const e = await item.getEndTime();
+        endTicks = e ? String(e.ticks !== undefined ? e.ticks : e) : null;
+      } catch (_) {}
+      try {
+        const i = await item.getInPoint();
+        inTicks = i ? String(i.ticks !== undefined ? i.ticks : i) : null;
+      } catch (_) {}
+      try {
+        const o = await item.getOutPoint();
+        outTicks = o ? String(o.ticks !== undefined ? o.ticks : o) : null;
+      } catch (_) {}
+
+      items.push({
+        name,
+        start_ticks: startTicks,
+        end_ticks: endTicks,
+        in_ticks: inTicks,
+        out_ticks: outTicks,
+        start_s: startTicks ? seconds(startTicks) : null,
+        end_s: endTicks ? seconds(endTicks) : null,
+        in_s: inTicks ? seconds(inTicks) : null,
+        out_s: outTicks ? seconds(outTicks) : null,
+        transform,
+        source_size: sourceSize,
+        graphic,
+      });
+    }
+
+    return {
+      sequence_name: sequence.name,
+      sequence_frame: seqFrame,
+      sequence_pixel_aspect: seqPixelAspect,
+      selected_count: items.length,
+      items,
+    };
+  }
+
+  const handlers = {
+    read_sequence: readSequence,
+    apply_cuts: applyCuts,
+    add_markers: addMarkers,
+    run_probe: runProbeCmd,
+    inspect_selection: inspectSelection,
+  };
 
   /* One call from the helper. Refused while the panel is busy, never queued behind the user. */
   async function handle(call) {

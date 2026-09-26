@@ -342,7 +342,7 @@
       node.addEventListener("click", () => intents.onAlign(node.getAttribute("data-align"), alignTo));
     });
     el.querySelectorAll("[data-distribute]").forEach((node) => {
-      node.addEventListener("click", () => intents.onDistribute(node.getAttribute("data-distribute")));
+      node.addEventListener("click", () => intents.onDistribute(node.getAttribute("data-distribute"), alignTo));
     });
   }
 

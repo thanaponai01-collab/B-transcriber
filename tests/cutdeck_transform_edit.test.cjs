@@ -139,7 +139,7 @@ function motionClip(name, o = {}) {
     return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6] };
   });
   const extra = o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : [];
-  const chain = o.graphic ? [motion, vm, ...texts, ...extra] : [motion];
+  const chain = o.graphic ? (o.noVectorMotion ? [motion, ...texts, ...extra] : [motion, vm, ...texts, ...extra]) : [motion];
   return {
     name,
     params,
@@ -667,6 +667,41 @@ test("distributeShifts gaps: equal space between neighbours whatever their width
   close(moved[0].l, 0, "first stays"); close(moved[2].r, 700, "last stays");
 });
 
+test("distributeFrameShifts centers: spaces element centers evenly across the sequence frame", () => {
+  const frame = { width: 1920, height: 1080 };
+  const boxes = [
+    { left: 100, right: 300, top: 0, bottom: 10 }, // center 200
+    { left: 800, right: 1000, top: 0, bottom: 10 }, // center 900
+  ];
+  // n = 2: targets are 1920 / 3 = 640 and 2 * 1920 / 3 = 1280.
+  const s = geometry.distributeFrameShifts(boxes, frame, "x", "centers");
+  close(200 + s[0], 640, "box 0 center");
+  close(900 + s[1], 1280, "box 1 center");
+});
+
+test("distributeFrameShifts gaps: equal margins on screen edges and equal gaps between elements", () => {
+  const frame = { width: 1920, height: 1080 };
+  // 3 boxes with widths 200, 200, 200: total width = 600.
+  // Remaining space = 1920 - 600 = 1320.
+  // (n + 1) = 4 spaces (left margin, 2 middle gaps, right margin) -> each space = 1320 / 4 = 330.
+  const boxes = [
+    { left: 50, right: 250, top: 0, bottom: 10 },
+    { left: 700, right: 900, top: 0, bottom: 10 },
+    { left: 1400, right: 1600, top: 0, bottom: 10 },
+  ];
+  const s = geometry.distributeFrameShifts(boxes, frame, "x", "gaps");
+  const moved = boxes.map((b, i) => ({ left: b.left + s[i], right: b.right + s[i] }));
+  const marginL = moved[0].left - 0;
+  const gap1 = moved[1].left - moved[0].right;
+  const gap2 = moved[2].left - moved[1].right;
+  const marginR = 1920 - moved[2].right;
+
+  close(marginL, 330, "left margin");
+  close(gap1, 330, "middle gap 1");
+  close(gap2, 330, "middle gap 2");
+  close(marginR, 330, "right margin");
+});
+
 test("alignToSelection left lines every clip's left edge up on the leftmost clip", async () => {
   const a = motionClip("A", at(400));
   const b = motionClip("B", at(1000, 0.3, 30));
@@ -714,4 +749,204 @@ test("distribute needs three usable clips: two, or three with one keyframed, is 
   const two = host([a, b, animated]);
   await assert.rejects(() => distribute(two.ppro, "h-gaps"), /at least 3.*Z.*keyframed/);
   assert.deepEqual([one.undoSteps, two.undoSteps], [[], []]);
+});
+
+test("distribute with to='frame' spaces 2 clips across sequence frame with equal margins and gaps", async () => {
+  // 2 clips of width 640 (scale 50% of 1280): widths are 640, 640. Total = 1280.
+  // In 1920 frame: remaining space = 1920 - 1280 = 640.
+  // 3 spaces -> each space is 640 / 3 = 213.333333 px.
+  const a = motionClip("A", at(200));
+  const b = motionClip("B", at(1200));
+  const { ppro, undoSteps } = host([a, b]);
+  const result = await distribute(ppro, "h-gaps", null, "frame");
+  assert.equal(result.done, 2);
+  const [bA, bB] = [box(a), box(b)];
+  const marginL = bA.left;
+  const middleGap = bB.left - bA.right;
+  const marginR = 1920 - bB.right;
+  close(marginL, 640 / 3, "left margin");
+  close(middleGap, 640 / 3, "middle gap");
+  close(marginR, 640 / 3, "right margin");
+  assert.deepEqual(undoSteps, ["CutDeck: Distribute h-gaps across frame"]);
+});
+
+test("distribute with to='frame' needs at least 2 usable clips; 1 is refused", async () => {
+  const a = motionClip("A", at(300));
+  const one = host([a]);
+  await assert.rejects(() => distribute(one.ppro, "h-centers", null, "frame"), /at least 2/);
+  assert.deepEqual(one.undoSteps, []);
+});
+
+test("distribute with to='frame' on single Graphic with 2 text layers distributes across frame", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.2, 0.5], [0.8, 0.5]], // 384, 1536
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro, undoSteps } = host([g]);
+
+  const result = await distribute(ppro, "h-centers", null, "frame");
+  assert.equal(result.done, 1);
+  // 2 layers: target centers at 1920 / 3 = 640 and 2 * 1920 / 3 = 1280
+  close(g.texts[0].value[0] * 1920, 640, "Layer 0 center at 640");
+  close(g.texts[1].value[0] * 1920, 1280, "Layer 1 center at 1280");
+  assert.deepEqual(undoSteps, ["CutDeck: Distribute h-centers across frame text layers"]);
+});
+
+test("setField on a multi-text Graphic preserves relative positions between text layers", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.1, 0.5], [0.3, 0.5]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro } = host([g]);
+
+  const res = await setField(ppro, "position-x", "200");
+  assert.equal(res.done, 1);
+
+  close(g.texts[0].value[0] * 1920, 200, "Layer 0 moved to 200");
+  close(g.texts[1].value[0] * 1920, 584, "Layer 1 moved by same delta (+8px) preserving spacing");
+});
+
+test("setAnchor on a multi-text Graphic falls back to Motion anchor and does not collapse text positions", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.1, 0.2], [0.5, 0.8]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro } = host([g]);
+
+  const TEXT_BOX = { left: 100, top: 200, right: 900, bottom: 800 };
+  const measure = async () => TEXT_BOX;
+
+  await setAnchor(ppro, "top-left", measure);
+
+  close(g.texts[0].value[0], 0.1, "Text 0 position preserved");
+  close(g.texts[1].value[0], 0.5, "Text 1 position preserved");
+  close(g.params[5].value[0] * 1920, 100, "Motion anchor X matches top-left");
+  close(g.params[5].value[1] * 1080, 200, "Motion anchor Y matches top-left");
+});
+
+test("isGraphic returns true for a clip with AE.ADBE Text even without AE.ADBE Graphic Group", async () => {
+  const { isGraphic } = require("../uxp/cutdeck/transform/params.js");
+  const textOnlyClip = {
+    getComponentChain: async () => ({
+      getComponentCount: () => 2,
+      getComponentAtIndex: (i) => ({
+        getMatchName: () => (i === 0 ? "AE.ADBE Motion" : "AE.ADBE Text"),
+      }),
+    }),
+  };
+  assert.equal(await isGraphic(textOnlyClip), true);
+});
+
+test("alignToFrame on multi-text Graphic shifts bounds cache once, not multiplied by layer count", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.2, 0.5], [0.6, 0.5]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro } = host([g]);
+
+  let measureCount = 0;
+  const TEXT_BOX = { left: 200, top: 400, right: 600, bottom: 500 };
+  const measure = async () => {
+    measureCount++;
+    return TEXT_BOX;
+  };
+
+  await alignToFrame(ppro, "left", measure);
+  assert.equal(measureCount, 1);
+
+  await alignToFrame(ppro, "right", measure);
+  assert.equal(measureCount, 1, "did not re-measure on second align");
+
+  close(g.texts[0].value[0] * 1920, 0.2 * 1920 + 1320, "Text 0 at right");
+  close(g.texts[1].value[0] * 1920, 0.6 * 1920 + 1320, "Text 1 at right");
+});
+
+test("setField on multi-text Graphic scales proportionally and rotates with relative delta", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.2, 0.5], [0.6, 0.5]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  // Initially Text 0 is 100%, Text 1 is set to 80% scale, 15° rotation
+  g.textScales[1].value = 80;
+  g.textRotations[1].value = 15;
+  const { ppro } = host([g]);
+
+  // Scale: 100 -> 150 (ratio = 1.5). Text 0 becomes 150, Text 1 becomes 80 * 1.5 = 120
+  await setField(ppro, "scale", "150");
+  assert.equal(g.textScales[0].value, 150, "Text 0 scale is 150");
+  assert.equal(g.textScales[1].value, 120, "Text 1 scale proportionally scaled to 120");
+
+  // Rotation: 0 -> 10 (delta = +10°). Text 0 becomes 10, Text 1 becomes 15 + 10 = 25
+  await setField(ppro, "rotation", "10");
+  assert.equal(g.textRotations[0].value, 10, "Text 0 rotation is 10");
+  assert.equal(g.textRotations[1].value, 25, "Text 1 rotation relatively shifted to 25");
+});
+
+test("alignToSelection on a single Graphic with multiple text layers aligns text layers inside the graphic", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.2, 0.3], [0.5, 0.6]], // Layer 0: x=384, y=324; Layer 1: x=960, y=648
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro, undoSteps } = host([g]);
+
+  // Align left: should align Layer 1's X to Layer 0's X (384 px = 0.2)
+  const result = await alignToSelection(ppro, "left");
+  assert.equal(result.done, 1);
+  close(g.texts[0].value[0] * 1920, 384, "Layer 0 stays at 384");
+  close(g.texts[1].value[0] * 1920, 384, "Layer 1 moved left to 384");
+  assert.deepEqual(undoSteps, ["CutDeck: Align left text layers"]);
+
+  // Align vcenter: should center their Y positions
+  await alignToSelection(ppro, "vcenter");
+  const expectedCenterY = (324 + 648) / 2; // 486
+  close(g.texts[0].value[1] * 1080, expectedCenterY, "Layer 0 Y centered");
+  close(g.texts[1].value[1] * 1080, expectedCenterY, "Layer 1 Y centered");
+});
+
+test("distribute on a single Graphic with 3 text layers evenly distributes their positions", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    texts: [[0.1, 0.2], [0.3, 0.3], [0.9, 0.8]], // x = 192, 576, 1728
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro, undoSteps } = host([g]);
+
+  const result = await distribute(ppro, "h-centers");
+  assert.equal(result.done, 1);
+  // Outer text layers stay at 192 and 1728; middle text layer moves to (192 + 1728)/2 = 960
+  close(g.texts[0].value[0] * 1920, 192, "First layer stays at 192");
+  close(g.texts[2].value[0] * 1920, 1728, "Last layer stays at 1728");
+  close(g.texts[1].value[0] * 1920, 960, "Middle layer evenly spaced at 960");
+  assert.deepEqual(undoSteps, ["CutDeck: Distribute h-centers text layers"]);
+});
+
+test("alignToFrame and setAnchor work on a Graphic clip without Vector Motion", async () => {
+  const g = motionClip("Graphic", {
+    graphic: true,
+    noVectorMotion: true,
+    texts: [[0.5, 0.5]],
+  });
+  const { ppro } = host([g]);
+
+  const TEXT_BOX = { left: 400, top: 300, right: 800, bottom: 500 };
+  const measure = async () => TEXT_BOX;
+
+  // Align left on text clip with no Vector Motion shifts the text layer directly
+  await alignToFrame(ppro, "left", measure);
+  close(g.texts[0].value[0] * 1920, 0.5 * 1920 - 400, "Text layer shifted left without VM");
+  assert.deepEqual(g.params[0].value, [0.5, 0.5], "Motion Position untouched");
+
+  // Set anchor on text clip with no Vector Motion updates text anchor and position
+  await setAnchor(ppro, "center", measure);
+  assert.deepEqual(g.params[5].value, [0.5, 0.5], "Motion anchor untouched");
+  close(pt(g.texts[0]).x, 200, "Text position updated to center of shifted box (200)");
+  close(pt(g.texts[0]).y, 400, "Text position updated to center (400)");
+  close(pt(g.textAnchors[0]).x, -360, "Text anchor updated to -360");
+  close(pt(g.textAnchors[0]).y, -140, "Text anchor updated to -140");
 });

@@ -35,7 +35,35 @@ function host({ endFrames = 900 } = {}) {
 const controller = () => createController({ render: () => {} });
 
 test("the driver offers exactly the helper's fixed commands", () => {
-  assert.deepEqual(COMMANDS, ["read_sequence", "apply_cuts", "add_markers"]);
+  assert.deepEqual(COMMANDS, ["read_sequence", "apply_cuts", "add_markers", "run_probe", "inspect_selection"]);
+});
+
+test("run_probe runs timing probe against fake host", async () => {
+  const h = host();
+  const ctl = controller();
+  const out = await createDriver({ ppro: h.ppro, ctl }).handle({ command: "run_probe", args: { probe: "timing" } });
+  assert.equal(out.probe, "timing");
+  assert.ok(out.report);
+  assert.equal(ctl.state.busy, false);
+});
+
+test("run_probe rejects unknown probe name", async () => {
+  const h = host();
+  const ctl = controller();
+  await assert.rejects(
+    createDriver({ ppro: h.ppro, ctl }).handle({ command: "run_probe", args: { probe: "nonexistent" } }),
+    /Unknown probe/
+  );
+});
+
+test("inspect_selection inspects selection on active sequence", async () => {
+  const h = host();
+  const ctl = controller();
+  const out = await createDriver({ ppro: h.ppro, ctl }).handle({ command: "inspect_selection" });
+  assert.equal(out.sequence_name, "Interview");
+  assert.equal(out.selected_count, 0);
+  assert.deepEqual(out.items, []);
+  assert.equal(ctl.state.busy, false);
 });
 
 test("read_sequence reports the active sequence", async () => {

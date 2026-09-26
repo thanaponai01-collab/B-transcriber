@@ -220,18 +220,22 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       const boundsShift = planned.boundsShift || null;
       delete planned.boundsShift;
       if (planned.layerWrites) {
+        let firstPos = null;
         for (const w of planned.layerWrites) {
           paramWrites.push(Object.assign({ name: clip.name }, w));
-          if (w.field === "text Position" && w.value) {
-            clipBoundsUpdates.push({ item: clip.item, dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0, key: clip.key, newPos: w.value });
+          if (!firstPos && w.field === "text Position" && w.value) {
+            firstPos = w.value;
           }
         }
+        clipBoundsUpdates.push({ item: clip.item, dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0, key: clip.key, newPos: firstPos });
         done += 1;
       } else {
         writes.push({ item: clip.item, name: clip.name, values: planned });
         done += 1;
         if (boundsShift) {
-          clipBoundsUpdates.push({ item: clip.item, dx: boundsShift.dx, dy: boundsShift.dy, key: clip.key, newPos: planned.position || null });
+          const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
+          const newPos = isTextGraphic ? null : (planned.position || null);
+          clipBoundsUpdates.push({ item: clip.item, dx: boundsShift.dx, dy: boundsShift.dy, key: clip.key, newPos });
         }
       }
     }
@@ -324,13 +328,20 @@ function textLayerShift(layers, model, source, delta) {
   };
   if (!layers) return why("layers unreadable");
   if (!layers.onlyText) return why("not text-only");
-  if (!layers.vectorMotion) return why("no Vector Motion");
   const vm = layers.vectorMotion;
-  const scale = staticValue(vm.scale);
-  const uniform = staticValue(vm.uniformScale);
-  const scaleWidth = uniform === false ? staticValue(vm.scaleWidth) : scale;
-  const rotation = staticValue(vm.rotation);
-  if (![scale, scaleWidth, rotation].every((v) => typeof v === "number") || !scale || !scaleWidth) return why("Vector Motion values");
+  let scale = 100;
+  let scaleWidth = 100;
+  let rotation = 0;
+  if (vm) {
+    const s = staticValue(vm.scale);
+    const uniform = staticValue(vm.uniformScale);
+    const sw = uniform === false ? staticValue(vm.scaleWidth) : s;
+    const r = staticValue(vm.rotation);
+    if (![s, sw, r].every((v) => typeof v === "number") || !s || !sw) return why("Vector Motion values");
+    scale = s;
+    scaleWidth = sw;
+    rotation = r;
+  }
   const origin = { x: 0, y: 0 };
   const onCanvas = transformGeometry.sequenceToSource(delta, {
     position: origin, anchor: origin, scaleX: model.scaleX, scaleY: model.scaleY, rotation: model.rotation,
@@ -374,11 +385,14 @@ function layerModel(position, anchorPoint, scaleEntry, widthEntry, uniformEntry,
 // through Motion, then Vector Motion, then the text layer's own transform. Null when that
 // can't be done exactly, so the caller moves the Graphic's Motion anchor instead.
 function textLayerAnchor(layers, model, source, onScreen) {
-  if (!layers || !layers.onlyText || !layers.vectorMotion) return null;
+  if (!layers || !layers.onlyText || !layers.texts || layers.texts.length !== 1) return null;
   const vm = layers.vectorMotion;
-  const vmModel = layerModel(vm.position, vm.anchorPoint, vm.scale, vm.scaleWidth, vm.uniformScale, vm.rotation, source);
-  if (!vmModel) return null;
-  const inGroup = transformGeometry.sequenceToSource(transformGeometry.sequenceToSource(onScreen, model), vmModel);
+  let inGroup = transformGeometry.sequenceToSource(onScreen, model);
+  if (vm) {
+    const vmModel = layerModel(vm.position, vm.anchorPoint, vm.scale, vm.scaleWidth, vm.uniformScale, vm.rotation, source);
+    if (!vmModel) return null;
+    inGroup = transformGeometry.sequenceToSource(inGroup, vmModel);
+  }
   const writes = [];
   for (const t of layers.texts) {
     const textModel = layerModel(t.position, t.anchorPoint, t.scale, t.horizontalScale, t.uniformScale, t.rotation, source);
@@ -420,9 +434,61 @@ async function alignToFrame(ppro, edge, measure = null) {
   }, measure);
 }
 
+async function alignTextLayersInGraphic(ppro, project, seq, clip, layers, edge) {
+  const seqFrame = await transformParams.readSequenceFrameSize(seq);
+  if (!seqFrame) throw new Error("Could not read the sequence frame size.");
+
+  const paramWrites = [];
+  const coords = [];
+  for (const t of layers.texts) {
+    const p = transformGeometry.pointXY(staticValue(t.position));
+    if (!p || !t.param) throw new Error(`"${clip.name}": text layer position is unreadable or keyframed.`);
+    coords.push({ t, px: { x: p.x * seqFrame.width, y: p.y * seqFrame.height } });
+  }
+
+  const xs = coords.map((c) => c.px.x);
+  const ys = coords.map((c) => c.px.y);
+  let targetVal = null;
+  const isX = ["left", "hcenter", "right"].includes(edge);
+
+  if (edge === "left") targetVal = Math.min(...xs);
+  else if (edge === "hcenter") targetVal = (Math.min(...xs) + Math.max(...xs)) / 2;
+  else if (edge === "right") targetVal = Math.max(...xs);
+  else if (edge === "top") targetVal = Math.min(...ys);
+  else if (edge === "vcenter") targetVal = (Math.min(...ys) + Math.max(...ys)) / 2;
+  else if (edge === "bottom") targetVal = Math.max(...ys);
+
+  for (let i = 0; i < coords.length; i++) {
+    const { t, px } = coords[i];
+    const newPx = {
+      x: isX ? targetVal : px.x,
+      y: !isX ? targetVal : px.y,
+    };
+    const norm = transformGeometry.framePixelsToNormalized(newPx, seqFrame.width, seqFrame.height);
+    paramWrites.push({
+      name: clip.name,
+      param: t.param,
+      field: "text Position",
+      value: norm,
+    });
+  }
+
+  await transformApply.applyMotionValues(ppro, project, `CutDeck: Align ${edge} text layers`, [], paramWrites, []);
+  frameBounds.invalidateBounds(clip.item, clip.key);
+  return { done: 1, skipped: [] };
+}
+
 // Phase 6: every selected clip to the outer box of all their drawn bounds.
 async function alignToSelection(ppro, edge, measure = null) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
+  const { project, sequence: seq } = await activeProjectAndSequence(ppro);
+  const clips = await readSelectedMotionClips(seq, ppro);
+  if (clips.length === 1 && (await transformParams.isGraphic(clips[0].item))) {
+    const layers = await transformParams.readGraphicLayers(clips[0].item);
+    if (layers && layers.texts && layers.texts.length >= 2) {
+      return alignTextLayersInGraphic(ppro, project, seq, clips[0], layers, edge);
+    }
+  }
   const group = (models, _frame, skipped) => {
     if (models.length < 2) throw new Error(`Select at least 2 clips to align to the selection.${skippedNote(skipped)}`);
     return transformGeometry.unionBounds(models.map(clipBounds));
@@ -440,15 +506,81 @@ const DISTRIBUTE = {
   "h-gaps": ["x", "gaps"], "v-gaps": ["y", "gaps"],
 };
 
-// Phase 6: the outer two clips stay, the others move between them (equal centres or equal gaps).
-async function distribute(ppro, kind, measure = null) {
+async function distributeTextLayersInGraphic(ppro, project, seq, clip, layers, kind, spec, to = "frame") {
+  const seqFrame = await transformParams.readSequenceFrameSize(seq);
+  if (!seqFrame) throw new Error("Could not read the sequence frame size.");
+
+  const paramWrites = [];
+  const coords = [];
+  for (const t of layers.texts) {
+    const p = transformGeometry.pointXY(staticValue(t.position));
+    if (!p || !t.param) throw new Error(`"${clip.name}": text layer position is unreadable or keyframed.`);
+    coords.push({ t, px: { x: p.x * seqFrame.width, y: p.y * seqFrame.height } });
+  }
+
+  const axis = spec[0]; // "x" or "y"
+  const order = coords.map((_, i) => i).sort((a, b) => coords[a].px[axis] - coords[b].px[axis]);
+  const n = order.length;
+  const isFrame = to === "frame";
+  const frameDim = axis === "x" ? seqFrame.width : seqFrame.height;
+
+  for (let k = 0; k < n; k++) {
+    const idx = order[k];
+    const { t, px } = coords[idx];
+    let targetPos;
+    if (isFrame) {
+      const step = frameDim / (n + 1);
+      targetPos = (k + 1) * step;
+    } else {
+      const firstVal = coords[order[0]].px[axis];
+      const lastVal = coords[order[n - 1]].px[axis];
+      const step = (lastVal - firstVal) / (n - 1);
+      targetPos = firstVal + k * step;
+    }
+    const newPx = {
+      x: axis === "x" ? targetPos : px.x,
+      y: axis === "y" ? targetPos : px.y,
+    };
+    const norm = transformGeometry.framePixelsToNormalized(newPx, seqFrame.width, seqFrame.height);
+    paramWrites.push({
+      name: clip.name,
+      param: t.param,
+      field: "text Position",
+      value: norm,
+    });
+  }
+
+  await transformApply.applyMotionValues(ppro, project, `CutDeck: Distribute ${kind}${isFrame ? " across frame" : ""} text layers`, [], paramWrites, []);
+  frameBounds.invalidateBounds(clip.item, clip.key);
+  return { done: 1, skipped: [] };
+}
+
+// Phase 6: distribute across the frame (equal margins on screen) or between outer selection.
+async function distribute(ppro, kind, measure = null, to = "selection") {
   const spec = DISTRIBUTE[kind];
   if (!spec) throw new Error(`Unknown distribution "${kind}".`);
-  const group = (models, _frame, skipped) => {
-    if (models.length < 3) throw new Error(`Select at least 3 clips to distribute.${skippedNote(skipped)}`);
-    return transformGeometry.distributeShifts(models.map(clipBounds), spec[0], spec[1]);
+  const { project, sequence: seq } = await activeProjectAndSequence(ppro);
+  const clips = await readSelectedMotionClips(seq, ppro);
+  const isFrame = to === "frame";
+
+  if (clips.length === 1 && (await transformParams.isGraphic(clips[0].item))) {
+    const layers = await transformParams.readGraphicLayers(clips[0].item);
+    const minLayers = isFrame ? 2 : 3;
+    if (layers && layers.texts && layers.texts.length >= minLayers) {
+      return distributeTextLayersInGraphic(ppro, project, seq, clips[0], layers, kind, spec, to);
+    }
+  }
+
+  const minClips = isFrame ? 2 : 3;
+  const group = (models, frame, skipped) => {
+    if (models.length < minClips) {
+      throw new Error(`Select at least ${minClips} clips to distribute${isFrame ? " across the frame" : ""}.${skippedNote(skipped)}`);
+    }
+    return isFrame
+      ? transformGeometry.distributeFrameShifts(models.map(clipBounds), frame, spec[0], spec[1])
+      : transformGeometry.distributeShifts(models.map(clipBounds), spec[0], spec[1]);
   };
-  return editSelectedClips(ppro, `CutDeck: Distribute ${kind}`, (ctx, seqFrame, shifts, index) => {
+  return editSelectedClips(ppro, `CutDeck: Distribute ${kind}${isFrame ? " across frame" : ""}`, (ctx, seqFrame, shifts, index) => {
     const d = shifts[index];
     return moveBy(ctx, seqFrame, spec[0] === "x" ? d : 0, spec[0] === "y" ? d : 0);
   }, measure, group);
@@ -507,32 +639,61 @@ async function setField(ppro, field, text) {
         let clipWrote = false;
         let deltaPx = 0;
         let lastNorm = null;
-        for (const t of layers.texts) {
-          if (spec.axis) {
-            const entry = t[spec.param];
-            const current = frame && transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
-            if (!current) continue;
-            deltaPx = number - current[spec.axis];
-            current[spec.axis] = number;
-            const norm = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
-            lastNorm = norm;
-            const targetParam = spec.param === "position" ? t.param : t.anchorParam;
-            if (targetParam) {
+        if (spec.axis) {
+          const primary = layers.texts[0];
+          const primaryEntry = primary && primary[spec.param];
+          const primaryCurrent = frame && primaryEntry && transformGeometry.normalizedToFramePixels(staticValue(primaryEntry), frame.width, frame.height);
+          if (primaryCurrent) {
+            deltaPx = number - primaryCurrent[spec.axis];
+            for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+              const t = layers.texts[tIdx];
+              const entry = t[spec.param];
+              const current = frame && transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
+              if (!current) continue;
+              current[spec.axis] += deltaPx;
+              const norm = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
+              if (tIdx === 0) lastNorm = norm;
+              const targetParam = spec.param === "position" ? t.param : t.anchorParam;
+              if (targetParam) {
+                paramWrites.push({
+                  param: targetParam,
+                  field: `text ${spec.param}`,
+                  value: norm,
+                  name: clip.name,
+                });
+                clipWrote = true;
+              }
+            }
+          }
+        } else if (spec.param === "scale") {
+          const primaryScale = staticValue(layers.texts[0].scale) || 100;
+          const ratio = primaryScale !== 0 ? number / primaryScale : 1;
+          for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+            const t = layers.texts[tIdx];
+            if (t.scaleParam) {
+              const curScale = staticValue(t.scale) || 100;
+              const newScale = tIdx === 0 ? number : (curScale * ratio);
               paramWrites.push({
-                param: targetParam,
-                field: `text ${spec.param}`,
-                value: norm,
+                param: t.scaleParam,
+                field: "text scale",
+                value: newScale,
                 name: clip.name,
               });
               clipWrote = true;
             }
-          } else {
-            const targetParam = spec.param === "scale" ? t.scaleParam : (spec.param === "rotation" ? t.rotationParam : null);
-            if (targetParam) {
+          }
+        } else if (spec.param === "rotation") {
+          const primaryRot = staticValue(layers.texts[0].rotation) || 0;
+          const deltaRot = number - primaryRot;
+          for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+            const t = layers.texts[tIdx];
+            if (t.rotationParam) {
+              const curRot = staticValue(t.rotation) || 0;
+              const newRot = tIdx === 0 ? number : (curRot + deltaRot);
               paramWrites.push({
-                param: targetParam,
-                field: `text ${spec.param}`,
-                value: number,
+                param: t.rotationParam,
+                field: "text rotation",
+                value: newRot,
                 name: clip.name,
               });
               clipWrote = true;
@@ -578,7 +739,7 @@ async function setField(ppro, field, text) {
 
 // Without events the panel falls back to the old fast poll. With them there is no poll:
 // a Position drag in Effect Controls fires no event and shows on the next click or Refresh.
-const FAST_POLL_MS = 600;
+const FAST_POLL_MS = 150;
 
 // Subscribes `handler` to selection changes and sequence switches. EventManager and
 // Constants.SequenceEvent {ACTIVATED, SELECTION_CHANGED} are in @adobe/premierepro 26.2.1
@@ -703,10 +864,10 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       await refreshAlignSequence();
       ctl.setStatus(editSummary(`Aligned ${edge}${toSelection ? " to selection" : ""}`, result), editLevel(result));
     }),
-    onDistribute: (kind) => ctl.act(async () => {
-      const result = await distribute(ppro, kind, measure);
+    onDistribute: (kind, to = "frame") => ctl.act(async () => {
+      const result = await distribute(ppro, kind, measure, to);
       await refreshAlignSequence();
-      ctl.setStatus(editSummary(`Distributed ${kind}`, result), editLevel(result));
+      ctl.setStatus(editSummary(`Distributed ${kind}${to === "frame" ? " across frame" : ""}`, result), editLevel(result));
     }),
     onProbe: (name) => ctl.act(async () => {
       if (name === "copystatus") {

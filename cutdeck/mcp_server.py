@@ -95,6 +95,18 @@ def create_server(backend: Backend) -> FastMCP:
         start. Needs the CutDeck panel open."""
         return await backend.premiere("add_markers", {"markers": markers})
 
+    @server.tool(annotations=read)
+    async def premiere_run_probe(probe: str) -> dict:
+        """Run a diagnostic probe in Premiere (timing, motion, effect, transform,
+        keyframe, alcreate, syncmoves, nativecut). Needs the CutDeck panel open."""
+        return await backend.premiere("run_probe", {"probe": probe})
+
+    @server.tool(annotations=read)
+    async def premiere_inspect_selection() -> dict:
+        """Inspect the selected track item(s) on the active sequence in Premiere:
+        name, timing, Motion/Transform parameters, and dimensions. Needs the CutDeck panel open."""
+        return await backend.premiere("inspect_selection")
+
     return server
 
 
