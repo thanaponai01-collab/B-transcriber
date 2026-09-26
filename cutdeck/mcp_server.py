@@ -107,6 +107,30 @@ def create_server(backend: Backend) -> FastMCP:
         name, timing, Motion/Transform parameters, and dimensions. Needs the CutDeck panel open."""
         return await backend.premiere("inspect_selection")
 
+    @server.tool(annotations=write)
+    async def premiere_set_transform_field(field: str, value: float) -> dict:
+        """Set a transform property (position-x, position-y, scale, rotation, anchor-x, anchor-y)
+        on selected clips in Premiere. Needs the CutDeck panel open."""
+        return await backend.premiere("set_transform_field", {"field": field, "value": value})
+
+    @server.tool(annotations=write)
+    async def premiere_set_anchor(target: str) -> dict:
+        """Set 9-point anchor target (top-left, top, top-right, left, center, right, bottom-left,
+        bottom, bottom-right) on selected clips while preserving picture position. Needs the CutDeck panel open."""
+        return await backend.premiere("set_anchor", {"target": target})
+
+    @server.tool(annotations=write)
+    async def premiere_align_clips(edge: str, to: str = "frame") -> dict:
+        """Align selected clips to the sequence frame or selection bounding box (left, hcenter, right,
+        top, vcenter, bottom). 'to' can be 'frame' or 'selection'. Needs the CutDeck panel open."""
+        return await backend.premiere("align_clips", {"edge": edge, "to": to})
+
+    @server.tool(annotations=write)
+    async def premiere_distribute_clips(kind: str, to: str = "frame") -> dict:
+        """Distribute 3+ selected clips across frame or within selection (h-centers, v-centers,
+        h-gaps, v-gaps). 'to' can be 'frame' or 'selection'. Needs the CutDeck panel open."""
+        return await backend.premiere("distribute_clips", {"kind": kind, "to": to})
+
     return server
 
 

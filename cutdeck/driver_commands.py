@@ -76,6 +76,76 @@ def _run_probe_arguments(args: dict, jobs) -> dict:
     return {"probe": probe}
 
 
+VALID_TRANSFORM_FIELDS = {"position-x", "position-y", "scale", "rotation", "anchor-x", "anchor-y"}
+VALID_ANCHOR_TARGETS = {"top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"}
+VALID_ALIGN_EDGES = {"left", "hcenter", "right", "top", "vcenter", "bottom"}
+VALID_ALIGN_TO = {"frame", "selection"}
+VALID_DISTRIBUTE_KINDS = {"h-centers", "v-centers", "h-gaps", "v-gaps"}
+VALID_DISTRIBUTE_TO = {"frame", "selection"}
+
+
+def _set_transform_field_arguments(args: dict, jobs) -> dict:
+    field = args.get("field")
+    if not isinstance(field, str) or field not in VALID_TRANSFORM_FIELDS:
+        raise ValueError(f"field must be one of: {', '.join(sorted(VALID_TRANSFORM_FIELDS))}")
+    value = args.get("value")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError("value must be specified")
+    try:
+        val_num = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"value must be a number, got {value!r}")
+    return {"field": field, "value": val_num}
+
+
+def _parse_field_target(target: str) -> dict:
+    if "=" not in target:
+        raise ValueError("target must be in field=value format (e.g. scale=120 or position-x=960)")
+    k, v = target.split("=", 1)
+    return {"field": k.strip(), "value": float(v.strip())}
+
+
+def _set_anchor_arguments(args: dict, jobs) -> dict:
+    target = args.get("target")
+    if not isinstance(target, str) or target not in VALID_ANCHOR_TARGETS:
+        raise ValueError(f"target must be one of: {', '.join(sorted(VALID_ANCHOR_TARGETS))}")
+    return {"target": target}
+
+
+def _align_clips_arguments(args: dict, jobs) -> dict:
+    edge = args.get("edge")
+    if not isinstance(edge, str) or edge not in VALID_ALIGN_EDGES:
+        raise ValueError(f"edge must be one of: {', '.join(sorted(VALID_ALIGN_EDGES))}")
+    to = args.get("to", "frame")
+    if not isinstance(to, str) or to not in VALID_ALIGN_TO:
+        raise ValueError(f"to must be one of: {', '.join(sorted(VALID_ALIGN_TO))}")
+    return {"edge": edge, "to": to}
+
+
+def _parse_align_target(target: str) -> dict:
+    parts = target.strip().split()
+    edge = parts[0]
+    to = parts[1] if len(parts) > 1 else "frame"
+    return {"edge": edge, "to": to}
+
+
+def _distribute_clips_arguments(args: dict, jobs) -> dict:
+    kind = args.get("kind")
+    if not isinstance(kind, str) or kind not in VALID_DISTRIBUTE_KINDS:
+        raise ValueError(f"kind must be one of: {', '.join(sorted(VALID_DISTRIBUTE_KINDS))}")
+    to = args.get("to", "frame")
+    if not isinstance(to, str) or to not in VALID_DISTRIBUTE_TO:
+        raise ValueError(f"to must be one of: {', '.join(sorted(VALID_DISTRIBUTE_TO))}")
+    return {"kind": kind, "to": to}
+
+
+def _parse_distribute_target(target: str) -> dict:
+    parts = target.strip().split()
+    kind = parts[0]
+    to = parts[1] if len(parts) > 1 else "frame"
+    return {"kind": kind, "to": to}
+
+
 # apply_cuts edits a copy of a long sequence: 1735 cuts took minutes live (ledger 09-24).
 COMMANDS: dict[str, Command] = {
     "read_sequence": Command(60, _no_arguments, "Read the active sequence."),
@@ -89,4 +159,16 @@ COMMANDS: dict[str, Command] = {
                          ("probe_name", lambda target: {"probe": target})),
     "inspect_selection": Command(30, _no_arguments,
                                  "Inspect the selected track item(s) on the active sequence in live Premiere."),
+    "set_transform_field": Command(30, _set_transform_field_arguments,
+                                   "Set a transform field (position-x, position-y, scale, rotation, anchor-x, anchor-y) on selected clips.",
+                                   ("field=value", _parse_field_target)),
+    "set_anchor": Command(30, _set_anchor_arguments,
+                          "Set 9-point anchor target on selected clips while preserving picture position.",
+                          ("target", lambda target: {"target": target.strip()})),
+    "align_clips": Command(30, _align_clips_arguments,
+                           "Align selected clips to sequence frame or selection bounding box.",
+                           ("edge [to]", _parse_align_target)),
+    "distribute_clips": Command(30, _distribute_clips_arguments,
+                                "Distribute 3+ selected clips across frame or within selection.",
+                                ("kind [to]", _parse_distribute_target)),
 }

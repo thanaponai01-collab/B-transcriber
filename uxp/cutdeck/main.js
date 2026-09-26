@@ -89,7 +89,7 @@ const align = createAlignFeature({
 
 // The Premiere driver: MCP agents and scripts reach Premiere through the helper and this panel
 // (docs/arch-design-helper-v2.md move 3). Its own quiet connection, re-registered after drops.
-const driver = createDriver({ ppro, ctl: mainCtl });
+const driver = createDriver({ ppro, ctl: mainCtl, align });
 let driverRegistration = null;
 const driverRpc = createRpc({
   attempts: 1,

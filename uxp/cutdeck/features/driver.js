@@ -24,12 +24,29 @@ const {
   readGraphicLayers,
   isGraphic,
 } = require("../transform/params.js");
+const {
+  setField,
+  setAnchor,
+  alignToFrame,
+  alignToSelection,
+  distribute,
+} = require("./align.js");
 
-const COMMANDS = ["read_sequence", "apply_cuts", "add_markers", "run_probe", "inspect_selection"];
+const COMMANDS = [
+  "read_sequence",
+  "apply_cuts",
+  "add_markers",
+  "run_probe",
+  "inspect_selection",
+  "set_transform_field",
+  "set_anchor",
+  "align_clips",
+  "distribute_clips",
+];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
 
-function createDriver({ ppro, ctl }) {
+function createDriver({ ppro, ctl, align = null, measure = null }) {
   async function readSequence() {
     const { project, sequence } = await activeProjectAndSequence(ppro, {
       sequenceErrorMessage: "Open a sequence in Premiere first." });
@@ -127,9 +144,10 @@ function createDriver({ ppro, ctl }) {
   async function inspectSelection() {
     const { sequence } = await activeProjectAndSequence(ppro, {
       sequenceErrorMessage: "Open a sequence in Premiere first." });
-    let selectedItems = await getSelectedTrackItems(sequence, ppro);
-    if (!selectedItems || selectedItems.length === 0) {
-      selectedItems = [];
+    const rawSelected = await getSelectedTrackItems(sequence, ppro);
+    const hasSelection = Array.isArray(rawSelected) && rawSelected.length > 0;
+    let selectedItems = hasSelection ? rawSelected : [];
+    if (!hasSelection) {
       const vCount = typeof sequence.getVideoTrackCount === "function" ? await sequence.getVideoTrackCount() : 0;
       for (let v = 0; v < vCount; v++) {
         const trk = typeof sequence.getVideoTrack === "function" ? await sequence.getVideoTrack(v) : null;
@@ -189,9 +207,42 @@ function createDriver({ ppro, ctl }) {
       sequence_name: sequence.name,
       sequence_frame: seqFrame,
       sequence_pixel_aspect: seqPixelAspect,
+      has_selection: hasSelection,
       selected_count: items.length,
       items,
     };
+  }
+
+  async function setTransformField({ field, value }) {
+    const r = await setField(ppro, field, value);
+    if (align && typeof align.refresh === "function") {
+      try { await align.refresh(); } catch (_) {}
+    }
+    return { done: r.done, skipped: r.skipped, field, value: Number(value) };
+  }
+
+  async function setAnchorCmd({ target }) {
+    const r = await setAnchor(ppro, target, measure);
+    if (align && typeof align.refresh === "function") {
+      try { await align.refresh(); } catch (_) {}
+    }
+    return { done: r.done, skipped: r.skipped, target };
+  }
+
+  async function alignClips({ edge, to = "frame" }) {
+    const r = await (to === "selection" ? alignToSelection(ppro, edge, measure) : alignToFrame(ppro, edge, measure));
+    if (align && typeof align.refresh === "function") {
+      try { await align.refresh(); } catch (_) {}
+    }
+    return { done: r.done, skipped: r.skipped, edge, to };
+  }
+
+  async function distributeClips({ kind, to = "frame" }) {
+    const r = await distribute(ppro, kind, measure, to);
+    if (align && typeof align.refresh === "function") {
+      try { await align.refresh(); } catch (_) {}
+    }
+    return { done: r.done, skipped: r.skipped, kind, to };
   }
 
   const handlers = {
@@ -200,6 +251,10 @@ function createDriver({ ppro, ctl }) {
     add_markers: addMarkers,
     run_probe: runProbeCmd,
     inspect_selection: inspectSelection,
+    set_transform_field: setTransformField,
+    set_anchor: setAnchorCmd,
+    align_clips: alignClips,
+    distribute_clips: distributeClips,
   };
 
   /* One call from the helper. Refused while the panel is busy, never queued behind the user. */

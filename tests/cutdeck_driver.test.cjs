@@ -35,7 +35,39 @@ function host({ endFrames = 900 } = {}) {
 const controller = () => createController({ render: () => {} });
 
 test("the driver offers exactly the helper's fixed commands", () => {
-  assert.deepEqual(COMMANDS, ["read_sequence", "apply_cuts", "add_markers", "run_probe", "inspect_selection"]);
+  assert.deepEqual(COMMANDS, [
+    "read_sequence",
+    "apply_cuts",
+    "add_markers",
+    "run_probe",
+    "inspect_selection",
+    "set_transform_field",
+    "set_anchor",
+    "align_clips",
+    "distribute_clips",
+  ]);
+});
+
+test("transform driver commands reject when no clip is selected", async () => {
+  const h = host();
+  const ctl = controller();
+  const driver = createDriver({ ppro: h.ppro, ctl });
+  await assert.rejects(
+    driver.handle({ command: "set_transform_field", args: { field: "scale", value: 120 } }),
+    /Select a clip/
+  );
+  await assert.rejects(
+    driver.handle({ command: "set_anchor", args: { target: "center" } }),
+    /Select a clip/
+  );
+  await assert.rejects(
+    driver.handle({ command: "align_clips", args: { edge: "left", to: "frame" } }),
+    /Select a clip/
+  );
+  await assert.rejects(
+    driver.handle({ command: "distribute_clips", args: { kind: "h-centers", to: "frame" } }),
+    /Select a clip/
+  );
 });
 
 test("run_probe runs timing probe against fake host", async () => {
