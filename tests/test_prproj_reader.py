@@ -148,7 +148,7 @@ def test_effects_carry_source_text_and_keyframes(tmp_path):
 REAL = Path(__file__).parent.parent / "test_projects" / "probe.prproj"
 
 
-@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is gitignored")
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
 def test_real_probe_project_text_layers():
     seq = next(s for s in read_project(REAL)["sequences"] if s["name"] == "Sequence 01")
     texts = [e["text"]["text"] for t in seq["video_tracks"] for c in t["clips"]
@@ -175,7 +175,7 @@ def test_run_tracking_and_bold():
     assert parse_source_text(_blob("T1_hello_arial_100"))["runs"][0]["tracking"] == 0.0
 
 
-@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is gitignored")
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
 def test_keyframe_clip_time_is_time_minus_source_in():
     # Sequence 02: clip at 10.01 s, keyframes set at 0 s, 1 s and 3 s into the clip.
     seq = next(s for s in read_project(REAL)["sequences"] if s["name"] == "Sequence 02")
@@ -242,3 +242,50 @@ def test_alignment_and_shadow():
     assert parse_source_text(_blob("S1_stroke_w5"))["alignment"] == "left"  # omitted = left
     assert parse_source_text(_blob("SH_shadow"))["shadow"] is True
     assert parse_source_text(_blob("A1_center"))["shadow"] is False
+
+
+def _seq04():
+    return next(s for s in read_project(REAL)["sequences"] if s["name"] == "Sequence 04")
+
+
+def _effect(clip, match_name):
+    return next(e for e in clip["effects"] if e["match_name"] == match_name)
+
+
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
+def test_untouched_clip_has_no_motion_component():
+    assert _seq04()["video_tracks"][0]["clips"][0]["effects"] == []
+
+
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
+def test_motion_params_and_their_coordinate_spaces():
+    # Typed into a 1280x720 clip in a 1920x1080 sequence: Position 100,200 / Anchor 100,200.
+    p = _effect(_seq04()["video_tracks"][1]["clips"][0], "AE.ADBE Motion")["params"]
+    assert p["position"]["value"] == pytest.approx([100 / 1920, 200 / 1080])
+    assert p["anchor"]["value"] == pytest.approx([100 / 1280, 200 / 720])
+    assert (p["scale"]["value"], p["scale_width"]["value"], p["rotation"]["value"]) == (50, 80, 15)
+    assert [p[k]["value"] for k in ("crop_left", "crop_top", "crop_right", "crop_bottom")] == [10, 20, 30, 40]
+    assert _effect(_seq04()["video_tracks"][1]["clips"][0], "AE.ADBE Opacity")["params"]["opacity"]["value"] == 70
+    assert "keyframes" not in p["position"]
+
+
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
+def test_motion_keyframes_are_clip_relative():
+    p = _effect(_seq04()["video_tracks"][2]["clips"][0], "AE.ADBE Motion")["params"]
+    assert [round(k["clip_time"], 3) for k in p["position"]["keyframes"]] == [0.0, 2.002]
+    assert p["position"]["keyframes"][1]["value"] == pytest.approx([0.1041667, 0.2777778])
+
+
+@pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
+def test_text_clip_transform_group():
+    edited, default = (_effect(c, "AE.ADBE Text")["params"]
+                       for c in (_seq04()["video_tracks"][3]["clips"][0], _seq04()["video_tracks"][4]["clips"][0]))
+    assert (edited["scale"]["value"], edited["rotation"]["value"]) == (92, 9)
+    # StartKeyframe, not the stale CurrentValue (92 on a default clip).
+    assert (default["scale"]["value"], default["position"]["value"]) == (100, [0.5, 0.5])
+
+
+def test_key_parses_scalar_and_point_records():
+    from cutdeck.prproj_reader import _key
+    assert _key(f"{2 * T},50.,0,0,0") == {"time": 2.0, "value": 50.0}
+    assert _key(f"{T},0.25:0.5,0,0,5,4") == {"time": 1.0, "value": [0.25, 0.5]}

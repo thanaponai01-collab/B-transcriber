@@ -174,6 +174,45 @@ def _text_of(objs: _Objects, comp: ET.Element) -> dict | None:
     return None
 
 
+# Param index -> name, per component, as saved by Premiere 26 (probe.prproj, Sequence 04).
+# Motion matches the panel's PARAM_INDEX (uxp/cutdeck/transform/params.js); Text carries its
+# own transform group. Position/Anchor are normalized (Position to the sequence frame, Anchor
+# to the clip's source frame); the rest are plain numbers (percent / degrees).
+_TRANSFORM_PARAMS = {
+    "AE.ADBE Motion": {0: "position", 1: "scale", 2: "scale_width", 4: "rotation", 5: "anchor",
+                       7: "crop_left", 8: "crop_top", 9: "crop_right", 10: "crop_bottom"},
+    "AE.ADBE Opacity": {0: "opacity"},
+    "AE.ADBE Text": {2: "position", 3: "scale", 4: "scale_width", 6: "rotation", 7: "opacity",
+                     8: "anchor"},
+}
+
+
+def _key(raw: str) -> dict:
+    """One keyframe record ``time,value,...`` -> {time, value}; a point value is ``x:y``."""
+    time, value = raw.split(",")[:2]
+    number = [float(v) for v in value.split(":")]
+    return {"time": _seconds(time), "value": number if ":" in value else number[0]}
+
+
+def _transform_params(objs: _Objects, comp: ET.Element, names: dict[int, str]) -> dict:
+    """Named params of a component. A value lives in ``StartKeyframe`` (``CurrentValue`` is
+    empty for points and rotation, and stale on a default Text clip: 92 beside a saved 100).
+    Animated params also list ``Keyframes``, ``;``-separated."""
+    out = {}
+    for p in comp.findall("Component/Params/Param"):
+        name = names.get(int(p.get("Index")))
+        param = objs.ref(p)
+        start = _text(param, "StartKeyframe")
+        if name is None or not start:
+            continue
+        entry = {"value": _key(start)["value"]}
+        keys = (_text(param, "Keyframes") or "").split(";")
+        if any(keys):
+            entry["keyframes"] = [_key(k) for k in keys if k]
+        out[name] = entry
+    return out
+
+
 def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
     chain = objs.ref(track_item.find("ClipTrackItem/ComponentOwner/Components"))
     out = []
@@ -192,6 +231,8 @@ def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
         }
         if effect["match_name"] == "AE.ADBE Text":
             effect["text"] = _text_of(objs, comp)
+        if effect["match_name"] in _TRANSFORM_PARAMS:
+            effect["params"] = _transform_params(objs, comp, _TRANSFORM_PARAMS[effect["match_name"]])
         out.append(effect)
     return out
 
@@ -230,6 +271,9 @@ def _track_item(objs: _Objects, item: ET.Element) -> dict:
         # Source Text keyframe times are source time: seconds into an untrimmed clip = time - source_in.
         for key in (effect.get("text") or {}).get("keyframes", []):
             key["clip_time"] = key["time"] - out["source_in"]
+        for param in effect.get("params", {}).values():
+            for key in param.get("keyframes", []):
+                key["clip_time"] = key["time"] - out["source_in"]
     return out
 
 

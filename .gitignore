@@ -74,5 +74,6 @@ uxp/cutdeck/package/
 # Node
 node_modules/
 
-# Local Premiere test projects read by cutdeck.prproj_reader (never committed)
-test_projects/
+# Local Premiere test projects read by cutdeck.prproj_reader; only the probe fixture is committed
+test_projects/*
+!test_projects/probe.prproj
