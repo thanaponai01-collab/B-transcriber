@@ -39,9 +39,12 @@ def motion_model(clip: dict, seq_frame: list[int]) -> dict | None:
     source frame is unknown."""
     fx = next((e for e in clip["effects"] if e["match_name"] == "AE.ADBE Motion"), None)
     src = clip.get("source_frame")
-    if not fx or not src:
+    if not src:
         return None
-    p = fx["params"]
+    # Premiere 26 saves nothing for a Motion at its defaults, so no effect = all defaults.
+    p = fx["params"] if fx else {"position": {"value": [0.5, 0.5]}, "anchor": {"value": [0.5, 0.5]}}
+    if not fx and any(e["match_name"] == "AE.ADBE Text" for e in clip["effects"]):
+        return None
     if any(v.get("keyframes") for v in p.values()):
         return None
     scale = _value(p, "scale", 100.0)

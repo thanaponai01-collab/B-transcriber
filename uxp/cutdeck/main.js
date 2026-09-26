@@ -127,6 +127,7 @@ alignPanel.bind({
   onSetField: align.onSetField,
   onAnchor: align.onAnchor,
   onAlign: align.onAlign,
+  onDistribute: align.onDistribute,
   onPoll: align.poll,
 });
 

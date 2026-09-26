@@ -126,17 +126,59 @@ function renderedBounds(clip, rect) {
 
 const ALIGN_EDGES = ["left", "hcenter", "right", "top", "vcenter", "bottom"];
 
-function alignShift(bounds, frame, edge) {
-  const zero = (v) => (Math.abs(v) < 1e-4 ? 0 : v);
+const zeroNear = (v) => (Math.abs(v) < 1e-4 ? 0 : v);
+
+// The shift that puts `bounds` on an edge or centre of `box` ({left, top, right, bottom}): the
+// sequence frame for Align to Frame, the selection's outer box for Align to Selection.
+function alignShiftTo(bounds, box, edge) {
   switch (edge) {
-    case "left": return { dx: zero(-bounds.left), dy: 0 };
-    case "hcenter": return { dx: zero(frame.width / 2 - (bounds.left + bounds.right) / 2), dy: 0 };
-    case "right": return { dx: zero(frame.width - bounds.right), dy: 0 };
-    case "top": return { dx: 0, dy: zero(-bounds.top) };
-    case "vcenter": return { dx: 0, dy: zero(frame.height / 2 - (bounds.top + bounds.bottom) / 2) };
-    case "bottom": return { dx: 0, dy: zero(frame.height - bounds.bottom) };
+    case "left": return { dx: zeroNear(box.left - bounds.left), dy: 0 };
+    case "hcenter": return { dx: zeroNear((box.left + box.right) / 2 - (bounds.left + bounds.right) / 2), dy: 0 };
+    case "right": return { dx: zeroNear(box.right - bounds.right), dy: 0 };
+    case "top": return { dx: 0, dy: zeroNear(box.top - bounds.top) };
+    case "vcenter": return { dx: 0, dy: zeroNear((box.top + box.bottom) / 2 - (bounds.top + bounds.bottom) / 2) };
+    case "bottom": return { dx: 0, dy: zeroNear(box.bottom - bounds.bottom) };
     default: return null;
   }
+}
+
+function alignShift(bounds, frame, edge) {
+  return alignShiftTo(bounds, { left: 0, top: 0, right: frame.width, bottom: frame.height }, edge);
+}
+
+// The smallest box holding every box in `list`.
+function unionBounds(list) {
+  return {
+    left: Math.min(...list.map((b) => b.left)),
+    top: Math.min(...list.map((b) => b.top)),
+    right: Math.max(...list.map((b) => b.right)),
+    bottom: Math.max(...list.map((b) => b.bottom)),
+  };
+}
+
+// Distribute along `axis` ("x" | "y"): the outermost two (by centre) stay put and the rest move
+// between them, either with equal spacing between CENTRES or equal GAPS between edges (a gap
+// goes negative when the clips overlap). Returns the shift for each box, in input order.
+function distributeShifts(list, axis, mode) {
+  const [lo, hi] = axis === "x" ? ["left", "right"] : ["top", "bottom"];
+  const centre = (b) => (b[lo] + b[hi]) / 2;
+  const order = list.map((_, i) => i).sort((a, b) => centre(list[a]) - centre(list[b]));
+  const shifts = list.map(() => 0);
+  const n = order.length;
+  if (mode === "centers") {
+    const first = centre(list[order[0]]);
+    const step = (centre(list[order[n - 1]]) - first) / (n - 1);
+    order.forEach((idx, k) => { shifts[idx] = zeroNear(first + k * step - centre(list[idx])); });
+  } else {
+    const total = order.reduce((sum, idx) => sum + (list[idx][hi] - list[idx][lo]), 0);
+    const gap = (list[order[n - 1]][hi] - list[order[0]][lo] - total) / (n - 1);
+    let edge = list[order[0]][lo];
+    order.forEach((idx) => {
+      shifts[idx] = zeroNear(edge - list[idx][lo]);
+      edge += list[idx][hi] - list[idx][lo] + gap;
+    });
+  }
+  return shifts;
 }
 
 module.exports = {
@@ -152,4 +194,7 @@ module.exports = {
   renderedBounds,
   ALIGN_EDGES,
   alignShift,
+  alignShiftTo,
+  unionBounds,
+  distributeShifts,
 };

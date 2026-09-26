@@ -13,7 +13,7 @@ const assert = require("node:assert/strict");
 const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
-const { setAnchor, alignToFrame, setField, readAlignTransform } = require("../uxp/cutdeck/features/align.js");
+const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/features/align.js");
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 
@@ -629,3 +629,89 @@ test("consecutive align clicks when already aligned do not add undo steps (noop)
 
 
 
+
+// --- Phase 6: align to selection, distribute ----------------------------------------------------
+
+// Rendered box of a scale-only 1280x720 clip in the 1920x1080 frame, from its written Position.
+const box = (c) => {
+  const w = (1280 * c.params[1].value) / 100;
+  const h = (720 * c.params[1].value) / 100;
+  const cx = c.params[0].value[0] * 1920;
+  const cy = c.params[0].value[1] * 1080;
+  return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2, cx, cy };
+};
+const at = (x, y = 0.5, scale = 50) => ({ position: [x / 1920, y], scale });
+
+test("unionBounds spans every box; alignShiftTo aligns to that box, not the frame", () => {
+  const u = geometry.unionBounds([{ left: 10, top: 20, right: 50, bottom: 60 }, { left: 0, top: 30, right: 40, bottom: 90 }]);
+  assert.deepEqual(u, { left: 0, top: 20, right: 50, bottom: 90 });
+  const b = { left: 10, top: 20, right: 50, bottom: 60 };
+  assert.deepEqual(geometry.alignShiftTo(b, u, "left"), { dx: -10, dy: 0 });
+  assert.deepEqual(geometry.alignShiftTo(b, u, "right"), { dx: 0, dy: 0 });
+  assert.deepEqual(geometry.alignShiftTo(b, u, "vcenter"), { dx: 0, dy: 15 });
+  assert.deepEqual(geometry.alignShift(b, { width: 100, height: 100 }, "left"), { dx: -10, dy: 0 });
+});
+
+test("distributeShifts: centres even out, the outer two stay, results follow input order", () => {
+  const boxes = [{ left: 375, right: 425, top: 0, bottom: 10 }, { left: 75, right: 125, top: 0, bottom: 10 }, { left: 100, right: 200, top: 0, bottom: 10 }];
+  // centres 400 / 100 / 150: sorted 100 (idx1), 150 (idx2), 400 (idx0) → middle goes to 250.
+  const s = geometry.distributeShifts(boxes, "x", "centers");
+  assert.deepEqual(s.map((v) => Math.round(v * 1e6) / 1e6), [0, 0, 100]);
+});
+
+test("distributeShifts gaps: equal space between neighbours whatever their widths", () => {
+  const boxes = [{ left: 0, right: 100, top: 0, bottom: 1 }, { left: 120, right: 140, top: 0, bottom: 1 }, { left: 500, right: 700, top: 0, bottom: 1 }];
+  const s = geometry.distributeShifts(boxes, "x", "gaps");
+  const moved = boxes.map((b, i) => ({ l: b.left + s[i], r: b.right + s[i] }));
+  close(moved[1].l - moved[0].r, moved[2].l - moved[1].r, "gap");
+  close(moved[0].l, 0, "first stays"); close(moved[2].r, 700, "last stays");
+});
+
+test("alignToSelection left lines every clip's left edge up on the leftmost clip", async () => {
+  const a = motionClip("A", at(400));
+  const b = motionClip("B", at(1000, 0.3, 30));
+  const { ppro, undoSteps } = host([a, b]);
+  const left = Math.min(box(a).left, box(b).left);
+  const result = await alignToSelection(ppro, "left");
+  assert.deepEqual(result, { done: 2, skipped: [] });
+  close(box(a).left, left, "A left"); close(box(b).left, left, "B left");
+  close(box(b).cy, 0.3 * 1080, "B's y untouched");
+  assert.deepEqual(undoSteps, ["CutDeck: Align left to selection"]);
+});
+
+test("alignToSelection needs two clips and writes nothing with one", async () => {
+  const a = motionClip("A", at(400));
+  const { ppro, undoSteps } = host([a]);
+  await assert.rejects(() => alignToSelection(ppro, "left"), /at least 2/);
+  assert.deepEqual(undoSteps, []);
+});
+
+test("distribute h-centers spaces three clips' centres evenly, in one undo step", async () => {
+  const [a, b, c] = [motionClip("A", at(300)), motionClip("B", at(500, 0.4)), motionClip("C", at(1500, 0.6))];
+  const { ppro, undoSteps } = host([b, c, a]); // selection order must not matter
+  const result = await distribute(ppro, "h-centers");
+  assert.equal(result.done, 3);
+  close(box(b).cx, (300 + 1500) / 2, "middle centre");
+  close(box(a).cx, 300, "leftmost stays"); close(box(c).cx, 1500, "rightmost stays");
+  close(box(b).cy, 0.4 * 1080, "y untouched");
+  assert.deepEqual(undoSteps, ["CutDeck: Distribute h-centers"]);
+});
+
+test("distribute v-gaps makes the vertical gaps equal for clips of different heights", async () => {
+  const cs = [motionClip("A", at(960, 0.2, 30)), motionClip("B", at(960, 0.35, 60)), motionClip("C", at(960, 0.9, 40))];
+  const { ppro } = host(cs);
+  await distribute(ppro, "v-gaps");
+  const [a, b, c] = cs.map(box);
+  close(b.top - a.bottom, c.top - b.bottom, "gap");
+  close(a.top, 0.2 * 1080 - 0.5 * 720 * 0.3, "first stays");
+});
+
+test("distribute needs three usable clips: two, or three with one keyframed, is refused untouched", async () => {
+  const [a, b] = [motionClip("A", at(300)), motionClip("B", at(900))];
+  const one = host([a, b]);
+  await assert.rejects(() => distribute(one.ppro, "h-centers"), /at least 3/);
+  const animated = motionClip("Z", Object.assign(at(1500), { keyframedPosition: true }));
+  const two = host([a, b, animated]);
+  await assert.rejects(() => distribute(two.ppro, "h-gaps"), /at least 3.*Z.*keyframed/);
+  assert.deepEqual([one.undoSteps, two.undoSteps], [[], []]);
+});

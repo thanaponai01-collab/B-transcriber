@@ -151,7 +151,7 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
 // A Graphic's canvas is the whole frame, so its geometry says nothing about where its text is.
 // For a Graphic, `measure` (transform/frameBounds.js) finds the box its text is actually drawn
 // in, and the plan uses that (`model.drawn`, sequence px).
-async function editSelectedClips(ppro, label, plan, measure = null) {
+async function editSelectedClips(ppro, label, plan, measure = null, group = null) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
   const clips = await readSelectedMotionClips(seq, ppro);
   if (clips.length === 0) throw new Error("Select a clip on the timeline.");
@@ -164,6 +164,7 @@ async function editSelectedClips(ppro, label, plan, measure = null) {
   const skipped = [];
   const clipBoundsUpdates = [];
   const unhideActions = [];
+  const ready = [];
   let done = 0;
   try {
     for (const clip of clips) {
@@ -204,7 +205,14 @@ async function editSelectedClips(ppro, label, plan, measure = null) {
           }
         }
       }
-      const planned = plan(m, seqFrame);
+      ready.push({ clip, m });
+    }
+    // A group command (align to selection, distribute) decides from every usable clip's bounds
+    // before any clip is planned; it throws, with nothing written, when there aren't enough.
+    const groupCtx = group ? group(ready.map((r) => r.m), seqFrame, skipped) : null;
+    for (let index = 0; index < ready.length; index += 1) {
+      const { clip, m } = ready[index];
+      const planned = plan(m, seqFrame, groupCtx, index);
       if (planned.noop) {
         done += 1;
         continue;
@@ -388,19 +396,62 @@ function textLayerAnchor(layers, model, source, onScreen) {
 
 // Phase 5: line each clip's rendered (cropped, scaled, rotated) bounds up with the sequence frame.
 // For a Graphic, the bounds are its measured text box, and the text layers move.
+// Where a clip's picture is drawn, in sequence pixels: the measured box for a Graphic, else the
+// cropped source under the clip's transform.
+function clipBounds({ model, source, crop, drawn }) {
+  return drawn || transformGeometry.renderedBounds(model, transformGeometry.visibleSourceRect(source, crop));
+}
+
+// The write that moves a clip's picture by (dx, dy) sequence pixels: its text layers for a
+// Graphic when that can be done exactly, else Motion Position.
+function moveBy(ctx, seqFrame, dx, dy) {
+  if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return { noop: true };
+  const layerWrites = ctx.drawn ? textLayerShift(ctx.layers, ctx.model, ctx.source, { x: dx, y: dy }) : null;
+  if (layerWrites) return { layerWrites, boundsShift: { dx, dy } };
+  const positionPx = { x: ctx.model.position.x + dx, y: ctx.model.position.y + dy };
+  return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height), boundsShift: { dx, dy } };
+}
+
 async function alignToFrame(ppro, edge, measure = null) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
-  return editSelectedClips(ppro, `CutDeck: Align ${edge}`, ({ model, source, crop, drawn, layers }, seqFrame) => {
-    const bounds = drawn || transformGeometry.renderedBounds(model, transformGeometry.visibleSourceRect(source, crop));
-    const { dx, dy } = transformGeometry.alignShift(bounds, seqFrame, edge);
-    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) {
-      return { noop: true };
-    }
-    const layerWrites = drawn ? textLayerShift(layers, model, source, { x: dx, y: dy }) : null;
-    if (layerWrites) return { layerWrites, boundsShift: { dx, dy } };
-    const positionPx = { x: model.position.x + dx, y: model.position.y + dy };
-    return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height), boundsShift: { dx, dy } };
+  return editSelectedClips(ppro, `CutDeck: Align ${edge}`, (ctx, seqFrame) => {
+    const { dx, dy } = transformGeometry.alignShift(clipBounds(ctx), seqFrame, edge);
+    return moveBy(ctx, seqFrame, dx, dy);
   }, measure);
+}
+
+// Phase 6: every selected clip to the outer box of all their drawn bounds.
+async function alignToSelection(ppro, edge, measure = null) {
+  if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
+  const group = (models, _frame, skipped) => {
+    if (models.length < 2) throw new Error(`Select at least 2 clips to align to the selection.${skippedNote(skipped)}`);
+    return transformGeometry.unionBounds(models.map(clipBounds));
+  };
+  return editSelectedClips(ppro, `CutDeck: Align ${edge} to selection`, (ctx, seqFrame, box) => {
+    const { dx, dy } = transformGeometry.alignShiftTo(clipBounds(ctx), box, edge);
+    return moveBy(ctx, seqFrame, dx, dy);
+  }, measure, group);
+}
+
+const skippedNote = (skipped) => (skipped.length ? ` Skipped: ${skipped.join(" ")}` : "");
+
+const DISTRIBUTE = {
+  "h-centers": ["x", "centers"], "v-centers": ["y", "centers"],
+  "h-gaps": ["x", "gaps"], "v-gaps": ["y", "gaps"],
+};
+
+// Phase 6: the outer two clips stay, the others move between them (equal centres or equal gaps).
+async function distribute(ppro, kind, measure = null) {
+  const spec = DISTRIBUTE[kind];
+  if (!spec) throw new Error(`Unknown distribution "${kind}".`);
+  const group = (models, _frame, skipped) => {
+    if (models.length < 3) throw new Error(`Select at least 3 clips to distribute.${skippedNote(skipped)}`);
+    return transformGeometry.distributeShifts(models.map(clipBounds), spec[0], spec[1]);
+  };
+  return editSelectedClips(ppro, `CutDeck: Distribute ${kind}`, (ctx, seqFrame, shifts, index) => {
+    const d = shifts[index];
+    return moveBy(ctx, seqFrame, spec[0] === "x" ? d : 0, spec[0] === "y" ? d : 0);
+  }, measure, group);
 }
 
 // Phase 2: one typed value on the clip the panel shows, in the units the panel shows (px, %, °).
@@ -646,10 +697,16 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       await refreshAlignSequence();
       ctl.setStatus(editSummary(`Anchor set to ${target}`, result), editLevel(result));
     }),
-    onAlign: (edge) => ctl.act(async () => {
-      const result = await alignToFrame(ppro, edge, measure);
+    onAlign: (edge, to = "frame") => ctl.act(async () => {
+      const toSelection = to === "selection";
+      const result = await (toSelection ? alignToSelection : alignToFrame)(ppro, edge, measure);
       await refreshAlignSequence();
-      ctl.setStatus(editSummary(`Aligned ${edge}`, result), editLevel(result));
+      ctl.setStatus(editSummary(`Aligned ${edge}${toSelection ? " to selection" : ""}`, result), editLevel(result));
+    }),
+    onDistribute: (kind) => ctl.act(async () => {
+      const result = await distribute(ppro, kind, measure);
+      await refreshAlignSequence();
+      ctl.setStatus(editSummary(`Distributed ${kind}`, result), editLevel(result));
     }),
     onProbe: (name) => ctl.act(async () => {
       if (name === "copystatus") {
@@ -680,4 +737,6 @@ module.exports = {
   setField,
   setAnchor,
   alignToFrame,
+  alignToSelection,
+  distribute,
 };

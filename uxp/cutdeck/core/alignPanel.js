@@ -330,8 +330,19 @@
         intents.onAnchor(node.getAttribute("data-anchor"));
       });
     });
+    // What the six align buttons align to: the sequence frame, or the selected clips' outer box.
+    let alignTo = "frame";
+    el.querySelectorAll("[data-align-to]").forEach((node) => {
+      node.addEventListener("click", () => {
+        alignTo = node.getAttribute("data-align-to");
+        el.querySelectorAll("[data-align-to]").forEach((c) => c.classList.toggle("active", c === node));
+      });
+    });
     el.querySelectorAll("[data-align]").forEach((node) => {
-      node.addEventListener("click", () => intents.onAlign(node.getAttribute("data-align")));
+      node.addEventListener("click", () => intents.onAlign(node.getAttribute("data-align"), alignTo));
+    });
+    el.querySelectorAll("[data-distribute]").forEach((node) => {
+      node.addEventListener("click", () => intents.onDistribute(node.getAttribute("data-distribute")));
     });
   }
 

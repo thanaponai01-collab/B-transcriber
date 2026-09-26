@@ -614,3 +614,16 @@ test("index.html has nine anchor cells and six align buttons, each with a value 
   assert.deepEqual([...anchors].sort(), Object.keys(ANCHOR_TARGETS).sort());
   assert.deepEqual([...edges].sort(), [...ALIGN_EDGES].sort());
 });
+
+test("index.html's Phase 6 controls carry values the feature knows: two align targets, four distributions", async () => {
+  const targets = [...html.matchAll(/data-align-to="([^"]+)"/g)].map((m) => m[1]);
+  const kinds = [...html.matchAll(/data-distribute="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(targets, ["frame", "selection"]);
+  assert.deepEqual([...kinds].sort(), ["h-centers", "h-gaps", "v-centers", "v-gaps"]);
+  // Each kind must be one distribute() accepts (it throws "Unknown distribution" otherwise; here
+  // it fails on the missing project first, which proves only that the name was not rejected).
+  const { distribute } = require("../uxp/cutdeck/features/align.js");
+  for (const kind of kinds) {
+    await assert.rejects(() => distribute({}, kind), (e) => !/Unknown distribution/.test(e.message));
+  }
+});
