@@ -554,3 +554,30 @@ project item verbatim, and record whether any column carries source resolution a
   a legitimate option and cheaper than Phases 0–6. If the goal is CutDeck doing it natively,
   alongside its own AL and quick-effect gestures, the plan stands — none of these integrate with
   that.
+
+---
+
+## Live run protocol — Phases 2–5, from saved projects (2026-09-26)
+
+A save is stronger evidence than an Effect Controls screenshot: the reader
+(`cutdeck/prproj_reader.py`) reads exactly what Premiere persisted. Work on a **copy** of
+`test_projects/probe.prproj`; one clip per row below, Sequence 04 (1920×1080), sources 1280×720.
+
+1. Set the clip up in Effect Controls, **Ctrl+S**, copy the file to `before.prproj`.
+2. Do one panel action on that clip, **Ctrl+S**, copy to `after.prproj`.
+3. `python -m cutdeck.prproj_anchor_check before.prproj after.prproj --sequence "Sequence 04"`
+   - Phase 2 (typed field): the changed field must read the typed value (in px / % / °).
+   - Phases 3–4 (anchor picker): the line must say `anchor on <target>` and `picture moved 0.00 px`.
+   - Phase 5 (align): the field `position` changes; read the new value in px with
+     `python -m cutdeck.prproj_pixels after.prproj --sequence "Sequence 04"`.
+4. Gate 2 also needs **undo**: Ctrl+Z, save, and the check against `before.prproj` shows no change.
+5. Watch the Program Monitor for every anchor move: **nothing may jump**. That is the only test
+   of whether Premiere draws by the panel's model (rotation sign, crop); the saved values can
+   only prove the panel wrote what the model says.
+
+Gate 4 matrix, run the nine anchor targets on each of the six clips: scale
+{100% uniform, 50% × Scale Width 80 with Uniform Scale off} × rotation {0°, 90°, 15°}, with a
+crop (10/20/30/40) so targets sit on the cropped picture. The offline version of this matrix
+(`tests/test_prproj_anchor_check.py`) passes, so a live failure means Premiere's model differs.
+Also run it once on an Adjustment Layer and once on the 2.0-PAR copy (the panel skips
+non-square-pixel clips with a reason; confirm that message shows and nothing is written).

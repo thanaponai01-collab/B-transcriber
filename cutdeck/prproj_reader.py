@@ -179,7 +179,7 @@ def _text_of(objs: _Objects, comp: ET.Element) -> dict | None:
 # own transform group. Position/Anchor are normalized (Position to the sequence frame, Anchor
 # to the clip's source frame); the rest are plain numbers (percent / degrees).
 _TRANSFORM_PARAMS = {
-    "AE.ADBE Motion": {0: "position", 1: "scale", 2: "scale_width", 4: "rotation", 5: "anchor",
+    "AE.ADBE Motion": {0: "position", 1: "scale", 2: "scale_width", 3: "uniform", 4: "rotation", 5: "anchor",
                        7: "crop_left", 8: "crop_top", 9: "crop_right", 10: "crop_bottom"},
     "AE.ADBE Opacity": {0: "opacity"},
     "AE.ADBE Text": {2: "position", 3: "scale", 4: "scale_width", 6: "rotation", 7: "opacity",
@@ -190,6 +190,8 @@ _TRANSFORM_PARAMS = {
 def _key(raw: str) -> dict:
     """One keyframe record ``time,value,...`` -> {time, value}; a point value is ``x:y``."""
     time, value = raw.split(",")[:2]
+    if value in ("true", "false"):
+        return {"time": _seconds(time), "value": value == "true"}
     number = [float(v) for v in value.split(":")]
     return {"time": _seconds(time), "value": number if ":" in value else number[0]}
 

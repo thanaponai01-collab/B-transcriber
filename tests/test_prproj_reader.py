@@ -267,6 +267,7 @@ def test_motion_params_and_their_coordinate_spaces():
     assert [p[k]["value"] for k in ("crop_left", "crop_top", "crop_right", "crop_bottom")] == [10, 20, 30, 40]
     assert _effect(_seq04()["video_tracks"][1]["clips"][0], "AE.ADBE Opacity")["params"]["opacity"]["value"] == 70
     assert "keyframes" not in p["position"]
+    assert p["uniform"]["value"] is False  # Scale 50 is then the height, Scale Width 80 the width
 
 
 @pytest.mark.skipif(not REAL.exists(), reason="probe.prproj is a committed fixture")
