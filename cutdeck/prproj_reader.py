@@ -237,13 +237,23 @@ def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
     return out
 
 
+def _frame(rect: str | None) -> list[int] | None:
+    """``FrameRect`` text ``0,0,w,h`` -> [w, h]."""
+    return [int(v) for v in rect.split(",")[2:4]] if rect else None
+
+
 def _source(objs: _Objects, clip: ET.Element) -> dict:
     src = objs.ref(clip.find("Clip/Source"))
     if src is None:
         return {}
     media = objs.ref(src.find("MediaSource/Media"))
     if media is not None:
-        return {"media_path": _text(media, "ActualMediaFilePath") or _text(media, "FilePath")}
+        out = {"media_path": _text(media, "ActualMediaFilePath") or _text(media, "FilePath")}
+        # Anchor Point is normalized to this frame, not the sequence's (probe.prproj).
+        frame = _frame(_text(objs.ref(media.find("VideoStream")), "FrameRect"))
+        if frame:
+            out["source_frame"] = frame
+        return out
     nested = objs.ref(src.find("SequenceSource/Sequence"))
     if nested is not None:
         return {"nested_sequence": _text(nested, "Name")}
@@ -333,6 +343,8 @@ def _sequence(objs: _Objects, seq: ET.Element) -> dict:
             continue
         tracks = [objs.ref(t) for t in group.findall("TrackGroup/Tracks/Track")]
         out[f"{kind}_tracks"] = [_track(objs, t) for t in tracks if t is not None]
+        if kind == "video":
+            out["frame"] = _frame(_text(group, "FrameRect"))
     out["markers"] = _markers(objs, seq)
     return out
 
