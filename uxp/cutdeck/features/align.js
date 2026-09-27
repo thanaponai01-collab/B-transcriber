@@ -861,11 +861,38 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     }
   }
 
-  function slideField(_field, _text) {
-    // Intermediate scrub updates stay in panel UI so dragging creates exactly one undo step in Premiere.
+  let slideInFlight = false;
+  let pendingSlide = null;
+
+  async function applySlide(field, text) {
+    if (slideInFlight) {
+      pendingSlide = { field, text };
+      return;
+    }
+    slideInFlight = true;
+    try {
+      await setField(ppro, field, text);
+    } catch (e) {
+      console.error("CutDeck: slide update failed", e);
+    } finally {
+      slideInFlight = false;
+      if (pendingSlide) {
+        const next = pendingSlide;
+        pendingSlide = null;
+        await applySlide(next.field, next.text);
+      }
+    }
+  }
+
+  function slideField(field, text) {
+    return applySlide(field, text);
   }
 
   async function commitField(field, text) {
+    pendingSlide = null;
+    while (slideInFlight) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     return ctl.act(async () => {
       let result;
       try {

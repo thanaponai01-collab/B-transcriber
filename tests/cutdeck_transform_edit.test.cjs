@@ -951,20 +951,22 @@ test("alignToFrame and setAnchor work on a Graphic clip without Vector Motion", 
   close(pt(g.textAnchors[0]).y, -140, "Text anchor updated to -140");
 });
 
-test("scrubbing properties commits exactly one undo transaction on release", async () => {
+test("scrubbing properties updates host live during drag and commits on release", async () => {
   const a = motionClip("A", { scale: 100 });
   const { ppro, undoSteps } = host([a]);
   const ctl = { state: { busy: false }, act: async (fn) => fn(), render() {}, setStatus() {} };
   const feature = createAlignFeature({ ppro, ctl });
 
-  // Intermediate slide steps must NOT create undo steps in Premiere
+  // Intermediate slide steps MUST update host live for live action on Premiere monitor
   await feature.onSlideField("scale", "110");
-  await feature.onSlideField("scale", "120");
-  assert.equal(undoSteps.length, 0, "No undo steps created during drag");
+  assert.equal(a.params[1].value, 110, "Host value updated live to 110 during drag");
 
-  // Releasing the scrub commits exactly one undo step
+  await feature.onSlideField("scale", "120");
+  assert.equal(a.params[1].value, 120, "Host value updated live to 120 during drag");
+
+  // Releasing the scrub commits the final value
   await feature.onCommitField("scale", "120");
   assert.equal(a.params[1].value, 120, "Final value committed to host");
-  assert.equal(undoSteps.length, 1, "Exactly one undo step created for the entire scrub session");
-  assert.equal(undoSteps[0], "CutDeck: Set scale");
+  assert.ok(undoSteps.length >= 1, "Undo transactions executed");
+  assert.equal(undoSteps[undoSteps.length - 1], "CutDeck: Set scale");
 });
