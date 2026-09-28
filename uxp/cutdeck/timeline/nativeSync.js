@@ -348,43 +348,55 @@ async function syncSequence(ppro, deps) {
   const name = `${source.name}${SYNCED_SUFFIX}`;
   deps.onStatus(`Placing ${clips.length} clips in ${name}…`);
   const copyId = await copySequence(project, source, name, targets);
-  await placeAll(ppro, project, await findSequence(project, copyId), targets);
+  try {
+    await placeAll(ppro, project, await findSequence(project, copyId), targets);
 
-  // References go stale across transactions (#18): fetch the copy again before reading it.
-  const copy = await findSequence(project, copyId);
-  const placedClips = await readSequence(ppro, copy);
-  const problems = checkPlacement(placedClips, targets, ticksPerFrame);
+    // References go stale across transactions (#18): fetch the copy again before reading it.
+    const copy = await findSequence(project, copyId);
+    const placedClips = await readSequence(ppro, copy);
+    const problems = checkPlacement(placedClips, targets, ticksPerFrame);
 
-  // Restore clip color label if any placed clip (e.g. V1) reverted to default color
-  const colorFixActions = [];
-  for (const c of [...placedClips.video, ...placedClips.audio]) {
-    const isVid = c.kind === "video";
-    const t = targets.find((tgt) => (isVid ? tgt.tracks.video === c.track : tgt.tracks.audio <= c.track && c.track < tgt.tracks.audio + tgt.clip.audio.length) && tgt.clip.path === c.path);
-    if (t && t.clip.colorLabel !== null && t.clip.colorLabel !== undefined && c.colorLabel !== t.clip.colorLabel) {
-      if (typeof c.item.createSetColorLabelAction === "function") {
-        const act = c.item.createSetColorLabelAction(t.clip.colorLabel);
-        if (act) colorFixActions.push(act);
-      }
-      if (c.projectItem && typeof c.projectItem.createSetColorLabelAction === "function") {
-        const act = c.projectItem.createSetColorLabelAction(t.clip.colorLabel);
-        if (act) colorFixActions.push(act);
+    // Restore clip color label if any placed clip (e.g. V1) reverted to default color
+    const colorFixActions = [];
+    for (const c of [...placedClips.video, ...placedClips.audio]) {
+      const isVid = c.kind === "video";
+      const t = targets.find((tgt) => (isVid ? tgt.tracks.video === c.track : tgt.tracks.audio <= c.track && c.track < tgt.tracks.audio + tgt.clip.audio.length) && tgt.clip.path === c.path);
+      if (t && t.clip.colorLabel !== null && t.clip.colorLabel !== undefined && c.colorLabel !== t.clip.colorLabel) {
+        if (typeof c.item.createSetColorLabelAction === "function") {
+          const act = c.item.createSetColorLabelAction(t.clip.colorLabel);
+          if (act) colorFixActions.push(act);
+        }
+        if (c.projectItem && typeof c.projectItem.createSetColorLabelAction === "function") {
+          const act = c.projectItem.createSetColorLabelAction(t.clip.colorLabel);
+          if (act) colorFixActions.push(act);
+        }
       }
     }
-  }
-  if (colorFixActions.length > 0) {
-    runTransaction(project, "CutDeck Sync: restore clip colors", (compound) => {
-      for (const act of colorFixActions) {
-        if (act) compound.addAction(act);
-      }
-    });
-  }
+    if (colorFixActions.length > 0) {
+      runTransaction(project, "CutDeck Sync: restore clip colors", (compound) => {
+        for (const act of colorFixActions) {
+          if (act) compound.addAction(act);
+        }
+      });
+    }
 
-  await project.openSequence(copy);
-  await project.setActiveSequence(copy);
-  const report = formatReport(name, plan, clips, skipped, problems);
-  targets.length = 0;
-  clips.length = 0;
-  return { text: report, problems };
+    await project.openSequence(copy);
+    await project.setActiveSequence(copy);
+    const report = formatReport(name, plan, clips, skipped, problems);
+    targets.length = 0;
+    clips.length = 0;
+    return { text: report, problems };
+  } catch (error) {
+    // The copy is half-built: name it so, before a rerun makes another _Synced beside it.
+    try {
+      const failed = await findSequence(project, copyId);
+      const item = await failed.getProjectItem();
+      runTransaction(project, "CutDeck Sync: mark failed copy", (compound) => {
+        compound.addAction(item.createSetNameAction(`${name} (FAILED)`));
+      });
+    } catch (_) { /* the error below is the one that matters */ }
+    throw error;
+  }
 }
 
 module.exports = { syncSequence, readSequence, mediaPath, groupUnits, groupClips, assignTracks, startTicks,

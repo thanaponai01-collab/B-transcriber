@@ -125,3 +125,29 @@ test("a job the helper lost in a restart is cleared with its message", async () 
   assert.equal(ctl.state.status.level, "error");
   assert.match(ctl.state.status.text, /restarted while this job ran/);
 });
+
+test("roughCut.follow: a cut that failed after its copy was made clears the job, so Resume cannot make a second copy", async () => {
+  const ctl = createController({ render: () => {} });
+  const job = { job_id: "job-7", state: "ready", output: "native", cuts: { cuts_frames: [[1, 2]], ticks_per_frame: "1" },
+    context: { sequence_id: "seq-1", sequence_name: "Shoot" }, result_name: "Shoot_Cut" };
+  const storage = createMockStorage({ [KEY]: JSON.stringify(job) });
+  const seq = { guid: { toString: () => "seq-1" } };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) } };
+  const applyCut = async () => { throw Object.assign(new Error("boom"), { copyCreated: true }); };
+  const roughCut = createRoughCutFeature({ ppro, ctl, rpc: async () => {}, storage, applyCut });
+  await assert.rejects(roughCut.follow({ ...job }), /boom/);
+  assert.equal(storage.getItem(KEY), null);
+});
+
+test("roughCut.follow: a cut that failed before any copy stays resumable", async () => {
+  const ctl = createController({ render: () => {} });
+  const job = { job_id: "job-8", state: "ready", output: "native", cuts: { cuts_frames: [[1, 2]], ticks_per_frame: "1" },
+    context: { sequence_id: "seq-1", sequence_name: "Shoot" }, result_name: "Shoot_Cut" };
+  const storage = createMockStorage({ [KEY]: JSON.stringify(job) });
+  const seq = { guid: { toString: () => "seq-1" } };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) } };
+  const applyCut = async () => { throw new Error("Cannot cut natively: nested"); };
+  const roughCut = createRoughCutFeature({ ppro, ctl, rpc: async () => {}, storage, applyCut });
+  await assert.rejects(roughCut.follow({ ...job }), /Cannot cut natively/);
+  assert.notEqual(storage.getItem(KEY), null);
+});

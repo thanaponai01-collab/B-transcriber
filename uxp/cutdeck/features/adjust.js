@@ -5,7 +5,6 @@ const SETTINGS_KEY = "cutdeck.adj.settings";
 
 const DEFAULT_SETTINGS = {
   frames: 16,
-  bin: "CutDeck AL/FX",
   color: "Iris",
   // Default OFF (2026-09-22): transitions always get the full requested 50/50
   // width now that overlapping ones auto-stack onto separate tracks (see
@@ -205,7 +204,7 @@ function createAdjustFeature({
     if (Object.prototype.hasOwnProperty.call(patch, "audioTrack")) {
       ctl.state.audioTrack = patch.audioTrack;
     }
-    const settingKeys = ["frames", "bin", "color", "clamp"];
+    const settingKeys = ["frames", "color", "clamp"];
     let changedSettings = false;
     const nextSettings = { ...(ctl.state.settings || DEFAULT_SETTINGS) };
     for (const key of settingKeys) {

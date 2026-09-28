@@ -240,44 +240,55 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; nothing was cut`);
   const copy = created[0];
   const copyItem = await copy.getProjectItem();
-  runTransaction(project, "CutDeck: name copy", (compound) => {
-    if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
-  });
-  // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
-  // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
-  // only once cut (or failed), so Premiere does not redraw it for every edit.
-  const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
-  runTransaction(project, "CutDeck: file rough cut", (compound) => {
-    const parent = asBinLike(copyItem.getParentBin());
-    if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
-  });
-  const started = Date.now();
-  // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
-  // each item on the copy by position and throws if one is not there.
-  const items = before.items;
-  const plan = planCutApply(items, cuts);
-  let steps, actual;
   try {
-    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
-    actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
-  } finally {
-    await timed("open copy", async () => {
-      await project.openSequence(copy);
-      await project.setActiveSequence(copy);
+    runTransaction(project, "CutDeck: name copy", (compound) => {
+      if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
     });
+    // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
+    // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
+    // only once cut (or failed), so Premiere does not redraw it for every edit.
+    const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
+    runTransaction(project, "CutDeck: file rough cut", (compound) => {
+      const parent = asBinLike(copyItem.getParentBin());
+      if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
+    });
+    const started = Date.now();
+    // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
+    // each item on the copy by position and throws if one is not there.
+    const items = before.items;
+    const plan = planCutApply(items, cuts);
+    let steps, actual;
+    try {
+      steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+      actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
+    } finally {
+      await timed("open copy", async () => {
+        await project.openSequence(copy);
+        await project.setActiveSequence(copy);
+      });
+    }
+    const elapsedSeconds = (Date.now() - started) / 1000;
+    const problems = verifyReadBack(items, plan, actual);
+    before.items = null;
+    before.transitions = null;
+    actual = null;
+    if (problems.length) {
+      throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
+        + "It is left open for inspection; your original sequence is untouched.");
+    }
+    const splits = plan.edits.filter((e) => e.op === "split").length;
+    console.log("CutDeck rough cut timings (s):", timings);
+    return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
+  } catch (error) {
+    // A half-cut copy must not pass for the result, nor collide with the next attempt's name.
+    try {
+      runTransaction(project, "CutDeck: mark failed copy", (compound) => {
+        compound.addAction(copyItem.createSetNameAction(`${resultName} (FAILED)`));
+      });
+    } catch (_) { /* the error below is the one that matters */ }
+    error.copyCreated = true;
+    throw error;
   }
-  const elapsedSeconds = (Date.now() - started) / 1000;
-  const problems = verifyReadBack(items, plan, actual);
-  before.items = null;
-  before.transitions = null;
-  actual = null;
-  if (problems.length) {
-    throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
-      + "It is left open for inspection; your original sequence is untouched.");
-  }
-  const splits = plan.edits.filter((e) => e.op === "split").length;
-  console.log("CutDeck rough cut timings (s):", timings);
-  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
 }
 
 module.exports = { applyNativeCut, applyPlan, readItems };

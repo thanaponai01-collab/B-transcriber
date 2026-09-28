@@ -412,3 +412,15 @@ test("restores V1 clip color if host placement resets V1 to default track color"
   assert.ok(v1);
   assert.equal(v1.colorLabelIndex, 6, "V1 color must be restored from 1 back to 6");
 });
+
+test("a placing failure renames the synced copy (FAILED) so a rerun cannot be confused with it", async () => {
+  const host = fakeHost({ files: FILES, timeline: TIMELINE });
+  const helper = fakeHelper(PLAN);
+  const execute = host.project.executeTransaction;
+  host.project.executeTransaction = (fn, label) => {
+    if (label === "CutDeck Sync") throw new Error("Premiere refused the placing");
+    return execute.call(host.project, fn, label);
+  };
+  await assert.rejects(run(host, helper), /Premiere refused the placing/);
+  assert.deepEqual(host.sequences.map((s) => s.name), ["Shoot", "Shoot_Synced (FAILED)"]);
+});

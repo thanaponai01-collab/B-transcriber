@@ -216,3 +216,20 @@ test("a clone that stays empty still stops the cut, saying where", async () => {
   flakyClones(h, new Set([30, 31]));
   await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /split at cut edges: action \d+ of \d+ .*returned no action \(undefined\), twice/);
 });
+
+test("a cut that fails after the copy exists renames the copy (FAILED) and says so on the error", async () => {
+  const h = fakeHost(golden.before);
+  flakyClones(h, new Set([30, 31]));
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);
+  assert.ok(error, "the cut should fail");
+  assert.equal(error.copyCreated, true);
+  assert.deepEqual(h.sequences.map((s) => s.name).sort(), ["Result (FAILED)", "Shoot"]);
+});
+
+test("a refusal before the copy is made leaves no copy and no copyCreated flag", async () => {
+  const h = fakeHost(golden.before, { speedOf: () => 2 });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);
+  assert.ok(error);
+  assert.notEqual(error.copyCreated, true);
+  assert.deepEqual(h.sequences.map((s) => s.name), ["Shoot"]);
+});

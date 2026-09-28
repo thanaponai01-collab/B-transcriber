@@ -8,7 +8,7 @@ const transformParams = require("../transform/params.js");
 const transformGeometry = require("../transform/geometry.js");
 const transformApply = require("../transform/apply.js");
 const frameBounds = require("../transform/frameBounds.js");
-const { activeProjectAndSequence } = require("../host/project.js");
+const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
 const { PROBES, runProbe, createProbesFeature } = require("./probes.js");
 
 const transformProbe = PROBES.find((p) => p.id === "transform");
@@ -166,6 +166,7 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
   const unhideActions = [];
   const ready = [];
   let done = 0;
+  let written = false;
   try {
     for (const clip of clips) {
       const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
@@ -241,19 +242,25 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
     }
     if (done && (writes.length > 0 || paramWrites.length > 0 || unhideActions.length > 0)) {
       await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites, unhideActions);
+      written = true;
     }
     for (const u of clipBoundsUpdates) {
       frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, u.newPos);
     }
   } finally {
-    if (unhideActions.length > 0 && !done) {
-      const { runTransaction } = require("../timeline/effects.js");
-      runTransaction(project, "CutDeck: restore clips", (compound) => {
-        for (const act of unhideActions) {
-          if (typeof act === "function") act(compound);
-          else if (act) compound.addAction(act);
-        }
-      });
+    // The unhide actions ride in the write's own transaction, so they only need running here
+    // when that write never happened (nothing to write, or it threw).
+    if (unhideActions.length > 0 && !written) {
+      try {
+        runTransaction(project, "CutDeck: restore clips", (compound) => {
+          for (const act of unhideActions) {
+            if (typeof act === "function") act(compound);
+            else if (act) compound.addAction(act);
+          }
+        });
+      } catch (restoreError) {
+        console.error("CutDeck: could not put hidden clips back", restoreError); // keep the original error
+      }
     }
   }
   // Text layer Position writes are not proven live yet: log before / written / read back, so one

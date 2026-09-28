@@ -970,3 +970,24 @@ test("scrubbing properties updates host live during drag and commits on release"
   assert.ok(undoSteps.length >= 1, "Undo transactions executed");
   assert.equal(undoSteps[undoSteps.length - 1], "CutDeck: Set scale");
 });
+
+test("a failed write puts clips the measurement hid back, in their own restore transaction", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  let disabled = false;
+  g.createSetDisabledAction = (d) => fake.action(() => { disabled = d; });
+  const { ppro, undoSteps } = host([g]);
+  const project = await ppro.Project.getActiveProject();
+  const execute = project.executeTransaction;
+  project.executeTransaction = (cb, label) => {
+    if (label === "CutDeck: Align left") throw new Error("write refused");
+    return execute.call(project, cb, label);
+  };
+  // The measurement hid the clip; only its unhide action can bring it back.
+  const measure = async () => {
+    disabled = true;
+    return { bounds: TEXT_BOX, unhideAction: (compound) => compound.addAction(g.createSetDisabledAction(false)) };
+  };
+  await assert.rejects(alignToFrame(ppro, "left", measure), /write refused/);
+  assert.equal(disabled, false, "the clip was left hidden");
+  assert.deepEqual(undoSteps, ["CutDeck: restore clips"]);
+});

@@ -438,10 +438,6 @@
 
       <div class="settings-grid-2col">
         <div class="setting-row">
-          <label class="setting-label" for="setting-bin">Project Bin</label>
-          <input type="text" id="setting-bin" class="setting-input" data-act="setting-bin" value="CutDeck AL/FX">
-        </div>
-        <div class="setting-row">
           <label class="setting-label" for="setting-color">Color</label>
           <select id="setting-color" class="setting-select" data-act="setting-color">
             <option value="Iris" selected>Iris (Cyan)</option>
@@ -466,7 +462,7 @@
 
       <div class="setting-row">
         <label class="setting-label">Presets</label>
-        <div class="setting-subtext">Select a clip or Adjustment Layer that already has a real effect applied to it in Premiere, name it, then Capture. The first 9 captured presets get their own quick button (3x3 grid) on the Adj &amp; FX page.</div>
+        <div class="setting-subtext">Select a clip or Adjustment Layer that already has a real effect applied to it in Premiere, name it, then Capture. Every captured preset gets its own quick button (3-column grid) on the Adj &amp; FX page.</div>
         <div class="fx-capture-row">
           <input type="text" id="fx-capture-name" class="setting-input" placeholder="Name this preset…" data-act="fx-capture-name">
           <div id="btn-capture-preset" class="btn-secondary" role="button" data-act="btn-capture-preset" title="Capture the selected clip or Adjustment Layer's real effects as a new preset">
@@ -515,7 +511,7 @@
           <div class="help-tool-name">Settings Reference:</div>
           <div class="help-item">• <strong>Transition (50/50)</strong>: Frame duration split evenly across the cut point (e.g. 16f = 8f left + 8f right).</div>
           <div class="help-item">• <strong>Clamp</strong>: Shrinks transition on short clips to prevent bleeding into adjacent cuts.</div>
-          <div class="help-item">• <strong>Bin &amp; Color</strong>: Target bin folder &amp; timeline label color for created ALs.</div>
+          <div class="help-item">• <strong>Color</strong>: Timeline label color for created ALs.</div>
         </div>
       </div>
     </div>
