@@ -28,12 +28,10 @@ pre-ASR check uses.
 from __future__ import annotations
 
 import shutil
-import subprocess
-import tempfile
 from fractions import Fraction
-from pathlib import Path
 
 from cutdeck.sequence_model import Sequence
+from cutdeck.sync import extract_mono_audio
 from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, range_window_frames
 
 _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
@@ -79,42 +77,28 @@ def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | N
     import soundfile as sf
 
     buffer = np.zeros(total_samples, dtype=np.float32)
-    tmp_dir = Path(tempfile.mkdtemp(prefix="cutdeck_extract_"))
-    try:
-        for i, clip in enumerate(track.clips):
-            if not clip.enabled:
+    for clip in track.clips:
+        if not clip.enabled:
+            continue
+        src_path = clip.media_path
+        in_s = clip.in_ticks / PPRO_TICKS_PER_SECOND
+        out_s = clip.out_ticks / PPRO_TICKS_PER_SECOND
+        start_s = clip.start_ticks / PPRO_TICKS_PER_SECOND
+        if window is not None:
+            # Trim the source span to the part of the clip inside the window.
+            keep_lo = max(start_s, window[0])
+            keep_hi = min(start_s + (out_s - in_s), window[1])
+            if keep_hi <= keep_lo:
                 continue
-            src_path = clip.media_path
-            in_s = clip.in_ticks / PPRO_TICKS_PER_SECOND
-            out_s = clip.out_ticks / PPRO_TICKS_PER_SECOND
-            start_s = clip.start_ticks / PPRO_TICKS_PER_SECOND
-            if window is not None:
-                # Trim the source span to the part of the clip inside the window.
-                keep_lo = max(start_s, window[0])
-                keep_hi = min(start_s + (out_s - in_s), window[1])
-                if keep_hi <= keep_lo:
-                    continue
-                in_s, out_s = in_s + (keep_lo - start_s), in_s + (keep_hi - start_s)
-                start_s = keep_lo
+            in_s, out_s = in_s + (keep_lo - start_s), in_s + (keep_hi - start_s)
+            start_s = keep_lo
 
-            seg_path = tmp_dir / f"seg{i}.wav"
-            cmd = ["ffmpeg", "-y", "-i", str(src_path),
-                   "-ss", f"{in_s:.9f}", "-to", f"{out_s:.9f}",
-                   "-vn", "-ac", "1", "-ar", str(_WORKING_SAMPLE_RATE), str(seg_path)]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"ffmpeg failed extracting {src_path} [{in_s:.3f}s-{out_s:.3f}s]: "
-                    f"{result.stderr[-500:]}"
-                )
-
-            seg_audio, _sr = sf.read(str(seg_path), dtype="float32")
-            offset = int(round((start_s - win_lo_s) * _WORKING_SAMPLE_RATE))
-            end = min(offset + len(seg_audio), total_samples)
-            if end > offset:
-                buffer[offset:end] = seg_audio[: end - offset]
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        seg_audio = extract_mono_audio(src_path, start_s=in_s, duration_s=out_s - in_s,
+                                       sample_rate=_WORKING_SAMPLE_RATE)
+        offset = int(round((start_s - win_lo_s) * _WORKING_SAMPLE_RATE))
+        end = min(offset + len(seg_audio), total_samples)
+        if end > offset:
+            buffer[offset:end] = seg_audio[: end - offset]
 
     sf.write(out_wav, buffer, _WORKING_SAMPLE_RATE)
     return out_wav

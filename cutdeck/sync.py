@@ -76,7 +76,10 @@ def extract_mono_audio(
         cmd.extend(["-t", f"{duration_s:.6f}"])
     cmd.extend([
         "-vn",
-        "-ac", "1",
+        # Mono with ffmpeg's normalized downmix. A plain `-ac 1` into float output skips the
+        # normalization and comes out 1.41x louder than the same file decoded to an int WAV,
+        # which is what the Rough Cut analysis was tuned on (measured 2026-09-28).
+        "-af", "aresample=ochl=mono:rematrix_maxval=1.0",
         "-ar", str(sample_rate),
         "-f", "f32le",
         "pipe:1",
