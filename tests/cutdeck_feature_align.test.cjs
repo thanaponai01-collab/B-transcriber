@@ -1,10 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  createAlignFeature,
-  describeField,
-  readAlignTransform,
-} = require("../uxp/cutdeck/features/align.js");
+const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+const { describeField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
 const { createController } = require("../uxp/cutdeck/features/controller.js");
 
 test("align: describeField handles missing, animated, points, and scalars", () => {

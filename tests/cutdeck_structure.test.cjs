@@ -156,7 +156,7 @@ function extractRequires(source) {
 // L1 UI: core/panel.js, core/alignPanel.js, core/progressText.js
 // L2 Features: features/*
 // L3 Domain: workflow.js, helperStart.js, core/rpc.js, presetStore.js, timelineRange.js,
-//            capabilityProbe.js, syncProbe.js, probes/*,
+//            capabilityProbe.js, roughCutProbe.js, syncProbe.js, layoutProbe.js,
 //            timeline/adjustmentLayer.js, timeline/alPlacement.js, timeline/alLibrary.js,
 //            timeline/alProject.js, timeline/alSeedData.js, timeline/effects.js,
 //            timeline/nativeSync.js, timeline/cutPlanApply.js, transform/*
@@ -254,6 +254,19 @@ test("(c) layer direction: no module imports upward (lower layer requiring highe
   }
 
   assert.deepEqual(violations, [], `Upward layer imports detected: ${violations.join(", ")}`);
+});
+
+test("(e) a feature file requires no other feature file except probes.js", () => {
+  const violations = [];
+  for (const file of allJsFiles) {
+    const srcRel = path.relative(uxpDir, file).replace(/\\/g, "/");
+    if (!srcRel.startsWith("features/")) continue;
+    for (const req of extractRequires(fs.readFileSync(file, "utf8"))) {
+      if (!req.module.startsWith("./") || req.module === "./probes.js") continue;
+      violations.push(`${srcRel} -> ${req.module}`);
+    }
+  }
+  assert.deepEqual(violations, [], `Feature-to-feature imports: ${violations.join(", ")}`);
 });
 
 test("(d) require('premierepro') at module scope appears only in main.js (or known exceptions)", () => {

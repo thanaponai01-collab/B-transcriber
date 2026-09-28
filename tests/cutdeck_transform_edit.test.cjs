@@ -13,7 +13,8 @@ const assert = require("node:assert/strict");
 const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
-const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform, createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
+const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 

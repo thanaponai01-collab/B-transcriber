@@ -30,7 +30,7 @@ const {
   alignToFrame,
   alignToSelection,
   distribute,
-} = require("./align.js");
+} = require("../transform/edit.js");
 
 const COMMANDS = [
   "read_sequence",
