@@ -737,8 +737,9 @@ async function setField(ppro, field, text) {
   return { done, skipped };
 }
 
-// Without events the panel falls back to the old fast poll. With them there is no poll:
-// a Position drag in Effect Controls fires no event and shows on the next click or Refresh.
+// The panel keeps this heartbeat poll even with events: Premiere fires no event for a timeline
+// click or a Position drag in Effect Controls, so the poll is what picks those up
+// (tests/cutdeck_align_panel.test.cjs pins it).
 const FAST_POLL_MS = 150;
 
 // Subscribes `handler` to selection changes and sequence switches. EventManager and
@@ -946,6 +947,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       await runProbe(transformProbe, ppro, ctl);
       if (ctl.state.status.level === "ready") ctl.setStatus(ctl.state.status.text, "info");
     }),
+    measure,
     refresh: refreshAlignSequence,
     poll: pollAlignTransform,
     startPolling: startAlignPolling,

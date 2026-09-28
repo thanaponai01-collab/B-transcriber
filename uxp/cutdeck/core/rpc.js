@@ -211,10 +211,13 @@
         s.onmessage = s.onerror = s.onclose = null;
         try { s.close(); } catch (_) {}
       }
-      for (const entry of pending.values()) {
+      const closed = new Error("Helper connection closed.");
+      for (const entry of [...pending.values()]) {
         clearTimer(entry.timer);
+        entry.reject(closed);
       }
       pending.clear();
+      for (const set of [...watchers.values()]) for (const w of [...set]) w.fail(closed);
       watchers.clear();
     };
 
