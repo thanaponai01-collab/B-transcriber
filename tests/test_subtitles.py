@@ -159,3 +159,22 @@ def test_srt_round_trip_already_frame_aligned_is_lossless_under_quantization():
     parsed = read_subtitles(content, "srt")
     assert parsed[0]["start_ms"] == 40
     assert parsed[0]["end_ms"] == 2000
+
+
+def test_write_skips_blank_cues_and_renumbers():
+    tokens = [
+        {"text": "one", "start_ms": 0, "end_ms": 500},
+        {"text": "  ", "start_ms": 500, "end_ms": 900},
+        {"text": "", "start_ms": 900, "end_ms": 950},
+        {"text": "two", "start_ms": 1000, "end_ms": 2000},
+    ]
+    parsed = read_subtitles(write_subtitles(tokens, "srt"), "srt")
+    assert [p["text"] for p in parsed] == ["one", "two"]
+    assert write_subtitles(tokens, "srt").count("-->") == 2
+    assert "\n2\n00:00:01,000" in write_subtitles(tokens, "srt")
+
+
+def test_write_text_blank_line_cannot_split_a_cue():
+    tokens = [{"text": "hi\n\n2\n00:00 --> x", "start_ms": 0, "end_ms": 1000}]
+    out = write_subtitles(tokens, "srt")
+    assert "\n\n" not in out.rstrip("\n")

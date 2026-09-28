@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -172,8 +172,11 @@ def save_corrections(job_id: int, req: SaveRequest):
 
 
 @app.get("/jobs/{job_id}/export/srt")
-def export_srt_endpoint(job_id: int, fps: float | None = None):
+def export_srt_endpoint(job_id: int, fps: float | None = Query(None, gt=0, allow_inf_nan=False)):
     conn = _conn()
+    if store.get_job(conn, job_id) is None:
+        conn.close()
+        raise HTTPException(404, "Job not found")
     tokens = store.get_tokens(conn, job_id)
     corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
     conn.close()
@@ -189,8 +192,11 @@ def export_srt_endpoint(job_id: int, fps: float | None = None):
 
 
 @app.get("/jobs/{job_id}/export/vtt")
-def export_vtt_endpoint(job_id: int, fps: float | None = None):
+def export_vtt_endpoint(job_id: int, fps: float | None = Query(None, gt=0, allow_inf_nan=False)):
     conn = _conn()
+    if store.get_job(conn, job_id) is None:
+        conn.close()
+        raise HTTPException(404, "Job not found")
     tokens = store.get_tokens(conn, job_id)
     corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
     conn.close()
