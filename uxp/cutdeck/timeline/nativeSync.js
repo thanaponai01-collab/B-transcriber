@@ -302,12 +302,18 @@ function checkPlacement(after, targets, ticksPerFrame) {
 
 const REASON = { no_audio: "no audio", unmatched: "matched nothing", silent: "silent audio", too_short: "too short" };
 
+/* The helper's cause for an unmatched clip, in its trailing parentheses. */
+const refusedBecause = (p) => {
+  const cause = p.status === "unmatched" && /\((.+)\)$/.exec(p.reason || "");
+  return cause ? ` (${cause[1]})` : "";
+};
+
 function formatReport(name, plan, clips, skipped, problems) {
   const byId = new Map(clips.map((c) => [c.id, c]));
   const placed = plan.placements.filter((p) => p.status === "anchor" || p.status === "synced");
   const back = plan.placements.filter((p) => !placed.includes(p));
   const lines = [`${placed.length} synced in ${plan.sessions} session${plan.sessions === 1 ? "" : "s"}.`
-    + (back.length ? ` ${back.length} at the back: ${back.map((p) => `${byId.get(p.id).name} ${REASON[p.status] || p.status}`).join(", ")}.` : "")];
+    + (back.length ? ` ${back.length} at the back: ${back.map((p) => `${byId.get(p.id).name} ${REASON[p.status] || p.status}${refusedBecause(p)}`).join(", ")}.` : "")];
   const drifting = placed.filter((p) => p.reason);
   if (drifting.length) lines.push(drifting.map((p) => `${byId.get(p.id).name} ${p.reason}.`).join(" "));
   if (skipped.length) lines.push(`Skipped ${skipped.length} item(s) with no media file (titles, graphics, nests).`);
