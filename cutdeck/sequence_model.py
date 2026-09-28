@@ -37,6 +37,7 @@ class Clip:
     in_ticks: int     # source In / Out
     out_ticks: int
     enabled: bool
+    speed: float = 1.0  # playback speed; 1.0 = normal. The analysis reads audio at normal speed only.
 
     @property
     def end_ticks(self) -> int:
@@ -149,7 +150,10 @@ def from_panel_json(sequence) -> Sequence:
             media_out = _ticks(clip.get("out_ticks"), "out_ticks")
             if media_out <= media_in:
                 raise ValueError(f"A clip on A{index} has its Out before its In")
-            clips.append(Clip(path, start, media_in, media_out, clip["enabled"]))
+            speed = clip.get("speed", 1.0)
+            if type(speed) not in (int, float) or not 0 < speed < float("inf"):
+                raise ValueError(f"A clip on A{index} has a malformed speed")
+            clips.append(Clip(path, start, media_in, media_out, clip["enabled"], float(speed)))
         out.append(Track(index - 1, not track["enabled"], tuple(clips)))
     return Sequence(tpf, end, tuple(out))
 
@@ -241,6 +245,12 @@ def check_reference_audio(sequence: Sequence, audio_track_index: int | None = No
     clips = [clip for clip in track.clips if clip.enabled]
     if not clips:
         raise XmlRecutRefusal("the reference audio track has no enabled clips")
+    for clip in clips:
+        if clip.speed != 1.0:
+            raise XmlRecutRefusal(
+                f"a clip on A{track.index + 1} plays at {clip.speed * 100:.0f}% speed; the analysis reads its "
+                "audio at normal speed, so its cuts would land in the wrong places. Set it to 100% or choose "
+                "another Reference Audio track")
     files: list[Path] = []
     for clip in clips:
         if Path(clip.media_path) not in files:

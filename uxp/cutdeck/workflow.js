@@ -3,7 +3,7 @@
    Rough Cut input (docs/arch-design-helper-v2.md move 6): the audio tracks are read natively and
    sent to the helper, which writes the FCP7 subset its analysis reads; nothing is exported.
    Adobe APIs read here: Sequence.getAudioTrackCount/getAudioTrack, AudioTrack.isMuted,
-   AudioClipTrackItem.getStartTime/getInPoint/getOutPoint/isDisabled/getProjectItem,
+   AudioClipTrackItem.getStartTime/getInPoint/getOutPoint/isDisabled/getSpeed/getProjectItem,
    ClipProjectItem.getMediaFilePath (reference/adobe/api/premierepro.txt:54-88,131,567-568).
    getStartTime/getInPoint/getOutPoint (media-relative) and getMediaFilePath are proven live
    (PREMIERE_FACTS "Track items", "Project items"); isMuted and audio isDisabled are not yet. */
@@ -45,10 +45,14 @@ async function readAudioTracks(ppro, sequence, snapshotContext) {
     for (const item of track ? await getTrackClipItems(track, ppro) : []) {
       let path = null;
       try { path = await mediaPath(ppro, item); } catch (_) { /* nested sequence: no file */ }
+      // Sent only when it is not 100%; a read that fails counts as normal speed, like isOff above.
+      let speed = 1;
+      try { speed = Number(await item.getSpeed()); } catch (_) { /* not reported */ }
       clips.push({ path, enabled: !(await isOff(() => item.isDisabled())),
         start_ticks: toTicks(await item.getStartTime()).toString(),
         in_ticks: toTicks(await item.getInPoint()).toString(),
-        out_ticks: toTicks(await item.getOutPoint()).toString() });
+        out_ticks: toTicks(await item.getOutPoint()).toString(),
+        ...(Number.isFinite(speed) && speed > 0 && speed !== 1 ? { speed } : {}) });
     }
     tracks.push({ enabled: !(track && await isOff(() => track.isMuted())), clips });
   }
