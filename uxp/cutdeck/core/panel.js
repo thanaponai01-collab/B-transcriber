@@ -396,6 +396,7 @@
       framesInput.addEventListener("change", (e) => {
         const val = parseInt(e.target.value, 10);
         if (!isNaN(val) && val >= 2 && val <= 240) intents.onSettingChange({ frames: val });
+        else e.target.value = currentFrames();
       });
     }
     const colorInput = $("setting-color");

@@ -5,6 +5,7 @@
 const capability = () => require("../capabilityProbe.js");
 const syncProbe = () => require("../syncProbe.js");
 const roughCutProbe = () => require("../roughCutProbe.js");
+const layoutProbe = () => require("../layoutProbe.js");
 
 const PROBES = [
   {
@@ -68,6 +69,20 @@ const PROBES = [
     format: (report) => roughCutProbe().formatNativeCutReport(report),
     logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
     logLabel: "CutDeck native cut probe",
+  },
+  {
+    id: "mutestate",
+    startText: "Reading every track's mute state…",
+    run: (ppro) => layoutProbe().probeMuteState(ppro),
+    format: (report) => layoutProbe().formatMuteStateReport(report),
+    logLabel: "CutDeck mute state probe",
+  },
+  {
+    id: "textcanvas",
+    startText: "Reading the selected Graphic's text Position against the sequence and canvas sizes…",
+    run: (ppro) => layoutProbe().probeTextCanvas(ppro),
+    format: (report) => layoutProbe().formatTextCanvasReport(report),
+    logLabel: "CutDeck text canvas probe",
   },
 ];
 

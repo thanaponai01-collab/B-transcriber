@@ -44,6 +44,8 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
 - fail-proof: changed the track-index guard in uxp/cutdeck/transform/frameBounds.js, cutdeck_frame_bounds.test.cjs went red; also made clip-underneath start exclusive and end inclusive, the frame-finished check accept a first non-zero size or a repeated null, and the playhead start check exclusive, cutdeck_frame_bounds_edges.test.cjs went red on each (the underneath start boundary and the size-stability check had stayed green before), reverted
+- fail-proof: stashed the alignPanel.js/panel.js fixes, cutdeck_input_commit.test.cjs went red on both tests (bad frame count stayed in the box; Enter committed twice), restored
+- fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
 
 ## Blind spots
 - No real run of the pipeline: nothing here transcribes real audio on GPU. `transcribe.pipeline.run` on a real file and `transcribe.eval.harness` on the gold set are manual.
