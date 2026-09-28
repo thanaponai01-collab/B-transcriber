@@ -171,8 +171,9 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
     other, other_start = clips[best], session.starts[best]
     o0, o1 = _overlap(coarse, coarse + clip.duration_s, other_start, other_start + other.duration_s)
     margin = lambda at: FINE_MARGIN_S + abs(at - (coarse + matched_at)) * MAX_DRIFT_PPM * 1e-6
-    # The overlap may open on silence, so step through it until a fine window confirms.
-    start, at = None, o0
+    # The overlap may open on minutes of silence (live 2026-09-28: 180 s), so the search opens where
+    # the coarse match heard the shared sound, then steps on until a fine window confirms.
+    start, at = None, min(max(o0, coarse + matched_at), o1 - MIN_DURATION_S)
     for _ in range(FINE_TRIES):
         if at > o1 - MIN_DURATION_S:
             break
