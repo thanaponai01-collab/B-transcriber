@@ -47,6 +47,10 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: stashed the alignPanel.js/panel.js fixes, cutdeck_input_commit.test.cjs went red on both tests (bad frame count stayed in the box; Enter committed twice), restored
 - fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
 
+## Topic Cut
+- test: `python -m pytest tests/test_cutdeck_topic_layout.py tests/test_cutdeck_topic_speakers.py -q -p no:cacheprovider`
+- fail-proof: set BLUE_FRAME_MIN to 0.99 and to 0.05 in cutdeck/topic_layout.py, test_top_edge_mostly_blue_is_clip / test_top_edge_mostly_not_blue_is_studio went red (the first version of the tests stayed green under 0.99 because its edges were 100% blue; fixed before use); in cutdeck/topic_speakers.py, made turns merge across a pause and set the smoothing reach to 0, test_a_pause_starts_a_new_turn_even_for_the_same_speaker and test_smoothing_removes_a_single_outlier went red; reverted, files identical to backup
+
 ## Blind spots
 - No real run of the pipeline: nothing here transcribes real audio on GPU. `transcribe.pipeline.run` on a real file and `transcribe.eval.harness` on the gold set are manual.
 - CutDeck panel checks run against `tests/fakes/premiere.cjs`, not live Premiere; real-host behaviour is only in docs/PREMIERE_FACTS.md.
@@ -55,3 +59,4 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - Live run 2026-09-28 (`2 FACEBOOK D1`, nothing selected): 8/8 passed. With nothing selected the four transform/anchor/align/distribute tests only proved the "Select a clip" refusal, so their success path on real clips is still unproven.
 - The offline mode of those tests runs the real panel driver against the fake Premiere with nothing selected, so the success path of transform/anchor/align/distribute on a real selection is only proven by the live run.
 - One equivalent mutant is left alive in flywheel/diff.py (`hi = j2` for `max(hi, j2)`).
+- Topic Cut: the two real-episode tests are opt-in (about 2 minutes together, over the runner's 120 s limit): `TOPIC_CUT_REAL=1 python -m pytest tests/test_cutdeck_topic_layout.py tests/test_cutdeck_topic_speakers.py -q -p no:cacheprovider`. They need the 4.5 GB `HKS Facebook 290969 Full.mp4`; the speaker one also needs speechbrain and a GPU. Run them before changing the layout or speaker modules. Their accuracy floors (layout 93%, speaker host/guest 85% / 15%) come from labels made by eye and a threshold tuned on the same frames, so they are optimistic. The topic-start judgement itself (which host run opens a new topic) is not code and has no check; its answer key is `tests/data/topic_cut_starts_hks290969.json`.

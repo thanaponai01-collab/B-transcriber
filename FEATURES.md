@@ -142,6 +142,16 @@ shortcut or command. Two processes matter: the Thai transcription pipeline + web
 - verify: CutDeck panel (UXP)
 - status: traced: read doSync; not run live this session
 
+## Topic Cut (partly built)
+- what: Split a finished host-and-guests recording (live news) into one clip per topic, each starting where the host asks a new question. Today: markers at the topic starts on a duplicate sequence; no razor cuts and no panel button yet.
+- cli: `python -m cutdeck.premiere_cli add_markers <markers.json>` @ cutdeck/premiere_cli.py :: add_markers
+- trace: `main` @ cutdeck/premiere_cli.py > `premiere` @ cutdeck/ai_backend.py > `_ask` @ cutdeck/ai_backend.py
+- needs: helper running and the CutDeck panel open on the duplicate sequence; a markers.json of `{start_s, name, comment}` built from the transcript (the topic judgement is done by reading it, not by code)
+- effect: Comment markers on the active sequence, one undo step
+- note: building blocks with no entry point of their own yet: `classify_frame` @ cutdeck/topic_layout.py (clip or studio layout), `host_turns` @ cutdeck/topic_speakers.py (host or guest voice). Design and findings: docs/DESIGN_TOPIC_CUT.md; answer key: tests/data/topic_cut_starts_hks290969.json
+- verify: Topic Cut
+- status: proven @ c279d6b: ran add_markers live on "Footages Copy 01" (31 markers, 1 undo step) and the Topic Cut tests, both with the real episode; the panel button, razor cuts and the topic judge do not exist
+
 ## Adjustment layer, matte and freeze frame
 - what: Add an adjustment layer, colour matte or frame hold to the timeline (click spans all, Ctrl per clip, Shift every cut; hold: Alt/Shift clones instead of exporting).
 - click: `#btn-adj` @ uxp/cutdeck/index.html
