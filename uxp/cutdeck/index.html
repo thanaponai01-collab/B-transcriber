@@ -95,6 +95,18 @@
           </svg>
           <span>Test Native Cut</span>
         </div>
+        <div id="mutestateprobe" class="dropdown-item" role="button" data-act="mutestateprobe" data-probe="mutestate" title="Read-only. Mute one track in Premiere first, then run this to see whether it reads muted.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/>
+          </svg>
+          <span>Check Mute State</span>
+        </div>
+        <div id="textcanvasprobe" class="dropdown-item" role="button" data-act="textcanvasprobe" data-probe="textcanvas" title="Read-only. Select one Graphic with text first.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 6h14M12 6v12M9 18h6"/>
+          </svg>
+          <span>Check Text Canvas</span>
+        </div>
         <div class="dropdown-divider"></div>
         <div id="menu-item-reload" class="dropdown-item" role="button" data-act="menu-item-reload">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -438,10 +450,6 @@
 
       <div class="settings-grid-2col">
         <div class="setting-row">
-          <label class="setting-label" for="setting-bin">Project Bin</label>
-          <input type="text" id="setting-bin" class="setting-input" data-act="setting-bin" value="CutDeck AL/FX">
-        </div>
-        <div class="setting-row">
           <label class="setting-label" for="setting-color">Color</label>
           <select id="setting-color" class="setting-select" data-act="setting-color">
             <option value="Iris" selected>Iris (Cyan)</option>
@@ -466,7 +474,7 @@
 
       <div class="setting-row">
         <label class="setting-label">Presets</label>
-        <div class="setting-subtext">Select a clip or Adjustment Layer that already has a real effect applied to it in Premiere, name it, then Capture. The first 9 captured presets get their own quick button (3x3 grid) on the Adj &amp; FX page.</div>
+        <div class="setting-subtext">Select a clip or Adjustment Layer that already has a real effect applied to it in Premiere, name it, then Capture. Every captured preset gets its own quick button (3-column grid) on the Adj &amp; FX page.</div>
         <div class="fx-capture-row">
           <input type="text" id="fx-capture-name" class="setting-input" placeholder="Name this preset…" data-act="fx-capture-name">
           <div id="btn-capture-preset" class="btn-secondary" role="button" data-act="btn-capture-preset" title="Capture the selected clip or Adjustment Layer's real effects as a new preset">
@@ -515,7 +523,7 @@
           <div class="help-tool-name">Settings Reference:</div>
           <div class="help-item">• <strong>Transition (50/50)</strong>: Frame duration split evenly across the cut point (e.g. 16f = 8f left + 8f right).</div>
           <div class="help-item">• <strong>Clamp</strong>: Shrinks transition on short clips to prevent bleeding into adjacent cuts.</div>
-          <div class="help-item">• <strong>Bin &amp; Color</strong>: Target bin folder &amp; timeline label color for created ALs.</div>
+          <div class="help-item">• <strong>Color</strong>: Timeline label color for created ALs.</div>
         </div>
       </div>
     </div>

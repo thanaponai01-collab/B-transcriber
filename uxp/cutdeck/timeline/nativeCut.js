@@ -9,7 +9,7 @@
        createSetEndAction is broken on this build — never used.
      - a clone OVERWRITES the time it lands on — used here as the razor (see applyPlan).
      - items read before a transaction can go stale, so every step re-reads the copy.
-   Up to five undo steps, said in the status line. */
+   Five undo steps plus one per extra 3,000-action batch, said in the status line. */
 
 const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
@@ -17,6 +17,8 @@ const { readSequence } = require("./nativeSync.js");
 const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
+const MOVE_BATCH = 3000;
+const SPLIT_BATCH = 3000;
 
 const kindOf = (c) => c.kind; // "video" | "audio" from readSequence
 const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
@@ -159,21 +161,27 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     return () => f.item.createSetOutPointAction(dt);
   }));
 
-  // 3. razor: one filler clone per cut edge.
-  seq = await read();
-  const razor = [];
-  for (const [key, at] of edges) {
-    const f = findIn(seq, key, park);
-    if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
-    const fItem = f.item;
-    for (const p of at) {
+  // 3. razor: one filler clone per cut edge. Batched like step 5 (live 2026-10-01: a 55 s commit and
+  // stale handles on a 16k-action run), each batch from a fresh read; the filler stays at `park`.
+  const cutAt = [];
+  for (const [key, at] of edges) for (const p of at) cutAt.push([key, p]);
+  seq = null;
+  for (let from = 0; from < cutAt.length; from += SPLIT_BATCH) {
+    seq = await read();
+    const fillers = new Map();
+    const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
+      if (!fillers.has(key)) {
+        const f = findIn(seq, key, park);
+        if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
+        fillers.set(key, f);
+      }
+      const f = fillers.get(key);
       const dt = tick(p - park);
-      razor.push(Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(fItem, dt, 0, 0, false, false),
-        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` }));
-    }
+      return Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(f.item, dt, 0, 0, false, false),
+        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` });
+    });
+    steps += tx("split at cut edges", razor);
   }
-  steps += tx("split at cut edges", razor);
-  razor.length = 0;
 
   // 4. remove everything inside a cut, and the fillers — per media type.
   seq = await read({ inPoint: false });
@@ -202,12 +210,21 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
   seq = await read({ end: false, inPoint: false });
   const fastShift = createFastShiftFor(cuts);
-  const moves = all(seq).map((c) => ({ c, by: fastShift(c.start) })).filter((m) => m.by > 0n)
-    .sort((x, y) => (x.c.start < y.c.start ? -1 : x.c.start > y.c.start ? 1 : 0));
-  steps += tx("close gaps", moves.map(({ c, by }) => {
-    const dt = tick(-by);
-    return () => c.item.createMoveAction(dt);
-  }));
+  // Live 2026-10-01: one transaction of 16,506 moves failed at action 13,845 with "script object is
+  // no longer valid" (handles read minutes earlier). So the moves go in batches, each from a fresh
+  // read. A piece not yet moved still sits at its original start, so it is found by lane + start.
+  const moves = all(seq).map((c) => ({ key: `${lane(c)}|${c.start}`, start: c.start, by: fastShift(c.start) })).filter((m) => m.by > 0n)
+    .sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
+  for (let at = 0; at < moves.length; at += MOVE_BATCH) {
+    if (at) seq = await read({ end: false, inPoint: false });
+    const fresh = new Map(all(seq).map((c) => [`${lane(c)}|${c.start}`, c]));
+    steps += tx("close gaps", moves.slice(at, at + MOVE_BATCH).map(({ key, by }) => {
+      const c = fresh.get(key);
+      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished`);
+      const dt = tick(-by);
+      return () => c.item.createMoveAction(dt);
+    }));
+  }
   moves.length = 0;
   seq = null;
   return steps;
@@ -240,44 +257,55 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; nothing was cut`);
   const copy = created[0];
   const copyItem = await copy.getProjectItem();
-  runTransaction(project, "CutDeck: name copy", (compound) => {
-    if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
-  });
-  // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
-  // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
-  // only once cut (or failed), so Premiere does not redraw it for every edit.
-  const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
-  runTransaction(project, "CutDeck: file rough cut", (compound) => {
-    const parent = asBinLike(copyItem.getParentBin());
-    if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
-  });
-  const started = Date.now();
-  // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
-  // each item on the copy by position and throws if one is not there.
-  const items = before.items;
-  const plan = planCutApply(items, cuts);
-  let steps, actual;
   try {
-    steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
-    actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
-  } finally {
-    await timed("open copy", async () => {
-      await project.openSequence(copy);
-      await project.setActiveSequence(copy);
+    runTransaction(project, "CutDeck: name copy", (compound) => {
+      if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
     });
+    // File it under CutDeck > Rough Cuts (FolderItem.createMoveItemAction d.ts:1271, called on the
+    // item's current parent as alLibrary does; ProjectItem.getParentBin d.ts:2515). It is opened
+    // only once cut (or failed), so Premiere does not redraw it for every edit.
+    const bin = asBinLike(await getOrCreateBin(project, [CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME]));
+    runTransaction(project, "CutDeck: file rough cut", (compound) => {
+      const parent = asBinLike(copyItem.getParentBin());
+      if (!compound.addAction(parent.createMoveItemAction(copyItem, bin))) throw new Error("addAction(move to bin) returned false");
+    });
+    const started = Date.now();
+    // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
+    // each item on the copy by position and throws if one is not there.
+    const items = before.items;
+    const plan = planCutApply(items, cuts);
+    let steps, actual;
+    try {
+      steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+      actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
+    } finally {
+      await timed("open copy", async () => {
+        await project.openSequence(copy);
+        await project.setActiveSequence(copy);
+      });
+    }
+    const elapsedSeconds = (Date.now() - started) / 1000;
+    const problems = verifyReadBack(items, plan, actual);
+    before.items = null;
+    before.transitions = null;
+    actual = null;
+    if (problems.length) {
+      throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
+        + "It is left open for inspection; your original sequence is untouched.");
+    }
+    const splits = plan.edits.filter((e) => e.op === "split").length;
+    console.log("CutDeck rough cut timings (s):", timings);
+    return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
+  } catch (error) {
+    // A half-cut copy must not pass for the result, nor collide with the next attempt's name.
+    try {
+      runTransaction(project, "CutDeck: mark failed copy", (compound) => {
+        compound.addAction(copyItem.createSetNameAction(`${resultName} (FAILED)`));
+      });
+    } catch (_) { /* the error below is the one that matters */ }
+    error.copyCreated = true;
+    throw error;
   }
-  const elapsedSeconds = (Date.now() - started) / 1000;
-  const problems = verifyReadBack(items, plan, actual);
-  before.items = null;
-  before.transitions = null;
-  actual = null;
-  if (problems.length) {
-    throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
-      + "It is left open for inspection; your original sequence is untouched.");
-  }
-  const splits = plan.edits.filter((e) => e.op === "split").length;
-  console.log("CutDeck rough cut timings (s):", timings);
-  return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
 }
 
 module.exports = { applyNativeCut, applyPlan, readItems };

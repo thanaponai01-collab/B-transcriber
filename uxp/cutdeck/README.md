@@ -240,7 +240,7 @@ the source media? It also records this build's interpolation-mode numbers (Linea
 
 ### Quick-effect preset buttons (Adj & FX page)
 
-Below the Adjustment Layer card, up to `MAX_QUICK_PRESETS` (currently 9, in
+Below the Adjustment Layer card, at least `MIN_QUICK_PRESETS` (9, in
 `core/panel.js`) captured presets each get their own button, laid out as a 3x3 grid of
 small buttons. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Layer card itself
 (span / per-clip / 50-50 cut transition) — clicking one both places the AL that way AND

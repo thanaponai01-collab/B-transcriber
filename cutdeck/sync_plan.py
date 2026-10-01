@@ -145,19 +145,23 @@ def _fine_start(loader: Loader, clip: _Clip, other: _Clip, other_start: float,
     return start
 
 
-def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: Loader) -> Optional[Placement]:
+def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: Loader) -> Placement | str:
+    """The clip's placement in the session, or the reason it was refused (a sentence for the report)."""
     composite, origin = _composite(session, clips)
     found = None
     chunk_from = 0.0
+    heard = 0  # pieces loud enough to try
     while found is None and chunk_from + MIN_OVERLAP_S <= clip.duration_s:
         chunk = clip.coarse[int(chunk_from * COARSE_RATE):int((chunk_from + COARSE_CHUNK_S) * COARSE_RATE)]
         if float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2))) >= MIN_RMS:
+            heard += 1
             offset, psr, runner_up = correlate_gcc_phat_detail(composite, _unit(chunk), COARSE_RATE)
             if psr >= MIN_PSR and runner_up <= MAX_RUNNER_UP:
                 found = (origin + offset - chunk_from, chunk_from, psr)
         chunk_from += COARSE_CHUNK_S
     if found is None:
-        return None
+        return (f"no shared sound with the session ({heard} piece(s) tried)" if heard
+                else "its audio is silent throughout")
     coarse, matched_at, psr = found
     # The placed clip this one overlaps most is the fine reference; too little overlap with
     # everything placed means the peak landed on silence padding, not on shared sound.
@@ -167,12 +171,13 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
         if o1 - o0 > best_len:
             best, best_len = cid, o1 - o0
     if best is None or best_len < MIN_OVERLAP_S:
-        return None
+        return "the match overlaps the session by under 2 s"
     other, other_start = clips[best], session.starts[best]
     o0, o1 = _overlap(coarse, coarse + clip.duration_s, other_start, other_start + other.duration_s)
     margin = lambda at: FINE_MARGIN_S + abs(at - (coarse + matched_at)) * MAX_DRIFT_PPM * 1e-6
-    # The overlap may open on silence, so step through it until a fine window confirms.
-    start, at = None, o0
+    # The overlap may open on minutes of silence (live 2026-09-28: 180 s), so the search opens where
+    # the coarse match heard the shared sound, then steps on until a fine window confirms.
+    start, at = None, min(max(o0, coarse + matched_at), o1 - MIN_DURATION_S)
     for _ in range(FINE_TRIES):
         if at > o1 - MIN_DURATION_S:
             break
@@ -184,7 +189,7 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
         # A coarse peak the fine match cannot confirm is chance. Live 2026-09-23: unrelated audio
         # scored coarse PSR 9-12 against a 37-minute session, one piece passed, and falling back
         # to the coarse start "synced" it on top of the interviews.
-        return None
+        return "a coarse match could not be confirmed at fine resolution"
     drift_ms = None
     if o1 - o0 >= DRIFT_CHECK_MIN_OVERLAP_S:
         late_at = o1 - FINE_WINDOW_S
@@ -224,13 +229,16 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Pro
     while pending:
         report(len(usable) - len(pending), len(usable), "Matching")
         anchor = pending.pop(0)
+        refusals: set[str] = set()  # why the others were refused against this anchor's session
         session = _Session({anchor.input.id: 0.0}, {anchor.input.id: Placement(anchor.input.id, "anchor", 0.0)})
         grew = True
         while grew:  # a clip that fails now may match once the session has grown
             grew = False
             for clip in list(pending):
                 placed = _try_place(clip, session, usable, loader)
-                if placed is not None:
+                if isinstance(placed, str):
+                    refusals.add(placed)
+                else:
                     session.starts[clip.input.id] = placed.start_s
                     session.found[clip.input.id] = placed
                     pending.remove(clip)
@@ -238,7 +246,8 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Pro
                     report(len(usable) - len(pending), len(usable), "Matching")
         if len(session.starts) == 1:
             rejected[anchor.input.id] = Placement(anchor.input.id, "unmatched", 0.0,
-                                                  reason="its audio matched no other clip")
+                                                  reason="its audio matched no other clip"
+                                                  + (f" ({'; '.join(sorted(refusals))})" if refusals else ""))
         else:
             sessions.append(session)
 

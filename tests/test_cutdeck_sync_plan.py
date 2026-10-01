@@ -259,6 +259,41 @@ def test_overlap_that_opens_on_silence_still_syncs():
     assert_session_true(plan, s, ["rec", "cam"])
 
 
+# 10b. Live 2026-09-28 (2026-09-26 17-27 shoot, three 2.6 h clips): the mics were silent for the
+#      first 180 s. The coarse match found the shared sound, but the fine match stepped only
+#      FINE_TRIES windows from the overlap start, all inside the silence, and called the clip
+#      unmatched: Sync placed nothing. The fine match must start where the coarse match heard it.
+def test_overlap_that_opens_on_minutes_of_silence_still_syncs():
+    s, ev = Shoot(), event(400, seed=21)
+    ev[0:200 * SR] = 0.0
+    s.clip("rec", ev, "ev", 0, 400)
+    s.clip("cam", ev, "ev", 1, 399)
+    plan = s.plan()
+    assert_session_true(plan, s, ["rec", "cam"])
+
+
+# 10c. An unmatched clip says which gate refused it, not just that nothing matched.
+def test_unmatched_reason_names_the_gate_that_refused():
+    s = Shoot()
+    s.add("a", event(60, seed=31))
+    s.add("b", event(60, seed=32))  # unrelated audio: the coarse match finds no shared sound
+    got = by_id(s.plan())
+    assert got["a"].status == "unmatched"
+    assert "no shared sound" in got["a"].reason, got["a"].reason
+
+
+def test_unmatched_reason_names_a_fine_match_that_could_not_confirm(monkeypatch):
+    import cutdeck.sync_plan as sp
+    ev = event(100, seed=33)
+    s = Shoot()
+    s.clip("rec", ev, "ev", 0, 100)
+    s.clip("cam", ev, "ev", 30, 90)
+    monkeypatch.setattr(sp, "_fine_start", lambda *a, **k: None)
+    got = by_id(s.plan())
+    assert got["rec"].status == "unmatched"
+    assert "could not be confirmed" in got["rec"].reason, got["rec"].reason
+
+
 # 11. The clips that could not be synced sit apart from the synced ones, in a row, each spaced
 #     by its whole file: the panel places full files on shared tracks, so a clip trimmed on the
 #     timeline must not run into the next one.

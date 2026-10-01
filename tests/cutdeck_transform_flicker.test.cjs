@@ -83,7 +83,7 @@ test("getCachedBounds retains cached bounds across floating point precision vari
 });
 
 test("readAlignTransform inspects component chain only once per item", async () => {
-  const { readAlignTransform } = require("../uxp/cutdeck/features/align.js");
+  const { readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
   let chainCalls = 0;
   const item = {
     getName: async () => "Title",

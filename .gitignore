@@ -77,3 +77,6 @@ node_modules/
 # Local Premiere test projects read by cutdeck.prproj_reader; only the probe fixture is committed
 test_projects/*
 !test_projects/probe.prproj
+
+# verify-loop state
+.verify-state.json

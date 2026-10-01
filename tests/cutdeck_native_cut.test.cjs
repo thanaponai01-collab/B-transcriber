@@ -177,7 +177,7 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   const h = fakeHost(rows);
   const r = await applyNativeCut(h.ppro, h.project, h.source, { cuts_frames, ticks_per_frame: golden.ticks_per_frame }, "big");
   assert.equal(r.cuts, 432);
-  assert.ok(r.steps <= 5);
+  assert.ok(r.steps <= 8); // 5 fixed steps + one extra per 3,000-action batch (split, close gaps)
   const { planCutApply } = require("../uxp/cutdeck/timeline/cutPlanApply.js");
   const items = rows.map(([k, t, s, e, i]) => ({ id: `${k}${t}`, mediaType: k, track: t, startTicks: BigInt(s) * TPF, endTicks: BigInt(e) * TPF, inTicks: BigInt(i) * TPF }));
   const plan = planCutApply(items, cuts_frames.map(([a, b]) => [BigInt(a) * TPF, BigInt(b) * TPF]));
@@ -191,7 +191,8 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   console.log(`scale test host reads: ${h.hostReads}`);
   assert.deepEqual(Object.keys(r.timings).sort(), ["close gaps", "make razor fillers", "open copy", "read source",
     "read-back", "reads", "remove cut pieces", "split at cut edges", "trim razor fillers"]);
-  assert.ok(h.hostReads < 35000, `host reads ${h.hostReads}`);
+  // 2026-10-01: split and close-gaps run in 3,000-action batches, each from a fresh read (48,445 here).
+  assert.ok(h.hostReads < 50000, `host reads ${h.hostReads}`);
 });
 
 /* Live 2026-09-24: Premiere returned undefined for one clone of 7,650, and a rerun went through. */
@@ -215,4 +216,21 @@ test("a clone that stays empty still stops the cut, saying where", async () => {
   const h = fakeHost(golden.before);
   flakyClones(h, new Set([30, 31]));
   await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /split at cut edges: action \d+ of \d+ .*returned no action \(undefined\), twice/);
+});
+
+test("a cut that fails after the copy exists renames the copy (FAILED) and says so on the error", async () => {
+  const h = fakeHost(golden.before);
+  flakyClones(h, new Set([30, 31]));
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);
+  assert.ok(error, "the cut should fail");
+  assert.equal(error.copyCreated, true);
+  assert.deepEqual(h.sequences.map((s) => s.name).sort(), ["Result (FAILED)", "Shoot"]);
+});
+
+test("a refusal before the copy is made leaves no copy and no copyCreated flag", async () => {
+  const h = fakeHost(golden.before, { speedOf: () => 2 });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);
+  assert.ok(error);
+  assert.notEqual(error.copyCreated, true);
+  assert.deepEqual(h.sequences.map((s) => s.name), ["Shoot"]);
 });

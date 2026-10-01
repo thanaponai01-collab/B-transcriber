@@ -197,6 +197,8 @@ def _read(**clip):
     (_read(enabled="yes"), "malformed"),
     (_read(out_ticks="0"), "Out before its In"),
     (_read(start_ticks="-5"), "start_ticks"),
+    (_read(speed=0), "speed"),
+    (_read(speed="fast"), "speed"),
 ])
 def test_a_bad_read_is_refused_whole(sequence, message):
     with pytest.raises(ValueError, match=message):
@@ -220,3 +222,17 @@ def test_prepare_writes_the_sequence_and_a_refused_prepare_leaves_nothing(tmp_pa
         assert sorted(p.name for p in tmp_path.iterdir()) == before
 
     asyncio.run(_test())
+
+
+def test_a_retimed_reference_clip_is_refused_before_any_audio_is_read(tmp_path):
+    media = tmp_path / "a.wav"
+    sf.write(str(media), np.zeros(4800, dtype=np.float32), 48000)
+    read = _read(path=str(media), speed=2.0)
+    with pytest.raises(sequence_model.XmlRecutRefusal, match="200% speed"):
+        check_reference_audio(from_panel_json(read))
+    # 100% is the same as no speed field, and a clip that is off is not analysed at all
+    assert check_reference_audio(from_panel_json(_read(path=str(media), speed=1.0)))["clip_count"] == 1
+    assert check_reference_audio(from_panel_json(
+        {**read, "audio_tracks": [{"enabled": True, "clips": [
+            {**read["audio_tracks"][0]["clips"][0], "enabled": False},
+            {**read["audio_tracks"][0]["clips"][0], "speed": 1.0}]}]}))["clip_count"] == 1

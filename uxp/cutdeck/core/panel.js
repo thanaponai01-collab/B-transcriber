@@ -17,10 +17,10 @@
   }
 
   let current = null;
-  // Up to this many captured presets get their own quick-effect button below the Adjustment
-  // Layer card, laid out as a 3-column grid. Bump this if more room is wanted later — nothing
-  // else assumes exactly 9.
-  const MAX_QUICK_PRESETS = 9;
+  // The quick-effect grid below the Adjustment Layer card has at least this many tiles (3
+  // columns), and grows by whole rows so every captured preset gets a button.
+  const MIN_QUICK_PRESETS = 9;
+  const QUICK_PRESET_COLUMNS = 3;
 
   function setText(el, value) {
     if (el && el.textContent !== value) el.textContent = value;
@@ -110,7 +110,6 @@
   function renderSettings(settings) {
     if (!settings) return;
     setValue($("setting-frames"), settings.frames);
-    setValue($("setting-bin"), settings.bin);
     setValue($("setting-color"), settings.color);
     setChecked($("setting-clamp"), !!settings.clamp);
 
@@ -120,17 +119,18 @@
     });
   }
 
-  // One quick-effect button per captured preset (capped at MAX_QUICK_PRESETS), below the
+  // One quick-effect button per captured preset (the grid grows past MIN_QUICK_PRESETS to fit them all), below the
   // Adjustment Layer card — same dynamic-content diff discipline as renderAudioOptions above,
   // rebuilt only when the underlying preset list actually changed. Always renders exactly
-  // MAX_QUICK_PRESETS tiles (a full 3x3 grid), not just as many as are captured — an unfilled
+  // MIN_QUICK_PRESETS tiles (a full 3x3 grid), not just as many as are captured — an unfilled
   // slot is its own empty-tile button (click opens Settings to Capture one).
   function renderPresetButtons(customPresets) {
     const container = $("fx-preset-buttons");
     if (!container) return;
     const presets = customPresets || [];
     const desired = [];
-    for (let i = 0; i < MAX_QUICK_PRESETS; i++) {
+    const tiles = Math.max(MIN_QUICK_PRESETS, Math.ceil(presets.length / QUICK_PRESET_COLUMNS) * QUICK_PRESET_COLUMNS);
+    for (let i = 0; i < tiles; i++) {
       desired.push(presets[i] ? { id: presets[i].id, name: presets[i].name } : null);
     }
 
@@ -396,12 +396,7 @@
       framesInput.addEventListener("change", (e) => {
         const val = parseInt(e.target.value, 10);
         if (!isNaN(val) && val >= 2 && val <= 240) intents.onSettingChange({ frames: val });
-      });
-    }
-    const binInput = $("setting-bin");
-    if (binInput) {
-      binInput.addEventListener("change", (e) => {
-        intents.onSettingChange({ bin: e.target.value.trim() || "CutDeck AL/FX" });
+        else e.target.value = currentFrames();
       });
     }
     const colorInput = $("setting-color");

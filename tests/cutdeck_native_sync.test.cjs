@@ -412,3 +412,25 @@ test("restores V1 clip color if host placement resets V1 to default track color"
   assert.ok(v1);
   assert.equal(v1.colorLabelIndex, 6, "V1 color must be restored from 1 back to 6");
 });
+
+test("a placing failure renames the synced copy (FAILED) so a rerun cannot be confused with it", async () => {
+  const host = fakeHost({ files: FILES, timeline: TIMELINE });
+  const helper = fakeHelper(PLAN);
+  const execute = host.project.executeTransaction;
+  host.project.executeTransaction = (fn, label) => {
+    if (label === "CutDeck Sync") throw new Error("Premiere refused the placing");
+    return execute.call(host.project, fn, label);
+  };
+  await assert.rejects(run(host, helper), /Premiere refused the placing/);
+  assert.deepEqual(host.sequences.map((s) => s.name), ["Shoot", "Shoot_Synced (FAILED)"]);
+});
+
+test("formatReport says why an unmatched clip was refused", () => {
+  const { formatReport } = require("../uxp/cutdeck/timeline/nativeSync.js");
+  const clips = [{ id: "c0", name: "A.MP4" }, { id: "c1", name: "B.MP4" }];
+  const plan = { sessions: 0, placements: [
+    { id: "c0", status: "unmatched", reason: "its audio matched no other clip (no shared sound with the session (3 piece(s) tried))" },
+    { id: "c1", status: "unmatched", reason: "its audio matched no other clip" }] };
+  const text = formatReport("X_Synced", plan, clips, [], []);
+  assert.match(text, /A\.MP4 matched nothing \(no shared sound with the session \(3 piece\(s\) tried\)\), B\.MP4 matched nothing\./);
+});

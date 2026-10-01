@@ -196,7 +196,13 @@
       const input = $(id);
       if (!input) continue;
       const field = input.getAttribute("data-field");
-      input.addEventListener("change", (e) => intents.onSetField(field, e.target.value));
+      // Enter/blur commit through exitEditMode, and the browser then fires change for the same
+      // text: that change is swallowed once so the value is set a single time.
+      let committedByExit = false;
+      input.addEventListener("change", (e) => {
+        if (committedByExit) { committedByExit = false; return; }
+        intents.onSetField(field, e.target.value);
+      });
 
       const wrap = input.parentElement;
       const targetEl = wrap || input;
@@ -205,6 +211,7 @@
 
       function enterEditMode() {
         if (input.disabled) return;
+        committedByExit = false;
         if (wrap && wrap.classList && typeof wrap.classList.add === "function") {
           wrap.classList.add("active-editing");
         }
@@ -227,6 +234,7 @@
           valText.textContent = input.value || (input.getAttribute && input.getAttribute("placeholder")) || "—";
         }
         if (commit) {
+          committedByExit = true;
           intents.onSetField(field, input.value);
         }
       }

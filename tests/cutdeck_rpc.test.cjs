@@ -320,3 +320,20 @@ test("retired socket probe files and registrations do not exist", () => {
   assert.doesNotMatch(html, /data-probe=["']socket["']/, "index.html must not contain data-probe='socket'");
 });
 
+
+test("close() rejects calls still waiting for a reply instead of leaving them hanging", async () => {
+  const h = harness(["open"]);
+  const pending = h.rpc({ type: "hello" });
+  await ready(h, 1);
+  const outcome = pending.then(() => "resolved", (error) => error.message);
+  h.rpc.close();
+  assert.match(await Promise.race([outcome, new Promise((r) => setTimeout(() => r("hung"), 200))]), /closed/i);
+});
+
+test("close() fails a job watch instead of leaving it hanging", async () => {
+  const h = harness(["open"]);
+  const watched = h.rpc.watch("job-1", () => {}).then(() => "resolved", (error) => error.message);
+  await ready(h, 1);
+  h.rpc.close();
+  assert.match(await Promise.race([watched, new Promise((r) => setTimeout(() => r("hung"), 200))]), /closed/i);
+});

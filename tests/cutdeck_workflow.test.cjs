@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { capture, prepare } = require("../uxp/cutdeck/workflow.js");
+const { capture, prepare, readAudioTracks } = require("../uxp/cutdeck/workflow.js");
 const { getOrCreateBin } = require("../uxp/cutdeck/host/project.js");
 const getOrCreateCutDeckBin = (project) => getOrCreateBin(project, ["CutDeck"]);
 
@@ -101,4 +101,15 @@ test("bin creation still works when the host has no lockedAccess", async () => {
   assert.equal(typeof f.project.lockedAccess, "undefined");
   const bin = await getOrCreateCutDeckBin(f.project);
   assert.equal(bin.name, "CutDeck");
+});
+
+test("the audio read carries a clip's speed when it is not 100%, and nothing when it is", async () => {
+  const f = fixture();
+  const retimed = { ...audioItem({ path: "D:/cam/A.mp4", start: "0", inPoint: "0", outPoint: "900" }), getSpeed: async () => 2 };
+  const normal = { ...audioItem({ path: "D:/cam/B.mp4", start: "900", inPoint: "0", outPoint: "50" }), getSpeed: async () => 1 };
+  const tracks = [{ getTrackItems: () => [retimed, normal], isMuted: async () => false }];
+  f.source.getAudioTrack = async (i) => tracks[i];
+  const read = await readAudioTracks(f.ppro, f.source, { audio_track_count: 1, ticks_per_frame: "10", end_ticks: "1000" });
+  assert.equal(read.audio_tracks[0].clips[0].speed, 2);
+  assert.equal("speed" in read.audio_tracks[0].clips[1], false);
 });

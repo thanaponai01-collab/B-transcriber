@@ -384,14 +384,15 @@ def find_resumable_job(
     engine_b: str,
     pipeline_version: str,
 ) -> Optional[JobRow]:
-    """The most recent 'failed' job for this exact (media, engine pair, pipeline
-    version) — a crash mid-run leaves state we can resume from (4.1, GAP-8).
+    """The most recent 'failed' or 'running' job for this exact (media, engine pair,
+    pipeline version) — a crash mid-run leaves state we can resume from (4.1, GAP-8).
+    A hard kill never reaches run_file's except, so it leaves 'running', not 'failed'.
     Engine/version must match exactly: swapping an engine invalidates any
     persisted engine_result rows, so that job is not resumable, only re-runnable
     as a fresh job."""
     row = conn.execute(
         "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
-        "AND pipeline_version = ? AND status = 'failed' ORDER BY id DESC LIMIT 1",
+        "AND pipeline_version = ? AND status IN ('failed', 'running') ORDER BY id DESC LIMIT 1",
         (media_id, engine_a, engine_b, pipeline_version),
     ).fetchone()
     if row is None:

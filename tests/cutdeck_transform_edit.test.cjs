@@ -13,7 +13,8 @@ const assert = require("node:assert/strict");
 const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
-const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform, createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
+const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 
@@ -969,4 +970,25 @@ test("scrubbing properties updates host live during drag and commits on release"
   assert.equal(a.params[1].value, 120, "Final value committed to host");
   assert.ok(undoSteps.length >= 1, "Undo transactions executed");
   assert.equal(undoSteps[undoSteps.length - 1], "CutDeck: Set scale");
+});
+
+test("a failed write puts clips the measurement hid back, in their own restore transaction", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  let disabled = false;
+  g.createSetDisabledAction = (d) => fake.action(() => { disabled = d; });
+  const { ppro, undoSteps } = host([g]);
+  const project = await ppro.Project.getActiveProject();
+  const execute = project.executeTransaction;
+  project.executeTransaction = (cb, label) => {
+    if (label === "CutDeck: Align left") throw new Error("write refused");
+    return execute.call(project, cb, label);
+  };
+  // The measurement hid the clip; only its unhide action can bring it back.
+  const measure = async () => {
+    disabled = true;
+    return { bounds: TEXT_BOX, unhideAction: (compound) => compound.addAction(g.createSetDisabledAction(false)) };
+  };
+  await assert.rejects(alignToFrame(ppro, "left", measure), /write refused/);
+  assert.equal(disabled, false, "the clip was left hidden");
+  assert.deepEqual(undoSteps, ["CutDeck: restore clips"]);
 });

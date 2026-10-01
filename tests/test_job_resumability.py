@@ -226,3 +226,38 @@ def test_run_file_reuses_supplied_ingest_result(monkeypatch):
     monkeypatch.setattr(ingest, "ingest", boom)
     monkeypatch.setattr(ingest, "load_audio", boom)
     assert pipeline_run.run_file(path, cfg, db, ingest_result=supplied)
+
+
+def test_killed_run_left_running_is_resumable():
+    """A hard kill never reaches run_file's except, so the job stays 'running'.
+    It must be found for resume, or its cached engine results are orphaned."""
+    from transcribe.db import store
+
+    path = _synthetic_wav()
+    db = _tmp_db()
+    store.init_db(db)
+    conn = store.connect(db)
+    media_id = store.create_media(conn, path)
+    job_id = store.create_job(conn, media_id, "mock", "passthrough", "v")
+    store.update_job_status(conn, job_id, "running")
+    store.update_job_phase(conn, job_id, "engine_a_done")
+
+    found = store.find_resumable_job(conn, media_id, "mock", "passthrough", "v")
+    conn.close()
+    assert found is not None and found.id == job_id
+    assert found.job_phase == "engine_a_done"
+
+
+def test_done_and_pending_jobs_are_not_resumable():
+    from transcribe.db import store
+
+    path = _synthetic_wav()
+    db = _tmp_db()
+    store.init_db(db)
+    conn = store.connect(db)
+    media_id = store.create_media(conn, path)
+    for status in ("done", "pending"):
+        job_id = store.create_job(conn, media_id, "mock", "passthrough", "v")
+        store.update_job_status(conn, job_id, status)
+    assert store.find_resumable_job(conn, media_id, "mock", "passthrough", "v") is None
+    conn.close()

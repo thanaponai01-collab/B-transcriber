@@ -25,6 +25,7 @@ const manifest = JSON.parse(read("uxp/cutdeck/manifest.json"));
 const html = read("uxp/cutdeck/index.html");
 const mainJs = read("uxp/cutdeck/main.js");
 const alignFeatureJs = read("uxp/cutdeck/features/align.js");
+const alignEditJs = read("uxp/cutdeck/transform/edit.js");
 const alignJsPath = path.join(root, "uxp", "cutdeck", "core", "alignPanel.js");
 
 // --- manifest ------------------------------------------------------------------------------
@@ -440,10 +441,10 @@ test("entrypoints.setup is guarded, and runs after the main panel is already bou
 
 // --- Phase 1 wiring: the read-only transform display is reachable from the real entry point -
 
-test("features/align.js requires the transform host-discovery and geometry modules", () => {
-  assert.match(alignFeatureJs, /require\("\.\.\/host\/trackItems\.js"\)/);
-  assert.match(alignFeatureJs, /require\("\.\.\/transform\/params\.js"\)/);
-  assert.match(alignFeatureJs, /require\("\.\.\/transform\/geometry\.js"\)/);
+test("transform/edit.js requires the transform host-discovery and geometry modules", () => {
+  assert.match(alignEditJs, /require\("\.\.\/host\/trackItems\.js"\)/);
+  assert.match(alignEditJs, /require\("\.\/params\.js"\)/);
+  assert.match(alignEditJs, /require\("\.\/geometry\.js"\)/);
 });
 
 test("Anchor Point is converted against the SOURCE frame, never the sequence frame", () => {
@@ -451,9 +452,9 @@ test("Anchor Point is converted against the SOURCE frame, never the sequence fra
   // Anchor Point against frameSize printed 150, 300 for a 100, 200 anchor on a 720p clip.
   // A Graphic has no project item, so its anchor frame falls back to the sequence frame
   // (transform/params.js readAnchorFrameSize; behaviour covered in cutdeck_transform_params).
-  assert.match(alignFeatureJs, /anchorFrame = await transformParams\.readAnchorFrameSize\(ppro, item, seq\)/);
-  assert.match(alignFeatureJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
-  assert.match(alignFeatureJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
+  assert.match(alignEditJs, /anchorFrame = await transformParams\.readAnchorFrameSize\(ppro, item, seq\)/);
+  assert.match(alignEditJs, /anchor:\s*describeField\(transform\.anchorPoint,\s*true,\s*anchorFrame\)/);
+  assert.match(alignEditJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
 });
 
 test("the transform panel's show hook starts the live poll, after mounting and the first read", () => {
@@ -592,7 +593,7 @@ test("a burst of events collapses into at most two reads", async () => {
 });
 
 test("readAlignTransform names the clip via getName() (track items have no .name)", async () => {
-  const { readAlignTransform } = require("../uxp/cutdeck/features/align.js");
+  const { readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
   const item = { getName: async () => "Interview_A.mp4", getIsSelected: async () => true };
   const seq = { getSelection: async () => ({ getTrackItems: async () => [item] }) };
   const out = await readAlignTransform(seq, null);
@@ -653,7 +654,7 @@ test("index.html's Phase 6 controls carry values the feature knows: two align ta
   assert.deepEqual([...kinds].sort(), ["h-centers", "h-gaps", "v-centers", "v-gaps"]);
   // Each kind must be one distribute() accepts (it throws "Unknown distribution" otherwise; here
   // it fails on the missing project first, which proves only that the name was not rejected).
-  const { distribute } = require("../uxp/cutdeck/features/align.js");
+  const { distribute } = require("../uxp/cutdeck/transform/edit.js");
   for (const kind of kinds) {
     await assert.rejects(() => distribute({}, kind), (e) => !/Unknown distribution/.test(e.message));
   }

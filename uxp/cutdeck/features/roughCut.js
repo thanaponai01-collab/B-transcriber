@@ -26,6 +26,7 @@ function createRoughCutFeature({
   rpc,
   ensureHelper,
   storage = typeof localStorage !== "undefined" ? localStorage : null,
+  applyCut = applyNativeCut,
   progressText = () => "Processing sequence in helper… Cuts stay inside marked In/Out.",
 }) {
   function readSavedJob() {
@@ -99,7 +100,14 @@ function createRoughCutFeature({
       throw new Error(`Open "${job.context.sequence_name}" to cut it, then Resume.`);
     }
     ctl.setStatus("Cutting a copy of your sequence in Premiere…", "busy");
-    const r = await applyNativeCut(ppro, project, sequence, job.cuts, job.result_name);
+    let r;
+    try {
+      r = await applyCut(ppro, project, sequence, job.cuts, job.result_name);
+    } catch (error) {
+      // A copy exists now: resuming would cut the source again into a second one.
+      if (error && error.copyCreated) clearJob();
+      throw error;
+    }
     clearJob();
     const seconds = Number(r.removedTicks * 10n / TICKS_PER_SECOND) / 10;
     ctl.setStatus(`${r.cuts} cuts · ${seconds.toFixed(1)} seconds removed, cut in ${r.elapsedSeconds.toFixed(0)} s.\nOpened ${r.name}`

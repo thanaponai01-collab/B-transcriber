@@ -176,3 +176,11 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   `docs/agents/triage-labels.md`.
 - **Domain docs:** single-context (`CONTEXT.md` + `docs/adr/` at the repo root, created
   when first needed; neither exists yet). See `docs/agents/domain.md`.
+
+## Project checks
+- `VERIFY.md`: each feature and the command that proves it. Run every check before saying done;
+  `verify-loop` builds and maintains it.
+- `FEATURES.md`: what the system has and how a user reaches each feature. Read it before driving or
+  changing the app; `feature-map` keeps it true.
+- Something broken and the cause unknown: `debug-protocol`. Need the system explained plainly, not
+  changed: `explain`.

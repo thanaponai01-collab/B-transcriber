@@ -105,11 +105,14 @@ def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -
     lines: list[str] = []
     if fmt == "vtt":
         lines += ["WEBVTT", ""]
-    for i, tok in enumerate(tokens, 1):
+    # A blank cue is invalid output, and a blank line inside a cue's text would
+    # end the cue early and corrupt the file, so both are dropped/collapsed here.
+    cues = [t for t in tokens if t["text"].strip()]
+    for i, tok in enumerate(cues, 1):
         if fmt == "srt":
             lines.append(str(i))
         lines.append(f"{ms_to_ts(tok['start_ms'])} --> {ms_to_ts(tok['end_ms'])}")
-        lines.append(tok["text"])
+        lines.append(re.sub(r"\n\s*\n+", "\n", tok["text"]))
         lines.append("")
 
     return "\n".join(lines)

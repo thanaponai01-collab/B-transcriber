@@ -30,7 +30,7 @@ const {
   alignToFrame,
   alignToSelection,
   distribute,
-} = require("./align.js");
+} = require("../transform/edit.js");
 
 const COMMANDS = [
   "read_sequence",
@@ -165,7 +165,7 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
       const name = await trackItemName(item, "unnamed");
       const transform = await readTransform(item);
       const sourceSize = await readSourceFrameSize(ppro, item);
-      const graphic = isGraphic(item) ? await readGraphicLayers(item) : null;
+      const graphic = (await isGraphic(item)) ? await readGraphicLayers(item) : null;
       let startTicks = null;
       let endTicks = null;
       let inTicks = null;

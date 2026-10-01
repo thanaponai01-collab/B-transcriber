@@ -201,3 +201,21 @@ test("keepRegistered stop clears pending timers and halts further registration",
   reg.onClose();
   assert.equal(timers.length, 1);
 });
+
+test("inspect_selection reports no graphic layers for a plain clip", async () => {
+  const h = host();
+  const item = { getComponentChain: async () => ({ getComponentCount: () => 0 }) };
+  const seq = await (await h.ppro.Project.getActiveProject()).getActiveSequence();
+  seq.getSelection = async () => ({ getTrackItems: async () => [item] });
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({ command: "inspect_selection" });
+  assert.equal(out.selected_count, 1);
+  assert.equal(out.items[0].graphic, null);
+});
+
+test("the driver measures Graphics with the Transform panel's measure", async () => {
+  const src = require("node:fs").readFileSync(require.resolve("../uxp/cutdeck/main.js"), "utf8");
+  assert.match(src, /createDriver\(\{[^}]*measure: align\.measure/);
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  const withHelper = createAlignFeature({ ppro: {}, ctl: { state: {}, render() {} }, uxp: {}, rpc: () => {} });
+  assert.equal(typeof withHelper.measure, "function");
+});
