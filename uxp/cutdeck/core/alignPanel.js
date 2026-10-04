@@ -63,13 +63,24 @@
     if (wrap && typeof wrap.querySelector === "function") {
       const valEl = wrap.querySelector(".val-text");
       if (valEl) {
-        valEl.textContent = value || placeholder || "—";
-        if (valEl.classList && typeof valEl.classList.toggle === "function") {
-          valEl.classList.toggle("placeholder", !value && !!placeholder);
+        const desiredText = value || placeholder || "—";
+        if (valEl.textContent !== desiredText) valEl.textContent = desiredText;
+        const isPlaceholder = !value && !!placeholder;
+        if (valEl.classList && typeof valEl.classList.contains === "function") {
+          if (valEl.classList.contains("placeholder") !== isPlaceholder) {
+            valEl.classList.toggle("placeholder", isPlaceholder);
+          }
+          if (valEl.classList.contains("disabled") !== disabled) {
+            valEl.classList.toggle("disabled", disabled);
+          }
+        } else if (valEl.classList && typeof valEl.classList.toggle === "function") {
+          valEl.classList.toggle("placeholder", isPlaceholder);
           valEl.classList.toggle("disabled", disabled);
         }
       }
-      if (wrap.classList && typeof wrap.classList.toggle === "function") {
+      if (wrap.classList && typeof wrap.classList.contains === "function") {
+        if (wrap.classList.contains("disabled") !== disabled) wrap.classList.toggle("disabled", disabled);
+      } else if (wrap.classList && typeof wrap.classList.toggle === "function") {
         wrap.classList.toggle("disabled", disabled);
       }
     }
@@ -172,9 +183,10 @@
     if (clipEl && typeof clipEl.setAttribute === "function") {
       clipEl.setAttribute("title", state.sequence ? state.sequence.name : "No sequence open");
     }
-    const hasClip = renderTransform(state.transform, state.busy);
+    const busyVis = state.showBusy !== undefined ? state.showBusy : state.busy;
+    const hasClip = renderTransform(state.transform, busyVis);
     renderStatus(state.status);
-    renderBusy(state.busy, hasClip);
+    renderBusy(busyVis, hasClip);
   }
 
   // --- bind: listeners once, intents out ---------------------------------------------------

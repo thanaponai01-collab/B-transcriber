@@ -46,7 +46,9 @@ const presetStore = createPresetStore({
 const rpc = createRpc({
   onRetry: (attempt, total) => mainCtl.setStatus(`Connecting to helper… attempt ${attempt} of ${total}.`, "busy"),
 });
-const quietRpc = createRpc({});
+// Liveness probes (hello/restart) try once: the start and restart loops already poll, so retrying
+// with backoff inside each probe only stacked seconds onto a helper that isn't up yet.
+const quietRpc = createRpc({ attempts: 1 });
 let helperRestart = Promise.resolve();
 
 function restartHelperOnStart() {
@@ -59,7 +61,7 @@ function restartHelperOnStart() {
 async function ensureHelper() {
   await helperRestart;
   return helperStart.ensureHelperRunning({
-    rpc,
+    rpc: quietRpc,
     version: workflow.VERSION,
     onStatus: (msg) => mainCtl.setStatus(msg, "busy"),
   });

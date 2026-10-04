@@ -231,11 +231,26 @@ test("unmount hides the container again", () => {
 test("render is idempotent: a second call with the same state changes nothing further", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
-  const state = { sequence: { name: "Sequence 1" }, busy: true, status: { text: "Working…", level: "busy" } };
+  const state = {
+    sequence: { name: "Sequence 1" },
+    busy: true,
+    showBusy: true,
+    transform: {
+      clipName: "clip A",
+      available: true,
+      fields: {
+        position: { known: true, animated: false, x: 100, y: 200 },
+        scale: { known: true, animated: false, value: 100 },
+        rotation: { known: true, animated: false, value: 0 },
+        anchor: { known: true, animated: false, x: 960, y: 540 },
+      },
+    },
+    status: { text: "Working…", level: "busy" },
+  };
 
   const snapshot = () => [...nodes.values()].map((n) => ({
     id: n.id, textContent: n.textContent, hidden: n.hidden, disabled: n.disabled, className: n.className,
-    childCount: n.children.length,
+    childCount: n.children.length, value: n.value,
   }));
 
   alignPanel.render(state);
@@ -725,3 +740,220 @@ test("arrow keys raise onSlideField with stepped values", () => {
 
   delete global.document;
 });
+
+// --- Slice 3 tests: optimistic UI, adaptive polling, commitField await ---------------------
+
+test("Slice 3: onSetField applies planned transform values directly before confirm read", async () => {
+  const fake = require("./fakes/premiere.cjs");
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+
+  const motionParam = (val) => {
+    const p = {
+      value: val,
+      getStartValue: () => Promise.resolve({ value: { value: p.value } }),
+      isTimeVarying: () => Promise.resolve(false),
+      createKeyframe: (v) => ({ value: v }),
+      createSetValueAction: (kf) => fake.action(() => {
+        p.value = kf.value;
+      }),
+    };
+    return p;
+  };
+  const params = [
+    motionParam([0.5, 0.5]), motionParam(100), motionParam(100),
+    motionParam(true), motionParam(0), motionParam([0.5, 0.5]),
+  ];
+  const item = {
+    name: "Clip1",
+    getComponentChain: () => Promise.resolve({
+      getComponentCount: () => 1,
+      getComponentAtIndex: () => ({
+        getMatchName: () => Promise.resolve("AE.ADBE Motion"),
+        getParam: (i) => params[i] || null,
+      }),
+    }),
+    getProjectItem: () => Promise.resolve(null),
+    getStartTime: () => Promise.resolve({ ticks: "0" }),
+    getTrackIndex: () => Promise.resolve(0),
+  };
+
+  const { project } = fake.createProject();
+  let confirmResolve;
+  const confirmPromise = new Promise((resolve) => { confirmResolve = resolve; });
+
+  const seq = {
+    name: "TestSeq",
+    getSelection: () => Promise.resolve({ getTrackItems: () => Promise.resolve([item]) }),
+    getSettings: () => Promise.resolve({
+      getVideoFrameRect: () => Promise.resolve({ width: 1920, height: 1080 }),
+      getVideoPixelAspectRatio: () => Promise.resolve("1:1"),
+    }),
+  };
+  project.getActiveSequence = () => Promise.resolve(seq);
+
+  const ppro = {
+    PointF: fake.PointF,
+    Project: { getActiveProject: () => Promise.resolve(project) },
+  };
+
+  const statesRendered = [];
+  const ctl = {
+    state: {
+      sequence: { name: "TestSeq" },
+      transform: {
+        clipName: "Clip1",
+        available: true,
+        fields: {
+          scale: { known: true, animated: false, value: 100 },
+          rotation: { known: true, animated: false, value: 0 },
+        },
+      },
+      status: { text: "Ready", level: "ready" },
+    },
+    act: async (fn) => { await fn(); },
+    render: () => {
+      statesRendered.push(JSON.parse(JSON.stringify(ctl.state.transform)));
+    },
+    setStatus: () => {},
+  };
+
+  const feature = createAlignFeature({ ppro, ctl });
+  const actionPromise = feature.onSetField("scale", "150");
+
+  // The optimistic state must already have scale.value = 150 before confirmPromise resolves
+  assert.ok(statesRendered.length >= 1, "Optimistic render was triggered");
+  const optimisticState = statesRendered[0];
+  assert.equal(optimisticState.fields.scale.value, 150);
+
+  await actionPromise;
+});
+
+test("Slice 3: commitField awaits in-flight slidePromise without polling loop", async () => {
+  const fake = require("./fakes/premiere.cjs");
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+
+  let slideDone = false;
+  let commitDone = false;
+  const executionOrder = [];
+
+  const ctl = {
+    state: {
+      sequence: { name: "Seq" },
+      transform: { clipName: "C", available: true, fields: { scale: { known: true, value: 100 } } },
+      status: { text: "Ready", level: "ready" },
+    },
+    act: async (fn) => { await fn(); },
+    render: () => {},
+    setStatus: () => {},
+  };
+
+  let resolveSlide;
+  const slideGate = new Promise((r) => { resolveSlide = r; });
+
+  const motionParam = (val) => {
+    const p = {
+      value: val,
+      getStartValue: () => Promise.resolve({ value: { value: p.value } }),
+      isTimeVarying: () => Promise.resolve(false),
+      createKeyframe: (v) => ({ value: v }),
+      createSetValueAction: (kf) => fake.action(() => {
+        p.value = kf.value;
+      }),
+    };
+    return p;
+  };
+  const params = [
+    motionParam([0.5, 0.5]), motionParam(100), motionParam(100),
+    motionParam(true), motionParam(0), motionParam([0.5, 0.5]),
+  ];
+  const item = {
+    name: "C",
+    getComponentChain: () => Promise.resolve({
+      getComponentCount: () => 1,
+      getComponentAtIndex: () => ({
+        getMatchName: () => Promise.resolve("AE.ADBE Motion"),
+        getParam: (i) => params[i] || null,
+      }),
+    }),
+    getProjectItem: () => Promise.resolve(null),
+    getStartTime: () => Promise.resolve({ ticks: "0" }),
+    getTrackIndex: () => Promise.resolve(0),
+  };
+
+  let slideCalls = 0;
+  const { project } = fake.createProject();
+  const seq = {
+    name: "Seq",
+    getSelection: async () => {
+      slideCalls++;
+      if (slideCalls === 1) {
+        await slideGate;
+        slideDone = true;
+        executionOrder.push("slideFinished");
+      }
+      return { getTrackItems: async () => [item] };
+    },
+    getSettings: () => Promise.resolve({
+      getVideoFrameRect: () => Promise.resolve({ width: 1920, height: 1080 }),
+      getVideoPixelAspectRatio: () => Promise.resolve("1:1"),
+    }),
+  };
+  project.getActiveSequence = () => Promise.resolve(seq);
+
+  const ppro = {
+    PointF: fake.PointF,
+    Project: { getActiveProject: () => Promise.resolve(project) },
+  };
+
+  const feature = createAlignFeature({ ppro, ctl });
+  feature.onSlideField("scale", "110");
+  const commitP = feature.onCommitField("scale", "120").then(() => {
+    commitDone = true;
+    executionOrder.push("commitFinished");
+  });
+
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(slideDone, false, "Slide still in flight");
+  assert.equal(commitDone, false, "Commit hasn't finished yet");
+
+  resolveSlide();
+  await commitP;
+
+  assert.equal(slideDone, true);
+  assert.equal(commitDone, true);
+  assert.deepEqual(executionOrder, ["slideFinished", "commitFinished"]);
+});
+
+test("Slice 3: adaptive poll interval drops to 1000ms idle and speeds to 150ms on activity", async () => {
+  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+  const ctl = {
+    state: { sequence: null, transform: null },
+    act: async (fn) => fn(),
+    render: () => {},
+    setStatus: () => {},
+  };
+  const feature = createAlignFeature({ ppro: {}, ctl });
+
+  // Initially after noteActivity, interval is FAST (150ms)
+  feature.noteActivity();
+  assert.equal(feature.currentPollInterval(), 150);
+
+  // Advance time past ACTIVITY_WINDOW_MS (2000ms)
+  const origDateNow = Date.now;
+  try {
+    let fakeTime = 100000;
+    Date.now = () => fakeTime;
+    feature.noteActivity();
+    assert.equal(feature.currentPollInterval(), 150);
+
+    fakeTime += 2500; // 2.5s later -> idle
+    assert.equal(feature.currentPollInterval(), 1000);
+
+    // Activity note resets back to fast poll
+    feature.noteActivity();
+    assert.equal(feature.currentPollInterval(), 150);
+  } finally {
+    Date.now = origDateNow;
+  }
+});
+

@@ -118,6 +118,44 @@ test("panel.render is idempotent: a second call with the same state mutates noth
   delete global.navigator;
 });
 
+test("panel.render does zero property mutations when called again with the same state", () => {
+  const { document, makeMutationTracker } = makeDomStub();
+  global.document = document;
+  global.window = { location: { reload: () => {} } };
+  global.navigator = {};
+  delete require.cache[require.resolve("../uxp/cutdeck/core/panel.js")];
+  const panel = require("../uxp/cutdeck/core/panel.js");
+
+  const fixtureState = {
+    sequence: { name: "Sequence 1", inSeconds: 12.5, outSeconds: 45.75, audioTrackCount: 2 },
+    tab: "edit",
+    cutMode: "silence",
+    audioTrack: 1,
+    settings: {
+      frames: 20, bin: "MyBin", color: "Mango", clamp: false, activeFx: "Zoom Out",
+      fxList: ["Zoom In", "Zoom Out", "Whip Pan L"],
+    },
+    job: { id: "job-1", state: "running" },
+    busy: true,
+    showBusy: true,
+    status: { text: "Working…", level: "busy" },
+  };
+
+  // First render establishes initial state
+  panel.render(fixtureState);
+
+  // Now start tracking mutations on existing elements
+  const tracker = makeMutationTracker();
+  panel.render(fixtureState);
+
+  assert.deepEqual(tracker.getMutations(), [], "second render with same state must perform 0 DOM mutations");
+
+  delete global.document;
+  delete global.window;
+  delete global.navigator;
+});
+
+
 // --- a minimal, hand-rolled DOM stub -----------------------------------------------------
 // No jsdom in this repo (no build step, no new runtime deps per CLAUDE.md) — this covers
 // exactly the subset of the DOM API core/panel.js uses.
@@ -130,26 +168,77 @@ function makeDomStub() {
     const classes = new Set();
     const attributes = {};
     const listeners = {};
+    let onMutate = null;
+    let _value = "";
+    let _checked = false;
+    let _hidden = false;
+    let _disabled = false;
     const el = {
       id,
       tagName: tag || "div",
-      value: "",
-      checked: false,
-      hidden: false,
-      disabled: false,
+      get value() { return _value; },
+      set value(v) {
+        if (_value !== v) {
+          if (onMutate) onMutate({ el, prop: "value", from: _value, to: v });
+          _value = v;
+        }
+      },
+      get checked() { return _checked; },
+      set checked(v) {
+        if (_checked !== v) {
+          if (onMutate) onMutate({ el, prop: "checked", from: _checked, to: v });
+          _checked = v;
+        }
+      },
+      get hidden() { return _hidden; },
+      set hidden(v) {
+        if (_hidden !== v) {
+          if (onMutate) onMutate({ el, prop: "hidden", from: _hidden, to: v });
+          _hidden = v;
+        }
+      },
+      get disabled() { return _disabled; },
+      set disabled(v) {
+        if (_disabled !== v) {
+          if (onMutate) onMutate({ el, prop: "disabled", from: _disabled, to: v });
+          _disabled = v;
+        }
+      },
       children: [],
       parentElement: null,
       get textContent() { return text; },
-      set textContent(v) { text = String(v); },
+      set textContent(v) {
+        const s = String(v);
+        if (text !== s) {
+          if (onMutate) onMutate({ el, prop: "textContent", from: text, to: s });
+          text = s;
+        }
+      },
       get innerHTML() { return ""; },
-      set innerHTML(_v) { el.children = []; },
+      set innerHTML(_v) {
+        if (onMutate) onMutate({ el, prop: "innerHTML", to: _v });
+        el.children = [];
+      },
       classList: {
-        add: (...cls) => cls.forEach((c) => classes.add(c)),
-        remove: (...cls) => cls.forEach((c) => classes.delete(c)),
+        add: (...cls) => cls.forEach((c) => {
+          if (!classes.has(c)) {
+            if (onMutate) onMutate({ el, prop: "classList.add", class: c });
+            classes.add(c);
+          }
+        }),
+        remove: (...cls) => cls.forEach((c) => {
+          if (classes.has(c)) {
+            if (onMutate) onMutate({ el, prop: "classList.remove", class: c });
+            classes.delete(c);
+          }
+        }),
         toggle(c, force) {
           const has = classes.has(c);
           const want = force === undefined ? !has : !!force;
-          if (want) classes.add(c); else classes.delete(c);
+          if (has !== want) {
+            if (onMutate) onMutate({ el, prop: "classList.toggle", class: c, want });
+            if (want) classes.add(c); else classes.delete(c);
+          }
           return want;
         },
         contains: (c) => classes.has(c),
@@ -158,9 +247,26 @@ function makeDomStub() {
       getAttribute(name) {
         return Object.prototype.hasOwnProperty.call(attributes, name) ? attributes[name] : null;
       },
-      setAttribute(name, v) { attributes[name] = String(v); },
-      removeAttribute(name) { delete attributes[name]; },
-      appendChild(child) { el.children.push(child); child.parentElement = el; return child; },
+      setAttribute(name, v) {
+        const s = String(v);
+        if (attributes[name] !== s) {
+          if (onMutate) onMutate({ el, prop: "setAttribute", name, from: attributes[name], to: s });
+          attributes[name] = s;
+        }
+      },
+      removeAttribute(name) {
+        if (Object.prototype.hasOwnProperty.call(attributes, name)) {
+          if (onMutate) onMutate({ el, prop: "removeAttribute", name });
+          delete attributes[name];
+        }
+      },
+      appendChild(child) {
+        if (onMutate) onMutate({ el, prop: "appendChild", child });
+        el.children.push(child);
+        child.parentElement = el;
+        return child;
+      },
+      _setOnMutate(fn) { onMutate = fn; },
       contains(other) {
         let n = other;
         while (n) { if (n === el) return true; n = n.parentElement; }
@@ -240,5 +346,17 @@ function makeDomStub() {
     }));
   }
 
-  return { document, elementSnapshot };
+  function makeMutationTracker() {
+    const mutations = [];
+    const record = (m) => mutations.push(m);
+    elements.forEach((e) => {
+      if (typeof e._setOnMutate === "function") e._setOnMutate(record);
+    });
+    return {
+      getMutations: () => mutations,
+    };
+  }
+
+  return { document, elementSnapshot, makeMutationTracker };
 }
+

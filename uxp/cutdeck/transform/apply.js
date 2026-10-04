@@ -10,7 +10,8 @@
 // before the transaction; every Action and Keyframe is created inside the callback
 // (PREMIERE_FACTS "executeTransaction + CompoundAction").
 
-const { findMotionComponent, PARAM_INDEX } = require("./params.js");
+const { findMotionComponent, PARAM_INDEX, clearComponentCache } = require("./params.js");
+const { clearSnapshotCache } = require("./snapshot.js");
 const { runTransaction } = require("../host/project.js");
 
 // `writes` = [{ item, name, values: { position?: {x,y}, anchorPoint?: {x,y}, scale?, rotation? } }].
@@ -48,6 +49,9 @@ async function applyMotionValues(ppro, project, label, writes, paramWrites = [],
       }
     }
   });
+
+  clearComponentCache();
+  clearSnapshotCache();
 }
 
 module.exports = { applyMotionValues };

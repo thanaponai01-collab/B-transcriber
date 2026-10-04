@@ -9,6 +9,7 @@ function createController({ render, initialState = {} }) {
   const state = {
     ...initialState,
     busy: false,
+    showBusy: false,
     status: (initialState && initialState.status) || { text: "Ready", level: "ready" },
   };
 
@@ -20,8 +21,15 @@ function createController({ render, initialState = {} }) {
   async function act(fn) {
     if (state.busy) return;
     state.busy = true;
+    state.showBusy = false;
     state.lastStatus = state.status;
     state.status = { text: "Processing…", level: "busy" };
+    let busyTimer = setTimeout(() => {
+      if (state.busy) {
+        state.showBusy = true;
+        render(state);
+      }
+    }, 150);
     render(state);
     try {
       await fn();
@@ -33,7 +41,9 @@ function createController({ render, initialState = {} }) {
       state.status = { text, level: "error" };
       console.error(error);
     } finally {
+      clearTimeout(busyTimer);
       state.busy = false;
+      state.showBusy = false;
       render(state);
     }
   }

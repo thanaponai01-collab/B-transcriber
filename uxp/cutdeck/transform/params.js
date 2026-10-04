@@ -159,15 +159,32 @@ async function readTransform(item) {
 // Position's normalized value into the pixel numbers Effect Controls displays (Anchor Point is
 // normalized to the SOURCE frame instead — see readSourceFrameSize below);
 // the conversion itself is pure math and lives in transform/geometry.js, not here.
+// WeakMap cache for sequence settings during snapshot/edits
+let seqSettingsCache = new WeakMap();
+
+async function getCachedSeqSettings(seq) {
+  if (!seq || typeof seq.getSettings !== "function") return null;
+  if (typeof seq === "object" && seqSettingsCache.has(seq)) {
+    return seqSettingsCache.get(seq);
+  }
+  const promise = (async () => {
+    try {
+      return await seq.getSettings();
+    } catch (_) {
+      return null;
+    }
+  })();
+  if (typeof seq === "object") seqSettingsCache.set(seq, promise);
+  return promise;
+}
+
 async function readSequenceFrameSize(seq) {
   if (!seq) return null;
   try {
-    if (typeof seq.getSettings === "function") {
-      const settings = await seq.getSettings();
-      if (settings && typeof settings.getVideoFrameRect === "function") {
-        const rect = await settings.getVideoFrameRect();
-        if (rect && rect.width && rect.height) return { width: rect.width, height: rect.height };
-      }
+    const settings = await getCachedSeqSettings(seq);
+    if (settings && typeof settings.getVideoFrameRect === "function") {
+      const rect = await settings.getVideoFrameRect();
+      if (rect && rect.width && rect.height) return { width: rect.width, height: rect.height };
     }
   } catch (_) {}
   try {
@@ -183,9 +200,9 @@ async function readSequenceFrameSize(seq) {
 // ("1:1", PREMIERE_FACTS "Sequence"), so parse "a:b"; a plain number string is accepted too.
 // Returns null when unreadable, never an assumed 1.
 async function readSequencePixelAspect(seq) {
-  if (!seq || typeof seq.getSettings !== "function") return null;
+  if (!seq) return null;
   try {
-    const settings = await seq.getSettings();
+    const settings = await getCachedSeqSettings(seq);
     if (!settings || typeof settings.getVideoPixelAspectRatio !== "function") return null;
     const text = String(await settings.getVideoPixelAspectRatio());
     const ratio = /^\s*([\d.]+)\s*:\s*([\d.]+)\s*$/.exec(text);
@@ -213,23 +230,38 @@ function parseVideoInfoSize(text) {
 
 const VIDEO_INFO_COLUMN_ID = "Column.Intrinsic.VideoInfo";
 
+let projectItemSourceSizeCache = new WeakMap();
+
+function clearSourceFrameSizeCache(projectItem = null) {
+  if (projectItem && typeof projectItem === "object") projectItemSourceSizeCache.delete(projectItem);
+  else projectItemSourceSizeCache = new WeakMap();
+}
+
 // The selected item's SOURCE frame size, which Anchor Point is normalized to. UXP has no
 // width/height on ProjectItem, ClipProjectItem or FootageInterpretation; the only read path is
 // Metadata.getProjectColumnsMetadata()'s Video Info column (Part 1a, proven on video and PNG).
 // Open question the plan still carries: whether hiding that column in the Project panel
 // removes it from this dump. If it does, this returns null and the panel shows Anchor Point
 // as unavailable — the right failure, never a sequence-sized fallback. Never throws.
+// Result is cached per project item since source dimensions do not change.
 async function readSourceFrameSize(ppro, item) {
   if (!ppro || !ppro.Metadata || typeof ppro.Metadata.getProjectColumnsMetadata !== "function") return null;
   if (!item || typeof item.getProjectItem !== "function") return null;
   try {
     const projectItem = await item.getProjectItem();
     if (!projectItem) return null;
+    if (typeof projectItem === "object" && projectItemSourceSizeCache.has(projectItem)) {
+      return projectItemSourceSizeCache.get(projectItem);
+    }
     const raw = await ppro.Metadata.getProjectColumnsMetadata(projectItem);
     const parsed = JSON.parse(typeof raw === "string" ? raw : String(raw));
     const columns = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.columns) ? parsed.columns : []);
     const column = columns.find((c) => c && c.ColumnID === VIDEO_INFO_COLUMN_ID);
-    return column ? parseVideoInfoSize(column.ColumnValue) : null;
+    const size = column ? parseVideoInfoSize(column.ColumnValue) : null;
+    if (typeof projectItem === "object") {
+      projectItemSourceSizeCache.set(projectItem, size);
+    }
+    return size;
   } catch (_) {
     return null;
   }
@@ -328,5 +360,6 @@ module.exports = {
   readSequencePixelAspect,
   parseVideoInfoSize,
   readSourceFrameSize,
+  clearSourceFrameSizeCache,
   clearComponentCache,
 };

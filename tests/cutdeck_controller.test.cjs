@@ -132,3 +132,33 @@ test("render is called on start and finish", async () => {
   assert.equal(states[1].busy, false);
   assert.deepEqual(states[1].status, { text: "Ready", level: "ready" });
 });
+
+test("act finishing in 50ms never renders showBusy: true", async () => {
+  const renderedShowBusy = [];
+  const ctl = createController({
+    render: (s) => renderedShowBusy.push(s.showBusy),
+  });
+
+  await ctl.act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  assert.equal(renderedShowBusy.length, 2, "initial render on start and final render on finish");
+  assert.deepEqual(renderedShowBusy, [false, false], "showBusy should remain false throughout fast action");
+  assert.equal(ctl.state.showBusy, false);
+});
+
+test("act taking longer than 150ms exposes showBusy: true after delay", async () => {
+  const renderedShowBusy = [];
+  const ctl = createController({
+    render: (s) => renderedShowBusy.push(s.showBusy),
+  });
+
+  await ctl.act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  assert.equal(renderedShowBusy.length, 3, "start (false), timeout (true), finish (false)");
+  assert.deepEqual(renderedShowBusy, [false, true, false]);
+  assert.equal(ctl.state.showBusy, false);
+});

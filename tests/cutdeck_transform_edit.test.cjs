@@ -992,3 +992,40 @@ test("a failed write puts clips the measurement hid back, in their own restore t
   assert.equal(disabled, false, "the clip was left hidden");
   assert.deepEqual(undoSteps, ["CutDeck: restore clips"]);
 });
+
+test("Slice 2: setAnchor on one clip performs at most 1 full read of sequence / items", async () => {
+  const a = motionClip("A");
+  let trackItemsReads = 0;
+  let sequenceSettingsReads = 0;
+  const { project, undoSteps } = fake.createProject();
+  const seq = {
+    name: "Seq",
+    getSelection: () => Promise.resolve({
+      getTrackItems: () => {
+        trackItemsReads += 1;
+        return Promise.resolve([a]);
+      },
+    }),
+    getSettings: () => {
+      sequenceSettingsReads += 1;
+      return Promise.resolve({
+        getVideoFrameRect: () => Promise.resolve({ width: 1920, height: 1080 }),
+        getVideoPixelAspectRatio: () => Promise.resolve("1:1"),
+      });
+    },
+  };
+  project.getActiveSequence = () => Promise.resolve(seq);
+  const ppro = {
+    PointF: fake.PointF,
+    Project: { getActiveProject: () => Promise.resolve(project) },
+    Metadata: {
+      getProjectColumnsMetadata: (pi) => Promise.resolve(JSON.stringify([
+        { ColumnID: "Column.Intrinsic.VideoInfo", ColumnValue: a.source },
+      ])),
+    },
+  };
+
+  await setAnchor(ppro, "top-left");
+  assert.equal(trackItemsReads, 1, "getTrackItems called exactly once via readSnapshot");
+  assert.equal(sequenceSettingsReads, 1, "getSettings called exactly once via readSnapshot");
+});

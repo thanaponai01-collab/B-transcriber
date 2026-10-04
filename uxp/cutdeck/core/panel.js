@@ -237,15 +237,20 @@
   }
 
   function renderBusy(busy) {
+    const off = !!busy;
     document.querySelectorAll("[data-act]").forEach((el) => {
-      if (busy) {
-        el.disabled = true;
-        el.setAttribute("disabled", "true");
-        el.classList.add("disabled");
-      } else {
-        el.disabled = false;
-        el.removeAttribute("disabled");
-        el.classList.remove("disabled");
+      if (el.disabled !== off) {
+        el.disabled = off;
+        if (off) {
+          el.setAttribute("disabled", "true");
+        } else {
+          el.removeAttribute("disabled");
+        }
+      }
+      if (el.classList && typeof el.classList.contains === "function") {
+        if (el.classList.contains("disabled") !== off) el.classList.toggle("disabled", off);
+      } else if (el.classList) {
+        el.classList.toggle("disabled", off);
       }
     });
   }
@@ -263,7 +268,7 @@
     renderPresetManageList(state.customPresets);
     renderPresetFile(state.presetFile);
     renderJobBanner(state.job);
-    renderBusy(state.busy);
+    renderBusy(state.showBusy !== undefined ? state.showBusy : state.busy);
   }
 
   // --- bind: DOM events -> intents -----------------------------------------------------------

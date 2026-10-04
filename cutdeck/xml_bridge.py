@@ -619,8 +619,16 @@ async def serve(jobs: XmlJobs, port: int = PORT):
                 await asyncio.wait(answers)
 
     # Reject ordinary website origins; the local UXP client has no web origin.
-    return await ws_serve(connection, "127.0.0.1", port,
-                          origins=[None, "null", "file://"], max_size=MAX_MESSAGE)
+    # Listen on both loopbacks: the panel dials "localhost", which Windows tries as ::1 first and
+    # only falls back to 127.0.0.1 after ~2 s per connect. IPv4 alone if IPv6 is disabled, or for
+    # port 0, where each loopback would get a different ephemeral port.
+    options = dict(origins=[None, "null", "file://"], max_size=MAX_MESSAGE)
+    if port:
+        try:
+            return await ws_serve(connection, ["127.0.0.1", "::1"], port, **options)
+        except OSError:
+            pass
+    return await ws_serve(connection, "127.0.0.1", port, **options)
 
 
 def spawn_replacement(port: int, jobs_dir: Path):

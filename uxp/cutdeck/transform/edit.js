@@ -9,6 +9,7 @@ const transformParams = require("./params.js");
 const transformGeometry = require("./geometry.js");
 const transformApply = require("./apply.js");
 const frameBounds = require("./frameBounds.js");
+const { readSnapshot } = require("./snapshot.js");
 const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
 
 function describeField(entry, isPoint, frameSize) {
@@ -23,45 +24,52 @@ function describeField(entry, isPoint, frameSize) {
   return typeof entry.value === "number" ? { known: true, animated: false, value: entry.value } : { known: false };
 }
 
-async function readAlignTransform(seq, ppro) {
-  if (!seq) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
+async function readAlignTransform(seqOrSnapshot, ppro = null) {
+  let snap;
+  if (seqOrSnapshot && seqOrSnapshot.clips !== undefined && seqOrSnapshot.items !== undefined) {
+    snap = seqOrSnapshot;
+  } else {
+    snap = await readSnapshot(ppro, { seq: seqOrSnapshot });
+  }
 
-  const items = await trackItems.getSelectedTrackItems(seq, ppro);
+  if (!snap.sequence) return { clipName: null, available: false, reason: "No sequence open.", fields: null };
+
+  const items = snap.items;
   if (items.length === 0) {
     return { clipName: null, available: false, reason: "Select a clip on the timeline.", fields: null };
   }
-  // Linked selection brings the audio along (PREMIERE_FACTS "Sequence.getSelection()"), and audio
-  // has no Motion: show the first selected item that has one.
-  let item = items[0];
-  let transform = null;
-  for (const candidate of items) {
-    transform = await transformParams.readTransform(candidate);
-    if (transform) { item = candidate; break; }
-  }
-  const clipName = (await trackItems.trackItemName(item, "(unnamed)")) + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
-  if (!transform) {
+
+  if (snap.clips.length === 0) {
+    const rawFirst = items[0];
+    const rawName = snap.firstItemName || (await trackItems.trackItemName(rawFirst, "(unnamed)"));
+    const clipName = rawName + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
     return { clipName, available: false, reason: "This item has no readable Transform.", fields: null };
   }
 
-  const frameSize = await transformParams.readSequenceFrameSize(seq);
-  const anchorFrame = await transformParams.readAnchorFrameSize(ppro, item, seq);
+  const primaryClip = snap.clips[0];
+  const item = primaryClip.item;
+  const clipName = primaryClip.name + (items.length > 1 ? ` (+${items.length - 1} more selected)` : "");
+  const seq = snap.sequence;
+  const frameSize = snap.seqFrame;
+  let anchorFrame = primaryClip.anchorFrame;
+  if (!anchorFrame) {
+    anchorFrame = await transformParams.readAnchorFrameSize(ppro, item, seq);
+  }
 
   // A Graphic with text: show the text layer's own transform (matching Effect Controls /
   // Properties panel), leaving the fixed Motion container alone.
-  if (await transformParams.isGraphic(item)) {
-    const layers = await transformParams.readGraphicLayers(item);
-    if (layers && layers.texts && layers.texts.length > 0) {
-      const primaryText = layers.texts[0];
-      const fields = {
-        position: describeField(primaryText.position, true, frameSize),
-        scale: describeField(primaryText.scale, false, frameSize),
-        rotation: describeField(primaryText.rotation, false, frameSize),
-        anchor: describeField(primaryText.anchorPoint, true, anchorFrame),
-      };
-      return { clipName, available: true, reason: null, fields };
-    }
+  if (primaryClip.isGraphic && primaryClip.layers && primaryClip.layers.texts && primaryClip.layers.texts.length > 0) {
+    const primaryText = primaryClip.layers.texts[0];
+    const fields = {
+      position: describeField(primaryText.position, true, frameSize),
+      scale: describeField(primaryText.scale, false, frameSize),
+      rotation: describeField(primaryText.rotation, false, frameSize),
+      anchor: describeField(primaryText.anchorPoint, true, anchorFrame),
+    };
+    return { clipName, available: true, reason: null, fields };
   }
 
+  const transform = primaryClip.transform;
   const fields = {
     position: describeField(transform.position, true, frameSize),
     scale: describeField(transform.scale, false, frameSize),
@@ -72,10 +80,11 @@ async function readAlignTransform(seq, ppro) {
 }
 
 async function readAlignState(ppro) {
-  const { sequence: seq } = await activeProjectAndSequence(ppro, { requireProject: false, requireSequence: false });
+  const snap = await readSnapshot(ppro);
+  const seq = snap.sequence;
   return {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
-    transform: await readAlignTransform(seq, ppro),
+    transform: await readAlignTransform(snap, ppro),
   };
 }
 
@@ -125,7 +134,9 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
     || typeof scaleWidth !== "number" || Object.values(crop).some((v) => typeof v !== "number")) {
     return { skip: `"${clip.name}": could not read all of its Motion values.` };
   }
-  const source = await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
+  const source = clip.anchorFrame !== undefined && clip.anchorFrame !== null
+    ? clip.anchorFrame
+    : await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
   if (!source) return { skip: `"${clip.name}": could not read its source frame size.` };
   if (source.pixelAspect !== 1 || seqAspect !== 1) {
     return { skip: `"${clip.name}": non-square pixels are not supported yet.` };
@@ -151,26 +162,31 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
 // in, and the plan uses that (`model.drawn`, sequence px).
 async function editSelectedClips(ppro, label, plan, measure = null, group = null) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq, ppro);
-  if (clips.length === 0) throw new Error("Select a clip on the timeline.");
-  const seqFrame = await transformParams.readSequenceFrameSize(seq);
+  const snap = await readSnapshot(ppro, { seq });
+  if (snap.clips.length === 0) throw new Error("Select a clip on the timeline.");
+  const seqFrame = snap.seqFrame;
   if (!seqFrame) throw new Error("Could not read the sequence frame size.");
-  const seqAspect = await transformParams.readSequencePixelAspect(seq);
+  const seqAspect = snap.seqAspect;
+  const clips = snap.clips;
 
   const writes = [];
   const paramWrites = [];
   const skipped = [];
   const clipBoundsUpdates = [];
   const unhideActions = [];
-  const ready = [];
   let done = 0;
   let written = false;
   try {
-    for (const clip of clips) {
+    const modelResults = await Promise.all(clips.map(async (clip) => {
       const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
+      return { clip, m };
+    }));
+
+    const ready = [];
+    for (const { clip, m } of modelResults) {
       if (m.skip) { skipped.push(m.skip); continue; }
-      if (await transformParams.isGraphic(clip.item)) {
-        m.layers = await transformParams.readGraphicLayers(clip.item);
+      if (clip.isGraphic) {
+        m.layers = clip.layers;
         const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
         let textScale = 100;
         let textRot = 0;
@@ -487,9 +503,10 @@ async function alignTextLayersInGraphic(ppro, project, seq, clip, layers, edge) 
 async function alignToSelection(ppro, edge, measure = null) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq, ppro);
-  if (clips.length === 1 && (await transformParams.isGraphic(clips[0].item))) {
-    const layers = await transformParams.readGraphicLayers(clips[0].item);
+  const snap = await readSnapshot(ppro, { seq });
+  const clips = snap.clips;
+  if (clips.length === 1 && clips[0].isGraphic) {
+    const layers = clips[0].layers;
     if (layers && layers.texts && layers.texts.length >= 2) {
       return alignTextLayersInGraphic(ppro, project, seq, clips[0], layers, edge);
     }
@@ -565,11 +582,12 @@ async function distribute(ppro, kind, measure = null, to = "selection") {
   const spec = DISTRIBUTE[kind];
   if (!spec) throw new Error(`Unknown distribution "${kind}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq, ppro);
+  const snap = await readSnapshot(ppro, { seq });
+  const clips = snap.clips;
   const isFrame = to === "frame";
 
-  if (clips.length === 1 && (await transformParams.isGraphic(clips[0].item))) {
-    const layers = await transformParams.readGraphicLayers(clips[0].item);
+  if (clips.length === 1 && clips[0].isGraphic) {
+    const layers = clips[0].layers;
     const minLayers = isFrame ? 2 : 3;
     if (layers && layers.texts && layers.texts.length >= minLayers) {
       return distributeTextLayersInGraphic(ppro, project, seq, clips[0], layers, kind, spec, to);
@@ -612,17 +630,18 @@ async function setField(ppro, field, text) {
   if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
 
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const clips = await readSelectedMotionClips(seq, ppro);
+  const snap = await readSnapshot(ppro, { seq });
+  const clips = snap.clips;
   if (clips.length === 0) throw new Error("Select a clip on the timeline.");
-  const seqFrame = spec.param === "position" ? await transformParams.readSequenceFrameSize(seq) : null;
+  const seqFrame = spec.param === "position" ? (snap.seqFrame || await transformParams.readSequenceFrameSize(seq)) : null;
 
   const writes = [];
   const paramWrites = [];
   const skipped = [];
   let done = 0;
   for (const clip of clips) {
-    if (await transformParams.isGraphic(clip.item)) {
-      const layers = await transformParams.readGraphicLayers(clip.item);
+    if (clip.isGraphic) {
+      const layers = clip.layers;
       if (layers && layers.onlyText && layers.texts.length > 0) {
         let textSkipped = false;
         for (const t of layers.texts) {
@@ -635,7 +654,7 @@ async function setField(ppro, field, text) {
         }
         if (textSkipped) continue;
 
-        const frame = seqFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
+        const frame = seqFrame || clip.anchorFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
         if (!frame) {
           skipped.push(`"${clip.name}": could not read its ${spec.param === "position" ? "sequence" : "source"} frame size.`);
           continue;
@@ -723,7 +742,7 @@ async function setField(ppro, field, text) {
     if (entry && entry.isTimeVarying) { skipped.push(`"${clip.name}" has this value keyframed.`); continue; }
     let value = number;
     if (spec.axis) {
-      const frame = seqFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
+      const frame = seqFrame || clip.anchorFrame || await transformParams.readAnchorFrameSize(ppro, clip.item, seq);
       if (!frame) {
         skipped.push(`"${clip.name}": could not read its ${spec.param === "position" ? "sequence" : "source"} frame size.`);
         continue;
