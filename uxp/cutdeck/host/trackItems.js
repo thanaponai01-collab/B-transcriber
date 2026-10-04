@@ -183,11 +183,35 @@ async function getSelectedVideoClips(ppro, seq) {
     }
 
     // 3. Verify item belongs to a Video Track (if videoItemsTrackMap was populated)
-    if (videoItemsTrackMap.size > 0 && !videoItemsTrackMap.has(it)) {
+    let assignedTrack = -1;
+    if (videoItemsTrackMap.has(it)) {
+      assignedTrack = videoItemsTrackMap.get(it);
+    } else {
+      // Fallback: Premiere Pro UXP returns fresh wrapper proxy objects where Map.has(it) fails.
+      // Match by start and end ticks within the collected video track items.
+      const itStart = typeof it.getStartTime === "function" ? (await it.getStartTime()) : it.startTime;
+      const itEnd = typeof it.getEndTime === "function" ? (await it.getEndTime()) : it.endTime;
+      const itSTicks = itStart ? (itStart.ticks || String(itStart)) : null;
+      const itETicks = itEnd ? (itEnd.ticks || String(itEnd)) : null;
+      if (itSTicks !== null) {
+        for (const [vi, vIdx] of videoItemsTrackMap.entries()) {
+          const vStart = typeof vi.getStartTime === "function" ? (await vi.getStartTime()) : vi.startTime;
+          const vEnd = typeof vi.getEndTime === "function" ? (await vi.getEndTime()) : vi.endTime;
+          const vSTicks = vStart ? (vStart.ticks || String(vStart)) : null;
+          const vETicks = vEnd ? (vEnd.ticks || String(vEnd)) : null;
+          if (vSTicks === itSTicks && (itETicks === null || vETicks === itETicks)) {
+            assignedTrack = vIdx;
+            break;
+          }
+        }
+      }
+    }
+
+    if (videoItemsTrackMap.size > 0 && assignedTrack === -1) {
       continue; // Audio clip on A1/A2, ignore!
     }
 
-    videoClips.push({ item: it, track: videoItemsTrackMap.has(it) ? videoItemsTrackMap.get(it) : -1 });
+    videoClips.push({ item: it, track: assignedTrack });
   }
 
   return videoClips;

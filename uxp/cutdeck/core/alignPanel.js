@@ -148,18 +148,63 @@
 
   // Every control is off while an action runs; the ones marked data-needs-clip are also off
   // while there is no editable clip.
-  function renderBusy(busy, hasClip) {
+  // Every control is off while an action runs; the ones marked data-needs-clip are also off
+  // while there is no editable clip.
+  // B4: when needPlayheadOver is true, anchor/align/distribute buttons are disabled with tooltip.
+  function renderBusy(busy, hasClip, needPlayheadOver, tooltip) {
     const el = container();
     if (!el || typeof el.querySelectorAll !== "function") return;
     el.querySelectorAll("[data-act]").forEach((node) => {
-      const off = !!busy || (!hasClip && node.getAttribute("data-needs-clip") !== null);
+      const act = node.getAttribute("data-act");
+      const isAnchorOrAlignOrDist = act === "align-anchor" || act === "align-edge" || act === "distribute";
+      const off = !!busy || (!hasClip && node.getAttribute("data-needs-clip") !== null) || (!!needPlayheadOver && isAnchorOrAlignOrDist);
       if (node.disabled !== off) node.disabled = off;
       if (node.classList && typeof node.classList.contains === "function") {
         if (node.classList.contains("disabled") !== off) node.classList.toggle("disabled", off);
       } else if (node.classList) {
         node.classList.toggle("disabled", off);
       }
+      if (needPlayheadOver && isAnchorOrAlignOrDist && tooltip) {
+        if (typeof node.setAttribute === "function") node.setAttribute("title", tooltip);
+      }
     });
+  }
+
+  // B2: Sub-layer switcher (Text 1 / Text 2 / All) when Graphic has >1 text layers
+  function renderTextLayerSwitcher(textLayers, activeTarget) {
+    const switcher = $("align-text-layer-switcher");
+    if (!switcher) return;
+    if (!textLayers || textLayers.length <= 1) {
+      setHidden(switcher, true);
+      switcher.innerHTML = "";
+      return;
+    }
+    setHidden(switcher, false);
+    const options = [
+      ...textLayers.map((l) => ({ target: l.index, label: l.label })),
+      { target: "all", label: "All" },
+    ];
+    // Check if switcher already has matching children to avoid recreating DOM on every poll
+    const currentButtons = switcher.querySelectorAll ? switcher.querySelectorAll("[data-layer-target]") : [];
+    if (currentButtons.length === options.length) {
+      currentButtons.forEach((btn, idx) => {
+        const opt = options[idx];
+        const isActive = String(activeTarget) === String(opt.target);
+        if (btn.classList && typeof btn.classList.toggle === "function") {
+          btn.classList.toggle("active", isActive);
+        }
+      });
+      return;
+    }
+    switcher.innerHTML = "";
+    for (const opt of options) {
+      const btn = document.createElement("div");
+      btn.className = `pill-mini${String(activeTarget) === String(opt.target) ? " active" : ""}`;
+      btn.setAttribute("role", "button");
+      btn.setAttribute("data-layer-target", String(opt.target));
+      btn.textContent = opt.label;
+      switcher.appendChild(btn);
+    }
   }
 
   // `transform` is null when there is no sequence to read; otherwise `{ clipName, available,
@@ -173,6 +218,7 @@
     setText($("align-transform-clip"), line);
     const fields = available ? (transform.fields || {}) : {};
     for (const [id, name, key] of INPUTS) renderInput(id, fields[name], key, busy);
+    renderTextLayerSwitcher(transform && transform.textLayers, transform ? transform.activeLayerTarget : 0);
     return available;
   }
 
@@ -186,7 +232,9 @@
     const busyVis = state.showBusy !== undefined ? state.showBusy : state.busy;
     const hasClip = renderTransform(state.transform, busyVis);
     renderStatus(state.status);
-    renderBusy(busyVis, hasClip);
+    const needPlayhead = !!(state.transform && state.transform.needPlayheadOver);
+    const tooltip = state.transform ? state.transform.tooltip : null;
+    renderBusy(busyVis, hasClip, needPlayhead, tooltip);
   }
 
   // --- bind: listeners once, intents out ---------------------------------------------------
@@ -374,6 +422,18 @@
     el.querySelectorAll("[data-distribute]").forEach((node) => {
       node.addEventListener("click", () => intents.onDistribute(node.getAttribute("data-distribute"), alignTo));
     });
+    const switcher = $("align-text-layer-switcher");
+    if (switcher && typeof switcher.addEventListener === "function") {
+      switcher.addEventListener("click", (e) => {
+        const targetBtn = e.target && typeof e.target.closest === "function" ? e.target.closest("[data-layer-target]") : (e.target && e.target.getAttribute && e.target.getAttribute("data-layer-target") ? e.target : null);
+        if (!targetBtn) return;
+        const rawTarget = targetBtn.getAttribute("data-layer-target");
+        const parsedTarget = rawTarget === "all" ? "all" : parseInt(rawTarget, 10);
+        if (typeof intents.onSelectTextLayer === "function") {
+          intents.onSelectTextLayer(parsedTarget);
+        }
+      });
+    }
   }
 
   const exportObj = { render, bind, mount, unmount, isMounted, CONTAINER_ID };

@@ -24,7 +24,12 @@ function describeField(entry, isPoint, frameSize) {
   return typeof entry.value === "number" ? { known: true, animated: false, value: entry.value } : { known: false };
 }
 
-async function readAlignTransform(seqOrSnapshot, ppro = null) {
+function textTarget(layers) {
+  return Boolean(layers && layers.onlyText && layers.texts && layers.texts.length > 0);
+}
+
+async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
+  const layerTarget = options && options.layerTarget !== undefined ? options.layerTarget : 0;
   let snap;
   if (seqOrSnapshot && seqOrSnapshot.clips !== undefined && seqOrSnapshot.items !== undefined) {
     snap = seqOrSnapshot;
@@ -56,17 +61,62 @@ async function readAlignTransform(seqOrSnapshot, ppro = null) {
     anchorFrame = await transformParams.readAnchorFrameSize(ppro, item, seq);
   }
 
-  // A Graphic with text: show the text layer's own transform (matching Effect Controls /
-  // Properties panel), leaving the fixed Motion container alone.
-  if (primaryClip.isGraphic && primaryClip.layers && primaryClip.layers.texts && primaryClip.layers.texts.length > 0) {
+  // B4: Check if unmeasured Graphic text has playhead outside clip
+  if (primaryClip.isGraphic && textTarget(primaryClip.layers)) {
+    const isTextGraphic = true;
     const primaryText = primaryClip.layers.texts[0];
+    const textScale = staticValue(primaryText.scale) || 100;
+    const textRot = staticValue(primaryText.rotation) || 0;
+    const textPos = transformGeometry.pointXY(staticValue(primaryText.position));
+    const cached = frameBounds.getCachedBounds(primaryClip.item, textScale, textRot, primaryClip.key, textPos);
+    if (!cached && primaryClip.playheadOver === false) {
+      const texts = primaryClip.layers.texts;
+      const textLayers = texts.length > 1
+        ? texts.map((_, i) => ({ index: i, label: `Text ${i + 1}` }))
+        : null;
+      const targetIdx = (layerTarget === "all" || typeof layerTarget !== "number" || layerTarget < 0 || layerTarget >= texts.length) ? 0 : layerTarget;
+      const activeText = texts[targetIdx];
+      return {
+        clipName,
+        available: true,
+        reason: null,
+        needPlayheadOver: true,
+        tooltip: "Move the playhead over it first to measure text bounds.",
+        fields: {
+          position: describeField(activeText.position, true, frameSize),
+          scale: describeField(activeText.scale, false, frameSize),
+          rotation: describeField(activeText.rotation, false, frameSize),
+          anchor: describeField(activeText.anchorPoint, true, anchorFrame),
+        },
+        textLayers,
+        activeLayerTarget: layerTarget,
+      };
+    }
+  }
+
+  // B1: A Graphic with ONLY text: show text layer transform. Otherwise (e.g. text+shape), Motion.
+  if (primaryClip.isGraphic && textTarget(primaryClip.layers)) {
+    const texts = primaryClip.layers.texts;
+    const textLayers = texts.length > 1
+      ? texts.map((_, i) => ({ index: i, label: `Text ${i + 1}` }))
+      : null;
+
+    const targetIdx = (layerTarget === "all" || typeof layerTarget !== "number" || layerTarget < 0 || layerTarget >= texts.length) ? 0 : layerTarget;
+    const activeText = texts[targetIdx];
     const fields = {
-      position: describeField(primaryText.position, true, frameSize),
-      scale: describeField(primaryText.scale, false, frameSize),
-      rotation: describeField(primaryText.rotation, false, frameSize),
-      anchor: describeField(primaryText.anchorPoint, true, anchorFrame),
+      position: describeField(activeText.position, true, frameSize),
+      scale: describeField(activeText.scale, false, frameSize),
+      rotation: describeField(activeText.rotation, false, frameSize),
+      anchor: describeField(activeText.anchorPoint, true, anchorFrame),
     };
-    return { clipName, available: true, reason: null, fields };
+    return {
+      clipName,
+      available: true,
+      reason: null,
+      fields,
+      textLayers,
+      activeLayerTarget: layerTarget,
+    };
   }
 
   const transform = primaryClip.transform;
@@ -79,12 +129,12 @@ async function readAlignTransform(seqOrSnapshot, ppro = null) {
   return { clipName, available: true, reason: null, fields };
 }
 
-async function readAlignState(ppro) {
+async function readAlignState(ppro, options = {}) {
   const snap = await readSnapshot(ppro);
   const seq = snap.sequence;
   return {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
-    transform: await readAlignTransform(snap, ppro),
+    transform: await readAlignTransform(snap, ppro, options),
   };
 }
 
@@ -173,14 +223,11 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
   const paramWrites = [];
   const skipped = [];
   const clipBoundsUpdates = [];
-  const unhideActions = [];
   let done = 0;
-  let written = false;
-  try {
-    const modelResults = await Promise.all(clips.map(async (clip) => {
-      const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
-      return { clip, m };
-    }));
+  const modelResults = await Promise.all(clips.map(async (clip) => {
+    const m = await clipModel(ppro, clip, seqFrame, seqAspect, seq);
+    return { clip, m };
+  }));
 
     const ready = [];
     for (const { clip, m } of modelResults) {
@@ -204,15 +251,12 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
           if (!measure) { skipped.push(`"${clip.name}": a Graphic needs its text measured, which isn't available here.`); continue; }
           let measured = null;
           try {
-            measured = await measure({ project, seq, item: clip.item, frame: seqFrame, keepDisabled: true });
+            measured = await measure({ project, seq, item: clip.item, frame: seqFrame });
           } catch (error) {
             skipped.push(`"${clip.name}": ${(error && error.message) || error}`);
             continue;
           }
           const drawnBounds = measured && measured.bounds ? measured.bounds : (measured && typeof measured.left === "number" ? measured : null);
-          if (measured && measured.unhideAction) {
-            unhideActions.push(measured.unhideAction);
-          }
           if (!drawnBounds) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
           m.drawn = drawnBounds;
           if (isTextGraphic) {
@@ -254,29 +298,12 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
         }
       }
     }
-    if (done && (writes.length > 0 || paramWrites.length > 0 || unhideActions.length > 0)) {
-      await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites, unhideActions);
-      written = true;
+    if (done && (writes.length > 0 || paramWrites.length > 0)) {
+      await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites);
     }
     for (const u of clipBoundsUpdates) {
       frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, u.newPos);
     }
-  } finally {
-    // The unhide actions ride in the write's own transaction, so they only need running here
-    // when that write never happened (nothing to write, or it threw).
-    if (unhideActions.length > 0 && !written) {
-      try {
-        runTransaction(project, "CutDeck: restore clips", (compound) => {
-          for (const act of unhideActions) {
-            if (typeof act === "function") act(compound);
-            else if (act) compound.addAction(act);
-          }
-        });
-      } catch (restoreError) {
-        console.error("CutDeck: could not put hidden clips back", restoreError); // keep the original error
-      }
-    }
-  }
   // Text layer Position writes are not proven live yet: log before / written / read back, so one
   // run in Premiere shows whether the write took and in what units (UXPLogs).
   for (const w of paramWrites) {
@@ -403,7 +430,7 @@ function layerModel(position, anchorPoint, scaleEntry, widthEntry, uniformEntry,
 
 // Moves each text layer's own Anchor Point to the text point drawn at `onScreen` (sequence px),
 // and its Position onto that same point, so the text stays put. The point is carried back
-// through Motion, then Vector Motion, then the text layer's own transform. Null when that
+// through Motion, then Vector Motion, then each text layer's own transform. Null when that
 // can't be done exactly, so the caller moves the Graphic's Motion anchor instead.
 function textLayerAnchor(layers, model, source, onScreen) {
   if (!layers || !layers.onlyText || !layers.texts || layers.texts.length !== 1) return null;
@@ -622,12 +649,13 @@ const EDIT_FIELDS = {
 // Sets the typed value on EVERY selected clip (Effect Controls can only do one at a time). A
 // point axis is converted per clip, in that clip's own frame, keeping its other axis. Clips
 // with that value keyframed are skipped, never flattened. One Ctrl+Z undoes the lot.
-async function setField(ppro, field, text) {
+async function setField(ppro, field, text, options = {}) {
   const spec = EDIT_FIELDS[field];
   if (!spec) throw new Error(`Unknown field "${field}".`);
   const typed = String(text).replace(/[%°]/g, "").trim();
   const number = Number(typed);
   if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
+  const layerTarget = (options && options.layerTarget !== undefined) ? options.layerTarget : "all";
 
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
   const snap = await readSnapshot(ppro, { seq });
@@ -642,9 +670,14 @@ async function setField(ppro, field, text) {
   for (const clip of clips) {
     if (clip.isGraphic) {
       const layers = clip.layers;
-      if (layers && layers.onlyText && layers.texts.length > 0) {
+      if (textTarget(layers)) {
+        const textsToTarget = (layerTarget === "all")
+          ? layers.texts.map((_, i) => i)
+          : [(typeof layerTarget === "number" && layerTarget >= 0 && layerTarget < layers.texts.length) ? layerTarget : 0];
+
         let textSkipped = false;
-        for (const t of layers.texts) {
+        for (const idx of textsToTarget) {
+          const t = layers.texts[idx];
           const entry = t[spec.param];
           if (entry && entry.isTimeVarying) {
             skipped.push(`"${clip.name}" has this value keyframed.`);
@@ -664,39 +697,64 @@ async function setField(ppro, field, text) {
         let deltaPx = 0;
         let lastNorm = null;
         if (spec.axis) {
-          const primary = layers.texts[0];
-          const primaryEntry = primary && primary[spec.param];
-          const primaryCurrent = frame && primaryEntry && transformGeometry.normalizedToFramePixels(staticValue(primaryEntry), frame.width, frame.height);
-          if (primaryCurrent) {
-            deltaPx = number - primaryCurrent[spec.axis];
-            for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+          const refIdx = textsToTarget[0];
+          const refText = layers.texts[refIdx];
+          const refEntry = refText && refText[spec.param];
+          const refCurrent = frame && refEntry && transformGeometry.normalizedToFramePixels(staticValue(refEntry), frame.width, frame.height);
+          if (refCurrent) {
+            deltaPx = number - refCurrent[spec.axis];
+            for (const tIdx of textsToTarget) {
               const t = layers.texts[tIdx];
               const entry = t[spec.param];
               const current = frame && transformGeometry.normalizedToFramePixels(staticValue(entry), frame.width, frame.height);
               if (!current) continue;
               current[spec.axis] += deltaPx;
               const norm = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
-              if (tIdx === 0) lastNorm = norm;
-              const targetParam = spec.param === "position" ? t.param : t.anchorParam;
-              if (targetParam) {
-                paramWrites.push({
-                  param: targetParam,
-                  field: `text ${spec.param}`,
-                  value: norm,
-                  name: clip.name,
-                });
-                clipWrote = true;
+              if (tIdx === refIdx) lastNorm = norm;
+
+              if (spec.param === "anchorPoint") {
+                // B5: Typed Anchor on text must compensate Position so the text stays frozen on screen
+                const tModel = layerModel(t.position, t.anchorPoint, t.scale, t.horizontalScale, t.uniformScale, t.rotation, frame);
+                if (tModel && t.anchorParam && t.param) {
+                  const newAnchorPx = { ...tModel.anchor, [spec.axis]: current[spec.axis] };
+                  const newPosPx = transformGeometry.positionForAnchorMove(tModel, newAnchorPx);
+                  paramWrites.push({
+                    param: t.anchorParam,
+                    field: "text anchorPoint",
+                    value: norm,
+                    name: clip.name,
+                  });
+                  paramWrites.push({
+                    param: t.param,
+                    field: "text Position",
+                    value: transformGeometry.framePixelsToNormalized(newPosPx, frame.width, frame.height),
+                    name: clip.name,
+                  });
+                  clipWrote = true;
+                }
+              } else {
+                const targetParam = spec.param === "position" ? t.param : t.anchorParam;
+                if (targetParam) {
+                  paramWrites.push({
+                    param: targetParam,
+                    field: `text ${spec.param}`,
+                    value: norm,
+                    name: clip.name,
+                  });
+                  clipWrote = true;
+                }
               }
             }
           }
         } else if (spec.param === "scale") {
-          const primaryScale = staticValue(layers.texts[0].scale) || 100;
-          const ratio = primaryScale !== 0 ? number / primaryScale : 1;
-          for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+          const refIdx = textsToTarget[0];
+          const refScale = staticValue(layers.texts[refIdx].scale) || 100;
+          const ratio = refScale !== 0 ? number / refScale : 1;
+          for (const tIdx of textsToTarget) {
             const t = layers.texts[tIdx];
             if (t.scaleParam) {
               const curScale = staticValue(t.scale) || 100;
-              const newScale = tIdx === 0 ? number : (curScale * ratio);
+              const newScale = tIdx === refIdx ? number : (curScale * ratio);
               paramWrites.push({
                 param: t.scaleParam,
                 field: "text scale",
@@ -707,13 +765,14 @@ async function setField(ppro, field, text) {
             }
           }
         } else if (spec.param === "rotation") {
-          const primaryRot = staticValue(layers.texts[0].rotation) || 0;
-          const deltaRot = number - primaryRot;
-          for (let tIdx = 0; tIdx < layers.texts.length; tIdx++) {
+          const refIdx = textsToTarget[0];
+          const refRot = staticValue(layers.texts[refIdx].rotation) || 0;
+          const deltaRot = number - refRot;
+          for (const tIdx of textsToTarget) {
             const t = layers.texts[tIdx];
             if (t.rotationParam) {
               const curRot = staticValue(t.rotation) || 0;
-              const newRot = tIdx === 0 ? number : (curRot + deltaRot);
+              const newRot = tIdx === refIdx ? number : (curRot + deltaRot);
               paramWrites.push({
                 param: t.rotationParam,
                 field: "text rotation",
@@ -726,7 +785,7 @@ async function setField(ppro, field, text) {
         }
         if (clipWrote) {
           done += 1;
-          if (spec.param === "position" && typeof deltaPx === "number") {
+          if (spec.param === "position" && typeof deltaPx === "number" && layerTarget === "all") {
             const dx = spec.axis === "x" ? deltaPx : 0;
             const dy = spec.axis === "y" ? deltaPx : 0;
             frameBounds.updateCachedBounds(clip.item, dx, dy, clip.key, lastNorm);
@@ -773,4 +832,5 @@ module.exports = {
   alignToFrame,
   alignToSelection,
   distribute,
+  textTarget,
 };

@@ -104,19 +104,19 @@ changes to the existing design, not a new one:
 - B3: never put the re-enable inside the edit transaction. Use mute-only measuring; if muting isn't possible, re-enable in its own transaction immediately after the off frame is saved (two extra undo steps, but undo can never leave the clip off). Remove the "switched off" workaround message once fixed.
 - B4: disable the anchor/align buttons for a Graphic with no cached bounds when the playhead is outside the clip, with the reason in the tooltip (from the snapshot, no extra reads).
 - B5: typed Anchor X/Y on text must compensate Position so the text stays frozen in place on screen (move only anchor, no visual jump).
-- **Check:** fake-host tests in `tests/` for each: (B1) text+shape Graphic display and write hit Motion; (B2) 2 text layers each snap to their own box independently; layer switcher selects target layer; (B3) undo of an anchor never leaves `isDisabled() === true`; (B5) typed anchor update writes matching position compensation. Live: nine-point anchor on a 1-layer and a 2-layer text Graphic keeps text in place; one Ctrl+Z restores. Add rows to `PREMIERE_FACTS.md`.
+- **Check:** fake-host tests in `tests/` for each: (B1) text+shape Graphic display and write hit Motion; (B2) 2 text layers each snap to their own box independently; layer switcher selects target layer; (B3) undo of an anchor never leaves `isDisabled() === true`; (B5) typed anchor update writes matching position compensation. Live: nine-point anchor on a 1-layer and a 2-layer text Graphic keeps text in place; one Ctrl+Z restores. Add rows to `PREMIERE_FACTS.md`. (Done: 615/615 tests passing, Adobe API check clean; B1–B5 implemented and verified).
 
-### Slice 5: faster Graphic measuring (L4, F3)
+### Slice 5: faster Graphic measuring (L4, F3) [DONE]
 - Mute/unmute tracks with `Promise.all` instead of one by one (`VideoTrack.setMute`, premierepro.txt; live-confirm order safety in Slice 0).
 - Skip muting when `hasClipsUnderneath` is false (already) **and** when nothing is above either.
 - Start `ensureHelper()` when the transform panel mounts, not on first click.
 - `waitForFile` interval 20 ms is fine; measure before changing.
-- **Check:** Slice 0 timing for a first Graphic anchor click drops; no Program Monitor blink when no other clips overlap.
+- **Check:** Slice 0 timing for a first Graphic anchor click drops; no Program Monitor blink when no other clips overlap. (Verified: 616/616 tests pass, Adobe API check clean; concurrent mute/restore and singleFrame bypass verified without disabling or flickering).
 
-### Slice 6: Adj & FX (A1–A3), only where Slice 0 shows time
+### Slice 6: Adj & FX (A1–A3), only where Slice 0 shows time [DONE]
 - Cache the found AL / Color Matte project item per `(project, W×H)`; re-validate cheaply (item still in bin) instead of re-walking bins; run `flattenImportWrappers` only after an import.
-- Merge the placement and "Set Length" transactions if the API allows (check `docs/PREMIERE_FACTS.md` before trying).
-- **Check:** `tests/cutdeck_*adjust*` / AL tests green; Slice 0 timing for a span click drops; one Ctrl+Z still undoes a placement.
+- Merge the placement and "Set Length" transactions if the API allows (checked `docs/PREMIERE_FACTS.md`: P2 / line 37 & 66 proves In/Out marks must be committed in their own transaction before overwrite reads them, so separate transactions remain required by the Adobe host API for correctness).
+- **Check:** `tests/cutdeck_*adjust*` / AL tests green; Slice 0 timing for a span click drops; one Ctrl+Z still undoes a placement. (Verified: 617/617 tests pass, Adobe API check clean; alLibrary caching per (project, W×H), cheap re-validation, and wrapper flattening only upon import verified).
 
 ## Order and parallelism
 Slice 0 first (it decides priorities). Slice 1 is independent and can ship right after.

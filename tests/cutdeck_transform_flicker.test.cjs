@@ -115,3 +115,49 @@ test("readAlignTransform inspects component chain only once per item", async () 
   assert.equal(state.available, true);
   assert.ok(chainCalls <= 1, `getComponentChain called ${chainCalls} times for a single item! Must be <= 1 for efficiency`);
 });
+
+test("measureDrawnBounds skips muting and disables nothing when other tracks have no overlapping clips", async () => {
+  const { project, undoSteps } = fake.createProject();
+  let track0Muted = false;
+  let track2Muted = false;
+  const track0 = {
+    isMuted: () => Promise.resolve(track0Muted),
+    setMute: (m) => { track0Muted = m; return Promise.resolve(true); },
+    getTrackItems: () => Promise.resolve([]), // no clips underneath
+  };
+  const item = {
+    isDisabled: () => Promise.resolve(false),
+    getStartTime: () => Promise.resolve(fake.tickTime(10)),
+    getEndTime: () => Promise.resolve(fake.tickTime(100)),
+    getTrackIndex: () => Promise.resolve(1), // track 1
+  };
+  const track1 = {
+    isMuted: () => Promise.resolve(false),
+    getTrackItems: () => Promise.resolve([item]),
+  };
+  const track2 = {
+    isMuted: () => Promise.resolve(track2Muted),
+    setMute: (m) => { track2Muted = m; return Promise.resolve(true); },
+    getTrackItems: () => Promise.resolve([]), // no clips above
+  };
+  const seq = {
+    getPlayerPosition: () => Promise.resolve(fake.tickTime(50)),
+    getVideoTrackCount: () => Promise.resolve(3),
+    getVideoTrack: (t) => Promise.resolve([track0, track1, track2][t]),
+  };
+  const written = [];
+  const ppro = { Exporter: { exportSequenceFrame: (s, t, name) => { written.push(name); return Promise.resolve(true); } } };
+  const getEntry = (n) => Promise.resolve({ getMetadata: () => Promise.resolve({ size: 99 }), delete: () => Promise.resolve(true) });
+  const uxp = { storage: { localFileSystem: { getTemporaryFolder: () => Promise.resolve({ nativePath: "C:\\Temp\\PluginData", getEntry }) } } };
+  const requests = [];
+  const rpc = (req) => { requests.push(req); return Promise.resolve({ bounds: { left: 10, top: 10, right: 100, bottom: 100 } }); };
+
+  const bounds = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT });
+  assert.deepEqual(bounds, { left: 10, top: 10, right: 100, bottom: 100 });
+  assert.equal(written.length, 1, "only 1 frame saved");
+  assert.equal(track0Muted, false, "track 0 was never muted");
+  assert.equal(track2Muted, false, "track 2 was never muted");
+  assert.equal(undoSteps.length, 0, "zero undo steps");
+  assert.equal(requests[0].off, undefined, "singleFrame export");
+});
+

@@ -31,25 +31,74 @@ async function findClipAtPlayhead(ppro, seq, ctiTicks) {
     if (selected && selected.length > 0) {
       for (const sc of selected) {
         const it = sc.item;
+        let trackIdx = sc.track;
+        if (trackIdx < 0 && typeof it.getTrackIndex === "function") {
+          try { trackIdx = await it.getTrackIndex(); } catch (_) {}
+        }
         const sTime = typeof it.getStartTime === "function" ? await it.getStartTime() : it.startTime;
         const eTime = typeof it.getEndTime === "function" ? await it.getEndTime() : it.endTime;
         const inTime = typeof it.getInPoint === "function" ? await it.getInPoint() : it.inPoint;
         const sTicks = toTicksOr(sTime, 0n);
         const eTicks = toTicksOr(eTime, 0n);
+
+        // If trackIdx is still unknown, scan tracks to find where this item lives
+        if (trackIdx < 0) {
+          const totalV = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
+          for (let v = 0; v < totalV; v++) {
+            const tr = await seq.getVideoTrack(v);
+            const trItems = await getTrackClipItems(tr, ppro);
+            for (const ti of trItems || []) {
+              if (ti === it) { trackIdx = v; break; }
+              const ts = typeof ti.getStartTime === "function" ? await ti.getStartTime() : ti.startTime;
+              const te = typeof ti.getEndTime === "function" ? await ti.getEndTime() : ti.endTime;
+              if (toTicksOr(ts, -1n) === sTicks && toTicksOr(te, -1n) === eTicks) {
+                trackIdx = v;
+                break;
+              }
+            }
+            if (trackIdx >= 0) break;
+          }
+        }
+
         if (sTicks <= ctiTicks && ctiTicks < eTicks) {
-          return { item: it, track: sc.track, startTicks: sTicks, endTicks: eTicks, inTicks: toTicksOr(inTime, 0n) };
+          return { item: it, track: trackIdx >= 0 ? trackIdx : 0, startTicks: sTicks, endTicks: eTicks, inTicks: toTicksOr(inTime, 0n) };
         }
       }
       // If selected clip doesn't span CTI, use the first selected clip
       const first = selected[0];
+      let firstTrack = first.track;
+      if (firstTrack < 0 && typeof first.item.getTrackIndex === "function") {
+        try { firstTrack = await first.item.getTrackIndex(); } catch (_) {}
+      }
       const sTime = typeof first.item.getStartTime === "function" ? await first.item.getStartTime() : first.item.startTime;
       const eTime = typeof first.item.getEndTime === "function" ? await first.item.getEndTime() : first.item.endTime;
       const inTime = typeof first.item.getInPoint === "function" ? await first.item.getInPoint() : first.item.inPoint;
+      const sTicks = toTicksOr(sTime, 0n);
+      const eTicks = toTicksOr(eTime, 0n);
+
+      if (firstTrack < 0) {
+        const totalV = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
+        for (let v = 0; v < totalV; v++) {
+          const tr = await seq.getVideoTrack(v);
+          const trItems = await getTrackClipItems(tr, ppro);
+          for (const ti of trItems || []) {
+            if (ti === first.item) { firstTrack = v; break; }
+            const ts = typeof ti.getStartTime === "function" ? await ti.getStartTime() : ti.startTime;
+            const te = typeof ti.getEndTime === "function" ? await ti.getEndTime() : ti.endTime;
+            if (toTicksOr(ts, -1n) === sTicks && toTicksOr(te, -1n) === eTicks) {
+              firstTrack = v;
+              break;
+            }
+          }
+          if (firstTrack >= 0) break;
+        }
+      }
+
       return {
         item: first.item,
-        track: first.track,
-        startTicks: toTicksOr(sTime, 0n),
-        endTicks: toTicksOr(eTime, 0n),
+        track: firstTrack >= 0 ? firstTrack : 0,
+        startTicks: sTicks,
+        endTicks: eTicks,
         inTicks: toTicksOr(inTime, 0n),
       };
     }
@@ -206,54 +255,68 @@ async function isolateClipTrackForExport(seq, itemTrackIndex) {
   if (!seq) return [];
   const tracksMuted = [];
 
-  // 1. Mute all video tracks other than itemTrackIndex
+  // 1. Mute all video tracks other than itemTrackIndex concurrently
   try {
     const videoTrackCount = typeof seq.getVideoTrackCount === "function" ? await seq.getVideoTrackCount() : 0;
+    const vIndices = [];
     for (let t = 0; t < videoTrackCount; t++) {
-      if (t === itemTrackIndex) continue;
-      try {
-        const track = await seq.getVideoTrack(t);
-        if (track && typeof track.isMuted === "function" && typeof track.setMute === "function") {
-          const wasMuted = await track.isMuted();
-          if (!wasMuted) {
-            await track.setMute(true);
-            tracksMuted.push(track);
-          }
-        }
-      } catch (_) {}
+      if (t !== itemTrackIndex) vIndices.push(t);
     }
+    const vTracks = await Promise.all(vIndices.map((t) => seq.getVideoTrack(t)));
+    const vMuteChecks = await Promise.all(vTracks.map(async (track) => {
+      if (!track || typeof track.isMuted !== "function" || typeof track.setMute !== "function") return null;
+      try {
+        const wasMuted = await track.isMuted();
+        return { track, wasMuted };
+      } catch (_) {
+        return null;
+      }
+    }));
+
+    const vToMute = vMuteChecks.filter((c) => c && !c.wasMuted).map((c) => c.track);
+    await Promise.all(vToMute.map((tr) => {
+      tracksMuted.push(tr);
+      return tr.setMute(true).catch(() => {});
+    }));
   } catch (_) {}
 
-  // 2. Mute caption tracks if any
+  // 2. Mute caption tracks concurrently if any
   try {
     const captionTrackCount = typeof seq.getCaptionTrackCount === "function" ? await seq.getCaptionTrackCount() : 0;
-    for (let c = 0; c < captionTrackCount; c++) {
+    const cIndices = [];
+    for (let c = 0; c < captionTrackCount; c++) cIndices.push(c);
+    const cTracks = await Promise.all(cIndices.map((c) => seq.getCaptionTrack(c)));
+    const cMuteChecks = await Promise.all(cTracks.map(async (track) => {
+      if (!track || typeof track.isMuted !== "function" || typeof track.setMute !== "function") return null;
       try {
-        const cTrack = await seq.getCaptionTrack(c);
-        if (cTrack && typeof cTrack.isMuted === "function" && typeof cTrack.setMute === "function") {
-          const wasMuted = await cTrack.isMuted();
-          if (!wasMuted) {
-            await cTrack.setMute(true);
-            tracksMuted.push(cTrack);
-          }
-        }
-      } catch (_) {}
-    }
+        const wasMuted = await track.isMuted();
+        return { track, wasMuted };
+      } catch (_) {
+        return null;
+      }
+    }));
+
+    const cToMute = cMuteChecks.filter((c) => c && !c.wasMuted).map((c) => c.track);
+    await Promise.all(cToMute.map((tr) => {
+      tracksMuted.push(tr);
+      return tr.setMute(true).catch(() => {});
+    }));
   } catch (_) {}
 
   return tracksMuted;
 }
 
-// Restores previously muted tracks back to unmuted state
+// Restores previously muted tracks back to unmuted state concurrently
 async function restoreIsolatedTracks(tracksMuted) {
-  if (!Array.isArray(tracksMuted)) return;
-  for (const track of tracksMuted) {
+  if (!Array.isArray(tracksMuted) || tracksMuted.length === 0) return;
+  await Promise.all(tracksMuted.map((track) => {
     try {
       if (track && typeof track.setMute === "function") {
-        await track.setMute(false);
+        return track.setMute(false).catch(() => {});
       }
     } catch (_) {}
-  }
+    return Promise.resolve();
+  }));
 }
 
 // Locates the imported frame item across the project with retries for asynchronous indexing,

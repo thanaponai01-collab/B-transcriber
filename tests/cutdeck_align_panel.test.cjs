@@ -114,6 +114,10 @@ function makeStub() {
         contains: (c) => classes.has(c),
       },
       get className() { return [...classes].join(" "); },
+      set className(v) {
+        classes.clear();
+        String(v).split(/\s+/).filter(Boolean).forEach((c) => classes.add(c));
+      },
       getAttribute: (n) => (n in attrs ? attrs[n] : null),
       setAttribute: (n, v) => { attrs[n] = String(v); },
       appendChild(child) {
@@ -148,6 +152,7 @@ function makeStub() {
   el("align-status-icon");
   el("align-transform-clip");
   el("align-transform-fields");
+  el("align-text-layer-switcher");
   el("align-scale-reset");
   el("align-rotation-reset");
   for (const [id, field] of [["align-position-x", "position-x"], ["align-position-y", "position-y"],
@@ -158,7 +163,10 @@ function makeStub() {
   const body = el("__body__");
   body.appendChild(container);
 
-  global.document = { getElementById: (id) => nodes.get(id) || null };
+  global.document = {
+    getElementById: (id) => nodes.get(id) || null,
+    createElement: (tag) => el(`__gen_${nodes.size}__`),
+  };
   global.window = undefined;
   return { nodes, container, body, probe };
 }
@@ -956,4 +964,68 @@ test("Slice 3: adaptive poll interval drops to 1000ms idle and speeds to 150ms o
     Date.now = origDateNow;
   }
 });
+
+test("Slice 4 B2: alignPanel renders text layer switcher when textLayers > 1", () => {
+  const alignPanel = require(alignJsPath);
+  const { nodes, root } = makeStub();
+  alignPanel.mount(root);
+
+  const state = {
+    sequence: { name: "Seq 1" },
+    busy: false,
+    transform: {
+      clipName: "Graphic",
+      available: true,
+      textLayers: [
+        { index: 0, label: "Text 1" },
+        { index: 1, label: "Text 2" },
+      ],
+      activeLayerTarget: 1,
+      fields: {},
+    },
+  };
+
+  alignPanel.render(state);
+  const switcher = nodes.get("align-text-layer-switcher");
+  assert.equal(switcher.hidden, false, "Switcher should be visible");
+  assert.equal(switcher.children.length, 3, "Should render Text 1, Text 2, All");
+  assert.equal(switcher.children[0].textContent, "Text 1");
+  assert.equal(switcher.children[1].textContent, "Text 2");
+  assert.equal(switcher.children[2].textContent, "All");
+  assert.ok(switcher.children[1].classList.contains("active"), "Text 2 is active");
+});
+
+test("Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver is true", () => {
+  const alignPanel = require(alignJsPath);
+  const { nodes, root } = makeStub();
+  alignPanel.mount(root);
+
+  // Stub anchor and align buttons
+  const anchorBtn = nodes.get("align-anchor-top-left") || (() => {
+    const b = {
+      id: "align-anchor-tl", hidden: false, disabled: false,
+      classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+      getAttribute: (n) => (n === "data-act" ? "align-anchor" : null),
+      setAttribute: () => {},
+    };
+    nodes.get("view-transform").children.push(b);
+    return b;
+  })();
+
+  const state = {
+    sequence: { name: "Seq 1" },
+    busy: false,
+    transform: {
+      clipName: "Graphic",
+      available: true,
+      needPlayheadOver: true,
+      tooltip: "Move the playhead over it first to measure text bounds.",
+      fields: {},
+    },
+  };
+
+  alignPanel.render(state);
+  assert.equal(anchorBtn.disabled, true, "Anchor button should be disabled when needPlayheadOver");
+});
+
 

@@ -82,8 +82,11 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   }
 
   let lastStateJson = "";
+  if (ctl.state.activeLayerTarget === undefined) {
+    ctl.state.activeLayerTarget = 0;
+  }
   async function refreshAlignSequence() {
-    const next = await readAlignState(ppro);
+    const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
     lastStateJson = JSON.stringify(next);
     ctl.state.sequence = next.sequence;
     ctl.state.transform = next.transform;
@@ -107,7 +110,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     try {
       do {
         pollAgain = false;
-        const next = await readAlignState(ppro);
+        const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
         // Avoid flapping the UI to disabled on transient empty reads during timeline selection transitions (up to ~300 ms)
         if (!next.transform.available && ctl.state.transform && ctl.state.transform.available && emptyPollCount < 2) {
           emptyPollCount++;
@@ -177,7 +180,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     slideInFlight = true;
     slidePromise = (async () => {
       try {
-        await setField(ppro, field, text);
+        await setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget });
       } catch (e) {
         console.error("CutDeck: slide update failed", e);
       } finally {
@@ -203,7 +206,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       await slidePromise;
     }
     return executeWithOptimisticConfirm(
-      () => setField(ppro, field, text),
+      () => setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget }),
       (st) => {
         const num = parseFloat(String(text).replace(/[%°]/g, "").trim());
         if (Number.isFinite(num) && st && st.fields) {
@@ -222,7 +225,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
 
   async function confirmBackgroundSnapshot() {
     try {
-      const next = await readAlignState(ppro);
+      const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
       const nextJson = JSON.stringify(next);
       if (nextJson !== lastStateJson) {
         lastStateJson = nextJson;
@@ -258,9 +261,14 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       frameBounds.clearBoundsCache();
       await refreshAlignSequence();
     }),
+    onSelectTextLayer: (target) => ctl.act(async () => {
+      noteActivity();
+      ctl.state.activeLayerTarget = target;
+      await refreshAlignSequence();
+    }),
     onSetField: (field, text) => {
       return executeWithOptimisticConfirm(
-        () => setField(ppro, field, text),
+        () => setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget }),
         (st) => {
           const num = parseFloat(String(text).replace(/[%°]/g, "").trim());
           if (Number.isFinite(num) && st && st.fields) {

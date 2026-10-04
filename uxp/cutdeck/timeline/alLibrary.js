@@ -31,6 +31,52 @@ async function getOrCreateAdjBin(project) {
 // from inside the wrapper.
 const IMPORT_WRAPPER_NAME = /^CutDeck (?:Color Matte )?\d+x\d+\.prproj$/;
 
+// Cache found items per (project, WxH) so subsequent clicks avoid re-walking bins.
+// Map keyed by project (WeakMap when project is object), mapping `${w}x${h}` -> item.
+const alCache = new WeakMap();
+const cmCache = new WeakMap();
+
+function getCachedItem(cache, project, key) {
+  if (!project || typeof project !== "object") return null;
+  const map = cache.get(project);
+  return map ? map.get(key) || null : null;
+}
+
+function setCachedItem(cache, project, key, item) {
+  if (!project || typeof project !== "object" || !item) return;
+  let map = cache.get(project);
+  if (!map) {
+    map = new Map();
+    cache.set(project, map);
+  }
+  map.set(key, item);
+}
+
+function clearLibraryCache(project) {
+  if (project && typeof project === "object") {
+    alCache.delete(project);
+    cmCache.delete(project);
+  }
+}
+
+// Cheaply re-validate that an item is still alive in a bin.
+async function isItemValid(item, bin) {
+  if (!item) return false;
+  try {
+    if (typeof item.getParentBin === "function") {
+      const parent = item.getParentBin();
+      if (parent) return true;
+    }
+  } catch (_) {}
+  if (bin) {
+    try {
+      const items = (await asBinLike(bin).getItems()) || [];
+      return items.some((it) => it === item || (it.name === item.name && it.type === item.type));
+    } catch (_) {}
+  }
+  return true;
+}
+
 async function listWrappers(bin) {
   const found = [];
   for (const it of (await bin.getItems()) || []) {
@@ -189,18 +235,37 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
     }
   } catch (_) {}
 
+  const cacheKey = (targetWidth && targetHeight) ? `${targetWidth}x${targetHeight}` : null;
+  let adjBin = null;
+
+  // Check cache first: if cached item is still valid in ADJ & FX or project, return it
+  if (cacheKey) {
+    const cached = getCachedItem(alCache, project, cacheKey);
+    if (cached) {
+      adjBin = await getOrCreateAdjBin(project).catch(() => null);
+      if (await isItemValid(cached, adjBin)) {
+        return cached;
+      }
+      // Stale cache item
+      const map = alCache.get(project);
+      if (map) map.delete(cacheKey);
+    }
+  }
+
   // Canonical home: Project panel > CutDeck > ADJ & FX. Ensured to exist (created if
   // missing) so there is always one unambiguous, always-findable place for the Adjustment
   // Layer(s) — no depending on it already being on some other sequence's timeline. One AL in
   // here just works. Several (one per resolution you actually use — e.g. "1920x1080",
   // "1080x1920") get matched to the active sequence by name — see pickBestCandidate.
   try {
-    const adjBin = await getOrCreateAdjBin(project);
-    await flattenImportWrappers(project, adjBin);
+    if (!adjBin) adjBin = await getOrCreateAdjBin(project);
     const items = (await asBinLike(adjBin).getItems()) || [];
     const candidates = items.filter((it) => it.type !== 2 && isAdjustmentLayerCandidate(it.name));
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
-    if (picked) return picked;
+    if (picked) {
+      if (cacheKey) setCachedItem(alCache, project, cacheKey, picked);
+      return picked;
+    }
   } catch (_) {}
 
   // Legacy fallback: search the whole project (an AL named/placed before ADJ & FX existed)
@@ -245,7 +310,11 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
 
   await search(root);
 
-  return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
+  const fallbackPicked = await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
+  if (fallbackPicked && cacheKey) {
+    setCachedItem(alCache, project, cacheKey, fallbackPicked);
+  }
+  return fallbackPicked;
 }
 
 // Writes bytes to the plugin's temporary folder and returns the native path.
@@ -319,14 +388,33 @@ async function findColorMatteItem(project, seq, ppro) {
     }
   } catch (_) {}
 
+  const cacheKey = (targetWidth && targetHeight) ? `${targetWidth}x${targetHeight}` : null;
+  let adjBin = null;
+
+  // Check cache first: if cached item is still valid in ADJ & FX or project, return it
+  if (cacheKey) {
+    const cached = getCachedItem(cmCache, project, cacheKey);
+    if (cached) {
+      adjBin = await getOrCreateAdjBin(project).catch(() => null);
+      if (await isItemValid(cached, adjBin)) {
+        return cached;
+      }
+      // Stale cache item
+      const map = cmCache.get(project);
+      if (map) map.delete(cacheKey);
+    }
+  }
+
   // 1. Canonical home: Project panel > CutDeck > ADJ & FX
   try {
-    const adjBin = await getOrCreateAdjBin(project);
-    await flattenImportWrappers(project, adjBin);
+    if (!adjBin) adjBin = await getOrCreateAdjBin(project);
     const items = (await asBinLike(adjBin).getItems()) || [];
     const candidates = items.filter((it) => it.type !== 2 && isColorMatteCandidate(it.name));
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
-    if (picked) return picked;
+    if (picked) {
+      if (cacheKey) setCachedItem(cmCache, project, cacheKey, picked);
+      return picked;
+    }
   } catch (_) {}
 
   // 2. Fallback: search the whole project
@@ -366,7 +454,11 @@ async function findColorMatteItem(project, seq, ppro) {
   }
 
   await search(root);
-  return await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
+  const fallbackPicked = await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
+  if (fallbackPicked && cacheKey) {
+    setCachedItem(cmCache, project, cacheKey, fallbackPicked);
+  }
+  return fallbackPicked;
 }
 
 // Automatically creates a Color Matte .prproj at the sequence's exact size and imports it into CutDeck > ADJ & FX
@@ -414,4 +506,5 @@ module.exports = {
   writeTempFile,
   createAdjustmentLayerForSequence,
   createColorMatteForSequence,
+  clearLibraryCache,
 };

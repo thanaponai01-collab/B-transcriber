@@ -227,6 +227,46 @@ test("alLibrary: findAdjustmentLayerItem ignores Color Matte and creates/finds t
   assert.equal(fallbackCM, null, "Fallback search must not pick Adjustment Layer as Color Matte");
 });
 
+test("alLibrary: caches found items per (project, WxH) and re-validates cheaply without re-walking bins", async () => {
+  let binGetItemsCount = 0;
+  const alItem = { name: "Adjustment Layer 1920x1080", type: 1, getParentBin: () => ({ name: "ADJ & FX" }) };
+  const adjBin = {
+    name: "ADJ & FX",
+    type: 2,
+    getItems: async () => {
+      binGetItemsCount++;
+      return [alItem];
+    },
+  };
+  const cutdeckBin = mockBin("CutDeck", [adjBin]);
+  const project = mockProjectWithBins([cutdeckBin]);
+
+  const seq = {
+    getSettings: async () => ({
+      getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+    }),
+  };
+
+  alLibrary.clearLibraryCache(project);
+
+  // 1st lookup: finds the AL and populates cache (bin.getItems called)
+  const first = await alLibrary.findAdjustmentLayerItem(project, seq, {});
+  assert.equal(first, alItem);
+  const countAfterFirst = binGetItemsCount;
+  assert.ok(countAfterFirst > 0, "bin read at least once on first lookup");
+
+  // 2nd lookup: cache hit! Validates via item.getParentBin, does NOT call bin.getItems again
+  const second = await alLibrary.findAdjustmentLayerItem(project, seq, {});
+  assert.equal(second, alItem);
+  assert.equal(binGetItemsCount, countAfterFirst, "bin was not re-read on cached lookup");
+
+  // Clear cache and verify it re-reads
+  alLibrary.clearLibraryCache(project);
+  const third = await alLibrary.findAdjustmentLayerItem(project, seq, {});
+  assert.equal(third, alItem);
+  assert.ok(binGetItemsCount > countAfterFirst, "bin re-read after clearing cache");
+});
+
 // ============================================================================
 // 3. frameHold.js (Non-destructive Freeze Frame)
 // ============================================================================
@@ -1191,5 +1231,96 @@ test("frameHold: addFrameHold isolates selected clip track during exportSequence
   assert.equal(v1MutedDuringExport, false, "V2 (target clip track) must stay unmuted during export");
   // Verify that V1 was restored to unmuted AFTER export!
   assert.equal(vTrackMutes[0], false, "V1 must be restored to unmuted after export completes");
+});
+
+test("frameHold: correctly resolves selected clip track on higher track even when proxy wrapper references differ", async () => {
+  let v0MutedDuringExport = null;
+  let v1MutedDuringExport = null;
+  const vTrackMutes = [false, false];
+
+  // Clip as returned by seq.getVideoTrack(1)
+  const trackClipV2 = {
+    startTime: { ticks: String(1n * TICKS_PER_SEC) },
+    endTime: { ticks: String(4n * TICKS_PER_SEC) },
+    getName: async () => "ClipOnV2.mp4",
+  };
+
+  // Distinct proxy object as returned by seq.getSelection() (different reference!)
+  const selectedProxyV2 = {
+    startTime: { ticks: String(1n * TICKS_PER_SEC) },
+    endTime: { ticks: String(4n * TICKS_PER_SEC) },
+    getName: async () => "ClipOnV2.mp4",
+    getIsSelected: async () => true,
+  };
+
+  const mockSeq = {
+    getTimebase: async () => String(TPF_24FPS),
+    getPlayerPosition: async () => ({ ticks: String(2n * TICKS_PER_SEC) }),
+    getSelection: async () => ({
+      getTrackItems: async () => [selectedProxyV2],
+    }),
+    getVideoTrackCount: async () => 2,
+    getVideoTrack: async (idx) => ({
+      getTrackItems: async () => (idx === 1 ? [trackClipV2] : []),
+      isMuted: async () => vTrackMutes[idx],
+      setMute: async (m) => { vTrackMutes[idx] = m; return true; },
+    }),
+    getCaptionTrackCount: async () => 0,
+    getSettings: async () => ({
+      getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+    }),
+  };
+
+  const holdBin = mockBin("Frame Holds", []);
+  const cutdeckBin = mockBin("CutDeck", [holdBin]);
+  const rootBin = mockBin("Root", [cutdeckBin]);
+
+  const project = {
+    getActiveSequence: async () => mockSeq,
+    executeTransaction: (build) => {
+      build({ addAction: () => true });
+      return true;
+    },
+    importFiles: async (paths, suppressUI, targetBin) => {
+      const fileName = paths[0].split(/[\\/]/).pop();
+      const stillItem = {
+        name: fileName,
+        type: 1,
+        createSetInOutPointsAction: () => ({ type: "setInOut" }),
+      };
+      (targetBin || holdBin).items.push(stillItem);
+      return true;
+    },
+    getRootItem: async () => rootBin,
+  };
+
+  const ppro = {
+    Project: { getActiveProject: async () => project },
+    TickTime: { createWithTicks: (ticks) => ({ ticks: String(ticks) }) },
+    Exporter: {
+      exportSequenceFrame: async () => {
+        v0MutedDuringExport = vTrackMutes[0];
+        v1MutedDuringExport = vTrackMutes[1];
+        return true;
+      },
+    },
+    SequenceEditor: {
+      getEditor: async () => ({
+        createOverwriteItemAction: () => () => true,
+      }),
+    },
+    Constants: {
+      TrackItemType: { CLIP: "TrackItemType.CLIP" },
+      MediaType: { VIDEO: "MediaType.VIDEO" },
+    },
+  };
+
+  const res = await frameHold.addFrameHold(ppro);
+
+  assert.equal(res.success, true);
+  // Must correctly resolve to track V2 (1-based index: 2) even with proxy mismatch!
+  assert.equal(res.sourceTrack, 2, "sourceTrack must resolve to V2 (2)");
+  assert.equal(v0MutedDuringExport, true, "V1 must be isolated (muted) during export");
+  assert.equal(v1MutedDuringExport, false, "V2 must remain unmuted so selected clip is captured");
 });
 

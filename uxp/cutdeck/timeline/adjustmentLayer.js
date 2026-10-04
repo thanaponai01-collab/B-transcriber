@@ -26,6 +26,7 @@ const {
   writeTempFile,
   createAdjustmentLayerForSequence,
   createColorMatteForSequence,
+  clearLibraryCache,
 } = require("./alLibrary.js");
 
 // Premiere timeline manipulation for CutDeck adjustment-layer placement — no DOM.
@@ -518,6 +519,7 @@ module.exports = {
   createColorMatteForSequence,
   flattenImportWrappers,
   writeTempFile,
+  clearLibraryCache,
   // Exported for timeline/effects.js: the robust (never-throws) getTrackItems lookup, reused
   // rather than re-guessed — see that module's getSelectedTrackItems.
   getTrackClipItems,

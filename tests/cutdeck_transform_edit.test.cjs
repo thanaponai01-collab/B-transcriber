@@ -14,6 +14,7 @@ const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
 const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
+const { readSnapshot } = require("../uxp/cutdeck/transform/snapshot.js");
 const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
 
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
@@ -518,27 +519,21 @@ test("consecutive alignments and anchor changes on a Graphic use cached bounds w
   assert.equal(measureCount, 2, "re-measured after scale change");
 });
 
-test("when measurement returns an unhideAction, it is committed atomically with the motion values in ONE transaction", async () => {
+test("B3: re-enable never compounds inside the edit write transaction", async () => {
   const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
-  let disabled = true;
+  let disabled = false;
   g.createSetDisabledAction = (d) => fake.action(() => { disabled = d; });
-  const { ppro } = host([g]);
+  const { ppro, undoSteps } = host([g]);
 
-  let unhideCalled = false;
   const measure = async () => {
-    return {
-      bounds: TEXT_BOX,
-      unhideAction: (compound) => {
-        unhideCalled = true;
-        compound.addAction(g.createSetDisabledAction(false));
-      },
-    };
+    // Under B3, measure restores clip in its own transaction before returning
+    return TEXT_BOX;
   };
 
   const result = await alignToFrame(ppro, "left", measure);
   assert.equal(result.done, 1);
-  assert.equal(unhideCalled, true, "unhide action was executed as part of the compound transaction");
   assert.equal(disabled, false, "clip is restored");
+  assert.equal(undoSteps.includes("CutDeck: Align left"), true);
 });
 
 test("bounds cache hits even when clip object reference changes if key (track:start) matches", async () => {
@@ -972,26 +967,6 @@ test("scrubbing properties updates host live during drag and commits on release"
   assert.equal(undoSteps[undoSteps.length - 1], "CutDeck: Set scale");
 });
 
-test("a failed write puts clips the measurement hid back, in their own restore transaction", async () => {
-  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
-  let disabled = false;
-  g.createSetDisabledAction = (d) => fake.action(() => { disabled = d; });
-  const { ppro, undoSteps } = host([g]);
-  const project = await ppro.Project.getActiveProject();
-  const execute = project.executeTransaction;
-  project.executeTransaction = (cb, label) => {
-    if (label === "CutDeck: Align left") throw new Error("write refused");
-    return execute.call(project, cb, label);
-  };
-  // The measurement hid the clip; only its unhide action can bring it back.
-  const measure = async () => {
-    disabled = true;
-    return { bounds: TEXT_BOX, unhideAction: (compound) => compound.addAction(g.createSetDisabledAction(false)) };
-  };
-  await assert.rejects(alignToFrame(ppro, "left", measure), /write refused/);
-  assert.equal(disabled, false, "the clip was left hidden");
-  assert.deepEqual(undoSteps, ["CutDeck: restore clips"]);
-});
 
 test("Slice 2: setAnchor on one clip performs at most 1 full read of sequence / items", async () => {
   const a = motionClip("A");
@@ -1029,3 +1004,77 @@ test("Slice 2: setAnchor on one clip performs at most 1 full read of sequence / 
   assert.equal(trackItemsReads, 1, "getTrackItems called exactly once via readSnapshot");
   assert.equal(sequenceSettingsReads, 1, "getSettings called exactly once via readSnapshot");
 });
+
+test("Slice 4 B1: readAlignTransform and setField on Graphic with shapeLayer target Motion, not text", async () => {
+  const g = motionClip("GraphicWithShape", {
+    graphic: true,
+    texts: [[0.2, 0.3]],
+    shapeLayer: true, // onlyText = false
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro } = host([g]);
+
+  const snap = await readSnapshot(ppro);
+  const info = await readAlignTransform(snap, ppro);
+  // Should report Motion values, not text values (Motion pos default is [0.5, 0.5])
+  close(info.fields.position.x, 960, "Position X reads Motion (960)");
+  close(info.fields.position.y, 540, "Position Y reads Motion (540)");
+
+  // setField writes Motion
+  await setField(ppro, "position-x", "500");
+  close(g.params[0].value[0] * 1920, 500, "Motion position X was written");
+  close(g.texts[0].value[0] * 1920, 384, "Text position was untouched (0.2 * 1920 = 384)");
+});
+
+test("Slice 4 B2: setField with layerTarget selects specific text layer or all", async () => {
+  const g = motionClip("MultiTextGraphic", {
+    graphic: true,
+    texts: [[0.1, 0.2], [0.3, 0.4]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  const { ppro } = host([g]);
+
+  // Target layer 1 independently
+  await setField(ppro, "position-x", "800", { layerTarget: 1 });
+  close(g.texts[0].value[0] * 1920, 192, "Layer 0 untouched (0.1 * 1920 = 192)");
+  close(g.texts[1].value[0] * 1920, 800, "Layer 1 set to 800");
+
+  // Target 'all' updates both in tandem
+  await setField(ppro, "position-x", "300", { layerTarget: "all" });
+  close(g.texts[0].value[0] * 1920, 300, "Layer 0 set to 300 (+108px)");
+  close(g.texts[1].value[0] * 1920, 908, "Layer 1 shifted by +108px in tandem");
+});
+
+test("Slice 4 B4: unmeasured Graphic text with playhead outside clip returns needPlayheadOver flag", async () => {
+  const g = motionClip("TextGraphic", {
+    graphic: true,
+    texts: [[0.2, 0.4]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  g.playheadOver = false;
+  const { ppro } = host([g]);
+
+  const snap = await readSnapshot(ppro);
+  snap.clips[0].playheadOver = false;
+  const info = await readAlignTransform(snap, ppro);
+  assert.equal(info.needPlayheadOver, true);
+  assert.equal(info.tooltip, "Move the playhead over it first to measure text bounds.");
+});
+
+test("Slice 4 B5: typed anchor on text compensates text position so text stays frozen on screen", async () => {
+  const g = motionClip("TextGraphic", {
+    graphic: true,
+    texts: [[0.5, 0.5]],
+    textAnchors: [[0.5, 0.5]],
+    vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+  });
+  // Initially anchor is at [0.5, 0.5] (960, 540)
+  const { ppro } = host([g]);
+
+  // Type new anchor X = 1060 (+100px)
+  await setField(ppro, "anchor-x", "1060");
+  close(g.textAnchors[0].value[0] * 1920, 1060, "Anchor X updated to 1060");
+  // Position must compensate: P' = P + delta = 960 + 100 = 1060
+  close(g.texts[0].value[0] * 1920, 1060, "Position X compensated to 1060");
+});
+

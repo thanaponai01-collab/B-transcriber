@@ -187,6 +187,7 @@ try {
             return;
           }
           alignCtl.render();
+          ensureHelper().catch(() => { /* helper start will be retried on demand */ });
           align.refresh().catch((error) => {
             alignCtl.setStatus(error.message || String(error), "error");
           });

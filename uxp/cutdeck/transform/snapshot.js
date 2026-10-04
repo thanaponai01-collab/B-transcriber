@@ -14,6 +14,7 @@
 const trackItems = require("../host/trackItems.js");
 const transformParams = require("./params.js");
 const { activeProjectAndSequence } = require("../host/project.js");
+const { toTicks } = require("../host/ticks.js");
 
 let cachedSnapshot = null;
 let cachedSignature = null;
@@ -92,10 +93,19 @@ async function readSnapshot(ppro, options = {}) {
     return cachedSnapshot;
   }
 
-  // Read sequence geometry once
-  const [seqFrame, seqAspect] = await Promise.all([
+  // Read sequence geometry and playhead position
+  const [seqFrame, seqAspect, playheadTicks] = await Promise.all([
     transformParams.readSequenceFrameSize(seq),
     transformParams.readSequencePixelAspect(seq),
+    (async () => {
+      try {
+        if (typeof seq.getPlayerPosition === "function") {
+          const pos = await seq.getPlayerPosition();
+          return toTicks(pos, "playhead");
+        }
+      } catch (_) {}
+      return null;
+    })(),
   ]);
 
   // Read each candidate item concurrently
@@ -103,10 +113,22 @@ async function readSnapshot(ppro, options = {}) {
     const transform = await transformParams.readTransform(item);
     if (!transform) return null;
 
-    const [key, name, isGraphic] = await Promise.all([
+    const [key, name, isGraphic, playheadOver] = await Promise.all([
       computeItemKey(item),
       trackItems.trackItemName(item, "(unnamed)"),
       transformParams.isGraphic(item),
+      (async () => {
+        if (playheadTicks === null) return null;
+        try {
+          if (typeof item.getStartTime === "function" && typeof item.getEndTime === "function") {
+            const [start, end] = await Promise.all([item.getStartTime(), item.getEndTime()]);
+            const startTicks = toTicks(start, "clip start");
+            const endTicks = toTicks(end, "clip end");
+            return playheadTicks >= startTicks && playheadTicks < endTicks;
+          }
+        } catch (_) {}
+        return null;
+      })(),
     ]);
 
     const [layers, anchorFrame] = await Promise.all([
@@ -122,6 +144,7 @@ async function readSnapshot(ppro, options = {}) {
       isGraphic,
       layers,
       anchorFrame,
+      playheadOver,
     };
   });
   const firstItemNamePromise = trackItems.trackItemName(rawItems[0], "(unnamed)");

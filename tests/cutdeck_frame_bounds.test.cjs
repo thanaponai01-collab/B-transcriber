@@ -72,7 +72,7 @@ test("if the first frame is never written, the clip is never switched off", asyn
 
 test("a clip that is already switched off is refused and left off", async () => {
   const h = setup({ startDisabled: true });
-  await assert.rejects(h.run(), /switched off on the timeline/);
+  await assert.rejects(h.run(), /Clip is disabled on the timeline\. Switch it on first\./);
   assert.equal(h.isDisabled(), true);
   assert.deepEqual(h.undoSteps, []);
 });
@@ -115,7 +115,7 @@ test("when a clip is on track 0 (nothing underneath), it measures from a single 
   assert.equal(deleted.length, 1, "temp file was cleaned up");
 });
 
-test("when keepDisabled is true and clips are underneath, returns unhideAction for atomic restore", async () => {
+test("when clips are underneath and track muting unavailable, re-enables clip immediately in its own transaction", async () => {
   const { project, undoSteps } = fake.createProject();
   let disabled = false;
   const item = {
@@ -152,11 +152,10 @@ test("when keepDisabled is true and clips are underneath, returns unhideAction f
   const requests = [];
   const rpc = (req) => { requests.push(req); return Promise.resolve({ bounds: { left: 11, top: 904, right: 429, bottom: 991 } }); };
 
-  const result = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT, keepDisabled: true });
-  assert.deepEqual(result.bounds, { left: 11, top: 904, right: 429, bottom: 991 });
-  assert.ok(result.unhideAction, "returns unhideAction");
+  const result = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT });
+  assert.deepEqual(result, { left: 11, top: 904, right: 429, bottom: 991 });
   assert.equal(deleted.length, 2, "both temp frames cleaned up");
-  project.executeTransaction(result.unhideAction, "CutDeck: restore");
-  assert.equal(disabled, false, "unhideAction restored clip inside transaction");
+  assert.equal(disabled, false, "clip is restored immediately");
+  assert.deepEqual(undoSteps, ["CutDeck: measure (hide clip)", "CutDeck: measure (show clip)"]);
 });
 
