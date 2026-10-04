@@ -189,6 +189,44 @@ test("alLibrary: findColorMatteItem finds existing color matte in CutDeck bin or
   assert.equal(found, matteItem);
 });
 
+test("alLibrary: findAdjustmentLayerItem ignores Color Matte and creates/finds true Adjustment Layer", async () => {
+  const matteItem = { name: "Color Matte 1920x1080", type: 1 };
+  const adjBin = mockBin("ADJ & FX", [matteItem]);
+  const cutdeckBin = mockBin("CutDeck", [adjBin]);
+  const project = mockProjectWithBins([cutdeckBin]);
+
+  const seq = {
+    getSettings: async () => ({
+      getVideoFrameRect: async () => ({ width: 1920, height: 1080 }),
+    }),
+  };
+
+  // When only a Color Matte is in ADJ & FX, findAdjustmentLayerItem must NOT pick it!
+  const found = await alLibrary.findAdjustmentLayerItem(project, seq, {});
+  assert.equal(found, null, "Should return null instead of picking Color Matte");
+
+  // When both exist in ADJ & FX, it must pick the Adjustment Layer, not Color Matte
+  const alItem = { name: "Adjustment Layer 1920x1080", type: 1 };
+  adjBin.items.push(alItem);
+  const foundAL = await alLibrary.findAdjustmentLayerItem(project, seq, {});
+  assert.equal(foundAL, alItem, "Should pick Adjustment Layer");
+
+  // Similarly, findColorMatteItem must not pick Adjustment Layer
+  const foundMatte = await alLibrary.findColorMatteItem(project, seq, {});
+  assert.equal(foundMatte, matteItem, "Should pick Color Matte");
+
+  // Fallback search isolation: in a regular bin (not ADJ & FX), ensure no cross-contamination
+  const otherBin = mockBin("Random Bin", [{ name: "Color Matte 1920x1080", type: 1 }]);
+  const emptyProject = mockProjectWithBins([otherBin]);
+  const fallbackAL = await alLibrary.findAdjustmentLayerItem(emptyProject, seq, {});
+  assert.equal(fallbackAL, null, "Fallback search must not pick Color Matte as AL");
+
+  const otherBinWithAL = mockBin("Random Bin 2", [{ name: "Adjustment Layer 1920x1080", type: 1 }]);
+  const emptyProjectWithAL = mockProjectWithBins([otherBinWithAL]);
+  const fallbackCM = await alLibrary.findColorMatteItem(emptyProjectWithAL, seq, {});
+  assert.equal(fallbackCM, null, "Fallback search must not pick Adjustment Layer as Color Matte");
+});
+
 // ============================================================================
 // 3. frameHold.js (Non-destructive Freeze Frame)
 // ============================================================================

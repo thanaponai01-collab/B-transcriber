@@ -138,6 +138,35 @@ async function pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppr
   return candidates[0];
 }
 
+// Returns true if an item name looks like an Adjustment Layer and NOT a Color Matte
+function isAdjustmentLayerCandidate(name) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  if (lower.includes("matte") || lower.includes("color")) return false;
+  return (
+    lower.includes("adjustment layer") ||
+    lower.includes("adjustment") ||
+    lower.startsWith("adj_") ||
+    lower.startsWith("al_") ||
+    /^\d+x\d+$/.test(lower) ||
+    /^\d+x\d+\.prproj$/i.test(lower)
+  );
+}
+
+// Returns true if an item name looks like a Color Matte and NOT an Adjustment Layer
+function isColorMatteCandidate(name) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  if (lower.includes("adjustment") || lower.startsWith("adj_") || lower.startsWith("al_")) return false;
+  return (
+    lower.includes("color matte") ||
+    lower.includes("matte") ||
+    lower.includes("color") ||
+    lower.startsWith("cm_") ||
+    lower.startsWith("matte_")
+  );
+}
+
 // Find adjustment layer in project panel or active timeline, matching active sequence dimensions and fps
 async function findAdjustmentLayerItem(project, seq, ppro) {
   if (!project || typeof project.getRootItem !== "function") return null;
@@ -169,7 +198,7 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
     const adjBin = await getOrCreateAdjBin(project);
     await flattenImportWrappers(project, adjBin);
     const items = (await asBinLike(adjBin).getItems()) || [];
-    const candidates = items.filter((it) => it.type !== 2 && it.name);
+    const candidates = items.filter((it) => it.type !== 2 && isAdjustmentLayerCandidate(it.name));
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
     if (picked) return picked;
   } catch (_) {}
@@ -207,17 +236,9 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
         continue;
       }
 
-      // Must be a clip item (type !== 2) whose name contains adjustment
-      if (it.type !== 2 && it.name) {
-        const lower = it.name.toLowerCase();
-        if (
-          lower.indexOf("adjustment layer") !== -1 ||
-          lower.indexOf("adjustment") !== -1 ||
-          lower.indexOf("adj_") === 0 ||
-          lower.indexOf("al_") === 0
-        ) {
-          allCandidates.push(it);
-        }
+      // Must be a clip item (type !== 2) matching adjustment layer criteria
+      if (it.type !== 2 && isAdjustmentLayerCandidate(it.name)) {
+        allCandidates.push(it);
       }
     }
   }
@@ -303,9 +324,7 @@ async function findColorMatteItem(project, seq, ppro) {
     const adjBin = await getOrCreateAdjBin(project);
     await flattenImportWrappers(project, adjBin);
     const items = (await asBinLike(adjBin).getItems()) || [];
-    const candidates = items.filter((it) => it.type !== 2 && it.name && (
-      it.name.toLowerCase().includes("matte") || it.name.toLowerCase().includes("color")
-    ));
+    const candidates = items.filter((it) => it.type !== 2 && isColorMatteCandidate(it.name));
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
     if (picked) return picked;
   } catch (_) {}
@@ -340,16 +359,8 @@ async function findColorMatteItem(project, seq, ppro) {
         continue;
       }
 
-      if (it.type !== 2 && it.name) {
-        const lower = it.name.toLowerCase();
-        if (
-          lower.includes("color matte") ||
-          lower.includes("matte") ||
-          lower.startsWith("cm_") ||
-          lower.startsWith("matte_")
-        ) {
-          allCandidates.push(it);
-        }
+      if (it.type !== 2 && isColorMatteCandidate(it.name)) {
+        allCandidates.push(it);
       }
     }
   }
