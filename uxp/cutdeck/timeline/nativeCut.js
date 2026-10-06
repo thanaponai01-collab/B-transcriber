@@ -235,10 +235,11 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       else fresh.set(k, [c]);
     }
     const batch = moves.slice(at, at + MOVE_BATCH);
-    const builders = batch.map(({ key, by, start }) => {
+    console.log(`CutDeck close gaps: starting batch ${at}..${at + batch.length} of ${moves.length} moves (${fresh.size} distinct positions on timeline)`);
+    const builders = batch.map(({ key, by, start }, batchIdx) => {
       const list = fresh.get(key);
       const c = list && list.shift();
-      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished`);
+      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished (batch item ${batchIdx} of ${batch.length}, global ${at + batchIdx})`);
       const dt = tick(-by);
       return Object.assign(() => c.item.createMoveAction(dt), {
         what: `${key.replace("|", " track ")}, shift ${-by} ticks from start ${start}`,
@@ -246,7 +247,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     });
     const res = tx("close gaps", builders, { allowPartial: true });
     steps += res.steps;
-    if (res.count < batch.length) console.log(`CutDeck close gaps: handle went stale after ${res.count} of ${batch.length} moves (moves done ${at + res.count} of ${moves.length})`);
+    console.log(`CutDeck close gaps: batch committed ${res.count} of ${batch.length} moves (total done ${at + res.count} of ${moves.length})`);
     if (res.count === 0) {
       throw new Error(`close gaps: stalled at move ${at + 1} of ${moves.length}`);
     }
