@@ -530,6 +530,19 @@
     </div>
   </div>
 
+  <div id="view-clubfriday" hidden style="padding:16px;overflow:auto;">
+    <h2>ClubFriday</h2>
+    <p>Mark In/Out on the timeline, then transcribe that range.</p>
+    <label>Audio track (blank = automatic)</label>
+    <input id="cf-track" type="text" placeholder="e.g. 1 for A1">
+    <button id="cf-start">Transcribe In/Out</button>
+    <button id="cf-restore">Load latest result</button>
+    <p id="cf-range"></p>
+    <p id="cf-status" role="status">Ready</p>
+    <button id="cf-import" disabled>Import SRT into project</button>
+    <button id="cf-editor">Open quote editor</button>
+    <p>After import: drag the SRT from CutDeck / ClubFriday onto the timeline. Choose Subtitle and Source timecode to align the captions.</p>
+  </div>
   <script src="main.js"></script>
 </body>
 </html>

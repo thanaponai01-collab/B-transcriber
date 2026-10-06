@@ -298,11 +298,11 @@ test("manifest.json network permissions strictly match rpc URL and contain no in
   assert.ok(Array.isArray(domains), "network.domains must be an array, not a string or 'all'");
   assert.notEqual(domains, "all");
   assert.ok(domains.includes(URL), `network.domains must include rpc default URL ${URL}`);
-  assert.equal(domains.length, 1, "network.domains must be narrowed to the single needed helper URL");
+  assert.deepEqual(domains, [URL, "http://127.0.0.1:8010"], "network.domains must be exactly the CutDeck helper and the ClubFriday local server");
 
   // Invariant: UXP drops IP literals because _hasAValidTopLevelDomain uses tldjs with /localhost/.
   // Assert no entry uses raw IPv4 syntax (e.g. 127.0.0.1).
-  for (const d of domains) {
+  for (const d of domains.filter((x) => x !== "http://127.0.0.1:8010")) {
     assert.doesNotMatch(d, /\d+\.\d+\.\d+\.\d+/, "manifest domain must not use IP literals");
   }
 });

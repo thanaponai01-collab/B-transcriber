@@ -149,6 +149,7 @@ def _parse_distribute_target(target: str) -> dict:
 # apply_cuts edits a copy of a long sequence: 1735 cuts took minutes live (ledger 09-24).
 COMMANDS: dict[str, Command] = {
     "read_sequence": Command(60, _no_arguments, "Read the active sequence."),
+    "read_audio_range": Command(60, _no_arguments, "Read marked range and source audio clips without editing Premiere."),
     "apply_cuts": Command(1800, _apply_cuts_arguments,
                           "Apply a finished rough cut job to a copy of the active sequence.",
                           ("job_id", lambda target: {"job_id": target})),

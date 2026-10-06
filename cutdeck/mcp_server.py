@@ -81,6 +81,11 @@ def create_server(backend: Backend) -> FastMCP:
         ticks_per_frame and track counts. Needs the CutDeck panel open."""
         return await backend.premiere("read_sequence")
 
+    @server.tool(annotations=read)
+    async def premiere_read_audio_range() -> dict:
+        """Read the active sequence's marked range and source audio clips, without editing it."""
+        return await backend.premiere("read_audio_range")
+
     @server.tool(annotations=write)
     async def premiere_apply_cuts(job_id: str) -> dict:
         """Apply a finished rough_cut job's cut list in live Premiere, to a COPY of the active

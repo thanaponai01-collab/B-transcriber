@@ -15,7 +15,7 @@ const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
    Adding a name here is a deliberate architectural decision (see docs/arch-design-panel-ui.md),
    never a way to quiet this test: anything listed must also be held to the id-resolution and
    render-idempotence tests below. */
-const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js"];
+const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js", "core/clubFridayPanel.js"];
 
 function idsInHtml(html) {
   return new Set([...html.matchAll(/\bid="([a-zA-Z0-9_-]+)"/g)].map((m) => m[1]));

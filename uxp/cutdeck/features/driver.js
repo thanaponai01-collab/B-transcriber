@@ -34,6 +34,7 @@ const {
 
 const COMMANDS = [
   "read_sequence",
+  "read_audio_range",
   "apply_cuts",
   "add_markers",
   "run_probe",
@@ -80,6 +81,7 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
       name: sequence.name,
       sequence_id: sequence.guid.toString(),
       project_id: project.guid.toString(),
+      project_path: project.path,
       in_ticks: inTicks,
       out_ticks: outTicks,
       end_ticks: endTicks,
@@ -247,6 +249,12 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
 
   const handlers = {
     read_sequence: readSequence,
+    read_audio_range: async () => {
+      const snapshot = await workflow.capture(ppro);
+      snapshot.context.project_path = snapshot.project.path;
+      return { context: snapshot.context,
+        sequence: await workflow.readAudioTracks(ppro, snapshot.sequence, snapshot.context) };
+    },
     apply_cuts: applyCuts,
     add_markers: addMarkers,
     run_probe: runProbeCmd,

@@ -100,6 +100,28 @@ const driverRpc = createRpc({
 });
 driverRegistration = keepRegistered({ rpc: driverRpc, version: workflow.VERSION, commands: driver.commands });
 
+const cfPanel = require("./core/clubFridayPanel.js").createClubFridayPanel(document);
+const cf = require("./features/clubFriday.js").createClubFriday({
+  fetch: (...args) => fetch(...args), ensureHelper, render: cfPanel.render,
+  launch: async () => {
+    const script = (await helperStart.findHelperScript()).replace("Start CutDeck (Hidden).vbs", "Start ClubFriday (Hidden).vbs");
+    const error = await uxp.shell.openPath(script, "Start ClubFriday transcription");
+    if (error) throw new Error(error);
+  },
+  importSrt: async (path, context) => {
+    const project = await ppro.Project.getActiveProject();
+    if (!project || project.guid.toString() !== context.project_id) throw new Error("Open the original Premiere project before importing this range.");
+    const host = require("./host/project.js");
+    const bin = host.asBinLike(await host.getOrCreateBin(project, ["CutDeck", "ClubFriday"]));
+    if (!await project.importFiles([path], true, bin, false)) throw new Error("Premiere could not import the SRT.");
+  },
+});
+cfPanel.bind(cf, async () => {
+  await cf.restore();
+  const error = await uxp.shell.openExternal("http://127.0.0.1:8010", "Open ClubFriday quote editor");
+  if (error) throw new Error(error);
+});
+
 let sequenceActivatedListener = null;
 let tornDown = false;
 function teardown() {
@@ -179,6 +201,7 @@ try {
   const { entrypoints } = uxp;
   entrypoints.setup({
     panels: {
+      "cutdeck.clubfriday.panel": { show(rootNode) { cfPanel.mount(rootNode); cf.restore(); } },
       "cutdeck.panel": { show() {} },
       "cutdeck.align.panel": {
         show(rootNode) {

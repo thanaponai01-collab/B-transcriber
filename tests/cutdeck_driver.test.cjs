@@ -37,6 +37,7 @@ const controller = () => createController({ render: () => {} });
 test("the driver offers exactly the helper's fixed commands", () => {
   assert.deepEqual(COMMANDS, [
     "read_sequence",
+    "read_audio_range",
     "apply_cuts",
     "add_markers",
     "run_probe",

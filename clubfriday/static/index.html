@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClubFriday · Quote workspace</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<header><div class="brand"><span class="logo">CF</span><div><h1>ClubFriday</h1><p>From conversation to the words worth keeping.</p></div></div><span class="badge">Quote workspace</span></header>
+<main>
+<section class="setup"><div><span class="eyebrow">01 / PREMIERE RANGE</span><h2 id="sequence">Connect your sequence</h2><p id="range">Open CutDeck in Premiere, then mark timeline In and Out.</p></div>
+<div class="controls"><button id="refresh">Read Premiere</button><label>Dialogue track<select id="track"><option value="">First active audio track</option></select></label><button class="primary" id="start">Transcribe In / Out</button></div></section>
+<div id="message" role="status" aria-live="polite">Ready to read your Premiere range.</div>
+<div class="sessionbar"><label>Saved ranges <select id="sessions"><option value="">Choose a range…</option></select></label><span id="summary"></span></div>
+<div class="workspace">
+<section class="transcript"><div class="sectionhead"><div><span class="eyebrow">02 / LISTEN & SELECT</span><h2>Thai transcript</h2></div><button id="add" disabled>Add selected quote</button></div>
+<p class="hint">Select consecutive sentences to highlight. Click a timestamp to listen.</p><button id="export-transcript" disabled>Export full transcript as SRT</button><p class="hint">All speech in this range, timed to your sequence. Place the imported SRT at sequence start (00:00).</p><audio id="audio" controls preload="none"></audio>
+<div id="cues"><div class="empty"><span>“</span><h3>The conversation starts here</h3><p>Transcribe a marked range to see its Thai sentences and timeline timestamps.</p></div></div></section>
+<section class="quotes"><div class="sectionhead"><div><span class="eyebrow">03 / PREPARE YOUR GRAPHICS</span><h2>Selected quotes <span id="count">0</span></h2></div><button id="save" disabled>Save quotes</button></div>
+<p class="hint">Keep the exact words. Adjust breaks across one, two, or three text layers.</p><button id="export" disabled>Export selected quotes as SRT</button><p class="hint">Import the SRT into Premiere and place it at sequence start (00:00). Quote times already include your marked range’s position.</p><div id="quotes"><div class="empty"><span>✦</span><h3>Keep the words that matter</h3><p>Your selected advice will appear here, ready to copy into your styled graphic.</p></div></div></section>
+</div></main><footer>ClubFriday uses your existing local Thai transcription helper. You choose what goes on screen.</footer>
+<script src="/static/quotes.js"></script><script src="/static/app.js"></script></body></html>

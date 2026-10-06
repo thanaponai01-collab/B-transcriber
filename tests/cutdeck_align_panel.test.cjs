@@ -30,11 +30,11 @@ const alignJsPath = path.join(root, "uxp", "cutdeck", "core", "alignPanel.js");
 
 // --- manifest ------------------------------------------------------------------------------
 
-test("the manifest declares two panel entrypoints with distinct ids", () => {
+test("the manifest declares three panel entrypoints with distinct ids", () => {
   const panels = manifest.entrypoints.filter((e) => e.type === "panel");
-  assert.equal(panels.length, 2);
-  assert.deepEqual(panels.map((p) => p.id), ["cutdeck.panel", "cutdeck.align.panel"]);
-  assert.equal(new Set(panels.map((p) => p.id)).size, 2, "entrypoint ids must be unique");
+  assert.equal(panels.length, 3);
+  assert.deepEqual(panels.map((p) => p.id), ["cutdeck.panel", "cutdeck.align.panel", "cutdeck.clubfriday.panel"]);
+  assert.equal(new Set(panels.map((p) => p.id)).size, 3, "entrypoint ids must be unique");
   for (const p of panels) {
     assert.ok(p.label && p.label.default, `${p.id} needs a label`);
   }

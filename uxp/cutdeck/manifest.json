@@ -11,13 +11,17 @@
   "requiredPermissions": {
     "localFileSystem": "fullAccess",
     "network": {
-      "domains": [
-        "ws://localhost:7891"
-      ]
+      "domains": ["ws://localhost:7891", "http://127.0.0.1:8010"]
     },
     "clipboard": "readAndWrite",
     "launchProcess": {
-      "extensions": [".cmd", ".vbs"]
+      "extensions": [
+        ".cmd",
+        ".vbs"
+      ],
+      "schemes": [
+        "http"
+      ]
     },
     "ipc": {
       "enablePluginCommunication": true
@@ -97,6 +101,21 @@
           ]
         }
       ]
+    },
+    {
+      "type": "panel",
+      "id": "cutdeck.clubfriday.panel",
+      "label": {
+        "default": "ClubFriday"
+      },
+      "minimumSize": {
+        "width": 300,
+        "height": 420
+      },
+      "preferredDockedSize": {
+        "width": 340,
+        "height": 520
+      }
     }
   ],
   "icons": [
