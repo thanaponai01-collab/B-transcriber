@@ -211,3 +211,44 @@ def test_no_trailing_gap_recovery_when_window_ends_close_to_last_word():
     merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(2.5 * _SR)), {}, 8)
     assert merged is tokens
     assert bs == 8
+
+
+def test_normal_spans_recover_tail_with_absolute_timestamps(monkeypatch):
+    from transcribe.audio.windows import Window
+    eng = FasterWhisperEngine()
+    monkeypatch.setattr("transcribe.engines.faster_whisper.speech_windows",
+                        lambda *a: [Window(5, 15, 0), Window(20, 22, 1)])
+    calls = []
+
+    def decode(audio, clip, vad, common, bs):
+        calls.append((len(audio), clip))
+        if clip is not None:
+            return [_FakeSegment([_FakeWord(" first", 5, 6),
+                                  _FakeWord(" later", 20, 21.8)])], bs
+        return [_FakeSegment([_FakeWord(" recovered", 0, 1)])], bs
+
+    eng._decode = decode
+    words = eng._transcribe_batched(np.zeros(22 * _SR), "th", None)
+    assert [(t, s, e) for t, s, e, c in words] == [
+        (" first", 5000, 6000), (" recovered", 6000, 7000),
+        (" later", 20000, 21800)]
+    assert len(calls) == 2  # one batch plus only the suspicious span's tail
+    assert calls[1] == (9 * _SR, None)
+
+
+def test_complete_normal_span_does_not_retry(monkeypatch):
+    from transcribe.audio.windows import Window
+    eng = FasterWhisperEngine()
+    monkeypatch.setattr("transcribe.engines.faster_whisper.speech_windows",
+                        lambda *a: [Window(5, 7, 0)])
+    calls = []
+
+    def decode(*args):
+        calls.append(args)
+        return [_FakeSegment([_FakeWord(" complete", 5, 5.8),
+                              _FakeWord(" end", 5.8, 6.8)])], 8
+
+    eng._decode = decode
+    words = eng._transcribe_batched(np.zeros(7 * _SR), "th", None)
+    assert len(calls) == 1
+    assert words[-1][1:3] == (5800, 6800)

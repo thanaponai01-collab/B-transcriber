@@ -452,8 +452,21 @@ class FasterWhisperEngine(Engine):
             # each under the encoder cap, so no arbitrary internal re-split happens).
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
-            for tok in self._words_of(segments):
-                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
+            normal_tokens = self._words_of(segments)
+            for win in normal:
+                # Batched timestamps are absolute; recovery expects window-local
+                # words and audio. Restore absolute time after the selective retry.
+                win_tokens = [
+                    RecognizedToken(t.text, t.start_ms - win.start_ms,
+                                    t.end_ms - win.start_ms, t.confidence, t.script)
+                    for t in normal_tokens
+                    if win.start_ms <= t.start_ms < win.end_ms
+                ]
+                win_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
+                win_tokens, bs = self._recover_truncated_tail(win_tokens, win_audio, common, bs)
+                for tok in win_tokens:
+                    words.append((tok.text, tok.start_ms + win.start_ms,
+                                  tok.end_ms + win.start_ms, tok.confidence))
         elif not long_runs:
             # No speech spans detected at all (rare) — fall back to faster-whisper's
             # own automatic VAD/whole-file path rather than emitting nothing.

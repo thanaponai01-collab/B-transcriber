@@ -53,28 +53,16 @@ class Hypotheses:
 
 
 def build_engine(name: str, device: str, config: dict):
-    """Construct an engine, probing what its constructor accepts.
-
-    A **capability probe**, not a swallowed exception: per-engine overrides live
-    under `config["engines"][<registry name>]` so a model/compute_type/beam swap
-    is a YAML edit, never a code edit (2.3). Not every adapter accepts that kwarg
-    set — passthrough and mock take `device` and nothing else — so we try the
-    full set and fall back to device-only on the `TypeError` that says "this
-    engine does not have those knobs". Any other failure propagates.
-    """
+    """Construct an engine with explicit overrides; invalid settings must fail."""
     engines_cfg = (config.get("engines", {}) or {}).get(name, {})
     kw = {"device": device, **engines_cfg}
     if name == "faster_whisper":
         # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon needs the full
         # pipeline config (thai_atoms + normalization.exception_lexicon), not just
         # this engine's own config["engines"]["faster_whisper"] sub-block —
-        # threaded only to this engine so other engines' kwarg sets (and their own
-        # TypeError fallback below) are untouched.
+        # threaded only to this engine; other adapters receive their own settings.
         kw.setdefault("config", config)
-    try:
-        return get_engine(name, **kw)
-    except TypeError:
-        return get_engine(name, device=device)
+    return get_engine(name, **kw)
 
 
 def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
@@ -108,9 +96,11 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config):
         if plan.self_ensemble_enabled and not plan.skip_engine_b:
             engine = build_engine(plan.engine_a_name, device, config)
             _log_vram("pre-engine-a-self-ensemble-resume")
-            engine.load()
-            pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
-            engine.unload()
+            try:
+                engine.load()
+                pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
+            finally:
+                engine.unload()
             _log_vram("post-engine-a-self-ensemble-resume")
             del engine
         _free_vram()
@@ -118,20 +108,22 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config):
 
     engine = build_engine(plan.engine_a_name, device, config)
     _log_vram("pre-engine-a")
-    engine.load()
-    _log_vram("engine-a-loaded")
-    tokens_a, final_a, raw_words_a = _transcribe_with(
-        engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
-        "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
-        temperature=plan.temperature_a, beam_size=plan.beam_size_a,
-    )
-    pseudo_b_tokens = pseudo_b_raw_words = None
-    if plan.self_ensemble_enabled:
-        pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
-        logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
-                    "beam_size=%s) from Engine A's residency, %d tokens",
-                    plan.temperature_b, plan.beam_size_b, len(pseudo_b_tokens))
-    engine.unload()
+    try:
+        engine.load()
+        _log_vram("engine-a-loaded")
+        tokens_a, final_a, raw_words_a = _transcribe_with(
+            engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
+            "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
+            temperature=plan.temperature_a, beam_size=plan.beam_size_a,
+        )
+        pseudo_b_tokens = pseudo_b_raw_words = None
+        if plan.self_ensemble_enabled:
+            pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
+            logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
+                        "beam_size=%s) from Engine A's residency, %d tokens",
+                        plan.temperature_b, plan.beam_size_b, len(pseudo_b_tokens))
+    finally:
+        engine.unload()
     _log_vram("post-engine-a")
     store.save_engine_result(
         conn, job_id, "a", plan.engine_a_name,
@@ -164,14 +156,16 @@ def _run_engine_b(conn, job_id, plan, inputs, device, config,
     else:
         engine = build_engine(plan.engine_b_name, device, config)
         _log_vram("pre-engine-b")
-        engine.load()
-        _log_vram("engine-b-loaded")
-        tokens_b, timestamps_final_b, raw_words_b = _transcribe_with(
-            engine, inputs.chunks, inputs.full_audio, inputs.bias_terms,
-            inputs.bias_weights, None, plan.engine_batch_size,
-            chunk_overlap_ms=plan.chunk_overlap_ms,
-        )
-        engine.unload()
+        try:
+            engine.load()
+            _log_vram("engine-b-loaded")
+            tokens_b, timestamps_final_b, raw_words_b = _transcribe_with(
+                engine, inputs.chunks, inputs.full_audio, inputs.bias_terms,
+                inputs.bias_weights, None, plan.engine_batch_size,
+                chunk_overlap_ms=plan.chunk_overlap_ms,
+            )
+        finally:
+            engine.unload()
         _log_vram("post-engine-b")
         del engine
 
