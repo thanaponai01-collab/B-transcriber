@@ -88,9 +88,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   // Actions must be CREATED inside the transaction callback — built outside it, Premiere throws
   // "The script object is no longer valid." (live run 2026-09-24). So each step passes a list
   // of builders, not actions.
-  const tx = (label, builders) => {
-    if (!builders.length) return 0;
+  const tx = (label, builders, { allowPartial = false } = {}) => {
+    if (!builders.length) return { steps: 0, count: 0 };
     const ed = editor();
+    let completed = 0;
     timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
       const len = builders.length;
       for (let i = 0; i < len; i++) {
@@ -101,6 +102,11 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
         // this callback, as required) before failing. The read-back still checks every piece.
         for (let attempt = 0; attempt < 2 && !action; attempt++) {
           try { action = build(ed); } catch (e) {
+            if (allowPartial && i > 0 && e.message && e.message.includes("is no longer valid")) {
+              // Stale handle mid-batch (live 2026-10-06, action 179 of 3000): commit what succeeded
+              // so far; the caller re-reads the copy and continues with fresh handles.
+              return;
+            }
             const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
             throw new Error(`${where} failed to build: ${e.message}`);
           }
@@ -117,9 +123,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
           const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
           throw new Error(`${where}: addAction returned false`);
         }
+        completed++;
       }
     }));
-    return 1;
+    return { steps: completed > 0 ? 1 : 0, count: completed };
   };
   // Positions only. The two reads after the razor see every piece (~8,700 on a 1,735-cut run,
   // 16 s live), so they read just what their step uses.
@@ -152,14 +159,14 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     if (!src) throw new Error(`clip on ${key.replace("|", " track ")} vanished`);
     const dt = tick(park - it.startTicks);
     return (ed) => (ed || editor()).createCloneTrackItemAction(src.item, dt, 0, 0, false, false);
-  }));
+  })).steps;
   seq = await read();
   steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
     const f = findIn(seq, key, park);
     if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land`);
     const dt = tick(f.inPoint + tpf);
     return () => f.item.createSetOutPointAction(dt);
-  }));
+  })).steps;
 
   // 3. razor: one filler clone per cut edge. Batched like step 5 (live 2026-10-01: a 55 s commit and
   // stale handles on a 16k-action run), each batch from a fresh read; the filler stays at `park`.
@@ -180,7 +187,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       return Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(f.item, dt, 0, 0, false, false),
         { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` });
     });
-    steps += tx("split at cut edges", razor);
+    steps += tx("split at cut edges", razor).steps;
   }
 
   // 4. remove everything inside a cut, and the fillers — per media type.
@@ -213,17 +220,36 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   // Live 2026-10-01: one transaction of 16,506 moves failed at action 13,845 with "script object is
   // no longer valid" (handles read minutes earlier). So the moves go in batches, each from a fresh
   // read. A piece not yet moved still sits at its original start, so it is found by lane + start.
+  // Live 2026-10-06: handles can still go stale mid-batch (e.g. action 179 of 3000). allowPartial
+  // commits what succeeded so far, then the next iteration re-reads for fresh handles.
   const moves = all(seq).map((c) => ({ key: `${lane(c)}|${c.start}`, start: c.start, by: fastShift(c.start) })).filter((m) => m.by > 0n)
     .sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
-  for (let at = 0; at < moves.length; at += MOVE_BATCH) {
-    if (at) seq = await read({ end: false, inPoint: false });
-    const fresh = new Map(all(seq).map((c) => [`${lane(c)}|${c.start}`, c]));
-    steps += tx("close gaps", moves.slice(at, at + MOVE_BATCH).map(({ key, by }) => {
-      const c = fresh.get(key);
+  let at = 0;
+  while (at < moves.length) {
+    if (at > 0) seq = await read({ end: false, inPoint: false });
+    const fresh = new Map();
+    for (const c of all(seq)) {
+      const k = `${lane(c)}|${c.start}`;
+      const list = fresh.get(k);
+      if (list) list.push(c);
+      else fresh.set(k, [c]);
+    }
+    const batch = moves.slice(at, at + MOVE_BATCH);
+    const builders = batch.map(({ key, by, start }) => {
+      const list = fresh.get(key);
+      const c = list && list.shift();
       if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished`);
       const dt = tick(-by);
-      return () => c.item.createMoveAction(dt);
-    }));
+      return Object.assign(() => c.item.createMoveAction(dt), {
+        what: `${key.replace("|", " track ")}, shift ${-by} ticks from start ${start}`,
+      });
+    });
+    const res = tx("close gaps", builders, { allowPartial: true });
+    steps += res.steps;
+    if (res.count === 0) {
+      throw new Error(`close gaps: stalled at move ${at + 1} of ${moves.length}`);
+    }
+    at += res.count;
   }
   moves.length = 0;
   seq = null;

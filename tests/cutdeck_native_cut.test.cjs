@@ -14,7 +14,7 @@ const { applyNativeCut } = require("../uxp/cutdeck/timeline/nativeCut.js");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [] } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set() } = {}) {
   let guid = 0;
   const sequences = [];
   const makeSeq = (name, tracks) => { const s = { name, id: `g${guid++}`, tracks }; sequences.push(s); return s; };
@@ -25,6 +25,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [] } = {}) {
     src.tracks[kind][track].push({ kind, track, start: BigInt(s) * TPF, end: BigInt(e) * TPF, in: BigInt(i) * TPF, path: "D:/a.mp4" });
   }
   let transactions = 0;
+  let moveCalls = 0;
   const clones = [];
   let inTx = false;
   // Live run 2026-09-24: an action created outside executeTransaction's callback throws.
@@ -72,7 +73,10 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [] } = {}) {
     getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: r.end.toString() }),
     getInPoint: async () => n({ ticks: r.in.toString() }), getSpeed: async () => n(speedOf(r)), isSpeedReversed: async () => n(0),
     getProjectItem: async () => n({ getMediaFilePath: async () => n(r.path), isSequence: async () => n(false), isMulticamClip: async () => n(false) }),
-    createMoveAction: (t) => act({ type: "move", raw: r, by: BigInt(t.ticks) }),
+    createMoveAction: (t) => {
+      if (staleMoveCalls.has(++moveCalls)) throw new Error("The script object is no longer valid.");
+      return act({ type: "move", raw: r, by: BigInt(t.ticks) });
+    },
     createSetInPointAction: (t) => act({ type: "setIn", raw: r, t: BigInt(t.ticks) }),
     createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) });
   const wrapTrack = (seq, kind, i) => ({ getTrackItems: (type) => (type === 2
@@ -234,3 +238,12 @@ test("a refusal before the copy is made leaves no copy and no copyCreated flag",
   assert.notEqual(error.copyCreated, true);
   assert.deepEqual(h.sequences.map((s) => s.name), ["Shoot"]);
 });
+
+test("stale handle mid-batch in close gaps: commits partial batch, re-reads, and completes exact cut", async () => {
+  const h = fakeHost(golden.before, { staleMoveCalls: new Set([4]) });
+  const r = await applyNativeCut(h.ppro, h.project, h.source, golden, "partial-close");
+  const copy = h.sequences.find((s) => s.name === "partial-close");
+  assert.deepEqual(h.rowsOf(copy), golden.after.map((x) => JSON.stringify(x)).sort());
+  assert.ok(r.steps >= 6, `expected at least 6 steps with split batch, got ${r.steps}`);
+});
+
