@@ -246,6 +246,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     });
     const res = tx("close gaps", builders, { allowPartial: true });
     steps += res.steps;
+    if (res.count < batch.length) console.log(`CutDeck close gaps: handle went stale after ${res.count} of ${batch.length} moves (moves done ${at + res.count} of ${moves.length})`);
     if (res.count === 0) {
       throw new Error(`close gaps: stalled at move ${at + 1} of ${moves.length}`);
     }
@@ -316,6 +317,10 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     before.transitions = null;
     actual = null;
     if (problems.length) {
+      // The message names only the first problem; the console gets all of them, so a failed run
+      // shows whether clips are missing (overwritten) or misplaced, and on which lanes.
+      const kinds = problems.reduce((n, p) => { const k = p.split(" ")[0]; n[k] = (n[k] || 0) + 1; return n; }, {});
+      console.log("CutDeck read-back mismatches", kinds, problems);
       throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
         + "It is left open for inspection; your original sequence is untouched.");
     }
