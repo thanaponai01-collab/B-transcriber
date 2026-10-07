@@ -67,3 +67,20 @@ test("an API only the unreleased Premiere has is caught, even when Adobe's sampl
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a name Adobe's samples only use behind @ts-expect-error (untyped) is caught", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cutdeck-api-"));
+  try {
+    fs.writeFileSync(path.join(dir, "razor.js"), [
+      'const ppro = require("premierepro");',
+      "function go(editor, t) {",
+      "  return editor.createRazorTrackAction(1, 0, t, true, 1);", // 27.1; samples call it with @ts-expect-error
+      "}",
+      "module.exports = { go };",
+    ].join("\n"));
+    const r = check([`--panel=${dir}`]);
+    assert.deepEqual(r.unknown.map((u) => u.name), ["createRazorTrackAction"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

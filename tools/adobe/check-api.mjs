@@ -59,8 +59,12 @@ declaredNames(parse(path.join(refDir, "typings", "premierepro-26.2.1.d.ts")), pr
 
 // 2. Adobe docs + samples: names written as `.name` in the markdown / sample code.
 const adobeDocs = new Set();
+//    A sample line under `@ts-expect-error` calls something Adobe's typings don't declare yet (an
+//    unreleased API, e.g. 27.1's razor), so its names prove nothing about the installed Premiere.
+const EXPECT_ERROR_NEXT_LINE = /@ts-expect-error[^\n]*\n[^\n]*/g;
 for (const f of walkFiles(refDir, (n) => /\.(md|js|ts|tsx|jsx)$/.test(n))) {
-  for (const m of fs.readFileSync(f, "utf8").matchAll(/\.([A-Za-z_$][\w$]*)/g)) adobeDocs.add(m[1]);
+  const text = fs.readFileSync(f, "utf8").replace(EXPECT_ERROR_NEXT_LINE, "");
+  for (const m of text.matchAll(/\.([A-Za-z_$][\w$]*)/g)) adobeDocs.add(m[1]);
 }
 
 // 3. JS + DOM built-ins, from TypeScript's own lib files.
