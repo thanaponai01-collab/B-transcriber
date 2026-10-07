@@ -9,6 +9,7 @@ run teaches something (see "Adding a fact" at the bottom).
 2. **`reference/adobe/api/premierepro.txt`** / **`api/uxp.txt`**: every declared member, one line
    each (`grep "^SequenceEditor\." reference/adobe/api/premierepro.txt`). Tags show `static`,
    `since`, and `NOT IN 26.2.1` (absent at the manifest's `minVersion` 26.2.0).
+   `api/premierepro-preview.txt` lists what the next, not-installed Premiere adds, removes or changes.
 3. **`reference/adobe/docs/`**: Adobe's docs (Premiere classes under `ppro-reference/`, the UXP
    platform under `uxp-api/`, recipes under `resources/recipes/`).
 4. **`reference/adobe/samples/`**: Adobe's own working panels, for real call patterns.
@@ -74,7 +75,7 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | `createRemoveItemsAction(sel, ripple=true, ANY)` | UNPROBED | Cross-track ripple depends on sync-lock UI state the API can't read. Rough Cut closes gaps itself with `createMoveAction`. | HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 3.2 |
 | `TrackItemSelection.createEmptySelection(cb)` | CATCH | The selection is **only valid inside its callback**. Build the selection *and* the remove action inside it, inside the transaction. Adobe's eslint rule: `no-empty-selection-escape`. | `nativeSync.js` 09-23 |
 | `createInsertProjectItemAction` | CATCH | Ripples: shifts every clip after `time`. CutDeck uses overwrite instead. | `adjustmentLayer.js` |
-| razor / split, link / unlink, get linked partner, move to another track, add track | ABSENT | Not declared in the typings at any version (grep). Split = overwrite-as-razor; tracks come from overwrite at index = count. | HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 2.4 |
+| razor / split, link / unlink, get linked partner, move to another track, add track | ABSENT (26.x) | Not declared in the typings at any version (grep). A native razor is announced for 27.1 (see *Next Premiere*). Split = overwrite-as-razor; tracks come from overwrite at index = count. | HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 2.4 |
 
 ## Track items (`VideoClipTrackItem` / `AudioClipTrackItem`)
 
@@ -178,8 +179,6 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | `typeof x === "function"` guards | CATCH | They silently skip a **wrong** API name. Check names with `tools/adobe/check-api.mjs`, not guards. | HANDOFF_CUTDECK_AL_FX_NEXT |
 | Panel compositing, Premiere 26.3.2.2 | BROKEN (26.3) | A UXP panel painted nothing (DevTools confirmed). Not seen on 26.5. | Ledger 08-29 |
 
-## Not UXP: ExtendScript / QE DOM
-
 ## ClubFriday captions (26.5.2)
 
 | Fact | Status | Detail | Proof |
@@ -189,8 +188,26 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | UI caption placement with Source timecode | WORKS | Dragging imported SRT to timeline, accepting Subtitle / Source timecode, created C1 in Edditing with first start 9.4094 s and last end 426.1590667 s, within unchanged marks 9.4094-426.2258. Thai text visible; save returned true. | Live 2026-10-06, CF_FINAL_TIMING and CF_SAVED readback |
 | Sub-frame SRT cue | CATCH | 204 input cues became 203 caption items: ASR cue 29 was only 1 ms (75.889-75.890 s), below one video frame. Preserve original transcript for review. | Live 2026-10-06, session a2ccc4ee0ca44155a3dd0cb93e7b57c4 |
 
+## Not UXP: ExtendScript / QE DOM
+
 Retired. Premiere 26.3 silently ignores QE `razor`/`ripple_delete` on some installs, and the File > Scripts
 menu is gone. ExtendScript is supported only through Sept 2026. Don't build on it (ledger 08-25).
+
+## Next Premiere (27.x): announced, not installed
+
+None of this runs on the installed 26.5. It is what to plan for. Source: `reference/adobe/api/premierepro-preview.txt`
+(member diff, `@adobe/premierepro@27.0.0-beta.57` vs 26.5.1) and Adobe's sample panel (`reference/adobe/samples/`,
+pinned b481f14). `check-api` rejects 27-only names until the pin moves to an installed version.
+
+| API | Status | What changes / why it matters | Proof |
+|---|---|---|---|
+| `MogrtText` / `MogrtComment` (`getText/setText`, `get/setFontName`, `get/setFontSize`, faux bold/italic, all/small caps, `is*Editable`, `isUniformStyling`) | ANNOUNCED 27.0 | `ComponentParam.getStartValue()` can resolve a `MogrtText`, and `createKeyframe(mogrtText)` writes one. This is the typed route for the ClubFriday text write that is **REJECTED** on 26.5 (plain-string `createKeyframe` → "Illegal Parameter type", `typeof MogrtText` undefined). `setText` collapses multi-run styling to one run. Probe on 27.0 with the AE-authored `ClubFriday AE Test.mogrt` before building. | typings 27.0.0-beta.57; samples `src/keyframe.ts` |
+| `SequenceEditor.createRazorTrackAction(mediaType, trackIndex, time, razorLinked, alignToMediaType)`, `createRazorAllTracksAction(mediaType, alignToMediaType)` | ANNOUNCED 27.1 (untyped) | A **native razor**, one Action per track, in a normal transaction (one undo step). Not in any typings yet (the sample uses `@ts-expect-error`). Would replace Rough Cut's overwrite-as-razor (7,650 clones for 426 cuts) and revive the razor route marked dead in #18/#24. Do not use until probed live on 27.1. The razor row under *Placing* stays ABSENT for 26.x. | samples commit 8d75ef1 (2026-10-06) `src/sequenceEditor.ts` |
+| `TickTime.timeToTimecode` / `timecodeToTime(tc, frameRate, timeDisplay)` | ANNOUNCED 27.0 | Premiere's own timecode string conversion; frame rate from `(await seq.getSettings()).getVideoFrameRate()`, display from `getSequenceVideoTimeDisplayFormat()`. CutDeck does its own tick math (`host/ticks.js`), so nothing depends on it. | typings 27.0; samples `src/tickTime.ts` |
+| `Project.getSequence(guid)` | BREAKING in 27.0 | Returns `Promise<Sequence \| null>` (was sync `Sequence`). The panel does not call it today (grep, 2026-10-07); any new call must `await`. | preview diff |
+| `PointKeyframe.value` / `ComponentParam.getValueAtTime` | BREAKING in 27.0 | Point values are typed as `{value: [x, y]}` (was `{value: PointF}`). `host/components.js unwrapKeyframeValue` passes arrays through untouched, so on 27 every `position.x` / `anchorPoint.x` in the Transform panel would read `undefined`. Probe on 27.0, then normalise `[x, y]` → `{x, y}` in that one function. | preview diff; `host/components.js:22` |
+| `Application.version` | REMOVED in 27.0 typings | The panel does not read it (grep, 2026-10-07). | preview diff |
+| `ProjectItem.type` | CHANGED in 27.0 | Now `Constants.ProjectItemType` (ROOT, BIN, CLIP, COMPOUND, FILE, STYLE) instead of a bare number: a typed way to tell bins from clips without `FolderItem.cast` probing. | preview diff |
 
 ---
 

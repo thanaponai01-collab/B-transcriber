@@ -3,11 +3,12 @@
   "typings": [
     { "package": "@adobe/premierepro", "version": "26.5.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.5.1.d.ts", "why": "installed Premiere is 26.5" },
     { "package": "@adobe/premierepro", "version": "26.2.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.2.1.d.ts", "why": "manifest minVersion is 26.2.0; anything absent here is 26.3+ only" },
+    { "package": "@adobe/premierepro", "version": "27.0.0-beta.57", "file": "src/premierepro.d.ts", "saveAs": "premierepro-27.0.0-beta.57.d.ts", "preview": true, "why": "next Premiere, not installed: indexed into api/premierepro-preview.txt only; check-api does NOT accept its names" },
     { "package": "@adobe/cc-ext-uxp-types", "version": "7.3.1", "file": "uxp/index.d.ts", "saveAs": "uxp-7.3.1.d.ts", "why": "UXP platform: storage, shell, network, xmp, os, fs" }
   ],
   "repos": [
-    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro", "sha": "b79ff3b47a7675681aeacf5328b3c16b39dcd583", "from": "src/pages", "saveAs": "docs", "why": "Premiere class reference (ppro-reference/) + UXP platform reference for Premiere (uxp-api/) + guides and recipes" },
-    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro-samples", "sha": "1f32dfd7b82074f6ece33f8c6ce9e89995378f7f", "from": ".", "saveAs": "samples", "why": "Adobe's own working sample panels: real call patterns" }
+    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro", "sha": "55a2a2d3eb0c4a2453eb9d38e8d067f851fa6b6e", "from": "src/pages", "saveAs": "docs", "why": "Premiere class reference (ppro-reference/) + UXP platform reference for Premiere (uxp-api/) + guides and recipes" },
+    { "repo": "https://github.com/AdobeDocs/uxp-premiere-pro-samples", "sha": "b481f1462400ddec5a7399e4930fafd7f71c58d0", "from": ".", "saveAs": "samples", "why": "Adobe's own working sample panels: real call patterns" }
   ],
   "keepExtensions": [".md", ".ts", ".tsx", ".js", ".jsx", ".json", ".html", ".css", ".yml", ".yaml", ".txt"],
   "licenseFiles": ["LICENSE", "COPYRIGHT"]

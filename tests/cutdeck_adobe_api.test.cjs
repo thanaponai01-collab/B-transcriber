@@ -50,3 +50,20 @@ test("an API written from memory is caught", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("an API only the unreleased Premiere has is caught, even when Adobe's samples use it", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cutdeck-api-"));
+  try {
+    fs.writeFileSync(path.join(dir, "next.js"), [
+      'const ppro = require("premierepro");',
+      "function tc(t, rate, display) {",
+      "  return ppro.TickTime.timecodeToTime(t, rate, display);", // 27.0 preview typings + samples only
+      "}",
+      "module.exports = { tc };",
+    ].join("\n"));
+    const r = check([`--panel=${dir}`]);
+    assert.deepEqual(r.unknown.map((u) => [u.name, u.previewOnly]), [["timecodeToTime", true]]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

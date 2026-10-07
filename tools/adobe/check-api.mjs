@@ -49,9 +49,10 @@ function declaredNames(sf, into) {
 
 const parse = (file) => ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
 
-// 1. Adobe typings (every pinned version).
-const adobeTyped = new Set();
-for (const t of sources.typings) declaredNames(parse(path.join(refDir, "typings", t.saveAs)), adobeTyped);
+// 1. Adobe typings (every pinned version). A `preview` pin (an unreleased Premiere) never makes a
+//    name known: the panel must run on the installed Premiere. Its names are reported instead.
+const adobeTyped = new Set(), previewTyped = new Set();
+for (const t of sources.typings) declaredNames(parse(path.join(refDir, "typings", t.saveAs)), t.preview ? previewTyped : adobeTyped);
 const premiere265 = new Set(), premiere262 = new Set();
 declaredNames(parse(path.join(refDir, "typings", "premierepro-26.5.1.d.ts")), premiere265);
 declaredNames(parse(path.join(refDir, "typings", "premierepro-26.2.1.d.ts")), premiere262);
@@ -112,9 +113,10 @@ for (const [file, sf] of panelAsts) {
       const name = node.name.text;
       const where = `${rel}:${sf.getLineAndCharacterOfPosition(node.name.getStart(sf)).line + 1}`;
       const bag = ts.isIdentifier(node.expression) && OPTION_BAGS.has(node.expression.text);
-      const known = bag || adobeTyped.has(name) || adobeDocs.has(name) || builtins.has(name) || own.has(name) ||
-        helper.has(name) || name in allowlist;
-      if (!known) unknown.push({ name, where, code: node.getText(sf).slice(0, 80) });
+      const previewOnly = previewTyped.has(name) && !adobeTyped.has(name) && !builtins.has(name) && !own.has(name);
+      const known = !previewOnly && (bag || adobeTyped.has(name) || adobeDocs.has(name) || builtins.has(name) ||
+        own.has(name) || helper.has(name) || name in allowlist);
+      if (!known) unknown.push({ name, where, code: node.getText(sf).slice(0, 80), ...(previewOnly ? { previewOnly } : {}) });
       else if (premiere265.has(name) && !premiere262.has(name) && !builtins.has(name) && !own.has(name)) needs263.push({ name, where });
     }
     ts.forEachChild(node, visit);
@@ -127,7 +129,7 @@ const result = { files: panelFiles.length, unknown, needs263, staleAllow };
 if (process.argv.includes("--json")) {
   process.stdout.write(JSON.stringify(result));
 } else {
-  console.log(`Checked ${panelFiles.length} panel files against reference/adobe/ (typings ${sources.typings.map((t) => `${t.package}@${t.version}`).join(", ")}).`);
+  console.log(`Checked ${panelFiles.length} panel files against reference/adobe/ (typings ${sources.typings.filter((t) => !t.preview).map((t) => `${t.package}@${t.version}`).join(", ")}).`);
   if (needs263.length) {
     console.log(`\nInfo: ${needs263.length} use(s) of Premiere members absent from the 26.2.1 typings (manifest minVersion 26.2.0):`);
     for (const u of needs263) console.log(`  ${u.name.padEnd(36)} ${u.where}`);
@@ -135,7 +137,7 @@ if (process.argv.includes("--json")) {
   if (staleAllow.length) console.log(`\nAllowlist entries now known elsewhere (remove them): ${staleAllow.join(", ")}`);
   if (unknown.length) {
     console.log(`\nFAIL: ${unknown.length} member name(s) found in no Adobe typings, Adobe docs, built-ins or CutDeck code:`);
-    for (const u of unknown) console.log(`  ${u.name.padEnd(36)} ${u.where}   ${u.code}`);
+    for (const u of unknown) console.log(`  ${u.name.padEnd(36)} ${u.where}   ${u.code}${u.previewOnly ? "   (only in an unreleased Premiere's typings)" : ""}`);
     console.log("\nLook each up in reference/adobe/ (api/*.txt, docs/). Real but untyped -> add to tools/adobe/api-allowlist.json with the proof. Not real -> it was written from memory; fix it.");
     process.exitCode = 1;
   } else {

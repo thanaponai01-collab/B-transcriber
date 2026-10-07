@@ -103,7 +103,8 @@ const header = (title, lines) => [
   "",
 ].join("\n");
 
-const pv = sources.typings.find((t) => t.package === "@adobe/premierepro").version;
+const pv = sources.typings.find((t) => t.package === "@adobe/premierepro" && !t.preview).version;
+const preview = sources.typings.find((t) => t.package === "@adobe/premierepro" && t.preview);
 const uv = sources.typings.find((t) => t.package === "@adobe/cc-ext-uxp-types").version;
 
 // Premiere, tagged against 26.2.1 (manifest minVersion) so 26.3+ APIs stand out.
@@ -121,4 +122,19 @@ fs.writeFileSync(path.join(apiDir, "premierepro.txt"), header(
   `Premiere Pro UXP API, @adobe/premierepro ${pv}. "NOT IN 26.2.1" = absent from the manifest-minVersion typings.`, pproLines));
 fs.writeFileSync(path.join(apiDir, "uxp.txt"), header(
   `UXP platform API, @adobe/cc-ext-uxp-types ${uv}. These typings have gaps (e.g. storage.localFileSystem is documented but missing); also check docs/uxp-api/.`, uxpLines));
+// The next (unreleased) Premiere, as a diff against the installed one: what to plan for, not use.
+if (preview) {
+  const sigs = (entries) => new Map(entries.map((e) => [`${e.owner}.${e.name}`, e]));
+  const now = sigs(pproEntries), next = sigs(collect(typingsFile(preview.package, preview.version), "premierepro"));
+  const rows = [];
+  for (const [k, e] of next) {
+    if (!now.has(k)) rows.push(line(e, ["ADDED"]));
+    else if (now.get(k).sig !== e.sig) rows.push(`${line(e, ["CHANGED"])}  (was ${k}${now.get(k).sig})`);
+  }
+  for (const [k, e] of now) if (!next.has(k)) rows.push(line(e, ["REMOVED"]));
+  rows.sort((a, b) => a.localeCompare(b));
+  fs.writeFileSync(path.join(apiDir, "premierepro-preview.txt"), header(
+    `Premiere Pro UXP API changes in @adobe/premierepro ${preview.version} (NOT installed) vs ${pv}. Plan for these; check-api rejects ADDED names until the pin moves.`, rows));
+  console.log(`index    api/premierepro-preview.txt (${rows.length} changes, ${preview.version} vs ${pv})`);
+}
 console.log(`index    api/premierepro.txt (${pproLines.length} members), api/uxp.txt (${uxpLines.length} members)`);
