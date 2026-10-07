@@ -195,13 +195,13 @@ shortcut or command. Two processes matter: the Thai transcription pipeline + web
 - status: proven @ 2ad7576 for the refusal path only (VERIFY.md live run 2026-09-28); success path on a real selection unproven
 
 ## Agent tools (MCP)
-- what: Expose CutDeck to agents over MCP stdio: transcribe, rough_cut, job polling, and the `premiere_*` live commands.
+- what: Expose CutDeck to agents over MCP stdio: transcribe, rough_cut (from an XML file), `premiere_rough_cut` (the live sequence, no XML: panel read -> `prepare` -> `start`, then `premiere_apply_cuts`), job polling, and the `premiere_*` live commands.
 - cli: `python scripts/start_cutdeck_mcp.py` @ scripts/start_cutdeck_mcp.py :: cutdeck.mcp_server
 - cli: `python -m cutdeck.mcp_server` @ cutdeck/mcp_server.py :: --port
 - trace: `main` @ cutdeck/mcp_server.py > `create_server` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `_ask` @ cutdeck/ai_backend.py
 - needs: helper running; the panel open for `premiere_*` tools
 - verify: CutDeck helper
-- status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started
+- status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started. `premiere_rough_cut` proven against a real helper with a stubbed panel read (tests/test_cutdeck_mcp_backend.py, 2026-10-07); not run against live Premiere
 
 ## Live Premiere CLI
 - what: Send one live command (status, read_sequence, apply_cuts, add_markers, run_probe, inspect_selection, transform/anchor/align/distribute) to the panel through the helper.

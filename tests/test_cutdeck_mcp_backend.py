@@ -316,3 +316,61 @@ def test_failed_worker_is_a_structured_failure_with_error(tmp_path, monkeypatch)
         await backend.transcribe(str(media))  # and a new job is accepted
 
     asyncio.run(_with_helper(jobs, body))
+
+
+def _live_capture():
+    """What the panel's `read_audio_range` returns: the exact input of the helper's `prepare`."""
+    return {"context": {"project_id": "project", "sequence_id": "sequence", "sequence_name": "Live",
+                        "in_ticks": "0", "out_ticks": "30", "end_ticks": "300", "ticks_per_frame": "1",
+                        "audio_track_count": 1, "project_path": "C:/p/live.prproj"},
+            "sequence": {"ticks_per_frame": "1", "end_ticks": "300", "audio_tracks": [
+                {"enabled": True, "clips": [{"path": "C:/media/clip.wav", "enabled": True,
+                                             "start_ticks": "0", "in_ticks": "0", "out_ticks": "300"}]}]}}
+
+
+def test_premiere_rough_cut_cuts_the_live_sequence_without_an_xml_file(tmp_path, monkeypatch):
+    jobs = _serve(tmp_path / "jobs", monkeypatch)
+    started = []
+
+    async def stub_exec(*args, **kwargs):
+        started.append(args)
+        raise OSError("worker unavailable")  # the job fails after start; start itself is what we test
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", stub_exec)
+
+    async def body(backend):
+        asked = []
+
+        async def premiere(command, args=None):
+            asked.append(command)
+            return _live_capture()
+        backend.premiere = premiere
+        view = await backend.premiere_rough_cut(speech_protection=False, preset="standard", audio_track=0)
+        assert asked == ["read_audio_range"]
+        assert view["kind"] == "rough_cut" and view["state"] == "running"
+        job = await jobs.dispatch({"type": "status", "job_id": view["job_id"]})
+        # prepare got the panel's own read: the job names the live sequence, the panel can apply it.
+        assert job["context"]["sequence_id"] == "sequence" and job["output"] == "native"
+        assert job["preset"] == "standard" and job["context"]["asr"] is False
+        await asyncio.gather(*jobs.tasks)
+
+    asyncio.run(_with_helper(jobs, body))
+    assert started
+
+
+def test_premiere_rough_cut_rejects_a_bad_preset_before_claiming_a_job(tmp_path, monkeypatch):
+    jobs = _serve(tmp_path / "jobs", monkeypatch)
+
+    async def body(backend):
+        async def premiere(command, args=None):
+            return _live_capture()
+        backend.premiere = premiere
+        with pytest.raises(ValueError, match="preset"):
+            await backend.premiere_rough_cut(preset="fast")
+        assert jobs.jobs == {}
+
+    asyncio.run(_with_helper(jobs, body))
+
+
+def test_capabilities_lists_the_live_rough_cut_tool():
+    assert "premiere_rough_cut" in Backend(1).capabilities()["tools"]

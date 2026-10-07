@@ -38,7 +38,7 @@ class Backend:
 
     def capabilities(self) -> dict:
         return {
-            "version": "3", "tools": ["transcribe", "rough_cut", "premiere_status",
+            "version": "3", "tools": ["transcribe", "rough_cut", "premiere_status", "premiere_rough_cut",
                                       *(f"premiere_{name}" for name in COMMANDS)],
             "live_premiere_control": True,
             "live_premiere_requires": "The CutDeck panel open in Premiere (premiere_status says)",
@@ -86,6 +86,16 @@ class Backend:
             "type": "submit_rough_cut", "sequence_xml": sequence_xml,
             "speech_protection": speech_protection, "preset": preset, "audio_track": audio_track,
             "start_frame": start_frame, "end_frame": end_frame}))
+
+    async def premiere_rough_cut(self, speech_protection: bool = True, preset: str = "standard",
+                                 audio_track: int | None = None) -> dict:
+        """Start a rough cut of the ACTIVE Premiere sequence's In/Out range, with no XML export:
+        the panel's own read of the audio tracks goes to the helper's `prepare`, exactly as the
+        panel's Rough Cut button does. The job is the panel's kind, so premiere_apply_cuts applies it."""
+        capture = await self.premiere("read_audio_range")
+        job = await self._ask({"type": "prepare", **capture["context"], "audio_track": audio_track,
+                               "asr": speech_protection, "preset": preset, "sequence": capture["sequence"]})
+        return self._view(await self._ask({"type": "start", "job_id": job["job_id"]}))
 
     async def status(self, job_id: str) -> dict:
         if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id):
