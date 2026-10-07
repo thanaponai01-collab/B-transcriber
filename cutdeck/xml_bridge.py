@@ -26,7 +26,7 @@ import uuid
 from xml.etree import ElementTree as ET
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
-from cutdeck import frame_bounds, sequence_model, text_properties
+from cutdeck import frame_bounds, sequence_model
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, XmlRecutRefusal
 
@@ -232,8 +232,6 @@ class XmlJobs:
         "submit_transcribe": "_on_submit_transcribe",
         "plan_sync": "_on_plan_sync",
         "frame_bounds": "_on_frame_bounds",
-        "measure_text": "_on_measure_text",
-        "text_properties": "_on_text_properties",
         "submit_rough_cut": "_on_submit_rough_cut",
     }
 
@@ -351,20 +349,6 @@ class XmlJobs:
         # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
         # thread, so other clients are answered while the PNGs are compared.
         return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
-
-    async def _on_measure_text(self, req: dict, client: Client | None) -> dict:
-        text = req.get("text", "")
-        font = req.get("font_name", "")
-        size = float(req.get("font_size", 100.0))
-        scale_x = float(req.get("scale_x", 100.0))
-        scale_y = float(req.get("scale_y", 100.0))
-        bounds = text_properties.measure_text_bounds(text, font, size, scale_x, scale_y)
-        return {"bounds": bounds}
-
-    async def _on_text_properties(self, req: dict, client: Client | None) -> dict:
-        project_path = _input_file(req.get("project_path"), ".prproj")
-        texts = await asyncio.to_thread(text_properties.extract_project_text_properties, project_path)
-        return {"texts": texts}
 
     async def _on_submit_rough_cut(self, req: dict, client: Client | None) -> dict:
         arguments = _rough_cut_arguments(req)
