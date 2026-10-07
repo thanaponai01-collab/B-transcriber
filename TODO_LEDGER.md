@@ -32,6 +32,15 @@ Gaps: gap closing only moves cue ends, so BER is identical for every `cue_max_cl
 `cue_max_close_gap_ms: 600` is BER-neutral by construction, would remove those; not applied
 (trades cue-linger for gaplessness; needs the user's call, then a harness run for the record).
 
+## cue_max_close_gap_ms 200 -> 600 — ACTIVATED — 2026-10-07
+
+From the segmentation replay over 13 hand-recut SRTs (`tools/replay_segmentation.py`): the recuts have
+10 gaps in 510 cues (short pool) while output had 31 gaps of 219-520 ms. Gap closing only extends the
+earlier cue's end, so it cannot change cue-start metrics. Harness (production run, gated vs
+`eval_run.id=72`) = `eval_run.id=73`: `cer_thai` 0.1276, `wer_latin` 0.6774, BER 0.4776, `cue_BER` 0.3550
+all identical (paired deltas exactly 0), `overlapping_cues` 0, `nonzero_gap_count` 43 -> 17,
+status pass. Cost: cues can stay on screen up to 600 ms longer than the speech.
+
 ## Window-seam interleaving fixed (cut_seams) — ACCEPTED with unresolved BER/cue_BER dips — 2026-10-07
 
 Defect (found diagnosing D5 `cer_thai`): a pause-free span over 25 s is decoded as overlapping

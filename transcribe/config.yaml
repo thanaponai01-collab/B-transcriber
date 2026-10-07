@@ -236,7 +236,10 @@ silence_drop_max_confidence: 0.5
 # always de-overlapped and clamped; this only tunes gap closing. A gap this short
 # is timestamp noise, not a pause, and it makes burned-in subtitles flicker off
 # and back on — hand-cut reference SRTs are gapless. 0 disables gap closing.
-cue_max_close_gap_ms: 200
+# 600 (was 200), 2026-10-07: replay over 13 hand-recut SRTs showed the recuts keep
+# only 10 gaps in 510 cues while output had 31 gaps of 219-520 ms. Moves cue ends
+# only, so cue-start metrics are unchanged; cues may linger up to 600 ms longer.
+cue_max_close_gap_ms: 600
 
 # Evaluation
 boundary_tol_ms: 300   # switch-point match tolerance (see eval/README.md)
