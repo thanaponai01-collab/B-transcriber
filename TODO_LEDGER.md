@@ -1,5 +1,37 @@
 # TODO_LEDGER
 
+## Segmentation replay vs 13 Premiere recuts — executed 2026-10-07
+
+`python -m tools.replay_segmentation [--grid KEY=V1,V2 ...]` (GPU-free; test `tests/test_replay_segmentation.py`).
+Replays cached Engine A raw words (latest job per media path) through `split_cues` + `conform_cues`
+and scores cue starts vs each `*mine*.srt` at 300 ms (same matcher as `cue_boundary_error_rate`).
+Replay matches stored tokens exactly for jobs 35/38 (jobs 44/29 predate later splitter changes).
+Excerpt recuts (hon 3 min, pud trim down2) score only the hyp cues inside the recut's time span.
+Text check: whitespace-stripped cue text is compared with baseline for every candidate; none changed.
+
+Baseline (config.yaml: target_chars 42, max_ms 4000, gap_ms 700, close-gap 200, greedy):
+
+| Pool | ref cues | hyp cues | cue_BER (1-F1) | macro BER | non-zero gaps |
+|---|---|---|---|---|---|
+| ALL 13 | 2941 | 2952 | 0.2605 | 0.1932 | 463 |
+| SHORT (11 clips, <=500 ref cues) | 510 | 447 | 0.1808 | 0.1818 | 47 |
+
+Per clip BER: CFD92 S1-4 .020/.194/.250/.520; CFD93 S1-4 .040/.217/.184/.080; CFD95 .197;
+hon .096; pud trim down .043 (full episode, 1119 cues, near-unedited), down2 .202; Bangkok .468.
+Hyp duration p50/p90 1.76/3.1 s, chars p50/p90 23/42 (SHORT).
+
+Sweeps (900 combos: target_chars 20-52, max_ms 2600-5000, gap_ms 400-900, space_min_chars 6-12,
+space_min_ms 300-700): **no winner.** Shrinking target_chars/max_ms is monotonically worse (36 chars:
+SHORT 0.2156; max_ms 3500: 0.1867) — more cues, but at the wrong places. Best is gap_ms 600:
+SHORT 0.1783 vs 0.1808 (-0.0025, ~1 cue of 510; not distinguishable from noise). Nothing sent to the
+harness; config.yaml unchanged. The under-segmentation (447 vs 510) is not fixed by size knobs.
+
+Gaps: gap closing only moves cue ends, so BER is identical for every `cue_max_close_gap_ms`
+(0/400/600/800 -> 1773/254/180/130 gaps ALL). The recuts have only 10 gaps in 510 SHORT cues
+(260, then >=620 ms); the hyp has 31 gaps of 219-520 ms the user would have closed. Candidate
+`cue_max_close_gap_ms: 600` is BER-neutral by construction, would remove those; not applied
+(trades cue-linger for gaplessness; needs the user's call, then a harness run for the record).
+
 ## Gold-set data fixes + re-baseline — executed 2026-10-07
 
 Two defects found reading `eval_run.id=65` per clip. Reference text only; no metric definition
