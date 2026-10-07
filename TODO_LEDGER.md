@@ -32,6 +32,33 @@ Gaps: gap closing only moves cue ends, so BER is identical for every `cue_max_cl
 `cue_max_close_gap_ms: 600` is BER-neutral by construction, would remove those; not applied
 (trades cue-linger for gaplessness; needs the user's call, then a harness run for the record).
 
+## Window-seam interleaving fixed (cut_seams) — ACCEPTED with unresolved BER/cue_BER dips — 2026-10-07
+
+Defect (found diagnosing D5 `cer_thai`): a pause-free span over 25 s is decoded as overlapping
+windows (`_LONG_SPAN_SAFE_S` 25 s, overlap 4 s). In the overlap the two decodes split the same speech
+differently and token-level `stitch()` kept pieces of both (`เขาไม่ได้` -> `เขไม่าได้`,
+`AMD` -> `AMdD`, `ออกมา` -> `ออกอกมา`). Second fault found while testing: a window that drops its last
+seconds stretches its final token over the gap (19.5-25.0 s on the Wealthy clip), so a naive seam at
+that token's fake end discarded the next window's real words.
+
+Fix: `stitch.cut_seams` gives each window one side of every seam, placed on a boundary both decodes
+share (nearest the overlap midpoint), never past/behind a token longer than 1.5 s. Opt-in via
+`decode_windows(cut_seams=True)`; only `faster_whisper.py`'s long-span path uses it, the ingest-chunk
+path (<1 s overlap) is unchanged. Tests: `tests/test_stitch_window_cut.py` (6).
+
+Harness, experiment vs `eval_run.id=69`: `cer_thai` 0.1356 -> 0.1276 (**confirmed improvement**, delta
+CI [-0.0125,-0.0034]; better on all 7 clips whose output changed); `wer_latin` 0.6882 -> 0.6774;
+`boundary_error_rate` 0.4521 -> 0.4776 and `cue_boundary_error_rate` 0.3292 -> 0.3550 were
+**UNRESOLVED** point-estimate worsenings (delta CIs [0, +0.037] and [-0.0006, +0.053]), so the gate
+said passed=False. Read on the Wealthy clip: output is cleaner and loses no speech; the lower matched
+counts come from garbled Latin fragments (`mic โคร rosoft`, `as เอเอส m`) that used to coincide with
+reference switch points and cue starts.
+
+**Decision (user, 2026-10-07): accept.** Baseline re-established with `--establish-baseline` as
+`eval_run.id=72` (`cer_thai` 0.1276, `wer_latin` 0.6774, BER 0.4776, `cue_BER` 0.3550). This accepts two
+unresolved dips knowingly; it is not a claim that BER/cue_BER improved. Re-check them when the gold set
+grows (needs a noisy clip). Unrelated: `tests/test_cutdeck_panel_wire.py` fails with and without this change.
+
 ## Gold-set data fixes + re-baseline — executed 2026-10-07
 
 Two defects found reading `eval_run.id=65` per clip. Reference text only; no metric definition

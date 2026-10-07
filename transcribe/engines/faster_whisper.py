@@ -519,7 +519,8 @@ class FasterWhisperEngine(Engine):
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
                         run[0].start_s, run[-1].end_s, len(run_windows))
             for tok in decode_windows(run_windows, decode_fn,
-                                       seam_window_ms=int(self._window_policy.overlap_s * 1000)):
+                                       seam_window_ms=int(self._window_policy.overlap_s * 1000),
+                                       cut_seams=True):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])

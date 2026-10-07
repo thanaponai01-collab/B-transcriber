@@ -196,6 +196,61 @@ def _interiority(tok: RecognizedToken, chunk_start: int, chunk_end: int) -> int:
     return min(center - chunk_start, chunk_end - center)
 
 
+# Two windows decoding the same overlap split it into differently-shaped
+# tokens ('เขาไม่'+'ได้' vs 'เขา'+'ไม่ได้'). stitch() pairs duplicates one token at
+# a time, so pieces of BOTH decodes survive and interleave ('เขไม่าได้'). For
+# overlapping decode windows, each window instead owns one side of a seam; the
+# seam sits on a boundary both decodes have, so neither word is cut in half.
+_SEAM_BOUNDARY_TOL_MS = 120
+_MAX_PIECE_MS = 1500  # a single token longer than this is a stretched/lost-audio token
+
+
+def _seam_between(a: ChunkTokens, b: ChunkTokens, tol_ms: int) -> int | None:
+    """Seam time inside the overlap of consecutive chunks a, b, or None if they
+    do not overlap. Prefers a boundary of a that b also has (within tol_ms),
+    nearest the overlap midpoint, so both windows are far from their own edges."""
+    lo, hi = b.start_ms, a.end_ms
+    if hi <= lo:
+        return None
+    # A decode that dropped part of its window leaves a token stretched over the
+    # missing audio (sub-word pieces are 20-80 ms). Neither window can own
+    # speech past/behind such a token, so the seam may not cross it.
+    a_stretch = [t.start_ms for t in a.tokens if t.end_ms > lo and t.end_ms - t.start_ms > _MAX_PIECE_MS]
+    b_stretch = [t.end_ms for t in b.tokens if t.start_ms < hi and t.end_ms - t.start_ms > _MAX_PIECE_MS]
+    if a_stretch:
+        hi = max(lo, min(hi, min(a_stretch)))
+    if b_stretch:
+        lo = min(hi, max(lo, max(b_stretch)))
+    mid = (lo + hi) // 2
+    a_bounds = sorted({t.end_ms for t in a.tokens if lo <= t.end_ms <= hi})
+    b_bounds = [x for t in b.tokens for x in (t.start_ms, t.end_ms) if lo <= x <= hi]
+    shared = [x for x in a_bounds if any(abs(x - y) <= tol_ms for y in b_bounds)]
+    pool = shared or a_bounds
+    return min(pool, key=lambda x: abs(x - mid)) if pool else mid
+
+
+def cut_seams(chunks: list[ChunkTokens], tol_ms: int = _SEAM_BOUNDARY_TOL_MS) -> list[ChunkTokens]:
+    """Trim consecutive overlapping chunks so each token is owned by one chunk.
+
+    A chunk keeps tokens whose centre lies between its two seams (the left seam
+    with the previous chunk, the right seam with the next). Non-overlapping
+    neighbours get no seam, so their tokens are untouched. Returns new
+    ChunkTokens; the inputs are not modified. Run ``stitch`` on the result to
+    mop up any token that still straddles a seam."""
+    order = sorted(range(len(chunks)), key=lambda i: chunks[i].start_ms)
+    seams = [_seam_between(chunks[order[k]], chunks[order[k + 1]], tol_ms)
+             for k in range(len(order) - 1)]
+    out: list[ChunkTokens | None] = [None] * len(chunks)
+    for k, i in enumerate(order):
+        left = seams[k - 1] if k > 0 else None
+        right = seams[k] if k < len(seams) else None
+        keep = [t for t in chunks[i].tokens
+                if (left is None or (t.start_ms + t.end_ms) / 2 >= left)
+                and (right is None or (t.start_ms + t.end_ms) / 2 < right)]
+        out[i] = ChunkTokens(keep, chunks[i].start_ms, chunks[i].end_ms)
+    return out  # type: ignore[return-value]
+
+
 def stitch(chunks: list[ChunkTokens], iou_threshold: float = 0.5,
            seam_window_ms: int = 1000) -> list[RecognizedToken]:
     """Merge per-chunk token streams, dropping duplicates in overlap windows.
