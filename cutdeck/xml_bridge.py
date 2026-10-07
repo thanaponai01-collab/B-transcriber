@@ -219,114 +219,31 @@ class XmlJobs:
         self.driver_commands: list[str] = []
         self.calls: dict[str, tuple[Client, asyncio.Future]] = {}
 
+    # Request type -> the method that answers it. Requests not listed here address an existing job
+    # (`status`, `start`) and are answered at the end of `dispatch` once the job is found.
+    _HANDLERS = {
+        "hello": "_on_hello",
+        "restart": "_on_restart",
+        "register_driver": "_on_register_driver",
+        "premiere_status": "_on_premiere_status",
+        "premiere": "_on_premiere",
+        "watch": "_on_watch",
+        "prepare": "_on_prepare",
+        "submit_transcribe": "_on_submit_transcribe",
+        "plan_sync": "_on_plan_sync",
+        "frame_bounds": "_on_frame_bounds",
+        "measure_text": "_on_measure_text",
+        "text_properties": "_on_text_properties",
+        "submit_rough_cut": "_on_submit_rough_cut",
+    }
+
     async def dispatch(self, req: dict, client: Client | None = None) -> dict:
         if not isinstance(req, dict):
             raise ValueError("Expected an object")
         kind = req.get("type")
-        if kind == "hello":
-            if req.get("version") != VERSION:
-                raise VersionMismatch()
-            return {"version": VERSION, "pid": os.getpid()}
-        if kind == "restart":
-            # The panel asks on every start so edited helper code is picked up. A running job's
-            # child would be orphaned, so never while one runs.
-            if self.active or self.cpu_active:
-                raise ValueError("CutDeck is processing a job; it restarts once that finishes")
-            self.restarting = True
-            return {"restarting": True}
-        if kind == "register_driver":
-            if client is None:
-                raise ValueError("Only a connected panel can be the Premiere driver")
-            commands = req.get("commands")
-            if not isinstance(commands, list) or not set(commands) <= set(COMMANDS):
-                raise ValueError("Unknown driver commands")
-            self.driver, self.driver_commands = client, list(commands)
-            print(f"driver registered: {', '.join(commands)}", flush=True)
-            return {"registered": True}
-        if kind == "premiere_status":
-            return {"connected": self.driver is not None, "commands": list(self.driver_commands)}
-        if kind == "premiere":
-            return {"result": await self._call_driver(req)}
-        if kind == "watch":
-            job = self._job(req.get("job_id"))
-            if client is not None and job["state"] not in TERMINAL_STATES:
-                self.watchers.setdefault(job["job_id"], set()).add(client)
-            return dict(job)
-        if kind == "prepare":
-            # Everything is checked before a job folder is claimed: a refused prepare leaves nothing.
-            context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count",
-                            "in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
-            context = {key: req.get(key) for key in context_keys}
-            if not all(isinstance(context[k], str) and context[k] for k in
-                       ("project_id", "sequence_id", "sequence_name")):
-                raise ValueError("Missing source project or sequence identity")
-            track = context["audio_track"]
-            if track is not None and (type(track) is not int or track < 0):
-                raise ValueError("Audio track must be a non-negative index")
-            if type(context["asr"]) is not bool:
-                raise ValueError("Speech protection must be true or false")
-            preset = req.get("preset", "standard")
-            if preset not in {"aggressive", "standard"}:
-                raise ValueError("preset must be aggressive or standard")
-            # The panel's native read of the audio tracks, instead of an XML export (move 6).
-            sequence_model.from_panel_json(req.get("sequence"))
-            job_id, folder = self._allocate()
-            (folder / "sequence.json").write_text(json.dumps(req["sequence"]), encoding="utf-8")
-            job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
-                   "preset": preset,
-                   "source_path": str(folder / "sequence.json"),
-                   "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
-                   "log_path": str(folder / "process.log"),
-                   # The panel cuts natively from this list; the XML output route is retired
-                   # for the panel (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
-                   "output": "native"}
-            self.jobs[job_id] = job
-            self._save(job)
-            return dict(job)
-        if kind == "submit_transcribe":
-            media = _input_file(req.get("media_path"))
-            job_id, folder = self._allocate()
-            job = {"job_id": job_id, "job_type": "transcribe", "kind": "transcribe",
-                   "state": "running", "arguments": {"media_path": media},
-                   "result_path": str(folder / "result.json"),
-                   "log_path": str(folder / "process.log")}
-            return self._launch(job, self._run_transcribe(job))
-        if kind == "plan_sync":
-            clips = _plan_sync_clips(req)
-            job_id, folder = self._allocate("cpu")
-            job = {"job_id": job_id, "job_type": "plan_sync", "state": "running",
-                   "clips": [{"id": c.id, "path": str(c.path), "duration_s": c.duration_s} for c in clips],
-                   "progress": {"pct": 0, "stage": "Reading audio"}}
-            return self._launch(job, self._run_plan_sync(job, clips), "cpu")
-        if kind == "frame_bounds":
-            # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
-            # thread, so other clients are answered while the PNGs are compared.
-            return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
-        if kind == "measure_text":
-            text = req.get("text", "")
-            font = req.get("font_name", "")
-            size = float(req.get("font_size", 100.0))
-            scale_x = float(req.get("scale_x", 100.0))
-            scale_y = float(req.get("scale_y", 100.0))
-            bounds = text_properties.measure_text_bounds(text, font, size, scale_x, scale_y)
-            return {"bounds": bounds}
-        if kind == "text_properties":
-            project_path = _input_file(req.get("project_path"), ".prproj")
-            texts = await asyncio.to_thread(text_properties.extract_project_text_properties, project_path)
-            return {"texts": texts}
-        if kind == "submit_rough_cut":
-            arguments = _rough_cut_arguments(req)
-            job_id, folder = self._allocate()
-            job = {"job_id": job_id, "job_type": "cut", "kind": "rough_cut", "output": "native",
-                   "state": "running", "arguments": arguments,
-                   "context": {"asr": arguments["speech_protection"]},
-                   "preset": arguments["preset"],
-                   "source_path": arguments["sequence_xml"],
-                   "reference_track": arguments["audio_track"],
-                   "log_path": str(folder / "process.log")}
-            if arguments["start_frame"] is not None:
-                job["range_frames"] = [arguments["start_frame"], arguments["end_frame"]]
-            return self._launch(job, self._run(job))
+        handler = self._HANDLERS.get(kind)
+        if handler is not None:
+            return await getattr(self, handler)(req, client)
         job = self._job(req.get("job_id"))
         if kind == "status":
             return dict(job)
@@ -345,6 +262,123 @@ class XmlJobs:
                 self._save(job)
                 return dict(job)
         raise ValueError("Unknown request type")
+
+    async def _on_hello(self, req: dict, client: Client | None) -> dict:
+        if req.get("version") != VERSION:
+            raise VersionMismatch()
+        return {"version": VERSION, "pid": os.getpid()}
+
+    async def _on_restart(self, req: dict, client: Client | None) -> dict:
+        # The panel asks on every start so edited helper code is picked up. A running job's
+        # child would be orphaned, so never while one runs.
+        if self.active or self.cpu_active:
+            raise ValueError("CutDeck is processing a job; it restarts once that finishes")
+        self.restarting = True
+        return {"restarting": True}
+
+    async def _on_register_driver(self, req: dict, client: Client | None) -> dict:
+        if client is None:
+            raise ValueError("Only a connected panel can be the Premiere driver")
+        commands = req.get("commands")
+        if not isinstance(commands, list) or not set(commands) <= set(COMMANDS):
+            raise ValueError("Unknown driver commands")
+        self.driver, self.driver_commands = client, list(commands)
+        print(f"driver registered: {', '.join(commands)}", flush=True)
+        return {"registered": True}
+
+    async def _on_premiere_status(self, req: dict, client: Client | None) -> dict:
+        return {"connected": self.driver is not None, "commands": list(self.driver_commands)}
+
+    async def _on_premiere(self, req: dict, client: Client | None) -> dict:
+        return {"result": await self._call_driver(req)}
+
+    async def _on_watch(self, req: dict, client: Client | None) -> dict:
+        job = self._job(req.get("job_id"))
+        if client is not None and job["state"] not in TERMINAL_STATES:
+            self.watchers.setdefault(job["job_id"], set()).add(client)
+        return dict(job)
+
+    async def _on_prepare(self, req: dict, client: Client | None) -> dict:
+        # Everything is checked before a job folder is claimed: a refused prepare leaves nothing.
+        context_keys = ("project_id", "sequence_id", "sequence_name", "audio_track", "audio_track_count",
+                        "in_ticks", "out_ticks", "end_ticks", "ticks_per_frame", "asr")
+        context = {key: req.get(key) for key in context_keys}
+        if not all(isinstance(context[k], str) and context[k] for k in
+                   ("project_id", "sequence_id", "sequence_name")):
+            raise ValueError("Missing source project or sequence identity")
+        track = context["audio_track"]
+        if track is not None and (type(track) is not int or track < 0):
+            raise ValueError("Audio track must be a non-negative index")
+        if type(context["asr"]) is not bool:
+            raise ValueError("Speech protection must be true or false")
+        preset = req.get("preset", "standard")
+        if preset not in {"aggressive", "standard"}:
+            raise ValueError("preset must be aggressive or standard")
+        # The panel's native read of the audio tracks, instead of an XML export (move 6).
+        sequence_model.from_panel_json(req.get("sequence"))
+        job_id, folder = self._allocate()
+        (folder / "sequence.json").write_text(json.dumps(req["sequence"]), encoding="utf-8")
+        job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
+               "preset": preset,
+               "source_path": str(folder / "sequence.json"),
+               "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
+               "log_path": str(folder / "process.log"),
+               # The panel cuts natively from this list; the XML output route is retired
+               # for the panel (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
+               "output": "native"}
+        self.jobs[job_id] = job
+        self._save(job)
+        return dict(job)
+
+    async def _on_submit_transcribe(self, req: dict, client: Client | None) -> dict:
+        media = _input_file(req.get("media_path"))
+        job_id, folder = self._allocate()
+        job = {"job_id": job_id, "job_type": "transcribe", "kind": "transcribe",
+               "state": "running", "arguments": {"media_path": media},
+               "result_path": str(folder / "result.json"),
+               "log_path": str(folder / "process.log")}
+        return self._launch(job, self._run_transcribe(job))
+
+    async def _on_plan_sync(self, req: dict, client: Client | None) -> dict:
+        clips = _plan_sync_clips(req)
+        job_id, folder = self._allocate("cpu")
+        job = {"job_id": job_id, "job_type": "plan_sync", "state": "running",
+               "clips": [{"id": c.id, "path": str(c.path), "duration_s": c.duration_s} for c in clips],
+               "progress": {"pct": 0, "stage": "Reading audio"}}
+        return self._launch(job, self._run_plan_sync(job, clips), "cpu")
+
+    async def _on_frame_bounds(self, req: dict, client: Client | None) -> dict:
+        # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
+        # thread, so other clients are answered while the PNGs are compared.
+        return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
+
+    async def _on_measure_text(self, req: dict, client: Client | None) -> dict:
+        text = req.get("text", "")
+        font = req.get("font_name", "")
+        size = float(req.get("font_size", 100.0))
+        scale_x = float(req.get("scale_x", 100.0))
+        scale_y = float(req.get("scale_y", 100.0))
+        bounds = text_properties.measure_text_bounds(text, font, size, scale_x, scale_y)
+        return {"bounds": bounds}
+
+    async def _on_text_properties(self, req: dict, client: Client | None) -> dict:
+        project_path = _input_file(req.get("project_path"), ".prproj")
+        texts = await asyncio.to_thread(text_properties.extract_project_text_properties, project_path)
+        return {"texts": texts}
+
+    async def _on_submit_rough_cut(self, req: dict, client: Client | None) -> dict:
+        arguments = _rough_cut_arguments(req)
+        job_id, folder = self._allocate()
+        job = {"job_id": job_id, "job_type": "cut", "kind": "rough_cut", "output": "native",
+               "state": "running", "arguments": arguments,
+               "context": {"asr": arguments["speech_protection"]},
+               "preset": arguments["preset"],
+               "source_path": arguments["sequence_xml"],
+               "reference_track": arguments["audio_track"],
+               "log_path": str(folder / "process.log")}
+        if arguments["start_frame"] is not None:
+            job["range_frames"] = [arguments["start_frame"], arguments["end_frame"]]
+        return self._launch(job, self._run(job))
 
     def _start(self, job: dict, sequence: Sequence) -> dict:
         start, end = range_from_ticks(sequence, job["context"])
