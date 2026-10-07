@@ -4,10 +4,11 @@
 # change, everything else (engines, normalization, reconciler, ...) still
 # comes from the base config.
 vad_min_silence_ms: 300
-rms_gate_min_gap_ms: 150
+rms_gate_min_gap_ms: 250
 cut:
-  min_silence_ms: 120
-  min_clip_ms: 500
-  max_dissolve_ms: 300
-  pad_pre_ms: 30
-  pad_post_ms: 15
+  min_silence_ms: 200
+  min_clip_ms: 400
+  max_dissolve_ms: 1000
+  pad_pre_ms: 80
+  pad_post_ms: 50
+

@@ -131,7 +131,11 @@ function createRoughCutFeature({
       ppro,
       rpc,
       snap,
-      { audio_track: ctl.state.audioTrack, asr: ctl.state.cutMode === "protected" },
+      {
+        audio_track: ctl.state.audioTrack,
+        asr: ctl.state.cutMode === "protected",
+        preset: ctl.state.cutPreset || "standard",
+      },
       save
     );
     await follow(job);
@@ -175,6 +179,10 @@ function createRoughCutFeature({
     onDismissJob: () => ctl.act(doDismiss),
     onCutMode: (mode) => {
       ctl.state.cutMode = mode;
+      ctl.render();
+    },
+    onCutPreset: (preset) => {
+      ctl.state.cutPreset = preset;
       ctl.render();
     },
     // Exposed helpers

@@ -39,7 +39,7 @@ _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 
 
 def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | None = None,
                     range_start_frame: int | None = None, range_end_frame: int | None = None,
-                    pad_seconds: float = 2.0) -> str:
+                    pad_seconds: float = 2.0, sample_rate: int = _WORKING_SAMPLE_RATE) -> str:
     """Build a sequence-timeline mono WAV from the sequence's own clips +
     source media, writing it to ``out_wav``. Returns ``out_wav``.
 
@@ -67,7 +67,7 @@ def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | N
                                          pad_seconds)
     win_lo_s = float(Fraction(lo_f * tb.fps_den, tb.fps_num))
     win_hi_s = float(Fraction(hi_f * tb.fps_den, tb.fps_num))
-    total_samples = int(round((win_hi_s - win_lo_s) * _WORKING_SAMPLE_RATE))
+    total_samples = int(round((win_hi_s - win_lo_s) * sample_rate))
 
     track = sequence.reference_track(audio_track_index)
 
@@ -94,11 +94,11 @@ def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | N
             start_s = keep_lo
 
         seg_audio = extract_mono_audio(src_path, start_s=in_s, duration_s=out_s - in_s,
-                                       sample_rate=_WORKING_SAMPLE_RATE)
-        offset = int(round((start_s - win_lo_s) * _WORKING_SAMPLE_RATE))
+                                       sample_rate=sample_rate)
+        offset = int(round((start_s - win_lo_s) * sample_rate))
         end = min(offset + len(seg_audio), total_samples)
         if end > offset:
             buffer[offset:end] = seg_audio[: end - offset]
 
-    sf.write(out_wav, buffer, _WORKING_SAMPLE_RATE)
+    sf.write(out_wav, buffer, sample_rate)
     return out_wav

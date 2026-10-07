@@ -638,6 +638,7 @@ def main(argv: list[str] | None = None) -> int:
             seq, extracted_tmp.name, args.audio_track,
             range_start_frame=frame_range[0] if frame_range else None,
             range_end_frame=frame_range[1] if frame_range else None,
+            sample_rate=16000,
         )
         if frame_range:
             window = range_window_frames(tb, seq_frames, frame_range)

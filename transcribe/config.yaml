@@ -326,8 +326,8 @@ flywheel:
 # rules pass turns on after the first eval baseline.
 cut:
   min_silence_ms: 250       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
-  pad_pre_ms: 50            # kept pre-roll before speech (attack matters most; tightened 2026-08-03: was 80)
-  pad_post_ms: 25           # kept post-roll after speech (tightened 2026-08-03: was 40)
+  pad_pre_ms: 80            # kept pre-roll before speech (attack matters most; 80ms avoids clipping initial consonants)
+  pad_post_ms: 50           # kept post-roll after speech (50ms avoids clipping trailing vowels)
   min_clip_ms: 1200         # kept clips shorter than this merge into a neighbor
   max_dissolve_ms: 4000     # cap on dead air a merge may re-admit; longer cuts
                              # get their too-short neighbor dropped instead (bug

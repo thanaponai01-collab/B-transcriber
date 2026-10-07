@@ -174,7 +174,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   for (const [key, at] of edges) for (const p of at) cutAt.push([key, p]);
   seq = null;
   for (let from = 0; from < cutAt.length; from += SPLIT_BATCH) {
-    seq = await read();
+    seq = await read({ inPoint: false });
     const fillers = new Map();
     const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
       if (!fillers.has(key)) {

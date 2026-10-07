@@ -265,11 +265,15 @@ class XmlJobs:
                 raise ValueError("Audio track must be a non-negative index")
             if type(context["asr"]) is not bool:
                 raise ValueError("Speech protection must be true or false")
+            preset = req.get("preset", "standard")
+            if preset not in {"aggressive", "standard"}:
+                raise ValueError("preset must be aggressive or standard")
             # The panel's native read of the audio tracks, instead of an XML export (move 6).
             sequence_model.from_panel_json(req.get("sequence"))
             job_id, folder = self._allocate()
             (folder / "sequence.json").write_text(json.dumps(req["sequence"]), encoding="utf-8")
             job = {"job_id": job_id, "job_type": "cut", "state": "prepared", "context": context,
+                   "preset": preset,
                    "source_path": str(folder / "sequence.json"),
                    "result_name": f"{context['sequence_name']} — CutDeck {job_id[:8]}",
                    "log_path": str(folder / "process.log"),
@@ -465,7 +469,7 @@ class XmlJobs:
             args = [sys.executable, "-u", "-m", "cutdeck.xml_recut", job["source_path"],
                     "--cuts-json", str(cuts_path),
                     "--config", str(ROOT / "transcribe/config.yaml"), "--no-save-plan"]
-            if job.get("preset", "aggressive") == "aggressive":
+            if job.get("preset", "standard") == "aggressive":
                 args += ["--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")]
             if "range_frames" in job:
                 start, end = job["range_frames"]
