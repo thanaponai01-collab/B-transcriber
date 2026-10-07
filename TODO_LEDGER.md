@@ -1,5 +1,45 @@
 # TODO_LEDGER
 
+## Gold-set data fixes + re-baseline — executed 2026-10-07
+
+Two defects found reading `eval_run.id=65` per clip. Reference text only; no metric definition
+changed (`METRICS_VERSION` stays 3), no engine/config change.
+
+1. **`Short1`, `Short2`, `Short3` references carried Premiere `<font color=...>` markup** inside
+   token text (frozen 2026-07-14, before `read_subtitles` started stripping tags). Every "Latin
+   word" in those clips was tag text (80 / 5 / 90 regex hits, 0 real), which added ~80 fake
+   reference switch points and made `wer_latin`/BER read 1.0 on Short1 and Short3. Tags stripped,
+   `script` re-derived with `detect_script`, `tools.make_gold.validate` clean; only `text`/`script`
+   fields changed, timings untouched.
+2. **`Bangkok Festivals_CT6_Short1_D5`**: reference ended at 54.6 s but the media ran 71.6 s, and
+   the last ~17 s is real speech (Engine A on 52-71.6 s: a full spoken passage). It was scored
+   as errors. Media trimmed to 54.7 s (`-c copy`); no reference text invented. Note: `*.mp4` in
+   the goldenset is gitignored, so the untrimmed file is not in git; its 52 s-end audio was kept
+   outside the repo, and the raw source is `SOUND FINAL` (see SOURCES.md).
+
+Re-baseline (`--establish-baseline`, 9 clips): `eval_run.id=67` vs `id=65`.
+
+| Metric | id=65 (old gold) | id=67 (fixed gold) |
+|---|---|---|
+| `cer_thai` | 0.1683 | 0.1473 |
+| `wer_latin` | 0.8761 | 0.6915 |
+| `boundary_error_rate` | 0.5696 | 0.4551 |
+| `cue_boundary_error_rate` | 0.3684 | 0.3602 |
+| switches (ref) | ~217 | 137 |
+
+Per clip, only the four edited clips changed (all other 5 byte-identical). D5 `cer_thai`
+0.597 -> 0.311. Short1/Short2/Short3 `cer_thai` unchanged (0.110 / 0.073 / 0.037) and
+Short1/Short3 `wer_latin` now weigh nothing (0 reference Latin words).
+
+**Consequences:** verdicts that leaned on `wer_latin`/BER from ids <= 66 (Qwen3-ASR Engine B,
+large-v3 probes, bias-index, funasr/typhoon/whisper_multi history) were judged on polluted
+references. `cer_thai` verdicts on the other clips are not affected, so the large-v3-combined
+rejection stands on `cue_BER` (confirmed). Re-probe fine margins against id=67, not older ids.
+
+**Still open:** D5 still scores `cer_thai` 0.311 with 29 hyp cues vs 12 reference cues. Its
+reference cues are 3-line paragraphs (not subtitle-sized), so its `cue_BER` (0.854) does not measure
+segmentation; its CER cause is not diagnosed. Left in the corpus pending a decision.
+
 ## Engine A probe: biodatlab/whisper-th-large-v3-combined — REJECTED — executed 2026-10-07
 
 Untried large-v3 fine-tune from the same Thonburian lineage/training data as the incumbent

@@ -37,14 +37,14 @@
       "end_ms": 13800
     },
     {
-      "text": "<font color=#59E2FEFF>โอ้โห</font>",
-      "script": "mixed",
+      "text": "โอ้โห",
+      "script": "thai",
       "start_ms": 13800,
       "end_ms": 14660
     },
     {
-      "text": "<font color=#C160FDFF>แปลว่าเขาคบกันมา</font> <font color=#C160FDFF>ยี่สิบปีอย่างนี้เหรอคะ</font>",
-      "script": "mixed",
+      "text": "แปลว่าเขาคบกันมา ยี่สิบปีอย่างนี้เหรอคะ",
+      "script": "thai",
       "start_ms": 14660,
       "end_ms": 17020
     },
@@ -55,14 +55,14 @@
       "end_ms": 18260
     },
     {
-      "text": "<font color=#59E2FEFF>โอ้โห</font>",
-      "script": "mixed",
+      "text": "โอ้โห",
+      "script": "thai",
       "start_ms": 18260,
       "end_ms": 18880
     },
     {
-      "text": "<font color=#C160FDFF>โดยที่หนูไม่รู้อะไรเลย</font>",
-      "script": "mixed",
+      "text": "โดยที่หนูไม่รู้อะไรเลย",
+      "script": "thai",
       "start_ms": 18880,
       "end_ms": 20700
     },
@@ -73,50 +73,50 @@
       "end_ms": 23080
     },
     {
-      "text": "<font color=#C160FDFF>คือปัญหาเนี้ย</font> <font color=#C160FDFF>หนูแก้ไม่ได้หรอก</font>",
-      "script": "mixed",
+      "text": "คือปัญหาเนี้ย หนูแก้ไม่ได้หรอก",
+      "script": "thai",
       "start_ms": 23080,
       "end_ms": 25780
     },
     {
-      "text": "<font color=#C160FDFF>ตอนนี้มันเป็นเรื่อง</font> <font color=#C160FDFF>ระหว่างเขากับผู้หญิงคนนั้น</font>",
-      "script": "mixed",
+      "text": "ตอนนี้มันเป็นเรื่อง ระหว่างเขากับผู้หญิงคนนั้น",
+      "script": "thai",
       "start_ms": 25780,
       "end_ms": 28220
     },
     {
-      "text": "<font color=#C160FDFF>ซึ่ง...</font>",
-      "script": "mixed",
+      "text": "ซึ่ง...",
+      "script": "thai",
       "start_ms": 28220,
       "end_ms": 28740
     },
     {
-      "text": "<font color=#C160FDFF>เขาต้องเป็นคนแก้ให้เรา </font>",
-      "script": "mixed",
+      "text": "เขาต้องเป็นคนแก้ให้เรา",
+      "script": "thai",
       "start_ms": 28740,
       "end_ms": 30380
     },
     {
-      "text": "<font color=#C160FDFF>ซึ่งปฏิเสธไม่ได้หรอกว่า</font>",
-      "script": "mixed",
+      "text": "ซึ่งปฏิเสธไม่ได้หรอกว่า",
+      "script": "thai",
       "start_ms": 30380,
       "end_ms": 31320
     },
     {
-      "text": "<font color=#C160FDFF>แฟนลี่อ่ะ หลอกลี่แหละ</font>",
-      "script": "mixed",
+      "text": "แฟนลี่อ่ะ หลอกลี่แหละ",
+      "script": "thai",
       "start_ms": 31320,
       "end_ms": 32420
     },
     {
-      "text": "<font color=#59E2FEFF>เลือกผิดก็เลือกใหม่ค่ะ</font> <font color=#59E2FEFF>น้องขา</font>",
-      "script": "mixed",
+      "text": "เลือกผิดก็เลือกใหม่ค่ะ น้องขา",
+      "script": "thai",
       "start_ms": 32420,
       "end_ms": 34080
     },
     {
-      "text": "<font color=#59E2FEFF>จริงๆ ชีวิตของคนเรามีแค่นี้นะ</font>",
-      "script": "mixed",
+      "text": "จริงๆ ชีวิตของคนเรามีแค่นี้นะ",
+      "script": "thai",
       "start_ms": 34080,
       "end_ms": 35920
     }
