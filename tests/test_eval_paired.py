@@ -238,3 +238,20 @@ def test_paired_uncertainty_does_not_promote_a_production_candidate(monkeypatch,
         assert latest.baseline_eval_id == baseline_id
     finally:
         conn.close()
+
+
+def test_cue_metric_exclusion_drops_only_that_clips_cue_counts(monkeypatch, tmp_path):
+    ref2 = [{'text': 'ขคงจ', 'script': 'thai', 'start_ms': 0, 'end_ms': 900}]
+    samples = [(Path('keep.wav'), REF), (Path('skip.wav'), ref2)]
+    monkeypatch.setattr(harness, '_load_goldenset', lambda: samples)
+    monkeypatch.setattr(harness, '_audio_duration_s', lambda _: 1)
+    pipeline = lambda path, cfg: [{**(REF if path.stem == 'keep' else ref2)[0], 'start_ms': 5000 if path.stem == 'skip' else 0,
+                                    'end_ms': 5900 if path.stem == 'skip' else 900}]
+    plain = harness.run_harness(CFG, tmp_path / "a.db", pipeline_fn=pipeline, experiment=True).metrics
+    cfg = {**CFG, 'eval_cue_metric_exclude': ['skip']}
+    excl = harness.run_harness(cfg, tmp_path / "b.db", pipeline_fn=pipeline, experiment=True).metrics
+    assert plain.cue_boundary_error_rate > 0 and plain.ref_cues == 2
+    assert excl.ref_cues == 1 and excl.hyp_cues == 1 and excl.cue_boundary_error_rate == 0.0
+    assert excl.thai_chars == plain.thai_chars  # text metrics still count the clip
+    assert harness._clip_key(Path('skip.wav'), ref2, cfg) != harness._clip_key(Path('skip.wav'), ref2, CFG)
+    assert harness._clip_key(Path('keep.wav'), REF, cfg) == harness._clip_key(Path('keep.wav'), REF, CFG)

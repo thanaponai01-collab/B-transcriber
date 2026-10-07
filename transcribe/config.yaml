@@ -402,3 +402,11 @@ reconciler:
     host: http://localhost:11434
     model: qwen2.5:3b-instruct
     timeout_s: 30   # first call after Ollama has unloaded the model can take >10s to reload
+
+# Gold clips whose reference cues are not subtitle-sized, so cue_boundary_error_rate
+# can't measure segmentation on them. Excluded from that metric only (by sample stem);
+# text metrics and the overlapping-cue hard check still count them. Changing this list
+# changes the clip's pairing key, so re-run with --establish-baseline.
+# Short1_D5: reference cues are 3-line paragraphs (12 cues vs ~29 output), 2026-10-07.
+eval_cue_metric_exclude:
+  - Bangkok Festivals_CT6_Short1_D5

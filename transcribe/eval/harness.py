@@ -99,6 +99,12 @@ def _load_goldenset() -> list[tuple[Path, list[dict]]]:
 
 
 
+def _cue_excluded(audio_path: Path, config: dict) -> bool:
+    """True when the clip's reference cues aren't subtitle-sized (config
+    `eval_cue_metric_exclude`, by sample stem), so it can't score segmentation."""
+    return audio_path.stem in (config.get("eval_cue_metric_exclude") or [])
+
+
 def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict) -> str:
     """Pair only identical media, references and scoring policies.
 
@@ -110,6 +116,8 @@ def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict) -> str:
     payload = {"sample": audio_path.stem, "audio": audio_hash, "reference": ref_tokens,
                "normalization": config.get("normalization", {}),
                "boundary_tol_ms": float(config.get("boundary_tol_ms", 300.0))}
+    if _cue_excluded(audio_path, config):
+        payload["cue_metric_excluded"] = True
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 def run_harness(
@@ -203,6 +211,10 @@ def run_harness(
         total_audio_s += _audio_duration_s(audio_path)
         # Pass config so reference and hypothesis are normalized identically.
         m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
+        if _cue_excluded(audio_path, config):
+            # Zero only the cue-boundary micro-F1 inputs: text metrics and the
+            # overlapping_cues hard invariant still count this clip.
+            m = dataclasses.replace(m, ref_cues=0, hyp_cues=0, matched_cues=0, cue_boundary_error_rate=0.0)
         clip_metrics.append(m)
         clips_by_key[key] = m
 

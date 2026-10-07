@@ -36,9 +36,12 @@ large-v3 probes, bias-index, funasr/typhoon/whisper_multi history) were judged o
 references. `cer_thai` verdicts on the other clips are not affected, so the large-v3-combined
 rejection stands on `cue_BER` (confirmed). Re-probe fine margins against id=67, not older ids.
 
-**Still open:** D5 still scores `cer_thai` 0.311 with 29 hyp cues vs 12 reference cues. Its
-reference cues are 3-line paragraphs (not subtitle-sized), so its `cue_BER` (0.854) does not measure
-segmentation; its CER cause is not diagnosed. Left in the corpus pending a decision.
+**D5 dropped from the cue metric (same day, user decision):** new config list
+`eval_cue_metric_exclude` (by sample stem) zeroes a clip's `ref_cues`/`hyp_cues`/`matched_cues`, so it
+leaves `cue_boundary_error_rate` (point estimate, bootstrap and paired CIs) and nothing else; text
+metrics and the `overlapping_cues` hard check still count it. Excluded clips get a different pairing
+key. Re-baselined as `eval_run.id=68`: `cue_BER` 0.3602 -> 0.3292, every other gated metric
+identical to id=67. D5's own `cer_thai` 0.311 cause is still undiagnosed (it stays in the text metrics).
 
 ## Engine A probe: biodatlab/whisper-th-large-v3-combined — REJECTED — executed 2026-10-07
 
