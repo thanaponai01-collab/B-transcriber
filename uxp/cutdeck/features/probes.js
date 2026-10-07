@@ -102,7 +102,6 @@ function createProbesFeature({
   ppro,
   ctl,
   clipboard = typeof navigator !== "undefined" && navigator.clipboard ? navigator.clipboard : null,
-  uxp = null,
   onCapturePreset = null,
 }) {
   async function handleProbe(name, payload) {
@@ -110,8 +109,8 @@ function createProbesFeature({
       const text = (ctl.state.lastStatus && ctl.state.lastStatus.text) || ctl.state.status.text;
       if (clipboard && clipboard.writeText) {
         await clipboard.writeText(text);
-      } else if (uxp && uxp.clipboard) {
-        uxp.clipboard.copyText(text);
+      } else if (clipboard && clipboard.setContent) {
+        await clipboard.setContent({ "text/plain": text });
       } else {
         throw new Error("No clipboard API on this build. The full report is in the UXP Developer Tool console as JSON.");
       }

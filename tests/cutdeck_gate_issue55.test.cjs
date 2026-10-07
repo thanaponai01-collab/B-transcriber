@@ -158,31 +158,22 @@ test("ATTACK [probes]: syncmoves probe logReplacer correctly handles BigInt with
   }
 });
 
-test("ATTACK [probes]: copystatus uses uxp.clipboard when navigator.clipboard is unavailable", async () => {
+test("ATTACK [probes]: copystatus falls back to the documented clipboard.setContent when writeText is missing", async () => {
   const ctl = createController({
     render: () => {},
     initialState: { status: { text: "Diagnostic Findings #1", level: "ready" } },
   });
 
-  let uxpCopied = null;
-  const mockUxp = {
-    clipboard: {
-      copyText: (text) => {
-        uxpCopied = text;
-      },
-    },
-  };
-
+  let copied = null;
   const probes = createProbesFeature({
     ppro: {},
     ctl,
-    clipboard: null, // navigator.clipboard unavailable
-    uxp: mockUxp,
+    clipboard: { setContent: async (data) => { copied = data; } }, // no writeText
   });
 
   await probes.onProbe("copystatus");
 
-  assert.equal(uxpCopied, "Diagnostic Findings #1");
+  assert.deepEqual(copied, { "text/plain": "Diagnostic Findings #1" });
   assert.equal(ctl.state.status.level, "ready");
   assert.match(ctl.state.status.text, /Diagnostic Findings #1\n\n--- copied to clipboard ---/);
 });
