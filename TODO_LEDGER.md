@@ -1,5 +1,27 @@
 # TODO_LEDGER
 
+## Engine A probe: biodatlab/whisper-th-large-v3-combined — REJECTED — executed 2026-10-07
+
+Untried large-v3 fine-tune from the same Thonburian lineage/training data as the incumbent
+`whisper-th-medium-combined`. Converted with `ct2-transformers-converter` (float16), run via a
+scratch config copy with `engines.faster_whisper.model_id` overridden; `--experiment`, 9-clip
+gold set, paired CIs vs baseline `eval_run.id=64` (this run: `eval_run.id=66`, `regression`).
+
+| Metric | Baseline (id=65 rerun) | large-v3-combined | Paired delta 95% CI | Verdict |
+|---|---|---|---|---|
+| `cer_thai` | 0.1683 | 0.1733 | [-0.041, +0.070] | unresolved |
+| `wer_latin` | 0.8761 | 0.9103 | [-0.140, +0.228] | unresolved |
+| `boundary_error_rate` | 0.5696 | 0.7151 | [-0.053, +0.336] | unresolved |
+| `cue_boundary_error_rate` | 0.3684 | 0.5613 | [+0.065, +0.303] | **confirmed regression** |
+| `rtf` | 0.109 | 0.224 | | ~2x slower |
+
+Reading: no text-accuracy gain even with matched training data, so the earlier large-v3
+losses (Typhoon, Pathumma) are not explained by training-data/normalization mismatch alone;
+large-v3 cue starts are the consistent loser. th-medium stays Engine A. Converted model
+deleted (3 GB, regenerable). Do not re-probe off-the-shelf large-v3 checkpoints without new
+evidence; remaining levers are Phase C fine-tune data (3.45 of 45 min collected) and a noisy
+gold clip.
+
 ## CutDeck panel review follow-ups — live results — 2026-09-24
 
 Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
