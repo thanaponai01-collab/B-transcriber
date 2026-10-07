@@ -82,7 +82,7 @@ reference switch points and cue starts.
 **Decision (user, 2026-10-07): accept.** Baseline re-established with `--establish-baseline` as
 `eval_run.id=72` (`cer_thai` 0.1276, `wer_latin` 0.6774, BER 0.4776, `cue_BER` 0.3550). This accepts two
 unresolved dips knowingly; it is not a claim that BER/cue_BER improved. Re-check them when the gold set
-grows (needs a noisy clip). Unrelated: `tests/test_cutdeck_panel_wire.py` fails with and without this change.
+grows (needs a noisy clip). Unrelated: `tests/test_cutdeck_panel_wire.py` failed with and without this change (fixed 2026-10-07: the Node client's `process.exit(0)` with open sockets aborted Node on Windows, exit 0xC0000409; it now closes both rpcs and exits on its own).
 
 ## Gold-set data fixes + re-baseline — executed 2026-10-07
 
