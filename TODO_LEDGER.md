@@ -73,7 +73,20 @@ rejection stands on `cue_BER` (confirmed). Re-probe fine margins against id=67, 
 leaves `cue_boundary_error_rate` (point estimate, bootstrap and paired CIs) and nothing else; text
 metrics and the `overlapping_cues` hard check still count it. Excluded clips get a different pairing
 key. Re-baselined as `eval_run.id=68`: `cue_BER` 0.3602 -> 0.3292, every other gated metric
-identical to id=67. D5's own `cer_thai` 0.311 cause is still undiagnosed (it stays in the text metrics).
+identical to id=67.
+
+**D5 `cer_thai` 0.311 diagnosed and fixed (same day).** Three causes: (1) reference cues past
+45.9 s do not match the audio (ref: "ถ้าท่าทางเขาแบบว่าโอ้โห...ร้องไห้ไม่ร้องไห้"; audio: "หลายๆคนเคย
+ถามผมว่าไม่มีคอนแทรกเตอร์เล่นได้ไหม..."), ~0.115 of the CER; likely the SRT was cut from a different
+position than the audio (unconfirmed). Fix: reference trimmed to the first 10 cues (<=45.939 s) and
+media trimmed to 45.96 s (a 54.7 s copy is in the session scratchpad, not in git). Re-baselined
+`eval_run.id=69`: D5 `cer_thai` 0.311 -> 0.154, corpus `cer_thai` 0.1473 -> 0.1356, `wer_latin` 0.6882,
+BER 0.4521, `cue_BER` 0.3292 unchanged. (2) **Open pipeline bug, not fixed:** a pause-free span
+>25 s is decoded as overlapping windows (`_LONG_SPAN_SAFE_S` 25 s, overlap 4 s); the seams (~21-25 s,
+~42-46 s) leave interleaved text from two decodes (`เขาไม่ได้` -> `เขไม่าได้`, `Cond คอนแ u ทรก ctor เตอร์`)
+even though the stitcher removed 79 duplicates. Worth ~0.03 CER on D5; this is not the issue-8
+<=80 ms fuzzy case. (3) The model writes loanwords in Thai script (`เอฟเฟกต์`, `โพสเจอร์`,
+`คอนแทรกเตอร์`) where the reference keeps Latin; ~0.04, model/style-policy, not fixed.
 
 ## Engine A probe: biodatlab/whisper-th-large-v3-combined — REJECTED — executed 2026-10-07
 

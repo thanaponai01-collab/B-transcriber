@@ -18,7 +18,7 @@ exclusion decision.
 
 | Gold clip | Source video | Status |
 |---|---|---|
-| `Bangkok Festivals_CT6_Short1_D5` | `SOUND FINAL.mp3` / `SOUND FINAL mine.srt` raw interview — intro teaser 0:00-0:15 + main occurrence 27:37-33:35 | **CONFIRMED** (commit `4e87034`/`6543249`); media trimmed to 54.7 s on 2026-10-07 to match the reference (original 71.6 s ran 17 s past it, unreferenced speech) |
+| `Bangkok Festivals_CT6_Short1_D5` | `SOUND FINAL.mp3` / `SOUND FINAL mine.srt` raw interview — intro teaser 0:00-0:15 + main occurrence 27:37-33:35 | **CONFIRMED** (commit `4e87034`/`6543249`); media trimmed to 45.96 s and reference cut to its first 10 cues on 2026-10-07: the original 71.6 s ran past the reference, and the reference's last two cues (after 45.9 s) did not match the audio |
 | `Bangkok Festivals_CT6_Short2_D1` | same `SOUND FINAL` raw interview — ~48:55-50:10 | **CONFIRMED** (commit `4e87034`, same interview as Short1_D5) |
 | `Bangkok Festivals_CT6_PeterWolf` | same `SOUND FINAL` raw interview — 23:43-27:23 | **CONFIRMED** (commit `4e87034`, explicitly trimmed to avoid overlapping Short1_D5/Short2_D1's ranges above) |
 | `Bangkok_Festivals_orchestra_sections` | Bangkok-Festivals-themed footage, added independently (commit `2378d3f`) | Unconfirmed whether this is the same raw interview as the three rows above (no "CT6" tag, added separately) — **treat as its own exclusion group by default**, verify before assuming independence |
