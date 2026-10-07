@@ -10,7 +10,7 @@
 const { activeProjectAndSequence } = require("./host/project.js");
 const { toTicks } = require("./host/ticks.js");
 const { getTrackClipItems } = require("./host/trackItems.js");
-const { mediaPath } = require("./timeline/nativeSync.js");
+const { mediaPath } = require("./host/sequenceRead.js");
 const VERSION = "cutdeck-xml-5";
 const guid = (object) => object.guid.toString();
 
