@@ -5,6 +5,7 @@ Config drives engine selection; no component imports a concrete engine directly.
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING
 
 from transcribe.engines.base import Engine
@@ -24,10 +25,19 @@ def register(name: str):
 
 
 def get_engine(name: str, **kwargs) -> Engine:
-    """Instantiate an engine by registry name. Raises KeyError if unknown."""
+    """Validate constructor arguments, then instantiate exactly once.
+
+    Binding errors identify the engine and invalid setting. Constructor errors
+    propagate unchanged: retrying without overrides would hide an internal bug.
+    Constructors that explicitly accept **kwargs retain that capability.
+    """
     if name not in _REGISTRY:
         _lazy_load(name)
     cls = _REGISTRY[name]
+    try:
+        inspect.signature(cls).bind(**kwargs)
+    except TypeError as error:
+        raise TypeError(f"Invalid configuration for engine {name!r}: {error}") from error
     return cls(**kwargs)
 
 

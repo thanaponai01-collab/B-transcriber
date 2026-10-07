@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS job (
     -- GPU-bound) engine passes instead of redoing everything from a crash at
     -- minute 45. NULL until the first phase completes.
     -- phase: engine_a_done | engine_b_done | reconciled | written
-    job_phase        TEXT
+    job_phase        TEXT,
+    -- NULL on legacy jobs: these cannot resume into a fingerprinted run.
+    resume_fingerprint TEXT
 );
 
 CREATE TABLE IF NOT EXISTS token (
@@ -153,11 +155,9 @@ CREATE TABLE IF NOT EXISTS eval_run (
     -- 95% percentile-bootstrap band per gated metric (metrics.bootstrap_ci,
     -- clip-level resampling) plus wall-clock-decode ÷ audio-duration. NULL on
     -- rows predating this column (old runs simply have no band recorded).
-    -- gate_unresolved: comma-separated names of gated metrics whose point
-    -- estimate crossed the regression tolerance but whose CI still contained
-    -- the baseline value — recorded instead of hard-failing the run on noise
-    -- indistinguishable from a real regression at this corpus size. NULL when
-    -- every gated metric either passed cleanly or regressed outside its CI.
+    -- gate_unresolved: metrics whose paired delta CI straddles the allowed
+    -- regression margin, or whose matching baseline evidence is unavailable.
+    -- These runs never pass or replace the production baseline.
     cer_thai_ci_lo              REAL,
     cer_thai_ci_hi              REAL,
     wer_latin_ci_lo             REAL,
@@ -168,6 +168,10 @@ CREATE TABLE IF NOT EXISTS eval_run (
     cue_boundary_error_rate_ci_hi REAL,
     rtf                 REAL,
     gate_unresolved      TEXT,
+    -- Paired gate evidence; NULL for runs predating paired comparisons.
+    baseline_eval_id     INTEGER REFERENCES eval_run(id),
+    paired_delta_ci_json TEXT,
+    gate_status          TEXT CHECK (gate_status IN ('pass', 'regression', 'unresolved')),
     -- Cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): count of hypothesis
     -- cues whose break the BreakLexicon says is illegal (particle-initial,
     -- digit-final, a split classifier+demonstrative pair, a split exception-
@@ -178,4 +182,12 @@ CREATE TABLE IF NOT EXISTS eval_run (
     cue_legality_violations INTEGER,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
+);
+
+-- Full per-clip rates AND aggregation counts: paired draws recompute micro-F1.
+CREATE TABLE IF NOT EXISTS eval_clip (
+    eval_run_id INTEGER NOT NULL REFERENCES eval_run(id) ON DELETE CASCADE,
+    clip_key    TEXT NOT NULL,
+    metrics_json TEXT NOT NULL,
+    PRIMARY KEY (eval_run_id, clip_key)
 );

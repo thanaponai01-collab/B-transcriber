@@ -70,13 +70,15 @@ def run_file(
     no chunk engine is active (whole-file engines want the raw track and no
     chunks); otherwise ignored and ingestion runs as usual.
     """
+    store.init_db(db_path)  # Apply additive migrations before resume lookup.
     conn = store.connect(db_path)
 
     # Bias terms from flywheel (+ weights for budget-aware prompt ranking, 5.1)
     bias_terms = store.get_bias_term_strings(conn)
     bias_weights = store.get_bias_term_weights(conn)
+    resume_fingerprint = planning.resume_fingerprint(config, bias_terms, bias_weights)
 
-    # The resume key is (media, engine pair, pipeline version), so job identity
+    # The resume key includes media, engine pair, version and settings/bias, so identity
     # has to be decided before the job can be looked up. plan.make_plan below
     # re-derives the same names from the same function, so there is exactly one
     # rule — see canonical_engine_names for the defect that motivates it.
@@ -85,16 +87,18 @@ def run_file(
     # ── Media record ──────────────────────────────────────────────────────────
     media_id = store.create_media(conn, audio_path)
 
-    # 4.1 (GAP-8): a 'failed' job for this exact media + engine pair + pipeline
-    # version is resumable — reuse it instead of starting over from scratch, so
+    # 4.1 (GAP-8): a 'failed' job with matching media, engines, version and
+    # settings/bias is resumable — reuse it instead of starting over from scratch, so
     # a crash after the (expensive, GPU-bound) engine passes doesn't cost them.
-    resume_job = store.find_resumable_job(conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION)
+    resume_job = store.find_resumable_job(
+        conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION, resume_fingerprint)
     if resume_job is not None:
         job_id = resume_job.id
         resume_phase = resume_job.job_phase
         logger.info("Resuming job %d from phase %r: %s", job_id, resume_phase, audio_path)
     else:
-        job_id = store.create_job(conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION)
+        job_id = store.create_job(
+            conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION, resume_fingerprint)
         resume_phase = None
         logger.info("Job %d started: %s", job_id, audio_path)
     store.update_job_status(conn, job_id, "running")

@@ -399,6 +399,32 @@ def bootstrap_ci(
     return lo, hi
 
 
+def paired_bootstrap_ci(
+    candidate: list[EvalMetrics], baseline: list[EvalMetrics], metric: str,
+    n_draws: int = 1000, ci: float = 0.95, seed: int | None = 0,
+) -> tuple[float, float]:
+    """CI of candidate minus baseline; matching clip order is required.
+
+    Both corpora use the SAME sampled indices and their own aggregate counts.
+    This retains reference weighting and micro-F1, including hallucinated
+    boundaries on clips with no reference boundaries. Lower deltas are better.
+    """
+    if not candidate or len(candidate) != len(baseline):
+        raise ValueError("paired bootstrap requires nonempty, equally sized corpora")
+    if metric not in CI_METRICS or n_draws < 1 or not 0 < ci < 1:
+        raise ValueError("invalid metric, draw count or confidence level")
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(n_draws):
+        indices = [rng.randrange(len(candidate)) for _ in candidate]
+        now = EvalMetrics.aggregate([candidate[i] for i in indices])
+        base = EvalMetrics.aggregate([baseline[i] for i in indices])
+        draws.append(getattr(now, metric) - getattr(base, metric))
+    draws.sort()
+    return (draws[int((1 - ci) / 2 * n_draws)],
+            draws[min(n_draws - 1, int((1 + ci) / 2 * n_draws))])
+
+
 # ── normalization (identical treatment of ref and hyp) ─────────────────────────
 
 def _normalize_tokens(tokens: list[dict], config: dict) -> list[dict]:

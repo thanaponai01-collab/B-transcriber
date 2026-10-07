@@ -4,7 +4,7 @@ Before this module existed, everything here was reachable only through
 run_harness: a scratch SQLite database, a bias-index mirror, a golden-set
 load off disk, a per-clip pipeline timing loop and a 27-column INSERT, all to
 exercise a comparison of a handful of floats. These tests construct
-EvalMetrics, an EvalRunRow baseline (or None) and explicit CI bounds, and
+EvalMetrics, an EvalRunRow baseline (or None) and explicit paired delta CI bounds, and
 assert on the returned GateVerdict. No database, no monkeypatching, no audio.
 
 Run: python -m pytest tests/test_eval_gate.py -v
@@ -25,7 +25,7 @@ ABS_FLOOR = 0.005    # regression_abs_floor: 0.005
 # Both gated metrics not under test in a given case are pinned equal to the
 # baseline with a CI that trivially contains it, so they never contribute to
 # the verdict.
-_QUIET = (0.10, (0.10, 0.10))
+_QUIET = (0.10, (0.0, 0.0))
 
 
 def _metrics(cer_thai=0.10, wer_latin=0.10, boundary_error_rate=0.10,
@@ -59,7 +59,7 @@ def _ci_all_quiet(**overrides):
 def test_regression_whose_ci_excludes_the_baseline_hard_fails():
     metrics = _metrics(cer_thai=0.20)
     baseline = _baseline(cer_thai=0.10)
-    ci = _ci_all_quiet(cer_thai=(0.15, 0.25))  # excludes 0.10
+    ci = _ci_all_quiet(cer_thai=(0.05, 0.15))  # entirely above allowed margin
     v = decide(metrics, baseline, ci, TOL_FRAC, ABS_FLOOR)
     assert v.passed is False
     assert v.regressions and v.regressions[0].startswith("CER_thai")
@@ -67,21 +67,22 @@ def test_regression_whose_ci_excludes_the_baseline_hard_fails():
     assert v.gate_unresolved is None
 
 
-def test_regression_whose_ci_contains_the_baseline_is_unresolved_and_still_passes():
+def test_delta_ci_straddling_margin_is_unresolved_and_does_not_pass():
     metrics = _metrics(cer_thai=1.0 / 6)  # 0.1667, past the 0.02/0.005 band vs 0.10
     baseline = _baseline(cer_thai=0.10)
-    ci = _ci_all_quiet(cer_thai=(0.10, 0.2333))  # contains 0.10
+    ci = _ci_all_quiet(cer_thai=(0.0, 0.1333))  # delta straddles allowed margin
     v = decide(metrics, baseline, ci, TOL_FRAC, ABS_FLOOR)
-    assert v.passed is True
+    assert v.passed is False
+    assert v.status == "unresolved"
     assert v.regressions == []
     assert v.unresolved and v.unresolved[0].startswith("CER_thai")
     assert v.gate_unresolved == "cer_thai"
 
 
 def test_within_tolerance_move_is_a_clean_pass():
-    metrics = _metrics(cer_thai=0.103)  # threshold is max(0.102, 0.105) = 0.105
+    metrics = _metrics(cer_thai=0.103)  # delta CI stays below the .005 margin
     baseline = _baseline(cer_thai=0.10)
-    ci = _ci_all_quiet(cer_thai=(0.08, 0.12))
+    ci = _ci_all_quiet(cer_thai=(-0.002, 0.004))
     v = decide(metrics, baseline, ci, TOL_FRAC, ABS_FLOOR)
     assert v.passed is True
     assert v.regressions == []
@@ -128,8 +129,8 @@ def test_multiple_regressions_mixing_confirmed_and_unresolved():
     metrics = _metrics(cer_thai=0.20, wer_latin=1.0 / 6)
     baseline = _baseline(cer_thai=0.10, wer_latin=0.10)
     ci = _ci_all_quiet(
-        cer_thai=(0.15, 0.25),        # excludes 0.10 -> confirmed
-        wer_latin=(0.10, 0.2333),     # contains 0.10 -> unresolved
+        cer_thai=(0.05, 0.15),        # delta excludes allowed margin -> confirmed
+        wer_latin=(0.0, 0.1333),     # delta straddles allowed margin -> unresolved
     )
     v = decide(metrics, baseline, ci, TOL_FRAC, ABS_FLOOR)
     assert v.passed is False  # the confirmed regression alone fails the run

@@ -141,6 +141,11 @@ engines:
     # instead of cut arbitrarily mid-utterance — see _LONG_SPAN_SAFE_S.
     vad_threshold: 0.35
     vad_min_silence_ms: 500
+    # Speech-validated tail/empty-decode retry also covers ordinary spans.
+    # 2026-10-07 nine-clip GPU A/B: all four gated metrics identical to baseline
+    # (CER_thai .1683, WER_latin .8761, BER .5696, cue_BER .3684), no overlaps.
+    # One retry at most; false restores the previous decode/recovery behavior.
+    recover_short_spans: true
   # Engine B candidate — not active (engine_b: passthrough above). LLM-decoder
   # ASR, the code-switch-wall priority candidate per HANDOFF_CEILING_BREAK.md
   # §6/4.1. Requires `qwen-asr` (see requirements.txt, commented out) — install

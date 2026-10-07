@@ -12,11 +12,11 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: disabled the zero-gap span merge in audio/windows.py, test_audio_windows/test_phase3_ingest went red, reverted
 
 ## Engines
-- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_hf_whisper_engines.py tests/test_phase4_typhoon.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_config_validation.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_faster_whisper_short_span_recovery.py tests/test_hf_whisper_engines.py tests/test_phase4_typhoon.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
 - fail-proof: no-op'd _release() in engines/base.py unload(), test_engine_base_unload went red; also removed gc.collect() and the empty_cache() call, and forced the CUDA check on, test_engine_unload_order went red on each (gc.collect() and empty_cache() removal had stayed green before), reverted
 
 ## Reconcile and pipeline
-- test: `python -m pytest tests/test_console_safe_print.py tests/test_export_job_layout.py tests/test_improvements_202607.py tests/test_job_resumability.py tests/test_phase1_robustness.py tests/test_phase2_config.py tests/test_phase3_llm_reconcile.py tests/test_pipeline_plan.py tests/test_pipeline_refine.py tests/test_pipeline_run_config_fallbacks.py tests/test_smoke.py tests/test_thai_atoms.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_console_safe_print.py tests/test_export_job_layout.py tests/test_improvements_202607.py tests/test_job_resumability.py tests/test_engine_safety_resume_identity.py tests/test_phase1_robustness.py tests/test_phase2_config.py tests/test_phase3_llm_reconcile.py tests/test_pipeline_plan.py tests/test_pipeline_refine.py tests/test_pipeline_run_config_fallbacks.py tests/test_smoke.py tests/test_thai_atoms.py -q -p no:cacheprovider`
 - fail-proof: narrowed the candidate set in reconcile.py to engine A only, test_smoke went red, reverted
 
 ## Thai cue legality lint
@@ -24,7 +24,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: swapped first/last edge token in thai/lint.py, test_thai_lint went red, reverted
 
 ## Eval harness and gate
-- test: `python -m pytest tests/test_eval_aggregation.py tests/test_eval_baseline_partitioning.py tests/test_eval_gate.py tests/test_eval_run_schema_migration.py tests/test_metrics_v2.py tests/test_metrics_v3.py tests/test_passage_review.py tests/test_phase6_evalperf.py tests/test_phase7_makegold.py tests/test_phase_a_ci.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_eval_aggregation.py tests/test_eval_baseline_partitioning.py tests/test_eval_gate.py tests/test_eval_paired.py tests/test_eval_run_schema_migration.py tests/test_metrics_v2.py tests/test_metrics_v3.py tests/test_passage_review.py tests/test_phase6_evalperf.py tests/test_phase7_makegold.py tests/test_phase_a_ci.py -q -p no:cacheprovider`
 - fail-proof: made the gate skip the regression test in eval/gate.py, test_eval_gate went red, reverted
 
 ## Correction flywheel and finetune

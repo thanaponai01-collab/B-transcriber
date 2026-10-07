@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import shutil
@@ -14,7 +15,7 @@ from typing import NamedTuple
 from transcribe.console import safe_print as _safe_print
 from transcribe.db import store
 from transcribe.eval.gate import decide
-from transcribe.eval.metrics import CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics
+from transcribe.eval.metrics import CI_METRICS, EvalMetrics, bootstrap_ci, compute_metrics, paired_bootstrap_ci
 from transcribe.thai.atoms import default_lexicon
 from transcribe.thai.lint import find_cue_legality_violations
 
@@ -27,15 +28,17 @@ _GOLDENSET = Path(__file__).parent / "goldenset"
 
 class HarnessResult(NamedTuple):
     """The harness is the single gate authority: it captures the prior passing
-    baseline *before* writing the new eval_run, gates on all three primary
+    baseline *before* writing the new eval_run, gates on all four paired
     signals, and returns its verdict. Callers must consume `passed` — never
     re-read get_last_passing_eval (that would compare the new run against itself)."""
     metrics: EvalMetrics
     passed: bool
-    baseline: EvalMetrics | None
+    baseline: store.EvalRunRow | None
     rtf: float | None = None
     ci: dict[str, tuple[float, float]] | None = None
     unresolved: list[str] | None = None
+    status: str = "pass"
+    paired_ci: dict[str, tuple[float, float]] | None = None
 
 
 def _config_hash(config: dict) -> str:
@@ -95,11 +98,26 @@ def _load_goldenset() -> list[tuple[Path, list[dict]]]:
     return samples
 
 
+
+def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict) -> str:
+    """Pair only identical media, references and scoring policies.
+
+    Missing paths support synthetic pipeline_fn fixtures; real gold media are
+    content-hashed. Sample names keep identical-content clips distinct.
+    """
+    audio_hash = (store.sha256_of_file(str(audio_path)) if audio_path.is_file()
+                  else "missing:" + audio_path.as_posix())
+    payload = {"sample": audio_path.stem, "audio": audio_hash, "reference": ref_tokens,
+               "normalization": config.get("normalization", {}),
+               "boundary_tol_ms": float(config.get("boundary_tol_ms", 300.0))}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
 def run_harness(
     config: dict,
     db_path: Path,
     pipeline_fn=None,
     experiment: bool = False,
+    establish_baseline: bool = False,
 ) -> HarnessResult | None:
     """
     Run the golden set through the pipeline and compute aggregate metrics.
@@ -109,6 +127,9 @@ def run_harness(
         db_path: path to the SQLite database
         pipeline_fn: callable(audio_path, config) -> list[dict{"text","script"}]
                      If None, the real pipeline is used (imports pipeline.run).
+        establish_baseline: Explicit production re-evaluation to seed per-clip
+                            evidence, skipping historical comparisons but not
+                            structural checks. Incompatible with experiments.
         experiment: True for an A/B probe (e.g. `--engine-b X`, `--llm-enabled`).
                     The run is still gated against the production baseline, but
                     its eval_run row is marked is_experiment=1 so it can never
@@ -116,10 +137,13 @@ def run_harness(
                     Production config changes (engine swap in config.yaml, bias
                     promotion) stay experiment=False — the gate must compare
                     them against the previous production baseline and, on pass,
-                    they legitimately become the new one.
+                    only a confirmed pass becomes the new one.
     Returns:
         EvalMetrics aggregate over all golden samples.
     """
+    if establish_baseline and experiment:
+        raise ValueError("baseline establishment requires a production run, not an experiment")
+    store.init_db(db_path)
     # #5: eval transcription writes media/job/token rows. Keep those OUT of the
     # caller's DB (the editor and flywheel read it) by sending run_file to a
     # throwaway scratch DB. eval_run *history* still goes to db_path below, so the
@@ -159,6 +183,7 @@ def run_harness(
     # Corpus aggregation is EvalMetrics.aggregate's job — each metric's weighting
     # rule lives next to its definition, so the two cannot silently disagree.
     clip_metrics: list[EvalMetrics] = []
+    clips_by_key: dict[str, EvalMetrics] = {}
     total_wall_s = 0.0
     total_audio_s = 0.0
     # Phase 3 cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): shares the
@@ -169,6 +194,9 @@ def run_harness(
     total_ref_lint_violations = 0
 
     for audio_path, ref_tokens in samples:
+        key = _clip_key(audio_path, ref_tokens, config)
+        if key in clips_by_key:
+            raise ValueError(f"duplicate golden sample: {audio_path}")
         t0 = time.perf_counter()
         hyp_tokens = pipeline_fn(audio_path, config)
         total_wall_s += time.perf_counter() - t0
@@ -176,6 +204,7 @@ def run_harness(
         # Pass config so reference and hypothesis are normalized identically.
         m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
         clip_metrics.append(m)
+        clips_by_key[key] = m
 
         hyp_violations = find_cue_legality_violations(hyp_tokens, lexicon)
         ref_violations = find_cue_legality_violations(ref_tokens, lexicon)
@@ -208,14 +237,35 @@ def run_harness(
 
     tol_frac = 1.0 + float(config.get("regression_tolerance", 0.02))
     abs_floor = float(config.get("regression_abs_floor", 0.005))
-    last = store.get_last_passing_eval(conn)
-    verdict = decide(agg, last, ci_bounds, tol_frac, abs_floor)
+    last = None if establish_baseline else store.get_last_passing_eval(conn)
+    paired_ci = None
+    comparison_error = None
+    if establish_baseline:
+        print("[harness] establishing a paired production baseline (history preserved)")
+    if last is not None:
+        cached = store.get_eval_clip_metrics(conn, last.id)
+        if not cached:
+            comparison_error = "baseline has no per-clip evidence; re-evaluate with --establish-baseline"
+        elif set(cached) != set(clips_by_key):
+            comparison_error = "gold audio, reference or scoring policy differs; cannot pair runs"
+        else:
+            keys = sorted(clips_by_key)
+            current = [clips_by_key[key] for key in keys]
+            previous = [EvalMetrics(**json.loads(cached[key])) for key in keys]
+            paired_ci = {name: paired_bootstrap_ci(current, previous, name) for name in CI_METRICS}
+    verdict = decide(agg, last, paired_ci, tol_frac, abs_floor, comparison_error=comparison_error)
+    if paired_ci is not None:
+        bands = "; ".join(f"{name}=[{lo:.4f},{hi:.4f}]" for name, (lo, hi) in paired_ci.items())
+        print(f"[harness] paired delta 95% CIs vs eval_run {last.id}: {bands}")
     passed = verdict.passed
     if verdict.regressions:
         print("[harness] REGRESSION: " + "; ".join(verdict.regressions))
     if verdict.unresolved:
-        print("[harness] UNRESOLVED (within CI, not a confirmed regression): "
+        print("[harness] UNRESOLVED (not a confirmed pass or regression): "
               + "; ".join(verdict.unresolved))
+
+    if verdict.improvements:
+        print("[harness] CONFIRMED IMPROVEMENT: " + "; ".join(verdict.improvements))
 
     # Hard structural invariant (§3.1): an overlapping cue is a shipped bug,
     # not a tolerance band — it fails the run unconditionally, even on the
@@ -250,7 +300,10 @@ def run_harness(
         rtf=rtf,
         gate_unresolved=gate_unresolved_names,
         cue_legality_violations=total_hyp_lint_violations,
-    ))
+        baseline_eval_id=last.id if last is not None else None,
+        paired_delta_ci_json=json.dumps(paired_ci) if paired_ci is not None else None,
+        gate_status=verdict.status,
+    ), clip_metrics={key: json.dumps(dataclasses.asdict(m)) for key, m in clips_by_key.items()})
     conn.close()
 
     def _fmt_ci(name: str) -> str:
@@ -269,10 +322,11 @@ def run_harness(
         f"rtf={'n/a' if rtf is None else f'{rtf:.3f}'}  "
         f"thai_chars={agg.thai_chars}  latin_words={agg.latin_words}  "
         f"switches={agg.ref_switches} (hyp {agg.hyp_switches}, matched {agg.matched_switches})  "
-        f"passed={passed}"
+        f"status={verdict.status} passed={passed}"
     )
     return HarnessResult(metrics=agg, passed=passed, baseline=last,
-                          rtf=rtf, ci=ci_bounds, unresolved=verdict.unresolved or None)
+                          rtf=rtf, ci=ci_bounds, unresolved=verdict.unresolved or None,
+                          status=verdict.status, paired_ci=paired_ci)
 
 
 if __name__ == "__main__":
@@ -302,6 +356,9 @@ if __name__ == "__main__":
                         help="Override self_ensemble.beam_size_b for this run (default from "
                         "config.yaml, normally 1 — the setting that actually produces a "
                         "decorrelated second hypothesis). Implies --self-ensemble.")
+    parser.add_argument("--establish-baseline", action="store_true",
+                        help="Re-evaluate production to establish matching per-clip baseline evidence. "
+                             "Preserves history and cue-overlap checks; cannot be combined with experiments.")
     parser.add_argument("--experiment", action="store_true",
                         help="Mark this run as an A/B experiment: gated against the "
                         "production baseline but never recorded AS a baseline. Implied "
@@ -330,6 +387,9 @@ if __name__ == "__main__":
     if experiment:
         print("[harness] experiment run - result will not become the regression baseline")
     import sys
-    result = run_harness(cfg, Path(args.db), experiment=experiment)
+    result = run_harness(cfg, Path(args.db), experiment=experiment,
+                         establish_baseline=args.establish_baseline)
+    if result is not None and result.status == "unresolved":
+        sys.exit(2)
     if result is None or not result.passed:
         sys.exit(1)

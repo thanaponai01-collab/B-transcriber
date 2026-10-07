@@ -13,6 +13,8 @@ compression/log-prob/no-speech thresholds drop garbage segments outright.
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from dataclasses import replace
 import logging
 import os
 import sys
@@ -173,7 +175,7 @@ class FasterWhisperEngine(Engine):
                  cue_split_algorithm: str = CUE_SPLIT_ALGORITHM,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500,
-                 config: dict | None = None):
+                 config: dict | None = None, recover_short_spans: bool = False):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -182,6 +184,7 @@ class FasterWhisperEngine(Engine):
         self._beam_size = beam_size
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
+        self._recover_short_spans = recover_short_spans
         # Cue splitting is transcribe/cues/'s job; this adapter only decides the
         # policy. Assembled once at construction — pure, cheap, no GPU.
         # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon it carries is
@@ -322,9 +325,9 @@ class FasterWhisperEngine(Engine):
                 best_i, best_gap = i, gap
         return best_i
 
-    def _recover_truncated_tail(self, tokens, sub_audio, common, bs):
+    def _recover_truncated_tail(self, tokens, sub_audio, common, bs, *, require_speech=False):
         """Detect and recover content dropped by an early-EOS decode within one
-        long-span window. Two independent failure modes, both early-EOS, that
+        decode window. Two independent failure modes, both early-EOS, that
         look nothing alike on the wire:
 
         (A) faster-whisper stretches the *last* word's own timestamp out to
@@ -346,15 +349,22 @@ class FasterWhisperEngine(Engine):
         near-duplicates (verified empirically while building the original (A)
         fix: a fixed-offset cut reproduced a stray syllable on both sides no
         matter how the offset was tuned). No recursion — if the redecode hits
-        the same issue, its result is kept as-is."""
-        if not tokens:
-            return tokens, bs
-        last = tokens[-1]
-        win_dur_ms = len(sub_audio) / _SR * 1000
-        dur = last.end_ms - last.start_ms
-        trailing_gap_ms = win_dur_ms - last.end_ms
+        the same issue, its result is kept as-is.
 
-        if dur >= _TRUNCATION_TAIL_MS:
+        require_speech gates retries on VAD evidence and also permits one retry
+        for a completely empty decode. False preserves legacy long-span behavior.
+        """
+        if not tokens and not require_speech:
+            return tokens, bs
+        last = tokens[-1] if tokens else None
+        win_dur_ms = len(sub_audio) / _SR * 1000
+        dur = last.end_ms - last.start_ms if last else 0
+        trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
+
+        if last is None:
+            kept = []
+            tail_start_ms = 0
+        elif dur >= _TRUNCATION_TAIL_MS:
             # (A) the last word itself is the suspect — discard it too and
             # redecode from a genuine inter-token pause before it.
             cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
@@ -374,7 +384,15 @@ class FasterWhisperEngine(Engine):
         if len(tail_audio) < _SR * 0.5:
             return tokens, bs
 
-        segments, bs = self._decode(tail_audio, None, False, common, bs)
+        clip = None
+        if require_speech:
+            # Detect actual speech again in the omitted region. VAD padding on
+            # the original span is not evidence that its trailing audio is speech.
+            windows = speech_windows(tail_audio, self._window_policy)
+            if not windows:
+                return tokens, bs
+            clip = [{"start": w.start_s, "end": w.end_s} for w in windows]
+        segments, bs = self._decode(tail_audio, clip, False, common, bs)
         tail_tokens = self._words_of(segments)
         if not tail_tokens:
             return tokens, bs
@@ -385,7 +403,8 @@ class FasterWhisperEngine(Engine):
         merged = kept + tail_tokens
         logger.info("Recovered truncated tail: redecoded from %.2fs -> %d token(s) "
                     "(window ends %.2fs, last kept word ended %.2fs)",
-                    tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000, last.end_ms / 1000)
+                    tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000,
+                    (last.end_ms / 1000) if last else 0.0)
         return merged, bs
 
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
@@ -452,7 +471,29 @@ class FasterWhisperEngine(Engine):
             # each under the encoder cap, so no arbitrary internal re-split happens).
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
-            for tok in self._words_of(segments):
+            decoded = self._words_of(segments)
+            if self._recover_short_spans:
+                # Batched clip timestamps are absolute. Group before recovery,
+                # convert to span-local times, then restore exactly one offset.
+                starts = [w.start_ms for w in normal]
+                grouped = [[] for _ in normal]
+                outside = []
+                for tok in decoded:
+                    index = bisect_right(starts, tok.start_ms) - 1
+                    if index >= 0 and tok.start_ms <= normal[index].end_ms:
+                        grouped[index].append(tok)
+                    else:
+                        outside.append(tok)
+                decoded = outside
+                for win, span_tokens in zip(normal, grouped):
+                    local = [replace(t, start_ms=t.start_ms - win.start_ms,
+                                     end_ms=t.end_ms - win.start_ms) for t in span_tokens]
+                    span_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
+                    local, bs = self._recover_truncated_tail(
+                        local, span_audio, common, bs, require_speech=True)
+                    decoded.extend(replace(t, start_ms=t.start_ms + win.start_ms,
+                                           end_ms=t.end_ms + win.start_ms) for t in local)
+            for tok in decoded:
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
         elif not long_runs:
             # No speech spans detected at all (rare) — fall back to faster-whisper's
@@ -466,7 +507,8 @@ class FasterWhisperEngine(Engine):
                 nonlocal bs
                 segments, bs = self._decode(win_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
-                win_tokens, bs = self._recover_truncated_tail(win_tokens, win_audio, common, bs)
+                win_tokens, bs = self._recover_truncated_tail(
+                    win_tokens, win_audio, common, bs, require_speech=self._recover_short_spans)
                 return win_tokens
 
             run_windows = [
