@@ -32,6 +32,22 @@ Gaps: gap closing only moves cue ends, so BER is identical for every `cue_max_cl
 `cue_max_close_gap_ms: 600` is BER-neutral by construction, would remove those; not applied
 (trades cue-linger for gaplessness; needs the user's call, then a harness run for the record).
 
+## Fine-tune data: 8 more hand-recut SRTs ingested — 2026-10-07
+
+`tools.make_finetune_set from-srt`: CFD 92 `mine-Short1..4`, CFD 93 `mineShort1..3`, and `hon trim 3 mins mine`
+(the first 173 s of `Audio test.mp3`, same timeline, checked by matching cue text). +330 utterances, 8.6 min:
+manifest 3.82 -> **12.41 of 45 min**, still `keep-collecting`. Every pair was checked first: SRT end vs audio length
+within 0.4 s, 93-98% text match to the pipeline's own SRT (hon: exact cue matches at 3 offsets).
+
+**Guard note:** the contamination guard refused CFD 92/93 Short1-3 when declared as `..._Short1_...` because the
+name tokens collide with gold rows `Short1-3` (CFD 90). Checked by content instead: longest shared run with any
+gold clip (Short1-3, shorts) is <= 15 chars, so they are different clips; ingested under `CFD92_clip1..3` /
+`CFD93_clip1..3`. Not a guard bypass for gold content.
+
+**Deliberately not ingested:** `CFD 93 mineShort4` (8 of its cues already in the manifest as corrections, would
+duplicate); `SOUND FINAL mine.srt` and `shorts_mine.srt` (gold-set sources); `mine test trim down.srt` (1119-cue
+full-episode recut, no matching audio, nearly unedited so it carries little human signal; `down2` is already in).
+
 ## cue_max_close_gap_ms 200 -> 600 — ACTIVATED — 2026-10-07
 
 From the segmentation replay over 13 hand-recut SRTs (`tools/replay_segmentation.py`): the recuts have
