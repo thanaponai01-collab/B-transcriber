@@ -14,7 +14,7 @@
 const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
-const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut } = require("./cutPlanApply.js");
+const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 const MOVE_BATCH = 3000;
@@ -69,6 +69,21 @@ async function readItems(ppro, seq, cuts) {
     }
   }
   return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
+}
+
+/* Before the analysis runs: the clips inside In/Out that applyNativeCut would refuse if a cut lands
+   inside them, as short descriptions ("name (video track 1) at 00:00:05.000 is a nested sequence").
+   Cut positions are not known yet, so this is a warning, never a refusal. */
+async function findUncuttable(ppro, seq, inTicks, outTicks) {
+  const range = [[toTicks(inTicks), toTicks(outTicks)]];
+  const { items, transitions } = await readItems(ppro, seq, range);
+  const found = [];
+  for (const item of [...items, ...transitions]) {
+    if (!overlapsCut(item.startTicks, item.endTicks, range)) continue;
+    const why = unsupportedReason(item);
+    if (why) found.push(`${item.name || "clip"} (${item.mediaType} track ${item.track + 1}) at ${timecode(item.startTicks)} is ${why}`);
+  }
+  return found;
 }
 
 /* Applies the cuts to `copy`, whose clips are `items`. Returns the undo-step count.
@@ -340,4 +355,4 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   }
 }
 
-module.exports = { applyNativeCut, applyPlan, readItems };
+module.exports = { applyNativeCut, applyPlan, readItems, findUncuttable };

@@ -183,4 +183,4 @@ function verifyReadBack(items, plan, actual) {
   return problems;
 }
 
-module.exports = { cutsToTicks, shiftFor, createFastShiftFor, isInsideCut, keepSubranges, overlapsCut, planCutApply, verifyReadBack };
+module.exports = { timecode, unsupportedReason, cutsToTicks, shiftFor, createFastShiftFor, isInsideCut, keepSubranges, overlapsCut, planCutApply, verifyReadBack };

@@ -5,7 +5,7 @@
 // Must not know: the DOM, UI panels, Adjustment Layer or Effects logic.
 
 const workflow = require("../workflow.js");
-const { applyNativeCut } = require("../timeline/nativeCut.js");
+const { applyNativeCut, findUncuttable } = require("../timeline/nativeCut.js");
 const { activeProjectAndSequence } = require("../host/project.js");
 const { TICKS_PER_SECOND } = require("../host/ticks.js");
 
@@ -27,8 +27,25 @@ function createRoughCutFeature({
   ensureHelper,
   storage = typeof localStorage !== "undefined" ? localStorage : null,
   applyCut = applyNativeCut,
+  scanUncuttable = findUncuttable,
   progressText = () => "Processing sequence in helper… Cuts stay inside marked In/Out.",
 }) {
+  // Shown beside the progress text while the helper analyses: a clip the cut can't go through
+  // is refused only after the analysis, so the editor hears about it before waiting.
+  let warning = "";
+  const withWarning = (text) => text + warning;
+
+  async function warnUncuttable(snap) {
+    warning = "";
+    try {
+      const found = await scanUncuttable(ppro, snap.sequence, snap.context.in_ticks, snap.context.out_ticks);
+      if (found.length) {
+        warning = `\nWarning: ${found.length} clip(s) in this range can't be cut if a cut lands inside them: `
+          + found.slice(0, 3).join("; ") + (found.length > 3 ? `; and ${found.length - 3} more` : "");
+      }
+    } catch (_) { /* advisory only: the cut itself still refuses what it can't do */ }
+  }
+
   function readSavedJob() {
     return lastJob(storage);
   }
@@ -64,9 +81,9 @@ function createRoughCutFeature({
   // The helper pushes the job's progress (rpc.watch); nothing polls.
   async function follow(job) {
     if (job.state === "running") {
-      ctl.setStatus(progressText(job), "busy");
+      ctl.setStatus(withWarning(progressText(job)), "busy");
       job = await rpc.watch(job.job_id, (update) => {
-        if (update.state === "running") ctl.setStatus(progressText(update), "busy");
+        if (update.state === "running") ctl.setStatus(withWarning(progressText(update)), "busy");
       });
     }
     if (job.state === "failed" || job.state === "interrupted") {
@@ -126,7 +143,8 @@ function createRoughCutFeature({
     }
     if (ensureHelper) await ensureHelper();
     const snap = await doRefresh();
-    ctl.setStatus("Preparing your sequence…", "busy");
+    await warnUncuttable(snap);
+    ctl.setStatus(withWarning("Preparing your sequence…"), "busy");
     const job = await workflow.prepare(
       ppro,
       rpc,

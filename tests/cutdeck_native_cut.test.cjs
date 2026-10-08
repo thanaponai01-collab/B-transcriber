@@ -9,7 +9,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { applyNativeCut } = require("../uxp/cutdeck/timeline/nativeCut.js");
+const { applyNativeCut, findUncuttable } = require("../uxp/cutdeck/timeline/nativeCut.js");
 
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
@@ -155,6 +155,22 @@ test("refuses before any edit: a transition a cut lands inside", async () => {
   const h = fakeHost(golden.before, { transitions: [{ kind: "video", track: 0, start: 995n * TPF, end: 1005n * TPF }] });
   await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /transition/);
   assert.equal(h.transactions, 0);
+});
+
+test("findUncuttable names what a cut inside In/Out would refuse, and edits nothing", async () => {
+  const h = fakeHost(golden.before, {
+    speedOf: (r) => (r.kind === "video" && r.track === 1 ? 2 : 1),
+    transitions: [{ kind: "video", track: 0, start: 995n * TPF, end: 1005n * TPF }, { kind: "video", track: 0, start: 5000n * TPF, end: 5010n * TPF }],
+  });
+  const found = await findUncuttable(h.ppro, h.source, (900n * TPF).toString(), (1100n * TPF).toString());
+  assert.ok(found.some((f) => /200% speed/.test(f)), found.join("; "));
+  assert.equal(found.filter((f) => /transition/.test(f)).length, 1, "only the transition inside the range");
+  assert.equal(h.transactions, 0);
+});
+
+test("findUncuttable is empty when nothing in the range is refusable", async () => {
+  const h = fakeHost(golden.before);
+  assert.deepEqual(await findUncuttable(h.ppro, h.source, (900n * TPF).toString(), (1100n * TPF).toString()), []);
 });
 
 test("refuses a cut list from another frame rate", async () => {

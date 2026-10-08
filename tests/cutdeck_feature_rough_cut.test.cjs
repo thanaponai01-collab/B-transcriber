@@ -151,3 +151,27 @@ test("roughCut.follow: a cut that failed before any copy stays resumable", async
   await assert.rejects(roughCut.follow({ ...job }), /Cannot cut natively/);
   assert.notEqual(storage.getItem(KEY), null);
 });
+
+test("roughCut.onCut: warns about uncuttable clips while the helper analyses; a failed scan blocks nothing", async () => {
+  const workflow = require("../uxp/cutdeck/workflow.js");
+  const snapshot = { inSeconds: 1, outSeconds: 2, sequence: { name: "seq" },
+    context: { sequence_name: "Shoot", audio_track_count: 1, in_ticks: "10", out_ticks: "20" } };
+  const { capture, prepare } = workflow;
+  workflow.capture = async () => snapshot;
+  try {
+    for (const [scan, expected] of [
+      [async () => ["a.mp4 (video track 1) at 00:00:01.000 is a nested sequence"], /Warning: 1 clip\(s\).*nested sequence/],
+      [async () => { throw new Error("host"); }, /^Preparing your sequence…$/],
+    ]) {
+      const ctl = createController({ render: () => {} });
+      const scanned = [];
+      let duringPrepare;
+      workflow.prepare = async () => { duringPrepare = ctl.state.status.text; return { job_id: "j", state: "no_cuts" }; };
+      const roughCut = createRoughCutFeature({ ppro: {}, ctl, rpc: async () => ({}), storage: createMockStorage(),
+        scanUncuttable: async (ppro, sequence, inTicks, outTicks) => { scanned.push([sequence, inTicks, outTicks]); return scan(); } });
+      await roughCut.onCut();
+      assert.deepEqual(scanned, [[snapshot.sequence, "10", "20"]]);
+      assert.match(duringPrepare, expected);
+    }
+  } finally { workflow.capture = capture; workflow.prepare = prepare; }
+});
