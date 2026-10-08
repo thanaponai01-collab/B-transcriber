@@ -324,11 +324,13 @@ flywheel:
 # Present now so Phase 0 (timebase + VAD persistence) has a home; the deterministic
 # rules pass turns on after the first eval baseline.
 cut:
-  min_silence_ms: 250       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
+  min_silence_ms: 200       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
   pad_pre_ms: 80            # kept pre-roll before speech (attack matters most; 80ms avoids clipping initial consonants)
   pad_post_ms: 50           # kept post-roll after speech (50ms avoids clipping trailing vowels)
-  min_clip_ms: 1200         # kept clips shorter than this merge into a neighbor
-  max_dissolve_ms: 4000     # cap on dead air a merge may re-admit; longer cuts
+  min_clip_ms: 200          # kept clips shorter than this merge into a neighbor (2026-10-08: was 1200,
+                             # which re-admitted 2-4 s of dead air to absorb sub-1.2 s blips; on a
+                             # 109 min sequence 200 keeps all VAD speech and trims 66.0 -> 58.6 min)
+  max_dissolve_ms: 1000     # cap on dead air a merge may re-admit (was 4000); longer cuts
                              # get their too-short neighbor dropped instead (bug
                              # fix 2026-08-03: a stray sub-min_clip_ms blip between
                              # two long silences was stitching them back together)
