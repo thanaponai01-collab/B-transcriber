@@ -122,24 +122,6 @@ test("makeTickTime creates TickTime factory from host ppro", () => {
   const fnTicks = makeTickTime(mockWithTicks);
   assert.deepEqual(fnTicks(254016000000n), { type: "withTicks", val: "254016000000" });
 
-  // createWithSeconds fallback
-  const mockWithSeconds = {
-    TickTime: {
-      createWithSeconds: (sec) => ({ type: "withSeconds", val: sec }),
-    },
-  };
-  const fnSec = makeTickTime(mockWithSeconds);
-  assert.deepEqual(fnSec(254016000000n), { type: "withSeconds", val: 1 });
-
-  // constructor fallback
-  class MockTickTime {
-    constructor(sec) {
-      this.sec = sec;
-    }
-  }
-  const mockCtor = { TickTime: MockTickTime };
-  const fnCtor = makeTickTime(mockCtor);
-  const created = fnCtor(254016000000n);
-  assert.ok(created instanceof MockTickTime);
-  assert.equal(created.sec, 1);
+  // No lossy fallback: a host without createWithTicks gets null, and callers refuse.
+  assert.equal(makeTickTime({ TickTime: { createWithSeconds: (sec) => sec } }), null);
 });
