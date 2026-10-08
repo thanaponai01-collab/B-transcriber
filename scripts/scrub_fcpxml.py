@@ -14,7 +14,7 @@ emits, structurally, so ``cutdeck/xml_recut.py`` is written against real
 structure rather than an imagined one.
 
 ``<clipitem><name>`` is deliberately left alone — it carries CutDeck's
-round-trip key (``cd###_p###_s####``, see ``xml_export.name_key``), which the
+round-trip key (``cd###_p###_s####``, as the retired xml_export wrote it), which the
 recut tests need to read.
 
 This module makes **no assumptions about sequence structure**: it walks every

@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -127,9 +128,13 @@ def test_a_job_prepared_before_the_upgrade_still_starts(tmp_path):
     asyncio.run(_test())
 
 
+def _pathurl(abs_path) -> str:
+    """The ``file://localhost/`` URL Premiere writes: drive colon percent-encoded, slashes kept."""
+    return "file://localhost/" + quote(str(abs_path).replace("\\", "/").lstrip("/"), safe="/")
+
+
 def _xml_export_of(read: dict) -> str:
     """A minimal FCP7 export of a one-track panel read, as Premiere writes it (pproTicks, pathurl)."""
-    from cutdeck.xml_export import _pathurl
     clip = read["audio_tracks"][0]["clips"][0]
     frames = lambda ticks: int(ticks) // TPF_30  # noqa: E731
     return f"""<?xml version="1.0" encoding="UTF-8"?><xmeml version="4"><sequence id="s"><name>t</name>

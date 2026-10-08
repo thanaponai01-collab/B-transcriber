@@ -242,7 +242,6 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `segment.py` | gap/VAD utterance segmentation over the token + speech_span timeline |
 | `rules.py` | deterministic cut pass; two rough-cut modes via `cut.rough_cut_mode` (default `interval`: silence-interval subtraction + min-clip merge; opt-in `segment`: keeps built outward from segments, no merge/dissolve needed), plus word-level `filler_cuts` (on the Phase 1 word timeline, config-gated) and `repeat_cuts` (deterministic stutter/duplicate-word n-gram detector, segment-bounded, config-gated) — both apply identically in either mode |
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
-| `xml_export.py` | CutPlan → FCP7 (xmeml v5) XML for Premiere; rational timebase only, **refuses VFR sources** (GAP-2); emits an audio-only crossfade transition on word-blade junctions; CLI `python -m cutdeck.xml_export --job-id N` |
 | `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
 | `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded (issue #17/#20) by the since-retired `live_clip.py`; kept in place, currently unused |
 

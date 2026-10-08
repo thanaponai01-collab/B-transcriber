@@ -92,7 +92,7 @@ def audio_track_groups(tracks: list[ET.Element]) -> list[int]:
 
 
 def pathurl_to_path(pathurl: str) -> Path:
-    """Inverse of ``xml_export._pathurl`` — ``file://localhost/C%3A/...`` -> ``C:/...``."""
+    """Premiere's ``file://localhost/C%3A/...`` URL -> ``C:/...``."""
     parsed = urlparse(pathurl)
     raw = unquote(parsed.path)
     if len(raw) >= 3 and raw[0] == "/" and raw[2] == ":":

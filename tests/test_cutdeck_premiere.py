@@ -2,6 +2,7 @@
 import asyncio
 import json
 from pathlib import Path
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -196,9 +197,13 @@ def test_real_socket_handles_bad_input_and_reconnect(tmp_path):
 
 # --- sources with real media paths ----------------------------------------------
 
+def _pathurl(abs_path) -> str:
+    """The ``file://localhost/`` URL Premiere writes: drive colon percent-encoded, slashes kept."""
+    return "file://localhost/" + quote(str(abs_path).replace("\\", "/").lstrip("/"), safe="/")
+
+
 def source_with_audio(media_path, name="Original"):
     """Same shape as source(), plus one audio clip naming a real media file."""
-    from cutdeck.xml_export import _pathurl
     return ('<xmeml><sequence id="original"><uuid>old</uuid>'
             f'<name>{name}</name><duration>300</duration>'
             '<rate><timebase>30</timebase><ntsc>FALSE</ntsc></rate>'

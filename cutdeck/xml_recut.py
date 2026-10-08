@@ -6,8 +6,8 @@ XML into an ElementTree and mutate only the numbers that must change; every
 element the transform doesn't understand round-trips structurally unchanged
 (ElementTree re-serialization reformats whitespace, but touches no tag,
 attribute, or text the transform didn't explicitly edit). This is deliberately
-the opposite strategy from ``xml_export.py``
-(which builds a fresh tree from a ``CutPlan``) — here the input tree already
+the opposite strategy from building a fresh tree
+from a ``CutPlan`` — here the input tree already
 carries structure this codebase has never modeled (logging metadata, color
 info, per-track UI state), and inventing a model for all of it would silently
 drop whatever nobody thought to model.
@@ -388,7 +388,7 @@ def recut(source_xml: str, plan: CutPlan, *,
     Pure: string in, string out, no side effects, no Premiere dependency.
     Returns ``(recut_xml, RecutReport)``. Raises ``XmlRecutRefusal`` on any
     structure this transform must not guess about, and ``ValueError`` on a
-    VFR timebase (GAP-2, matching ``xml_export.to_xml``).
+    VFR timebase (GAP-2).
     """
     if plan.timebase.is_vfr:
         raise ValueError(

@@ -291,7 +291,7 @@ def test_plan_json_roundtrip():
 def test_plan_json_roundtrip_preserves_is_vfr():
     """GAP-2 bug fix: to_dict/from_dict used to drop Timebase.is_vfr entirely,
     so any VFR source's plan silently came back is_vfr=False the moment it
-    was saved and reloaded -- defeating xml_export's VFR refusal/conform path
+    was saved and reloaded -- defeating the VFR refusal/conform path
     in the real CLI flow (which always goes through the DB, never an
     in-memory CutPlan). Confirmed both directions here."""
     cfg = CutConfig()
@@ -372,7 +372,7 @@ def test_plan_store_roundtrip():
 
 def test_plan_store_roundtrip_preserves_is_vfr():
     """Same GAP-2 bug as test_plan_json_roundtrip_preserves_is_vfr, but
-    through the real DB save/load path xml_export.py's CLI actually uses."""
+    through the real DB save/load path the CLIs actually use."""
     from transcribe.db import store
     db = _tmp_db()
     store.init_db(db)

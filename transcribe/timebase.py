@@ -217,7 +217,7 @@ def _ffprobe(media_path: str) -> dict:
         "stream=codec_type,r_frame_rate,avg_frame_rate,sample_rate:format=duration",
         media_path,
     ]
-    # encoding/errors explicit — see the note in cutdeck/xml_export.probe_frame_size:
+    # encoding/errors explicit:
     # text=True decodes ffprobe's UTF-8 output with the locale codec, and a Thai
     # media path in its stderr then loses the whole error message.
     out = subprocess.run(cmd, capture_output=True, text=True,
