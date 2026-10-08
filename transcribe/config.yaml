@@ -364,18 +364,6 @@ segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split
 
-# which exporter consumes a CutPlan. 'new_sequence' (default): xml_export.py
-# builds a fresh FCP7 sequence for the editor to import — the proven,
-# lower-risk path. See cutdeck/export_mode.py.
-cutdeck:
-  # new_sequence | recut_sequence
-  #   new_sequence   — write an FCP7 XML for the editor to import. Safest default
-  #                    (never touches a live sequence); real-import acceptance
-  #                    still OPEN, see TODO_LEDGER.
-  #   recut_sequence — rewrite the editor's OWN exported FCP7 XML with the cuts
-  #                    applied, sync-preserving and offline (HANDOFF_CUTDECK_XML_RECUT).
-  mode: new_sequence
-
 # Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
 # model served by `ollama serve`, never an external API. Off by default —
 # reconcile._pick() falls back to _script_fallback whenever llm_enabled is
