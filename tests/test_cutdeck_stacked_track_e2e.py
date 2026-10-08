@@ -150,6 +150,18 @@ def test_default_run_cuts_the_dialogue_pause_on_every_track_in_sync(tmp_path, ex
                 assert PAUSE_S[0] * FPS <= cut_start and cut_end <= PAUSE_S[1] * FPS
 
 
+def test_analyze_returns_the_pause_cut_without_a_cli_or_xml(export):
+    import yaml
+    source, overlay = export
+    config = yaml.safe_load((Path(__file__).resolve().parent.parent / "transcribe/config.yaml").read_text(encoding="utf-8"))
+    xml_recut._deep_update(config, yaml.safe_load(overlay.read_text(encoding="utf-8")))
+    plan, cuts = xml_recut.analyze(from_fcp7_xml(source.read_text(encoding="utf-8")), config, frame_range=RANGE)
+    assert len(cuts) >= 1
+    for a, b in cuts:
+        assert RANGE[0] <= a < b <= RANGE[1]
+        assert PAUSE_S[0] * FPS <= a and b <= PAUSE_S[1] * FPS
+
+
 def test_default_run_preserves_unknown_xml_and_file_listings(tmp_path, export):
     sequence, _ = _recut(tmp_path, export)
     # Content the transform has no model for round-trips.

@@ -534,15 +534,145 @@ def _deep_update(base: dict, overlay: dict) -> None:
             base[key] = value
 
 
-def main(argv: list[str] | None = None) -> int:
-    import argparse
+def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tuple[int, int] | None = None,
+            audio_track: int | None = None, asr: bool = False, db=None, job_id: int = 0,
+            mixdown_wav: str | None = None) -> tuple[CutPlan, list[tuple[int, int]]]:
+    """Analyse the sequence's reference audio (or the given ``mixdown_wav``) and return the plan plus
+    its cut spans in sequence frames, scoped to ``frame_range``. The one place a rough cut's cuts
+    are decided; ``main`` only chooses what to do with the result."""
     import tempfile
     from pathlib import Path
 
-    import yaml
-
     from cutdeck.contracts import CutConfig
     from cutdeck.sequence_mixdown import plan_from_mixdown
+
+    tb = seq.timebase
+    seq_frames = seq.duration_frames
+    cfg = CutConfig.from_yaml(raw_config)
+
+    # Same config->ingest mapping as the rest of the pipeline. Without it,
+    # ingest() falls back to its own hardcoded defaults (vad_threshold=0.5,
+    # vad_min_silence_ms=300) and silence detection diverges from config.yaml
+    # (2026-08-29 bug: leftover silence in recut output).
+    from transcribe.pipeline.ingest import ingest_settings
+    ingest_kwargs = dict(denoise=raw_config.get("denoise", True),
+                         **ingest_settings(raw_config))
+
+    if asr:
+        # One ingest serves the duration guard, run_file() and the plan. run_file
+        # feeds ingest().audio to a whole-file engine, which must hear the raw
+        # track, so the shared pass can't be denoised (run_file's own rule).
+        ingest_kwargs["denoise"] = False
+
+    extracted_tmp = None
+    window = None  # (lo, hi) sequence frames, set only when we trim the mixdown ourselves
+    if mixdown_wav is None:
+        from cutdeck.xml_audio_extract import extract_mixdown
+        _progress(5, "Extracting audio")
+        extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        extracted_tmp.close()
+        print("no mixdown given — extracting one from the sequence's own source media...")
+        mixdown_wav = extract_mixdown(
+            seq, extracted_tmp.name, audio_track,
+            range_start_frame=frame_range[0] if frame_range else None,
+            range_end_frame=frame_range[1] if frame_range else None,
+            sample_rate=16000,
+        )
+        if frame_range:
+            window = range_window_frames(tb, seq_frames, frame_range)
+
+    try:
+        from transcribe.pipeline.ingest import ingest
+        _progress(20, "Detecting speech")
+        mixdown_result = ingest(mixdown_wav, materialize_chunks=False, **ingest_kwargs)
+        _check_duration_guard(window[1] - window[0] if window else seq_frames,
+                              mixdown_result.duration_ms, tb)
+
+        tokens = None
+        words = None
+        if asr:
+            from types import SimpleNamespace
+
+            from transcribe.db import store
+            from transcribe.pipeline.run import run_file
+
+            from cutdeck.words import words_for_job
+
+            db_path = Path(db) if db else store._DEFAULT_DB
+
+            # The mixdown is deterministic for one sequence + range, so its sha256
+            # is the cache key: a finished job for the same media, engine pair and
+            # pipeline version already holds the transcript — reuse it, 0 ASR passes.
+            from transcribe.pipeline import plan as planning
+            from transcribe.pipeline.run import PIPELINE_VERSION
+            engine_a, engine_b = planning.canonical_engine_names(raw_config)
+            asr_conn = store.connect(db_path)
+            try:
+                media_id = store.create_media(asr_conn, mixdown_wav)
+                cached = store.find_finished_job(
+                    asr_conn, media_id, engine_a, engine_b, PIPELINE_VERSION)
+                if cached is not None:
+                    print(f"--asr: reusing the transcript of job {cached.id} "
+                          "(same mixdown, engines and pipeline version)")
+                    words = words_for_job(asr_conn, cached.id)
+                    token_dicts = [dict(text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
+                                   for t in store.get_tokens(asr_conn, cached.id)]
+                    job_id = cached.id
+            finally:
+                asr_conn.close()
+
+            if cached is None:
+                _progress(35, "Transcribing speech")
+                print("--asr: running the full ASR pipeline on the mixdown "
+                      "(this transcribes the whole mixdown — slower than silence-only)...")
+                token_dicts = run_file(mixdown_wav, raw_config, db_path,
+                                       ingest_result=mixdown_result)
+                # run_file() resolves/creates its own job_id internally and never
+                # returns it — look it up by media path so the plan we save below
+                # references the job the tokens actually belong to, not job_id's
+                # default of 0 (which doesn't exist -> cut_plan FK violation).
+                asr_conn = store.connect(db_path)
+                try:
+                    job_row = store.get_latest_job_for_media(asr_conn, media_id)
+                    if job_row is not None:
+                        job_id = job_row.id
+                        words = words_for_job(asr_conn, job_row.id)
+                finally:
+                    asr_conn.close()
+            print(f"--asr: got {len(token_dicts)} tokens")
+            # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
+            # dicts run_file returns aren't attribute-accessible, so wrap them
+            # rather than re-deriving the job id run_file already resolved
+            # internally (duplicating its resumable-job lookup would be another
+            # place that lookup could drift out of sync).
+            tokens = [
+                SimpleNamespace(idx=i, text=t["text"],
+                                 start_ms=t["start_ms"], end_ms=t["end_ms"])
+                for i, t in enumerate(token_dicts)
+            ]
+
+        _progress(85, "Calculating cut spans")
+        plan = plan_from_mixdown(mixdown_wav, job_id, cfg, timebase=tb,
+                                  tokens=tokens, ingest_result=mixdown_result,
+                                  words=words)
+    finally:
+        if extracted_tmp is not None:
+            Path(extracted_tmp.name).unlink(missing_ok=True)
+
+    if window:
+        # The plan was built on a WAV that starts at the window's first frame.
+        plan = shift_plan(plan, frame_to_ms_int(window[0], tb))
+
+    cuts = scoped_cuts(plan, tb, seq_frames, frame_range)
+    return plan, cuts
+
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    from pathlib import Path
+
+    import yaml
 
     ap = argparse.ArgumentParser(
         description="Recut an exported FCP7 XML sequence against a silence-removal "
@@ -609,123 +739,10 @@ def main(argv: list[str] | None = None) -> int:
     raw_config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     if args.overlay:
         _deep_update(raw_config, yaml.safe_load(Path(args.overlay).read_text(encoding="utf-8")))
-    cfg = CutConfig.from_yaml(raw_config)
-
-    # Same config->ingest mapping as the rest of the pipeline. Without it,
-    # ingest() falls back to its own hardcoded defaults (vad_threshold=0.5,
-    # vad_min_silence_ms=300) and silence detection diverges from config.yaml
-    # (2026-08-29 bug: leftover silence in recut output).
-    from transcribe.pipeline.ingest import ingest_settings
-    ingest_kwargs = dict(denoise=raw_config.get("denoise", True),
-                         **ingest_settings(raw_config))
-
-    if args.asr:
-        # One ingest serves the duration guard, run_file() and the plan. run_file
-        # feeds ingest().audio to a whole-file engine, which must hear the raw
-        # track, so the shared pass can't be denoised (run_file's own rule).
-        ingest_kwargs["denoise"] = False
-
-    extracted_tmp = None
-    mixdown_wav = args.mixdown_wav
-    window = None  # (lo, hi) sequence frames, set only when we trim the mixdown ourselves
-    if mixdown_wav is None:
-        from cutdeck.xml_audio_extract import extract_mixdown
-        _progress(5, "Extracting audio")
-        extracted_tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        extracted_tmp.close()
-        print("no mixdown given — extracting one from the sequence's own source media...")
-        mixdown_wav = extract_mixdown(
-            seq, extracted_tmp.name, args.audio_track,
-            range_start_frame=frame_range[0] if frame_range else None,
-            range_end_frame=frame_range[1] if frame_range else None,
-            sample_rate=16000,
-        )
-        if frame_range:
-            window = range_window_frames(tb, seq_frames, frame_range)
-
-    try:
-        from transcribe.pipeline.ingest import ingest
-        _progress(20, "Detecting speech")
-        mixdown_result = ingest(mixdown_wav, materialize_chunks=False, **ingest_kwargs)
-        _check_duration_guard(window[1] - window[0] if window else seq_frames,
-                              mixdown_result.duration_ms, tb)
-
-        tokens = None
-        words = None
-        if args.asr:
-            from types import SimpleNamespace
-
-            from transcribe.db import store
-            from transcribe.pipeline.run import run_file
-
-            from cutdeck.words import words_for_job
-
-            db_path = Path(args.db) if args.db else store._DEFAULT_DB
-
-            # The mixdown is deterministic for one sequence + range, so its sha256
-            # is the cache key: a finished job for the same media, engine pair and
-            # pipeline version already holds the transcript — reuse it, 0 ASR passes.
-            from transcribe.pipeline import plan as planning
-            from transcribe.pipeline.run import PIPELINE_VERSION
-            engine_a, engine_b = planning.canonical_engine_names(raw_config)
-            asr_conn = store.connect(db_path)
-            try:
-                media_id = store.create_media(asr_conn, mixdown_wav)
-                cached = store.find_finished_job(
-                    asr_conn, media_id, engine_a, engine_b, PIPELINE_VERSION)
-                if cached is not None:
-                    print(f"--asr: reusing the transcript of job {cached.id} "
-                          "(same mixdown, engines and pipeline version)")
-                    words = words_for_job(asr_conn, cached.id)
-                    token_dicts = [dict(text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
-                                   for t in store.get_tokens(asr_conn, cached.id)]
-                    args.job_id = cached.id
-            finally:
-                asr_conn.close()
-
-            if cached is None:
-                _progress(35, "Transcribing speech")
-                print("--asr: running the full ASR pipeline on the mixdown "
-                      "(this transcribes the whole mixdown — slower than silence-only)...")
-                token_dicts = run_file(mixdown_wav, raw_config, db_path,
-                                       ingest_result=mixdown_result)
-                # run_file() resolves/creates its own job_id internally and never
-                # returns it — look it up by media path so the plan we save below
-                # references the job the tokens actually belong to, not args.job_id's
-                # default of 0 (which doesn't exist -> cut_plan FK violation).
-                asr_conn = store.connect(db_path)
-                try:
-                    job_row = store.get_latest_job_for_media(asr_conn, media_id)
-                    if job_row is not None:
-                        args.job_id = job_row.id
-                        words = words_for_job(asr_conn, job_row.id)
-                finally:
-                    asr_conn.close()
-            print(f"--asr: got {len(token_dicts)} tokens")
-            # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
-            # dicts run_file returns aren't attribute-accessible, so wrap them
-            # rather than re-deriving the job id run_file already resolved
-            # internally (duplicating its resumable-job lookup would be another
-            # place that lookup could drift out of sync).
-            tokens = [
-                SimpleNamespace(idx=i, text=t["text"],
-                                 start_ms=t["start_ms"], end_ms=t["end_ms"])
-                for i, t in enumerate(token_dicts)
-            ]
-
-        _progress(85, "Calculating cut spans")
-        plan = plan_from_mixdown(mixdown_wav, args.job_id, cfg, timebase=tb,
-                                  tokens=tokens, ingest_result=mixdown_result,
-                                  words=words)
-    finally:
-        if extracted_tmp is not None:
-            Path(extracted_tmp.name).unlink(missing_ok=True)
-
-    if window:
-        # The plan was built on a WAV that starts at the window's first frame.
-        plan = shift_plan(plan, frame_to_ms_int(window[0], tb))
-
-    cuts = scoped_cuts(plan, tb, seq_frames, frame_range)
+    plan, cuts = analyze(seq, raw_config, frame_range=frame_range, audio_track=args.audio_track,
+                         asr=args.asr, db=args.db, job_id=args.job_id, mixdown_wav=args.mixdown_wav)
+    # analyze() trims the mixdown to the In/Out window itself only when it extracted one.
+    window = range_window_frames(tb, seq_frames, frame_range) if frame_range and args.mixdown_wav is None else None
     n_cut = len(cuts)
     cut_ms = frame_to_ms_int(sum(b - a for a, b in cuts), tb)
 
