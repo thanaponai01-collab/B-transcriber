@@ -219,7 +219,6 @@ rms_gate_floor_percentile: 10.0   # how far into the quiet tail counts as "gate-
 rms_gate_min_gap_ms: 300
 chunk_overlap_ms: 750       # GAP-4: adjacent VAD chunks overlap this much so stitch.py
                             # dedupes seam words (only used when a chunk engine is active)
-conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources before frame export
 
 # Hallucination filtering (GAP-3): drop tokens that sit mostly inside VAD silence
 drop_tokens_over_silence: true

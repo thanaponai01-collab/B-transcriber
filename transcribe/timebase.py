@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import subprocess
 from dataclasses import dataclass
 from fractions import Fraction
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -131,7 +129,7 @@ def probe(media_path: str) -> Timebase:
 
     Uses ``avg_frame_rate`` as truth. If ``r_frame_rate != avg_frame_rate`` the
     source is variable-frame-rate (VFR) — flagged via ``is_vfr`` so downstream
-    frame-based export (GAP-2) can refuse or conform a CFR proxy.
+    frame-based work (GAP-2) can refuse it.
 
     Falls back to a 25/1 timebase if ffprobe is unavailable or the file has no
     video stream (audio-only) — frame math is only meaningful once a video
@@ -162,39 +160,6 @@ def probe(media_path: str) -> Timebase:
         duration_ms=duration_ms,
         is_vfr=is_vfr,
     )
-
-
-def conform_vfr(media_path: str, tb: Timebase, out_dir: Optional[str] = None) -> tuple[str, "Timebase"]:
-    """Transcode a constant-frame-rate proxy for a VFR source (GAP-2).
-
-    ``-vsync cfr`` at the source's own average rate duplicates/drops frames to
-    fit a single grid without changing playback timing, so span boundaries in
-    milliseconds (already computed against the audio track) stay valid against
-    the proxy. Audio is copied, not re-encoded. Re-probes the proxy and raises
-    if it still reports VFR (conform failed).
-    """
-    if shutil.which("ffmpeg") is None:
-        raise RuntimeError("ffmpeg not found on PATH — cannot conform a VFR proxy")
-
-    src = Path(media_path)
-    dest_dir = Path(out_dir) if out_dir else src.parent
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    proxy_path = dest_dir / f"{src.stem}.cfr_proxy{src.suffix}"
-
-    target_rate = f"{tb.fps_num}/{tb.fps_den}"
-    cmd = [
-        "ffmpeg", "-y", "-i", str(src),
-        "-vsync", "cfr", "-r", target_rate, "-c:a", "copy",
-        str(proxy_path),
-    ]
-    logger.info("Conforming VFR proxy: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True, capture_output=True, text=True,
-                   encoding="utf-8", errors="replace")
-
-    new_tb = probe(str(proxy_path))
-    if new_tb.is_vfr:
-        raise RuntimeError(f"CFR conform failed: proxy {proxy_path} still reports VFR")
-    return str(proxy_path), new_tb
 
 
 def _parse_rate(rate: str) -> tuple[int, int]:

@@ -110,8 +110,8 @@ def run_file(
         store.set_media_timebase(conn, media_id, tb.fps_num, tb.fps_den, tb.is_vfr)
         if tb.is_vfr:
             logger.warning(
-                "Job %d: source is VFR (variable frame rate) — frame-based export "
-                "requires a conformed CFR proxy (config conform_vfr: true)", job_id
+                "Job %d: source is VFR (variable frame rate) — frame-based cuts "
+                "need a constant-frame-rate copy", job_id
             )
     except Exception as e:
         logger.info("Timebase probe skipped (%s)", e)

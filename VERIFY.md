@@ -8,7 +8,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: broke the silence-gap comparison in cues/split.py (gap_ms x1000), test_cues_* went red, reverted
 
 ## Audio ingest
-- test: `python -m pytest tests/test_audio_decode.py tests/test_audio_windows.py tests/test_denoise_inmemory.py tests/test_phase3_ingest.py tests/test_stitch_fuzzy_seam_text.py tests/test_stitch_seam_window.py tests/test_stitch_subword_coincidence.py tests/test_vfr_conform.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_audio_decode.py tests/test_audio_windows.py tests/test_denoise_inmemory.py tests/test_phase3_ingest.py tests/test_stitch_fuzzy_seam_text.py tests/test_stitch_seam_window.py tests/test_stitch_subword_coincidence.py -q -p no:cacheprovider`
 - fail-proof: disabled the zero-gap span merge in audio/windows.py, test_audio_windows/test_phase3_ingest went red, reverted
 
 ## Engines
