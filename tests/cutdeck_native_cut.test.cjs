@@ -14,7 +14,7 @@ const { applyNativeCut, findUncuttable } = require("../uxp/cutdeck/timeline/nati
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set() } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set() } = {}) {
   let guid = 0;
   const sequences = [];
   const makeSeq = (name, tracks) => { const s = { name, id: `g${guid++}`, tracks }; sequences.push(s); return s; };
@@ -26,6 +26,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   }
   let transactions = 0;
   let moveCalls = 0;
+  let cloneCalls = 0;
   const clones = [];
   let inTx = false;
   // Live run 2026-09-24: an action created outside executeTransaction's callback throws.
@@ -120,7 +121,10 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
     TickTime: { createWithTicks: (s) => ({ ticks: s }) },
     TrackItemSelection: { createEmptySelection: (cb) => { const items = []; cb({ items, addItem: (it) => items.push(it._raw) }); return true; } },
     SequenceEditor: { getEditor: (s) => ({
-      createCloneTrackItemAction: (item, t) => act({ type: "clone", raw: item._raw, by: BigInt(t.ticks) }),
+      createCloneTrackItemAction: (item, t) => {
+        if (staleCloneCalls.has(++cloneCalls)) throw new Error("The script object is no longer valid.");
+        return act({ type: "clone", raw: item._raw, by: BigInt(t.ticks) });
+      },
       createRemoveItemsAction: (sel, ripple, mt) => act({ type: "remove", seq: s._seq, items: sel.items, mt }),
     }) },
   };
@@ -263,3 +267,12 @@ test("stale handle mid-batch in close gaps: commits partial batch, re-reads, and
   assert.ok(r.steps >= 6, `expected at least 6 steps with split batch, got ${r.steps}`);
 });
 
+
+test("stale handle mid-batch in split at cut edges: commits partial batch, re-reads, and completes exact cut", async () => {
+  // Live 2026-10-10: action 2585 of 3000 in the razor step threw "The script object is no longer valid."
+  const h = fakeHost(golden.before, { staleCloneCalls: new Set([15 + 8]) /* 15 filler clones, then mid-razor */ });
+  const r = await applyNativeCut(h.ppro, h.project, h.source, golden, "partial-split");
+  const copy = h.sequences.find((s) => s.name === "partial-split");
+  assert.deepEqual(h.rowsOf(copy), golden.after.map((x) => JSON.stringify(x)).sort());
+  assert.ok(r.steps >= 6, `expected at least 6 steps with split batch, got ${r.steps}`);
+});

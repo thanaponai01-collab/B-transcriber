@@ -185,10 +185,12 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
   // 3. razor: one filler clone per cut edge. Batched like step 5 (live 2026-10-01: a 55 s commit and
   // stale handles on a 16k-action run), each batch from a fresh read; the filler stays at `park`.
+  // Live 2026-10-10: a handle still went stale mid-batch (action 2585 of 3000), so like step 5 a
+  // batch commits what it built and the next one re-reads and continues from there.
   const cutAt = [];
   for (const [key, at] of edges) for (const p of at) cutAt.push([key, p]);
   seq = null;
-  for (let from = 0; from < cutAt.length; from += SPLIT_BATCH) {
+  for (let from = 0; from < cutAt.length;) {
     seq = await read({ inPoint: false });
     const fillers = new Map();
     const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
@@ -202,7 +204,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       return Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(f.item, dt, 0, 0, false, false),
         { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` });
     });
-    steps += tx("split at cut edges", razor).steps;
+    const res = tx("split at cut edges", razor, { allowPartial: true });
+    steps += res.steps;
+    if (res.count === 0) throw new Error(`split at cut edges: stalled at edge ${from + 1} of ${cutAt.length}`);
+    from += res.count;
   }
 
   // 4. remove everything inside a cut, and the fillers — per media type.
