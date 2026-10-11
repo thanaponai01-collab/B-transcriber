@@ -8,7 +8,7 @@ transform has no model for. A1 is switched-off music that never goes quiet; A2 i
 dialogue with one long pause. The VAD reads the real extracted audio, so *which*
 track was analyzed decides whether anything is cut.
 
-Real ffmpeg, real extraction, real ``xml_recut.main``; only Silero is replaced by an
+Real ffmpeg, real extraction, real ``rough_cut.main``; only Silero is replaced by an
 energy detector so no model download or GPU is needed.
 """
 from pathlib import Path
@@ -18,10 +18,12 @@ from xml.etree import ElementTree as ET
 import numpy as np
 import pytest
 
-from cutdeck import xml_recut
-from cutdeck.xml_bridge import reference_audio_track
-from cutdeck.sequence_model import check_reference_audio, from_fcp7_xml
-from cutdeck.xml_sequence import frame_to_ticks
+from cutdeck import rough_cut, sequence_model
+from cutdeck.helper import reference_audio_track
+from cutdeck.sequence_model import check_reference_audio
+from tests.sequence_fixture import from_fcp7_xml, panel_json_from_xml
+import json
+from cutdeck.sequence_timing import frame_to_ticks
 from cutdeck.contracts import Timebase
 from transcribe.pipeline import ingest as ingest_mod
 
@@ -95,104 +97,69 @@ def export(tmp_path, monkeypatch):
     media.mkdir()
     xml = _sequence(_wav(media / "picture.wav", None), _wav(media / "music.wav", None),
                     _wav(media / "dialogue.wav", PAUSE_S))
-    path = tmp_path / "source.xml"
-    path.write_text(xml, encoding="utf-8")
+    path = tmp_path / "sequence.json"
+    path.write_text(json.dumps(panel_json_from_xml(xml)), encoding="utf-8")
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text("denoise: false\nrms_gate_enabled: false\n", encoding="utf-8")
     return path, overlay
 
 
-def _recut(tmp_path, export, *extra):
+def _analyse(tmp_path, export, *extra):
     source, overlay = export
-    out, report = tmp_path / "out.xml", tmp_path / "report.json"
-    assert xml_recut.main([str(source), "--overlay", str(overlay), "--out", str(out),
-                           "--report", str(report), "--no-save-plan",
+    out = tmp_path / "cuts.json"
+    assert rough_cut.main([str(source), "--overlay", str(overlay), "--cuts-json", str(out),
                            "--range-start-frame", str(RANGE[0]),
                            "--range-end-frame", str(RANGE[1]), *extra]) == 0
-    import json
-    return ET.parse(out).getroot().find("sequence"), json.loads(report.read_text(encoding="utf-8"))
+    data = json.loads(out.read_text(encoding="utf-8"))
+    return data, data["report"]
 
 
-def _tracks(sequence):
-    return sequence.findall("media/video/track") + sequence.findall("media/audio/track")
 
 
 def test_default_reference_is_the_switched_on_dialogue_track(export):
     source, _ = export
-    checked = check_reference_audio(from_fcp7_xml(source.read_text(encoding="utf-8")))
+    checked = check_reference_audio(sequence_model.load(source))
     assert checked["track"] == 1  # A2, not the switched-off A1
     assert [Path(f).name for f in checked["files"]] == ["dialogue.wav"]
     assert checked["clip_count"] == 2
 
 
-def test_default_run_cuts_the_dialogue_pause_on_every_track_in_sync(tmp_path, export):
-    sequence, report = _recut(tmp_path, export)
-    removed = report["removed_frames"]
-    assert report["cuts_applied"] >= 1 and removed > 0
-    assert int(sequence.findtext("duration")) == FRAMES - removed
-
-    for track in _tracks(sequence):
-        clips = track.findall("clipitem")
-        # Every clip started aligned (start == in). After the cut, a piece is either
-        # untouched (offset 0) or shifted by exactly the removed duration — on every
-        # track, so picture, music and both dialogue channels stay in sync.
-        offsets = {int(c.findtext("in")) - int(c.findtext("start")) for c in clips}
-        assert offsets == {0, removed}, (track.get("currentExplodedTrackIndex"), offsets)
-        for c in clips:
-            # The audio engine reads ticks; stale ticks play the wrong audio silently.
-            assert int(c.findtext("pproTicksIn")) == frame_to_ticks(int(c.findtext("in")), TB)
-            assert int(c.findtext("pproTicksOut")) == frame_to_ticks(int(c.findtext("out")), TB)
-            # The removed span lies inside the pause and inside In/Out.
-            if int(c.findtext("in")) - int(c.findtext("start")) == removed:
-                cut_end = int(c.findtext("in"))
-                cut_start = cut_end - removed
-                assert RANGE[0] <= cut_start and cut_end <= RANGE[1]
-                assert PAUSE_S[0] * FPS <= cut_start and cut_end <= PAUSE_S[1] * FPS
+def test_json_analysis_cuts_the_dialogue_pause_in_sequence_frames(tmp_path, export):
+    cuts, report = _analyse(tmp_path, export)
+    assert report["cuts_applied"] >= 1 and report["removed_frames"] > 0
+    for a, b in cuts["cuts_frames"]:
+        assert RANGE[0] <= a < b <= RANGE[1]
+        assert PAUSE_S[0] * FPS <= a and b <= PAUSE_S[1] * FPS
+    assert cuts["source_sequence"] == json.loads(export[0].read_text())
 
 
 def test_analyze_returns_the_pause_cut_without_a_cli_or_xml(export):
     import yaml
     source, overlay = export
     config = yaml.safe_load((Path(__file__).resolve().parent.parent / "transcribe/config.yaml").read_text(encoding="utf-8"))
-    xml_recut._deep_update(config, yaml.safe_load(overlay.read_text(encoding="utf-8")))
-    plan, cuts = xml_recut.analyze(from_fcp7_xml(source.read_text(encoding="utf-8")), config, frame_range=RANGE)
+    rough_cut._deep_update(config, yaml.safe_load(overlay.read_text(encoding="utf-8")))
+    plan, cuts = rough_cut.analyze(sequence_model.load(source), config, frame_range=RANGE)
     assert len(cuts) >= 1
     for a, b in cuts:
         assert RANGE[0] <= a < b <= RANGE[1]
         assert PAUSE_S[0] * FPS <= a and b <= PAUSE_S[1] * FPS
 
 
-def test_default_run_preserves_unknown_xml_and_file_listings(tmp_path, export):
-    sequence, _ = _recut(tmp_path, export)
-    # Content the transform has no model for round-trips.
-    assert sequence.findtext("timecode/string") == "00:00:00:00"
-    assert sequence.findtext("media/video/format/samplecharacteristics/width") == "1920"
-    assert sequence.findtext("media/audio/numOutputChannels") == "2"
-    assert {c.findtext("logginginfo/description") for c in sequence.iter("clipitem")
-            if c.find("logginginfo") is not None} == {"take 3"}
-    # Channel grouping and track switches survive, so Premiere re-imports the same tracks.
-    audio = sequence.findall("media/audio/track")
-    assert [(t.get("totalExplodedTrackCount"), t.get("currentExplodedTrackIndex"),
-             t.findtext("enabled")) for t in audio] == [
-        ("2", "0", "FALSE"), ("2", "1", "FALSE"), ("2", "0", "TRUE"), ("2", "1", "TRUE")]
-    # Each file still has exactly one full listing, so no clip goes offline on import.
-    listed = [f.get("id") for f in sequence.iter("file") if f.find("pathurl") is not None]
-    assert sorted(listed) == ["fd", "fm", "fv"]
 
 
 def test_explicit_premiere_track_maps_through_channel_groups(tmp_path, export):
     """The panel sends Premiere's logical track; the helper reads it as that track. Picking A1 (the switched-off music) is honored — and music never pauses,
     so nothing is cut. Picking A2 gives the same result as the default."""
     source, _ = export
-    sequence = from_fcp7_xml(source.read_text(encoding="utf-8"))
+    sequence = sequence_model.load(source)
     a1 = reference_audio_track(sequence, {"audio_track": 0, "audio_track_count": 2})
     a2 = reference_audio_track(sequence, {"audio_track": 1, "audio_track_count": 2})
     assert (a1, a2) == (0, 1)
 
-    _, report = _recut(tmp_path, export, "--audio-track", str(a1))
+    _, report = _analyse(tmp_path, export, "--audio-track", str(a1))
     assert report["cuts_applied"] == 0 and report["removed_frames"] == 0
 
-    default_seq, _ = _recut(tmp_path, export)
-    default_xml = ET.tostring(default_seq, encoding="unicode")
-    explicit_seq, _ = _recut(tmp_path, export, "--audio-track", str(a2))
-    assert ET.tostring(explicit_seq, encoding="unicode") == default_xml
+    default_seq, _ = _analyse(tmp_path, export)
+    default_cuts = default_seq["cuts_frames"]
+    explicit_seq, _ = _analyse(tmp_path, export, "--audio-track", str(a2))
+    assert explicit_seq["cuts_frames"] == default_cuts

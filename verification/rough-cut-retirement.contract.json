@@ -1,0 +1,18 @@
+{
+  "goal": "Retire XML-file Rough Cut, preserve JSON analysis and native editing, and reject stale source audio before native edits",
+  "target": "local",
+  "max_attempts": 5,
+  "timeout_seconds": 600,
+  "max_seconds": 10800,
+  "criteria": [
+    {"statement": "Shared services have no XML dependency and retired XML routes fail clearly", "stage": "retire"},
+    {"statement": "Native apply refuses a changed source audio snapshot before editing", "stage": "retire"},
+    {"statement": "JSON analysis, native golden, helper jobs, ClubFriday and panel regressions pass", "stage": "prove"}
+  ],
+  "oracle_files": ["verification/rough-cut-retirement.md", "tests/test_cutdeck_rough_cut_retirement.py", "tests/fixtures/cutdeck_native_plan_golden.json", "scripts/check_rough_cut.py"],
+  "stages": [
+    {"id": "retire", "skill": "evolve-maintain", "command": ["python", "scripts/check_rough_cut.py", "--acceptance"], "inputs": ["cutdeck", "uxp/cutdeck", "clubfriday", "tests", "scripts", "verification/rough-cut-retirement.md"]},
+    {"id": "prove", "skill": "correctness-gate", "command": ["python", "scripts/check_rough_cut.py"], "inputs": ["cutdeck", "uxp/cutdeck", "clubfriday", "tests", "scripts", "transcribe/config.yaml", "docs/rough-cut.md", "docs/architecture.md", "BUILD.md"]}
+  ],
+  "actions": []
+}

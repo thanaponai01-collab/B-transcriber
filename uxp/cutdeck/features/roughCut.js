@@ -122,7 +122,7 @@ function createRoughCutFeature({
       r = await applyCut(ppro, project, sequence, job.cuts, job.result_name);
     } catch (error) {
       // A copy exists now: resuming would cut the source again into a second one.
-      if (error && error.copyCreated) clearJob();
+      if (error && (error.copyCreated || error.staleSource)) clearJob();
       throw error;
     }
     clearJob();

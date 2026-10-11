@@ -1,25 +1,25 @@
-"""Unit tests for cutdeck.xml_bridge — the rough-cut job lifecycle."""
+"""Unit tests for cutdeck.helper — the rough-cut job lifecycle."""
 
 import asyncio
 import time
 from pathlib import Path
 import pytest
 
-from cutdeck.xml_bridge import XmlJobs
+from cutdeck.helper import Jobs
 
 
 
 @pytest.fixture(autouse=True)
 def _media_check_stub(monkeypatch):
-    """These tests drive the job with the xml_recut child stubbed; the source-media check
-    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
-    from cutdeck import xml_bridge
-    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+    """These tests drive the job with the rough_cut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_audio_extract.py."""
+    from cutdeck import helper
+    monkeypatch.setattr(helper, "check_reference_audio",
                         lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 
 def test_parse_progress():
-    from cutdeck.xml_bridge import parse_progress
+    from cutdeck.helper import parse_progress
 
     assert parse_progress("PROGRESS:50:Transcribing speech\r\n") == {"pct": 50, "stage": "Transcribing speech"}
     assert parse_progress("PROGRESS:150:Overshoot")["pct"] == 100
@@ -32,10 +32,10 @@ def test_xml_jobs_cut_reports_progress_while_running(tmp_path, monkeypatch):
     """`status` must show the stage the subprocess last announced, mid-run."""
     import json
     import sys
-    from cutdeck import xml_bridge
+    from cutdeck import helper
 
     go = tmp_path / "go"
-    # Stand-in for xml_recut: announce a stage, hold until the test has looked, finish.
+    # Stand-in for rough_cut: announce a stage, hold until the test has looked, finish.
     fake = f"""
 import sys, json, time, pathlib
 print('PROGRESS:50:Transcribing speech', flush=True)
@@ -51,13 +51,13 @@ json.dump({{'cuts_frames': [], 'ticks_per_frame': '1', 'sequence_duration_frames
     def fake_exec(*args, **kwargs):
         return real_exec(sys.executable, "-u", "-c", fake, *args[4:], **kwargs)
 
-    monkeypatch.setattr(xml_bridge.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(helper.asyncio, "create_subprocess_exec", fake_exec)
     # Only _run's subprocess handling is under test, not the export-dependent lookups.
-    monkeypatch.setattr(xml_bridge, "range_from_ticks", lambda *_: (0, 10))
-    monkeypatch.setattr(xml_bridge, "reference_audio_track", lambda *_: None)
+    monkeypatch.setattr(helper, "range_from_ticks", lambda *_: (0, 10))
+    monkeypatch.setattr(helper, "reference_audio_track", lambda *_: None)
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         prep = await jobs.dispatch({
             "type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "Seq",
             "audio_track": None, "audio_track_count": 1, "asr": False,
@@ -86,10 +86,10 @@ json.dump({{'cuts_frames': [], 'ticks_per_frame': '1', 'sequence_duration_frames
 
 
 def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
-    """Drive one cut job whose xml_recut child is `script` (given the real child's
+    """Drive one cut job whose rough_cut child is `script` (given the real child's
     arguments in sys.argv); return (jobs, final status)."""
     import sys
-    from cutdeck import xml_bridge
+    from cutdeck import helper
 
     real_exec = asyncio.create_subprocess_exec
     spawned = []
@@ -99,12 +99,12 @@ def _run_cut_with_fake_child(tmp_path, monkeypatch, script):
         spawned.append(proc)
         return proc
 
-    monkeypatch.setattr(xml_bridge.asyncio, "create_subprocess_exec", spawn)
-    monkeypatch.setattr(xml_bridge, "range_from_ticks", lambda *_: (0, 10))
-    monkeypatch.setattr(xml_bridge, "reference_audio_track", lambda *_: None)
+    monkeypatch.setattr(helper.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(helper, "range_from_ticks", lambda *_: (0, 10))
+    monkeypatch.setattr(helper, "reference_audio_track", lambda *_: None)
 
     async def _drive():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         prep = await jobs.dispatch({
             "type": "prepare", "project_id": "p", "sequence_id": "s", "sequence_name": "Seq",
             "audio_track": None, "audio_track_count": 1, "asr": False,
@@ -175,9 +175,9 @@ def test_restarted_helper_gets_a_hidden_console_not_none(tmp_path, monkeypatch):
     """A DETACHED_PROCESS helper has no console, so each ffmpeg/ffprobe it runs pops a visible
     console window (reproduced 2026-09-24). CREATE_NO_WINDOW gives it a hidden one to inherit."""
     import subprocess
-    from cutdeck import xml_bridge
+    from cutdeck import helper
     seen = {}
-    monkeypatch.setattr(xml_bridge.subprocess, "Popen", lambda *a, **k: seen.update(k))
-    xml_bridge.spawn_replacement(7891, tmp_path)
+    monkeypatch.setattr(helper.subprocess, "Popen", lambda *a, **k: seen.update(k))
+    helper.spawn_replacement(7891, tmp_path)
     assert seen["creationflags"] & subprocess.CREATE_NO_WINDOW
     assert not seen["creationflags"] & subprocess.DETACHED_PROCESS

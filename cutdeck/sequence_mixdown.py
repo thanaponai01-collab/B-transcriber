@@ -82,7 +82,7 @@ def plan_from_mixdown(
     ``ingest_result`` (optional ``IngestResult`` from ``ingest(mixdown_path,
     ...)`` with the same ``ingest_kwargs``): reuse a decode + VAD pass the
     caller already ran on this mixdown instead of repeating it
-    (``xml_recut`` ingests once for its duration guard). ``ingest_kwargs`` are
+    (``rough_cut`` ingests once for its duration guard). ``ingest_kwargs`` are
     ignored when it is given.
     """
     if (cfg.fillers_enabled or cfg.repeats_enabled) and not words:

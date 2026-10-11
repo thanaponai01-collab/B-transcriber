@@ -28,7 +28,21 @@ Owner priority supersedes the earlier transcription CLI foundation next step.
   original failure cases; .verify-evidence/rough-cut-reliability finished strict green.
   Details and limits: verification/rough-cut-reliability.md.
 
+## Rough Cut XML retirement - 2026-10-11
+Owner approved the review's three steps: separate shared services, retire XML-file
+entry points, and strengthen the existing native architecture. RUN.json owns execution.
+- Shared helper: cutdeck/helper.py; JSON analysis: cutdeck/rough_cut.py; audio extraction:
+  cutdeck/audio_extract.py; exact timing: cutdeck/sequence_timing.py.
+- FCP7 parsing/writing and the XML-file MCP tool are retired. Old commands explain the
+  replacement; old prepared/ready XML jobs fail clearly. JSON job storage is preserved.
+- Newly analysed cuts retain their source audio snapshot. Both panel and agent apply paths
+  compare it before cloning; stale results clear the panel job so the next cut can analyse.
+- Current architecture and instructions: docs/rough-cut.md and uxp/cutdeck/README.md.
+- Local checks: python scripts/check_rough_cut.py. Rejection/strict evidence and limits:
+  verification/rough-cut-retirement-evidence.md (when complete).
+
 ## Next
 Run the repaired Rough Cut on the previously failing sequence in live Premiere;
 verify read-back and retained original. Read-only readiness currently fails because
-Premiere is not running. No real-host success is claimed from the offline tests.
+Premiere is not running. Reload the panel and restart the helper for protocol cutdeck-6.
+No real-host success is claimed from the offline tests.

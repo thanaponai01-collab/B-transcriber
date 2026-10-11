@@ -1,0 +1,6 @@
+{
+  "file": "cutdeck/rough_cut.py",
+  "before": "\"source_sequence\": source_sequence,",
+  "after": "\"source_sequence\": {},",
+  "claim": "Cut output carries the source snapshot that was analysed, so native apply can reject a changed source."
+}

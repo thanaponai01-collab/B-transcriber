@@ -292,6 +292,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
 /* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
 async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
+  if (cutsJson.source_sequence) {
+    const { assertSourceAudioUnchanged } = require("../workflow.js");
+    await assertSourceAudioUnchanged(ppro, source, cutsJson.source_sequence);
+  }
   // Seconds per step, summed by label, so a slow run shows where its time went.
   const timings = {};
   // Works for sync steps (transactions: errors must throw where they happen) and async reads.

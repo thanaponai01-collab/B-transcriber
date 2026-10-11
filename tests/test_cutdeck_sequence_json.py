@@ -13,9 +13,11 @@ import pytest
 import soundfile as sf
 
 from cutdeck import sequence_model
-from cutdeck.sequence_model import check_reference_audio, from_fcp7_xml, from_panel_json
-from cutdeck.xml_bridge import XmlJobs, range_from_ticks, reference_audio_track
-from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, resolve_file_path
+from cutdeck.sequence_model import check_reference_audio, from_panel_json
+from tests.sequence_fixture import from_fcp7_xml
+from cutdeck.helper import Jobs, range_from_ticks, reference_audio_track
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
+from tests.sequence_fixture import resolve_file_path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = Path(__file__).parent / "fixtures" / "cutdeck_recut_sample_scrubbed.xml"
@@ -56,36 +58,7 @@ def test_both_routes_pick_the_same_reference_track_and_clips(premiere_track):
     assert exported.reference_track(index) == panel.reference_track(index)
 
 
-def test_cuts_json_from_both_routes_matches_frame_for_frame(tmp_path):
-    """The whole analysis (real ffmpeg extraction, VAD, cut rules) on the same audio, fed each way."""
-    tone = tmp_path / "tone.wav"
-    rate = 48000
-    audio = np.zeros(rate * 6, dtype=np.float32)
-    audio[rate:rate * 2] = 0.5 * np.sin(2 * np.pi * 440 * np.arange(rate) / rate)
-    audio[rate * 4:rate * 5] = 0.5 * np.sin(2 * np.pi * 440 * np.arange(rate) / rate)
-    sf.write(tone, audio, rate)
-    read = {"ticks_per_frame": str(TPF_30), "end_ticks": str(180 * TPF_30), "audio_tracks": [
-        {"enabled": True, "clips": [{"path": str(tone), "enabled": True, "start_ticks": "0",
-                                     "in_ticks": "0", "out_ticks": str(6 * PPRO_TICKS_PER_SECOND)}]}]}
-    xml = tmp_path / "export.xml"
-    xml.write_text(_xml_export_of(read), encoding="utf-8")
-    (tmp_path / "sequence.json").write_text(json.dumps(read), encoding="utf-8")
-    cuts = {}
-    for name in ("export.xml", "sequence.json"):
-        out = tmp_path / f"{name}.cuts.json"
-        run = subprocess.run([sys.executable, "-m", "cutdeck.xml_recut", str(tmp_path / name), "--cuts-json",
-                              str(out), "--no-save-plan", "--config", str(ROOT / "transcribe/config.yaml"),
-                              "--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")],
-                             cwd=ROOT, capture_output=True, text=True)
-        assert run.returncode == 0, run.stdout + run.stderr
-        cuts[name] = json.loads(out.read_text(encoding="utf-8"))
-    assert cuts["export.xml"]["cuts_frames"], "the silences between the tones should be cut"
-    assert cuts["export.xml"]["cuts_frames"] == cuts["sequence.json"]["cuts_frames"]
-
-
-def test_a_job_prepared_before_the_upgrade_still_starts(tmp_path):
-    """A job folder from before `prepare` stored sequence.json holds only source.xml, state prepared.
-    It starts, and its cuts.json matches a job prepared today from the same sequence."""
+def test_json_analysis_is_repeatable_and_keeps_the_source_snapshot(tmp_path):
     tone = tmp_path / "tone.wav"
     rate = 48000
     audio = np.zeros(rate * 6, dtype=np.float32)
@@ -95,62 +68,28 @@ def test_a_job_prepared_before_the_upgrade_still_starts(tmp_path):
     read = {"ticks_per_frame": str(TPF_30), "end_ticks": str(180 * TPF_30), "audio_tracks": [
         {"enabled": True, "clips": [{"path": str(tone), "enabled": True, "start_ticks": "0",
                                      "in_ticks": "0", "out_ticks": str(6 * PPRO_TICKS_PER_SECOND)}]}]}
-    context = {"project_id": "p", "sequence_id": "s", "sequence_name": "Seq", "audio_track": 0,
-               "audio_track_count": 1, "asr": False, "in_ticks": "0", "out_ticks": str(180 * TPF_30),
-               "end_ticks": str(180 * TPF_30), "ticks_per_frame": str(TPF_30)}
-    old_id = "a" * 32
-    old = tmp_path / "jobs" / old_id
-    old.mkdir(parents=True)
-    (old / "source.xml").write_text(_xml_export_of(read), encoding="utf-8")
-    (old / "job.json").write_text(json.dumps({
-        "job_id": old_id, "job_type": "cut", "state": "prepared", "context": context,
-        "source_path": str(old / "source.xml"), "result_name": "Seq", "log_path": str(old / "process.log"),
-        "output": "native"}), encoding="utf-8")
-
-    async def _finished(jobs, job_id):
-        for _ in range(600):
-            job = await jobs.dispatch({"type": "status", "job_id": job_id})
-            if job["state"] not in ("prepared", "running"):
-                return job
-            await asyncio.sleep(0.5)
-        raise AssertionError("the job did not finish")
-
-    async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")  # a fresh helper: the old job is only on disk
-        started = await jobs.dispatch({"type": "start", "job_id": old_id})
-        assert started["state"] == "running", started
-        cuts_of_old = (await _finished(jobs, old_id))["cuts"]["cuts_frames"]
-        new = await jobs.dispatch({"type": "prepare", **context, "sequence": read})
-        await jobs.dispatch({"type": "start", "job_id": new["job_id"]})
-        assert cuts_of_old, "the silences between the tones should be cut"
-        assert cuts_of_old == (await _finished(jobs, new["job_id"]))["cuts"]["cuts_frames"]
-
-    asyncio.run(_test())
+    source = tmp_path / "sequence.json"
+    source.write_text(json.dumps(read), encoding="utf-8")
+    results = []
+    for n in range(2):
+        out = tmp_path / f"cuts{n}.json"
+        run = subprocess.run([sys.executable, "-m", "cutdeck.rough_cut", str(source), "--cuts-json", str(out),
+                              "--config", str(ROOT / "transcribe/config.yaml"),
+                              "--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")],
+                             cwd=ROOT, capture_output=True, text=True)
+        assert run.returncode == 0, run.stdout + run.stderr
+        results.append(json.loads(out.read_text(encoding="utf-8")))
+    assert results[0]["cuts_frames"], "the silences between tones should be cut"
+    assert results[0] == results[1]
+    assert results[0]["source_sequence"] == read
 
 
-def _pathurl(abs_path) -> str:
-    """The ``file://localhost/`` URL Premiere writes: drive colon percent-encoded, slashes kept."""
-    return "file://localhost/" + quote(str(abs_path).replace("\\", "/").lstrip("/"), safe="/")
-
-
-def _xml_export_of(read: dict) -> str:
-    """A minimal FCP7 export of a one-track panel read, as Premiere writes it (pproTicks, pathurl)."""
-    clip = read["audio_tracks"][0]["clips"][0]
-    frames = lambda ticks: int(ticks) // TPF_30  # noqa: E731
-    return f"""<?xml version="1.0" encoding="UTF-8"?><xmeml version="4"><sequence id="s"><name>t</name>
-<duration>{frames(read["end_ticks"])}</duration><rate><timebase>30</timebase><ntsc>FALSE</ntsc></rate>
-<media><audio><track><clipitem id="c1"><name>t</name><enabled>TRUE</enabled><start>{frames(clip["start_ticks"])}</start>
-<end>{frames(clip["out_ticks"])}</end><in>0</in><out>{frames(clip["out_ticks"])}</out>
-<pproTicksIn>{clip["in_ticks"]}</pproTicksIn><pproTicksOut>{clip["out_ticks"]}</pproTicksOut>
-<file id="f1"><pathurl>{_pathurl(clip["path"])}</pathurl></file></clipitem><enabled>TRUE</enabled></track></audio></media></sequence></xmeml>"""
-
-
-def test_load_reads_both_a_sequence_json_and_a_prepared_job_from_before_the_model(tmp_path):
-    """Jobs prepared by an earlier helper hold `source.xml`; they must still start."""
+def test_load_accepts_json_and_retires_old_xml_jobs(tmp_path):
     read = _panel_read_of_the_fixture()
     (tmp_path / "sequence.json").write_text(json.dumps(read), encoding="utf-8")
-    (tmp_path / "source.xml").write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
-    assert sequence_model.load(tmp_path / "sequence.json") == sequence_model.load(tmp_path / "source.xml")
+    assert sequence_model.load(tmp_path / "sequence.json") == from_panel_json(read)
+    with pytest.raises(ValueError, match="retired"):
+        sequence_model.load(tmp_path / "source.xml")
 
 
 def test_the_live_range_check_accepts_the_panel_read():
@@ -163,7 +102,7 @@ def test_the_live_range_check_accepts_the_panel_read():
 
 def test_a_mixdown_from_json_puts_the_audio_where_the_clip_sits(tmp_path):
     """Real ffmpeg: a 1 s tone placed at 1 s in a 3 s sequence lands at 1 s in the mixdown."""
-    from cutdeck.xml_audio_extract import extract_mixdown
+    from cutdeck.audio_extract import extract_mixdown
     rate = 48000
     tone = tmp_path / "tone.wav"
     sf.write(tone, 0.5 * np.sin(2 * np.pi * 440 * np.arange(rate) / rate).astype(np.float32), rate)
@@ -216,7 +155,7 @@ def test_prepare_writes_the_sequence_and_a_refused_prepare_leaves_nothing(tmp_pa
                "out_ticks": str(30 * TPF_30), "end_ticks": str(90 * TPF_30), "ticks_per_frame": str(TPF_30)}
 
     async def _test():
-        jobs = XmlJobs(tmp_path)
+        jobs = Jobs(tmp_path)
         job = await jobs.dispatch({**context, "sequence": _read()})
         source = sequence_model.load(job["source_path"])
         assert Path(job["source_path"]).name == "sequence.json"
@@ -233,7 +172,7 @@ def test_a_retimed_reference_clip_is_refused_before_any_audio_is_read(tmp_path):
     media = tmp_path / "a.wav"
     sf.write(str(media), np.zeros(4800, dtype=np.float32), 48000)
     read = _read(path=str(media), speed=2.0)
-    with pytest.raises(sequence_model.XmlRecutRefusal, match="200% speed"):
+    with pytest.raises(sequence_model.SequenceRefusal, match="200% speed"):
         check_reference_audio(from_panel_json(read))
     # 100% is the same as no speed field, and a clip that is off is not analysed at all
     assert check_reference_audio(from_panel_json(_read(path=str(media), speed=1.0)))["clip_count"] == 1

@@ -14,6 +14,51 @@ const { applyNativeCut, findUncuttable } = require("../uxp/cutdeck/timeline/nati
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
+function audioSnapshot(rows) {
+  const audioTracks = [];
+  for (const [kind, track, start, end, inPoint] of rows) {
+    if (kind !== "audio") continue;
+    while (audioTracks.length <= track) audioTracks.push({ enabled: true, clips: [] });
+    audioTracks[track].clips.push({ path: "D:/a.mp4", enabled: true,
+      start_ticks: String(BigInt(start) * TPF), in_ticks: String(BigInt(inPoint) * TPF),
+      out_ticks: String(BigInt(inPoint + end - start) * TPF) });
+  }
+  return { ticks_per_frame: String(TPF), end_ticks: String(BigInt(Math.max(...rows.map((r) => r[3]))) * TPF),
+    audio_tracks: audioTracks };
+}
+
+for (const [name, change] of [
+  ["timing", (h) => { h.src.tracks.audio[0][0].start += TPF; }],
+  ["source in", (h) => { h.src.tracks.audio[0][0].in += TPF; }],
+  ["media", (h) => { h.src.tracks.audio[0][0].path = "D:/different.wav"; }],
+  ["disabled clip", (h) => { h.src.tracks.audio[0][0].disabled = true; }],
+  ["speed", (h) => { h.src.tracks.audio[0][0].speed = 2; }],
+  ["muted track", (h) => { h.src.tracks.audio[0].muted = true; }],
+  ["duration", (h) => { h.src.tracks.video[0][0].end += TPF; }],
+]) {
+  test(`source audio snapshot: changed ${name} refuses before cloning or editing`, async () => {
+    const h = fakeHost(golden.before, { speedOf: (r) => r.speed || 1 });
+    change(h);
+    const sourceBefore = h.rowsOf(h.src);
+    await assert.rejects(applyNativeCut(h.ppro, h.project, h.source,
+      { ...golden, source_sequence: audioSnapshot(golden.before) }, "Stale result"),
+      (error) => /changed since analysis/.test(error.message) && error.staleSource === true);
+    assert.equal(h.transactions, 0, "stale audio snapshot caused a transaction");
+    assert.equal(h.sequences.length, 1, "stale audio snapshot created a copy");
+    assert.deepEqual(h.rowsOf(h.src), sourceBefore);
+  });
+}
+
+test("source audio snapshot: enumeration order changes still apply the exact golden", async () => {
+  const h = fakeHost(golden.before);
+  for (const track of h.src.tracks.audio) track.reverse();
+  const result = await applyNativeCut(h.ppro, h.project, h.source,
+    { ...golden, source_sequence: audioSnapshot(golden.before) }, "Fresh result");
+  assert.equal(result.cuts, golden.cuts_frames.length);
+  const copy = h.sequences.find((s) => s.name === "Fresh result");
+  assert.deepEqual(h.rowsOf(copy), golden.after.map((r) => JSON.stringify(r)).sort());
+});
+
 function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set() } = {}) {
   let guid = 0;
   const sequences = [];
@@ -73,7 +118,10 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   const wrapItem = (r) => {
     const item = { _raw: r, _stale: false,
     getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: r.end.toString() }),
-    getInPoint: async () => n({ ticks: r.in.toString() }), getSpeed: async () => n(speedOf(r)), isSpeedReversed: async () => n(0),
+    getInPoint: async () => n({ ticks: r.in.toString() }),
+    getOutPoint: async () => n({ ticks: (r.in + r.end - r.start).toString() }),
+    isDisabled: async () => !!r.disabled,
+    getSpeed: async () => n(speedOf(r)), isSpeedReversed: async () => n(0),
     getProjectItem: async () => n({ getMediaFilePath: async () => n(r.path), isSequence: async () => n(false), isMulticamClip: async () => n(false) }),
     createMoveAction: (t) => {
       if (staleMoveCalls.has(++moveCalls)) item._stale = true;
@@ -84,13 +132,16 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
     createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) };
     return item;
   };
-  const wrapTrack = (seq, kind, i) => ({ getTrackItems: (type) => (type === 2
+  const wrapTrack = (seq, kind, i) => ({ isMuted: async () => !!seq.tracks[kind][i].muted,
+    getTrackItems: (type) => (type === 2
     ? transitions.filter((x) => seq === src && x.kind === kind && x.track === i).map((x) => ({ getStartTime: async () => ({ ticks: x.start.toString() }), getEndTime: async () => ({ ticks: x.end.toString() }) }))
     : seq.tracks[kind][i].map(wrapItem)) });
   const wrapSeq = (seq) => ({ get name() { return seq.name; }, guid: { toString: () => seq.id }, _seq: seq,
     getVideoTrackCount: async () => seq.tracks.video.length, getAudioTrackCount: async () => seq.tracks.audio.length,
     getVideoTrack: async (i) => wrapTrack(seq, "video", i), getAudioTrack: async (i) => wrapTrack(seq, "audio", i),
     getTimebase: async () => TPF.toString(),
+    getEndTime: async () => ({ ticks: [...seq.tracks.video.flat(), ...seq.tracks.audio.flat()]
+      .reduce((end, r) => r.end > end ? r.end : end, 0n).toString() }),
     getProjectItem: async () => ({ _seq: seq, createSetNameAction: (n) => act({ type: "rename", seq, name: n }),
       getParentBin: () => binOf(seq) }),
     createCloneAction: () => act({ type: "cloneSeq", seq }) });

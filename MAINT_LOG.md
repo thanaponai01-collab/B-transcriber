@@ -9,6 +9,21 @@ read.
 
 ---
 
+## 2026-10-11 | Improve / Evolve | Rough Cut XML retirement and source identity
+
+Owner approved retirement after the architecture review. Traced: the panel already
+used JSON and native edits, while XML-named modules held active shared services and
+the MCP file tool still accepted XML. Proven offline: changing analysed source audio
+could reach native apply; seven new refusal cases failed before the guard.
+Moved active services to helper, rough_cut, audio_extract and sequence_timing;
+removed production FCP7 parsing/writing and the file-based MCP tool; retained clear
+old-command messages and failed-job recovery. Added source-snapshot comparison
+before cloning through the shared native entry point. Retained original preservation,
+bounded fresh-handle recovery and the frozen native golden. Reach: helper/launchers,
+panel and agent apply paths, shared ClubFriday extraction and current docs/tests.
+Guarded by scripts/check_rough_cut.py and the scoped recipe/evidence in verification/.
+Follow-up: reload panel, restart helper and verify on the previously failing live sequence.
+
 ## MAINT-001 | 2026-08-20 | Fix | doubled-syllable stutter at overlapping decode-window seams (issue #8)
 
 **Symptom:** on a long pause-free audio span, faster_whisper decodes it as

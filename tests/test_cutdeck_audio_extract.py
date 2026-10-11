@@ -1,4 +1,4 @@
-"""Acceptance — cutdeck.xml_audio_extract: build a mixdown WAV straight from
+"""Acceptance — cutdeck.audio_extract: build a mixdown WAV straight from
 an XML's own clipitems + source media, no Premiere export step.
 
 Runs against real ffmpeg on PATH (not mocked), same discipline as
@@ -11,20 +11,22 @@ from urllib.parse import quote
 
 import numpy as np
 import pytest
+from tests.sequence_fixture import from_fcp7_xml, panel_json_from_xml
+import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cutdeck import sequence_model, xml_audio_extract  # noqa: E402
-from cutdeck.xml_sequence import XmlRecutRefusal  # noqa: E402
+from cutdeck import sequence_model, audio_extract  # noqa: E402
+from cutdeck.sequence_timing import SequenceRefusal  # noqa: E402
 
 
 def extract_mixdown(xml, *args, **kwargs):
     """The extractor reads a Sequence; these tests describe theirs as an FCP7 export."""
-    return xml_audio_extract.extract_mixdown(sequence_model.from_fcp7_xml(xml), *args, **kwargs)
+    return audio_extract.extract_mixdown(from_fcp7_xml(xml), *args, **kwargs)
 
 
 def check_reference_audio(xml, *args):
-    return sequence_model.check_reference_audio(sequence_model.from_fcp7_xml(xml), *args)
+    return sequence_model.check_reference_audio(from_fcp7_xml(xml), *args)
 
 SR = 48000
 
@@ -131,7 +133,7 @@ def test_no_audio_tracks_refuses(tmp_path):
     </sequence>
 </xmeml>
 """
-    with pytest.raises(XmlRecutRefusal, match="no audio tracks"):
+    with pytest.raises(SequenceRefusal, match="no audio tracks"):
         extract_mixdown(xml, str(tmp_path / "out.wav"))
 
 
@@ -139,7 +141,7 @@ def test_out_of_range_audio_track_index_refuses(tmp_path):
     src = tmp_path / "source.wav"
     _tone_wav(src, 2.0, 440.0)
     xml = _sequence_xml(src, [(0, 60, 0, 60, True)], 60, 30)
-    with pytest.raises(XmlRecutRefusal, match="audio track"):
+    with pytest.raises(SequenceRefusal, match="audio track"):
         extract_mixdown(xml, str(tmp_path / "out.wav"), audio_track_index=5)
 
 
@@ -179,7 +181,7 @@ def test_recut_range_matches_full_mixdown_and_guard_rejects_wrong_length(tmp_pat
     """The trimmed-WAV path must yield the same recut as a full-length mixdown
     over the same range, and the duration guard must catch a wrong-length WAV."""
     import soundfile as sf
-    from cutdeck import xml_recut
+    from cutdeck import rough_cut
     from transcribe.pipeline import ingest as ingest_mod
 
     sr = 48000
@@ -190,8 +192,8 @@ def test_recut_range_matches_full_mixdown_and_guard_rejects_wrong_length(tmp_pat
     src = tmp_path / "source.wav"
     sf.write(str(src), audio, sr)
     xml = _sequence_xml(src, [(0, 600, 0, 600, True)], 600, 30)
-    xml_path = tmp_path / "seq.xml"
-    xml_path.write_text(xml, encoding="utf-8")
+    xml_path = tmp_path / "sequence.json"
+    xml_path.write_text(json.dumps(panel_json_from_xml(xml)), encoding="utf-8")
 
     def energy_vad(tensor, model, **kw):
         loud = (np.abs(np.asarray(tensor)) > 0.1).astype(np.int8)
@@ -205,20 +207,20 @@ def test_recut_range_matches_full_mixdown_and_guard_rejects_wrong_length(tmp_pat
 
     def run(out_name, *extra):
         out = tmp_path / out_name
-        rc = xml_recut.main([str(xml_path), *extra, *rng, "--overlay", str(overlay),
-                             "--out", str(out), "--no-save-plan"])
+        rc = rough_cut.main([str(xml_path), *extra, *rng, "--overlay", str(overlay),
+                             "--cuts-json", str(out)])
         assert rc == 0
-        return out.read_text(encoding="utf-8")
+        return json.loads(out.read_text(encoding="utf-8"))["cuts_frames"]
 
-    scoped = run("scoped.xml")  # CLI trims the mixdown itself
+    scoped = run("scoped.json")  # CLI trims the mixdown itself
     full_wav = tmp_path / "full.wav"
     extract_mixdown(xml, str(full_wav))
-    assert run("full.xml", str(full_wav)) == scoped
+    assert run("full.json", str(full_wav)) == scoped
 
     # 6s-10s of a 20s sequence is not the whole sequence and not the window.
     wrong = tmp_path / "wrong.wav"
     sf.write(str(wrong), audio[: 8 * sr], sr)
-    with pytest.raises(xml_recut.DurationMismatch):
+    with pytest.raises(rough_cut.DurationMismatch):
         run("wrong.xml", str(wrong))
 
 
@@ -252,7 +254,7 @@ def test_default_reference_skips_switched_off_track(tmp_path, wav):
 
 
 def test_default_reference_refuses_when_every_track_is_switched_off(tmp_path, wav):
-    with pytest.raises(XmlRecutRefusal, match="switched off"):
+    with pytest.raises(SequenceRefusal, match="switched off"):
         check_reference_audio(_tracks_xml([(False, [(wav, "")])]))
 
 
@@ -265,15 +267,15 @@ def test_explicit_reference_is_honored_even_when_switched_off(tmp_path, wav):
 @pytest.mark.parametrize("index", [-1, 2])
 def test_negative_or_out_of_range_reference_refuses(tmp_path, wav, index):
     xml = _tracks_xml([(True, [(wav, "")]), (True, [(wav, "")])])
-    with pytest.raises(XmlRecutRefusal, match="requested index"):
+    with pytest.raises(SequenceRefusal, match="requested index"):
         check_reference_audio(xml, index)
-    with pytest.raises(XmlRecutRefusal, match="requested index"):
+    with pytest.raises(SequenceRefusal, match="requested index"):
         extract_mixdown(xml, str(tmp_path / "out.wav"), index)
 
 
 def test_missing_source_media_refuses(tmp_path, wav):
     xml = _tracks_xml([(True, [(wav, ""), (tmp_path / "offline.wav", "")])])
-    with pytest.raises(XmlRecutRefusal, match="missing or offline"):
+    with pytest.raises(SequenceRefusal, match="missing or offline"):
         check_reference_audio(xml)
 
 
@@ -285,13 +287,13 @@ def test_source_without_audio_stream_refuses(tmp_path):
     silent_video = tmp_path / "picture_only.mp4"
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
                     "testsrc=duration=1:size=64x64:rate=30", str(silent_video)], check=True)
-    with pytest.raises(XmlRecutRefusal, match="no audio stream"):
+    with pytest.raises(SequenceRefusal, match="no audio stream"):
         check_reference_audio(_tracks_xml([(True, [(silent_video, "")])]))
 
 
 def test_clip_on_another_frame_grid_without_ticks_refuses(tmp_path, wav):
     own_rate = "<rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>"
-    with pytest.raises(XmlRecutRefusal, match="own frame rate"):
+    with pytest.raises(SequenceRefusal, match="own frame rate"):
         check_reference_audio(_tracks_xml([(True, [(wav, own_rate)])]))
     ticked = own_rate + "<pproTicksIn>0</pproTicksIn><pproTicksOut>254016000000</pproTicksOut>"
     assert check_reference_audio(_tracks_xml([(True, [(wav, ticked)])]))["clip_count"] == 1

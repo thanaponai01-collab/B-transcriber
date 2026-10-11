@@ -4,7 +4,7 @@
   const SUFFIX = "cuts stay inside marked In/Out.";
   const FALLBACK = "Processing sequence in helper… Cuts stay inside marked In/Out.";
 
-  // `job.progress` is {pct, stage} once xml_recut has announced a phase; absent before that
+  // `job.progress` is {pct, stage} once analysis has announced a phase; absent before that
   // and for sync jobs. Anything malformed falls back to the static message rather than
   // showing "undefined… NaN%". `job.reference` names the audio being analyzed (e.g.
   // "A2 (interview.wav)") once the helper has checked it; older helpers never send it.

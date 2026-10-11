@@ -5,7 +5,7 @@
     python -m cutdeck.premiere_cli apply_cuts <job_id>
     python -m cutdeck.premiere_cli add_markers markers.json   # [{"start_s": 1.5, "name": "..."}]
 
-Prints the result as JSON. The helper (`python -m cutdeck.xml_bridge`) must be running and the
+Prints the result as JSON. The helper (`python -m cutdeck.helper`) must be running and the
 CutDeck panel open in Premiere. Python scripts can call `cutdeck.ai_backend.Backend().premiere`
 directly instead (docs/arch-design-helper-v2.md move 3).
 """
@@ -19,7 +19,7 @@ import sys
 
 from cutdeck.ai_backend import Backend
 from cutdeck.driver_commands import COMMANDS
-from cutdeck.xml_bridge import PORT
+from cutdeck.helper import PORT
 
 
 async def run(args, backend: Backend):

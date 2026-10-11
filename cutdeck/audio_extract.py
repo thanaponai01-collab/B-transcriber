@@ -1,30 +1,8 @@
-"""xml_audio_extract.py — build a sequence-timeline mixdown WAV directly from
-an exported FCP7 XML's own clipitems and source media, no Premiere render.
+"""Build a timeline-aligned mono mixdown from a typed sequence and original source media.
 
-``sequence_mixdown.py``'s ingest path needs a waveform that represents what
-the editor actually hears across the sequence's timeline, to run VAD/silence
-detection against. Normally that means the editor exports one by hand
-(``File > Export > Media``). This module builds the same kind of waveform
-without that step: the XML already names every source file and its exact
-in/out/start/end on the timeline, so each audio clip's segment can be pulled
-straight from its original source file (via ffmpeg) and pasted into a silence
-buffer at its timeline position — the same pattern the retired mark-and-apply
-``live_clip.py`` used (reads original media directly rather than waiting on
-a render).
-
-**What this trades away, on purpose:** a real Premiere export bakes in
-whatever the sequence's mix actually does — gain automation, EQ, panning,
-crossfades. This module reads only each clip's position and source In/Out (Premiere ticks)
-and does none of that. For a plain stacked-clip sequence with no effects
-(this project's real sequences, per ``docs/HANDOFF_CUTDECK_XML_RECUT.md``'s
-Phase 0 note) that gap is negligible; for a heavily mixed sequence it would
-not be — pick the manual export path there instead.
-
-Which track is the "reference" dialogue track is decided by
-``cutdeck.sequence_model.Sequence.reference_track`` — the same rule the helper's
-pre-ASR check uses.
+Gain, EQ, panning and crossfades are not rendered. Reference-track selection belongs
+to sequence_model; positions and source In/Out use exact Premiere ticks.
 """
-
 from __future__ import annotations
 
 import shutil
@@ -32,7 +10,7 @@ from fractions import Fraction
 
 from cutdeck.sequence_model import Sequence
 from cutdeck.sync import extract_mono_audio
-from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, range_window_frames
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, range_window_frames
 
 _WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
 

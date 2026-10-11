@@ -2,7 +2,8 @@
 
 Current owner request (2026-10-11): improve reliability when Rough Cut stops midway
 and leaves a failed sequence; leave enough context to recover the design next time.
-The system is messy in its host recovery, but its helper/panel boundary is sound.
+Follow-up owner authorization: retire XML-file routes, separate shared services,
+and improve the native path. This is a local source change; live confirmation is pending.
 
 ## Requirements
 - Analyze the marked range; apply cuts to a copy, preserving the source sequence.
@@ -11,16 +12,19 @@ The system is messy in its host recovery, but its helper/panel boundary is sound
 - Allow at most three fresh-read retries without progress; then report the stage
   and action, mark the copy FAILED, and prevent Resume from duplicating that copy.
 - Only announce success after clip-by-clip read-back matches the pure cut plan.
+- Newly analysed cuts carry source audio data; changed media, timing, speed, enabled state,
+  track state or sequence duration must refuse before creating a copy.
 
 ## Current flow (source-traced)
 ```mermaid
 flowchart LR
   button["Rough Cut / Resume"] --> feature["roughCut.js: job lifecycle"]
   feature --> workflow["workflow.js: capture audio tracks"]
-  workflow --> helper["xml_bridge.py: persisted analysis job"]
-  helper --> analysis["xml_recut.py: cut frames"]
+  workflow --> helper["helper.py: persisted analysis job"]
+  helper --> analysis["rough_cut.py: cut frames"]
   helper --> feature
-  feature --> native["nativeCut.js: copy and edit"]
+  feature --> guard["workflow.js: compare source audio snapshot"]
+  guard --> native["nativeCut.js: copy and edit"]
   native --> plan["cutPlanApply.js: pure plan and comparison"]
   native --> host["Premiere: fresh handles and transactions"]
   host --> native
@@ -30,10 +34,11 @@ flowchart LR
 |---|---|
 | Button routing and feature construction | uxp/cutdeck/main.js:71,165-169 |
 | Capture, persisted job and Resume | uxp/cutdeck/features/roughCut.js:90,151,180 |
-| Native audio input; prepare/start | uxp/cutdeck/workflow.js:43,68 |
-| Persist sequence.json; launch analysis; return cuts | cutdeck/xml_bridge.py:299,472 |
+| Native audio input; prepare/start | uxp/cutdeck/workflow.js:40,63 |
+| Compare source audio before any copy/edit | uxp/cutdeck/workflow.js:84 |
+| Persist sequence.json; launch analysis; return cuts | cutdeck/helper.py:277,440 |
 | Pure cut plan and verification | uxp/cutdeck/timeline/cutPlanApply.js:132,163 |
-| Native edit entry point (panel and agent calls) | uxp/cutdeck/timeline/nativeCut.js:294; uxp/cutdeck/features/driver.js:117 |
+| Native edit entry point (panel and agent calls) | uxp/cutdeck/timeline/nativeCut.js:294; uxp/cutdeck/features/driver.js:105 |
 | Transactions owned in one place | uxp/cutdeck/host/project.js:26 |
 
 ## Failure and repair
@@ -56,9 +61,32 @@ This is reversible code, without a stored-data or public-API migration.
 - Includes first-action/mid-batch recovery, persistent failure, source preservation,
   432-cut/5-track scale, refusal, job persistence and failed-copy handling.
 - Live Premiere remains required: offline fakes cannot prove host commit semantics.
-- Source edits during analysis are not fingerprinted; sequence identity is checked.
+- New cuts include source_sequence: native apply rereads audio and compares a canonical
+  signature before cloning. Enumeration order is ignored; both panel and agent use this guard.
+- Stale-source errors discard the panel result so a new cut reanalyses. Wrong sequence identity
+  stays resumable. Older saved JSON results without snapshots retain the old checks.
 - Filler setup/removal errors and commit failures are not automatically retried.
 - Native razor is announced for 27.1 but unproven here (PREMIERE_FACTS.md:205).
   Replacing overwrite-as-razor requires an installed-host probe first.
 - Historical HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md describes retired XML input and
   earlier split proposals; use this current map and workflow.js for today's flow.
+
+
+## XML retirement
+The helper is `python -m cutdeck.helper`; analysis is `cutdeck/rough_cut.py`,
+source extraction is `cutdeck/audio_extract.py`, and tick/frame/window math lives in
+`cutdeck/sequence_timing.py`. `sequence_model.py` validates JSON only.
+The XML-file MCP `rough_cut` tool and helper submit route are retired; use
+`premiere_rough_cut`, then `premiere_apply_cuts`. Prepared/ready XML jobs fail with a
+replacement message. JSON jobs retain their persisted format. Protocol version is cutdeck-6.
+
+`cutdeck.xml_bridge` is a compatibility launcher; `cutdeck.xml_recut` and cut_xml.ps1
+are retirement messages. Production contains no FCP7 parser or rewrite engine.
+The panel's installed manifest ID and saved-job key retain their historical names
+to preserve installation and recovery identity; they do not select an XML route.
+Historical XML fixtures are read only by tests/sequence_fixture.py; native output
+remains checked against the frozen native golden. Project-file XML for .prproj
+inspection, adjustment layers and color mattes remains a separate supported workflow.
+
+Verification contract: verification/rough-cut-retirement.md; command:
+`python scripts/check_rough_cut.py`. Reload the panel and restart the helper after this change.

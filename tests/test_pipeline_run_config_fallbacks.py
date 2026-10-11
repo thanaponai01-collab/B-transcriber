@@ -91,5 +91,5 @@ def test_ingest_settings_is_the_single_mapping_and_matches_config_yaml():
 
 def test_callers_do_not_re_spell_the_mapping():
     for path in (REPO_ROOT / "transcribe" / "pipeline" / "run.py",
-                 REPO_ROOT / "cutdeck" / "xml_recut.py"):
+                 REPO_ROOT / "cutdeck" / "rough_cut.py"):
         assert 'get("vad_' not in path.read_text(encoding="utf-8"), path

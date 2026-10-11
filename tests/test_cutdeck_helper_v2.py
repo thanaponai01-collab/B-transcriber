@@ -8,9 +8,9 @@ import time
 
 import pytest
 
-from cutdeck import xml_bridge
+from cutdeck import helper
 from cutdeck.ai_backend import Backend
-from cutdeck.xml_bridge import PPRO_TICKS_PER_SECOND, XmlJobs, serve
+from cutdeck.helper import PPRO_TICKS_PER_SECOND, Jobs, serve
 
 
 async def _with_helper(jobs, body):
@@ -33,7 +33,7 @@ async def _recv(ws, timeout=5):
 
 def test_replies_carry_the_request_id_and_do_not_wait_for_slower_ones(tmp_path, monkeypatch):
     """A slow frame_bounds (on its worker thread) doesn't hold up a status sent after it."""
-    monkeypatch.setattr(xml_bridge.frame_bounds, "measure_request",
+    monkeypatch.setattr(helper.frame_bounds, "measure_request",
                         lambda *_: (time.sleep(0.5), {"bounds": None})[1])
 
     async def body(port):
@@ -44,17 +44,17 @@ def test_replies_carry_the_request_id_and_do_not_wait_for_slower_ones(tmp_path, 
         assert (first["id"], first["ok"]) == (2, False) and "Unknown job" in first["message"]
         assert (second["id"], second["ok"], second["bounds"]) == (1, True, None)
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_a_request_without_an_id_gets_a_reply_without_one(tmp_path):
     async def body(port):
         async with _connect(port) as ws:
-            await ws.send(json.dumps({"type": "hello", "version": xml_bridge.VERSION}))
+            await ws.send(json.dumps({"type": "hello", "version": helper.VERSION}))
             reply = await _recv(ws)
         assert reply["ok"] and "id" not in reply
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_a_one_megabyte_request_is_read(tmp_path):
@@ -65,7 +65,7 @@ def test_a_one_megabyte_request_is_read(tmp_path):
             reply = await _recv(ws)
         assert reply["id"] == "big" and "Unknown job" in reply["message"]
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def _media(folder):
@@ -82,8 +82,8 @@ def test_watch_pushes_progress_then_the_finished_job(tmp_path, monkeypatch):
         raise RuntimeError("no audio stream")  # a finding in the plan, not a failed job
 
     release_flag = False
-    monkeypatch.setattr(xml_bridge, "_load_audio", slow_loader)
-    jobs = XmlJobs(tmp_path / "jobs")
+    monkeypatch.setattr(helper, "_load_audio", slow_loader)
+    jobs = Jobs(tmp_path / "jobs")
 
     async def body(port):
         nonlocal release_flag
@@ -107,7 +107,7 @@ def test_watch_pushes_progress_then_the_finished_job(tmp_path, monkeypatch):
 
 
 def test_watching_a_finished_job_just_returns_it(tmp_path):
-    jobs = XmlJobs(tmp_path)
+    jobs = Jobs(tmp_path)
     folder = tmp_path / ("a" * 32)
     folder.mkdir()
     jobs.jobs["a" * 32] = {"job_id": "a" * 32, "job_type": "cut", "state": "no_cuts"}
@@ -132,10 +132,10 @@ def _saved_job(folder, job_id, **fields):
 def test_a_job_running_when_the_helper_stopped_reads_as_interrupted(tmp_path):
     _saved_job(tmp_path, "b" * 32, state="running", progress={"pct": 40, "stage": "Transcribing"})
     _saved_job(tmp_path, "c" * 32, state="ready", cuts={"cuts_frames": [[1, 2]]})
-    _saved_job(tmp_path, "d" * 32, state="prepared", source_path=str(tmp_path / "source.xml"))
+    _saved_job(tmp_path, "d" * 32, state="prepared", source_path=str(tmp_path / "sequence.json"))
 
     async def _test():
-        jobs = XmlJobs(tmp_path)  # a fresh helper: nothing in memory
+        jobs = Jobs(tmp_path)  # a fresh helper: nothing in memory
         running = await jobs.dispatch({"type": "status", "job_id": "b" * 32})
         assert running["state"] == "interrupted" and "restarted" in running["message"]
         saved = json.loads((tmp_path / ("b" * 32) / "job.json").read_text(encoding="utf-8"))
@@ -156,7 +156,7 @@ def test_mcp_reports_an_interrupted_job(tmp_path):
     async def body(port):
         return await Backend(port).status("b" * 32)
 
-    view = asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    view = asyncio.run(_with_helper(Jobs(tmp_path), body))
     assert view["state"] == "interrupted"
 
 
@@ -191,7 +191,7 @@ def test_a_premiere_command_round_trips_through_the_panel(tmp_path):
         task.cancel()
         await ws.close()
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_without_a_panel_the_command_says_to_open_it(tmp_path):
@@ -200,7 +200,7 @@ def test_without_a_panel_the_command_says_to_open_it(tmp_path):
             await Backend(port).premiere("read_sequence")
         assert (await Backend(port).premiere_status())["connected"] is False
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_a_panel_that_disconnects_fails_the_pending_call(tmp_path):
@@ -216,7 +216,7 @@ def test_a_panel_that_disconnects_fails_the_pending_call(tmp_path):
         with pytest.raises(ValueError, match="open the CutDeck panel"):
             await Backend(port).premiere("read_sequence")
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_the_panels_refusal_is_the_callers_error(tmp_path):
@@ -227,11 +227,11 @@ def test_the_panels_refusal_is_the_callers_error(tmp_path):
         task.cancel()
         await ws.close()
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_apply_cuts_sends_a_finished_jobs_cut_list_and_nothing_else(tmp_path):
-    jobs = XmlJobs(tmp_path)
+    jobs = Jobs(tmp_path)
     cuts = {"cuts_frames": [[10, 20]], "ticks_per_frame": "8475667200", "sequence_duration_frames": 900}
     jobs.jobs["a" * 32] = {"job_id": "a" * 32, "job_type": "cut", "state": "ready", "cuts": cuts,
                            "context": {"sequence_id": "seq-guid", "sequence_name": "Interview"},
@@ -267,14 +267,14 @@ def test_add_markers_reach_the_panel_as_exact_ticks(tmp_path):
             "start_ticks": str(PPRO_TICKS_PER_SECOND * 3 // 2), "duration_ticks": str(PPRO_TICKS_PER_SECOND // 4),
             "name": "cut 1", "comment": "removed 0.3 s"}]
         for bad in ([], [{"start_s": -1}], [{"start_s": "1"}], [{"start_s": 1, "name": 5}], "x",
-                    [{"start_s": 1}] * (xml_bridge.MAX_MARKERS + 1)):
+                    [{"start_s": 1}] * (helper.MAX_MARKERS + 1)):
             with pytest.raises(ValueError):
                 await backend.premiere("add_markers", {"markers": bad})
         assert len(calls) == 1
         task.cancel()
         await ws.close()
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_only_the_fixed_commands_exist(tmp_path):
@@ -292,7 +292,7 @@ def test_only_the_fixed_commands_exist(tmp_path):
         task.cancel()
         await ws.close()
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 # --- the command line for outside scripts -------------------------------------------------------
@@ -314,7 +314,7 @@ def test_cli_runs_each_command_through_the_panel(tmp_path):
         task.cancel()
         await ws.close()
 
-    asyncio.run(_with_helper(XmlJobs(tmp_path), body))
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
 def test_cli_without_a_helper_says_how_to_start_it(capsys):
@@ -324,4 +324,4 @@ def test_cli_without_a_helper_says_how_to_start_it(capsys):
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     assert premiere_cli.main(["read_sequence", "--port", str(port)]) == 1
-    assert "python -m cutdeck.xml_bridge" in capsys.readouterr().err
+    assert "python -m cutdeck.helper" in capsys.readouterr().err

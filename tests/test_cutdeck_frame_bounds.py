@@ -8,7 +8,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from cutdeck import frame_bounds
-from cutdeck.xml_bridge import XmlJobs
+from cutdeck.helper import Jobs
 
 
 def _frames(folder, background=(0, 0, 0, 0)):
@@ -67,13 +67,13 @@ def test_identical_frames_give_no_box(tmp_path):
 
 def test_request_measures_and_keeps_only_the_latest_pair(tmp_path):
     on, off = _frames(tmp_path)
-    result = asyncio.run(XmlJobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
+    result = asyncio.run(Jobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
     assert result == {"bounds": {"left": 11, "top": 904, "right": 429, "bottom": 991}}
     assert not (tmp_path / "on.png").exists() and not (tmp_path / "off.png").exists()
     kept = tmp_path / "cutdeck-bounds-last-on.png", tmp_path / "cutdeck-bounds-last-off.png"
     assert all(path.exists() for path in kept)
     on, off = _frames(tmp_path)  # a second request replaces the kept pair
-    asyncio.run(XmlJobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
+    asyncio.run(Jobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
     assert all(path.exists() for path in kept) and not Path(on).exists()
 
 
@@ -81,7 +81,7 @@ def test_request_measures_and_keeps_only_the_latest_pair(tmp_path):
 def test_request_refuses_a_missing_frame(tmp_path, on):
     _, off = _frames(tmp_path)
     with pytest.raises(ValueError):
-        asyncio.run(XmlJobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
+        asyncio.run(Jobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": on, "off": off}))
 
 
 def test_single_frame_drawn_bounds(tmp_path):
@@ -97,7 +97,7 @@ def test_single_frame_request_dispatch(tmp_path):
     ImageDraw.Draw(img).rectangle([11, 904, 428, 990], fill=(250, 250, 250, 255))
     single_path = tmp_path / "single.png"
     img.save(single_path)
-    result = asyncio.run(XmlJobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": str(single_path)}))
+    result = asyncio.run(Jobs(tmp_path / "jobs").dispatch({"type": "frame_bounds", "on": str(single_path)}))
     assert result == {"bounds": {"left": 11, "top": 904, "right": 429, "bottom": 991}}
     assert not single_path.exists()
     assert (tmp_path / "cutdeck-bounds-last-on.png").exists()

@@ -1,9 +1,11 @@
-<!-- context-paths: clubfriday/server.py, clubfriday/static/app.js, cutdeck/ai_backend.py, cutdeck/xml_audio_extract.py, uxp/cutdeck/main.js -->
+<!-- context-paths: clubfriday/server.py, clubfriday/static/app.js, cutdeck/ai_backend.py, cutdeck/audio_extract.py, uxp/cutdeck/main.js -->
 # Architecture
 
 Rough Cut's current native analysis/edit flow and recovery rules are mapped in
 [Rough Cut](rough-cut.md), traced and tested offline on 2026-10-11. The historical
 native-cut handoff includes superseded XML input and split designs.
+The shared helper, analysis, extraction and timing now have independent modules;
+FCP7 input/output is retired. New cut plans validate source audio before native edits.
 
 ## ClubFriday path
 
@@ -14,10 +16,10 @@ This as-is module view was traced on 2026-10-11.
 flowchart LR
   browser["clubfriday/static/app.js"] --> server["clubfriday/server.py"]
   server --> backend["cutdeck/ai_backend.py"]
-  server --> audio["cutdeck/xml_audio_extract.py"]
+  server --> audio["cutdeck/audio_extract.py"]
   server --> sessions["output/clubfriday session files"]
   server --> srt["Project CutDeck/ClubFriday SRT"]
-  backend --> helper["cutdeck/xml_bridge.py websocket helper"]
+  backend --> helper["cutdeck/helper.py websocket helper"]
   panel["uxp/cutdeck/features/clubFriday.js"] --> server
 ```
 
@@ -28,7 +30,7 @@ flowchart LR
 | Server -> audio | clubfriday/server.py:74: extract_mixdown with zero padding |
 | Server -> sessions | clubfriday/server.py:111: atomic write_json persistence |
 | Server -> SRT | clubfriday/server.py:289, 306: BOM/CRLF writes |
-| Backend -> helper | cutdeck/ai_backend.py:57: localhost websocket exchange |
+| Backend -> helper | cutdeck/ai_backend.py:54: localhost websocket exchange |
 | Panel -> server | uxp/cutdeck/features/clubFriday.js:7: HTTP request |
 
 ## Boundaries and placement
@@ -39,7 +41,7 @@ flowchart LR
 - Browser assets belong in clubfriday/static; tests in tests; shared helper behavior
   in cutdeck. Generated audio/session/evidence belongs under ignored output/.
 - Source extraction uses ffmpeg, numpy and soundfile; it omits Premiere effects,
-  transitions and gain automation (cutdeck/xml_audio_extract.py:17-25).
+  transitions and gain automation (cutdeck/audio_extract.py module contract).
 
 ## Coverage gaps
 - Helper -> ASR engines -> SQLite is outside this traced flow; consult SYSTEM_SPEC.md

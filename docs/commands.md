@@ -11,7 +11,7 @@ is not supplied by requirements.txt (minimum versions only).
 | `python -m pytest tests/test_clubfriday.py -q -p no:cacheprovider` | pytest, FastAPI/TestClient and backend imports; clubfriday/README.md | 13 passed |
 | `node --test tests/clubfriday_quotes.test.cjs tests/clubfriday_panel.test.cjs` | Node; existing panel/quote tests | 3 panel checks passed; quote module file loaded without separate reported cases |
 | `python -m clubfriday.server --port 8010` | FastAPI/uvicorn; loopback quote UI; clubfriday/server.py | not launched |
-| `python -m cutdeck.xml_bridge` | websockets, ffmpeg, ASR model/GPU for jobs; CLAUDE.md | not launched |
+| `python -m cutdeck.helper` | websockets, ffmpeg, ASR model/GPU for jobs; CLAUDE.md | not launched |
 | `python -m uvicorn transcribe.editor.server:app --host 127.0.0.1 --port 8000` | finished jobs/database, FastAPI; CLAUDE.md | not launched |
 | `python -m transcribe.pipeline.run FILE --config transcribe/config.yaml` | source media, ffmpeg, CT2 model, GPU runtime; CLAUDE.md | not run |
 | `python -m transcribe.eval.harness --config transcribe/config.yaml` | gold media, model/GPU; CLAUDE.md | not run |

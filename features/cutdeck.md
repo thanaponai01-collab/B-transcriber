@@ -2,25 +2,25 @@
 
 ## CutDeck helper
 - what: Local websocket service (ws://127.0.0.1:7891) that runs CutDeck jobs (rough cut, transcribe, sync plan) and relays live-Premiere commands between agents and the panel.
-- cli: `python -m cutdeck.xml_bridge` @ cutdeck/xml_bridge.py :: --jobs-dir
-- trace: `main` @ cutdeck/xml_bridge.py > `serve` @ cutdeck/xml_bridge.py > `dispatch` @ cutdeck/xml_bridge.py > `_run` @ cutdeck/xml_bridge.py
+- cli: `python -m cutdeck.helper` @ cutdeck/helper.py :: --jobs-dir
+- trace: `main` @ cutdeck/helper.py > `serve` @ cutdeck/helper.py > `dispatch` @ cutdeck/helper.py > `_run` @ cutdeck/helper.py
 - effect: job folders under `output/premiere/`, `helper.log`
 - verify: CutDeck helper
 - status: suspected: current behavior not re-proven after source drift; historical proof at commit 2ad7576 (earlier live run 2026-09-28, per VERIFY.md): helper live-proven in Premiere; not restarted in this session
 
 ## Rough cut
-- current-design: docs/rough-cut.md (native audio input, bounded stale-handle recovery, verification and limits)
+- current-design: docs/rough-cut.md (JSON audio input, source-snapshot validation, bounded stale-handle recovery and verification limits)
 - what: Find silence and filler in the active Premiere sequence and cut them out of a copy of the sequence, natively in Premiere.
 - click: `#cut` @ uxp/cutdeck/index.html
 - click: `#resume` @ uxp/cutdeck/index.html
 - click: `#pill-speech` @ uxp/cutdeck/index.html
 - click: `#pill-silence` @ uxp/cutdeck/index.html
-- cli: `python -m cutdeck.xml_recut <sequence.xml>` @ cutdeck/xml_recut.py :: --dry-run
+- cli: `python -m cutdeck.rough_cut <sequence.json> --cuts-json <cuts.json>` @ cutdeck/rough_cut.py :: --dry-run
 - trace: `bindPrimaryActions` @ uxp/cutdeck/core/panel.js > `onCut` @ uxp/cutdeck/main.js > `onCut` @ uxp/cutdeck/features/roughCut.js > `doCut` @ uxp/cutdeck/features/roughCut.js > `nativeCut` @ uxp/cutdeck/features/roughCut.js
 - needs: helper running; the active sequence open in Premiere
 - effect: a new sequence `<name> — CutDeck <id>`; the original is untouched
 - verify: CutDeck panel (UXP)
-- status: traced: read doCut/nativeCut and the helper's prepare/submit_rough_cut/_run; live Premiere run of the cut itself not repeated this session
+- status: proven offline 2026-10-11: JSON analysis, source-snapshot refusal, exact native golden and bounded handle recovery; live Premiere confirmation remains pending (verification/rough-cut-retirement-evidence.md)
 
 ## Sync sequence
 - what: Match every clip by its own audio and lay them on their own tracks in a copy named `<sequence>_Synced`.
@@ -83,7 +83,7 @@
 - status: suspected: current behavior not re-proven after source drift; historical proof at commit 2ad7576 for the refusal path only (VERIFY.md live run 2026-09-28); success path on a real selection unproven
 
 ## Agent tools (MCP)
-- what: Expose CutDeck to agents over MCP stdio: transcribe, rough_cut (from an XML file), `premiere_rough_cut` (the live sequence, no XML: panel read -> `prepare` -> `start`, then `premiere_apply_cuts`), job polling, and the `premiere_*` live commands.
+- what: Expose CutDeck to agents over MCP stdio: transcribe and `premiere_rough_cut` (the live sequence, no XML: panel read -> `prepare` -> `start`, then `premiere_apply_cuts`), job polling, and the `premiere_*` live commands.
 - cli: `python scripts/start_cutdeck_mcp.py` @ scripts/start_cutdeck_mcp.py :: cutdeck.mcp_server
 - cli: `python -m cutdeck.mcp_server` @ cutdeck/mcp_server.py :: --port
 - trace: `main` @ cutdeck/mcp_server.py > `create_server` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `_ask` @ cutdeck/ai_backend.py

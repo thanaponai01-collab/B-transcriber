@@ -1,17 +1,4 @@
-"""sequence_model.py — the sequence's audio, as the analysis reads it (docs/arch-design-helper-v3.md move 3).
-
-One typed model of what Rough Cut analyses: the audio tracks, and on each the clips' media file,
-timeline position and source In/Out, all in Premiere ticks. Two doors build it:
-
-- ``from_panel_json`` — the panel's native read (``prepare``'s ``sequence``), validated whole;
-- ``from_fcp7_xml`` — an exported FCP7 XML (the MCP ``rough_cut`` tool, the ``xml_recut`` CLI, and
-  jobs prepared by an earlier helper, which hold ``source.xml``). Premiere's exploded stereo
-  channel tracks are regrouped here, so a track index is always a Premiere audio track.
-
-``range_from_ticks``, ``reference_audio_track``, ``check_reference_audio``, ``extract_mixdown``
-and ``xml_recut.main`` read a ``Sequence``; none of them parses XML for the timeline. Rewriting
-an XML export (``xml_recut.recut``) still works on the XML itself.
-"""
+"""Validated sequence audio from the panel JSON snapshot, in exact Premiere ticks."""
 from __future__ import annotations
 
 import json
@@ -20,11 +7,9 @@ import subprocess
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import Timebase
-from cutdeck.xml_sequence import (PPRO_TICKS_PER_SECOND, XmlRecutRefusal, audio_track_groups, child_text,
-                                  frame_to_ticks, resolve_file_path, sequence_timebase)
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
 MAX_TRACKS = 128
 MAX_CLIPS = 20000
@@ -32,7 +17,7 @@ MAX_CLIPS = 20000
 
 @dataclass(frozen=True)
 class Clip:
-    path: str | None  # None: an XML export that names the file but never gives its pathurl
+    path: str | None  # None: a clip with no readable source media
     start_ticks: int  # where it sits on the sequence
     in_ticks: int     # source In / Out
     out_ticks: int
@@ -47,7 +32,7 @@ class Clip:
     def media_path(self) -> str:
         """The source file, for an analysis that reads this clip's audio."""
         if self.path is None:
-            raise XmlRecutRefusal("a clip has no <pathurl> anywhere in the export — source media path unknown")
+            raise SequenceRefusal("a clip has no source media path")
         return self.path
 
 
@@ -80,19 +65,19 @@ class Sequence:
         and a lav track muted in the mix is still the best thing to analyze. Nothing here guesses
         by loudness."""
         if not self.tracks:
-            raise XmlRecutRefusal("sequence has no audio tracks to extract from")
+            raise SequenceRefusal("sequence has no audio tracks to extract from")
         if index is not None:
             if not 0 <= index < len(self.tracks):
-                raise XmlRecutRefusal(f"sequence has {len(self.tracks)} audio track(s), requested index "
+                raise SequenceRefusal(f"sequence has {len(self.tracks)} audio track(s), requested index "
                                       f"{index} (0-based)")
             return self.tracks[index]
         with_clips = [track for track in self.tracks if track.clips]
         if not with_clips:
-            raise XmlRecutRefusal("no audio track has any clips")
+            raise SequenceRefusal("no audio track has any clips")
         for track in with_clips:
             if not track.muted:
                 return track
-        raise XmlRecutRefusal("every audio track with clips is switched off; choose a Reference Audio track")
+        raise SequenceRefusal("every audio track with clips is switched off; choose a Reference Audio track")
 
 
 def _ticks(value, what: str) -> int:
@@ -106,7 +91,7 @@ def _is_absolute(path: str) -> bool:
 
 
 def timebase(ticks_per_frame: int) -> tuple[int, bool]:
-    """(timebase, ntsc) of an FCP7 <rate> for Premiere's ticks per frame."""
+    """(nominal fps, ntsc) for Premiere's ticks per frame."""
     if ticks_per_frame <= 0:
         raise ValueError("ticks_per_frame must be positive")
     whole, rest = divmod(PPRO_TICKS_PER_SECOND, ticks_per_frame)
@@ -158,66 +143,6 @@ def from_panel_json(sequence) -> Sequence:
     return Sequence(tpf, end, tuple(out))
 
 
-def _source_span_ticks(clipitem: ET.Element, tb: Timebase) -> tuple[int, int]:
-    """The clip's source In/Out in ticks: Premiere's own ``pproTicks`` (sub-frame) when the export
-    has them, else the frame-based ``<in>``/``<out>``."""
-    ticks_in, ticks_out = clipitem.find("pproTicksIn"), clipitem.find("pproTicksOut")
-    if ticks_in is not None and ticks_in.text and ticks_out is not None and ticks_out.text:
-        return int(ticks_in.text), int(ticks_out.text)
-    return (frame_to_ticks(int(child_text(clipitem, "in", "0")), tb),
-            frame_to_ticks(int(child_text(clipitem, "out", "0")), tb))
-
-
-def _xml_clip(sequence: ET.Element, clipitem: ET.Element, tb: Timebase) -> Clip | None:
-    """One ``<clipitem>`` as a Clip; None when it contributes nothing (no source file, or an empty span)."""
-    file_el = clipitem.find("file")
-    if file_el is None or file_el.get("id") is None:
-        return None
-    enabled = child_text(clipitem, "enabled", "TRUE") == "TRUE"
-    try:
-        path = str(resolve_file_path(sequence, file_el.get("id")))
-    except XmlRecutRefusal:
-        path = None  # only an analysis that reads this clip's audio needs it (`media_path`)
-    if enabled and clipitem.find("pproTicksIn") is None and clipitem.find("rate") is not None:
-        clip_tb = sequence_timebase(clipitem)
-        if clip_tb.fps_num * tb.fps_den != tb.fps_num * clip_tb.fps_den:
-            raise XmlRecutRefusal(
-                f"clip {child_text(clipitem, 'name', '?')!r} has its own frame rate and no "
-                "tick positions, so its audio cannot be placed exactly")
-    media_in, media_out = _source_span_ticks(clipitem, tb)
-    if media_out <= media_in:
-        return None
-    return Clip(path, frame_to_ticks(int(child_text(clipitem, "start", "0")), tb),
-                media_in, media_out, enabled)
-
-
-def from_fcp7_xml(source_xml: str) -> Sequence:
-    """An exported FCP7 sequence's audio. Each Premiere track is the first of its exploded
-    channel tracks (the channels of one stereo track carry the same clips)."""
-    sequence = ET.fromstring(source_xml).find("sequence")
-    if sequence is None:
-        raise XmlRecutRefusal("no <sequence> element found in source XML")
-    tb = sequence_timebase(sequence)
-    ticks_per_frame = Fraction(PPRO_TICKS_PER_SECOND * tb.fps_den, tb.fps_num)
-    if ticks_per_frame.denominator != 1:
-        raise XmlRecutRefusal("Unsupported sequence frame rate")
-    tpf = int(ticks_per_frame)
-    xml_tracks = sequence.findall("media/audio/track")
-    tracks = tuple(
-        Track(number, child_text(xml_tracks[first], "enabled", "TRUE") != "TRUE",
-              tuple(clip for clip in (_xml_clip(sequence, item, tb)
-                                      for item in xml_tracks[first].findall("clipitem")) if clip))
-        for number, first in enumerate(audio_track_groups(xml_tracks)))
-    return Sequence(tpf, int(child_text(sequence, "duration", "0")) * tpf, tracks)
-
-
-def load(path: str | Path) -> Sequence:
-    """A job's sequence file: the panel's JSON read, or an FCP7 XML (MCP jobs, older prepared jobs)."""
-    path = Path(path)
-    text = path.read_text(encoding="utf-8-sig")
-    return from_panel_json(json.loads(text)) if path.suffix.lower() == ".json" else from_fcp7_xml(text)
-
-
 def _has_audio_stream(path: Path) -> bool | None:
     """True/False from ffprobe, or None when ffprobe cannot answer (missing, unreadable)."""
     if shutil.which("ffprobe") is None:
@@ -244,10 +169,10 @@ def check_reference_audio(sequence: Sequence, audio_track_index: int | None = No
     track = sequence.reference_track(audio_track_index)
     clips = [clip for clip in track.clips if clip.enabled]
     if not clips:
-        raise XmlRecutRefusal("the reference audio track has no enabled clips")
+        raise SequenceRefusal("the reference audio track has no enabled clips")
     for clip in clips:
         if clip.speed != 1.0:
-            raise XmlRecutRefusal(
+            raise SequenceRefusal(
                 f"a clip on A{track.index + 1} plays at {clip.speed * 100:.0f}% speed; the analysis reads its "
                 "audio at normal speed, so its cuts would land in the wrong places. Set it to 100% or choose "
                 "another Reference Audio track")
@@ -257,7 +182,15 @@ def check_reference_audio(sequence: Sequence, audio_track_index: int | None = No
             files.append(Path(clip.media_path))
     for path in files:
         if not path.is_file():
-            raise XmlRecutRefusal(f"source media is missing or offline: {path}")
+            raise SequenceRefusal(f"source media is missing or offline: {path}")
         if _has_audio_stream(path) is False:
-            raise XmlRecutRefusal(f"source media has no audio stream: {path}")
+            raise SequenceRefusal(f"source media has no audio stream: {path}")
     return {"track": track.index, "clip_count": len(clips), "files": [str(path) for path in files]}
+
+
+def load(path: str | Path) -> Sequence:
+    """Read a persisted panel JSON snapshot; XML input is retired."""
+    path = Path(path)
+    if path.suffix.lower() != ".json":
+        raise SequenceRefusal("XML Rough Cut is retired. Start a new Rough Cut in the panel or use premiere_rough_cut.")
+    return from_panel_json(json.loads(path.read_text(encoding="utf-8-sig")))

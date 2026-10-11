@@ -1,6 +1,6 @@
 """CutDeck MCP stdio entry point; all processing output stays in job logs.
 
-Jobs run in the :7891 helper (`python -m cutdeck.xml_bridge`), which must be running.
+Jobs run in the :7891 helper (`python -m cutdeck.helper`), which must be running.
 """
 import argparse
 
@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from cutdeck.ai_backend import Backend
-from cutdeck.xml_bridge import PORT
+from cutdeck.helper import PORT
 
 
 def create_server(backend: Backend) -> FastMCP:
@@ -37,25 +37,6 @@ def create_server(backend: Backend) -> FastMCP:
         cues, not guaranteed individual words. Poll get_job then get_result.
         """
         return await backend.transcribe(media_path)
-
-    @server.tool(annotations=write)
-    async def rough_cut(sequence_xml: str, speech_protection: bool = True,
-                        preset: str = "aggressive", audio_track: int | None = None,
-                        start_frame: int | None = None, end_frame: int | None = None) -> dict:
-        """Find silence/filler to remove from an exported FCP7 XML sequence; return a job_id.
-
-        The result is a cut list: ascending [start_frame, end_frame) spans on the
-        sequence frame grid, plus ticks_per_frame. No XML is written and source files
-        are unchanged. Source media referenced by the XML must be accessible. The
-        CutDeck panel's Rough Cut applies the same list natively in Premiere.
-        preset: aggressive or standard. speech_protection enables ASR to protect
-        short speech. audio_track is a zero-based Premiere audio track (A1 is 0),
-        whatever its channel count. Optional frame range
-        is [start_frame, end_frame), measured from the full sequence start. Audio
-        is still analyzed over the full sequence; returned spans stay inside the range.
-        """
-        return await backend.rough_cut(sequence_xml, speech_protection, preset, audio_track,
-                                 start_frame, end_frame)
 
     @server.tool(annotations=read)
     async def get_job(job_id: str) -> dict:

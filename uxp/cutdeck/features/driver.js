@@ -95,24 +95,12 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
     };
   }
 
-  /* A panel job names the sequence it analysed. A job from an XML file (MCP) doesn't, so its
-     length must match instead, with the helper's own tolerance for an export's padding
-     (xml_bridge.range_from_ticks: max(30 frames, 5 s)). */
+  // Every supported job comes from a live sequence capture; length alone cannot identify it.
   async function applyCuts({ cuts, sequence_id: sequenceId, sequence_name: sequenceName, result_name: resultName }) {
     const { project, sequence } = await activeProjectAndSequence(ppro, {
       sequenceErrorMessage: "Open the sequence to cut in Premiere first." });
-    if (sequenceId) {
-      if (sequence.guid.toString() !== sequenceId) throw new Error(`Open "${sequenceName}" to cut it, then try again.`);
-    } else {
-      const tpf = toTicks(await sequence.getTimebase());
-      const frames = toTicks(await sequence.getEndTime()) / tpf;
-      const fps = Number(TICKS_PER_SECOND / tpf);
-      const slack = BigInt(Math.max(30, Math.floor(fps * 5)));
-      const expected = BigInt(cuts.sequence_duration_frames || 0);
-      if (frames > expected + slack || expected > frames + slack) {
-        throw new Error(`The active sequence is ${frames} frames; the cut list was made for ${expected}. Open the analysed sequence.`);
-      }
-    }
+    if (!sequenceId) throw new Error("This cut list has no source sequence identity. Start a new Rough Cut.");
+    if (sequence.guid.toString() !== sequenceId) throw new Error(`Open "${sequenceName}" to cut it, then try again.`);
     ctl.setStatus("Cutting a copy of your sequence for an outside request…", "busy");
     const r = await applyNativeCut(ppro, project, sequence, cuts, resultName);
     return { cuts: r.cuts, removed_seconds: seconds(r.removedTicks), splits: r.splits, undo_steps: r.steps,

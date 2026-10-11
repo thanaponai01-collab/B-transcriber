@@ -8,18 +8,18 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from cutdeck.contracts import CUT, KEEP, CutPlan, CutSpan, Timebase
-from cutdeck.sequence_model import from_fcp7_xml
-from cutdeck.xml_recut import recut
-from cutdeck.xml_sequence import frame_to_ticks
-from cutdeck.xml_bridge import XmlJobs, range_from_ticks, reference_audio_track, serve, VERSION
+from tests.sequence_fixture import from_fcp7_xml
+from cutdeck.rough_cut import scoped_cuts
+from cutdeck.sequence_timing import frame_to_ticks
+from cutdeck.helper import Jobs, range_from_ticks, reference_audio_track, serve, VERSION
 
 
 @pytest.fixture(autouse=True)
 def _media_check_stub(monkeypatch):
-    """These tests drive the job with the xml_recut child stubbed; the source-media check
-    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
-    from cutdeck import xml_bridge
-    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+    """These tests drive the job with the rough_cut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_audio_extract.py."""
+    from cutdeck import helper
+    monkeypatch.setattr(helper, "check_reference_audio",
                         lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 
@@ -52,28 +52,18 @@ def plan():
         CutSpan(idx=2, src_in_ms=5000, src_out_ms=10000, action=KEEP)])
 
 
-def test_scope_preserves_outside_content_and_shifts_all_tracks():
-    result, report = recut(source(), plan(), frame_range=(60, 120))
-    seq = ET.fromstring(result).find("sequence")
-    assert seq.findtext("duration") == "240"
-    assert report.removed_frames == 60
-    for track in seq.findall("media/video/track"):
-        clips = track.findall("clipitem")
-        assert [(c.findtext("start"), c.findtext("end"), c.findtext("in"), c.findtext("out"))
-                for c in clips] == [("0", "60", "0", "60"), ("60", "240", "120", "300")]
-        assert clips[1].findtext("pproTicksIn") == str(frame_to_ticks(120, Timebase(30, 1)))
+def test_scope_clips_the_plan_to_the_marked_range():
+    assert scoped_cuts(plan(), Timebase(30, 1), 300, (60, 120)) == [(60, 120)]
 
 
-def test_scope_no_cuts_is_unchanged():
-    result, report = recut(source(), plan(), frame_range=(200, 250))
-    assert result == source()
-    assert report.cuts_applied == report.removed_frames == 0
+def test_scope_without_cuts_returns_an_empty_plan():
+    assert scoped_cuts(plan(), Timebase(30, 1), 300, (200, 250)) == []
 
 
 @pytest.mark.parametrize("bounds", [(-1, 50), (40, 40), (50, 40), (0, 301)])
 def test_invalid_range_refused(bounds):
     with pytest.raises(ValueError):
-        recut(source(), plan(), frame_range=bounds)
+        scoped_cuts(plan(), Timebase(30, 1), 300, bounds)
 
 
 @pytest.mark.parametrize("ntsc", [False, True])
@@ -138,7 +128,7 @@ def test_job_runs_existing_cli_once_and_returns_the_cut_list(tmp_path, monkeypat
     monkeypatch.setattr(asyncio, "create_subprocess_exec", subprocess_stub)
 
     async def scenario():
-        jobs = XmlJobs(tmp_path)
+        jobs = Jobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **context()})
         request = {"type": "start", "job_id": job["job_id"]}
         assert (await jobs.dispatch(request))["state"] == "running"
@@ -151,7 +141,8 @@ def test_job_runs_existing_cli_once_and_returns_the_cut_list(tmp_path, monkeypat
         assert result["cuts"]["cuts_frames"] == [[70, 80]]
         assert "--out" not in calls[0]
         assert len(calls) == 1
-        assert "--asr" in calls[0] and "--no-save-plan" in calls[0]
+        assert "--asr" in calls[0] and "cutdeck.rough_cut" in calls[0]
+        assert result["cuts"]["source_sequence"] == context()["sequence"]
         assert calls[0][calls[0].index("--range-start-frame") + 1] == "60"
         assert calls[0][calls[0].index("--range-end-frame") + 1] == "120"
     asyncio.run(scenario())
@@ -163,7 +154,7 @@ def test_worker_failure_releases_single_job_slot(tmp_path, monkeypatch):
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fail)
 
     async def scenario():
-        jobs = XmlJobs(tmp_path)
+        jobs = Jobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **context()})
         await jobs.dispatch({"type": "start", "job_id": job["job_id"]})
         await asyncio.gather(*jobs.tasks)
@@ -178,7 +169,7 @@ def test_real_socket_handles_bad_input_and_reconnect(tmp_path):
     from websockets.asyncio.client import connect
 
     async def scenario():
-        server = await serve(XmlJobs(tmp_path), port=0)
+        server = await serve(Jobs(tmp_path), port=0)
         async with server:
             url = f"ws://127.0.0.1:{server.sockets[0].getsockname()[1]}"
             async with connect(url) as socket:
@@ -219,7 +210,7 @@ def source_with_audio(media_path, name="Original"):
 
 def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
     async def scenario():
-        jobs = XmlJobs(tmp_path)
+        jobs = Jobs(tmp_path)
         job = await jobs.dispatch({"type": "prepare", **{**context(), "in_ticks": "1"}})
         request = {"type": "start", "job_id": job["job_id"]}
         started = await jobs.dispatch(request)
@@ -231,9 +222,9 @@ def test_start_refusal_fails_the_job_instead_of_leaving_it_prepared(tmp_path):
 
 
 def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypatch):
-    from cutdeck import xml_bridge
+    from cutdeck import helper
     from cutdeck.sequence_model import check_reference_audio
-    monkeypatch.setattr(xml_bridge, "check_reference_audio", check_reference_audio)
+    monkeypatch.setattr(helper, "check_reference_audio", check_reference_audio)
     spawned = []
 
     async def spawn(*args, **kwargs):
@@ -242,7 +233,7 @@ def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypat
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
 
     async def scenario():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         offline = context()
         offline["sequence"]["audio_tracks"][0]["clips"][0]["path"] = str(tmp_path / "offline.mp4")
         job = await jobs.dispatch({"type": "prepare", **offline})
@@ -256,14 +247,14 @@ def test_missing_source_media_fails_before_the_worker_starts(tmp_path, monkeypat
 
 
 def test_reference_label_uses_premiere_track_numbers():
-    from cutdeck.xml_bridge import reference_label
+    from cutdeck.helper import reference_label
     checked = {"track": 1, "files": [r"D:\shoot\lav.wav", r"D:\shoot\lav2.wav"]}
     assert reference_label(checked) == "A2 (lav.wav +1 more)"
     assert reference_label({**checked, "files": [r"D:\shoot\lav.wav"]}) == "A2 (lav.wav)"
 
 
 def test_failure_detail_is_the_exception_line_not_the_stack(tmp_path):
-    from cutdeck.xml_bridge import failure_detail
+    from cutdeck.helper import failure_detail
     log = tmp_path / "process.log"
     log.write_text("PROGRESS:5:Extracting audio\nTraceback (most recent call last):\n"
                    '  File "x.py", line 1, in <module>\n    boom()\n'

@@ -12,6 +12,19 @@ function createMockStorage(initial = {}) {
   };
 }
 
+test("roughCut.follow: stale source audio clears the result so the next cut can analyse again", async () => {
+  const ctl = createController({ render: () => {} });
+  const job = { job_id: "stale", state: "ready", output: "native", cuts: { cuts_frames: [[1, 2]] },
+    context: { sequence_id: "source", sequence_name: "Shoot" } };
+  const storage = createMockStorage({ [KEY]: JSON.stringify(job) });
+  const sequence = { guid: { toString: () => "source" } };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => sequence }) } };
+  const applyCut = async () => { const error = new Error("changed since analysis"); error.staleSource = true; throw error; };
+  const feature = createRoughCutFeature({ ppro, ctl, storage, rpc: async () => {}, applyCut });
+  await assert.rejects(feature.follow(job), /changed since analysis/);
+  assert.equal(storage.getItem(KEY), null);
+});
+
 test("roughCut.follow: a ready job from the retired XML route is cleared with a clear message", async () => {
   const ctl = createController({ render: () => {} });
   const storage = createMockStorage({ [KEY]: JSON.stringify({ job_id: "job-1", state: "running" }) });

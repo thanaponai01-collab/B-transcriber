@@ -25,6 +25,9 @@ are refused. Requirement: clubfriday/README.md; checks: tests/test_clubfriday.py
   FAILED copies; recover and record the architecture (docs/rough-cut.md).
 - Scope is repository context plus a ClubFriday backend verification slice.
 - Rough Cut reliability is the current owner priority; live-host confirmation remains pending.
+- Follow-up authorized 2026-10-11: retire XML-file Rough Cut, keep JSON analysis and
+  native editing, separate shared services, and refuse changed source audio before edits.
+  Acceptance: verification/rough-cut-retirement.md.
 - Real GPU accuracy, Premiere insertion and browser interactions need separate proof.
 - SYSTEM_SPEC.md has historical engine/status/count notes; use current config and
   CLAUDE.md for active engine decisions. This pass does not rewrite historical specs.

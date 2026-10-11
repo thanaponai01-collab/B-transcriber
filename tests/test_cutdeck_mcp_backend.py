@@ -6,17 +6,17 @@ import sys
 import pytest
 
 from cutdeck.ai_backend import Backend
-from cutdeck.xml_bridge import XmlJobs, serve
+from cutdeck.helper import Jobs, serve
 
 SAMPLE_XML = Path(__file__).parent / "fixtures" / "cutdeck_recut_sample_scrubbed.xml"
 
 
 @pytest.fixture(autouse=True)
 def _media_check_stub(monkeypatch):
-    """These tests drive the job with the xml_recut child stubbed; the source-media check
-    it runs first is covered in test_cutdeck_xml_audio_extract.py."""
-    from cutdeck import xml_bridge
-    monkeypatch.setattr(xml_bridge, "check_reference_audio",
+    """These tests drive the job with the rough_cut child stubbed; the source-media check
+    it runs first is covered in test_cutdeck_audio_extract.py."""
+    from cutdeck import helper
+    monkeypatch.setattr(helper, "check_reference_audio",
                         lambda *_: {"track": 0, "clip_count": 1, "files": ["clip.wav"]})
 
 _FAKE_WORKER = (
@@ -37,7 +37,7 @@ def _serve(tmp_path, monkeypatch, *, worker=_FAKE_WORKER):
         return await real_exec(*args, **kwargs)
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", stub_exec)
-    return XmlJobs(tmp_path)
+    return Jobs(tmp_path)
 
 
 async def _with_helper(jobs, body):
@@ -73,26 +73,6 @@ def test_mcp_started_transcribe_is_visible_to_panel_status(tmp_path, monkeypatch
     asyncio.run(_with_helper(jobs, body))
 
 
-def test_mcp_started_rough_cut_is_visible_to_panel_status(tmp_path, monkeypatch):
-    jobs = _serve(tmp_path / "jobs", monkeypatch)
-    source = tmp_path / "seq.xml"
-    source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
-
-    async def body(backend):
-        started = await backend.rough_cut(str(source), speech_protection=False)
-        job_id = started["job_id"]
-        assert started["kind"] == "rough_cut"
-        assert started["state"] in {"running", "failed", "succeeded"}
-        panel_view = await jobs.dispatch({"type": "status", "job_id": job_id})
-        assert panel_view["job_id"] == job_id
-        await asyncio.gather(*jobs.tasks)
-        assert (await backend.status(job_id))["job_id"] == job_id
-        # The user's own export is an input, never an output: it must be untouched.
-        assert source.read_text(encoding="utf-8") == SAMPLE_XML.read_text(encoding="utf-8")
-
-    asyncio.run(_with_helper(jobs, body))
-
-
 def test_one_gpu_lock_across_panel_and_mcp(tmp_path, monkeypatch):
     media = tmp_path / "clip.wav"
     media.write_bytes(b"RIFF")
@@ -115,26 +95,6 @@ def test_one_gpu_lock_across_panel_and_mcp(tmp_path, monkeypatch):
     asyncio.run(_with_helper(jobs, body))
 
 
-@pytest.mark.parametrize("kwargs, message", [
-    (dict(preset="fast"), "preset"),
-    (dict(speech_protection="yes"), "speech_protection"),
-    (dict(audio_track=-1), "audio_track"),
-    (dict(start_frame=5), "frame bounds"),
-    (dict(start_frame=9, end_frame=3), "frame bounds"),
-])
-def test_rough_cut_rejects_bad_arguments(tmp_path, monkeypatch, kwargs, message):
-    jobs = _serve(tmp_path / "jobs", monkeypatch)
-    source = tmp_path / "seq.xml"
-    source.write_text("<xmeml/>", encoding="utf-8")
-
-    async def body(backend):
-        with pytest.raises(ValueError, match=message):
-            await backend.rough_cut(str(source), **kwargs)
-        assert not jobs.jobs  # refused before any job exists
-
-    asyncio.run(_with_helper(jobs, body))
-
-
 def test_inputs_must_be_absolute_existing_files(tmp_path, monkeypatch):
     jobs = _serve(tmp_path / "jobs", monkeypatch)
 
@@ -145,15 +105,16 @@ def test_inputs_must_be_absolute_existing_files(tmp_path, monkeypatch):
             await backend.transcribe(str(tmp_path / "missing.wav"))
         wrong = tmp_path / "seq.txt"
         wrong.write_text("x")
-        with pytest.raises(ValueError, match=r"\.xml"):
-            await backend.rough_cut(str(wrong))
+        # Transcription accepts local media independently of the retired XML route.
+        assert (await backend.transcribe(str(wrong)))["kind"] == "transcribe"
+        await asyncio.gather(*jobs.tasks)
 
     asyncio.run(_with_helper(jobs, body))
 
 
 def test_helper_not_running_is_a_clear_error(tmp_path):
     async def go():
-        with pytest.raises(RuntimeError, match="xml_bridge"):
+        with pytest.raises(RuntimeError, match="cutdeck.helper"):
             await Backend(1).status("0" * 32)  # nothing listens on port 1
 
     asyncio.run(go())
@@ -197,17 +158,17 @@ _FAKE_RECUT = (
 
 
 def _serve_recut(tmp_path, monkeypatch, cuts):
-    """Helper whose xml_recut child is a stub that reports `cuts` applied."""
+    """Helper whose rough_cut child is a stub that reports `cuts` applied."""
     real_exec = asyncio.create_subprocess_exec
 
     async def stub_exec(*args, **kwargs):
-        if "cutdeck.xml_recut" in args:
+        if "cutdeck.rough_cut" in args:
             tail = "CUTS" if cuts else "NONE"
             return await real_exec(sys.executable, "-c", _FAKE_RECUT, *args[4:], tail, **kwargs)
         return await real_exec(*args, **kwargs)
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", stub_exec)
-    return XmlJobs(tmp_path)
+    return Jobs(tmp_path)
 
 
 def test_no_cuts_job_never_deletes_the_users_export(tmp_path, monkeypatch):
@@ -217,7 +178,7 @@ def test_no_cuts_job_never_deletes_the_users_export(tmp_path, monkeypatch):
     source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
 
     async def body(backend):
-        job_id = (await backend.rough_cut(str(source), speech_protection=False))["job_id"]
+        job_id = (await _start_live(backend))["job_id"]
         await asyncio.gather(*jobs.tasks)
         assert (await jobs.dispatch({"type": "status", "job_id": job_id}))["state"] == "no_cuts"
         assert (await backend.status(job_id))["state"] == "succeeded"
@@ -233,8 +194,7 @@ def test_cut_job_result_is_the_cut_list(tmp_path, monkeypatch):
     source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
 
     async def body(backend):
-        job_id = (await backend.rough_cut(str(source), speech_protection=False,
-                                          start_frame=0, end_frame=100))["job_id"]
+        job_id = (await _start_live(backend))["job_id"]
         running = await backend.result(job_id)  # not finished: state view, not a result
         assert running["state"] in {"running", "succeeded"}
         await asyncio.gather(*jobs.tasks)
@@ -243,19 +203,6 @@ def test_cut_job_result_is_the_cut_list(tmp_path, monkeypatch):
         assert result["cuts_frames"] == [[10, 20]] and result["ticks_per_frame"] == "8467200000"
         assert result["report"]["cuts_applied"] == 1
         assert "output_path" not in result
-
-    asyncio.run(_with_helper(jobs, body))
-
-
-def test_frame_range_starting_at_zero_is_valid(tmp_path, monkeypatch):
-    jobs = _serve_recut(tmp_path / "jobs", monkeypatch, cuts=True)
-    source = tmp_path / "seq.xml"
-    source.write_text(SAMPLE_XML.read_text(encoding="utf-8"), encoding="utf-8")
-
-    async def body(backend):
-        job = await backend.rough_cut(str(source), start_frame=0, end_frame=1)
-        assert job["arguments"]["start_frame"] == 0
-        await asyncio.gather(*jobs.tasks)
 
     asyncio.run(_with_helper(jobs, body))
 
@@ -374,3 +321,11 @@ def test_premiere_rough_cut_rejects_a_bad_preset_before_claiming_a_job(tmp_path,
 
 def test_capabilities_lists_the_live_rough_cut_tool():
     assert "premiere_rough_cut" in Backend(1).capabilities()["tools"]
+
+
+async def _start_live(backend):
+    async def capture(command, args=None):
+        assert command == "read_audio_range"
+        return _live_capture()
+    backend.premiere = capture
+    return await backend.premiere_rough_cut(speech_protection=False)

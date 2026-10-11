@@ -51,7 +51,7 @@ enforces the proven rules and is itself checked against the typings.
 
 In the change, name the source that confirmed the API. **If UXP doesn't have the
 feature, don't fake or approximate it in the panel.** Build it in the CutDeck helper
-(`python -m cutdeck.xml_bridge`, `ws://127.0.0.1:7891`, exposed to agents by the MCP
+(`python -m cutdeck.helper`, `ws://127.0.0.1:7891`, exposed to agents by the MCP
 server `cutdeck/mcp_server.py`) and have the panel call it through `core/rpc.js`.
 
 ## Commands

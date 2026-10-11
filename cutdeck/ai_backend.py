@@ -1,6 +1,6 @@
 """MCP-facing view of CutDeck's jobs; the jobs themselves live in the :7891 helper.
 
-`cutdeck.xml_bridge` owns every job (one job_id space, one GPU lane). This module
+`cutdeck.helper` owns every job (one job_id space, one GPU lane). This module
 only speaks to it over one-shot websocket exchanges, and keeps the two things MCP
 promises its agents: the published capabilities and the job-state vocabulary, plus
 paged transcript results. Live Premiere commands go through the same helper to the
@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 
 from cutdeck.driver_commands import COMMANDS
-from cutdeck.xml_bridge import PORT, VERSION
+from cutdeck.helper import PORT, VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -38,11 +38,11 @@ class Backend:
 
     def capabilities(self) -> dict:
         return {
-            "version": "3", "tools": ["transcribe", "rough_cut", "premiere_status", "premiere_rough_cut",
+            "version": "4", "tools": ["transcribe", "premiere_status", "premiere_rough_cut",
                                       *(f"premiere_{name}" for name in COMMANDS)],
             "live_premiere_control": True,
             "live_premiere_requires": "The CutDeck panel open in Premiere (premiere_status says)",
-            "rough_cut_input": "Exported FCP7 sequence XML with accessible source media",
+            "rough_cut_input": "Live Premiere sequence audio snapshot via premiere_rough_cut",
             "rough_cut_output": ("Cut list: [start_frame, end_frame) spans on the sequence frame "
                                  "grid plus ticks_per_frame; the CutDeck panel's Rough Cut applies "
                                  "these natively. No XML is written."),
@@ -63,7 +63,7 @@ class Backend:
         except OSError as exc:
             raise RuntimeError(
                 f"CutDeck helper is not running on 127.0.0.1:{self.port}; "
-                "start it with: python -m cutdeck.xml_bridge") from exc
+                "start it with: python -m cutdeck.helper") from exc
         return reply
 
     @staticmethod
@@ -78,14 +78,6 @@ class Backend:
 
     async def transcribe(self, media_path: str) -> dict:
         return self._view(await self._ask({"type": "submit_transcribe", "media_path": media_path}))
-
-    async def rough_cut(self, sequence_xml: str, speech_protection: bool = True,
-                        preset: str = "aggressive", audio_track: int | None = None,
-                        start_frame: int | None = None, end_frame: int | None = None) -> dict:
-        return self._view(await self._ask({
-            "type": "submit_rough_cut", "sequence_xml": sequence_xml,
-            "speech_protection": speech_protection, "preset": preset, "audio_track": audio_track,
-            "start_frame": start_frame, "end_frame": end_frame}))
 
     async def premiere_rough_cut(self, speech_protection: bool = True, preset: str = "standard",
                                  audio_track: int | None = None) -> dict:

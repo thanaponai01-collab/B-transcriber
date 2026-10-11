@@ -22,9 +22,9 @@ from pydantic import BaseModel, Field
 
 from cutdeck.ai_backend import Backend, write_json
 from cutdeck.sequence_model import from_panel_json, check_reference_audio
-from cutdeck.xml_audio_extract import extract_mixdown
-from cutdeck.xml_bridge import range_from_ticks
-from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND
+from cutdeck.audio_extract import extract_mixdown
+from cutdeck.helper import range_from_ticks
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 HERE = Path(__file__).parent
 

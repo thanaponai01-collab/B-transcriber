@@ -2,13 +2,16 @@
 
 **Role: production.** This is the only CutDeck panel. Install via the packaged `.ccx` (issue #40); no UXP Developer Tool needed. It talks to the helper on `ws://127.0.0.1:7891`.
 
-Mark **In / Out** on the timeline and click **Rough Cut**. CutDeck reads the
-sequence's audio tracks and sends them to the helper to analyse (no XML export since
-docs/arch-design-helper-v2.md move 6), then cuts a **copy** of your sequence
-with live Premiere edits (effects and keyframes kept), files it under
-**CutDeck ▸ Rough Cuts** and opens it. Your sequence is never edited. Split clips'
-audio comes out unlinked from their video. Undo takes up to 5 Ctrl+Z. The old XML
-*import* route is retired (docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md).
+Mark **In / Out** on the timeline and click **Rough Cut**. The panel captures
+the sequence's audio tracks as JSON. The helper analyses source audio and returns
+frame cuts; the panel applies them to a **copy**, checks the result clip by clip,
+files it under **CutDeck > Rough Cuts**, then opens it. Your original stays untouched.
+Split pieces' audio is unlinked from video. Large cuts may need more than five Undo steps.
+
+XML-file input and XML rewriting are retired. Use the panel or the MCP
+`premiere_rough_cut` tool. Before applying a newly analysed cut list, the panel checks
+that the source audio snapshot and sequence duration still match; a changed source
+requires a new analysis. See [the current architecture](../../docs/rough-cut.md).
 
 While the panel is open it is also the helper's **Premiere driver**: MCP agents
 (`premiere_*` tools) and scripts (`python -m cutdeck.premiere_cli status | read_sequence |
@@ -66,7 +69,7 @@ when that isn't set up, not as a replacement for it.
 1. Open your source sequence. Set timeline In and Out marks. The panel reads
    them automatically on open; click the refresh icon (top right) or the
    sequence card to re-read after changing the marks.
-2. Leave **Reference Audio** on its default to match the working XML
+2. Leave **Reference Audio** on its default to select the dialogue
    command, or select a specific Premiere audio track.
 3. Leave the **Speech + Silence** preset selected for aggressive silence
    cutting with ASR protection for short speech. **Silence Only** skips ASR,
@@ -87,20 +90,9 @@ sequence is not edited, and Sync refuses to run on a `_Synced` copy.
 The diagnostics drawer (gear icon, top right) holds the read-only timing
 probe, the connection probe, and copy-status.
 
-The rough cut XML is written to a **`CutDeck` folder beside your footage**, named
-after the sequence and job, so it sits with the media instead of inside this repo:
-
-```
-D:\Footage\CFD 94  interview_A.mp4
-  CutDeck    Interview — CutDeck 4f2a1b9c.xml
-```
-
-"Beside your footage" means the folder holding the media on the audio track that was
-analyzed — the same track the cuts come from. Only the result goes there; `sequence.json`,
-`job.json`, `report.json` and `process.log` stay in `output/premiere/<job identifier>/`.
-If the media cannot be located or written to (a disconnected drive, a sequence with no
-audio), the result falls back to the job folder and the panel says so rather than
-failing the cut. A run that finds no cuts leaves nothing in your media folder.
+The result is a native Premiere sequence, not a file to import. Analysis files
+(`sequence.json`, `cuts.json`, `job.json`, `process.log`) stay in
+`output/premiere/<job identifier>/`. No XML is exported or written beside footage.
 
 The source sequence is never edited. Material before In is preserved; material
 after Out shifts earlier by the removed duration across all tracks. Only the
@@ -116,9 +108,9 @@ refused by the native cut. While it runs, the status line names the track and fi
 (for example `A2 (interview.wav)`). If processing fails, the message quotes the
 error from `process.log` instead of only an exit code.
 
-The helper maps Premiere stereo tracks to their expanded XML channel groups.
-Audio extraction otherwise has the same behavior and limitations as the existing
-XML workflow: it reads original media, not a rendered Premiere effects mix.
+Track indices are Premiere audio tracks (A1 is 0), independent of channel count.
+Audio extraction reads original source media; it does not render Premiere gain,
+EQ, panning or crossfades.
 
 ## Recovery
 
@@ -135,6 +127,9 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
   cannot run hidden or pass arguments — if `Start CutDeck.cmd` itself has a problem
   (no Python found, a broken `.venv`), its console window says so. Run it manually
   once to see the real error.
+- **Source changed during analysis:** the stale result is discarded before any copy or edit.
+  Click Rough Cut again to analyse the current source. Older saved JSON results without
+  a source snapshot retain their previous identity checks; start a new job for this guard.
 - **Switched sequences:** the cut is only applied to the sequence it was analysed
   from. Open it again and click Rough Cut (it resumes the pending job).
 - **Helper restarted:** its live job list is reset and the pending job clears
@@ -144,7 +139,7 @@ XML workflow: it reads original media, not a rendered Premiere effects mix.
 - **Dismiss last job:** clears the panel's recovery entry so you can start again.
   It does not cancel a running analysis or remove job files.
 - **Processing failed:** inspect `process.log` in the job folder. `job.json` and
-  `report.json` record the captured range and result. Job files are retained;
+  `cuts.json` record the captured range and result. Job files are retained;
   they are not automatically deleted.
 
 The helper runs one GPU job (rough cut, transcription) at a time; Sync matching runs
@@ -155,26 +150,16 @@ Stop it with Ctrl+C in its window when finished.
 
 ## Verification status
 
-Automated tests cover exact CFR/NTSC range conversion, scoped XML cuts,
-stereo-track mapping, unchanged no-cut output, CLI reports, worker errors,
-duplicate starts, real WebSocket reconnection, and panel import identity checks.
+Offline checks cover JSON analysis, exact CFR/NTSC timing, reference-track selection,
+range offsets, speech protection, helper restart/reconnection, worker errors, source
+snapshot refusal, exact native golden output and bounded stale-handle recovery.
+The captured XML native-plan golden remains an independent fixture; its bytes are frozen.
 
-**Still requires a live Premiere acceptance run:** panel rendering/loading;
-XML export with In/Out set still exporting the full sequence; In/Out edge
-interpretation; XML import and result discovery; playback/audio sync on the
-result. The installed version meets the documented API minimum, but these host
-behaviors have not been exercised by the automated tests.
-
-For the first live run, use a short test sequence with stacked tracks, two
-silence gaps, and speech on both sides of the marks. Compare with your existing
-XML result. Verify the first/last removed frame, track alignment, playable audio,
-and that the original sequence is unchanged. Repeat once with no cuts and once
-after disconnecting/reopening the panel during analysis.
-
-Existing XML limitations remain: transitions and nested sequences are refused;
-keyframed effects at split points can be refused; speed changes are not validated
-by the existing transformer. XML recutting removes link groups, so synchronized
-clip positions do not imply linked selections when dragging clips afterward.
+Live Premiere still needs confirmation: run the repaired workflow on the previously
+failing sequence and check playback, first/last removed frames, track alignment, the
+retained original and clip-by-clip read-back. Offline fakes cannot prove host commits.
+Native edits refuse unsupported transitions, nested/multicam clips and retimed clips
+where cuts land. A native razor is not used without an installed-host probe.
 
 ## Layout
 
@@ -189,27 +174,25 @@ The panel follows the layered architecture and conventions defined in [docs/arch
 
 
 ```powershell
-.venv\Scripts\python.exe -m cutdeck.xml_bridge
-.venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_xml_recut_cli.py tests/test_cutdeck_xml_recut.py -q
+.venv\Scripts\python.exe -m cutdeck.helper
+.venv\Scripts\python.exe -m pytest tests/test_cutdeck_premiere.py tests/test_cutdeck_rough_cut_cli.py -q
 node --test tests/cutdeck_assembly.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_rpc.test.cjs
 ```
 
-`workflow.js` contains the Premiere operations; `core/rpc.js` owns the helper socket (request
-ids, pushed job events, incoming driver calls) and its retry rule; `features/driver.js` runs
-the helper's Premiere commands; `main.js` handles panel state. Protocol:
-docs/arch-design-helper-v2.md. `cutdeck/xml_bridge.py` launches the
-existing CLI in a subprocess.
-The helper on port 7891 is the one server to start (`Start CutDeck.cmd`). The split probe
-remains separate from this XML integration. (`bridge.py`, `live_clip.py` and `mark_export.py`
-— the retired mark-and-apply `plan` path — were removed under issue #25.)
+`workflow.js` captures sequence audio and validates source identity before native apply;
+`core/rpc.js` owns the helper socket and pushed events; `features/driver.js` serves
+fixed Premiere commands. `cutdeck/helper.py` owns persisted jobs and launches
+`python -m cutdeck.rough_cut` to analyse JSON. Shared extraction is in
+`cutdeck/audio_extract.py`, exact timing in `cutdeck/sequence_timing.py`.
 
-New CLI options: `--range-start-frame`, `--range-end-frame` (half-open interval),
-`--report`, and `--no-save-plan`. The helper uses all four. Existing unscoped
-command invocations keep their behavior.
+The helper on port 7891 is the one server to start (`Start CutDeck.cmd`). The old
+`python -m cutdeck.xml_bridge` command only forwards to this helper. The old
+`cutdeck.xml_recut` and `scripts/cut_xml.ps1` commands stop with replacement instructions.
+For offline JSON analysis use `python -m cutdeck.rough_cut sequence.json --cuts-json cuts.json`;
+optional frame bounds are a half-open interval. XML input and output are unsupported.
 
 API references checked during implementation:
 
-- [Project XML export](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/projectconverter)
 - [Project import and sequence operations](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/project)
 - [Sequence marks](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/sequence)
 - [TickTime](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/classes/ticktime)
