@@ -1,5 +1,7 @@
 # VERIFY
 
+include: verification/rough-cut.md
+
 Foundation scope (2026-10-11): selected ClubFriday backend checks run from the Git
 root E:/Me/5.Claude/Transcriber_v2 using `python` (observed Python 3.13.4).
 The TestClient recipe owns temporary directories; no live launch/readiness/cleanup

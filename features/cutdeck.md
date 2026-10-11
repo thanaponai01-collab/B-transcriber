@@ -9,6 +9,7 @@
 - status: suspected: current behavior not re-proven after source drift; historical proof at commit 2ad7576 (earlier live run 2026-09-28, per VERIFY.md): helper live-proven in Premiere; not restarted in this session
 
 ## Rough cut
+- current-design: docs/rough-cut.md (native audio input, bounded stale-handle recovery, verification and limits)
 - what: Find silence and filler in the active Premiere sequence and cut them out of a copy of the sequence, natively in Premiere.
 - click: `#cut` @ uxp/cutdeck/index.html
 - click: `#resume` @ uxp/cutdeck/index.html

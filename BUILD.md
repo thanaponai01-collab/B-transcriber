@@ -17,7 +17,18 @@ required for the GPU setup. See [commands](docs/commands.md) and [verification](
 - Next owner priority is unknown; historical deferred styled graphic insertion remains
   blocked by the text-write API evidence in the linked work record.
 
+## Rough Cut reliability - 2026-10-11
+Owner priority supersedes the earlier transcription CLI foundation next step.
+- Proof: `node --test tests/cutdeck_native_cut.test.cjs tests/cutdeck_cut_plan_apply.test.cjs tests/cutdeck_feature_rough_cut.test.cjs` must pass exact golden output, fresh-handle recovery, bounded failure and unchanged-source assertions.
+- First-action stale failure reproduced: 14 passed / 4 failed before the fix.
+- Bounded recovery implemented in existing split/move transaction loops; 37 targeted
+  checks and all 635 panel checks passed. Committed with this recovery record;
+  source map: docs/rough-cut.md.
+- Evidence: output/rough-cut-reliability/; scoped mutation challenge caught all four
+  original failure cases; .verify-evidence/rough-cut-reliability finished strict green.
+  Details and limits: verification/rough-cut-reliability.md.
+
 ## Next
-Trace the transcription CLI through engine execution, storage and subtitle export,
-then refresh its requirement-backed verification. Completion check: relevant feature
-trace is complete and its check rejects a controlled wrong result before strict pass.
+Run the repaired Rough Cut on the previously failing sequence in live Premiere;
+verify read-back and retained original. Read-only readiness currently fails because
+Premiere is not running. No real-host success is claimed from the offline tests.

@@ -21,8 +21,10 @@ full transcript exports preserve timeline timing and text. Empty/overlapping quo
 are refused. Requirement: clubfriday/README.md; checks: tests/test_clubfriday.py.
 
 ## Scope and unanswered questions
+- Current owner priority (2026-10-11): fix Rough Cut stopping midway and leaving
+  FAILED copies; recover and record the architecture (docs/rough-cut.md).
 - Scope is repository context plus a ClubFriday backend verification slice.
-- Owner priority after existing ClubFriday work has not been reconfirmed.
+- Rough Cut reliability is the current owner priority; live-host confirmation remains pending.
 - Real GPU accuracy, Premiere insertion and browser interactions need separate proof.
 - SYSTEM_SPEC.md has historical engine/status/count notes; use current config and
   CLAUDE.md for active engine decisions. This pass does not rewrite historical specs.

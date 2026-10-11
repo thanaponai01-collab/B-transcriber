@@ -12,4 +12,5 @@ Read the relevant area before changing its entry points.
 
 Coverage gaps: real GPU ASR, live Premiere, browser interactions and all remaining
 CLI jobs are not re-verified. The scanner does not discover every CLI or dynamic control.
-Next batch: trace the transcription CLI through storage/export and refresh its proof.
+Current owner priority: Rough Cut reliability; current design in docs/rough-cut.md.
+Next: confirm the repaired path on the previously failing sequence in live Premiere.

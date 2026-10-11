@@ -70,16 +70,20 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   };
   let hostReads = 0; // every per-clip read the panel makes
   const n = (v) => { hostReads++; return v; };
-  const wrapItem = (r) => ({ _raw: r,
+  const wrapItem = (r) => {
+    const item = { _raw: r, _stale: false,
     getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: r.end.toString() }),
     getInPoint: async () => n({ ticks: r.in.toString() }), getSpeed: async () => n(speedOf(r)), isSpeedReversed: async () => n(0),
     getProjectItem: async () => n({ getMediaFilePath: async () => n(r.path), isSequence: async () => n(false), isMulticamClip: async () => n(false) }),
     createMoveAction: (t) => {
-      if (staleMoveCalls.has(++moveCalls)) throw new Error("The script object is no longer valid.");
+      if (staleMoveCalls.has(++moveCalls)) item._stale = true;
+      if (item._stale) throw new Error("The script object is no longer valid.");
       return act({ type: "move", raw: r, by: BigInt(t.ticks) });
     },
     createSetInPointAction: (t) => act({ type: "setIn", raw: r, t: BigInt(t.ticks) }),
-    createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) });
+    createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) };
+    return item;
+  };
   const wrapTrack = (seq, kind, i) => ({ getTrackItems: (type) => (type === 2
     ? transitions.filter((x) => seq === src && x.kind === kind && x.track === i).map((x) => ({ getStartTime: async () => ({ ticks: x.start.toString() }), getEndTime: async () => ({ ticks: x.end.toString() }) }))
     : seq.tracks[kind][i].map(wrapItem)) });
@@ -122,7 +126,8 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
     TrackItemSelection: { createEmptySelection: (cb) => { const items = []; cb({ items, addItem: (it) => items.push(it._raw) }); return true; } },
     SequenceEditor: { getEditor: (s) => ({
       createCloneTrackItemAction: (item, t) => {
-        if (staleCloneCalls.has(++cloneCalls)) throw new Error("The script object is no longer valid.");
+        if (staleCloneCalls.has(++cloneCalls)) item._stale = true;
+        if (item._stale) throw new Error("The script object is no longer valid.");
         return act({ type: "clone", raw: item._raw, by: BigInt(t.ticks) });
       },
       createRemoveItemsAction: (sel, ripple, mt) => act({ type: "remove", seq: s._seq, items: sel.items, mt }),
@@ -130,7 +135,9 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   };
   const rowsOf = (seq) => ["video", "audio"].flatMap((k) => seq.tracks[k].flatMap((t) =>
     t.map((r) => JSON.stringify([k, r.track, Number(r.start / TPF), Number(r.end / TPF), Number(r.in / TPF)])))).sort();
-  return { ppro, project, source: wrapSeq(src), src, sequences, rowsOf, clones, events, binPath, get transactions() { return transactions; }, get hostReads() { return hostReads; } };
+  return { ppro, project, source: wrapSeq(src), src, sequences, rowsOf, clones, events, binPath,
+    get transactions() { return transactions; }, get hostReads() { return hostReads; },
+    get cloneCalls() { return cloneCalls; }, get moveCalls() { return moveCalls; } };
 }
 
 test("golden: native apply on the captured synced stack equals the XML route's recut, source untouched", async () => {
@@ -276,3 +283,33 @@ test("stale handle mid-batch in split at cut edges: commits partial batch, re-re
   assert.deepEqual(h.rowsOf(copy), golden.after.map((x) => JSON.stringify(x)).sort());
   assert.ok(r.steps >= 6, `expected at least 6 steps with split batch, got ${r.steps}`);
 });
+
+for (const stage of ["split", "move"]) {
+  test(`stale first handle in ${stage}: fresh read recovers an exact cut`, async () => {
+    // Include a stale first handle after a partial commit, not just the initial batch.
+    const failures = stage === "split"
+      ? { staleCloneCalls: new Set([16, 17, 20, 21]) }
+      : { staleMoveCalls: new Set([1, 2, 5, 6]) };
+    const h = fakeHost(golden.before, failures);
+    const before = h.rowsOf(h.src);
+    await applyNativeCut(h.ppro, h.project, h.source, golden, "recovered");
+    assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "recovered")),
+      golden.after.map((x) => JSON.stringify(x)).sort());
+    assert.deepEqual(h.rowsOf(h.src), before);
+    assert.ok(!h.events.includes("tx empty"), "a stale first action must not commit an empty transaction");
+  });
+
+  test(`persistently stale first handle in ${stage}: bounded failure leaves source untouched`, async () => {
+    const calls = new Set(Array.from({ length: 30 }, (_, i) => i + (stage === "split" ? 16 : 1)));
+    const h = fakeHost(golden.before, stage === "split" ? { staleCloneCalls: calls } : { staleMoveCalls: calls });
+    const before = h.rowsOf(h.src);
+    const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "stalled").then(() => null, (e) => e);
+    assert.match(error.message, /stalled.*3 fresh reads/);
+    assert.equal(error.copyCreated, true);
+    assert.equal(stage === "split" ? h.cloneCalls - 15 : h.moveCalls, 4,
+      "one initial attempt plus three fresh-read attempts, then stop");
+    assert.deepEqual(h.rowsOf(h.src), before);
+    assert.ok(h.sequences.some((s) => s.name === "stalled (FAILED)"));
+    assert.ok(!h.events.includes("tx empty"));
+  });
+}

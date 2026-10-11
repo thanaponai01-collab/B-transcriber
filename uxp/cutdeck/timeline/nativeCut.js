@@ -19,6 +19,7 @@ const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor,
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 const MOVE_BATCH = 3000;
 const SPLIT_BATCH = 3000;
+const STALE_READ_RETRIES = 3;
 
 const kindOf = (c) => c.kind; // "video" | "audio" from readSequence
 const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
@@ -107,40 +108,46 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     if (!builders.length) return { steps: 0, count: 0 };
     const ed = editor();
     let completed = 0;
-    timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
-      const len = builders.length;
-      for (let i = 0; i < len; i++) {
-        const build = builders[i];
-        let action, added;
-        // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
-        // cut list went through on a rerun, so an empty result is asked for once more (still inside
-        // this callback, as required) before failing. The read-back still checks every piece.
-        for (let attempt = 0; attempt < 2 && !action; attempt++) {
-          try { action = build(ed); } catch (e) {
-            if (allowPartial && i > 0 && e.message && e.message.includes("is no longer valid")) {
-              // Stale handle mid-batch (live 2026-10-06, action 179 of 3000): commit what succeeded
-              // so far; the caller re-reads the copy and continues with fresh handles.
-              return;
+    try {
+      timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
+        const len = builders.length;
+        for (let i = 0; i < len; i++) {
+          const build = builders[i];
+          let action, added;
+          // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
+          // cut list went through on a rerun, so an empty result is asked for once more (still inside
+          // this callback, as required) before failing. The read-back still checks every piece.
+          for (let attempt = 0; attempt < 2 && !action; attempt++) {
+            try { action = build(ed); } catch (e) {
+              if (allowPartial && e.message && e.message.includes("is no longer valid")) {
+                // Stale handle mid-batch (live 2026-10-06, action 179 of 3000): commit what succeeded
+                // so far; the caller re-reads the copy and continues with fresh handles.
+                if (completed > 0) return;
+                // Abort an empty batch; retry only after the caller acquires fresh handles.
+                throw Object.assign(e, { staleHandle: true });
+              }
+              const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+              throw new Error(`${where} failed to build: ${e.message}`);
             }
-            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-            throw new Error(`${where} failed to build: ${e.message}`);
           }
+          if (!action) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where}: Premiere returned no action (${action}), twice`);
+          }
+          try { added = compound.addAction(action); } catch (e) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where} was refused: ${e.message}`);
+          }
+          if (!added) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where}: addAction returned false`);
+          }
+          completed++;
         }
-        if (!action) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where}: Premiere returned no action (${action}), twice`);
-        }
-        try { added = compound.addAction(action); } catch (e) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where} was refused: ${e.message}`);
-        }
-        if (!added) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where}: addAction returned false`);
-        }
-        completed++;
-      }
-    }));
+      }));
+    } catch (error) {
+      if (!(allowPartial && completed === 0 && error.staleHandle)) throw error;
+    }
     return { steps: completed > 0 ? 1 : 0, count: completed };
   };
   // Positions only. The two reads after the razor see every piece (~8,700 on a 1,735-cut run,
@@ -149,6 +156,15 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   const all = (seq) => [...seq.video, ...seq.audio];
   const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
+  let stalledReads = 0;
+  const advance = (label, result, at, total) => {
+    if (result.count > 0) { stalledReads = 0; return result.count; }
+    if (++stalledReads > STALE_READ_RETRIES) {
+      throw new Error(`${label}: stalled at action ${at + 1} of ${total} after ${STALE_READ_RETRIES} fresh reads (Premiere handles are still invalid)`);
+    }
+    console.log(`CutDeck ${label}: stale first handle; fresh read ${stalledReads} of ${STALE_READ_RETRIES} at action ${at + 1}`);
+    return 0;
+  };
 
   // Where each track needs a razor: every cut edge strictly inside a clip. The edge at b is cut
   // by a one-frame filler ending there, so the filler itself lies inside the cut.
@@ -206,8 +222,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     });
     const res = tx("split at cut edges", razor, { allowPartial: true });
     steps += res.steps;
-    if (res.count === 0) throw new Error(`split at cut edges: stalled at edge ${from + 1} of ${cutAt.length}`);
-    from += res.count;
+    from += advance("split at cut edges", res, from, cutAt.length);
   }
 
   // 4. remove everything inside a cut, and the fillers — per media type.
@@ -246,7 +261,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     .sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
   let at = 0;
   while (at < moves.length) {
-    if (at > 0) seq = await read({ end: false, inPoint: false });
+    if (at > 0 || stalledReads > 0) seq = await read({ end: false, inPoint: false });
     const fresh = new Map();
     for (const c of all(seq)) {
       const k = `${lane(c)}|${c.start}`;
@@ -268,10 +283,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     const res = tx("close gaps", builders, { allowPartial: true });
     steps += res.steps;
     console.log(`CutDeck close gaps: batch committed ${res.count} of ${batch.length} moves (total done ${at + res.count} of ${moves.length})`);
-    if (res.count === 0) {
-      throw new Error(`close gaps: stalled at move ${at + 1} of ${moves.length}`);
-    }
-    at += res.count;
+    at += advance("close gaps", res, at, moves.length);
   }
   moves.length = 0;
   seq = null;

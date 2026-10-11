@@ -1,5 +1,11 @@
 <!-- context-paths: clubfriday/server.py, clubfriday/static/app.js, cutdeck/ai_backend.py, cutdeck/xml_audio_extract.py, uxp/cutdeck/main.js -->
-# Architecture: ClubFriday path
+# Architecture
+
+Rough Cut's current native analysis/edit flow and recovery rules are mapped in
+[Rough Cut](rough-cut.md), traced and tested offline on 2026-10-11. The historical
+native-cut handoff includes superseded XML input and split designs.
+
+## ClubFriday path
 
 ClubFriday owns quote sessions and exports; the shared CutDeck helper owns ASR jobs.
 This as-is module view was traced on 2026-10-11.
