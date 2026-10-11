@@ -80,3 +80,7 @@ test_projects/*
 
 # verify-loop state
 .verify-state.json
+
+# Rebuildable agent context and private verification evidence
+.project-context/
+.verify-evidence/

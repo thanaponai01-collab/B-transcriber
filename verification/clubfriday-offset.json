@@ -1,0 +1,6 @@
+{
+  "file": "clubfriday/server.py",
+  "before": "offset = session[\"offset_ms\"]",
+  "after": "offset = 0",
+  "claim": "ClubFriday README requires absolute Premiere timeline timestamps; dropping the marked-range offset violates that requirement."
+}
