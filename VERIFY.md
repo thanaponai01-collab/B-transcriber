@@ -86,7 +86,8 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - ClubFriday: the browser page (clubfriday/static/app.js) has no automated check, and nothing here transcribes a real range or imports the SRT into live Premiere; the backend runs against a fake helper and extractor.
 - No real run of the pipeline: nothing here transcribes real audio on GPU. `transcribe.pipeline.run` on a real file and `transcribe.eval.harness` on the gold set are manual.
 - CutDeck panel checks run against `tests/fakes/premiere.cjs`, not live Premiere; real-host behaviour is only in docs/PREMIERE_FACTS.md.
-- Panel fail-proof covers frameBounds only; other panel modules are not mutation-checked.
+- Panel fail-proof includes the historical cases above and the Rough Cut source guard
+  (verification/rough-cut-retirement-evidence.md); coverage is not exhaustive.
 - Live Premiere is opt-in, not part of `verify.py run`. Before releasing CutDeck: start the helper (`python -m cutdeck.helper`), open a sequence with In/Out marks and the CutDeck panel, check with `python -m cutdeck.live_check`, then run `python -m pytest tests/test_cutdeck_live_premiere.py --live -m live -v` (add `--live-edit` only if you accept the selected clips being edited). It fails, never skips, if any piece is missing.
 - Live run 2026-09-28 (`2 FACEBOOK D1`, nothing selected): 8/8 passed. With nothing selected the four transform/anchor/align/distribute tests only proved the "Select a clip" refusal, so their success path on real clips is still unproven.
 - The offline mode of those tests runs the real panel driver against the fake Premiere with nothing selected, so the success path of transform/anchor/align/distribute on a real selection is only proven by the live run.

@@ -3,6 +3,11 @@
 Local source work is complete; real Premiere/GPU confirmation remains pending.
 Contract: rough-cut-retirement.md. Scoped recipe: rough-cut-retirement.recipe.md.
 
+Code baseline: `afa8dc76dd42446cf541698b9894f8be35c089db`, pushed to origin/master
+on 2026-10-11. The checks below ran on the working source before that commit;
+committing/pushing did not rerun them. `git ls-remote origin refs/heads/master`
+matched the full local HEAD after push, and `git status --short` was empty.
+
 ## Changes and preserved behavior
 - Shared services now live in cutdeck/helper.py, rough_cut.py, audio_extract.py and
   sequence_timing.py. Launchers, transcription/MCP clients and ClubFriday use them.
