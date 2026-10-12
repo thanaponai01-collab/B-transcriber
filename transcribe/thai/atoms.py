@@ -65,6 +65,11 @@ _FINAL_PARTICLES = frozenset({
     "จ้ะ", "อ่ะ", "มั้ย", "ไหม", "เหรอ", "หรอ", "ป่ะ",
 })
 
+# Particles that close a clause. They are not glued (a glue would pull the break
+# earlier, away from the word they belong to); the cue splitter instead lets a cue
+# run slightly over its time/size target to keep one with the clause it ends.
+TRAILING_PARTICLES = _FINAL_PARTICLES | frozenset({"เนี้ย", "เนี่ย", "น่ะ"})
+
 RULE_MAI_YAMOK = "mai_yamok"
 RULE_RECIPROCAL_PARTICLE = "reciprocal_particle"
 RULE_NUMERAL_UNIT = "numeral_unit"

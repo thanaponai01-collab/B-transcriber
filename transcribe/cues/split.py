@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from transcribe.cues.policy import CuePolicy
+from transcribe.thai.atoms import TRAILING_PARTICLES
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,11 @@ _DP_SPACE_DISCOUNT = 50.0
 _DP_OVERFLOW_UNIT_MS = 100
 _DP_OVERFLOW_WEIGHT = 4.0
 _DP_RUNT_PENALTY = 1_000_000.0
+
+# Greedy: a trailing particle (เนี้ย, น่ะ, ...) may push a cue this far past
+# target_ms / target_chars rather than start the next cue. Not a policy knob.
+_PARTICLE_OVERSHOOT_MS = 500
+_PARTICLE_OVERSHOOT_CHARS = 8
 
 
 def split_cues(words, policy: CuePolicy | None = None):
@@ -266,6 +272,11 @@ def _split_greedy(words, policy: CuePolicy):
             wants_break = new_sentence or gap >= gap_ms or span > target_ms or n_chars >= target_chars
             if (wants_break and not new_sentence and gap < gap_ms
                     and _short_tail_fits(i)):
+                wants_break = False
+            if (wants_break and not new_sentence and gap < gap_ms
+                    and t.strip() in TRAILING_PARTICLES
+                    and span <= target_ms + _PARTICLE_OVERSHOOT_MS
+                    and n_chars <= target_chars + _PARTICLE_OVERSHOOT_CHARS):
                 wants_break = False
             if wants_break:
                 _close()
