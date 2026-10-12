@@ -7,12 +7,14 @@
 # longer needs a long smoothing window. 2026-10-12, 120 s of real news audio: this overlay
 # removes 10.6 s of silence against 5.2 s for the default, with 0 audible (>= floor+15 dB)
 # 20 ms windows inside any cut.
-vad_min_silence_ms: 150     # split speech at gaps this short (default 500)
-rms_gate_min_gap_ms: 150    # energy gate splits at quiet gaps this short (default 300)
+vad_min_silence_ms: 120     # split speech at gaps this short (default 500)
+rms_gate_min_gap_ms: 120    # energy gate splits at quiet gaps this short (default 300)
 cut:
-  min_silence_ms: 150
-  min_clip_ms: 100
+  min_silence_ms: 119       # cut any silence of 120 ms or more
+  min_clip_ms: 60           # keep short audio islands down to 60 ms
   max_dissolve_ms: 1000
-  pad_pre_ms: 60
-  pad_post_ms: 40
-  sound_guard_min_ms: 60    # keep shorter bursts of sound than the default 100
+  pad_pre_ms: 40            # 40 ms pre-roll before each sound (attack)
+  pad_post_ms: 60           # 60 ms post-roll after each sound (tail)
+  sound_guard_db: 10        # sensitive energy floor: breaths, laughter, SFX >= +10 dB count as sound
+  sound_guard_tail_db: 5    # keep decaying tails down to +5 dB above noise floor
+  sound_guard_min_ms: 40    # keep bursts down to 40 ms

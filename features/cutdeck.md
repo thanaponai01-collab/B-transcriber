@@ -6,7 +6,7 @@
 - trace: `main` @ cutdeck/helper.py > `serve` @ cutdeck/helper.py > `dispatch` @ cutdeck/helper.py > `_run` @ cutdeck/helper.py
 - effect: job folders under `output/premiere/`, `helper.log`
 - verify: CutDeck helper
-- status: suspected: current behavior not re-proven after source drift; historical proof at commit 2ad7576 (earlier live run 2026-09-28, per VERIFY.md): helper live-proven in Premiere; not restarted in this session
+- status: offline-proven at afa8dc7 (verification/rough-cut-retirement-evidence.md); current helper not restarted/live-confirmed. Live proof at 2ad7576 is historical.
 
 ## Rough cut
 - current-design: docs/rough-cut.md (JSON audio input, source-snapshot validation, bounded stale-handle recovery and verification limits)

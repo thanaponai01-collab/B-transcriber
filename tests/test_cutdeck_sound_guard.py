@@ -132,3 +132,77 @@ def test_sound_runs_ignore_clicks_and_keep_fading_tails():
     tone[SR:2 * SR] += (0.2 * np.sin(2 * np.pi * 150 * t) * np.exp(-3 * t)).astype(np.float32)
     runs = ingest_mod.sound_runs(tone, SR, margin_db=15, tail_db=6, min_ms=100)
     assert len(runs) == 1 and runs[0][0] <= 1020 and runs[0][1] >= 1700
+
+
+def test_aggressive_cut_handles_40ms_pre_60ms_post_and_120ms_threshold(monkeypatch):
+    """Aggressive cuts leave 40ms pre / 60ms post and cut every silence >= 120ms."""
+    cfg = _raw_config("aggressive")
+    assert cfg["cut"]["pad_pre_ms"] == 40
+    assert cfg["cut"]["pad_post_ms"] == 60
+    assert cfg["cut"]["min_silence_ms"] == 119
+
+    # Test with synthetic speech segments having silences of 110ms, 120ms, and 300ms
+    # Speech 1: 0 - 1000ms
+    # Silence 1: 1000 - 1110ms (110ms: < 120ms -> kept, NOT cut)
+    # Speech 2: 1110 - 2000ms
+    # Silence 2: 2000 - 2120ms (120ms: >= 120ms -> cut from 2060 to 2080, exactly 20ms)
+    # Speech 3: 2120 - 3000ms
+    # Silence 3: 3000 - 3300ms (300ms: >= 120ms -> cut from 3060 to 3260, exactly 200ms)
+    # Speech 4: 3300 - 4000ms
+    from cutdeck.contracts import CutConfig
+    from cutdeck.rules import build_cut_spans
+    from transcribe.pipeline.ingest import SpeechSpan
+    spans = [
+        SpeechSpan(0, 0, 1000, "speech"),
+        SpeechSpan(1, 1000, 1110, "silence"),
+        SpeechSpan(2, 1110, 2000, "speech"),
+        SpeechSpan(3, 2000, 2120, "silence"),
+        SpeechSpan(4, 2120, 3000, "speech"),
+        SpeechSpan(5, 3000, 3300, "silence"),
+        SpeechSpan(6, 3300, 4000, "speech"),
+    ]
+    cut_cfg = CutConfig.from_yaml(cfg)
+    plan_spans = build_cut_spans(tokens=[], spans=spans, duration_ms=4000, cfg=cut_cfg)
+    cuts = [(s.src_in_ms, s.src_out_ms) for s in plan_spans if s.action == CUT]
+
+    # Silence 1 (110ms) must NOT have any cut inside it
+    assert not any(1000 <= a and b <= 1110 for a, b in cuts)
+    # Silence 2 (120ms) must be cut from 2060 (1000+60 post) to 2080 (2120-40 pre)
+    assert (2060, 2080) in cuts
+    # Silence 3 (300ms) must be cut from 3060 to 3260
+    assert (3060, 3260) in cuts
+
+
+def test_aggressive_breath_and_sfx_preserved_without_vad(tmp_path, monkeypatch):
+    """Soft breath (+12 dB above noise floor) and music/SFX are preserved even if VAD hears nothing."""
+    rng = np.random.default_rng(42)
+    # 4 seconds: 1s silence, 0.2s breath (+12 dB), 1s silence, 0.5s SFX/chime, 1.3s silence
+    floor = rng.standard_normal(SR * 4).astype(np.float32) * 10 ** (-55 / 20)
+    audio = floor.copy()
+
+    # Breath: shaped pink/filtered noise from 1.0s to 1.2s at -43 dB (+12 dB above floor)
+    t_breath = np.arange(int(0.2 * SR))
+    breath_noise = rng.standard_normal(len(t_breath)).astype(np.float32) * 10 ** (-43 / 20)
+    # simple envelope
+    env = np.sin(np.pi * np.linspace(0, 1, len(t_breath)))
+    audio[SR:SR + len(t_breath)] += breath_noise * env
+
+    # SFX: 0.5s chime / tone from 2.2s to 2.7s
+    t_sfx = np.arange(int(0.5 * SR)) / SR
+    sfx = (0.1 * np.sin(2 * np.pi * 440 * t_sfx)).astype(np.float32)
+    audio[int(2.2 * SR):int(2.2 * SR) + len(t_sfx)] += sfx
+
+    path = tmp_path / "breath_sfx.wav"
+    sf.write(path, audio, SR)
+
+    # VAD is completely blind (0 speech found)
+    cuts = _cuts(_plan(str(path), _raw_config("aggressive"), monkeypatch, vad_segments=[]))
+
+    # Calculate audible windows for the breath and SFX
+    # Breath window: 1000 - 1200ms
+    # SFX window: 2200 - 2700ms
+    breath_lost = [t for t in range(1040, 1160, 20) if any(a <= t < b for a, b in cuts)]
+    assert breath_lost == [], f"Breath was cut: {cuts}"
+
+    sfx_lost = [t for t in range(2240, 2660, 20) if any(a <= t < b for a, b in cuts)]
+    assert sfx_lost == [], f"SFX was cut: {cuts}"
