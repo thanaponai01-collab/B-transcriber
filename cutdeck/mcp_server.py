@@ -69,12 +69,12 @@ def create_server(backend: Backend) -> FastMCP:
         return await backend.premiere("read_audio_range")
 
     @server.tool(annotations=write)
-    async def premiere_rough_cut(speech_protection: bool = True, preset: str = "standard",
+    async def premiere_rough_cut(speech_protection: bool = True, preset: str = "aggressive",
                                  audio_track: int | None = None) -> dict:
         """Rough-cut the ACTIVE Premiere sequence's timeline In/Out range: find silence/filler to
         remove, return a job_id. No XML export is needed; the CutDeck panel reads the audio
         tracks itself. Poll get_job, then premiere_apply_cuts(job_id) cuts a COPY of the
-        sequence (the original is never edited). preset: standard or aggressive.
+        sequence (the original is never edited). preset: aggressive (default) or standard.
         speech_protection enables ASR to protect short speech. audio_track is a zero-based
         Premiere audio track (A1 is 0); omit it for the first un-muted track with clips.
         Needs the CutDeck panel open and In/Out marks set."""

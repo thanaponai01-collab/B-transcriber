@@ -79,7 +79,7 @@ class Backend:
     async def transcribe(self, media_path: str) -> dict:
         return self._view(await self._ask({"type": "submit_transcribe", "media_path": media_path}))
 
-    async def premiere_rough_cut(self, speech_protection: bool = True, preset: str = "standard",
+    async def premiere_rough_cut(self, speech_protection: bool = True, preset: str = "aggressive",
                                  audio_track: int | None = None) -> dict:
         """Start a rough cut of the ACTIVE Premiere sequence's In/Out range, with no XML export:
         the panel's own read of the audio tracks goes to the helper's `prepare`, exactly as the

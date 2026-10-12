@@ -152,7 +152,7 @@ function createRoughCutFeature({
       {
         audio_track: ctl.state.audioTrack,
         asr: ctl.state.cutMode === "protected",
-        preset: ctl.state.cutPreset || "standard",
+        preset: ctl.state.cutPreset || "aggressive",
       },
       save
     );

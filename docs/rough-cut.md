@@ -106,6 +106,6 @@ dropped by the min-clip merge.
   `cutdeck.rough_cut.analysis_ingest_kwargs` is the single mapping used by analysis.
 - The aggressive overlay uses 150 ms VAD/gate/silence thresholds and 60/40 ms pads, which are
   only safe because of the guard. Measured on 120 s of real audio: 10.6 s removed vs 5.2 s for
-  standard, 0 audible 20 ms windows inside cuts. The panel still defaults to the standard preset.
+  standard, 0 audible 20 ms windows inside cuts. Aggressive is the default everywhere (panel, helper, MCP); standard stays selectable.
 - Check: `python -m pytest tests/test_cutdeck_sound_guard.py` (synthetic held vowel, VAD blind
   to it, both presets; fails with the guard off). Not yet heard in live Premiere.

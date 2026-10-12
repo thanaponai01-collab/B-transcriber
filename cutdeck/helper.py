@@ -287,7 +287,7 @@ class Jobs:
             raise ValueError("Audio track must be a non-negative index")
         if type(context["asr"]) is not bool:
             raise ValueError("Speech protection must be true or false")
-        preset = req.get("preset", "standard")
+        preset = req.get("preset", "aggressive")
         if preset not in {"aggressive", "standard"}:
             raise ValueError("preset must be aggressive or standard")
         # The panel's native read of the audio tracks, instead of an XML export (move 6).
@@ -456,7 +456,7 @@ class Jobs:
             args = [sys.executable, "-u", "-m", "cutdeck.rough_cut", job["source_path"],
                     "--cuts-json", str(cuts_path),
                     "--config", str(ROOT / "transcribe/config.yaml")]
-            if job.get("preset", "standard") == "aggressive":
+            if job.get("preset", "aggressive") == "aggressive":
                 args += ["--overlay", str(ROOT / "transcribe/config.aggressive_cut.yaml")]
             if "range_frames" in job:
                 start, end = job["range_frames"]
