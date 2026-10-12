@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS engine_result (
     tokens_json       TEXT    NOT NULL,  -- list of RecognizedToken dicts, global-timestamped
     timestamps_final  INTEGER NOT NULL DEFAULT 0,
     raw_words_json    TEXT,              -- nullable: per-word timestamps (5.4/CutDeck Phase 5)
+    raw_segments_json TEXT,              -- nullable: per-segment avg_logprob/no_speech_prob/compression_ratio
     created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE (job_id, engine_slot)
 );

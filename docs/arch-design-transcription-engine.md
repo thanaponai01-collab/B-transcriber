@@ -176,7 +176,9 @@ fewer gaps give better cue starts.
 |---|---|
 | 1 | **Partly built.** Done: `speech_coverage_miss` (gated) and `orphan_cues` (descriptive) in metrics v4, new `eval_run` columns, `store.path` config key with `store.resolve_db_path`, harness uses it (`tests/test_metrics_v4.py`; pytest 1064 pass). Open: grow gold set to 15+ clips (needs owner's Premiere recuts); GPU harness run to set the v4 baseline and show `vad_threshold: 0.8` fails the new metric. |
 | 2 | **Built (2026-10-12).** `transcribe/service.py` (`transcribe()` → `Transcript` with `job_id`, cues, words, cache); `run_file_job` returns `(job_id, tokens)`, `run_file` unchanged. Rough Cut, helper `ai_worker`, editor and CLI now use the shared `store.path` DB (`tests/test_service.py`; pytest 1067 pass). Open: `glossary` argument (item 4); MCP reaches it through the helper, no direct call. |
-| 3-5 | Not started. |
+| 3 | **Built, OFF.** `pipeline/coverage.py` (gaps ≥ 600 ms, orphans, `fill_gaps`), `engine_run.gap_redecoder` (Engine A re-decode, ±1 s context, no prompt), wired in `run.py` behind `coverage_guard.enabled: false`. `Transcript.coverage_gaps` is always reported. Tests: `tests/test_coverage_guard.py` (mock + fake redecoder). Open: GPU harness run showing `speech_coverage_miss` drops, then flip the flag. |
+| 4 | **Built, not probed.** `glossary=` on `service.transcribe` / `run_file_job` (job-only terms, outrank learned ones, skip the cache); faster_whisper `bias_channel: prompt\|hotwords\|both` (default `prompt` = today). Open: harness probe of hotwords vs prompt on gold clips with glossaries; ClubFriday text-edit → `correction` row (panel work). |
+| 5 | **Partly built.** faster_whisper records per-segment `avg_logprob` / `no_speech_prob` / `compression_ratio` (`engine_result.raw_segments_json`, new column); `service.review_flags` ranks cues using `review.suspicion_reasons` + those stats; `Transcript.review_flags`. Open: flag-precision check on the gold set; the targeted second-opinion decode (needs GPU and a picker UI). Long pause-free spans don't record stats (window-relative). |
 
 ## Build order and cost
 

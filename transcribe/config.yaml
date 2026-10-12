@@ -400,6 +400,12 @@ segment:
 store:
   path: transcriber.db
 
+# Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
+# (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU
+# harness run shows speech_coverage_miss drops with no gated regression.
+coverage_guard:
+  enabled: false
+
 reconciler:
   llm_enabled: false
   ollama:

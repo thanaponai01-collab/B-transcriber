@@ -97,3 +97,54 @@ def test_callers_share_one_db_and_one_bias_index(monkeypatch, tmp_path):
     conn.close()
     assert not (folder / "transcribe.db").exists()
     assert len(seen) == 2 and seen[0] == seen[1] == ["CutDeck"]
+
+
+def test_glossary_reaches_the_engine_and_skips_cache(monkeypatch, tmp_path):
+    from transcribe import service
+    import transcribe.pipeline.run as run_mod
+    _patch_vad(monkeypatch)
+    wav, db = _wav(), _db(tmp_path)
+    seen = []
+    real = run_mod.engine_run.run_engines
+
+    def spy(conn, job_id, job_plan, inputs, device, config):
+        seen.append((list(inputs.bias_terms), dict(inputs.bias_weights)))
+        return real(conn, job_id, job_plan, inputs, device, config)
+
+    monkeypatch.setattr(run_mod.engine_run, "run_engines", spy)
+    service.transcribe(wav, config=_CFG, db_path=db)
+    again = service.transcribe(wav, config=_CFG, db_path=db, glossary=["โหนกระแส", " "])
+    assert not again.cached
+    assert seen[0][0] == [] and seen[1][0] == ["โหนกระแส"] and seen[1][1]["โหนกระแส"] >= 1.0
+
+
+def test_review_flags_rank_by_reasons_and_use_decode_stats():
+    from transcribe.service import review_flags
+    cues = [{"text": "สวัสดีครับ", "start_ms": 0, "end_ms": 2000, "confidence": 0.95},
+            {"text": "สวัสดีครับ", "start_ms": 2000, "end_ms": 4000, "confidence": 0.95},
+            {"text": "สวัสดีครับ", "start_ms": 4000, "end_ms": 6000, "confidence": 0.5}]
+    segs = [{"start_ms": 2000, "end_ms": 4000, "avg_logprob": -1.2,
+             "no_speech_prob": 0.1, "compression_ratio": 1.0},
+            {"start_ms": 4000, "end_ms": 6000, "avg_logprob": -1.2,
+             "no_speech_prob": 0.5, "compression_ratio": 1.0}]
+    flags = review_flags(cues, segs)
+    assert [f["cue_index"] for f in flags] == [2, 1]  # cue 0 clean, not flagged
+    assert "low decode log-probability" in flags[1]["reasons"]
+
+
+def test_transcript_reports_uncovered_speech(monkeypatch, tmp_path):
+    from transcribe import service
+    _patch_vad(monkeypatch)
+    t = service.transcribe(_wav(6.0), config=_CFG, db_path=_db(tmp_path))
+    # mock cues end at 2 s; VAD says speech runs 0-6 s -> the tail is reported, never filled
+    assert any(g["start_ms"] >= 1900 and g["end_ms"] >= 5900 for g in t.coverage_gaps)
+
+
+def test_hotwords_channel_ranks_by_weight_and_rejects_bad_value():
+    import pytest
+    import transcribe.engines.faster_whisper as fw
+    from transcribe.contracts import EngineInput
+    inp = EngineInput(bias_terms=["a", "b", "c"], bias_weights={"b": 3.0, "c": 2.0})
+    assert fw.FasterWhisperEngine._build_hotwords(inp) == "b c a"
+    with pytest.raises(ValueError):
+        fw.FasterWhisperEngine(bias_channel="nope")

@@ -195,6 +195,7 @@ class EngineResultRow:
     timestamps_final: bool
     raw_words_json: Optional[str]
     created_at: str
+    raw_segments_json: Optional[str] = None
 
 
 @dataclass
@@ -619,6 +620,14 @@ def purge_job_transcript_data(conn: sqlite3.Connection, job_id: int) -> None:
     For throwaway inputs (cutdeck's temp mixdown) that can never be resumed."""
     for table in ("token", "speech_span", "engine_result"):
         conn.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
+    conn.commit()
+
+
+def save_engine_segments(conn: sqlite3.Connection, job_id: int, engine_slot: str,
+                         raw_segments_json: str) -> None:
+    """Attach per-segment decode statistics to an already-saved engine_result."""
+    conn.execute("UPDATE engine_result SET raw_segments_json = ? WHERE job_id = ? AND engine_slot = ?",
+                 (raw_segments_json, job_id, engine_slot))
     conn.commit()
 
 

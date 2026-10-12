@@ -81,6 +81,28 @@ def _engine_residency(engine, stage: str):
         _log_vram("post-" + stage)
 
 
+@contextmanager
+def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: int):
+    """Engine A, resident for the duration, as `redecode(lo_ms, hi_ms) -> cue dicts`.
+
+    Used by the coverage guard after the main decode, so it keeps the one-model-at-a-time
+    rule. Each excerpt is decoded alone: no bias prompt, no earlier text as context.
+    """
+    engine = build_engine(plan.engine_a_name, device, config)
+    with _engine_residency(engine, "coverage-guard"):
+        def redecode(lo_ms: int, hi_ms: int) -> list[dict]:
+            excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
+            if not len(excerpt):
+                return []
+            res = engine.transcribe(EngineInput(audio=excerpt, language_hint="th"))
+            return [{"text": t.text, "start_ms": t.start_ms + lo_ms, "end_ms": t.end_ms + lo_ms,
+                     "script": t.script, "confidence": t.confidence}
+                    for t in res.tokens]
+        yield redecode
+    del engine
+    _free_vram()
+
+
 def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
                 device: str, config: dict) -> Hypotheses:
     """Produce both hypotheses, reusing whatever a resumed job already cached."""
@@ -138,6 +160,9 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config):
         _tokens_to_json(tokens_a), final_a,
         json.dumps(raw_words_a) if raw_words_a is not None else None,
     )
+    stats = getattr(engine, "last_segment_stats", None)
+    if isinstance(stats, list) and stats:
+        store.save_engine_segments(conn, job_id, "a", json.dumps(stats))
     store.update_job_phase(conn, job_id, PHASE_ENGINE_A_DONE)
     del engine
     _free_vram()
