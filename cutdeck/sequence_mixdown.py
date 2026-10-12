@@ -116,6 +116,7 @@ def plan_from_mixdown(
     cut_spans = build_cut_spans(
         tokens=tokens or [], spans=result.spans, duration_ms=duration_ms, cfg=cfg,
         words=words, segments=segments, job_id=job_id,
+        protect=getattr(result, "sound_runs", None),
     )
 
     from transcribe.db import store

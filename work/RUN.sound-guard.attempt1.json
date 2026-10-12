@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "contract": {
+    "goal": "Rough Cut removes as much true silence as possible and never cuts audible sound (held vowels, fading tails)",
+    "target": "local",
+    "max_attempts": 6,
+    "timeout_seconds": 900,
+    "max_seconds": 14400,
+    "criteria": [
+      {
+        "statement": "A held vowel the VAD misses is kept: zero audible 20 ms windows fall inside cuts",
+        "stage": "prove"
+      },
+      {
+        "statement": "True silence is still cut aggressively (>= total minus 400 ms per silence) in standard and aggressive presets",
+        "stage": "prove"
+      },
+      {
+        "statement": "Existing rough-cut, ingest, rules and panel regressions stay green",
+        "stage": "regress"
+      }
+    ],
+    "oracle_files": [
+      "tests/test_cutdeck_sound_guard.py",
+      "tests/audio_synth.py"
+    ],
+    "stages": [
+      {
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cutdeck_sound_guard.py",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "inputs": [
+          "cutdeck",
+          "transcribe/pipeline/ingest.py",
+          "transcribe/config.yaml",
+          "transcribe/config.aggressive_cut.yaml",
+          "tests/test_cutdeck_sound_guard.py",
+          "tests/audio_synth.py"
+        ]
+      },
+      {
+        "id": "regress",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cutdeck_sequence_mixdown.py",
+          "tests/test_phase3_ingest.py",
+          "tests/test_cutdeck_rough_cut_cli.py",
+          "tests/test_cutdeck_rough_cut_retirement.py",
+          "tests/test_pipeline_run_config_fallbacks.py",
+          "tests/test_cutdeck_phase1.py",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "inputs": [
+          "cutdeck",
+          "transcribe/pipeline/ingest.py",
+          "transcribe/config.yaml",
+          "tests"
+        ]
+      }
+    ],
+    "actions": []
+  },
+  "contract_hash": "4432d0ce34430bcde1865842b04d134043554c18e9e6d5b5d61cc4ffa72521b6",
+  "oracle_hash": "645227e602f009daafb25115ea27cf3e46cf95f5e7c72eb522b977d73a7e3dec",
+  "started_at": 1791770869.350414,
+  "status": "failed",
+  "proofs": {},
+  "attempts": {},
+  "journal": {},
+  "history": [],
+  "reason": "oracle test assertion corrected after init (checked inaudible fade tail as vowel); re-initialising with the corrected oracle",
+  "next_action": "init new run with same contract"
+}

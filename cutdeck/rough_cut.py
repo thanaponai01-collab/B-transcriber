@@ -1,7 +1,7 @@
 """Analyse a panel sequence snapshot and emit a native cut plan; no timeline edits."""
 from __future__ import annotations
 from dataclasses import replace
-from cutdeck.contracts import CUT, CutPlan, Timebase
+from cutdeck.contracts import CUT, CutConfig, CutPlan, Timebase
 from cutdeck import sequence_model
 from cutdeck.sequence_timing import SequenceRefusal, range_window_frames, ticks_per_frame
 from transcribe.timebase import ms_to_frame
@@ -95,6 +95,15 @@ def _deep_update(base: dict, overlay: dict) -> None:
             base[key] = value
 
 
+def analysis_ingest_kwargs(raw_config: dict) -> dict:
+    """ingest() settings for Rough Cut: the shared VAD mapping plus the sound guard."""
+    from transcribe.pipeline.ingest import ingest_settings
+    cfg = CutConfig.from_yaml(raw_config)
+    return dict(**ingest_settings(raw_config), sound_guard_db=cfg.sound_guard_db,
+                sound_guard_tail_db=cfg.sound_guard_tail_db,
+                sound_guard_min_ms=cfg.sound_guard_min_ms)
+
+
 def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tuple[int, int] | None = None,
             audio_track: int | None = None, asr: bool = False, db=None, job_id: int = 0,
             mixdown_wav: str | None = None) -> tuple[CutPlan, list[tuple[int, int]]]:
@@ -103,7 +112,6 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
     import tempfile
     from pathlib import Path
 
-    from cutdeck.contracts import CutConfig
     from cutdeck.sequence_mixdown import plan_from_mixdown
 
     tb = seq.timebase
@@ -114,9 +122,8 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
     # ingest() falls back to its own hardcoded defaults (vad_threshold=0.5,
     # vad_min_silence_ms=300) and silence detection diverges from config.yaml
     # (2026-08-29 bug: leftover silence in recut output).
-    from transcribe.pipeline.ingest import ingest_settings
     ingest_kwargs = dict(denoise=raw_config.get("denoise", True),
-                         **ingest_settings(raw_config))
+                         **analysis_ingest_kwargs(raw_config))
 
     if asr:
         # One ingest serves the duration guard, run_file() and the plan. run_file

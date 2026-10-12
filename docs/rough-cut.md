@@ -90,3 +90,22 @@ inspection, adjustment layers and color mattes remains a separate supported work
 
 Verification contract: verification/rough-cut-retirement.md; command:
 `python scripts/check_rough_cut.py`. Reload the panel and restart the helper after this change.
+
+## Sound guard: cut silence only (2026-10-12)
+Problem: silence was whatever Silero VAD and the RMS gate did not call speech, so a held
+vowel ("ahhhh") that scored as non-speech was cut, and a short island of real sound could be
+dropped by the min-clip merge.
+- `ingest.sound_runs` judges by loudness alone: a window 15 dB above the file's own noise
+  floor (5th-percentile level, clamped to -65..-35 dB) seeds a run; the run grows while it stays
+  6 dB above the floor (fading tails) and needs 100 ms of seed (clicks do not count).
+  It reads the pre-denoise audio.
+- `ingest(sound_guard_db=...)` unions those runs into the speech segments; the runs also
+  travel on `IngestResult.sound_runs` into `build_cut_spans(protect=...)`, so
+  `apply_min_clip_merge` never drops an island that overlaps one.
+- Config: `cut.sound_guard_db/tail_db/min_ms` (config.yaml, on by default; null disables).
+  `cutdeck.rough_cut.analysis_ingest_kwargs` is the single mapping used by analysis.
+- The aggressive overlay uses 150 ms VAD/gate/silence thresholds and 60/40 ms pads, which are
+  only safe because of the guard. Measured on 120 s of real audio: 10.6 s removed vs 5.2 s for
+  standard, 0 audible 20 ms windows inside cuts. The panel still defaults to the standard preset.
+- Check: `python -m pytest tests/test_cutdeck_sound_guard.py` (synthetic held vowel, VAD blind
+  to it, both presets; fails with the guard off). Not yet heard in live Premiere.

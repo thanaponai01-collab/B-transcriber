@@ -502,9 +502,14 @@ def _has_token(tokens: Optional[list], span: CutSpan) -> bool:
     return False
 
 
+def _overlaps_protected(protect: Optional[list], span: CutSpan) -> bool:
+    """True if ``span`` overlaps any (start_ms, end_ms) run of audible sound."""
+    return any(a < span.src_out_ms and b > span.src_in_ms for a, b in (protect or ()))
+
+
 def apply_min_clip_merge(
     spans: list[CutSpan], min_clip_ms: int, max_dissolve_ms: Optional[int] = None,
-    tokens: Optional[list] = None,
+    tokens: Optional[list] = None, protect: Optional[list] = None,
 ) -> list[CutSpan]:
     """Dissolve cuts adjacent to too-short kept clips, toward the longer neighbour.
 
@@ -535,7 +540,14 @@ def apply_min_clip_merge(
     settles a token-bearing island permanently, so the count of unsettled
     too-short keeps strictly decreases and the loop terminates. A lone kept
     clip with no neighbouring cut is left as-is.
+
+    ``protect`` ((start_ms, end_ms) runs of audible sound from the sound guard) is
+    treated like tokens: a short island overlapping one is real audio, so it stands
+    alone and is never dropped as noise.
     """
+    def _real_audio(span: CutSpan) -> bool:
+        return _has_token(tokens, span) or _overlaps_protected(protect, span)
+
     spans = _coalesce(spans)
     while True:
         short = [i for i, s in enumerate(spans)
@@ -546,7 +558,7 @@ def apply_min_clip_merge(
         # Shortest first; tie-break on position for determinism.
         i = min(short, key=lambda k: (spans[k].duration_ms, k))
 
-        if _has_token(tokens, spans[i]):
+        if _real_audio(spans[i]):
             spans[i].reason = _STANDALONE
             continue
 
@@ -571,7 +583,7 @@ def apply_min_clip_merge(
             far = cut_idx - 1 if cut_idx < i else cut_idx + 1
             if not (0 <= far < len(spans) and spans[far].action == KEEP):
                 return False
-            return spans[far].reason == _STANDALONE or _has_token(tokens, spans[far])
+            return spans[far].reason == _STANDALONE or _real_audio(spans[far])
 
         left_ok = (has_left_cut and not _far_is_protected(i - 1)
                    and (max_dissolve_ms is None
@@ -614,6 +626,7 @@ def build_cut_spans(
     segments: Optional[list[Segment]] = None,
     job_id: Optional[int] = None,
     labels: Optional[list[Label]] = None,
+    protect: Optional[list] = None,
 ) -> list[CutSpan]:
     """Run the full deterministic pass → contiguous keep/cut spans over the media.
 
@@ -667,4 +680,5 @@ def build_cut_spans(
     raw = silence_cuts(silences, cfg, effective_min_silence_ms) + word_cuts
     merged = _merge_overlaps(raw, duration_ms)
     assembled = _assemble(merged, duration_ms)
-    return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens)
+    return apply_min_clip_merge(assembled, cfg.min_clip_ms, cfg.max_dissolve_ms, tokens,
+                                protect)

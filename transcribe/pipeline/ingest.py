@@ -48,6 +48,8 @@ class IngestResult:
     sample_rate: int
     duration_ms: int
     audio: np.ndarray | None = None
+    # Runs of audible sound (ms) found by the energy guard; empty when it is off.
+    sound_runs: list[tuple[int, int]] | None = None
 
 
 _AV_CONTAINERS = frozenset({
@@ -315,6 +317,58 @@ def _rms_gate_segments(
     return out
 
 
+_GUARD_WINDOW_MS = 20
+_GUARD_FLOOR_MIN_DB = -65.0   # digital silence must not make room tone look like sound
+_GUARD_FLOOR_MAX_DB = -35.0
+
+
+def sound_runs(audio: np.ndarray, sr: int, *, margin_db: float = 15.0,
+               tail_db: float = 6.0, min_ms: int = 100) -> list[tuple[int, int]]:
+    """Runs of audible sound as (start_ms, end_ms), judged by loudness alone.
+
+    VAD answers "does this sound like speech?", and a sustained vowel ("ahhhh"), a
+    hum or a fading tail can score no. For a silence cutter the only safe question is
+    "is anything audible here?": a window counts as sound when it is ``margin_db``
+    above the file's own noise floor (its 5th-percentile window level). A run grows
+    outward while the level stays ``tail_db`` above the floor, so decays are kept, and
+    survives only with at least ``min_ms`` of seed windows, so clicks and pops are not.
+    """
+    window = max(1, int(_GUARD_WINDOW_MS * sr / 1000))
+    n = len(audio) // window
+    if n == 0:
+        return []
+    frames = audio[:n * window].reshape(n, window).astype(np.float64)
+    db = 20.0 * np.log10(np.sqrt(np.mean(frames ** 2, axis=1) + 1e-9))
+    floor = float(np.clip(np.percentile(db, 5), _GUARD_FLOOR_MIN_DB, _GUARD_FLOOR_MAX_DB))
+    seed = db >= floor + margin_db
+    grow = db >= floor + tail_db
+    need = max(1, -(-min_ms // _GUARD_WINDOW_MS))
+    runs: list[tuple[int, int]] = []
+    i = 0
+    while i < n:
+        if not grow[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and grow[j]:
+            j += 1
+        if int(seed[i:j].sum()) >= need:
+            runs.append((i * _GUARD_WINDOW_MS, j * _GUARD_WINDOW_MS))
+        i = j
+    return runs
+
+
+def _union_segments(segments: list[tuple[int, int]], extra: list[tuple[int, int]]
+                    ) -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    for a, b in sorted(segments + extra):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
 def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -> list[SpeechSpan]:
     """Turn VAD speech segments into a gap-free, ordered speech/silence timeline
     covering [0, total]. The silence between/around speech is the master timeline
@@ -394,7 +448,10 @@ def ingest(path: str, denoise: bool = True,
            audio: np.ndarray | None = None,
            sr: int | None = None,
            materialize_chunks: bool = True,
-           chunk_overlap_ms: int = 0) -> IngestResult:
+           chunk_overlap_ms: int = 0,
+           sound_guard_db: float | None = None,
+           sound_guard_tail_db: float = 6.0,
+           sound_guard_min_ms: int = 100) -> IngestResult:
     """
     Main ingestion entry point.
 
@@ -409,10 +466,16 @@ def ingest(path: str, denoise: bool = True,
     `rms_gate_floor_db=None` (default) estimates the gate's loudness floor from
     this file's own quietest speech content (`_estimate_speech_floor_db`) instead
     of using one fixed number for every recording — pass a float to pin it.
+
+    `sound_guard_db` (off when None): after VAD and the RMS gate, every run of audio at
+    least this many dB above the file's noise floor is added to the speech segments
+    (`sound_runs`), judged on the pre-denoise audio. For silence cutters, where losing
+    a held vowel the VAD called non-speech is worse than keeping a little extra.
     """
     logger.info("Ingesting: %s", path)
     if audio is None:
         audio, sr = load_audio(path)
+    raw_audio = audio
 
     if denoise:
         audio = _apply_rolling_denoise(audio, sr)
@@ -440,6 +503,13 @@ def ingest(path: str, denoise: bool = True,
                         len(segments), len(gated))
         segments = gated
 
+    guarded = None
+    if sound_guard_db is not None:
+        guarded = sound_runs(raw_audio, sr, margin_db=sound_guard_db,
+                             tail_db=sound_guard_tail_db, min_ms=sound_guard_min_ms)
+        runs_samples = [(a * sr // 1000, min(b * sr // 1000, len(audio))) for a, b in guarded]
+        segments = _union_segments(segments, runs_samples)
+
     chunks = _materialize_chunks(audio, sr, segments, chunk_overlap_ms) if materialize_chunks else []
 
     spans = _build_spans(segments, len(audio), sr)
@@ -449,4 +519,5 @@ def ingest(path: str, denoise: bool = True,
         sample_rate=sr,
         duration_ms=int(len(audio) * 1000 / sr),
         audio=audio,
+        sound_runs=guarded,
     )

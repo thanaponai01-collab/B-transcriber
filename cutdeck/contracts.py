@@ -198,6 +198,13 @@ class CutConfig:
     adaptive_silence: bool = False
     silence_percentile: int = 60
 
+    # Sound guard — a silence cutter's safety net. Any run of audio this many dB above
+    # the file's noise floor is kept even when VAD calls it non-speech (a held "ahhh").
+    # None disables it; see transcribe.pipeline.ingest.sound_runs.
+    sound_guard_db: Optional[float] = None
+    sound_guard_tail_db: float = 6.0
+    sound_guard_min_ms: int = 100
+
     # Retake/false-start classifier (Phase 6, cutdeck/takes.py) — the only
     # judgment module. Deterministic marker detection always runs (whether a
     # phrase is a marker is never the LLM's call); the LLM step that decides
@@ -235,6 +242,10 @@ class CutConfig:
             min_nonspeech_ms=int(cut.get("min_nonspeech_ms", 400)),
             adaptive_silence=bool(cut.get("adaptive_silence", False)),
             silence_percentile=int(cut.get("silence_percentile", 60)),
+            sound_guard_db=(float(cut["sound_guard_db"])
+                            if cut.get("sound_guard_db") is not None else None),
+            sound_guard_tail_db=float(cut.get("sound_guard_tail_db", 6.0)),
+            sound_guard_min_ms=int(cut.get("sound_guard_min_ms", 100)),
             retake_markers=tuple(cut.get("retake_markers", []) or []),
             keep_last_take=bool(cut.get("keep_last_take", True)),
             takes_llm_enabled=bool(cut.get("llm_enabled", False)),

@@ -361,6 +361,13 @@ cut:
                              # is VAD-misclassified dead air (breath/cough/noise), cut outright
   adaptive_silence: false   # 5.2 — percentile silence threshold, off until an eval baseline exists
   silence_percentile: 60
+  # Sound guard (2026-10-12): VAD can call a held vowel ("ahhhh") non-speech and the
+  # silence pass then cut it. Any run >= sound_guard_db above the file's own noise floor
+  # is kept regardless of VAD; it extends while >= sound_guard_tail_db (fading tails) and
+  # needs sound_guard_min_ms of loud audio, so clicks do not count. null disables.
+  sound_guard_db: 15
+  sound_guard_tail_db: 6
+  sound_guard_min_ms: 100
 segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split
