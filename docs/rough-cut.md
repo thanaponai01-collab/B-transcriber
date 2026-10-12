@@ -109,3 +109,16 @@ dropped by the min-clip merge.
   standard, 0 audible 20 ms windows inside cuts. Aggressive is the default everywhere (panel, helper, MCP); standard stays selectable.
 - Check: `python -m pytest tests/test_cutdeck_sound_guard.py` (synthetic held vowel, VAD blind
   to it, both presets; fails with the guard off). Not yet heard in live Premiere.
+
+## Lag and the ripple question (2026-10-12)
+- The razor is overwrite-by-clone: two 1-frame clones per cut per track, all removed again, then one
+  move per surviving piece. Tens of thousands of edits on a long run, all kept in Premiere's undo.
+- Panel bug fixed: the Transform tab polled every 150 ms even when idle (40 reads in 6 s); now 1 s.
+  Check: `node --test tests/cutdeck_align_poll_rate.test.cjs`. Whether Premiere's own load is the
+  rest of the post-cut lag is unmeasured.
+- Ripple instead of moves: `applyPlan(..., { ripple: true })` is used only by *Test Ripple Delete*.
+  On the fake host, per-track ripple misses the golden plan on 21 of 66 rows: a ripple closes only
+  the removed piece, so a clip after empty space under a cut (a late camera) stays short of its
+  plan. The probe aims a cut there. Production stays on moves until the probe reads `exact` live
+  on a synced multicam sequence. Check: `node --test tests/cutdeck_ripple_probe.test.cjs`.
+- Native razor (27.1) remains the route that removes the clones; installed Premiere is 26.5.2.

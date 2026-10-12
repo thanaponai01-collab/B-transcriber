@@ -53,9 +53,20 @@ Owner requested aggressive silence trimming without cutting any audible sound (s
   - Default preset remains `aggressive` in the panel, helper and MCP tools.
 - Verification: `python -m pytest tests/test_cutdeck_sound_guard.py -v` (9 passed); full suite `python -m pytest tests/ -k "not live"` (1033 passed); `node --test tests/*.cjs` (644 passed).
 
+## Rough Cut lag: poll fix and ripple probe - 2026-10-12
+- Transform poll idle rate fixed (40 → ≤7 reads per 6 s idle). New diagnostics probe
+  *Test Ripple Delete* (uxp/cutdeck/rippleProbe.js). RUN.json owns proof; details docs/rough-cut.md.
+- Panel suite 652/652.
+- Live 2026-10-12 (owner's status paste, "2026-10-10 15-29-44_Synced"): 361 cuts, 659.9 s removed,
+  cut in 10 s, read-back clean, original untouched, 8 undo steps. Split at cut edges 4.7 s,
+  reads 2.5 s, close gaps only 0.5 s: replacing moves with ripple would save under a second here.
+  Ripple probe itself not yet run live.
+
 ## Next
 Run the repaired Rough Cut on the previously failing sequence in live Premiere;
 verify playable audio, exact read-back, retained original and changed-source refusal.
 Last read-only readiness attempt failed because Premiere was not running; readiness
 has not been rechecked. Reload the panel and restart the helper for protocol cutdeck-6.
 No real-host success is claimed from the offline tests.
+Also live: run *Test Ripple Delete* on the synced multicam sequence; `exact` with the
+empty-space case tested would justify replacing the per-piece moves with ripple remove.

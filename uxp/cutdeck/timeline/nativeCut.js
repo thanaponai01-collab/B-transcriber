@@ -97,8 +97,9 @@ async function findUncuttable(ppro, seq, inTicks, outTicks) {
      3. clone the filler onto every cut edge that falls inside a clip — an overwrite splits the
         clip under it, so the kept pieces are the original clip, effects and all,
      4. remove everything now lying inside a cut (the fillers too),
-     5. move every survivor left by what was removed before it. */
-async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn()) {
+     5. move every survivor left by what was removed before it.
+   `ripple: true` (the ripple probe only, unproven live) removes with ripple instead and skips 5. */
+async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn(), { ripple = false } = {}) {
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   const editor = () => ppro.SequenceEditor.getEditor(copy);
   // Actions must be CREATED inside the transaction callback — built outside it, Premiere throws
@@ -240,7 +241,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
         let added = false;
         ppro.TrackItemSelection.createEmptySelection((selection) => {
           for (const c of these) selection.addItem(c.item, true);
-          added = compound.addAction(ed.createRemoveItemsAction(selection, false, kind === "video" ? MT.VIDEO : MT.AUDIO));
+          added = compound.addAction(ed.createRemoveItemsAction(selection, ripple, kind === "video" ? MT.VIDEO : MT.AUDIO));
         });
         if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
       }
@@ -248,6 +249,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     doomed.length = 0;
     doomed = null;
   }
+  if (ripple) return steps;
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
   seq = await read({ end: false, inPoint: false });

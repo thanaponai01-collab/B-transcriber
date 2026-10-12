@@ -147,15 +147,13 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       noteActivity();
       pollAlignTransform();
     });
+    // The timer ticks at the fast rate; when idle, only every IDLE_POLL_MS of those ticks read.
+    let lastPollTime = 0;
     alignPollTimer = setInterval(() => {
-      const isFastWindow = (Date.now() - lastActivityTime < ACTIVITY_WINDOW_MS);
-      if (!isFastWindow) {
-        // In idle period: execute poll on every tick (every 1000ms)
-        pollAlignTransform();
-      } else {
-        // In fast period: execute poll on every tick (every 150ms)
-        pollAlignTransform();
-      }
+      const now = Date.now();
+      if (now - lastPollTime < currentPollInterval()) return;
+      lastPollTime = now;
+      pollAlignTransform();
     }, FAST_POLL_MS);
   }
 

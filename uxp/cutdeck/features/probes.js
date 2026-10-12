@@ -6,6 +6,7 @@ const capability = () => require("../capabilityProbe.js");
 const syncProbe = () => require("../syncProbe.js");
 const roughCutProbe = () => require("../roughCutProbe.js");
 const layoutProbe = () => require("../layoutProbe.js");
+const rippleProbe = () => require("../rippleProbe.js");
 
 const PROBES = [
   {
@@ -69,6 +70,13 @@ const PROBES = [
     format: (report) => roughCutProbe().formatNativeCutReport(report),
     logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
     logLabel: "CutDeck native cut probe",
+  },
+  {
+    id: "ripple",
+    startText: "Copying this sequence, then testing ripple delete with two short cuts on the copy…",
+    run: (ppro) => rippleProbe().probeRippleDelete(ppro),
+    format: (report) => rippleProbe().formatRippleReport(report),
+    logLabel: "CutDeck ripple delete probe",
   },
   {
     id: "mutestate",
