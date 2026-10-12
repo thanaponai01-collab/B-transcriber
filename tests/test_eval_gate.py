@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from transcribe.db.store import EvalRunRow
 from transcribe.eval.gate import decide
-from transcribe.eval.metrics import EvalMetrics
+from transcribe.eval.metrics import CI_METRICS, EvalMetrics
 
 TOL_FRAC = 1.02      # regression_tolerance: 0.02
 ABS_FLOOR = 0.005    # regression_abs_floor: 0.005
@@ -48,8 +48,7 @@ def _baseline(cer_thai=0.10, wer_latin=0.10, boundary_error_rate=0.10,
 
 
 def _ci_all_quiet(**overrides):
-    ci = {name: _QUIET[1] for name in
-          ("cer_thai", "wer_latin", "boundary_error_rate", "cue_boundary_error_rate")}
+    ci = {name: _QUIET[1] for name in CI_METRICS}
     ci.update(overrides)
     return ci
 

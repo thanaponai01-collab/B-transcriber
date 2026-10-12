@@ -136,6 +136,10 @@ def test_init_db_schema_is_unchanged():
             ("paired_delta_ci_json", "TEXT", 0, None),
             ("gate_status", "TEXT", 0, None),
             ("cue_legality_violations", "INTEGER", 0, None),
+            ("speech_coverage_miss", "REAL", 1, "0.0"),
+            ("orphan_cues", "INTEGER", 0, None),
+            ("speech_coverage_miss_ci_lo", "REAL", 0, None),
+            ("speech_coverage_miss_ci_hi", "REAL", 0, None),
             ("ran_at", "TEXT", 1, "datetime('now')"),
             ("passed", "INTEGER", 1, None),
         ]

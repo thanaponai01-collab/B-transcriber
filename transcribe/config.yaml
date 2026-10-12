@@ -395,6 +395,11 @@ segment:
 #   revisited; what remains is whether a bigger local model (qwen2.5:7b-
 #   instruct?) or a richer prompt (few-shot examples, surrounding context)
 #   can do genuinely better than always-trust-Engine-A. See TODO_LEDGER.md.
+# The one database every tool shares (eval baselines, bias terms, corrections,
+# jobs). Relative paths resolve against the repo root, never the CWD.
+store:
+  path: transcriber.db
+
 reconciler:
   llm_enabled: false
   ollama:

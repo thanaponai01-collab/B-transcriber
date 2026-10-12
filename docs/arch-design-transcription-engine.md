@@ -170,6 +170,13 @@ fewer gaps give better cue starts.
 - Select-only reconciliation, the one-model VRAM rule and the 0.02 regression gate all still apply.
 - Nothing here is proven on GPU yet. Each item has its own harness run before activation.
 
+## Build status
+
+| # | Status (2026-10-12) |
+|---|---|
+| 1 | **Partly built.** Done: `speech_coverage_miss` (gated) and `orphan_cues` (descriptive) in metrics v4, new `eval_run` columns, `store.path` config key with `store.resolve_db_path`, harness uses it (`tests/test_metrics_v4.py`; pytest 1064 pass). Open: grow gold set to 15+ clips (needs owner's Premiere recuts); GPU harness run to set the v4 baseline and show `vad_threshold: 0.8` fails the new metric. |
+| 2-5 | Not started. |
+
 ## Build order and cost
 
 | # | Item | Depends on | Rough size |

@@ -12,6 +12,21 @@ from typing import Optional
 _SCHEMA = Path(__file__).parent / "schema.sql"
 _DEFAULT_DB = Path(__file__).parent.parent.parent / "transcriber.db"
 
+_REPO_ROOT = _DEFAULT_DB.parent
+
+
+def resolve_db_path(config: Optional[dict] = None) -> Path:
+    """The one database every tool shares: `store.path` from config.yaml, resolved
+    against the repo root when relative (never the CWD), else the default
+    `transcriber.db`. Callers that take an explicit path (tests, scratch DBs)
+    keep doing so; this is for entry points that previously guessed."""
+    configured = ((config or {}).get("store") or {}).get("path")
+    if not configured:
+        return _DEFAULT_DB
+    path = Path(configured)
+    return path if path.is_absolute() else _REPO_ROOT / path
+
+
 # Table-level constraint clauses (not columns) that can appear inside a
 # CREATE TABLE's parens, plus the marker for a PRIMARY KEY column — neither
 # is valid in an ALTER TABLE ... ADD COLUMN statement.
@@ -245,6 +260,10 @@ class EvalRunRow:
     rtf: Optional[float] = None
     gate_unresolved: Optional[str] = None
     cue_legality_violations: Optional[int] = None
+    speech_coverage_miss: float = 0.0
+    orphan_cues: Optional[int] = None
+    speech_coverage_miss_ci_lo: Optional[float] = None
+    speech_coverage_miss_ci_hi: Optional[float] = None
     baseline_eval_id: Optional[int] = None
     paired_delta_ci_json: Optional[str] = None
     gate_status: Optional[str] = None
@@ -296,6 +315,10 @@ class EvalRun:
     rtf: Optional[float] = None
     gate_unresolved: Optional[str] = None
     cue_legality_violations: Optional[int] = None
+    speech_coverage_miss: float = 0.0
+    orphan_cues: Optional[int] = None
+    speech_coverage_miss_ci_lo: Optional[float] = None
+    speech_coverage_miss_ci_hi: Optional[float] = None
     baseline_eval_id: Optional[int] = None
     paired_delta_ci_json: Optional[str] = None
     gate_status: Optional[str] = None
@@ -732,13 +755,16 @@ _EVAL_RUN_COLUMNS = (
     "boundary_error_rate_ci_lo", "boundary_error_rate_ci_hi",
     "cue_boundary_error_rate_ci_lo", "cue_boundary_error_rate_ci_hi",
     "rtf", "gate_unresolved", "cue_legality_violations", "baseline_eval_id",
-    "paired_delta_ci_json", "gate_status", "passed",
+    "paired_delta_ci_json", "gate_status",
+    "speech_coverage_miss", "orphan_cues",
+    "speech_coverage_miss_ci_lo", "speech_coverage_miss_ci_hi", "passed",
 )
 
 # Columns whose stored type is narrower than what a caller may hand in.
 _EVAL_RUN_COERCE = {
     "is_experiment": int, "passed": int, "metrics_version": int,
     "cue_boundary_error_rate": float, "overlapping_cues": int,
+    "speech_coverage_miss": float,
 }
 
 
