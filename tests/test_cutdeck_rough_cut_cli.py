@@ -133,11 +133,11 @@ def test_asr_rough_cut_shares_one_raw_ingest_with_run_file(
     calls = _count_ingest_calls(monkeypatch)
     seen = {}
 
-    def fake_run_file(path, config, db_path, ingest_result=None):
+    def fake_run_file_job(path, config, db_path, ingest_result=None):
         seen["result"] = ingest_result
-        return []
+        return 0, []
 
-    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    monkeypatch.setattr(run_mod, "run_file_job", fake_run_file_job)
     db = tmp_path / "t.db"
     store.init_db(db)
     rc = rough_cut.main([str(sequence_json_path), mixdown_path, "--dry-run",
@@ -161,7 +161,7 @@ def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_json_path, *, extract
     store.init_db(db)
     made = {}
 
-    def fake_run_file(path, config, db_path, ingest_result=None):
+    def fake_run_file_job(path, config, db_path, ingest_result=None):
         conn = store.connect(db_path)
         media_id = store.create_media(conn, path)
         job_id = store.create_job(conn, media_id, "a", "passthrough", "1.0.0")
@@ -175,9 +175,9 @@ def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_json_path, *, extract
                                      raw_words_json=json.dumps(raw_words))
         conn.close()
         made["job"] = job_id
-        return [dict(text="x", start_ms=0, end_ms=100)]
+        return job_id, [dict(text="x", start_ms=0, end_ms=100)]
 
-    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    monkeypatch.setattr(run_mod, "run_file_job", fake_run_file_job)
     argv = [str(sequence_json_path), "--dry-run", "--job-id", "1", "--asr", "--db", str(db)]
     if extracted:
         def fake_extract(xml, out, track, **kw):
@@ -222,7 +222,7 @@ def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
     store.init_db(db)
     calls = []
 
-    def fake_run_file(path, config, db_path, ingest_result=None):
+    def fake_run_file_job(path, config, db_path, ingest_result=None):
         calls.append(path)
         conn = store.connect(db_path)
         media_id = store.create_media(conn, path)
@@ -234,13 +234,13 @@ def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
         store.update_job_phase(conn, job_id, "written")
         store.update_job_status(conn, job_id, "done")
         conn.close()
-        return [dict(text="x", start_ms=0, end_ms=100)]
+        return job_id, [dict(text="x", start_ms=0, end_ms=100)]
 
     def fake_extract(xml, out, track, **kw):
         shutil.copy(mixdown_path, out)
         return out
 
-    monkeypatch.setattr(run_mod, "run_file", fake_run_file)
+    monkeypatch.setattr(run_mod, "run_file_job", fake_run_file_job)
     monkeypatch.setattr(audio_extract, "extract_mixdown", fake_extract)
     outs = []
     for n in (1, 2):

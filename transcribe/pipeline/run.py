@@ -58,8 +58,18 @@ def run_file(
     db_path: Path,
     ingest_result: ingest.IngestResult | None = None,
 ) -> list[dict]:
+    """Run the pipeline and return the token dicts. See `run_file_job`."""
+    return run_file_job(audio_path, config, db_path, ingest_result)[1]
+
+
+def run_file_job(
+    audio_path: str,
+    config: dict,
+    db_path: Path,
+    ingest_result: ingest.IngestResult | None = None,
+) -> tuple[int, list[dict]]:
     """
-    Run the full pipeline on one audio file.
+    Run the full pipeline on one audio file; returns `(job_id, tokens)`.
 
     Returns list of token dicts: {"text", "start_ms", "end_ms", "script",
                                    "confidence", "source_engine"}
@@ -206,7 +216,7 @@ def run_file(
         raise
 
     conn.close()
-    return [
+    return job_id, [
         {
             "idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms,
             "script": t.script, "confidence": t.confidence, "source_engine": t.source_engine,
@@ -222,11 +232,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
     parser.add_argument("--config", default="config.yaml")
-    parser.add_argument("--db", default="transcriber.db")
+    parser.add_argument("--db", default=None, help="default: store.path from config")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
-    tokens = run_file(args.audio, cfg, Path(args.db))
+    tokens = run_file(args.audio, cfg, Path(args.db) if args.db else store.resolve_db_path(cfg))
     import sys, io
     out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     for t in tokens:

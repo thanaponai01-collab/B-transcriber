@@ -175,7 +175,8 @@ fewer gaps give better cue starts.
 | # | Status (2026-10-12) |
 |---|---|
 | 1 | **Partly built.** Done: `speech_coverage_miss` (gated) and `orphan_cues` (descriptive) in metrics v4, new `eval_run` columns, `store.path` config key with `store.resolve_db_path`, harness uses it (`tests/test_metrics_v4.py`; pytest 1064 pass). Open: grow gold set to 15+ clips (needs owner's Premiere recuts); GPU harness run to set the v4 baseline and show `vad_threshold: 0.8` fails the new metric. |
-| 2-5 | Not started. |
+| 2 | **Built (2026-10-12).** `transcribe/service.py` (`transcribe()` → `Transcript` with `job_id`, cues, words, cache); `run_file_job` returns `(job_id, tokens)`, `run_file` unchanged. Rough Cut, helper `ai_worker`, editor and CLI now use the shared `store.path` DB (`tests/test_service.py`; pytest 1067 pass). Open: `glossary` argument (item 4); MCP reaches it through the helper, no direct call. |
+| 3-5 | Not started. |
 
 ## Build order and cost
 
