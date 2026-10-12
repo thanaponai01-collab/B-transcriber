@@ -23,3 +23,16 @@ def test_overshoot_is_bounded():
     words = [("ซึ่งในช่วงแห้ง", 0, 4900, None), ("เนี้ย", 4900, 5200, None)]
     cues = split_cues(words, CuePolicy(target_ms=4000))
     assert cues[-1][0] == "เนี้ย"
+
+
+def test_connective_after_closing_particle_opens_a_new_cue():
+    words = [("มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ", 0, 3000, None),
+             ("แล้วก็", 3100, 3500, None), ("แต่ในฝนมันจะวุ่นวายหน่อยครับ", 3500, 5500, None)]
+    cues = split_cues(words, CuePolicy())
+    assert cues[0][0].endswith("ครับ") and cues[1][0].startswith("แล้วก็")
+
+
+def test_connective_mid_clause_does_not_break():
+    words = [("มันหาตำแหน่งกันยากนะ", 0, 3000, None),
+             ("แล้วก็", 3100, 3500, None), ("แต่ในฝนมัน", 3500, 4500, None)]
+    assert split_cues(words, CuePolicy())[0][0].endswith("แล้วก็")

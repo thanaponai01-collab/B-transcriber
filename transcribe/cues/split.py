@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 
 from transcribe.cues.policy import CuePolicy
-from transcribe.thai.atoms import TRAILING_PARTICLES
+from transcribe.thai.atoms import CLAUSE_CLOSERS, LEADING_CONNECTIVES, TRAILING_PARTICLES
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +278,11 @@ def _split_greedy(words, policy: CuePolicy):
                     and span <= target_ms + _PARTICLE_OVERSHOOT_MS
                     and n_chars <= target_chars + _PARTICLE_OVERSHOOT_CHARS):
                 wants_break = False
+            if (not wants_break and not new_sentence
+                    and t.strip() in LEADING_CONNECTIVES
+                    and "".join(x[0] for x in cur).rstrip().endswith(tuple(CLAUSE_CLOSERS))
+                    and n_chars >= space_min_chars and span >= space_min_ms):
+                wants_break = True   # a clause closed by ครับ/ค่ะ; a new one opens
             if wants_break:
                 _close()
                 cur = []
