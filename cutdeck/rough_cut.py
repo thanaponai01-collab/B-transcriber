@@ -160,52 +160,18 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
         if asr:
             from types import SimpleNamespace
 
-            from transcribe.db import store
-            from transcribe.pipeline.run import run_file
+            from transcribe.service import transcribe
 
-            from cutdeck.words import words_for_job
-
-            db_path = Path(db) if db else store._DEFAULT_DB
-
-            # The mixdown is deterministic for one sequence + range, so its sha256
-            # is the cache key: a finished job for the same media, engine pair and
-            # pipeline version already holds the transcript — reuse it, 0 ASR passes.
-            from transcribe.pipeline import plan as planning
-            from transcribe.pipeline.run import PIPELINE_VERSION
-            engine_a, engine_b = planning.canonical_engine_names(raw_config)
-            asr_conn = store.connect(db_path)
-            try:
-                media_id = store.create_media(asr_conn, mixdown_wav)
-                cached = store.find_finished_job(
-                    asr_conn, media_id, engine_a, engine_b, PIPELINE_VERSION)
-                if cached is not None:
-                    print(f"--asr: reusing the transcript of job {cached.id} "
-                          "(same mixdown, engines and pipeline version)")
-                    words = words_for_job(asr_conn, cached.id)
-                    token_dicts = [dict(text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
-                                   for t in store.get_tokens(asr_conn, cached.id)]
-                    job_id = cached.id
-            finally:
-                asr_conn.close()
-
-            if cached is None:
-                _progress(35, "Transcribing speech")
-                print("--asr: running the full ASR pipeline on the mixdown "
-                      "(this transcribes the whole mixdown — slower than silence-only)...")
-                token_dicts = run_file(mixdown_wav, raw_config, db_path,
-                                       ingest_result=mixdown_result)
-                # run_file() resolves/creates its own job_id internally and never
-                # returns it — look it up by media path so the plan we save below
-                # references the job the tokens actually belong to, not job_id's
-                # default of 0 (which doesn't exist -> cut_plan FK violation).
-                asr_conn = store.connect(db_path)
-                try:
-                    job_row = store.get_latest_job_for_media(asr_conn, media_id)
-                    if job_row is not None:
-                        job_id = job_row.id
-                        words = words_for_job(asr_conn, job_row.id)
-                finally:
-                    asr_conn.close()
+            # The service reuses a finished job for the same mixdown sha256, engines and
+            # pipeline version (0 ASR passes) and returns the job id it ran under.
+            _progress(35, "Transcribing speech")
+            transcript = transcribe(mixdown_wav, config=raw_config,
+                                    db_path=Path(db) if db else None,
+                                    ingest_result=mixdown_result)
+            if transcript.cached:
+                print(f"--asr: reusing the transcript of job {transcript.job_id} "
+                      "(same mixdown, engines and pipeline version)")
+            job_id, words, token_dicts = transcript.job_id, transcript.words, transcript.cues
             print(f"--asr: got {len(token_dicts)} tokens")
             # rules.apply_min_clip_merge only needs .idx/.start_ms/.end_ms — the
             # dicts run_file returns aren't attribute-accessible, so wrap them

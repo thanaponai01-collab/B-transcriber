@@ -175,7 +175,8 @@ class FasterWhisperEngine(Engine):
                  cue_split_algorithm: str = CUE_SPLIT_ALGORITHM,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500,
-                 config: dict | None = None, recover_short_spans: bool = False):
+                 config: dict | None = None, recover_short_spans: bool = False,
+                 bias_channel: str = "prompt"):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -185,6 +186,14 @@ class FasterWhisperEngine(Engine):
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
         self._recover_short_spans = recover_short_spans
+        # How bias/glossary terms reach the decoder: "prompt" (initial_prompt, the
+        # production behaviour), "hotwords" (faster-whisper's hotwords argument) or
+        # "both". Only the harness should change this (item 4, arch-design doc).
+        if bias_channel not in ("prompt", "hotwords", "both"):
+            raise ValueError(f"bias_channel must be prompt, hotwords or both, got {bias_channel!r}")
+        self._bias_channel = bias_channel
+        self._hotwords: str | None = None
+        self._segment_stats: list[dict] = []
         # Cue splitting is transcribe/cues/'s job; this adapter only decides the
         # policy. Assembled once at construction — pure, cheap, no GPU.
         # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon it carries is
@@ -254,6 +263,27 @@ class FasterWhisperEngine(Engine):
             return lambda s: len(tok.encode(s).ids)
         except Exception:
             return None
+
+    def _note_segments(self, segments) -> None:
+        """Keep each segment's decode statistics (absolute-time paths only; the long-run
+        window path is window-relative and does not record)."""
+        for g in segments:
+            if getattr(g, "avg_logprob", None) is None:
+                continue
+            self._segment_stats.append({
+                "start_ms": int(g.start * 1000), "end_ms": int(g.end * 1000),
+                "avg_logprob": g.avg_logprob, "no_speech_prob": g.no_speech_prob,
+                "compression_ratio": g.compression_ratio})
+
+    @property
+    def last_segment_stats(self) -> list[dict]:
+        return list(self._segment_stats)
+
+    @staticmethod
+    def _build_hotwords(inp: EngineInput, max_terms: int = 30) -> str:
+        weights = inp.bias_weights or {}
+        ranked = sorted(dict.fromkeys(inp.bias_terms), key=lambda t: -float(weights.get(t, 1.0)))
+        return " ".join(ranked[:max_terms])
 
     def _build_bias_prompt(self, inp: EngineInput) -> str:
         weights = inp.bias_weights or {}
@@ -450,6 +480,8 @@ class FasterWhisperEngine(Engine):
         )
         if temperature is not None:
             common["temperature"] = temperature
+        if self._hotwords:
+            common["hotwords"] = self._hotwords
         bs = self._batch_size
         words: list[tuple[str, int, int, float | None]] = []
 
@@ -471,6 +503,7 @@ class FasterWhisperEngine(Engine):
             # each under the encoder cap, so no arbitrary internal re-split happens).
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
+            self._note_segments(segments)
             decoded = self._words_of(segments)
             if self._recover_short_spans:
                 # Batched clip timestamps are absolute. Group before recovery,
@@ -499,6 +532,7 @@ class FasterWhisperEngine(Engine):
             # No speech spans detected at all (rare) — fall back to faster-whisper's
             # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
+            self._note_segments(segments)
             for tok in self._words_of(segments):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
@@ -543,7 +577,11 @@ class FasterWhisperEngine(Engine):
         # bias terms ride in as initial_prompt (CT2's native biasing channel).
         # GAP-5 / 5.1: budget-aware packing, ranked by learned weight (not insertion
         # order), counted with CT2's own tokenizer so Thai token density is honoured.
-        initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms else None
+        use_prompt = self._bias_channel in ("prompt", "both")
+        initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms and use_prompt else None
+        self._hotwords = (self._build_hotwords(inp)
+                          if inp.bias_terms and self._bias_channel in ("hotwords", "both") else None)
+        self._segment_stats = []
 
         words = self._transcribe_batched(audio, inp.language_hint, initial_prompt,
                                           temperature=temperature, beam_size=beam_size)
@@ -563,7 +601,7 @@ class FasterWhisperEngine(Engine):
             # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
             # cues; word granularity is re-derived on demand from here (CutDeck Phase
             # 5 filler excision needs word-level cuts inside a cue).
-            raw={"words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
+            raw={"segments": list(self._segment_stats), "words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
         )
 
     def _release(self) -> None:

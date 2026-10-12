@@ -9,6 +9,7 @@ from transcribe.eval.metrics import CI_METRICS, EvalMetrics
 _GATE_LABELS = {
     "cer_thai": "CER_thai", "wer_latin": "WER_latin",
     "boundary_error_rate": "BER", "cue_boundary_error_rate": "cue_BER",
+    "speech_coverage_miss": "coverage_miss",
 }
 
 

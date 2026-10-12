@@ -24,7 +24,7 @@ from transcribe.flywheel.diff import diff_corrections
 from transcribe.subtitles import write_subtitles
 
 _HERE = Path(__file__).parent
-_DB_PATH = Path("transcriber.db")
+_DB_PATH = store.resolve_db_path()
 
 app = FastAPI(title="Transcriber Editor")
 app.mount("/static", StaticFiles(directory=str(_HERE / "static"), html=True), name="static")

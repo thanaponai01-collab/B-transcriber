@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS engine_result (
     tokens_json       TEXT    NOT NULL,  -- list of RecognizedToken dicts, global-timestamped
     timestamps_final  INTEGER NOT NULL DEFAULT 0,
     raw_words_json    TEXT,              -- nullable: per-word timestamps (5.4/CutDeck Phase 5)
+    raw_segments_json TEXT,              -- nullable: per-segment avg_logprob/no_speech_prob/compression_ratio
     created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE (job_id, engine_slot)
 );
@@ -180,6 +181,13 @@ CREATE TABLE IF NOT EXISTS eval_run (
     -- lexicon, per the handoff's own instruction. NULL on rows predating
     -- this column.
     cue_legality_violations INTEGER,
+    -- Coverage signals (metrics v4, docs/arch-design-transcription-engine.md #1).
+    -- Gated: speech_coverage_miss = reference cue time no hypothesis cue overlaps
+    -- / total reference cue time. Descriptive: orphan_cues.
+    speech_coverage_miss    REAL    NOT NULL DEFAULT 0.0,
+    orphan_cues             INTEGER,
+    speech_coverage_miss_ci_lo REAL,
+    speech_coverage_miss_ci_hi REAL,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

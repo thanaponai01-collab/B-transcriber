@@ -309,6 +309,10 @@ def run_harness(
         boundary_error_rate_ci_hi=ci_bounds["boundary_error_rate"][1],
         cue_boundary_error_rate_ci_lo=ci_bounds["cue_boundary_error_rate"][0],
         cue_boundary_error_rate_ci_hi=ci_bounds["cue_boundary_error_rate"][1],
+        speech_coverage_miss=agg.speech_coverage_miss,
+        orphan_cues=agg.orphan_cues,
+        speech_coverage_miss_ci_lo=ci_bounds["speech_coverage_miss"][0],
+        speech_coverage_miss_ci_hi=ci_bounds["speech_coverage_miss"][1],
         rtf=rtf,
         gate_unresolved=gate_unresolved_names,
         cue_legality_violations=total_hyp_lint_violations,
@@ -328,6 +332,8 @@ def run_harness(
         f"BER={agg.boundary_error_rate:.4f} {_fmt_ci('boundary_error_rate')}  "
         f"WER={agg.wer:.4f}  "
         f"cue_BER={agg.cue_boundary_error_rate:.4f} {_fmt_ci('cue_boundary_error_rate')}  "
+        f"coverage_miss={agg.speech_coverage_miss:.4f} {_fmt_ci('speech_coverage_miss')}  "
+        f"orphans={agg.orphan_cues}  "
         f"cue_overlaps={agg.overlapping_cues}  cue_count_delta={agg.cue_count_delta:+d}  "
         f"cue_legality_violations={total_hyp_lint_violations} "
         f"(reference={total_ref_lint_violations})  "
@@ -347,7 +353,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
-    parser.add_argument("--db", default="transcriber.db")
+    parser.add_argument("--db", default=None,
+                        help="Eval database; default is store.path from config.yaml")
     parser.add_argument("--engine-b", help="Override engine_b for a one-command A/B "
                         "comparison, e.g. --engine-b typhoon_rt (4.2)")
     parser.add_argument("--llm-enabled", action="store_true",
@@ -399,7 +406,7 @@ if __name__ == "__main__":
     if experiment:
         print("[harness] experiment run - result will not become the regression baseline")
     import sys
-    result = run_harness(cfg, Path(args.db), experiment=experiment,
+    result = run_harness(cfg, Path(args.db) if args.db else store.resolve_db_path(cfg), experiment=experiment,
                          establish_baseline=args.establish_baseline)
     if result is not None and result.status == "unresolved":
         sys.exit(2)

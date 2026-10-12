@@ -24,7 +24,8 @@ from pathlib import Path
 import torch
 
 from transcribe.db import store
-from transcribe.pipeline import align_force, engine_run, ingest, refine
+from transcribe.contracts import PipelineToken
+from transcribe.pipeline import align_force, coverage, engine_run, ingest, refine
 from transcribe.pipeline import plan as planning
 
 logger = logging.getLogger(__name__)
@@ -52,18 +53,50 @@ def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestRe
     )
 
 
+def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config):
+    """Re-decode speech no cue covers (see coverage.py). Engine A tokens only."""
+    cues = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms, "script": t.script,
+             "confidence": t.confidence, "source_engine": t.source_engine} for t in tokens]
+    speech = [(s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "speech"]
+    gaps = coverage.find_gaps(speech, cues)
+    if not gaps:
+        return tokens
+    logger.info("Coverage guard: %d gap(s) to re-decode", len(gaps))
+    with engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
+                                  ingest_result.sample_rate) as redecode:
+        filled, _still_empty = coverage.fill_gaps(cues, gaps, redecode)
+    return [PipelineToken(idx=i, text=c["text"], start_ms=c["start_ms"], end_ms=c["end_ms"],
+                          script=c["script"], confidence=c["confidence"],
+                          source_engine=c.get("source_engine", "a"))
+            for i, c in enumerate(filled)]
+
+
 def run_file(
     audio_path: str,
     config: dict,
     db_path: Path,
     ingest_result: ingest.IngestResult | None = None,
 ) -> list[dict]:
+    """Run the pipeline and return the token dicts. See `run_file_job`."""
+    return run_file_job(audio_path, config, db_path, ingest_result)[1]
+
+
+def run_file_job(
+    audio_path: str,
+    config: dict,
+    db_path: Path,
+    ingest_result: ingest.IngestResult | None = None,
+    glossary: tuple[str, ...] | list[str] = (),
+) -> tuple[int, list[dict]]:
     """
-    Run the full pipeline on one audio file.
+    Run the full pipeline on one audio file; returns `(job_id, tokens)`.
 
     Returns list of token dicts: {"text", "start_ms", "end_ms", "script",
                                    "confidence", "source_engine"}
     These are also written to the DB.
+
+    `glossary`: extra terms for this job only (show title, names, brands). They join the
+    flywheel's bias terms for the decode and are not written to the bias index.
 
     `ingest_result`: an `ingest()` result the caller already computed for this
     exact file with the same VAD settings and `denoise=False`. Reused only when
@@ -76,6 +109,11 @@ def run_file(
     # Bias terms from flywheel (+ weights for budget-aware prompt ranking, 5.1)
     bias_terms = store.get_bias_term_strings(conn)
     bias_weights = store.get_bias_term_weights(conn)
+    for term in dict.fromkeys(t.strip() for t in glossary if t and t.strip()):
+        if term not in bias_weights:
+            bias_terms.append(term)
+        # A user-supplied term outranks learned ones when the prompt budget is tight.
+        bias_weights[term] = max([1.0, *bias_weights.values()])
     resume_fingerprint = planning.resume_fingerprint(config, bias_terms, bias_weights)
 
     # The resume key includes media, engine pair, version and settings/bias, so identity
@@ -178,6 +216,10 @@ def run_file(
             on_reconciled=lambda: store.update_job_phase(conn, job_id, _PHASE_RECONCILED),
         )
 
+        if (config.get("coverage_guard") or {}).get("enabled", False):
+            pipeline_tokens = _fill_coverage_gaps(
+                pipeline_tokens, ingest_result, job_plan, device, config)
+
         # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{
             "job_id": job_id,
@@ -206,7 +248,7 @@ def run_file(
         raise
 
     conn.close()
-    return [
+    return job_id, [
         {
             "idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms,
             "script": t.script, "confidence": t.confidence, "source_engine": t.source_engine,
@@ -222,11 +264,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
     parser.add_argument("--config", default="config.yaml")
-    parser.add_argument("--db", default="transcriber.db")
+    parser.add_argument("--db", default=None, help="default: store.path from config")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
-    tokens = run_file(args.audio, cfg, Path(args.db))
+    tokens = run_file(args.audio, cfg, Path(args.db) if args.db else store.resolve_db_path(cfg))
     import sys, io
     out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     for t in tokens:

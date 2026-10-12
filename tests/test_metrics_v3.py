@@ -31,8 +31,9 @@ def _tmp_db():
     return db
 
 
-def test_metrics_version_is_3():
-    assert METRICS_VERSION == 3
+def test_metrics_version_is_at_least_3():
+    # v3 introduced the cue-structure signals; later versions keep them.
+    assert METRICS_VERSION >= 3
 
 
 # ── cue-boundary F1 ────────────────────────────────────────────────────────────
