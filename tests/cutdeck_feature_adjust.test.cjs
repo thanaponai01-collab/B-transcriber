@@ -93,3 +93,46 @@ test("adjust: onApplyPreset throws if preset id is not found", async () => {
   assert.equal(ctl.state.status.level, "error");
   assert.match(ctl.state.status.text, /This preset could not be found/);
 });
+
+test("adjust: Alt mode applies the preset to the selected clips, placing no AL", async () => {
+  const preset = { id: "fx-1", name: "Zoom", components: [{ matchName: "AE.ADBE Gaussian Blur 2", params: [] }] };
+  const ctl = createController({ render: () => {}, initialState: { customPresets: [preset] } });
+  const seq = { name: "seq" };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) } };
+  const clipA = { id: "a" };
+  const clipB = { id: "b" };
+  let applied = null;
+  const adjust = createAdjustFeature({
+    ppro,
+    ctl,
+    timeline: { placeAdjustmentLayersOnTimeline: async () => { throw new Error("must not place an AL"); } },
+    effects: { applyCapturedPresetToAll: async (_p, _proj, items, pre) => { applied = { items, pre }; return { warnings: [] }; } },
+    selection: { getSelectedVideoClips: async (_p, s) => (s === seq ? [{ item: clipA, track: 0 }, { item: clipB, track: 1 }] : []) },
+  });
+
+  await adjust.onApplyPreset("fx-1", "selected");
+
+  assert.deepEqual(applied.items, [clipA, clipB]);
+  assert.equal(applied.pre, preset);
+  assert.equal(ctl.state.status.level, "ready");
+  assert.match(ctl.state.status.text, /Applied \[Zoom\] to 2 selected clip/);
+});
+
+test("adjust: Alt mode with nothing selected says so and changes nothing", async () => {
+  const preset = { id: "fx-1", name: "Zoom", components: [{ matchName: "x", params: [] }] };
+  const ctl = createController({ render: () => {}, initialState: { customPresets: [preset] } });
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => ({}) }) } };
+  let called = false;
+  const adjust = createAdjustFeature({
+    ppro,
+    ctl,
+    effects: { applyCapturedPresetToAll: async () => { called = true; return { warnings: [] }; } },
+    selection: { getSelectedVideoClips: async () => [] },
+  });
+
+  await adjust.onApplyPreset("fx-1", "selected");
+
+  assert.equal(called, false);
+  assert.equal(ctl.state.status.level, "error");
+  assert.match(ctl.state.status.text, /Select the clip/);
+});

@@ -229,7 +229,9 @@ small buttons. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Laye
 (span / per-clip / 50-50 cut transition) — clicking one both places the AL that way AND
 applies that preset's real captured effect to every AL it just placed, via
 `timeline/effects.js`'s `applyCapturedPreset`. One combined action, same as the Adjustment
-Layer card, just per-preset. The old quick frame-length cycle badge was removed — the
+Layer card, just per-preset. **Alt+Click** places no AL: it applies the preset straight
+onto the video clips already selected on the timeline (linked audio and ALs are skipped).
+The old quick frame-length cycle badge was removed — the
 Transition (50/50) frame length is still set in Settings (frame stepper / mini pills).
 
 **Capture** (Settings > Presets) is the only way to fill a slot: select a clip or Adjustment
