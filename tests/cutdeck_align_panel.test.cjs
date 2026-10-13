@@ -517,20 +517,16 @@ test("no hide or destroy hook is registered", () => {
 
 // --- event-driven refresh (review 2026-09-24 item 2) ---------------------------------------
 
-// The poll is a self-rescheduling setTimeout (150 ms active / 1000 ms idle); the tests' own short
-// waits (10-20 ms) pass through to the real timer.
 function withFakeInterval(fn) {
-  const orig = global.setTimeout;
-  const origClear = global.clearTimeout;
+  const orig = global.setInterval;
+  const origClear = global.clearInterval;
   const calls = [];
   const cleared = [];
-  const isPoll = (ms) => ms === 150 || ms === 1000;
-  global.setTimeout = (cb, ms, ...rest) => { if (!isPoll(ms)) return orig(cb, ms, ...rest); calls.push(ms); return calls.length; };
-  global.clearTimeout = (id) => { if (typeof id === "number" && id <= calls.length) cleared.push(id); else origClear(id); };
-  const restore = () => { global.setTimeout = orig; global.clearTimeout = origClear; };
+  global.setInterval = (cb, ms) => { calls.push(ms); return calls.length; };
+  global.clearInterval = (id) => { cleared.push(id); };
   let out;
-  try { out = fn(calls, cleared); } catch (e) { restore(); throw e; }
-  return Promise.resolve(out).finally(restore);
+  try { out = fn(calls, cleared); } catch (e) { global.setInterval = orig; global.clearInterval = origClear; throw e; }
+  return Promise.resolve(out).finally(() => { global.setInterval = orig; global.clearInterval = origClear; });
 }
 
 test("Transform panel attaches selection to the active sequence and moves it on switch", async () => {
@@ -1034,51 +1030,34 @@ test("Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver
 
 
 
-test("poll timer: 10 s idle makes at most 11 reads, and an idle read bypasses the snapshot cache", async () => {
-  const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
-  const realSetTimeout = global.setTimeout, realClearTimeout = global.clearTimeout, realNow = Date.now;
-  let now = 1_000_000;
-  const timers = [];
-  global.setTimeout = (fn, ms) => { timers.push({ fn, at: now + ms }); return timers.length; };
-  global.clearTimeout = () => {};
+test("an idle poll tick reads past the snapshot cache; a tick right after activity does not", async () => {
+  const realSetInterval = global.setInterval, realClearInterval = global.clearInterval, realNow = Date.now;
+  let tick = null, now = 1_000_000;
+  global.setInterval = (fn) => { tick = fn; return 1; };
+  global.clearInterval = () => {};
   Date.now = () => now;
-  let reads = 0;
-  const ppro = {
-    Project: { getActiveProject: async () => { reads++; return null; } },
+  const selections = [];
+  const item = { getStartTime: async () => ({ ticks: "0" }), getTrackIndex: async () => 0 };
+  // getPlayerPosition is read only when the snapshot is rebuilt, never on a cache hit.
+  const seq = { getPlayerPosition: async () => { selections.push(1); return { ticks: "0" }; },
+    getSelection: async () => ({ getTrackItems: async () => [item] }) };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) },
     EventManager: { addGlobalEventListener() {}, addEventListener() {} },
-    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } },
-  };
-  try {
-    const feature = createAlignFeature({ ppro, ctl: { state: {}, render() {}, setStatus() {} } });
-    feature.startPolling();
-    now += 5000; // past the 2 s activity window: the first tick finds the panel idle
-    assert.ok(timers.length > 0, "polling must be driven by setTimeout so it can follow the idle interval");
-    timers.shift().fn();
-    await new Promise((r) => setImmediate(r));
-    reads = 0;
-    const end = now + 10_000;
-    while (timers.length && now < end) {
-      timers.sort((a, b) => a.at - b.at);
-      const t = timers.shift();
-      now = t.at;
-      t.fn();
-      await new Promise((r) => setImmediate(r));
-    }
-    assert.ok(reads > 0 && reads <= 11, `idle polling read ${reads} times in 10 s`);
-    feature.stopPolling && feature.stopPolling();
-  } finally {
-    global.setTimeout = realSetTimeout; global.clearTimeout = realClearTimeout; Date.now = realNow;
-  }
-});
-
-test("readAlignState passes forceRefresh through to the snapshot read", async () => {
-  const { readAlignState } = require("../uxp/cutdeck/transform/edit.js");
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } } };
   const snapshot = require("../uxp/cutdeck/transform/snapshot.js");
-  let sel = 0;
-  const seq = { getSelection: async () => { sel++; return { getTrackItems: async () => [] }; } };
-  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) } };
-  snapshot.clearSnapshotCache();
-  await readAlignState(ppro, { forceRefresh: true });
-  await readAlignState(ppro, { forceRefresh: true });
-  assert.equal(sel, 2);
+  try {
+    const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+    const feature = createAlignFeature({ ppro, ctl: { state: {}, render() {}, setStatus() {} } });
+    snapshot.clearSnapshotCache();
+    feature.startPolling();
+    now += 150; tick(); await new Promise((r) => setTimeout(r, 20));   // active: caches
+    now += 150; tick(); await new Promise((r) => setTimeout(r, 20));   // active: may use the cache
+    const active = selections.length;
+    now += 5000; tick(); await new Promise((r) => setTimeout(r, 20));  // idle: must re-read
+    const afterIdle = selections.length;
+    assert.ok(afterIdle > active, "an idle tick must rebuild the snapshot");
+    feature.stopPolling();
+  } finally {
+    global.setInterval = realSetInterval; global.clearInterval = realClearInterval; Date.now = realNow;
+  }
 });

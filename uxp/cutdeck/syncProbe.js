@@ -23,7 +23,8 @@ const { attempt, finding, formatFindings } = require("./capabilityProbe.js");
 const { runTransaction } = require("./host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
 // Shared with native Sync, which owns them.
-const { readSequence, groupUnits, baseName } = require("./timeline/nativeSync.js");
+const { readSequence } = require("./host/sequenceRead.js");
+const { groupUnits, baseName } = require("./timeline/nativeSync.js");
 
 const SPEED_CLONES = 100;
 const TEST_SUFFIX = " — CutDeck sync test";

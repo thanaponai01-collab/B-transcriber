@@ -13,6 +13,8 @@ compression/log-prob/no-speech thresholds drop garbage segments outright.
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from dataclasses import replace
 import logging
 import os
 import sys
@@ -173,7 +175,8 @@ class FasterWhisperEngine(Engine):
                  cue_split_algorithm: str = CUE_SPLIT_ALGORITHM,
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500,
-                 config: dict | None = None):
+                 config: dict | None = None, recover_short_spans: bool = False,
+                 bias_channel: str = "prompt"):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -182,6 +185,15 @@ class FasterWhisperEngine(Engine):
         self._beam_size = beam_size
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
+        self._recover_short_spans = recover_short_spans
+        # How bias/glossary terms reach the decoder: "prompt" (initial_prompt, the
+        # production behaviour), "hotwords" (faster-whisper's hotwords argument) or
+        # "both". Only the harness should change this (item 4, arch-design doc).
+        if bias_channel not in ("prompt", "hotwords", "both"):
+            raise ValueError(f"bias_channel must be prompt, hotwords or both, got {bias_channel!r}")
+        self._bias_channel = bias_channel
+        self._hotwords: str | None = None
+        self._segment_stats: list[dict] = []
         # Cue splitting is transcribe/cues/'s job; this adapter only decides the
         # policy. Assembled once at construction — pure, cheap, no GPU.
         # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon it carries is
@@ -251,6 +263,27 @@ class FasterWhisperEngine(Engine):
             return lambda s: len(tok.encode(s).ids)
         except Exception:
             return None
+
+    def _note_segments(self, segments) -> None:
+        """Keep each segment's decode statistics (absolute-time paths only; the long-run
+        window path is window-relative and does not record)."""
+        for g in segments:
+            if getattr(g, "avg_logprob", None) is None:
+                continue
+            self._segment_stats.append({
+                "start_ms": int(g.start * 1000), "end_ms": int(g.end * 1000),
+                "avg_logprob": g.avg_logprob, "no_speech_prob": g.no_speech_prob,
+                "compression_ratio": g.compression_ratio})
+
+    @property
+    def last_segment_stats(self) -> list[dict]:
+        return list(self._segment_stats)
+
+    @staticmethod
+    def _build_hotwords(inp: EngineInput, max_terms: int = 30) -> str:
+        weights = inp.bias_weights or {}
+        ranked = sorted(dict.fromkeys(inp.bias_terms), key=lambda t: -float(weights.get(t, 1.0)))
+        return " ".join(ranked[:max_terms])
 
     def _build_bias_prompt(self, inp: EngineInput) -> str:
         weights = inp.bias_weights or {}
@@ -322,9 +355,9 @@ class FasterWhisperEngine(Engine):
                 best_i, best_gap = i, gap
         return best_i
 
-    def _recover_truncated_tail(self, tokens, sub_audio, common, bs):
+    def _recover_truncated_tail(self, tokens, sub_audio, common, bs, *, require_speech=False):
         """Detect and recover content dropped by an early-EOS decode within one
-        long-span window. Two independent failure modes, both early-EOS, that
+        decode window. Two independent failure modes, both early-EOS, that
         look nothing alike on the wire:
 
         (A) faster-whisper stretches the *last* word's own timestamp out to
@@ -346,15 +379,22 @@ class FasterWhisperEngine(Engine):
         near-duplicates (verified empirically while building the original (A)
         fix: a fixed-offset cut reproduced a stray syllable on both sides no
         matter how the offset was tuned). No recursion — if the redecode hits
-        the same issue, its result is kept as-is."""
-        if not tokens:
-            return tokens, bs
-        last = tokens[-1]
-        win_dur_ms = len(sub_audio) / _SR * 1000
-        dur = last.end_ms - last.start_ms
-        trailing_gap_ms = win_dur_ms - last.end_ms
+        the same issue, its result is kept as-is.
 
-        if dur >= _TRUNCATION_TAIL_MS:
+        require_speech gates retries on VAD evidence and also permits one retry
+        for a completely empty decode. False preserves legacy long-span behavior.
+        """
+        if not tokens and not require_speech:
+            return tokens, bs
+        last = tokens[-1] if tokens else None
+        win_dur_ms = len(sub_audio) / _SR * 1000
+        dur = last.end_ms - last.start_ms if last else 0
+        trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
+
+        if last is None:
+            kept = []
+            tail_start_ms = 0
+        elif dur >= _TRUNCATION_TAIL_MS:
             # (A) the last word itself is the suspect — discard it too and
             # redecode from a genuine inter-token pause before it.
             cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
@@ -374,7 +414,15 @@ class FasterWhisperEngine(Engine):
         if len(tail_audio) < _SR * 0.5:
             return tokens, bs
 
-        segments, bs = self._decode(tail_audio, None, False, common, bs)
+        clip = None
+        if require_speech:
+            # Detect actual speech again in the omitted region. VAD padding on
+            # the original span is not evidence that its trailing audio is speech.
+            windows = speech_windows(tail_audio, self._window_policy)
+            if not windows:
+                return tokens, bs
+            clip = [{"start": w.start_s, "end": w.end_s} for w in windows]
+        segments, bs = self._decode(tail_audio, clip, False, common, bs)
         tail_tokens = self._words_of(segments)
         if not tail_tokens:
             return tokens, bs
@@ -385,7 +433,8 @@ class FasterWhisperEngine(Engine):
         merged = kept + tail_tokens
         logger.info("Recovered truncated tail: redecoded from %.2fs -> %d token(s) "
                     "(window ends %.2fs, last kept word ended %.2fs)",
-                    tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000, last.end_ms / 1000)
+                    tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000,
+                    (last.end_ms / 1000) if last else 0.0)
         return merged, bs
 
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
@@ -431,6 +480,8 @@ class FasterWhisperEngine(Engine):
         )
         if temperature is not None:
             common["temperature"] = temperature
+        if self._hotwords:
+            common["hotwords"] = self._hotwords
         bs = self._batch_size
         words: list[tuple[str, int, int, float | None]] = []
 
@@ -452,12 +503,36 @@ class FasterWhisperEngine(Engine):
             # each under the encoder cap, so no arbitrary internal re-split happens).
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
-            for tok in self._words_of(segments):
+            self._note_segments(segments)
+            decoded = self._words_of(segments)
+            if self._recover_short_spans:
+                # Batched clip timestamps are absolute. Group before recovery,
+                # convert to span-local times, then restore exactly one offset.
+                starts = [w.start_ms for w in normal]
+                grouped = [[] for _ in normal]
+                outside = []
+                for tok in decoded:
+                    index = bisect_right(starts, tok.start_ms) - 1
+                    if index >= 0 and tok.start_ms <= normal[index].end_ms:
+                        grouped[index].append(tok)
+                    else:
+                        outside.append(tok)
+                decoded = outside
+                for win, span_tokens in zip(normal, grouped):
+                    local = [replace(t, start_ms=t.start_ms - win.start_ms,
+                                     end_ms=t.end_ms - win.start_ms) for t in span_tokens]
+                    span_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
+                    local, bs = self._recover_truncated_tail(
+                        local, span_audio, common, bs, require_speech=True)
+                    decoded.extend(replace(t, start_ms=t.start_ms + win.start_ms,
+                                           end_ms=t.end_ms + win.start_ms) for t in local)
+            for tok in decoded:
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
         elif not long_runs:
             # No speech spans detected at all (rare) — fall back to faster-whisper's
             # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
+            self._note_segments(segments)
             for tok in self._words_of(segments):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
@@ -466,7 +541,8 @@ class FasterWhisperEngine(Engine):
                 nonlocal bs
                 segments, bs = self._decode(win_audio, None, False, common, bs)
                 win_tokens = self._words_of(segments)
-                win_tokens, bs = self._recover_truncated_tail(win_tokens, win_audio, common, bs)
+                win_tokens, bs = self._recover_truncated_tail(
+                    win_tokens, win_audio, common, bs, require_speech=self._recover_short_spans)
                 return win_tokens
 
             run_windows = [
@@ -477,7 +553,8 @@ class FasterWhisperEngine(Engine):
             logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
                         run[0].start_s, run[-1].end_s, len(run_windows))
             for tok in decode_windows(run_windows, decode_fn,
-                                       seam_window_ms=int(self._window_policy.overlap_s * 1000)):
+                                       seam_window_ms=int(self._window_policy.overlap_s * 1000),
+                                       cut_seams=True):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])
@@ -500,7 +577,11 @@ class FasterWhisperEngine(Engine):
         # bias terms ride in as initial_prompt (CT2's native biasing channel).
         # GAP-5 / 5.1: budget-aware packing, ranked by learned weight (not insertion
         # order), counted with CT2's own tokenizer so Thai token density is honoured.
-        initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms else None
+        use_prompt = self._bias_channel in ("prompt", "both")
+        initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms and use_prompt else None
+        self._hotwords = (self._build_hotwords(inp)
+                          if inp.bias_terms and self._bias_channel in ("hotwords", "both") else None)
+        self._segment_stats = []
 
         words = self._transcribe_batched(audio, inp.language_hint, initial_prompt,
                                           temperature=temperature, beam_size=beam_size)
@@ -520,7 +601,7 @@ class FasterWhisperEngine(Engine):
             # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
             # cues; word granularity is re-derived on demand from here (CutDeck Phase
             # 5 filler excision needs word-level cuts inside a cue).
-            raw={"words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
+            raw={"segments": list(self._segment_stats), "words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
         )
 
     def _release(self) -> None:

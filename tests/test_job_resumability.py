@@ -184,7 +184,7 @@ def test_different_engine_pair_is_not_resumable(monkeypatch):
 
 
 def test_run_file_reuses_supplied_ingest_result(monkeypatch):
-    """A whole-file-engine caller that already ingested (cutdeck xml_recut --asr)
+    """A whole-file-engine caller that already ingested (cutdeck rough_cut --asr)
     hands the result over; run_file must not decode/VAD the file again."""
     from transcribe.contracts import EngineInput, EngineResult, RecognizedToken
     from transcribe.db import store

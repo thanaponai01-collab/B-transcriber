@@ -10,14 +10,14 @@ import sys
 import pytest
 
 from cutdeck.ai_backend import Backend
-from cutdeck.xml_bridge import XmlJobs, serve
+from cutdeck.helper import Jobs, serve, VERSION
 
 CLIENT = Path(__file__).parent / "fixtures" / "panel_wire_client.cjs"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="needs Node for the panel code")
 
 
 def test_the_real_panel_code_and_the_real_helper_agree(tmp_path):
-    jobs = XmlJobs(tmp_path)
+    jobs = Jobs(tmp_path)
     job_id = "a" * 32
     (tmp_path / job_id).mkdir()
     jobs.jobs[job_id] = job = {"job_id": job_id, "job_type": "cut", "state": "running",
@@ -37,7 +37,7 @@ def test_the_real_panel_code_and_the_real_helper_agree(tmp_path):
 
         try:
             assert await line() == {"registered": True}
-            assert await line() == {"hello": "cutdeck-xml-5",
+            assert await line() == {"hello": VERSION,
                                     "missing": "Unknown job; start a new operation"}
             assert await line() == {"update": "running", "pct": 10}  # the watch reply
 

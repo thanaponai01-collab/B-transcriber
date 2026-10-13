@@ -13,8 +13,8 @@
       "end_ms": 3380
     },
     {
-      "text": "<font color=#C160FDFF>ภรรยาหายไป</font> <font color=#C160FDFF>อย่างเงี้ยหรอคะ </font>",
-      "script": "mixed",
+      "text": "ภรรยาหายไป อย่างเงี้ยหรอคะ",
+      "script": "thai",
       "start_ms": 3380,
       "end_ms": 4800
     },
@@ -67,62 +67,62 @@
       "end_ms": 18440
     },
     {
-      "text": "<font color=#59E2FEFF>ใจของภรรยาเรา</font>",
-      "script": "mixed",
+      "text": "ใจของภรรยาเรา",
+      "script": "thai",
       "start_ms": 18440,
       "end_ms": 19580
     },
     {
-      "text": "<font color=#59E2FEFF>ไปอยู่ทางนั้น</font> <font color=#59E2FEFF>พอสมควรเลยนะคะ</font>",
-      "script": "mixed",
+      "text": "ไปอยู่ทางนั้น พอสมควรเลยนะคะ",
+      "script": "thai",
       "start_ms": 19580,
       "end_ms": 21520
     },
     {
-      "text": "<font color=#59E2FEFF>เดินหน้าต่อก็ได้นะ แต่ต้องยอมรับความจริง</font>",
-      "script": "mixed",
+      "text": "เดินหน้าต่อก็ได้นะ แต่ต้องยอมรับความจริง",
+      "script": "thai",
       "start_ms": 21520,
       "end_ms": 23620
     },
     {
-      "text": "<font color=#59E2FEFF>ว่า คุณภรรยา</font> <font color=#59E2FEFF>ไม่ได้รักเราเท่าเดิมแล้วอ่ะค่ะ</font>",
-      "script": "mixed",
+      "text": "ว่า คุณภรรยา ไม่ได้รักเราเท่าเดิมแล้วอ่ะค่ะ",
+      "script": "thai",
       "start_ms": 23620,
       "end_ms": 26500
     },
     {
-      "text": "<font color=#C160FDFF>ถึงแม้ว่าอาจจะไม่ได้</font> <font color=#C160FDFF>ถูกใจภรรยาเหมือนเดิม</font>",
-      "script": "mixed",
+      "text": "ถึงแม้ว่าอาจจะไม่ได้ ถูกใจภรรยาเหมือนเดิม",
+      "script": "thai",
       "start_ms": 26500,
       "end_ms": 28400
     },
     {
-      "text": "<font color=#C160FDFF>เมื่อกี้บอกตอนนี้ทำอะไร</font> <font color=#C160FDFF>ก็ดูผิดไปหมด</font>",
-      "script": "mixed",
+      "text": "เมื่อกี้บอกตอนนี้ทำอะไร ก็ดูผิดไปหมด",
+      "script": "thai",
       "start_ms": 28400,
       "end_ms": 31020
     },
     {
-      "text": "<font color=#C160FDFF>แต่ไม่ได้หมายความว่า</font> <font color=#C160FDFF>เราเป็นคนผิด</font>",
-      "script": "mixed",
+      "text": "แต่ไม่ได้หมายความว่า เราเป็นคนผิด",
+      "script": "thai",
       "start_ms": 31020,
       "end_ms": 32600
     },
     {
-      "text": "<font color=#C160FDFF>เพราะอย่างน้อยที่สุด</font> <font color=#C160FDFF>เราก็ซื่อสัตย์</font>",
-      "script": "mixed",
+      "text": "เพราะอย่างน้อยที่สุด เราก็ซื่อสัตย์",
+      "script": "thai",
       "start_ms": 32600,
       "end_ms": 34020
     },
     {
-      "text": "<font color=#C160FDFF>มันก็ไม่แน่ว่าคนที่ซื่อสัตย์</font>",
-      "script": "mixed",
+      "text": "มันก็ไม่แน่ว่าคนที่ซื่อสัตย์",
+      "script": "thai",
       "start_ms": 34020,
       "end_ms": 35620
     },
     {
-      "text": "<font color=#C160FDFF>บางทีก็ต้องเจ็บปวด ก็มี</font>",
-      "script": "mixed",
+      "text": "บางทีก็ต้องเจ็บปวด ก็มี",
+      "script": "thai",
       "start_ms": 35620,
       "end_ms": 37120
     }

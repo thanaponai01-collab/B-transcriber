@@ -131,4 +131,6 @@ def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> N
         # promote unvalidated terms.
         _rollback("no gold set to validate against")
     if not result.passed:
+        if result.status == "unresolved":
+            _rollback("evaluation unresolved; more matching evidence required")
         _rollback(f"metrics regressed vs baseline (CER {result.metrics.cer_thai:.4f})")

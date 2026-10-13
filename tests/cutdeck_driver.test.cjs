@@ -144,11 +144,11 @@ test("apply_cuts refuses a sequence other than the one the job analysed", async 
   assert.equal(ctl.state.status.level, "error");
 });
 
-test("apply_cuts for an XML-file job refuses a sequence of another length", async () => {
+test("apply_cuts for a retired file job refuses missing source identity", async () => {
   const h = host({ endFrames: 900 });
   await assert.rejects(createDriver({ ppro: h.ppro, ctl: controller() }).handle({ command: "apply_cuts", args: {
     cuts: { cuts_frames: [[10, 20]], sequence_duration_frames: 5000 }, result_name: "x" } }),
-  /900 frames; the cut list was made for 5000/);
+  /no source sequence identity/);
   assert.equal(h.undoSteps.length, 0);
 });
 

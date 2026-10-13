@@ -1,13 +1,20 @@
-# Overlay for cutdeck/xml_recut.py's --overlay flag: tuned, more-aggressive
-# silence-removal thresholds vs. transcribe/config.yaml's defaults. Applied
-# on top of --config (default transcribe/config.yaml) — only these 7 keys
-# change, everything else (engines, normalization, reconciler, ...) still
-# comes from the base config.
-vad_min_silence_ms: 300
-rms_gate_min_gap_ms: 150
+# Overlay for cutdeck/rough_cut.py's --overlay flag: the most aggressive silence removal
+# that still keeps every audible sound. Applied on top of --config (default
+# transcribe/config.yaml); only the keys present here change.
+#
+# What makes this safe: cut.sound_guard_* (config.yaml) keeps any run that is audibly above
+# the file's own noise floor even when VAD calls it non-speech (a held "ahhhh"), so VAD no
+# longer needs a long smoothing window. 2026-10-12, 120 s of real news audio: this overlay
+# removes 10.6 s of silence against 5.2 s for the default, with 0 audible (>= floor+15 dB)
+# 20 ms windows inside any cut.
+vad_min_silence_ms: 120     # split speech at gaps this short (default 500)
+rms_gate_min_gap_ms: 120    # energy gate splits at quiet gaps this short (default 300)
 cut:
-  min_silence_ms: 120
-  min_clip_ms: 500
-  max_dissolve_ms: 300
-  pad_pre_ms: 30
-  pad_post_ms: 15
+  min_silence_ms: 119       # cut any silence of 120 ms or more
+  min_clip_ms: 60           # keep short audio islands down to 60 ms
+  max_dissolve_ms: 1000
+  pad_pre_ms: 40            # 40 ms pre-roll before each sound (attack)
+  pad_post_ms: 60           # 60 ms post-roll after each sound (tail)
+  sound_guard_db: 10        # sensitive energy floor: breaths, laughter, SFX >= +10 dB count as sound
+  sound_guard_tail_db: 5    # keep decaying tails down to +5 dB above noise floor
+  sound_guard_min_ms: 40    # keep bursts down to 40 ms

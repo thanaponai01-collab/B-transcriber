@@ -13,12 +13,13 @@
 
 const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
-const { readSequence } = require("./nativeSync.js");
-const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut } = require("./cutPlanApply.js");
+const { readSequence } = require("../host/sequenceRead.js");
+const { cutsToTicks, planCutApply, verifyReadBack, shiftFor, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 const MOVE_BATCH = 3000;
 const SPLIT_BATCH = 3000;
+const STALE_READ_RETRIES = 3;
 
 const kindOf = (c) => c.kind; // "video" | "audio" from readSequence
 const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
@@ -71,6 +72,21 @@ async function readItems(ppro, seq, cuts) {
   return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
 }
 
+/* Before the analysis runs: the clips inside In/Out that applyNativeCut would refuse if a cut lands
+   inside them, as short descriptions ("name (video track 1) at 00:00:05.000 is a nested sequence").
+   Cut positions are not known yet, so this is a warning, never a refusal. */
+async function findUncuttable(ppro, seq, inTicks, outTicks) {
+  const range = [[toTicks(inTicks), toTicks(outTicks)]];
+  const { items, transitions } = await readItems(ppro, seq, range);
+  const found = [];
+  for (const item of [...items, ...transitions]) {
+    if (!overlapsCut(item.startTicks, item.endTicks, range)) continue;
+    const why = unsupportedReason(item);
+    if (why) found.push(`${item.name || "clip"} (${item.mediaType} track ${item.track + 1}) at ${timecode(item.startTicks)} is ${why}`);
+  }
+  return found;
+}
+
 /* Applies the cuts to `copy`, whose clips are `items`. Returns the undo-step count.
 
    Splits use Premiere's own overwrite as the razor. Live run 2 (2026-09-24) showed the first
@@ -81,8 +97,9 @@ async function readItems(ppro, seq, cuts) {
      3. clone the filler onto every cut edge that falls inside a clip — an overwrite splits the
         clip under it, so the kept pieces are the original clip, effects and all,
      4. remove everything now lying inside a cut (the fillers too),
-     5. move every survivor left by what was removed before it. */
-async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn()) {
+     5. move every survivor left by what was removed before it.
+   `ripple: true` (the ripple probe only, unproven live) removes with ripple instead and skips 5. */
+async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) => fn(), { ripple = false } = {}) {
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   const editor = () => ppro.SequenceEditor.getEditor(copy);
   // Actions must be CREATED inside the transaction callback — built outside it, Premiere throws
@@ -92,40 +109,46 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     if (!builders.length) return { steps: 0, count: 0 };
     const ed = editor();
     let completed = 0;
-    timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
-      const len = builders.length;
-      for (let i = 0; i < len; i++) {
-        const build = builders[i];
-        let action, added;
-        // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
-        // cut list went through on a rerun, so an empty result is asked for once more (still inside
-        // this callback, as required) before failing. The read-back still checks every piece.
-        for (let attempt = 0; attempt < 2 && !action; attempt++) {
-          try { action = build(ed); } catch (e) {
-            if (allowPartial && i > 0 && e.message && e.message.includes("is no longer valid")) {
-              // Stale handle mid-batch (live 2026-10-06, action 179 of 3000): commit what succeeded
-              // so far; the caller re-reads the copy and continues with fresh handles.
-              return;
+    try {
+      timed(label, () => runTransaction(project, `CutDeck: ${label}`, (compound) => {
+        const len = builders.length;
+        for (let i = 0; i < len; i++) {
+          const build = builders[i];
+          let action, added;
+          // Live 2026-09-24: one clone of 7,650 in the razor step came back undefined and the same
+          // cut list went through on a rerun, so an empty result is asked for once more (still inside
+          // this callback, as required) before failing. The read-back still checks every piece.
+          for (let attempt = 0; attempt < 2 && !action; attempt++) {
+            try { action = build(ed); } catch (e) {
+              if (allowPartial && e.message && e.message.includes("is no longer valid")) {
+                // Stale handle mid-batch (live 2026-10-06, action 179 of 3000): commit what succeeded
+                // so far; the caller re-reads the copy and continues with fresh handles.
+                if (completed > 0) return;
+                // Abort an empty batch; retry only after the caller acquires fresh handles.
+                throw Object.assign(e, { staleHandle: true });
+              }
+              const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+              throw new Error(`${where} failed to build: ${e.message}`);
             }
-            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-            throw new Error(`${where} failed to build: ${e.message}`);
           }
+          if (!action) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where}: Premiere returned no action (${action}), twice`);
+          }
+          try { added = compound.addAction(action); } catch (e) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where} was refused: ${e.message}`);
+          }
+          if (!added) {
+            const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
+            throw new Error(`${where}: addAction returned false`);
+          }
+          completed++;
         }
-        if (!action) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where}: Premiere returned no action (${action}), twice`);
-        }
-        try { added = compound.addAction(action); } catch (e) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where} was refused: ${e.message}`);
-        }
-        if (!added) {
-          const where = `${label}: action ${i + 1} of ${len}${build.what ? ` (${build.what})` : ""}`;
-          throw new Error(`${where}: addAction returned false`);
-        }
-        completed++;
-      }
-    }));
+      }));
+    } catch (error) {
+      if (!(allowPartial && completed === 0 && error.staleHandle)) throw error;
+    }
     return { steps: completed > 0 ? 1 : 0, count: completed };
   };
   // Positions only. The two reads after the razor see every piece (~8,700 on a 1,735-cut run,
@@ -134,6 +157,15 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   const all = (seq) => [...seq.video, ...seq.audio];
   const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
+  let stalledReads = 0;
+  const advance = (label, result, at, total) => {
+    if (result.count > 0) { stalledReads = 0; return result.count; }
+    if (++stalledReads > STALE_READ_RETRIES) {
+      throw new Error(`${label}: stalled at action ${at + 1} of ${total} after ${STALE_READ_RETRIES} fresh reads (Premiere handles are still invalid)`);
+    }
+    console.log(`CutDeck ${label}: stale first handle; fresh read ${stalledReads} of ${STALE_READ_RETRIES} at action ${at + 1}`);
+    return 0;
+  };
 
   // Where each track needs a razor: every cut edge strictly inside a clip. The edge at b is cut
   // by a one-frame filler ending there, so the filler itself lies inside the cut.
@@ -170,11 +202,13 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
   // 3. razor: one filler clone per cut edge. Batched like step 5 (live 2026-10-01: a 55 s commit and
   // stale handles on a 16k-action run), each batch from a fresh read; the filler stays at `park`.
+  // Live 2026-10-10: a handle still went stale mid-batch (action 2585 of 3000), so like step 5 a
+  // batch commits what it built and the next one re-reads and continues from there.
   const cutAt = [];
   for (const [key, at] of edges) for (const p of at) cutAt.push([key, p]);
   seq = null;
-  for (let from = 0; from < cutAt.length; from += SPLIT_BATCH) {
-    seq = await read();
+  for (let from = 0; from < cutAt.length;) {
+    seq = await read({ inPoint: false });
     const fillers = new Map();
     const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
       if (!fillers.has(key)) {
@@ -187,7 +221,9 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       return Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(f.item, dt, 0, 0, false, false),
         { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` });
     });
-    steps += tx("split at cut edges", razor).steps;
+    const res = tx("split at cut edges", razor, { allowPartial: true });
+    steps += res.steps;
+    from += advance("split at cut edges", res, from, cutAt.length);
   }
 
   // 4. remove everything inside a cut, and the fillers — per media type.
@@ -205,7 +241,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
         let added = false;
         ppro.TrackItemSelection.createEmptySelection((selection) => {
           for (const c of these) selection.addItem(c.item, true);
-          added = compound.addAction(ed.createRemoveItemsAction(selection, false, kind === "video" ? MT.VIDEO : MT.AUDIO));
+          added = compound.addAction(ed.createRemoveItemsAction(selection, ripple, kind === "video" ? MT.VIDEO : MT.AUDIO));
         });
         if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
       }
@@ -213,6 +249,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     doomed.length = 0;
     doomed = null;
   }
+  if (ripple) return steps;
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
   seq = await read({ end: false, inPoint: false });
@@ -226,7 +263,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     .sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
   let at = 0;
   while (at < moves.length) {
-    if (at > 0) seq = await read({ end: false, inPoint: false });
+    if (at > 0 || stalledReads > 0) seq = await read({ end: false, inPoint: false });
     const fresh = new Map();
     for (const c of all(seq)) {
       const k = `${lane(c)}|${c.start}`;
@@ -235,10 +272,11 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       else fresh.set(k, [c]);
     }
     const batch = moves.slice(at, at + MOVE_BATCH);
-    const builders = batch.map(({ key, by, start }) => {
+    console.log(`CutDeck close gaps: starting batch ${at}..${at + batch.length} of ${moves.length} moves (${fresh.size} distinct positions on timeline)`);
+    const builders = batch.map(({ key, by, start }, batchIdx) => {
       const list = fresh.get(key);
       const c = list && list.shift();
-      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished`);
+      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished (batch item ${batchIdx} of ${batch.length}, global ${at + batchIdx})`);
       const dt = tick(-by);
       return Object.assign(() => c.item.createMoveAction(dt), {
         what: `${key.replace("|", " track ")}, shift ${-by} ticks from start ${start}`,
@@ -246,10 +284,8 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     });
     const res = tx("close gaps", builders, { allowPartial: true });
     steps += res.steps;
-    if (res.count === 0) {
-      throw new Error(`close gaps: stalled at move ${at + 1} of ${moves.length}`);
-    }
-    at += res.count;
+    console.log(`CutDeck close gaps: batch committed ${res.count} of ${batch.length} moves (total done ${at + res.count} of ${moves.length})`);
+    at += advance("close gaps", res, at, moves.length);
   }
   moves.length = 0;
   seq = null;
@@ -258,6 +294,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
 /* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
 async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
+  if (cutsJson.source_sequence) {
+    const { assertSourceAudioUnchanged } = require("../workflow.js");
+    await assertSourceAudioUnchanged(ppro, source, cutsJson.source_sequence);
+  }
   // Seconds per step, summed by label, so a slow run shows where its time went.
   const timings = {};
   // Works for sync steps (transactions: errors must throw where they happen) and async reads.
@@ -316,6 +356,10 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     before.transitions = null;
     actual = null;
     if (problems.length) {
+      // The message names only the first problem; the console gets all of them, so a failed run
+      // shows whether clips are missing (overwritten) or misplaced, and on which lanes.
+      const kinds = problems.reduce((n, p) => { const k = p.split(" ")[0]; n[k] = (n[k] || 0) + 1; return n; }, {});
+      console.log("CutDeck read-back mismatches", kinds, problems);
       throw new Error(`The cut copy "${resultName}" does not match the plan (${problems.length} problem(s); first: ${problems[0]}). `
         + "It is left open for inspection; your original sequence is untouched.");
     }
@@ -334,4 +378,4 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   }
 }
 
-module.exports = { applyNativeCut, applyPlan, readItems };
+module.exports = { applyNativeCut, applyPlan, readItems, findUncuttable };

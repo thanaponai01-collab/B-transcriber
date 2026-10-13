@@ -1,0 +1,6 @@
+{
+  "file": "uxp/cutdeck/timeline/nativeCut.js",
+  "before": "if (allowPartial && e.message && e.message.includes(\"is no longer valid\"))",
+  "after": "if (allowPartial && i > 0 && e.message && e.message.includes(\"is no longer valid\"))",
+  "claim": "Rough Cut must recover a stale first handle in both split and move batches using fresh reads, while bounding retries and preserving the source."
+}

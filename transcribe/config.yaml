@@ -141,6 +141,11 @@ engines:
     # instead of cut arbitrarily mid-utterance — see _LONG_SPAN_SAFE_S.
     vad_threshold: 0.35
     vad_min_silence_ms: 500
+    # Speech-validated tail/empty-decode retry also covers ordinary spans.
+    # 2026-10-07 nine-clip GPU A/B: all four gated metrics identical to baseline
+    # (CER_thai .1683, WER_latin .8761, BER .5696, cue_BER .3684), no overlaps.
+    # One retry at most; false restores the previous decode/recovery behavior.
+    recover_short_spans: true
   # Engine B candidate — not active (engine_b: passthrough above). LLM-decoder
   # ASR, the code-switch-wall priority candidate per HANDOFF_CEILING_BREAK.md
   # §6/4.1. Requires `qwen-asr` (see requirements.txt, commented out) — install
@@ -214,7 +219,6 @@ rms_gate_floor_percentile: 10.0   # how far into the quiet tail counts as "gate-
 rms_gate_min_gap_ms: 300
 chunk_overlap_ms: 750       # GAP-4: adjacent VAD chunks overlap this much so stitch.py
                             # dedupes seam words (only used when a chunk engine is active)
-conform_vfr: false          # GAP-2: transcode a CFR proxy for VFR sources before frame export
 
 # Hallucination filtering (GAP-3): drop tokens that sit mostly inside VAD silence
 drop_tokens_over_silence: true
@@ -231,7 +235,10 @@ silence_drop_max_confidence: 0.5
 # always de-overlapped and clamped; this only tunes gap closing. A gap this short
 # is timestamp noise, not a pause, and it makes burned-in subtitles flicker off
 # and back on — hand-cut reference SRTs are gapless. 0 disables gap closing.
-cue_max_close_gap_ms: 200
+# 600 (was 200), 2026-10-07: replay over 13 hand-recut SRTs showed the recuts keep
+# only 10 gaps in 510 cues while output had 31 gaps of 219-520 ms. Moves cue ends
+# only, so cue-start metrics are unchanged; cues may linger up to 600 ms longer.
+cue_max_close_gap_ms: 600
 
 # Evaluation
 boundary_tol_ms: 300   # switch-point match tolerance (see eval/README.md)
@@ -317,11 +324,13 @@ flywheel:
 # Present now so Phase 0 (timebase + VAD persistence) has a home; the deterministic
 # rules pass turns on after the first eval baseline.
 cut:
-  min_silence_ms: 250       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
-  pad_pre_ms: 50            # kept pre-roll before speech (attack matters most; tightened 2026-08-03: was 80)
-  pad_post_ms: 25           # kept post-roll after speech (tightened 2026-08-03: was 40)
-  min_clip_ms: 1200         # kept clips shorter than this merge into a neighbor
-  max_dissolve_ms: 4000     # cap on dead air a merge may re-admit; longer cuts
+  min_silence_ms: 200       # VAD silence longer than this becomes a cut (tightened 2026-08-03: was 350)
+  pad_pre_ms: 80            # kept pre-roll before speech (attack matters most; 80ms avoids clipping initial consonants)
+  pad_post_ms: 50           # kept post-roll after speech (50ms avoids clipping trailing vowels)
+  min_clip_ms: 200          # kept clips shorter than this merge into a neighbor (2026-10-08: was 1200,
+                             # which re-admitted 2-4 s of dead air to absorb sub-1.2 s blips; on a
+                             # 109 min sequence 200 keeps all VAD speech and trims 66.0 -> 58.6 min)
+  max_dissolve_ms: 1000     # cap on dead air a merge may re-admit (was 4000); longer cuts
                              # get their too-short neighbor dropped instead (bug
                              # fix 2026-08-03: a stray sub-min_clip_ms blip between
                              # two long silences was stitching them back together)
@@ -352,21 +361,16 @@ cut:
                              # is VAD-misclassified dead air (breath/cough/noise), cut outright
   adaptive_silence: false   # 5.2 — percentile silence threshold, off until an eval baseline exists
   silence_percentile: 60
+  # Sound guard (2026-10-12): VAD can call a held vowel ("ahhhh") non-speech and the
+  # silence pass then cut it. Any run >= sound_guard_db above the file's own noise floor
+  # is kept regardless of VAD; it extends while >= sound_guard_tail_db (fading tails) and
+  # needs sound_guard_min_ms of loud audio, so clicks do not count. null disables.
+  sound_guard_db: 15
+  sound_guard_tail_db: 6
+  sound_guard_min_ms: 100
 segment:
   gap_ms: 700               # token gap larger than this starts a new segment
   vad_silence_ms: 500       # VAD silence between tokens that forces a split
-
-# which exporter consumes a CutPlan. 'new_sequence' (default): xml_export.py
-# builds a fresh FCP7 sequence for the editor to import — the proven,
-# lower-risk path. See cutdeck/export_mode.py.
-cutdeck:
-  # new_sequence | recut_sequence
-  #   new_sequence   — write an FCP7 XML for the editor to import. Safest default
-  #                    (never touches a live sequence); real-import acceptance
-  #                    still OPEN, see TODO_LEDGER.
-  #   recut_sequence — rewrite the editor's OWN exported FCP7 XML with the cuts
-  #                    applied, sync-preserving and offline (HANDOFF_CUTDECK_XML_RECUT).
-  mode: new_sequence
 
 # Phase 3 — LLM reconciler tiebreak on A/B disagreements. Local-only: calls a
 # model served by `ollama serve`, never an external API. Off by default —
@@ -391,9 +395,28 @@ cutdeck:
 #   revisited; what remains is whether a bigger local model (qwen2.5:7b-
 #   instruct?) or a richer prompt (few-shot examples, surrounding context)
 #   can do genuinely better than always-trust-Engine-A. See TODO_LEDGER.md.
+# The one database every tool shares (eval baselines, bias terms, corrections,
+# jobs). Relative paths resolve against the repo root, never the CWD.
+store:
+  path: transcriber.db
+
+# Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
+# (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU
+# harness run shows speech_coverage_miss drops with no gated regression.
+coverage_guard:
+  enabled: false
+
 reconciler:
   llm_enabled: false
   ollama:
     host: http://localhost:11434
     model: qwen2.5:3b-instruct
     timeout_s: 30   # first call after Ollama has unloaded the model can take >10s to reload
+
+# Gold clips whose reference cues are not subtitle-sized, so cue_boundary_error_rate
+# can't measure segmentation on them. Excluded from that metric only (by sample stem);
+# text metrics and the overlapping-cue hard check still count them. Changing this list
+# changes the clip's pairing key, so re-run with --establish-baseline.
+# Short1_D5: reference cues are 3-line paragraphs (12 cues vs ~29 output), 2026-10-07.
+eval_cue_metric_exclude:
+  - Bangkok Festivals_CT6_Short1_D5

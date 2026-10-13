@@ -51,7 +51,7 @@ enforces the proven rules and is itself checked against the typings.
 
 In the change, name the source that confirmed the API. **If UXP doesn't have the
 feature, don't fake or approximate it in the panel.** Build it in the CutDeck helper
-(`python -m cutdeck.xml_bridge`, `ws://127.0.0.1:7891`, exposed to agents by the MCP
+(`python -m cutdeck.helper`, `ws://127.0.0.1:7891`, exposed to agents by the MCP
 server `cutdeck/mcp_server.py`) and have the panel call it through `core/rpc.js`.
 
 ## Commands
@@ -184,3 +184,41 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   changing the app; `feature-map` keeps it true.
 - Something broken and the cause unknown: `debug-protocol`. Need the system explained plainly, not
   changed: `explain`.
+
+<!-- agent-routing -->
+## Agent routing
+
+- Coordinator: the current Codex session (GPT-6); instructions cannot switch its model.
+- Execution role: plugin `agents/drive-executor.md` (Sonnet), for bounded implementation
+  and local checks when the host supports that configured worker.
+- Discovery role: plugin `agents/setup-reader.md` (Haiku), for bounded read-only evidence.
+- Codex host limitation: these Claude plugin workers are unavailable through the current
+  delegation API. Use the current session as a single-agent fallback; do not claim a switch.
+- Honor host and project model overrides; report the actual worker/model or fallback.
+- `project-foundation` owns foundation preparation; Drive owns execution gates and
+  task context upkeep. Setup alone does not establish product readiness or verification.
+- Worker assignments include exact paths, source pointers, immutable acceptance checks,
+  allowed edits, evidence location, output limits and supported step/spend limits.
+- Send bounded task context, not the full chat or secrets. Delegate only when it saves work.
+- Workers cannot change acceptance oracles or authorize external actions.
+  The coordinator judges retained proof and owns external-action decisions.
+- Existing context: [SYSTEM_SPEC.md](SYSTEM_SPEC.md), [FEATURES.md](FEATURES.md),
+  [VERIFY.md](VERIFY.md), [BUILD.md](BUILD.md), [MAINT_LOG.md](MAINT_LOG.md).
+<!-- /agent-routing -->
+
+<!-- start-here -->
+## Start here
+Goal: local Thai transcription/review and Premiere workflows; selected context slice is ClubFriday.
+intent: BRIEF.md
+work: BUILD.md
+features: FEATURES.md
+verify: VERIFY.md
+architecture: docs/architecture.md
+commands: docs/commands.md
+Read [intent](BRIEF.md), [work](BUILD.md), [features](FEATURES.md), then [checks](VERIFY.md).
+Read [architecture](docs/architecture.md) for boundaries and [commands](docs/commands.md) before running tools.
+Checks cover selected backend behavior; real GPU, browser and Premiere behavior remain unverified.
+Read feature area includes for the task; read [ClubFriday work](work/clubfriday-history.md) for existing live evidence and deferred work.
+Changed decisions replace their brief/area entries; authorized updates refresh affected intent, evidence and Next; read-only reviews report gaps.
+Memory: use installed `C:/Users/thana/.claude/plugins/cache/thanaponai01-skills/top-tier-engineer/4.61.0/skills/project-context/scripts/context.py --repo . search QUERY`; upkeep uses `index --files` for changed context.
+<!-- /start-here -->

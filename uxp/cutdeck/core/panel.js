@@ -153,7 +153,7 @@
         btn.className = "fx-preset-btn";
         btn.setAttribute("data-act", "fx-preset-btn");
         btn.setAttribute("data-preset-id", d.id);
-        btn.title = `${d.name} (Click: Span | Ctrl: Each Clip | Shift: Every Cut)`;
+        btn.title = `${d.name} (Click: Span | Ctrl: Each Clip | Shift: Every Cut | Alt: Selected Clips)`;
         btn.textContent = d.name;
       } else {
         btn.className = "fx-preset-btn fx-preset-empty-slot";
@@ -417,7 +417,8 @@
   // Event delegation on the quick-effect button row: reads which preset and which modifier
   // keys, same gesture set as bindAdjustmentButtons' btn-adj below (Click: span | Ctrl: per
   // clip | Shift: every cut) — each click both places the AL that way AND applies that
-  // preset's real effect to it (see main.js's doApplyPreset).
+  // preset's real effect to it (see main.js's doApplyPreset). Alt skips the AL and applies
+  // the preset to the clips already selected.
   function bindPresetButtons(intents) {
     const container = $("fx-preset-buttons");
     if (!container) return;
@@ -435,7 +436,8 @@
         return;
       }
       let mode = "span";
-      if (e.shiftKey) mode = "transition";
+      if (e.altKey) mode = "selected";
+      else if (e.shiftKey) mode = "transition";
       else if (e.ctrlKey || e.metaKey) mode = "per_clip";
       intents.onApplyPreset(presetId, mode);
     });

@@ -6,19 +6,12 @@ UTF-8, and `print()` of a Thai path then raises UnicodeEncodeError. Where that
 print is a success announcement — after the artifact is written and the DB row
 committed — the process dies with exit 1 on work that fully succeeded.
 
-The subprocess test at the bottom reproduces exactly that, end to end, through
-the real `cutdeck.xml_export` CLI. The unit tests above it pin the three
-degradation steps individually.
-
-`PYTHONIOENCODING=cp1252` is forced rather than inherited so the failing
-condition is reproduced identically on any host, not only on a Windows machine
-whose locale happens to be cp1252.
+The unit tests pin the three degradation steps individually.
 """
 
 from __future__ import annotations
 
 import io
-import os
 import subprocess
 import sys
 import tempfile
@@ -109,64 +102,6 @@ def test_stream_without_a_buffer_degrades_lossily_but_never_raises():
     assert written.endswith(".xml\n")
 
 
-# ── the regression, through the real CLI ──────────────────────────────────────
-
-def _seed_plan_with_thai_media(db: Path) -> int:
-    """A job + media + saved cut_plan whose media lives under a Thai folder."""
-    from cutdeck.contracts import CutConfig, Timebase
-    from cutdeck.plan import build_plan, save_plan
-    from cutdeck.rules import build_cut_spans
-    from transcribe.db import store
-
-    store.init_db(db)
-    conn = store.connect(db)
-    try:
-        media_dir = Path(tempfile.mkdtemp()) / THAI
-        media_dir.mkdir(parents=True)
-        media_path = media_dir / f"{THAI}.mp4"
-        media_path.write_bytes(b"\x00" * 64)
-
-        media_id = store.create_media(conn, str(media_path))
-        store.set_media_timebase(conn, media_id, 30000, 1001, is_vfr=False)
-        job_id = store.create_job(conn, media_id, "a", "b", "1.0")
-
-        spans = build_cut_spans(
-            [],
-            [{"idx": 0, "start_ms": 0, "end_ms": 3000, "kind": "speech"},
-             {"idx": 1, "start_ms": 3000, "end_ms": 5000, "kind": "silence"},
-             {"idx": 2, "start_ms": 5000, "end_ms": 9000, "kind": "speech"}],
-            9000, CutConfig(),
-        )
-        plan = build_plan(job_id, "a" * 64, Timebase(30000, 1001), 9000, spans)
-        return save_plan(conn, plan)
-    finally:
-        conn.close()
-
-
-def test_xml_export_cli_succeeds_with_a_thai_output_path_on_a_cp1252_stdout():
-    """The reported defect: `python -m cutdeck.xml_export` wrote the XML, flipped
-    the plan to `exported`, then died with UnicodeEncodeError on its own success
-    line — reporting failure for a completed export."""
-    db = Path(tempfile.mkdtemp()) / "t.db"
-    plan_id = _seed_plan_with_thai_media(db)
-    out = Path(tempfile.mkdtemp()) / THAI / "cd001_p001.xml"
-
-    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONPATH": str(ROOT)}
-    proc = subprocess.run(
-        [sys.executable, "-m", "cutdeck.xml_export",
-         "--plan-id", str(plan_id), "--db", str(db), "--out", str(out)],
-        cwd=str(ROOT), env=env, capture_output=True,
-    )
-
-    assert proc.returncode == 0, (
-        f"CLI exited {proc.returncode}\n"
-        f"stderr: {proc.stderr.decode('utf-8', 'replace')}"
-    )
-    assert b"UnicodeEncodeError" not in proc.stderr
-    assert out.exists()
-    assert THAI in proc.stdout.decode("utf-8", "replace")
-
-
 # ── the same wall at the other process boundary ───────────────────────────────
 #
 # Found while verifying the ladder above, not reported separately: subprocess's
@@ -218,7 +153,6 @@ def test_explicit_utf8_decoding_preserves_thai_stderr():
 
 @pytest.mark.parametrize("module,func", [
     ("transcribe.timebase", "_ffprobe"),
-    ("cutdeck.xml_export", "probe_frame_size"),
 ])
 def test_ffprobe_callers_pin_their_decoding(module, func):
     """The shipping ffprobe callers must not leave decoding to the locale."""

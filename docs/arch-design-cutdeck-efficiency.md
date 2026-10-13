@@ -112,17 +112,18 @@ effort: S to measure, S-M to fix
 Order: 1 and 3 are independent and small; 2 is the largest time win for multi-cam days; 4 waits
 on a live measurement.
 
-## Status (2026-10-13, same day)
+## Status (2026-10-13)
 
-All four moves are in the working tree, uncommitted. Python suite 1097 passed; every `tests/*.cjs`
-file green; `check-api.mjs` clean.
+Written against a tree 49 commits behind master. Master had already landed its own idle poll
+(`align.js` skips ticks until `IDLE_POLL_MS`) and a 16 kHz mixdown (`extract_mixdown(sample_rate=16000)`,
+read straight from ffmpeg). On merge, master's versions were kept and only what they lacked was added.
 
-| Move | Result | Proof |
+| Move | Landed | Notes |
 |---|---|---|
-| 1 poll | self-rescheduling `setTimeout` follows `currentPollInterval()`; idle ticks force a fresh read | new timer test red before (no `setTimeout` polling), green after |
-| 2 sync | refused clips retry only against members that joined since; reference FFT cached per FFT length. 4 b-roll: 48 → 36 correlations, 7.0 → 3.0 s; 8: 138 → 114, 13.5 → 5.6 s; 16: 462 → 414, ~51 → 13 s. Plans identical (4, 8). Peak memory +~60 MB (cached spectra) | `test_a_refused_clip_is_retried_only_against_who_joined_since` red (ref 100 s) before, green after |
-| 3 mixdown | 16 kHz buffer, but **each segment is read at 48 kHz and resampled with librosa (soxr), not read at 16 kHz from ffmpeg**: this ffmpeg has no libsoxr and its resampler moved cut edges. Cuts on 3 real speech ranges: 2 identical, 1 within 92 ms. The planner's own noise floor is larger (a 7 ms input shift changed 126 → 133 cuts), so exact-edge equality is not a usable gate. The `.copy()` in `extract_mono_audio` was left: transient, and not proven safe to drop | `xml_audio_extract` tests (rate now 16000) |
-| 4 reads | per-clip host reads in `readAudioTracks` and `readItems` run together (as `listClips` already does). **Speed gain not measured: Premiere was not running.** Output order unchanged | `cutdeck_workflow` test red (peak 1 in flight) before, green after |
+| 1 poll | master's skip-ticks poll, plus a fresh (cache-bypassing) read on idle ticks | idle ticks used to return the cached snapshot, so an Effect Controls edit never showed; new test fails without the change |
+| 2 sync | this change | refused clips retry only against members that joined since; reference FFT cached. 4 unmatched clips: 48 -> 36 correlations, 7.0 -> 3.0 s; 8: 138 -> 114, 13.5 -> 5.6 s; 16: 462 -> 414, ~51 -> 13 s. Plans identical (4, 8). Peak memory +~60 MB |
+| 3 mixdown | master | Measured here: 16 kHz straight from ffmpeg (no libsoxr in this build) vs 48 kHz-then-soxr moved cut edges on 1 of 3 real ranges by up to 92 ms (2 identical), but the planner's own noise is larger (a 7 ms input shift changed 126 -> 133 cuts), so it is not a reason to revert. Resampling each 48 kHz segment with librosa would match today's output more closely if exactness ever matters |
+| 4 reads | this change | per-clip host reads in `readAudioTracks` and `readItems` run together (as `listClips` does). **Speed gain not measured: Premiere was not running.** |
 
-Still open: Sync's b-roll × b-roll term (each unmatched clip becomes an anchor and is tried
-against the rest); a live timing of Rough Cut's two reads.
+Still open: Sync's b-roll x b-roll term (each unmatched clip becomes an anchor and is tried against
+the rest); a live timing of Rough Cut's two reads.

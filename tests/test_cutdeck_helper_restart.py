@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from cutdeck.xml_bridge import VERSION, XmlJobs
+from cutdeck.helper import VERSION, Jobs
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -57,7 +57,7 @@ def _kill(pid):
 
 def test_restart_replaces_the_process_on_the_same_port(tmp_path):
     port = _free_port()
-    first = subprocess.Popen([sys.executable, "-m", "cutdeck.xml_bridge", "--port", str(port),
+    first = subprocess.Popen([sys.executable, "-m", "cutdeck.helper", "--port", str(port),
                               "--jobs-dir", str(tmp_path)], cwd=ROOT,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     replacement = None
@@ -76,7 +76,7 @@ def test_restart_replaces_the_process_on_the_same_port(tmp_path):
 
 def test_restart_is_refused_while_a_job_runs(tmp_path):
     async def _test():
-        jobs = XmlJobs(tmp_path)
+        jobs = Jobs(tmp_path)
         jobs.active = "some-job"
         with pytest.raises(ValueError, match="processing a job"):
             await jobs.dispatch({"type": "restart"})
@@ -87,11 +87,11 @@ def test_restart_is_refused_while_a_job_runs(tmp_path):
 
 def test_hello_from_another_version_says_what_this_helper_is():
     """The panel decides to restart an outdated helper from `code`, never from message wording."""
-    from cutdeck.xml_bridge import serve
+    from cutdeck.helper import serve
 
     async def _test(tmp):
         port = _free_port()
-        server = await serve(XmlJobs(tmp), port)
+        server = await serve(Jobs(tmp), port)
         async with server:
             return await _ask(port, {"type": "hello", "version": "cutdeck-xml-0"})
 
@@ -109,7 +109,7 @@ def test_a_helper_that_cannot_take_the_port_says_why_in_helper_log(tmp_path):
         holder.bind(("127.0.0.1", 0))
         holder.listen()
         port = holder.getsockname()[1]
-        helper = subprocess.run([sys.executable, "-m", "cutdeck.xml_bridge", "--port", str(port),
+        helper = subprocess.run([sys.executable, "-m", "cutdeck.helper", "--port", str(port),
                                  "--jobs-dir", str(tmp_path)], cwd=ROOT, timeout=30,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     assert helper.returncode != 0

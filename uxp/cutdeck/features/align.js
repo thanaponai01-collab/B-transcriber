@@ -147,23 +147,22 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       noteActivity();
       pollAlignTransform();
     });
-    // Self-rescheduling so the gap follows currentPollInterval(): 150 ms right after activity,
-    // 1000 ms idle. An idle tick bypasses the snapshot cache: Premiere fires no event for an
-    // Effect Controls drag, so only a fresh read can see one.
-    const tick = () => {
-      if (!started) return;
-      const idle = Date.now() - lastActivityTime >= ACTIVITY_WINDOW_MS;
-      pollAlignTransform({ forceRefresh: idle }).finally(() => {
-        if (started) alignPollTimer = setTimeout(tick, currentPollInterval());
-      });
-    };
-    alignPollTimer = setTimeout(tick, currentPollInterval());
+    // The timer ticks at the fast rate; when idle, only every IDLE_POLL_MS of those ticks read.
+    // An idle read bypasses the snapshot cache: Premiere fires no event for an Effect Controls
+    // drag, so only a fresh read can see one.
+    let lastPollTime = 0;
+    alignPollTimer = setInterval(() => {
+      const now = Date.now();
+      if (now - lastPollTime < currentPollInterval()) return;
+      lastPollTime = now;
+      pollAlignTransform({ forceRefresh: now - lastActivityTime >= ACTIVITY_WINDOW_MS });
+    }, FAST_POLL_MS);
   }
 
   function stopAlignPolling() {
     started = false;
     if (alignPollTimer !== null) {
-      clearTimeout(alignPollTimer);
+      clearInterval(alignPollTimer);
       alignPollTimer = null;
     }
     if (typeof unsubscribeEvents === "function") {

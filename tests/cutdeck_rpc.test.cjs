@@ -156,7 +156,7 @@ test("overlapping calls go out together on one socket and replies find them by i
 test("an old helper's reply without an id still answers the oldest call", async () => {
   // A helper from before v2 refusing `hello` must be recognised, so the panel can restart it.
   const h = harness(["open"]);
-  const pending = h.rpc({ type: "hello", version: "cutdeck-xml-5" });
+  const pending = h.rpc({ type: "hello", version: "cutdeck-6" });
   const socket = await ready(h, 1);
   socket.push({ ok: false, code: "version_mismatch", message: "Panel/helper version mismatch" });
   await assert.rejects(pending, (error) => error.code === "version_mismatch");

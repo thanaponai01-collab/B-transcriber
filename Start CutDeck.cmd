@@ -18,5 +18,5 @@ if "%PY%"=="" (
 )
 
 echo Keep this helper open while using the CutDeck Premiere panel.
-"%PY%" -m cutdeck.xml_bridge
+"%PY%" -m cutdeck.helper
 if errorlevel 1 pause

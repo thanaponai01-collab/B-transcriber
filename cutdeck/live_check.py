@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from cutdeck.ai_backend import Backend
 from cutdeck.driver_commands import COMMANDS
-from cutdeck.xml_bridge import PORT
+from cutdeck.helper import PORT
 
 
 @dataclass

@@ -8,7 +8,6 @@ Covers:
 All GPU-free. Run: python -m pytest tests/test_cutdeck_phase2.py -v
 """
 
-from xml.etree import ElementTree as ET
 
 from cutdeck.contracts import (
     BLADE_VAD,
@@ -16,7 +15,6 @@ from cutdeck.contracts import (
     CUT,
     KEEP,
     CutConfig,
-    CutPlan,
     CutSpan,
     Segment,
     Timebase,
@@ -24,7 +22,6 @@ from cutdeck.contracts import (
 from cutdeck.rules import build_cut_spans, filler_cuts, repeat_cuts
 from cutdeck import plan as planmod
 from cutdeck.words import Word
-from cutdeck.xml_export import to_xml
 
 NTSC2997 = Timebase(fps_num=30000, fps_den=1001, duration_ms=3_600_000)
 
@@ -192,44 +189,3 @@ def test_assert_contiguous_exhaustive_unaffected_by_blade():
         CutSpan(2, 1200, 2000, KEEP),
     ]
     planmod.assert_contiguous_exhaustive(spans, 2000)  # must not raise
-
-
-def _plan(spans, duration_ms=3_600_000):
-    return CutPlan(job_id=42, media_sha256="x" * 64, timebase=NTSC2997, spans=spans)
-
-
-def test_xml_export_emits_crossfade_only_on_word_blade_edges():
-    spans = [
-        CutSpan(idx=0, src_in_ms=0, src_out_ms=10_000, action=KEEP),
-        CutSpan(idx=1, src_in_ms=10_000, src_out_ms=10_500, action=CUT,
-                reason="filler", blade=BLADE_WORD),
-        CutSpan(idx=2, src_in_ms=10_500, src_out_ms=20_000, action=KEEP),
-        CutSpan(idx=3, src_in_ms=20_000, src_out_ms=22_000, action=CUT,
-                reason="silence", blade=BLADE_VAD),
-        CutSpan(idx=4, src_in_ms=22_000, src_out_ms=3_600_000, action=KEEP),
-    ]
-    root = ET.fromstring(to_xml(_plan(spans), r"C:\Me\footage.mp4", plan_id=7))
-
-    audio_tracks = root.findall("sequence/media/audio/track")
-    assert audio_tracks, "expected audio tracks in export"
-    for track in audio_tracks:
-        transitions = track.findall("transitionitem")
-        # Exactly one crossfade (the word-blade junction), none for the VAD junction.
-        assert len(transitions) == 1
-        effect = transitions[0].find("effect")
-        assert effect.find("mediatype").text == "audio"
-
-    video_transitions = root.find("sequence/media/video/track").findall("transitionitem")
-    assert video_transitions == []  # video track never gets a crossfade
-
-
-def test_xml_export_no_crossfade_when_all_vad_blade():
-    spans = [
-        CutSpan(idx=0, src_in_ms=0, src_out_ms=10_000, action=KEEP),
-        CutSpan(idx=1, src_in_ms=10_000, src_out_ms=12_000, action=CUT,
-                reason="silence", blade=BLADE_VAD),
-        CutSpan(idx=2, src_in_ms=12_000, src_out_ms=3_600_000, action=KEEP),
-    ]
-    root = ET.fromstring(to_xml(_plan(spans), r"C:\Me\footage.mp4", plan_id=7))
-    for track in root.findall("sequence/media/audio/track"):
-        assert track.findall("transitionitem") == []

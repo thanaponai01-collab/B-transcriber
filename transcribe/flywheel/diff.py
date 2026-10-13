@@ -105,3 +105,34 @@ def diff_corrections(
                 corrected_span=extract_changed_span(orig["text"], corr["text"]),
             ))
     return pairs
+
+
+def save_corrections(conn, job_id: int, edits: list[dict]) -> dict:
+    """Write human edits of a stored job (`{"idx", "text", "reason"?}`) as correction rows.
+
+    The one write path for every tool that edits a transcript (editor, ClubFriday), so all
+    of them feed the same bias index. A re-save replaces the earlier row per token; an edit
+    back to the raw text deletes it."""
+    from transcribe.db import store
+
+    original = {t.idx: t for t in store.get_tokens(conn, job_id)}
+    pairs = diff_corrections(
+        [{"idx": t.idx, "text": t.text, "source_engine": t.source_engine} for t in original.values()],
+        edits,
+    )
+    for pair in pairs:
+        store.create_correction(
+            conn, job_id=job_id, token_idx=pair.token_idx, raw_text=pair.raw_text,
+            corrected_text=pair.corrected_text, source_engine=pair.source_engine,
+            reason=pair.reason, corrected_span=pair.corrected_span,
+        )
+    reverted = 0
+    changed = {p.token_idx for p in pairs}
+    existing = {c.token_idx for c in store.get_corrections(conn, job_id)}
+    for edit in edits:
+        orig = original.get(edit["idx"])
+        if (orig is not None and edit["idx"] not in changed and edit["idx"] in existing
+                and edit["text"] == orig.text):
+            store.delete_correction(conn, job_id, edit["idx"])
+            reverted += 1
+    return {"saved": len(pairs), "reverted": reverted}

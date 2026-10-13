@@ -1,0 +1,6 @@
+{
+  "file": "cutdeck/rough_cut.py",
+  "before": "return [(max(a, start), min(b, end)) for a, b in cuts\n            if max(a, start) < min(b, end)]",
+  "after": "return cuts",
+  "claim": "Only cuts inside the marked half-open range may be returned."
+}

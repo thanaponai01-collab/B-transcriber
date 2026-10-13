@@ -1,0 +1,22 @@
+{
+  "goal": "Transform poll drops to once a second when idle; a 'Test Ripple Delete' probe can tell, live, whether ripple remove can replace Rough Cut's per-piece moves",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 600,
+  "max_seconds": 7200,
+  "criteria": [
+    {"statement": "Idle Transform poll reads at most ~1/s (was 40 reads in 6 s)", "stage": "poll"},
+    {"statement": "Ripple probe edits only a copy, aims a cut over empty space before a later clip, and reports mismatch/exact against the real Rough Cut plan; reachable from the diagnostics menu", "stage": "ripple"},
+    {"statement": "All panel tests including the Adobe API check stay green", "stage": "all"}
+  ],
+  "oracle_files": ["tests/cutdeck_align_poll_rate.test.cjs", "tests/cutdeck_ripple_probe.test.cjs"],
+  "stages": [
+    {"id": "poll", "skill": "evolve-maintain", "command": ["node", "--test", "tests/cutdeck_align_poll_rate.test.cjs"],
+     "inputs": ["uxp/cutdeck/features/align.js", "tests/cutdeck_align_poll_rate.test.cjs"]},
+    {"id": "ripple", "skill": "build-discipline", "command": ["node", "--test", "tests/cutdeck_ripple_probe.test.cjs", "tests/cutdeck_native_cut.test.cjs"],
+     "inputs": ["uxp/cutdeck/rippleProbe.js", "uxp/cutdeck/timeline", "uxp/cutdeck/features/probes.js", "uxp/cutdeck/index.html", "tests/fakes/native_cut_host.cjs", "tests/cutdeck_ripple_probe.test.cjs", "tests/cutdeck_native_cut.test.cjs"]},
+    {"id": "all", "skill": "correctness-gate", "command": ["node", "--test", "tests/"],
+     "inputs": ["uxp/cutdeck", "tests"]}
+  ],
+  "actions": []
+}

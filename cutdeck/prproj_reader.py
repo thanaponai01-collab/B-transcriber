@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 
 def load_root(path: str | Path) -> ET.Element:

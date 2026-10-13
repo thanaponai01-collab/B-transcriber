@@ -26,6 +26,12 @@ function getEffects() {
   return defaultEffects;
 }
 
+let defaultSelection;
+function getSelection() {
+  if (!defaultSelection) defaultSelection = require("../host/trackItems.js");
+  return defaultSelection;
+}
+
 function loadSettings(storage) {
   if (!storage) return { ...DEFAULT_SETTINGS };
   try {
@@ -66,12 +72,16 @@ function createAdjustFeature({
   timeline,
   effects,
   frameHold,
+  selection,
 }) {
   function getTl() {
     return timeline || getTimeline();
   }
   function getFx() {
     return effects || getEffects();
+  }
+  function getSel() {
+    return selection || getSelection();
   }
   function getFh() {
     return frameHold || getFrameHold();
@@ -172,6 +182,7 @@ function createAdjustFeature({
     const customPresets = ctl.state.customPresets || [];
     const preset = customPresets.find((p) => p.id === presetId);
     if (!preset) throw new Error("This preset could not be found — it may have been deleted.");
+    if (mode === "selected") return applyPresetToSelectedClips(preset);
     const s = ctl.state.settings || DEFAULT_SETTINGS;
 
     const modeLabel = mode === "transition" ? "cut transition" : mode === "per_clip" ? "per clip" : "span";
@@ -192,6 +203,27 @@ function createAdjustFeature({
     const appliedCount = res.placedItems.length;
 
     const done = `Applied [${preset.name}] to ${appliedCount} AL(s) on V${res.targetTrack}${describeSequenceMatch(res)}`;
+    if (warnings.length) {
+      ctl.setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:\n${warnings.slice(0, 6).join("\n")}`, "error");
+    } else {
+      ctl.setStatus(`${done}!`, "ready");
+    }
+  }
+
+  // Alt+click: the preset goes onto the clips already selected on the timeline, no AL placed.
+  // Video clips only (linked audio is dropped by getSelectedVideoClips, as is an AL).
+  async function applyPresetToSelectedClips(preset) {
+    const project = await ppro.Project.getActiveProject();
+    const seq = project ? await project.getActiveSequence() : null;
+    if (!seq) throw new Error("Open a sequence first.");
+    const clips = (await getSel().getSelectedVideoClips(ppro, seq)).map((c) => c.item);
+    if (clips.length === 0) {
+      throw new Error(`Select the clip(s) to apply [${preset.name}] to, then Alt+click it again.`);
+    }
+
+    ctl.setStatus(`Applying [${preset.name}] to ${clips.length} selected clip(s)…`, "busy");
+    const { warnings } = await getFx().applyCapturedPresetToAll(ppro, project, clips, preset);
+    const done = `Applied [${preset.name}] to ${clips.length} selected clip(s)`;
     if (warnings.length) {
       ctl.setStatus(`${done}, but ${warnings.length} thing(s) didn't land as captured:\n${warnings.slice(0, 6).join("\n")}`, "error");
     } else {

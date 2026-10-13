@@ -1,4 +1,4 @@
-"""cutdeck.xml_bridge `plan_sync`: native Sync's matching job (docs/HANDOFF_CUTDECK_NATIVE_SYNC.md
+"""cutdeck.helper `plan_sync`: native Sync's matching job (docs/HANDOFF_CUTDECK_NATIVE_SYNC.md
 step 2A). The helper matches clips by audio; the panel places them. Audio is served by the
 synthetic Shoot of test_cutdeck_sync_plan.py, so no ffmpeg or real media is needed."""
 
@@ -9,8 +9,8 @@ import threading
 
 import pytest
 
-from cutdeck import xml_bridge
-from cutdeck.xml_bridge import VERSION, XmlJobs
+from cutdeck import helper
+from cutdeck.helper import VERSION, Jobs
 from tests.test_cutdeck_sync_plan import Shoot, event
 
 
@@ -44,7 +44,7 @@ def test_bad_request_is_refused_without_claiming_the_slot(tmp_path, clips, messa
         clip["path"] = {"A": a, "MISSING": str(tmp_path / "gone.mp4")}.get(clip["path"], clip["path"])
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         with pytest.raises(ValueError, match=message):
             await jobs.dispatch({"type": "plan_sync", "clips": clips})
         assert jobs.active is None and not jobs.jobs
@@ -67,10 +67,10 @@ def test_places_clips_and_reports_progress(tmp_path, monkeypatch):
         stages.append(live["job"]["progress"]["stage"])
         return shoot.loader(path, rate, start_s, duration_s)
 
-    monkeypatch.setattr(xml_bridge, "_load_audio", loader)
+    monkeypatch.setattr(helper, "_load_audio", loader)
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         started = await jobs.dispatch({"type": "plan_sync", "clips": [
             {"id": cid, "path": paths[cid], "duration_s": 30.0} for cid in ids]})
         assert started["state"] == "running" and started["job_type"] == "plan_sync"
@@ -106,10 +106,10 @@ def test_sync_holds_the_cpu_lane_not_the_gpu_lane(tmp_path, monkeypatch):
         release.wait(5)
         raise RuntimeError("no audio stream")
 
-    monkeypatch.setattr(xml_bridge, "_load_audio", blocked_loader)
+    monkeypatch.setattr(helper, "_load_audio", blocked_loader)
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         first = await jobs.dispatch(_one_clip(a))
         with pytest.raises(ValueError, match="already matching a sync"):
             await jobs.dispatch(_one_clip(a))
@@ -140,7 +140,7 @@ def test_failure_is_reported_and_frees_the_slot(tmp_path, monkeypatch):
     monkeypatch.setattr("cutdeck.sync_plan.plan_sync", broken)
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
+        jobs = Jobs(tmp_path / "jobs")
         job = await jobs.dispatch(_one_clip(a))
         await asyncio.gather(*jobs.tasks)
         assert jobs.active is None
@@ -158,7 +158,7 @@ def test_version_bump_is_shared_with_the_panel(tmp_path):
 
     async def _test():
         with pytest.raises(ValueError, match="version mismatch"):
-            await XmlJobs(tmp_path).dispatch({"type": "hello", "version": "cutdeck-xml-1"})
+            await Jobs(tmp_path).dispatch({"type": "hello", "version": "cutdeck-xml-1"})
 
     asyncio.run(_test())
 
@@ -174,13 +174,13 @@ def test_realistic_200_clip_request_fits_the_socket(tmp_path, monkeypatch):
     def no_audio(*_):
         raise RuntimeError("stub")
 
-    monkeypatch.setattr(xml_bridge, "_load_audio", no_audio)
+    monkeypatch.setattr(helper, "_load_audio", no_audio)
     request = {"type": "plan_sync", "clips": [
         {"id": f"clip{n}", "path": p, "duration_s": 1234.567891} for n, p in enumerate(paths)]}
 
     async def _test():
-        jobs = XmlJobs(tmp_path / "jobs")
-        server = await xml_bridge.serve(jobs, 0)
+        jobs = Jobs(tmp_path / "jobs")
+        server = await helper.serve(jobs, 0)
         try:
             port = server.sockets[0].getsockname()[1]
             async with connect(f"ws://127.0.0.1:{port}") as socket:

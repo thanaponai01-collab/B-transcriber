@@ -1,0 +1,6 @@
+{
+  "file": "uxp/cutdeck/timeline/nativeCut.js",
+  "before": "if (cutsJson.source_sequence) {",
+  "after": "if (false && cutsJson.source_sequence) {",
+  "claim": "New cuts must refuse changed source audio before any copy or edit."
+}

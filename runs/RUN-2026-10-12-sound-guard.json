@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "contract": {
+    "goal": "Rough Cut removes as much true silence as possible and never cuts audible sound (held vowels, fading tails)",
+    "target": "local",
+    "max_attempts": 6,
+    "timeout_seconds": 900,
+    "max_seconds": 14400,
+    "criteria": [
+      {
+        "statement": "A held vowel the VAD misses is kept: zero audible 20 ms windows fall inside cuts",
+        "stage": "prove"
+      },
+      {
+        "statement": "True silence is still cut aggressively (>= total minus 400 ms per silence) in standard and aggressive presets",
+        "stage": "prove"
+      },
+      {
+        "statement": "Existing rough-cut, ingest, rules and panel regressions stay green",
+        "stage": "regress"
+      }
+    ],
+    "oracle_files": [
+      "tests/test_cutdeck_sound_guard.py",
+      "tests/audio_synth.py"
+    ],
+    "stages": [
+      {
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cutdeck_sound_guard.py",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "inputs": [
+          "cutdeck",
+          "transcribe/pipeline/ingest.py",
+          "transcribe/config.yaml",
+          "transcribe/config.aggressive_cut.yaml",
+          "tests/test_cutdeck_sound_guard.py",
+          "tests/audio_synth.py"
+        ]
+      },
+      {
+        "id": "regress",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cutdeck_sequence_mixdown.py",
+          "tests/test_phase3_ingest.py",
+          "tests/test_cutdeck_rough_cut_cli.py",
+          "tests/test_cutdeck_rough_cut_retirement.py",
+          "tests/test_pipeline_run_config_fallbacks.py",
+          "tests/test_cutdeck_phase1.py",
+          "-q",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "inputs": [
+          "cutdeck",
+          "transcribe/pipeline/ingest.py",
+          "transcribe/config.yaml",
+          "tests"
+        ]
+      }
+    ],
+    "actions": []
+  },
+  "contract_hash": "4432d0ce34430bcde1865842b04d134043554c18e9e6d5b5d61cc4ffa72521b6",
+  "oracle_hash": "759c495c13b62b14ff1f119e77ff5adf2eb725337bf3dae868770514e747dfcf",
+  "started_at": 1791771039.4621747,
+  "status": "complete",
+  "proofs": {
+    "prove": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sound_guard.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".......                                                                  [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n7 passed, 2 warnings in 4.68s\n",
+      "at": 1791771160.3206575,
+      "seconds": 5.786,
+      "inputs_hash": "9ad156c4429c76a6642761059ff9fd0066a6d35198c6e0d17e087ec08d2c1fb5"
+    },
+    "regress": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sequence_mixdown.py",
+        "tests/test_phase3_ingest.py",
+        "tests/test_cutdeck_rough_cut_cli.py",
+        "tests/test_cutdeck_rough_cut_retirement.py",
+        "tests/test_pipeline_run_config_fallbacks.py",
+        "tests/test_cutdeck_phase1.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".....................................................................    [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n69 passed, 2 warnings in 6.44s\n",
+      "at": 1791771166.1501796,
+      "seconds": 8.064,
+      "inputs_hash": "e01a9a275462e75e379ebf87e6006d2c9306754cd845aa09348485da49fed598"
+    }
+  },
+  "attempts": {
+    "prove": 2,
+    "regress": 2
+  },
+  "journal": {},
+  "history": [
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sound_guard.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".......                                                                  [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n7 passed, 2 warnings in 4.55s\n",
+      "at": 1791771039.565265,
+      "seconds": 5.567,
+      "inputs_hash": "9ad156c4429c76a6642761059ff9fd0066a6d35198c6e0d17e087ec08d2c1fb5"
+    },
+    {
+      "stage": "regress",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sequence_mixdown.py",
+        "tests/test_phase3_ingest.py",
+        "tests/test_cutdeck_rough_cut_cli.py",
+        "tests/test_cutdeck_rough_cut_retirement.py",
+        "tests/test_pipeline_run_config_fallbacks.py",
+        "tests/test_cutdeck_phase1.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".....................................................................    [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n69 passed, 2 warnings in 8.19s\n",
+      "at": 1791771048.1532254,
+      "seconds": 9.71,
+      "inputs_hash": "e01a9a275462e75e379ebf87e6006d2c9306754cd845aa09348485da49fed598"
+    },
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sound_guard.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".......                                                                  [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sound_guard.py::test_held_vowel_is_never_cut_when_vad_misses_it[standard]\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n7 passed, 2 warnings in 4.68s\n",
+      "at": 1791771160.3206575,
+      "seconds": 5.786,
+      "inputs_hash": "9ad156c4429c76a6642761059ff9fd0066a6d35198c6e0d17e087ec08d2c1fb5"
+    },
+    {
+      "stage": "regress",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_cutdeck_sequence_mixdown.py",
+        "tests/test_phase3_ingest.py",
+        "tests/test_cutdeck_rough_cut_cli.py",
+        "tests/test_cutdeck_rough_cut_retirement.py",
+        "tests/test_pipeline_run_config_fallbacks.py",
+        "tests/test_cutdeck_phase1.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "exit": 0,
+      "output": ".....................................................................    [100%]\n============================== warnings summary ===============================\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_cutdeck_sequence_mixdown.py::test_silence_only_removal_matches_hand_computed_regions\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n69 passed, 2 warnings in 6.44s\n",
+      "at": 1791771166.1501796,
+      "seconds": 8.064,
+      "inputs_hash": "e01a9a275462e75e379ebf87e6006d2c9306754cd845aa09348485da49fed598"
+    }
+  ]
+}

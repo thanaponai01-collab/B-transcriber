@@ -12,6 +12,21 @@ from typing import Optional
 _SCHEMA = Path(__file__).parent / "schema.sql"
 _DEFAULT_DB = Path(__file__).parent.parent.parent / "transcriber.db"
 
+_REPO_ROOT = _DEFAULT_DB.parent
+
+
+def resolve_db_path(config: Optional[dict] = None) -> Path:
+    """The one database every tool shares: `store.path` from config.yaml, resolved
+    against the repo root when relative (never the CWD), else the default
+    `transcriber.db`. Callers that take an explicit path (tests, scratch DBs)
+    keep doing so; this is for entry points that previously guessed."""
+    configured = ((config or {}).get("store") or {}).get("path")
+    if not configured:
+        return _DEFAULT_DB
+    path = Path(configured)
+    return path if path.is_absolute() else _REPO_ROOT / path
+
+
 # Table-level constraint clauses (not columns) that can appear inside a
 # CREATE TABLE's parens, plus the marker for a PRIMARY KEY column — neither
 # is valid in an ALTER TABLE ... ADD COLUMN statement.
@@ -111,7 +126,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _add("correction", "corrected_span", "corrected_span TEXT")
 
     # job resumability (4.1, GAP-8)
-    _add("job", "job_phase", "job_phase TEXT")
+    for name, ddl in _schema_columns("job"):
+        _add("job", name, ddl)
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────
@@ -138,6 +154,7 @@ class JobRow:
     created_at: str
     status: str
     job_phase: Optional[str] = None
+    resume_fingerprint: Optional[str] = None
 
 
 @dataclass
@@ -178,6 +195,7 @@ class EngineResultRow:
     timestamps_final: bool
     raw_words_json: Optional[str]
     created_at: str
+    raw_segments_json: Optional[str] = None
 
 
 @dataclass
@@ -243,6 +261,13 @@ class EvalRunRow:
     rtf: Optional[float] = None
     gate_unresolved: Optional[str] = None
     cue_legality_violations: Optional[int] = None
+    speech_coverage_miss: float = 0.0
+    orphan_cues: Optional[int] = None
+    speech_coverage_miss_ci_lo: Optional[float] = None
+    speech_coverage_miss_ci_hi: Optional[float] = None
+    baseline_eval_id: Optional[int] = None
+    paired_delta_ci_json: Optional[str] = None
+    gate_status: Optional[str] = None
 
 
 @dataclass
@@ -291,6 +316,13 @@ class EvalRun:
     rtf: Optional[float] = None
     gate_unresolved: Optional[str] = None
     cue_legality_violations: Optional[int] = None
+    speech_coverage_miss: float = 0.0
+    orphan_cues: Optional[int] = None
+    speech_coverage_miss_ci_lo: Optional[float] = None
+    speech_coverage_miss_ci_hi: Optional[float] = None
+    baseline_eval_id: Optional[int] = None
+    paired_delta_ci_json: Optional[str] = None
+    gate_status: Optional[str] = None
 
 
 # ── media ─────────────────────────────────────────────────────────────────────
@@ -346,10 +378,12 @@ def create_job(
     engine_a: str,
     engine_b: str,
     pipeline_version: str,
+    resume_fingerprint: Optional[str] = None,
 ) -> int:
     cur = conn.execute(
-        "INSERT INTO job (media_id, engine_a, engine_b, pipeline_version) VALUES (?, ?, ?, ?)",
-        (media_id, engine_a, engine_b, pipeline_version),
+        "INSERT INTO job (media_id, engine_a, engine_b, pipeline_version, resume_fingerprint) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (media_id, engine_a, engine_b, pipeline_version, resume_fingerprint),
     )
     conn.commit()
     return cur.lastrowid
@@ -383,17 +417,20 @@ def find_resumable_job(
     engine_a: str,
     engine_b: str,
     pipeline_version: str,
+    resume_fingerprint: Optional[str] = None,
 ) -> Optional[JobRow]:
     """The most recent 'failed' or 'running' job for this exact (media, engine pair,
-    pipeline version) — a crash mid-run leaves state we can resume from (4.1, GAP-8).
+    pipeline version, resume fingerprint). Legacy callers without a fingerprint
+    only match legacy jobs. Fingerprinted runs never reuse unknown settings.
     A hard kill never reaches run_file's except, so it leaves 'running', not 'failed'.
     Engine/version must match exactly: swapping an engine invalidates any
     persisted engine_result rows, so that job is not resumable, only re-runnable
     as a fresh job."""
     row = conn.execute(
         "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
-        "AND pipeline_version = ? AND status IN ('failed', 'running') ORDER BY id DESC LIMIT 1",
-        (media_id, engine_a, engine_b, pipeline_version),
+        "AND pipeline_version = ? AND resume_fingerprint IS ? "
+        "AND status IN ('failed', 'running') ORDER BY id DESC LIMIT 1",
+        (media_id, engine_a, engine_b, pipeline_version, resume_fingerprint),
     ).fetchone()
     if row is None:
         return None
@@ -586,6 +623,14 @@ def purge_job_transcript_data(conn: sqlite3.Connection, job_id: int) -> None:
     conn.commit()
 
 
+def save_engine_segments(conn: sqlite3.Connection, job_id: int, engine_slot: str,
+                         raw_segments_json: str) -> None:
+    """Attach per-segment decode statistics to an already-saved engine_result."""
+    conn.execute("UPDATE engine_result SET raw_segments_json = ? WHERE job_id = ? AND engine_slot = ?",
+                 (raw_segments_json, job_id, engine_slot))
+    conn.commit()
+
+
 def save_engine_result(
     conn: sqlite3.Connection,
     job_id: int,
@@ -718,17 +763,22 @@ _EVAL_RUN_COLUMNS = (
     "cer_thai_ci_lo", "cer_thai_ci_hi", "wer_latin_ci_lo", "wer_latin_ci_hi",
     "boundary_error_rate_ci_lo", "boundary_error_rate_ci_hi",
     "cue_boundary_error_rate_ci_lo", "cue_boundary_error_rate_ci_hi",
-    "rtf", "gate_unresolved", "cue_legality_violations", "passed",
+    "rtf", "gate_unresolved", "cue_legality_violations", "baseline_eval_id",
+    "paired_delta_ci_json", "gate_status",
+    "speech_coverage_miss", "orphan_cues",
+    "speech_coverage_miss_ci_lo", "speech_coverage_miss_ci_hi", "passed",
 )
 
 # Columns whose stored type is narrower than what a caller may hand in.
 _EVAL_RUN_COERCE = {
     "is_experiment": int, "passed": int, "metrics_version": int,
     "cue_boundary_error_rate": float, "overlapping_cues": int,
+    "speech_coverage_miss": float,
 }
 
 
-def create_eval_run(conn: sqlite3.Connection, run: EvalRun) -> int:
+def create_eval_run(conn: sqlite3.Connection, run: EvalRun,
+                    clip_metrics: Optional[dict[str, str]] = None) -> int:
     """Persist one eval run. Takes the whole record, so adding a metric is a
     field on `EvalRun` plus a name in `_EVAL_RUN_COLUMNS` — not an edit to a
     column list, a placeholder count and a values tuple in three parallel
@@ -747,13 +797,27 @@ def create_eval_run(conn: sqlite3.Connection, run: EvalRun) -> int:
         coerce = _EVAL_RUN_COERCE.get(column)
         values.append(coerce(value) if coerce is not None else value)
 
-    cur = conn.execute(
-        f"INSERT INTO eval_run ({', '.join(_EVAL_RUN_COLUMNS)}) "
-        f"VALUES ({', '.join('?' * len(_EVAL_RUN_COLUMNS))})",
-        tuple(values),
-    )
-    conn.commit()
-    return cur.lastrowid
+    with conn:
+        cur = conn.execute(
+            f"INSERT INTO eval_run ({', '.join(_EVAL_RUN_COLUMNS)}) "
+            f"VALUES ({', '.join('?' * len(_EVAL_RUN_COLUMNS))})",
+            tuple(values),
+        )
+        eval_id = cur.lastrowid
+        if clip_metrics:
+            conn.executemany(
+                "INSERT INTO eval_clip (eval_run_id, clip_key, metrics_json) VALUES (?, ?, ?)",
+                [(eval_id, key, blob) for key, blob in clip_metrics.items()],
+            )
+    return eval_id
+
+
+def get_eval_clip_metrics(conn: sqlite3.Connection, eval_run_id: int) -> dict[str, str]:
+    rows = conn.execute(
+        "SELECT clip_key, metrics_json FROM eval_clip WHERE eval_run_id = ? ORDER BY clip_key",
+        (eval_run_id,),
+    ).fetchall()
+    return {row["clip_key"]: row["metrics_json"] for row in rows}
 
 
 def _eval_row(row: sqlite3.Row) -> EvalRunRow:
@@ -784,7 +848,9 @@ def get_last_passing_eval(
         metrics_version = METRICS_VERSION
     row = conn.execute(
         "SELECT * FROM eval_run WHERE passed = 1 AND kind = ? AND is_experiment = 0 "
-        "AND metrics_version = ? ORDER BY ran_at DESC, id DESC LIMIT 1",
+        "AND metrics_version = ? AND gate_unresolved IS NULL "
+        "AND (gate_status IS NULL OR gate_status = 'pass') "
+        "ORDER BY ran_at DESC, id DESC LIMIT 1",
         (kind, int(metrics_version)),
     ).fetchone()
     if row is None:

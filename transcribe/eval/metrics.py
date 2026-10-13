@@ -51,7 +51,15 @@ _LATIN_RUN = re.compile(r"[a-z0-9]+")  # applied to lowercased text
 #       nonzero_gap_count) for trend-watching. Existing cer_thai/wer_latin/BER
 #       definitions are unchanged; only the version bumps, so a fresh baseline
 #       starts under the standard metrics_version partitioning.
-METRICS_VERSION = 3
+#   v4: speech_coverage_miss added (docs/arch-design-transcription-engine.md #1)
+#       - ms of reference cue time that no hypothesis cue overlaps, / total
+#       reference cue time. Catches speech that produced no text at all, which
+#       CER averages away. Gated. Also descriptive-only orphan_cues (isolated
+#       hyp cues under 300 ms). Existing definitions are unchanged.
+METRICS_VERSION = 4
+
+ORPHAN_MAX_MS = 300.0        # a hyp cue shorter than this, with no neighbour nearby, is an orphan
+ORPHAN_ISOLATION_MS = 300.0  # "no neighbour nearby": clear time to both adjacent cues at least this long
 
 
 @dataclass
@@ -75,6 +83,11 @@ class EvalMetrics:
     cue_count_delta: int = 0    # hyp cue count − ref cue count (descriptive only)
     shortest_cue_ms: float | None = None  # shortest hyp cue duration (descriptive only)
     nonzero_gap_count: int = 0  # positive-gap count between consecutive hyp cues (descriptive only)
+    # -- coverage signals (v4) ------------------------------------------------
+    speech_coverage_miss: float = 0.0  # missed_speech_ms / ref_speech_ms
+    ref_speech_ms: float = 0.0  # total reference cue time (aggregation weight)
+    missed_speech_ms: float = 0.0  # reference cue time with no overlapping hyp cue
+    orphan_cues: int = 0        # isolated hyp cues under ORPHAN_MAX_MS (descriptive only)
 
     @classmethod
     def aggregate(cls, clips: "list[EvalMetrics]") -> "EvalMetrics":
@@ -130,6 +143,10 @@ class EvalMetrics:
             cue_count_delta=_sum("cue_count_delta"),
             shortest_cue_ms=min(shortest) if shortest else None,
             nonzero_gap_count=_sum("nonzero_gap_count"),
+            speech_coverage_miss=_weighted("speech_coverage_miss", "ref_speech_ms"),
+            ref_speech_ms=_sum("ref_speech_ms"),
+            missed_speech_ms=_sum("missed_speech_ms"),
+            orphan_cues=_sum("orphan_cues"),
         )
 
 
@@ -352,6 +369,42 @@ def _cue_gap_stats(tokens: list[dict]) -> tuple[float | None, int]:
     return shortest, nonzero_gaps
 
 
+def _speech_coverage(ref_tokens: list[dict], hyp_tokens: list[dict]) -> tuple[float, float]:
+    """(total reference cue ms, reference cue ms with no overlapping hyp cue).
+
+    A reference cue is "missed" when no hypothesis cue overlaps it at all, so
+    wrong text over real speech is CER's job and silence over real speech is
+    this one's. Tokens without both timestamps are skipped."""
+    def spans(tokens: list[dict]) -> list[tuple[float, float]]:
+        return [(float(t["start_ms"]), float(t["end_ms"])) for t in tokens
+                if t.get("start_ms") is not None and t.get("end_ms") is not None]
+
+    hyp = spans(hyp_tokens)
+    total = missed = 0.0
+    for start, end in spans(ref_tokens):
+        dur = max(0.0, end - start)
+        total += dur
+        if not any(hs < end and he > start for hs, he in hyp):
+            missed += dur
+    return total, missed
+
+
+def _orphan_count(tokens: list[dict]) -> int:
+    """Hyp cues shorter than ORPHAN_MAX_MS with at least ORPHAN_ISOLATION_MS of
+    clear time to both neighbours (clip edges count as clear)."""
+    spans = [(float(t["start_ms"]), float(t["end_ms"])) for t in tokens
+             if t.get("start_ms") is not None and t.get("end_ms") is not None]
+    count = 0
+    for i, (start, end) in enumerate(spans):
+        if end - start >= ORPHAN_MAX_MS:
+            continue
+        before = start - spans[i - 1][1] if i > 0 else float("inf")
+        after = spans[i + 1][0] - end if i + 1 < len(spans) else float("inf")
+        if before >= ORPHAN_ISOLATION_MS and after >= ORPHAN_ISOLATION_MS:
+            count += 1
+    return count
+
+
 # ── bootstrap confidence intervals (HANDOFF_ONE_ENGINE §3.1) ──────────────────
 #
 # Every regression verdict to date compared two single point estimates, with
@@ -365,7 +418,8 @@ def _cue_gap_stats(tokens: list[dict]) -> tuple[float | None, int]:
 # Descriptive only: doesn't change any metric's *definition*, so this does
 # not bump METRICS_VERSION.
 
-CI_METRICS = ("cer_thai", "wer_latin", "boundary_error_rate", "cue_boundary_error_rate")
+CI_METRICS = ("cer_thai", "wer_latin", "boundary_error_rate", "cue_boundary_error_rate",
+              "speech_coverage_miss")
 
 
 def bootstrap_ci(
@@ -397,6 +451,32 @@ def bootstrap_ci(
     lo = draws[int((1 - ci) / 2 * n_draws)]
     hi = draws[min(n_draws - 1, int((1 + ci) / 2 * n_draws))]
     return lo, hi
+
+
+def paired_bootstrap_ci(
+    candidate: list[EvalMetrics], baseline: list[EvalMetrics], metric: str,
+    n_draws: int = 1000, ci: float = 0.95, seed: int | None = 0,
+) -> tuple[float, float]:
+    """CI of candidate minus baseline; matching clip order is required.
+
+    Both corpora use the SAME sampled indices and their own aggregate counts.
+    This retains reference weighting and micro-F1, including hallucinated
+    boundaries on clips with no reference boundaries. Lower deltas are better.
+    """
+    if not candidate or len(candidate) != len(baseline):
+        raise ValueError("paired bootstrap requires nonempty, equally sized corpora")
+    if metric not in CI_METRICS or n_draws < 1 or not 0 < ci < 1:
+        raise ValueError("invalid metric, draw count or confidence level")
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(n_draws):
+        indices = [rng.randrange(len(candidate)) for _ in candidate]
+        now = EvalMetrics.aggregate([candidate[i] for i in indices])
+        base = EvalMetrics.aggregate([baseline[i] for i in indices])
+        draws.append(getattr(now, metric) - getattr(base, metric))
+    draws.sort()
+    return (draws[int((1 - ci) / 2 * n_draws)],
+            draws[min(n_draws - 1, int((1 + ci) / 2 * n_draws))])
 
 
 # ── normalization (identical treatment of ref and hyp) ─────────────────────────
@@ -451,6 +531,7 @@ def compute_metrics(
     cue_ber = boundary_f1_error(cue_matched, len(ref_cue_pts), len(hyp_cue_pts))
     overlapping_cues = _cue_overlap_count(hyp_tokens)
     shortest_cue_ms, nonzero_gap_count = _cue_gap_stats(hyp_tokens)
+    ref_speech_ms, missed_speech_ms = _speech_coverage(ref_tokens, hyp_tokens)
 
     return EvalMetrics(
         cer_thai=cer_thai,
@@ -471,4 +552,8 @@ def compute_metrics(
         cue_count_delta=len(hyp_tokens) - len(ref_tokens),
         shortest_cue_ms=shortest_cue_ms,
         nonzero_gap_count=nonzero_gap_count,
+        speech_coverage_miss=missed_speech_ms / ref_speech_ms if ref_speech_ms else 0.0,
+        ref_speech_ms=ref_speech_ms,
+        missed_speech_ms=missed_speech_ms,
+        orphan_cues=_orphan_count(hyp_tokens),
     )

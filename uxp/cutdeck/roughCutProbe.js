@@ -20,7 +20,8 @@
 const { attempt, finding, formatFindings } = require("./capabilityProbe.js");
 const { runTransaction } = require("./host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
-const { readSequence, groupUnits, baseName } = require("./timeline/nativeSync.js");
+const { readSequence } = require("./host/sequenceRead.js");
+const { groupUnits, baseName } = require("./timeline/nativeSync.js");
 const { captureEffectFromTrackItem } = require("./timeline/effects.js");
 
 const TEST_SUFFIX = " — CutDeck cut test";

@@ -1,0 +1,148 @@
+{
+  "tokens": [
+    {
+      "text": "โค้งแรกเอาไงกันดีครับที่สิงคโปร์ ที่นี่ครับ",
+      "script": "thai",
+      "start_ms": 0,
+      "end_ms": 1900
+    },
+    {
+      "text": "ที่นี่ครับ Start โค้งแรกถ้าใน",
+      "script": "mixed",
+      "start_ms": 1900,
+      "end_ms": 4466
+    },
+    {
+      "text": "Track ที่แห้งเนี้ย",
+      "script": "mixed",
+      "start_ms": 4466,
+      "end_ms": 5833
+    },
+    {
+      "text": "ไม่ค่อยมีปัญหากันเท่าไหร่นะครับแต่ในฝนก็อาจจะ",
+      "script": "thai",
+      "start_ms": 5833,
+      "end_ms": 8333
+    },
+    {
+      "text": "วุ่นวายนิดหนึ่งนะครับ",
+      "script": "thai",
+      "start_ms": 8333,
+      "end_ms": 9600
+    },
+    {
+      "text": "ซึ่งเราก็เห็นแล้วว่าใน Sprint Race เกิดอะไรขึ้นนะ",
+      "script": "mixed",
+      "start_ms": 9600,
+      "end_ms": 13033
+    },
+    {
+      "text": "เรามาดูจุดก่อนนะที่หนึ่งครับ",
+      "script": "thai",
+      "start_ms": 13033,
+      "end_ms": 15333
+    },
+    {
+      "text": "Start ใน outside นะครับ",
+      "script": "mixed",
+      "start_ms": 15333,
+      "end_ms": 17300
+    },
+    {
+      "text": "ใน Racing line ที่สองนะครับ",
+      "script": "mixed",
+      "start_ms": 17300,
+      "end_ms": 19300
+    },
+    {
+      "text": "start ใน inside ครับ ใน dirty track",
+      "script": "mixed",
+      "start_ms": 19300,
+      "end_ms": 21600
+    },
+    {
+      "text": "จากจุด Start นะครับ",
+      "script": "mixed",
+      "start_ms": 21600,
+      "end_ms": 22833
+    },
+    {
+      "text": "ถึงโค้งแรกเนี้ยมันไม่ไกลมากนะ",
+      "script": "thai",
+      "start_ms": 22833,
+      "end_ms": 25500
+    },
+    {
+      "text": "มันแป๊บเดียวโค้งหนึ่งนะครับซึ่งในช่วงแห้งเนี้ย",
+      "script": "thai",
+      "start_ms": 25500,
+      "end_ms": 29600
+    },
+    {
+      "text": "มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ",
+      "script": "thai",
+      "start_ms": 29600,
+      "end_ms": 32566
+    },
+    {
+      "text": "แล้วก็ แต่ในฝนเนี้ยมันจะวุ่นวายหน่อยครับ",
+      "script": "thai",
+      "start_ms": 32566,
+      "end_ms": 35300
+    },
+    {
+      "text": "เพราะว่าเหมือนมันจะกลับกันนะไอในไอไลน์ที่",
+      "script": "thai",
+      "start_ms": 35300,
+      "end_ms": 39533
+    },
+    {
+      "text": "มันค่อนข้างเป็น Racing line ที่มี rubber เนี่ย",
+      "script": "mixed",
+      "start_ms": 39533,
+      "end_ms": 42533
+    },
+    {
+      "text": "มันจะค่อนข้างลื่นครับ ส่วนใน Dirty track เนี้ย",
+      "script": "mixed",
+      "start_ms": 42533,
+      "end_ms": 45933
+    },
+    {
+      "text": "ที่ไม่มี rubber เลยมันกลับมี grip มากขึ้นมานะ",
+      "script": "mixed",
+      "start_ms": 45933,
+      "end_ms": 48833
+    },
+    {
+      "text": "ใน Sprint race เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะ",
+      "script": "mixed",
+      "start_ms": 48833,
+      "end_ms": 51400
+    },
+    {
+      "text": "กับข้างหลังครับ Hamilton",
+      "script": "mixed",
+      "start_ms": 51400,
+      "end_ms": 52933
+    },
+    {
+      "text": "ซึ่งโค้งแรกผมว่าก็ถ้าสมมุติ",
+      "script": "thai",
+      "start_ms": 52933,
+      "end_ms": 55500
+    },
+    {
+      "text": "ใน dry นะไม่น่ามีปัญหาอะไรครับแต่น่าจะมีปัญหากัน",
+      "script": "mixed",
+      "start_ms": 55500,
+      "end_ms": 58600
+    },
+    {
+      "text": "ในคันหลังหลังนะ",
+      "script": "thai",
+      "start_ms": 58600,
+      "end_ms": 60200
+    }
+  ]
+}

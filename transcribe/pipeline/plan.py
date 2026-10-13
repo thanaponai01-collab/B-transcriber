@@ -15,6 +15,8 @@ which is what makes the plan computable before anything is constructed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 
 from transcribe.engines import registry
@@ -146,3 +148,14 @@ def _opt_float(value) -> float | None:
 
 def _opt_int(value) -> int | None:
     return int(value) if value is not None else None
+
+
+def resume_fingerprint(config: dict, bias_terms: list[str], bias_weights: dict) -> str:
+    """Conservative cache identity: all settings and the exact bias inputs.
+
+    Mapping order is immaterial; list order (including prompt term order) is not.
+    Local checkpoint contents changed in place still require a version bump.
+    """
+    payload = {"config": config, "bias_terms": bias_terms, "bias_weights": bias_weights}
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

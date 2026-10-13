@@ -57,20 +57,12 @@ function toTicksOr(value, fallback = 0n) {
   }
 }
 
-/* Exact TickTime maker for Premiere Pro API */
+/* Exact TickTime maker for Premiere Pro API: TickTime.createWithTicks(string) only
+   (PREMIERE_FACTS.md, WORKS). No seconds fallback: it would carry float drift in. */
 function makeTickTime(ppro) {
   const TickTime = ppro && ppro.TickTime;
-  if (!TickTime) return null;
-  const names = ["createWithTicks", "createWithTickcount", "createWithTickCount"];
-  for (const n of names) {
-    if (typeof TickTime[n] === "function") {
-      return (val) => TickTime[n](val.toString());
-    }
-  }
-  if (typeof TickTime.createWithSeconds === "function") {
-    return (val) => TickTime.createWithSeconds(Number(val) / Number(TICKS_PER_SECOND));
-  }
-  return (val) => new TickTime(Number(val) / Number(TICKS_PER_SECOND));
+  if (!TickTime || typeof TickTime.createWithTicks !== "function") return null;
+  return (val) => TickTime.createWithTicks(val.toString());
 }
 
 module.exports = {

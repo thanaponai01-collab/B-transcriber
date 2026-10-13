@@ -1,7 +1,7 @@
 /* Host operations kept separate from UI so identity and import behavior can be tested.
 
    Rough Cut input (docs/arch-design-helper-v2.md move 6): the audio tracks are read natively and
-   sent to the helper, which writes the FCP7 subset its analysis reads; nothing is exported.
+   sent to the helper as sequence.json; nothing is exported.
    Adobe APIs read here: Sequence.getAudioTrackCount/getAudioTrack, AudioTrack.isMuted,
    AudioClipTrackItem.getStartTime/getInPoint/getOutPoint/isDisabled/getSpeed/getProjectItem,
    ClipProjectItem.getMediaFilePath (reference/adobe/api/premierepro.txt:54-88,131,567-568).
@@ -10,8 +10,8 @@
 const { activeProjectAndSequence } = require("./host/project.js");
 const { toTicks } = require("./host/ticks.js");
 const { getTrackClipItems } = require("./host/trackItems.js");
-const { mediaPath } = require("./timeline/nativeSync.js");
-const VERSION = "cutdeck-xml-5";
+const { mediaPath } = require("./host/sequenceRead.js");
+const VERSION = "cutdeck-6";
 const guid = (object) => object.guid.toString();
 
 async function capture(ppro) {
@@ -76,4 +76,24 @@ async function prepare(ppro, rpc, snapshot, options, save) {
   return started;
 }
 
-module.exports = { VERSION, capture, prepare, readAudioTracks };
+// Only analysis inputs matter. Host enumeration order may change after a fresh read.
+function audioSnapshotSignature(sequence) {
+  return JSON.stringify({ ticks_per_frame: String(sequence.ticks_per_frame), end_ticks: String(sequence.end_ticks),
+    audio_tracks: sequence.audio_tracks.map((track) => ({ enabled: track.enabled,
+      clips: track.clips.map((clip) => JSON.stringify([clip.path, clip.enabled, String(clip.start_ticks),
+        String(clip.in_ticks), String(clip.out_ticks), clip.speed === undefined ? 1 : clip.speed])).sort() })) });
+}
+
+async function assertSourceAudioUnchanged(ppro, source, expected) {
+  const current = await readAudioTracks(ppro, source, {
+    audio_track_count: await source.getAudioTrackCount(),
+    ticks_per_frame: await source.getTimebase(), end_ticks: toTicks(await source.getEndTime()).toString(),
+  });
+  if (audioSnapshotSignature(current) !== audioSnapshotSignature(expected)) {
+    const error = new Error("The source audio or sequence duration changed since analysis. Start a new Rough Cut.");
+    error.staleSource = true;
+    throw error;
+  }
+}
+
+module.exports = { VERSION, capture, prepare, readAudioTracks, assertSourceAudioUnchanged };

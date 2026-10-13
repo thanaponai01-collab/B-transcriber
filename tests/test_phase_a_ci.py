@@ -163,13 +163,12 @@ def test_harness_rtf_is_none_when_audio_cannot_be_duration_probed(monkeypatch):
 
 # ── harness: unresolved vs. confirmed regression ───────────────────────────────
 
-def test_regression_inside_bootstrap_ci_is_recorded_unresolved_not_failed(monkeypatch):
-    """3-clip corpus, each clip's OWN cer_thai fixed at 0.10, 0.10, 0.30 (100
-    Thai chars each). Corpus point estimate is 0.1667 — past the regression
-    band vs. a 0.10 baseline — but this run's own bootstrap CI is
-    [0.10, 0.2333] (verified directly against metrics.bootstrap_ci with this
-    exact per-clip distribution): it still contains the baseline, so this
-    must NOT hard-fail; it must be recorded unresolved instead."""
+def test_legacy_baseline_without_paired_data_is_unresolved_not_promoted(monkeypatch):
+    """Legacy aggregate-only baselines cannot yield a paired interval.
+
+    Even when candidate-only uncertainty includes the old baseline, the run
+    must stay unresolved and cannot replace the passing production baseline.
+    """
     from transcribe.eval import harness
 
     hyp_by_name = {
@@ -204,10 +203,14 @@ def test_regression_inside_bootstrap_ci_is_recorded_unresolved_not_failed(monkey
     )
     assert result is not None
     assert abs(result.metrics.cer_thai - 1.0 / 6) < 1e-6  # 0.1667, past the 0.02/0.005 band
-    assert result.passed, "baseline is within this run's own CI - must not hard-fail"
+    assert not result.passed
+    assert result.status == "unresolved"
     assert result.unresolved and any(m.startswith("CER_thai") for m in result.unresolved)
 
     conn = store.connect(db)
-    last_run = store.get_last_passing_eval(conn)  # unresolved still passes
-    assert last_run.gate_unresolved == "cer_thai"
+    last_run = store.get_last_passing_eval(conn)
+    assert last_run.config_hash == "baseline"
+    unresolved_run = max(store.list_eval_runs(conn), key=lambda row: row.id)
+    assert unresolved_run.gate_status == "unresolved"
+    assert "cer_thai" in unresolved_run.gate_unresolved
     conn.close()

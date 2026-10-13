@@ -56,29 +56,47 @@ Besides `cue_boundary_error_rate`, `compute_metrics`/the harness also report:
 - **`cue_count_delta`**, **`shortest_cue_ms`**, **`nonzero_gap_count`** —
   descriptive only, recorded on `eval_run` for trend-watching, never gated.
 
-## Bootstrap confidence intervals + RTF (Phase A, HANDOFF_ONE_ENGINE.md §3)
+## Paired confidence intervals and gate verdicts
 
-Every gated metric (`cer_thai`, `wer_latin`, `boundary_error_rate`,
-`cue_boundary_error_rate`) also gets a 95% percentile bootstrap CI
-(`metrics.bootstrap_ci`, 1000 draws, resampling *clips* with replacement —
-not characters/words within a clip). Descriptive/gate-softening only: it does
-not change any metric's definition, so it does not bump `METRICS_VERSION`.
+Each run stores full per-clip metrics and aggregation counts in `eval_clip`.
+Clip keys fingerprint the audio content, sample name, reference tokens,
+normalization policy and boundary tolerance. Both runs must contain the same
+keys before comparison; changing audio, annotations, scoring rules or corpus
+membership makes the comparison unresolved.
 
-**The regression gate rule became CI-aware:** if a metric's point estimate
-crosses the regression tolerance but this run's own bootstrap CI still
-contains the baseline's value, the run is **not** hard-failed on that metric
-— it's recorded in `eval_run.gate_unresolved` (comma-separated metric names)
-and printed as `UNRESOLVED (within CI, not a confirmed regression)` instead
-of `REGRESSION`. Only a point-regression whose CI *excludes* the baseline
-fails the run. This retroactively explains (and would have softened) several
-2026-08 rejections decided by margins the handoffs themselves flagged as
-smaller than run-to-run resampling noise on this corpus size — see
-TODO_LEDGER.md.
+`paired_bootstrap_ci` resamples the same clip indices for candidate and baseline
+(1000 seeded draws), recomputes each corpus's weighted rates and micro-F1, then
+forms a 95% percentile interval for **candidate minus baseline**. Lower is better.
+For each metric the allowed regression margin is
+`max(baseline * regression_tolerance, regression_abs_floor)`:
 
-`eval_run` also records `rtf` (wall-clock decode time ÷ total gold-set audio
-duration) — descriptive only, not gated, until a speed floor is chosen. It's
-`NULL` when audio duration can't be probed (e.g. a nonexistent path in a unit
-test) rather than a fabricated number.
+- **pass:** the entire interval is at or below the allowed margin.
+- **regression:** the entire interval is above the margin.
+- **unresolved:** the interval straddles the margin, or paired evidence is missing.
+
+An interval entirely below zero also reports a confirmed improvement. Any
+confirmed regression or overlapping cue gives the overall `regression` verdict;
+otherwise any unresolved metric makes the whole run `unresolved`. Only `pass`
+sets `passed=True` and can replace the production baseline. Experiments never
+become baselines. Historical rows with `gate_unresolved` are also excluded,
+even if an older gate marked them passing. CLI exit codes are 0 for pass,
+1 for regression/empty corpus and 2 for unresolved.
+
+`eval_run` preserves the baseline run ID, paired delta intervals and gate status.
+Candidate-only confidence bands and `rtf` (wall time / audio duration) remain
+descriptive. Metric definitions are unchanged, so `METRICS_VERSION` stays at 3.
+
+Old aggregate-only runs cannot supply paired evidence. Establish matching
+per-clip evidence by explicitly re-evaluating the production configuration:
+
+```bash
+python -m transcribe.eval.harness --config transcribe/config.yaml --establish-baseline
+```
+
+This preserves evaluation history and still enforces cue non-overlap, but skips
+the historical comparison. It cannot be combined with `--experiment` or model
+probe flags. The same command can establish a baseline after intentional corpus
+or scoring-policy changes. Do not use it to bypass a candidate's regression.
 
 ## Code-switch boundary labeling rules
 

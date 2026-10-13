@@ -6,6 +6,7 @@ const capability = () => require("../capabilityProbe.js");
 const syncProbe = () => require("../syncProbe.js");
 const roughCutProbe = () => require("../roughCutProbe.js");
 const layoutProbe = () => require("../layoutProbe.js");
+const rippleProbe = () => require("../rippleProbe.js");
 
 const PROBES = [
   {
@@ -71,6 +72,13 @@ const PROBES = [
     logLabel: "CutDeck native cut probe",
   },
   {
+    id: "ripple",
+    startText: "Copying this sequence, then testing ripple delete with two short cuts on the copy…",
+    run: (ppro) => rippleProbe().probeRippleDelete(ppro),
+    format: (report) => rippleProbe().formatRippleReport(report),
+    logLabel: "CutDeck ripple delete probe",
+  },
+  {
     id: "mutestate",
     startText: "Reading every track's mute state…",
     run: (ppro) => layoutProbe().probeMuteState(ppro),
@@ -102,7 +110,6 @@ function createProbesFeature({
   ppro,
   ctl,
   clipboard = typeof navigator !== "undefined" && navigator.clipboard ? navigator.clipboard : null,
-  uxp = null,
   onCapturePreset = null,
 }) {
   async function handleProbe(name, payload) {
@@ -110,8 +117,8 @@ function createProbesFeature({
       const text = (ctl.state.lastStatus && ctl.state.lastStatus.text) || ctl.state.status.text;
       if (clipboard && clipboard.writeText) {
         await clipboard.writeText(text);
-      } else if (uxp && uxp.clipboard) {
-        uxp.clipboard.copyText(text);
+      } else if (clipboard && clipboard.setContent) {
+        await clipboard.setContent({ "text/plain": text });
       } else {
         throw new Error("No clipboard API on this build. The full report is in the UXP Developer Tool console as JSON.");
       }

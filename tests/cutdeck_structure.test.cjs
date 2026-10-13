@@ -290,9 +290,9 @@ test("(d) require('premierepro') at module scope appears only in main.js (or kno
   assert.deepEqual(offenders, [], `require('premierepro') at module scope in unauthorized files: ${offenders.join(", ")}`);
 });
 
-test("(e) workflow.VERSION matches cutdeck/xml_bridge.py VERSION and helperStart.js has no version literal", () => {
+test("(e) workflow.VERSION matches cutdeck/helper.py VERSION and helperStart.js has no version literal", () => {
   const workflowPath = path.join(uxpDir, "workflow.js");
-  const xmlBridgePath = path.join(root, "cutdeck", "xml_bridge.py");
+  const xmlBridgePath = path.join(root, "cutdeck", "helper.py");
   const helperStartPath = path.join(uxpDir, "helperStart.js");
 
   const workflowSource = fs.readFileSync(workflowPath, "utf8");

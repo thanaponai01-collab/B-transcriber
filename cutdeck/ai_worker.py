@@ -11,16 +11,17 @@ from cutdeck.ai_backend import ROOT, write_json
 def run(folder: Path) -> None:
     job = json.loads((folder / "job.json").read_text(encoding="utf-8"))
     args = job["arguments"]
-    from transcribe.db import store
-    database = folder / "transcribe.db"
-    store.init_db(database)
     if job["kind"] == "transcribe":
         import yaml
-        from transcribe.pipeline.run import run_file
+        from transcribe.service import transcribe
         config = yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8"))
-        cues = run_file(args["media_path"], config, database)
+        # The shared store (config store.path), not a per-job DB: bias terms, corrections
+        # and the sha256 cache then reach ClubFriday too. The job folder keeps result.json.
+        transcript = transcribe(args["media_path"], config=config)
+        # transcript_job_id lets an editing client (ClubFriday) save corrections against it.
         result = {"kind": "transcribe", "media_path": args["media_path"],
-                  "timing_unit": "milliseconds", "granularity": "phrase_cues", "cues": cues}
+                  "timing_unit": "milliseconds", "granularity": "phrase_cues",
+                  "transcript_job_id": transcript.job_id, "cues": transcript.cues}
     else:
         raise ValueError("Unknown worker operation")
     write_json(folder / "result.json", result)

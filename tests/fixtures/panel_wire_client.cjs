@@ -48,5 +48,8 @@ registration = keepRegistered({ rpc: driverRpc, version: VERSION, commands: driv
   say({ hello: hello.value && hello.value.version, missing: missing.reason && missing.reason.message });
   const job = await rpc.watch(watchJob, (update) => say({ update: update.state, pct: update.progress && update.progress.pct }));
   say({ finished: job.state });
-  process.exit(0);  // the open sockets would keep Node running
+  // Close both sockets and let Node drain: process.exit() with sockets still open aborts Node on
+  // Windows (exit 0xC0000409, libuv assertion).
+  rpc.close();
+  driverRpc.close();
 })().catch((error) => { say({ error: error.message }); process.exit(1); });

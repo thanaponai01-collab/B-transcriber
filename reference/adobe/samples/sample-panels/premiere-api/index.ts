@@ -186,6 +186,8 @@ import {
   insertMogrt,
   insertTrackItem,
   overwriteTrackItem,
+  razorAllTracksAtSelection,
+  razorVideoTracksAtSelection,
   removeSelectedTrackItems,
 } from "./src/sequenceEditor";
 import {
@@ -307,17 +309,33 @@ const PREMIERE_MEDIA_EXTENSIONS = [
 // Configure entrypoints for use by UXP during different lifecycle events
 // for each of the panels or commands defined in the manifest.json file.
 entrypoints.setup({
+  plugin: {
+    create(this: UxpPluginInfo) {
+      console.log("Plugin created!");
+    },
+    destroy(this: UxpPluginInfo) {
+      console.log("Plugin destroyed!");
+    },
+  },
   panels: {
     // @ts-expect-error - entrypoints.setup is, unfortunately, incorrectly typed
     // for panels and commands.
     // See: https://github.com/adobe/cc-ext-uxp-types/issues/5
     samplepanel: {
-      show() {
-        // Add custom initialization logic here when the panel is shown.
-        log("Ready");
+      create(this: UxpPanelInfo, _rootNode: HTMLElement) {
+        console.log(`Panel ${this.id} created!`);
       },
-      hide() {
+      destroy(this: UxpPanelInfo, _rootNode: HTMLElement, _data: string | undefined) {
+        // `data` is not currently used (undefined)
+      },
+      hide(this: UxpPanelInfo, _rootNode: HTMLElement, _data: string | undefined) {
         // Add custom cleanup logic here when the panel is hidden.
+        // `data` is not currently used (undefined)
+      },
+      show(this: UxpPanelInfo, _rootNode: HTMLElement, _data: string | undefined) {
+        // Add custom initialization logic here when the panel is shown.
+        // `data` is not currently used (undefined)
+        log("Ready");
       },
       menuItems: [
         {
@@ -362,8 +380,7 @@ entrypoints.setup({
           checked: false,
         },
       ],
-      /** @this {UxpPanelInfo} */
-      invokeMenu(id: string) {
+      invokeMenu(this: UxpPanelInfo, id: string) {
         switch (id) {
           case "open-project":
             openProjectClicked();
@@ -374,10 +391,7 @@ entrypoints.setup({
             break;
 
           case "toggle-checked":
-            // "this" refers to the (UxpPanelInfo) panel itself, allowing
-            // access the panel's menu items and other properties.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (this.menuItems as any).getItem(id).checked = !(this.menuItems as any).getItem(id).checked;
+            this.menuItems.getItem(id).checked = !this.menuItems.getItem(id).checked;
             break;
 
           case "submenu-item1":
@@ -396,6 +410,40 @@ entrypoints.setup({
     },
   },
 });
+
+/* 27.1.0 button events */
+
+// SequenceEditor
+
+async function razorAllTracksClicked() {
+  const project = await ppro.Project.getActiveProject();
+  if (!project) {
+    log(`Failed to get project`, "red");
+    return;
+  }
+
+  const result = await razorAllTracksAtSelection(project);
+  if (result) {
+    log("Successfully razored all audio/video tracks at the selected track item's midpoint")
+  } else {
+    log("Failed to razor the selected track item and tracks", "red");
+  }
+}
+
+async function razorVideoTracksClicked() {
+  const project = await ppro.Project.getActiveProject();
+  if (!project) {
+    log(`Failed to get project`, "red");
+    return;
+  }
+
+  const result = await razorVideoTracksAtSelection(project);
+  if (result) {
+    log("Successfully razored all video tracks at the selected track item's midpoint")
+  } else {
+    log("Failed to razor the selected track item and tracks", "red");
+  }
+}
 
 /* 27.0.0 button events */
 
@@ -2994,6 +3042,10 @@ window.addEventListener("load", async () => {
   registerClick("dnd-add-files", addDragAndDropFilesClicked);
   registerClick("dnd-clear", clearDragAndDropFilesClicked);
   renderDragAndDropList();
+
+  /* 27.1.0 button event registration */
+  registerClick("sequenceeditor-razor-all-tracks", razorAllTracksClicked);
+  registerClick("sequenceeditor-razor-video-tracks", razorVideoTracksClicked);
 
   /* 27.0.0 button events registering */
   registerClick("keyframe-print-mogrtcomment-details", printMogrtCommentParamDetailsClicked)

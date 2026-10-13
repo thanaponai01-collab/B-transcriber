@@ -1,16 +1,14 @@
 """preview.py — ffmpeg concat-demuxer stream-copy preview render (HANDOFF_CUTDECK_WORDLEVEL.md Phase 3).
 
 Every threshold in this system (silence, filler, repeat, blade) was being tuned
-blind until this module existed — the real Premiere XML round-trip
-(``xml_export.py``) is still an open acceptance item, so this is the only way
-to *watch* a rough cut before Phase 4/5 change how it's built.
+blind until this module existed — a rough cut can only be judged in Premiere,
+so this is the only quick way to *watch* one before Phase 4/5 change how it's built.
 
 **This is a sanity watch, not a frame-accuracy check.** Stream-copy ``-ss``/``-to``
 snaps to the nearest keyframe on each side of a cut, so a join can be off by up
-to one GOP. Frame accuracy is ``xml_export.py``'s job, verified in Premiere, not
-here. The output filename and CLI print both say ``approx`` for a stream-copy
-render so it's never mistaken for the real thing. ``--reencode`` re-encodes each
-kept span (slow) for a frame-accurate render when a boundary is genuinely in
+to one GOP. Frame accuracy is checked in Premiere, not here. The output filename
+and CLI print both say ``approx`` for a stream-copy render so it's never mistaken
+for the real thing. ``--reencode`` re-encodes each kept span (slow) for a frame-accurate render when a boundary is genuinely in
 question.
 """
 
@@ -47,7 +45,7 @@ def _check_ffmpeg(ffmpeg_bin: str) -> None:
 
 
 def _run(cmd: list[str]) -> None:
-    # encoding/errors explicit — see cutdeck/xml_export.probe_frame_size. Without
+    # encoding/errors explicit — see transcribe.timebase._ffprobe. Without
     # them, a Thai media path in ffmpeg's stderr makes `proc.stderr` None, so the
     # raise below reported "ffmpeg failed: None" on exactly the footage this
     # project always has.
@@ -172,7 +170,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         n_keep = len(keep_ranges_ms(plan))
         label = "frame-accurate re-encode" if args.reencode else "APPROXIMATE (stream-copy, keyframe-imprecise)"
         safe_print(f"wrote {result} ({n_keep} keep clips, {label}) — "
-                   "sanity watch only, not a frame-accuracy check; use xml_export.py + "
+                   "sanity watch only, not a frame-accuracy check; check it in "
                    "Premiere for that.")
     finally:
         conn.close()

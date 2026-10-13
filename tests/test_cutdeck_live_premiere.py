@@ -7,7 +7,7 @@ live     a real Premiere Pro, a running helper and the CutDeck panel. Left out u
          with --live-edit.
 
 To run live:
-    1. Start the helper:  python -m cutdeck.xml_bridge   (or Start CutDeck.cmd)
+    1. Start the helper:  python -m cutdeck.helper   (or Start CutDeck.cmd)
     2. Open Premiere Pro with a sequence (In/Out marks set), and open the CutDeck panel
     3. Check the stack:   python -m cutdeck.live_check
     4. Run:               python -m pytest tests/test_cutdeck_live_premiere.py --live -v
@@ -22,7 +22,7 @@ import pytest
 
 from cutdeck.ai_backend import Backend
 from cutdeck.driver_commands import COMMANDS
-from cutdeck.xml_bridge import XmlJobs, serve
+from cutdeck.helper import Jobs, serve
 
 PANEL = Path(__file__).parent / "fixtures" / "offline_panel.cjs"
 
@@ -36,7 +36,7 @@ def offline_backend(tmp_path_factory):
     ready = threading.Event()
 
     async def boot():
-        started["server"] = await serve(XmlJobs(tmp_path_factory.mktemp("jobs")), 0)
+        started["server"] = await serve(Jobs(tmp_path_factory.mktemp("jobs")), 0)
         started["port"] = started["server"].sockets[0].getsockname()[1]
         ready.set()
 

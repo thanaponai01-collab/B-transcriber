@@ -1,0 +1,124 @@
+{
+  "goal": "Transform poll drops to once a second when idle; a 'Test Ripple Delete' probe can tell, live, whether ripple remove can replace Rough Cut's per-piece moves",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 600,
+  "max_seconds": 7200,
+  "criteria": [
+    {
+      "statement": "Idle Transform poll reads at most ~1/s (was 40 reads in 6 s)",
+      "stage": "poll"
+    },
+    {
+      "statement": "Ripple probe edits only a copy, aims a cut over empty space before a later clip, and reports mismatch/exact against the real Rough Cut plan; reachable from the diagnostics menu",
+      "stage": "ripple"
+    },
+    {
+      "statement": "All panel tests including the Adobe API check stay green",
+      "stage": "all"
+    }
+  ],
+  "oracle_files": [
+    "tests/cutdeck_align_poll_rate.test.cjs",
+    "tests/cutdeck_ripple_probe.test.cjs"
+  ],
+  "stages": [
+    {
+      "id": "poll",
+      "skill": "evolve-maintain",
+      "command": [
+        "node",
+        "--test",
+        "tests/cutdeck_align_poll_rate.test.cjs"
+      ],
+      "inputs": [
+        "uxp/cutdeck/features/align.js",
+        "tests/cutdeck_align_poll_rate.test.cjs"
+      ]
+    },
+    {
+      "id": "ripple",
+      "skill": "build-discipline",
+      "command": [
+        "node",
+        "--test",
+        "tests/cutdeck_ripple_probe.test.cjs",
+        "tests/cutdeck_native_cut.test.cjs"
+      ],
+      "inputs": [
+        "uxp/cutdeck/rippleProbe.js",
+        "uxp/cutdeck/timeline",
+        "uxp/cutdeck/features/probes.js",
+        "uxp/cutdeck/index.html",
+        "tests/fakes/native_cut_host.cjs",
+        "tests/cutdeck_ripple_probe.test.cjs",
+        "tests/cutdeck_native_cut.test.cjs"
+      ]
+    },
+    {
+      "id": "all",
+      "skill": "correctness-gate",
+      "command": [
+        "node",
+        "--test",
+        "tests/clubfriday_panel.test.cjs",
+        "tests/cutdeck_adj_matte_hold.test.cjs",
+        "tests/cutdeck_adobe_api.test.cjs",
+        "tests/cutdeck_al_autocreate.test.cjs",
+        "tests/cutdeck_al_create_probe.test.cjs",
+        "tests/cutdeck_al_placement.test.cjs",
+        "tests/cutdeck_al_project.test.cjs",
+        "tests/cutdeck_al_track_pick.test.cjs",
+        "tests/cutdeck_align_panel.test.cjs",
+        "tests/cutdeck_align_poll_rate.test.cjs",
+        "tests/cutdeck_assembly.test.cjs",
+        "tests/cutdeck_component_access.test.cjs",
+        "tests/cutdeck_controller.test.cjs",
+        "tests/cutdeck_cut_plan_apply.test.cjs",
+        "tests/cutdeck_driver.test.cjs",
+        "tests/cutdeck_effects_keyframes.test.cjs",
+        "tests/cutdeck_fake_premiere.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_feature_align.test.cjs",
+        "tests/cutdeck_feature_presets.test.cjs",
+        "tests/cutdeck_feature_probes.test.cjs",
+        "tests/cutdeck_feature_rough_cut.test.cjs",
+        "tests/cutdeck_feature_sync.test.cjs",
+        "tests/cutdeck_frame_bounds.test.cjs",
+        "tests/cutdeck_frame_bounds_edges.test.cjs",
+        "tests/cutdeck_gate_issue54.test.cjs",
+        "tests/cutdeck_gate_issue55.test.cjs",
+        "tests/cutdeck_gate_issue57.test.cjs",
+        "tests/cutdeck_helper_start.test.cjs",
+        "tests/cutdeck_host_project.test.cjs",
+        "tests/cutdeck_host_ticks.test.cjs",
+        "tests/cutdeck_input_commit.test.cjs",
+        "tests/cutdeck_keyframe_probe.test.cjs",
+        "tests/cutdeck_layout_probe.test.cjs",
+        "tests/cutdeck_native_cut.test.cjs",
+        "tests/cutdeck_native_cut_probe.test.cjs",
+        "tests/cutdeck_native_sync.test.cjs",
+        "tests/cutdeck_panel_settings_presets.test.cjs",
+        "tests/cutdeck_preset_store.test.cjs",
+        "tests/cutdeck_progress_text.test.cjs",
+        "tests/cutdeck_ripple_probe.test.cjs",
+        "tests/cutdeck_rpc.test.cjs",
+        "tests/cutdeck_structure.test.cjs",
+        "tests/cutdeck_sync_moves_probe.test.cjs",
+        "tests/cutdeck_syntax.test.cjs",
+        "tests/cutdeck_transform_cropbox.test.cjs",
+        "tests/cutdeck_transform_edit.test.cjs",
+        "tests/cutdeck_transform_flicker.test.cjs",
+        "tests/cutdeck_transform_params.test.cjs",
+        "tests/cutdeck_transform_probe.test.cjs",
+        "tests/cutdeck_workflow.test.cjs",
+        "tests/panel_ui_contract.test.cjs"
+      ],
+      "inputs": [
+        "uxp/cutdeck",
+        "tests"
+      ]
+    }
+  ],
+  "actions": []
+}
