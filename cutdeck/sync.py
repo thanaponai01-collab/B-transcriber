@@ -117,8 +117,13 @@ def correlate_gcc_phat_detail(
     ref_audio: np.ndarray,
     clip_audio: np.ndarray,
     sample_rate: int = DEFAULT_SAMPLE_RATE,
+    ref_spectra: dict | None = None,
 ) -> tuple[float, float, float]:
     """`correlate_gcc_phat`, plus how close the runner-up match came.
+
+    `ref_spectra`, if given, is a dict the caller keeps for one `ref_audio`: the reference's FFT
+    is stored in it per FFT length, so matching many clips against one reference transforms it
+    once instead of once per clip.
 
     Returns (offset_s, psr, runner_up): runner_up is the highest correlation outside the
     +/-50 ms peak window divided by the peak (0..1). Near 1.0 means two places match about
@@ -136,7 +141,12 @@ def correlate_gcc_phat_detail(
     n_fft = int(2 ** np.ceil(np.log2(n_total)))
 
     # Compute FFT
-    X_ref = np.fft.rfft(ref_audio, n_fft)
+    if ref_spectra is not None and n_fft in ref_spectra:
+        X_ref = ref_spectra[n_fft]
+    else:
+        X_ref = np.fft.rfft(ref_audio, n_fft)
+        if ref_spectra is not None:
+            ref_spectra[n_fft] = X_ref
     X_clip = np.fft.rfft(clip_audio, n_fft)
 
     # Cross-power spectrum

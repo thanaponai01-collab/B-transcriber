@@ -100,7 +100,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let emptyPollCount = 0;
   // Coalesces bursts (a drag-select fires many events): one read at a time, plus one
   // follow-up if more arrived meanwhile.
-  async function pollAlignTransform() {
+  async function pollAlignTransform({ forceRefresh = false } = {}) {
     if (ctl.state.busy) return;
     if (typeof isMainBusy === "function" && isMainBusy()) return;
     if (typeof isMounted === "function" && !isMounted()) return;
@@ -110,7 +110,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     try {
       do {
         pollAgain = false;
-        const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
+        const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget, forceRefresh });
         // Avoid flapping the UI to disabled on transient empty reads during timeline selection transitions (up to ~300 ms)
         if (!next.transform.available && ctl.state.transform && ctl.state.transform.available && emptyPollCount < 2) {
           emptyPollCount++;
@@ -147,22 +147,23 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       noteActivity();
       pollAlignTransform();
     });
-    alignPollTimer = setInterval(() => {
-      const isFastWindow = (Date.now() - lastActivityTime < ACTIVITY_WINDOW_MS);
-      if (!isFastWindow) {
-        // In idle period: execute poll on every tick (every 1000ms)
-        pollAlignTransform();
-      } else {
-        // In fast period: execute poll on every tick (every 150ms)
-        pollAlignTransform();
-      }
-    }, FAST_POLL_MS);
+    // Self-rescheduling so the gap follows currentPollInterval(): 150 ms right after activity,
+    // 1000 ms idle. An idle tick bypasses the snapshot cache: Premiere fires no event for an
+    // Effect Controls drag, so only a fresh read can see one.
+    const tick = () => {
+      if (!started) return;
+      const idle = Date.now() - lastActivityTime >= ACTIVITY_WINDOW_MS;
+      pollAlignTransform({ forceRefresh: idle }).finally(() => {
+        if (started) alignPollTimer = setTimeout(tick, currentPollInterval());
+      });
+    };
+    alignPollTimer = setTimeout(tick, currentPollInterval());
   }
 
   function stopAlignPolling() {
     started = false;
     if (alignPollTimer !== null) {
-      clearInterval(alignPollTimer);
+      clearTimeout(alignPollTimer);
       alignPollTimer = null;
     }
     if (typeof unsubscribeEvents === "function") {

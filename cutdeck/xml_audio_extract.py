@@ -34,7 +34,12 @@ from cutdeck.sequence_model import Sequence
 from cutdeck.sync import extract_mono_audio
 from cutdeck.xml_sequence import PPRO_TICKS_PER_SECOND, range_window_frames
 
-_WORKING_SAMPLE_RATE = 48000  # arbitrary but consistent; ingest() resamples to 16k anyway
+# Each segment is read at 48 kHz, as the analysis was tuned on, then resampled with the same call
+# ingest() uses and pasted into a 16 kHz buffer: ingest() would resample to 16 kHz anyway, and a
+# 48 kHz buffer cost 3x the memory (225 MB vs 73 MB decode peak per 10 min of sequence). Reading
+# at 16 kHz straight from ffmpeg is not equivalent: its resampler is not soxr (no libsoxr here).
+_READ_SAMPLE_RATE = 48000
+_WORKING_SAMPLE_RATE = 16000
 
 
 def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | None = None,
@@ -73,6 +78,7 @@ def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | N
 
     window = (win_lo_s, win_hi_s) if range_start_frame is not None else None
 
+    import librosa
     import numpy as np
     import soundfile as sf
 
@@ -94,7 +100,9 @@ def extract_mixdown(sequence: Sequence, out_wav: str, audio_track_index: int | N
             start_s = keep_lo
 
         seg_audio = extract_mono_audio(src_path, start_s=in_s, duration_s=out_s - in_s,
-                                       sample_rate=_WORKING_SAMPLE_RATE)
+                                       sample_rate=_READ_SAMPLE_RATE)
+        seg_audio = librosa.resample(seg_audio, orig_sr=_READ_SAMPLE_RATE,
+                                     target_sr=_WORKING_SAMPLE_RATE)
         offset = int(round((start_s - win_lo_s) * _WORKING_SAMPLE_RATE))
         end = min(offset + len(seg_audio), total_samples)
         if end > offset:

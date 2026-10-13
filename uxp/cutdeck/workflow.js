@@ -41,19 +41,22 @@ async function readAudioTracks(ppro, sequence, snapshotContext) {
   const tracks = [];
   for (let t = 0; t < snapshotContext.audio_track_count; t++) {
     const track = await sequence.getAudioTrack(t);
-    const clips = [];
-    for (const item of track ? await getTrackClipItems(track, ppro) : []) {
+    // Every clip of the track is read at once (as nativeSync.listClips does): one awaited call
+    // after another made this read grow with ~8 host round trips per clip.
+    const clips = await Promise.all((track ? await getTrackClipItems(track, ppro) : []).map(async (item) => {
       let path = null;
       try { path = await mediaPath(ppro, item); } catch (_) { /* nested sequence: no file */ }
       // Sent only when it is not 100%; a read that fails counts as normal speed, like isOff above.
       let speed = 1;
       try { speed = Number(await item.getSpeed()); } catch (_) { /* not reported */ }
-      clips.push({ path, enabled: !(await isOff(() => item.isDisabled())),
-        start_ticks: toTicks(await item.getStartTime()).toString(),
-        in_ticks: toTicks(await item.getInPoint()).toString(),
-        out_ticks: toTicks(await item.getOutPoint()).toString(),
-        ...(Number.isFinite(speed) && speed > 0 && speed !== 1 ? { speed } : {}) });
-    }
+      const [disabled, start, inPoint, outPoint] = await Promise.all([
+        isOff(() => item.isDisabled()), item.getStartTime(), item.getInPoint(), item.getOutPoint()]);
+      return { path, enabled: !disabled,
+        start_ticks: toTicks(start).toString(),
+        in_ticks: toTicks(inPoint).toString(),
+        out_ticks: toTicks(outPoint).toString(),
+        ...(Number.isFinite(speed) && speed > 0 && speed !== 1 ? { speed } : {}) };
+    }));
     tracks.push({ enabled: !(track && await isOff(() => track.isMuted())), clips });
   }
   return { ticks_per_frame: snapshotContext.ticks_per_frame, end_ticks: snapshotContext.end_ticks,

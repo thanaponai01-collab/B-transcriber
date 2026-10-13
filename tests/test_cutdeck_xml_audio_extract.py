@@ -92,7 +92,7 @@ def test_extracted_audio_matches_source_segment(tmp_path):
 
     import soundfile as sf
     result, sr = sf.read(str(out_wav), dtype="float32")
-    assert sr == 48000
+    assert sr == 16000  # the rate ingest() works at; 48 kHz cost 3x the memory
     # Total duration matches the SEQUENCE's declared duration (10s), not the clip's.
     assert abs(len(result) / sr - 10.0) < 0.05
 

@@ -130,7 +130,7 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
 }
 
 async function readAlignState(ppro, options = {}) {
-  const snap = await readSnapshot(ppro);
+  const snap = await readSnapshot(ppro, { forceRefresh: !!options.forceRefresh });
   const seq = snap.sequence;
   return {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
