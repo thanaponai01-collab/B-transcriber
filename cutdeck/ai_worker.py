@@ -17,9 +17,11 @@ def run(folder: Path) -> None:
         config = yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8"))
         # The shared store (config store.path), not a per-job DB: bias terms, corrections
         # and the sha256 cache then reach ClubFriday too. The job folder keeps result.json.
-        cues = transcribe(args["media_path"], config=config).cues
+        transcript = transcribe(args["media_path"], config=config)
+        # transcript_job_id lets an editing client (ClubFriday) save corrections against it.
         result = {"kind": "transcribe", "media_path": args["media_path"],
-                  "timing_unit": "milliseconds", "granularity": "phrase_cues", "cues": cues}
+                  "timing_unit": "milliseconds", "granularity": "phrase_cues",
+                  "transcript_job_id": transcript.job_id, "cues": transcript.cues}
     else:
         raise ValueError("Unknown worker operation")
     write_json(folder / "result.json", result)

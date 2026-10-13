@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import difflib
 from contextlib import asynccontextmanager
 from dataclasses import replace
 import json
@@ -25,6 +26,8 @@ from cutdeck.sequence_model import from_panel_json, check_reference_audio
 from cutdeck.audio_extract import extract_mixdown
 from cutdeck.helper import range_from_ticks
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
+from transcribe.db import store
+from transcribe.flywheel import diff as flywheel_diff
 
 HERE = Path(__file__).parent
 
@@ -89,7 +92,32 @@ class QuoteRequest(BaseModel):
     quotes: list[Quote] = Field(max_length=500)
 
 
-def create_app(directory: Path | None = None, backend=None, extractor=extract_range) -> FastAPI:
+def split_quote_edit(raw_texts: list[str], lines: list[str]) -> list[str]:
+    """Each cue's share of an edited quote.
+
+    A new quote is its cues joined by spaces, then broken into lines without dropping
+    characters, so the lines joined with "" are the editable text. Cue boundaries are
+    carried into the edit through a character alignment; an edit that straddles a
+    boundary goes to the later cue."""
+    raw, edited = " ".join(raw_texts), "".join(lines)
+    opcodes = difflib.SequenceMatcher(a=raw, b=edited, autojunk=False).get_opcodes()
+
+    def mapped(pos: int) -> int:
+        for tag, i1, i2, j1, j2 in opcodes:
+            if i1 <= pos < i2 or (pos == i2 == len(raw)):
+                return j1 + (pos - i1) if tag == "equal" else j1
+        return len(edited)
+
+    cuts, pos = [0], 0
+    for text in raw_texts[:-1]:
+        pos += len(text) + 1
+        cuts.append(mapped(pos))
+    cuts.append(len(edited))
+    return [edited[a:b].strip() for a, b in zip(cuts, cuts[1:])]
+
+
+def create_app(directory: Path | None = None, backend=None, extractor=extract_range,
+               corrections_db: Path | None = None) -> FastAPI:
     directory = Path(directory or HERE.parent / "output" / "clubfriday")
     directory.mkdir(parents=True, exist_ok=True)
     backend = backend or Backend()
@@ -129,6 +157,26 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
         destination = Path(project_path).parent / "CutDeck" / "ClubFriday"
         destination.mkdir(parents=True, exist_ok=True)
         return destination / f"{name}-{session['id'][:8]}-{kind}.srt"
+
+    def record_corrections(session: dict):
+        """Quote wording edits become correction rows in the shared store, like editor saves.
+        Sessions transcribed before the helper reported its store job are skipped."""
+        job_id = session.get("transcript_job_id")
+        cues = session["cues"]
+        if job_id is None:
+            return
+        edits = []
+        for quote in session["quotes"]:
+            chosen = [cues[i] for i in quote["cue_indices"]]
+            if any(c.get("idx") is None for c in chosen):
+                return
+            texts = split_quote_edit([c["text"] for c in chosen], quote["lines"])
+            edits += [{"idx": c["idx"], "text": t} for c, t in zip(chosen, texts) if t]
+        conn = store.connect(corrections_db or store.resolve_db_path())
+        try:
+            flywheel_diff.save_corrections(conn, job_id, edits)
+        finally:
+            conn.close()
 
     async def process(session: dict, snapshot: dict, track: int | None):
         try:
@@ -235,7 +283,9 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
                             cues.extend(result["cues"])
                         offset = session["offset_ms"]
                         session["cues"] = [{"text": c["text"], "start_ms": round(c["start_ms"] + offset),
-                                            "end_ms": round(c["end_ms"] + offset)} for c in cues]
+                                            "end_ms": round(c["end_ms"] + offset), "idx": c.get("idx")}
+                                           for c in cues]
+                        session["transcript_job_id"] = result.get("transcript_job_id")
                         session["state"] = "ready"
                     elif result["state"] in ("failed", "interrupted"):
                         session.update(state="failed", error=result.get("error", "Transcription failed"))
@@ -273,6 +323,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
                             "end_ms": session["cues"][indices[-1]]["end_ms"]})
             session["quotes"] = out
             save(session)
+            record_corrections(session)
             return session
 
     @app.get("/api/sessions/{session_id}/quotes.srt")

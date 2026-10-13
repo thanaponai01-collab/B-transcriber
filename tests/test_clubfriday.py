@@ -141,3 +141,49 @@ def test_home_serves_the_editor_page_and_premiere_reports_status(client):
     status = client.get("/api/premiere").json()
     assert status["connected"] is True and status["commands"] == ["read_audio_range"]
     assert status["sequence"]["name"] == "Ep 1"
+
+
+def test_split_quote_edit_keeps_cue_shares():
+    assert server.split_quote_edit(["หนึ่ง", "สอง"], ["หนึ่ง สอง"]) == ["หนึ่ง", "สอง"]
+    assert server.split_quote_edit(["หนึ่ง", "สอง"], ["หนึ่ง ส", "าม"]) == ["หนึ่ง", "สาม"]
+    assert server.split_quote_edit(["ChatGBT ดี", "มาก"], ["ChatGPT ดี", " มาก"]) == ["ChatGPT ดี", "มาก"]
+
+
+def test_quote_edit_becomes_correction_in_shared_store(tmp_path, monkeypatch):
+    from transcribe.db import store
+    db = tmp_path / "shared.db"
+    store.init_db(db)
+    conn = store.connect(db)
+    (tmp_path / "range.wav").write_bytes(b"RIFF")
+    media_id = store.create_media(conn, str(tmp_path / "range.wav"))
+    job_id = store.create_job(conn, media_id, engine_a="faster_whisper", engine_b="passthrough",
+                              pipeline_version="test")
+    store.bulk_create_tokens(conn, [
+        {"job_id": job_id, "idx": i, "text": c["text"], "start_ms": c["start_ms"], "end_ms": c["end_ms"],
+         "script": "thai", "confidence": None, "source_engine": "a", "speaker_id": None}
+        for i, c in enumerate(CUES)])
+    conn.close()
+
+    class StoreBackend(FakeBackend):
+        async def result(self, job_id_, offset=0, limit=100):
+            return {"state": "succeeded", "transcript_job_id": job_id, "next_offset": None,
+                    "cues": [{**c, "idx": i} for i, c in enumerate(CUES)]}
+
+    fake_sequence = SimpleNamespace(tracks=[object()], ticks_per_frame=254016000000 // 25)
+    monkeypatch.setattr(server, "from_panel_json", lambda _: fake_sequence)
+    monkeypatch.setattr(server, "range_from_ticks", lambda seq, ctx: (25, 75))
+    project = tmp_path / "proj" / "p.prproj"
+    project.parent.mkdir()
+    project.write_text("x")
+    app = server.create_app(tmp_path / "sessions", StoreBackend(project), fake_extractor, corrections_db=db)
+    with TestClient(app) as c:
+        sid = ready_session(c)["id"]
+        url = f"/api/sessions/{sid}/quotes"
+        assert c.put(url, json={"quotes": [{"cue_indices": [0, 1], "lines": ["หนึ่ง", " สี่"]}]}).status_code == 200
+        conn = store.connect(db)
+        rows = store.get_corrections(conn, job_id)
+        assert [(r.token_idx, r.raw_text, r.corrected_text) for r in rows] == [(1, "สอง", "สี่")]
+        # Editing the wording back to the transcript removes the correction.
+        c.put(url, json={"quotes": [{"cue_indices": [0, 1], "lines": ["หนึ่ง สอง"]}]})
+        assert store.get_corrections(conn, job_id) == []
+        conn.close()

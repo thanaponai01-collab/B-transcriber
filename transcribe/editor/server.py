@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from transcribe.db import store
-from transcribe.flywheel.diff import diff_corrections
+from transcribe.flywheel import diff as flywheel_diff
 from transcribe.subtitles import write_subtitles
 
 _HERE = Path(__file__).parent
@@ -132,43 +132,10 @@ def save_corrections(job_id: int, req: SaveRequest):
         conn.close()
         raise HTTPException(404, "Job not found")
 
-    original = {t.idx: t for t in store.get_tokens(conn, job_id)}
-    original_tokens = [
-        {"idx": t.idx, "text": t.text, "source_engine": t.source_engine}
-        for t in original.values()
-    ]
-    pairs = diff_corrections(
-        original_tokens,
-        [{"idx": t.idx, "text": t.text, "reason": t.reason} for t in req.tokens],
-    )
-
-    for pair in pairs:
-        # create_correction replaces any prior row for this (job, token), so
-        # repeated saves refine the correction instead of stacking duplicates.
-        store.create_correction(
-            conn,
-            job_id=job_id,
-            token_idx=pair.token_idx,
-            raw_text=pair.raw_text,
-            corrected_text=pair.corrected_text,
-            source_engine=pair.source_engine,
-            reason=pair.reason,
-            corrected_span=pair.corrected_span,
-        )
-
-    # A token sent back matching its raw text is a revert: drop any stale
-    # correction so exports and the flywheel stop seeing the old edit.
-    reverted = 0
-    changed = {p.token_idx for p in pairs}
-    existing = {c.token_idx for c in store.get_corrections(conn, job_id)}
-    for t in req.tokens:
-        orig = original.get(t.idx)
-        if orig is not None and t.idx not in changed and t.idx in existing and t.text == orig.text:
-            store.delete_correction(conn, job_id, t.idx)
-            reverted += 1
-
+    result = flywheel_diff.save_corrections(
+        conn, job_id, [{"idx": t.idx, "text": t.text, "reason": t.reason} for t in req.tokens])
     conn.close()
-    return {"saved": len(pairs), "reverted": reverted}
+    return result
 
 
 @app.get("/jobs/{job_id}/export/srt")
