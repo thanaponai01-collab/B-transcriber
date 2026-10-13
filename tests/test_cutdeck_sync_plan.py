@@ -236,8 +236,8 @@ def test_a_chance_coarse_peak_the_fine_match_refuses_is_unmatched(monkeypatch):
     s.clip("host", other, "other", 0, 30)
     real = sync_plan.correlate_gcc_phat_detail
 
-    def chance_peak(ref, clip, rate):
-        offset, psr, runner_up = real(ref, clip, rate)
+    def chance_peak(ref, clip, rate, spectra=None):
+        offset, psr, runner_up = real(ref, clip, rate, spectra)
         if rate == COARSE_RATE and psr < sync_plan.MIN_PSR:  # the live numbers, at a place that overlaps
             return 10.0, 11.9, 0.78
         return offset, psr, runner_up
@@ -309,3 +309,28 @@ def test_unplaced_clips_follow_a_visible_gap_spaced_by_their_whole_file():
     assert got["trimmed"].status == got["other"].status == "unmatched"
     assert got["trimmed"].start_s == pytest.approx(60 + UNPLACED_GAP_S, abs=TOL_S)
     assert got["other"].start_s == pytest.approx(got["trimmed"].start_s + 40 + SESSION_GAP_S, abs=0.01)
+
+
+# 11. A clip refused by the session as it stood is retried only against the members that joined
+#     since, and clips tried against the same audio share its FFT. Before: every retry heard the
+#     whole session again (quadratic in unmatched clips: 51 s for 3 cameras + 16 b-roll clips).
+def test_a_refused_clip_is_retried_only_against_who_joined_since(monkeypatch):
+    from cutdeck import sync_plan
+    s, ev = Shoot(), event(120, seed=21)
+    s.clip("a", ev, "ev", 0, 60)        # the anchor: longest
+    s.clip("b", ev, "ev", 50, 100)      # joins after a, and reaches past it
+    s.add("stranger", event(55, seed=22))  # longer than b: tried (and refused) before b joins
+    refs = []
+    real = sync_plan.correlate_gcc_phat_detail
+
+    def spy(ref, clip, rate, spectra=None):
+        if rate == COARSE_RATE:
+            refs.append((len(ref) / COARSE_RATE, spectra))
+        return real(ref, clip, rate, spectra)
+
+    monkeypatch.setattr(sync_plan, "correlate_gcc_phat_detail", spy)
+    got = by_id(s.plan())
+    assert got["stranger"].status == "unmatched"
+    # stranger: against a (60 s), then against b alone (50 s), never against the 100 s of both
+    assert refs and max(length for length, _ in refs) < 61, [length for length, _ in refs]
+    assert all(spectra is not None for _, spectra in refs)

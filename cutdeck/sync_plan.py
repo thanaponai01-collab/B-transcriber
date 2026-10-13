@@ -145,9 +145,28 @@ def _fine_start(loader: Loader, clip: _Clip, other: _Clip, other_start: float,
     return start
 
 
-def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: Loader) -> Placement | str:
-    """The clip's placement in the session, or the reason it was refused (a sentence for the report)."""
-    composite, origin = _composite(session, clips)
+@dataclass
+class _View:
+    """The audio a clip is matched against: some members of a session, mixed once, with the
+    reference FFTs shared by every clip tried against it."""
+    composite: np.ndarray
+    origin: float
+    spectra: dict = field(default_factory=dict)
+
+
+def _view(session: _Session, clips: dict[str, _Clip], members) -> _View:
+    sub = _Session({m: session.starts[m] for m in members})
+    composite, origin = _composite(sub, clips)
+    return _View(composite, origin)
+
+
+def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: Loader,
+               view: Optional[_View] = None) -> Placement | str:
+    """The clip's placement in the session, or the reason it was refused (a sentence for the report).
+    `view` limits the coarse match to some of the session's members (default: all of them)."""
+    if view is None:
+        view = _view(session, clips, list(session.starts))
+    composite, origin = view.composite, view.origin
     found = None
     chunk_from = 0.0
     heard = 0  # pieces loud enough to try
@@ -155,7 +174,7 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
         chunk = clip.coarse[int(chunk_from * COARSE_RATE):int((chunk_from + COARSE_CHUNK_S) * COARSE_RATE)]
         if float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2))) >= MIN_RMS:
             heard += 1
-            offset, psr, runner_up = correlate_gcc_phat_detail(composite, _unit(chunk), COARSE_RATE)
+            offset, psr, runner_up = correlate_gcc_phat_detail(composite, _unit(chunk), COARSE_RATE, view.spectra)
             if psr >= MIN_PSR and runner_up <= MAX_RUNNER_UP:
                 found = (origin + offset - chunk_from, chunk_from, psr)
         chunk_from += COARSE_CHUNK_S
@@ -232,12 +251,22 @@ def plan_sync(clips: Sequence[ClipInput], loader: Loader, progress: Optional[Pro
         refusals: set[str] = set()  # why the others were refused against this anchor's session
         session = _Session({anchor.input.id: 0.0}, {anchor.input.id: Placement(anchor.input.id, "anchor", 0.0)})
         grew = True
+        tried: dict[str, set[str]] = {}  # clip id -> session members it already failed against
         while grew:  # a clip that fails now may match once the session has grown
             grew = False
+            views: dict[tuple, _View] = {}  # members -> their mixed audio, shared by clips with the same history
             for clip in list(pending):
-                placed = _try_place(clip, session, usable, loader)
+                # A refusal against some members stands: only members that joined since can change
+                # it, so the retry hears just those, not the whole session again.
+                fresh = tuple(m for m in session.starts if m not in tried.get(clip.input.id, ()))
+                if not fresh:
+                    continue
+                if fresh not in views:
+                    views[fresh] = _view(session, usable, fresh)
+                placed = _try_place(clip, session, usable, loader, views[fresh])
                 if isinstance(placed, str):
                     refusals.add(placed)
+                    tried.setdefault(clip.input.id, set()).update(fresh)
                 else:
                     session.starts[clip.input.id] = placed.start_s
                     session.found[clip.input.id] = placed

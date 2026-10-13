@@ -100,7 +100,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let emptyPollCount = 0;
   // Coalesces bursts (a drag-select fires many events): one read at a time, plus one
   // follow-up if more arrived meanwhile.
-  async function pollAlignTransform() {
+  async function pollAlignTransform({ forceRefresh = false } = {}) {
     if (ctl.state.busy) return;
     if (typeof isMainBusy === "function" && isMainBusy()) return;
     if (typeof isMounted === "function" && !isMounted()) return;
@@ -110,7 +110,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     try {
       do {
         pollAgain = false;
-        const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
+        const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget, forceRefresh });
         // Avoid flapping the UI to disabled on transient empty reads during timeline selection transitions (up to ~300 ms)
         if (!next.transform.available && ctl.state.transform && ctl.state.transform.available && emptyPollCount < 2) {
           emptyPollCount++;
@@ -148,12 +148,14 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       pollAlignTransform();
     });
     // The timer ticks at the fast rate; when idle, only every IDLE_POLL_MS of those ticks read.
+    // An idle read bypasses the snapshot cache: Premiere fires no event for an Effect Controls
+    // drag, so only a fresh read can see one.
     let lastPollTime = 0;
     alignPollTimer = setInterval(() => {
       const now = Date.now();
       if (now - lastPollTime < currentPollInterval()) return;
       lastPollTime = now;
-      pollAlignTransform();
+      pollAlignTransform({ forceRefresh: now - lastActivityTime >= ACTIVITY_WINDOW_MS });
     }, FAST_POLL_MS);
   }
 

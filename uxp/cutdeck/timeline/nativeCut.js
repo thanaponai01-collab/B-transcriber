@@ -32,10 +32,10 @@ const asPlanItem = (c, extra = {}) => ({ id: itemKey(c), name: c.path ? String(c
    a read-back that only needs positions. */
 async function readItems(ppro, seq, cuts) {
   const s = await readSequence(ppro, seq);
-  const items = [];
-  for (const c of [...s.video, ...s.audio]) {
+  // All clips at once: the four per-clip reads for a clip a cut lands in were awaited one by one.
+  const items = await Promise.all([...s.video, ...s.audio].map(async (c) => {
     let speed = 1, reversed = false, isNested = false, isMulticam = false;
-    if (!cuts || !overlapsCut(c.start, c.end, cuts)) { items.push(asPlanItem(c, { raw: c })); continue; }
+    if (!cuts || !overlapsCut(c.start, c.end, cuts)) return asPlanItem(c, { raw: c });
     try { speed = await c.item.getSpeed(); } catch (_) { /* not reported: treat as normal */ }
     try { reversed = !!(await c.item.isSpeedReversed()); } catch (_) { /* idem */ }
     try {
@@ -43,8 +43,8 @@ async function readItems(ppro, seq, cuts) {
       if (pi && typeof pi.isSequence === "function") isNested = !!(await pi.isSequence());
       if (pi && typeof pi.isMulticamClip === "function") isMulticam = !!(await pi.isMulticamClip());
     } catch (_) { /* graphics / adjustment layers have no clip project item */ }
-    items.push(asPlanItem(c, { speed, reversed, isNested, isMulticam, raw: c }));
-  }
+    return asPlanItem(c, { speed, reversed, isNested, isMulticam, raw: c });
+  }));
   const transitions = [];
   if (!cuts) return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
   const type = ppro.Constants.TrackItemType.TRANSITION;

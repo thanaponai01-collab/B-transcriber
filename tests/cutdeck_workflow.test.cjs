@@ -113,3 +113,18 @@ test("the audio read carries a clip's speed when it is not 100%, and nothing whe
   assert.equal(read.audio_tracks[0].clips[0].speed, 2);
   assert.equal("speed" in read.audio_tracks[0].clips[1], false);
 });
+
+test("the audio read asks the host about a track's clips together, keeping their order", async () => {
+  const f = fixture();
+  let inFlight = 0, peak = 0;
+  const slow = (item) => {
+    const wrap = (fn) => async (...a) => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setImmediate(r)); inFlight--; return fn(...a); };
+    return Object.fromEntries(Object.entries(item).map(([k, v]) => [k, typeof v === "function" ? wrap(v) : v]));
+  };
+  const items = ["A", "B", "C", "D"].map((n, i) => slow({ ...audioItem({ path: `D:/cam/${n}.mp4`, start: String(i * 100), inPoint: "0", outPoint: "50" }), getSpeed: async () => 1 }));
+  f.source.getAudioTrack = async () => ({ getTrackItems: () => items, isMuted: async () => false });
+  const read = await readAudioTracks(f.ppro, f.source, { audio_track_count: 1, ticks_per_frame: "10", end_ticks: "1000" });
+  assert.deepEqual(read.audio_tracks[0].clips.map((c) => c.path), ["D:/cam/A.mp4", "D:/cam/B.mp4", "D:/cam/C.mp4", "D:/cam/D.mp4"]);
+  assert.deepEqual(read.audio_tracks[0].clips.map((c) => c.start_ticks), ["0", "100", "200", "300"]);
+  assert.ok(peak > 1, `host calls ran one at a time (peak ${peak} in flight)`);
+});

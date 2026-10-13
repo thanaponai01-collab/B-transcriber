@@ -1029,3 +1029,35 @@ test("Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver
 });
 
 
+
+test("an idle poll tick reads past the snapshot cache; a tick right after activity does not", async () => {
+  const realSetInterval = global.setInterval, realClearInterval = global.clearInterval, realNow = Date.now;
+  let tick = null, now = 1_000_000;
+  global.setInterval = (fn) => { tick = fn; return 1; };
+  global.clearInterval = () => {};
+  Date.now = () => now;
+  const selections = [];
+  const item = { getStartTime: async () => ({ ticks: "0" }), getTrackIndex: async () => 0 };
+  // getPlayerPosition is read only when the snapshot is rebuilt, never on a cache hit.
+  const seq = { getPlayerPosition: async () => { selections.push(1); return { ticks: "0" }; },
+    getSelection: async () => ({ getTrackItems: async () => [item] }) };
+  const ppro = { Project: { getActiveProject: async () => ({ getActiveSequence: async () => seq }) },
+    EventManager: { addGlobalEventListener() {}, addEventListener() {} },
+    Constants: { SequenceEvent: { ACTIVATED: "a", SELECTION_CHANGED: "s" } } };
+  const snapshot = require("../uxp/cutdeck/transform/snapshot.js");
+  try {
+    const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
+    const feature = createAlignFeature({ ppro, ctl: { state: {}, render() {}, setStatus() {} } });
+    snapshot.clearSnapshotCache();
+    feature.startPolling();
+    now += 150; tick(); await new Promise((r) => setTimeout(r, 20));   // active: caches
+    now += 150; tick(); await new Promise((r) => setTimeout(r, 20));   // active: may use the cache
+    const active = selections.length;
+    now += 5000; tick(); await new Promise((r) => setTimeout(r, 20));  // idle: must re-read
+    const afterIdle = selections.length;
+    assert.ok(afterIdle > active, "an idle tick must rebuild the snapshot");
+    feature.stopPolling();
+  } finally {
+    global.setInterval = realSetInterval; global.clearInterval = realClearInterval; Date.now = realNow;
+  }
+});
