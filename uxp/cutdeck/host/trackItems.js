@@ -122,7 +122,7 @@ async function trackItemName(it, fallback = "") {
 
 // Helper to read selected VIDEO clips on active sequence (strictly ignoring audio clips and adjustment layers).
 // Replaces today's adjustmentLayer.js getSelectedTimelineClips, built on getSelectedTrackItems.
-async function getSelectedVideoClips(ppro, seq) {
+async function getSelectedVideoClips(ppro, seq, { includeAdjustmentLayers = false } = {}) {
   if (!seq) return [];
   const rawItems = await getSelectedTrackItems(seq, ppro);
   if (!rawItems || rawItems.length === 0) return [];
@@ -163,11 +163,11 @@ async function getSelectedVideoClips(ppro, seq) {
     // VideoClipTrackItem/AudioClipTrackItem (@adobe/premierepro 26.2.1 d.ts); the name
     // check is only a fallback where it's missing — by name, footage called
     // "adjustment_test.mp4" is skipped and a renamed AL passes as footage.
-    if (typeof it.isAdjustmentLayer === "function") {
+    if (!includeAdjustmentLayers && typeof it.isAdjustmentLayer === "function") {
       let isAL = false;
       try { isAL = await it.isAdjustmentLayer(); } catch (_) {}
       if (isAL) continue;
-    } else {
+    } else if (!includeAdjustmentLayers) {
       const name = (await trackItemName(it)).toLowerCase();
       if (name.includes("adjustment") || name.startsWith("adj_")) {
         continue;

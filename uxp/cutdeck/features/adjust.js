@@ -211,14 +211,14 @@ function createAdjustFeature({
   }
 
   // Alt+click: the preset goes onto the clips already selected on the timeline, no AL placed.
-  // Video clips only (linked audio is dropped by getSelectedVideoClips, as is an AL).
+  // Video clips and existing Adjustment Layers; linked audio is excluded.
   async function applyPresetToSelectedClips(preset) {
     const project = await ppro.Project.getActiveProject();
     const seq = project ? await project.getActiveSequence() : null;
     if (!seq) throw new Error("Open a sequence first.");
-    const clips = (await getSel().getSelectedVideoClips(ppro, seq)).map((c) => c.item);
+    const clips = (await getSel().getSelectedVideoClips(ppro, seq, { includeAdjustmentLayers: true })).map((c) => c.item);
     if (clips.length === 0) {
-      throw new Error(`Select the clip(s) to apply [${preset.name}] to, then Alt+click it again.`);
+      throw new Error(`Select the clip(s) or Adjustment Layer(s) to apply [${preset.name}] to, then Alt+click it again.`);
     }
 
     ctl.setStatus(`Applying [${preset.name}] to ${clips.length} selected clip(s)…`, "busy");
