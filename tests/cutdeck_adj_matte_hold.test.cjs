@@ -759,14 +759,17 @@ test("frameHold: saves export frame in project CutDeck folder when project.path 
 
 const adjustmentLayer = require("../uxp/cutdeck/timeline/adjustmentLayer.js");
 
-test("adjustmentLayer: placeMediaOnTimeline uses track item caching for high-speed O(N) verification", async () => {
+for (const selectionKind of ["video", "short", "adjustment", "single adjustment"]) {
+const shortPlacement = selectionKind === "short";
+const adjustmentSelection = selectionKind.includes("adjustment");
+test(`adjustmentLayer: selection=${selectionKind} is placed and fitted exactly`, async () => {
   // Simulate 50 clips to verify performance and trackCache operation
-  const N = 50;
+  const N = selectionKind === "single adjustment" ? 1 : shortPlacement || adjustmentSelection ? 3 : 50;
   let trackClipCalls = 0;
 
   const mockClips = [];
   for (let i = 0; i < N; i++) {
-    const s = BigInt(i * 10) * TICKS_PER_SEC;
+    const s = BigInt(i * (shortPlacement ? 5 : 10)) * TICKS_PER_SEC;
     const e = s + 5n * TICKS_PER_SEC;
     mockClips.push({
       startTime: { ticks: String(s) },
@@ -776,7 +779,7 @@ test("adjustmentLayer: placeMediaOnTimeline uses track item caching for high-spe
       getTrackIndex: async () => 0,
       getIsSelected: async () => true,
       getMediaType: async () => "MediaType.VIDEO",
-      isAdjustmentLayer: async () => false,
+      isAdjustmentLayer: async () => adjustmentSelection,
       getName: async () => `Clip_${i}`,
     });
   }
@@ -828,16 +831,21 @@ test("adjustmentLayer: placeMediaOnTimeline uses track item caching for high-spe
         addAction: (act) => {
           if (act && act.type === "overwrite") {
             // Emulate placed item appearing on timeline
+            let actualEnd = BigInt(act.time.ticks) + currentDurTicks - (shortPlacement ? TPF_24FPS : 0n);
             placedALs.push({
               sTicks: BigInt(act.time.ticks),
               eTicks: BigInt(act.time.ticks) + currentDurTicks,
               startTime: act.time,
               endTime: { ticks: String(BigInt(act.time.ticks) + currentDurTicks) },
               getStartTime: async () => act.time,
-              getEndTime: async () => ({ ticks: String(BigInt(act.time.ticks) + currentDurTicks) }),
+              getEndTime: async () => ({ ticks: String(actualEnd) }),
+              getOutPoint: async () => ({ ticks: String(actualEnd - BigInt(act.time.ticks)) }),
+              createSetEndAction: () => { throw new Error("Premiere: setEnd is unsupported"); },
+              createSetOutPointAction: (out) => ({ type: "fitEnd", apply: () => { actualEnd = BigInt(act.time.ticks) + BigInt(out.ticks); } }),
               isAdjustmentLayer: async () => true,
             });
           }
+          if (act && act.type === "fitEnd") act.apply();
           return true;
         },
       });
@@ -879,11 +887,22 @@ test("adjustmentLayer: placeMediaOnTimeline uses track item caching for high-spe
   const elapsed = Date.now() - t0;
 
   assert.equal(res.placedCount, N);
+  assert.equal(res.selectedCount, N);
+  for (let i = 0; i < N; i++) {
+    assert.equal((await placedALs[i].getStartTime()).ticks, (await mockClips[i].getStartTime()).ticks);
+    assert.equal((await placedALs[i].getEndTime()).ticks, (await mockClips[i].getEndTime()).ticks);
+  }
+  if (shortPlacement) {
+    for (let i = 0; i < N; i++) {
+      assert.equal(BigInt((await placedALs[i].getEndTime()).ticks), BigInt((i + 1) * 5) * TICKS_PER_SEC);
+    }
+  }
   // Total track queries across all 50 items is a small constant (setup + lanes + 1 cache query for target track)
   // Without trackCache, verification alone would make N queries (50 calls).
   assert.ok(trackClipCalls < 10, `Expected < 10 track queries via trackCache, got ${trackClipCalls}`);
   assert.ok(elapsed < 2000, `Execution took ${elapsed} ms, should be under 2000 ms`);
 });
+}
 
 test("adjustmentLayer: 200 items placement benchmark runs in milliseconds with minimal calls", async () => {
   const N = 200;

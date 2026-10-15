@@ -234,7 +234,7 @@ async function placeMediaOnTimeline(ppro, options = {}) {
 
   // Check if user has clips selected on timeline
   mark('setup');
-  const selectedClips = await getSelectedVideoClips(ppro, seq);
+  const selectedClips = await getSelectedVideoClips(ppro, seq, { includeAdjustmentLayers: true });
   const rawClipsWithTimes = [];
   for (const sc of selectedClips) {
     try {
@@ -441,6 +441,7 @@ async function placeMediaOnTimeline(ppro, options = {}) {
     }
   }));
 
+  const shortLayers = [];
   for (let pIdx = 0; pIdx < placements.length; pIdx++) {
     const p = placements[pIdx];
     const targetTrack = targets[pIdx];
@@ -449,7 +450,10 @@ async function placeMediaOnTimeline(ppro, options = {}) {
     const itemsOnTrack = trackCache.get(targetTrack) || [];
     for (const itemData of itemsOnTrack) {
       const diff = itemData.sTicks > p.startTicks ? (itemData.sTicks - p.startTicks) : (p.startTicks - itemData.sTicks);
-      if (diff <= (tpf * 2n)) {
+      if (diff === 0n) {
+        if (itemData.eTicks !== null && itemData.eTicks < p.endTicks) {
+          shortLayers.push({ item: itemData.it, placement: p, track: targetTrack, actualEnd: itemData.eTicks });
+        }
         if (itemData.eTicks !== null && itemData.eTicks > p.endTicks + tpf) {
           lengthErr = new Error(
             `The ${layerTitle} on V${targetTrack + 1} came out longer than asked and may ` +
@@ -474,6 +478,41 @@ async function placeMediaOnTimeline(ppro, options = {}) {
     }
 
     placedCount++;
+  }
+
+  // Source-item marks can be quantized on the synthetic media's own frame grid.
+  // Correct only an observed short instance, on the sequence timeline, rather than
+  // padding every source Out mark and risking an overwrite beyond the guarded span.
+  if (shortLayers.length) {
+    // Timeline end setters are broken on supported Premiere builds. Tail edits
+    // use media-relative Out points, as in nativeCut.js; preserve the source offset.
+    for (const repair of shortLayers) {
+      const { item, placement, actualEnd } = repair;
+      if (typeof item.getOutPoint !== "function" || typeof item.createSetOutPointAction !== "function") {
+        throw new Error(`Could not fit the ${layerTitle} end on this Premiere build. Undo this placement.`);
+      }
+      const sourceOut = toTicksOr(await item.getOutPoint(), null);
+      if (sourceOut === null) throw new Error(`Could not read the ${layerTitle} source Out point. Undo this placement.`);
+      repair.sourceOut = sourceOut + placement.endTicks - actualEnd;
+    }
+    runTransaction(freshProject, `CutDeck: Fit ${layerTitle} Ends`, (compound) => {
+      for (const { item, sourceOut } of shortLayers) {
+        const action = item.createSetOutPointAction(tickTime(sourceOut));
+        if (!action || !compound.addAction(action)) throw new Error(`Could not fit the ${layerTitle} end. Undo this placement.`);
+      }
+    });
+    // A successful transaction alone is insufficient: insist on the exact boundaries.
+    for (const { placement, track } of shortLayers) {
+      const trackObj = await seqAfter.getVideoTrack(track);
+      const items = await getTrackClipItemsOrThrow(trackObj, ppro);
+      let fitted = false;
+      for (const item of items) {
+        const start = toTicksOr(typeof item.getStartTime === "function" ? await item.getStartTime() : item.startTime, null);
+        const end = toTicksOr(typeof item.getEndTime === "function" ? await item.getEndTime() : item.endTime, null);
+        if (start === placement.startTicks && end === placement.endTicks) { fitted = true; break; }
+      }
+      if (!fitted) throw new Error(`The ${layerTitle} on V${track + 1} still does not match the selected clip after fitting. Undo this placement.`);
+    }
   }
 
   // Release cache map to reclaim memory immediately
