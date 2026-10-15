@@ -31,14 +31,6 @@ function assignPlacementLanes(placements) {
   return laneOf;
 }
 
-// Project-item Out marks in Premiere are inclusive, while timeline clip ends are
-// exclusive.  To overwrite exactly `durationTicks`, put the Out mark on the frame
-// immediately after that duration; using the duration itself makes the resulting
-// instance one frame short and exposes a gap before the next per-clip layer.
-function sourceOutPointForDuration(durationTicks, ticksPerFrame) {
-  return BigInt(durationTicks) + BigInt(ticksPerFrame);
-}
-
 // Cover every selected clip's own span, any track — not just V1 (confirmed
 // 2026-09-21: the user wants AL over a region where only V2/V3 have a selected
 // clip and V1 has nothing there too).
@@ -233,7 +225,6 @@ function planPlacements({
 
 module.exports = {
   assignPlacementLanes,
-  sourceOutPointForDuration,
   resolveTopLayer,
   planPlacements,
 };

@@ -5,20 +5,10 @@ const {
   resolveTopLayer,
   planPlacements,
   assignPlacementLanes,
-  sourceOutPointForDuration,
 } = require("../uxp/cutdeck/timeline/alPlacement.js");
 
 
 const TPF_24FPS = 10594584000n; // 1 frame in ticks at 24fps
-
-test("source Out point includes the last frame so adjacent per-clip layers do not leave a gap", () => {
-  const twoFrames = 2n * TPF_24FPS;
-
-  // Premiere's project-item Out mark is inclusive.  An Out mark at 2 frames therefore
-  // yields only [0, 1 frame] on overwrite; it must sit one frame beyond the desired
-  // exclusive timeline end to produce a full two-frame instance.
-  assert.equal(sourceOutPointForDuration(twoFrames, TPF_24FPS), 3n * TPF_24FPS);
-});
 
 test("resolveTopLayer: single clip returns its full span", () => {
   const clips = [{ track: 0, startTicks: 1000n, endTicks: 5000n }];
