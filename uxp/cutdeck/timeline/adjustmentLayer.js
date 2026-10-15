@@ -12,6 +12,7 @@ const {
 } = require("../host/trackItems.js");
 const {
   assignPlacementLanes,
+  sourceOutPointForDuration,
   resolveTopLayer,
   planPlacements,
 } = require("./alPlacement.js");
@@ -386,7 +387,8 @@ async function placeMediaOnTimeline(ppro, options = {}) {
         throw new Error(`the ${layerTitle} item has no In/Out call`);
       }
       runTransaction(freshProject, `CutDeck: Set ${layerTitle} Length`, (compound) => {
-        const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(durTicks));
+        const sourceOut = sourceOutPointForDuration(durTicks, tpf);
+        const inOut = clipItem.createSetInOutPointsAction(tickTime(0n), tickTime(sourceOut));
         if (!inOut || !compound.addAction(inOut)) throw new Error("In/Out action was rejected");
         if (colorPending && typeof clipItem.createSetColorLabelAction === "function") {
           const colorAction = clipItem.createSetColorLabelAction(getLabelIndex(options.color));
