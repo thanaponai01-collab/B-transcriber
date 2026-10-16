@@ -41,6 +41,7 @@ function effectControlsExtras(transform) {
     cropRight: describeField(t.cropRight, false),
     cropBottom: describeField(t.cropBottom, false),
     opacity: describeField(t.opacity, false),
+    blendMode: describeField(t.blendMode, false),
   };
   if (extras.uniformScale.value !== false && extras.scaleWidth.known) extras.scaleWidth.locked = true;
   return extras;
@@ -720,6 +721,7 @@ const EDIT_FIELDS = {
   "crop-right": { param: "cropRight", min: 0, max: 100 },
   "crop-bottom": { param: "cropBottom", min: 0, max: 100 },
   opacity: { param: "opacity", min: 0, max: 100 },
+  "blend-mode": { param: "blendMode", min: 0, max: 31, whole: true },
 };
 
 // The params a text-only Graphic takes from its text layer; every other field is the clip's own.
@@ -749,7 +751,8 @@ function parseFieldValue(spec, text) {
   if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
   const min = spec.min === undefined ? -Infinity : spec.min;
   const max = spec.max === undefined ? Infinity : spec.max;
-  return Math.min(max, Math.max(min, number));
+  const clamped = Math.min(max, Math.max(min, number));
+  return spec.whole ? Math.round(clamped) : clamped;
 }
 
 // Sets the typed value on EVERY selected clip (Effect Controls can only do one at a time). A
@@ -951,6 +954,7 @@ const RESET_FIELDS = {
   "crop-right": { param: "cropRight", label: "Crop Right", motion: 0 },
   "crop-bottom": { param: "cropBottom", label: "Crop Bottom", motion: 0 },
   opacity: { param: "opacity", label: "Opacity", motion: 100 },
+  "blend-mode": { param: "blendMode", label: "Blend Mode", motion: 0 },
 };
 
 // Resets one row on every selected clip (both axes of a point together) in ONE transaction, so

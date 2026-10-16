@@ -8,6 +8,7 @@ clip's drawn pixels in sequence coordinates, whatever sits under or over it.
 Proven live 2026-09-24 on a text Graphic: the difference was the text alone, 418 x 87 px.
 """
 
+import time
 from pathlib import Path
 
 from PIL import Image, ImageChops
@@ -22,11 +23,24 @@ STRONG = 16
 MARGIN = 8
 
 
+def _open_image(path: str, wait_s: float = 5.0):
+    """Image.open, retried while Premiere still holds the PNG it just exported: the panel sees the
+    file stop growing, but Windows refuses to open it (Errno 13) until Premiere lets go."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            return Image.open(path)
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+
+
 def drawn_bounds(on_path: str, off_path: str | None = None) -> dict | None:
     """Box of the pixels that differ between the two frames, or non-empty pixels in a single frame,
     as sequence pixels ``{left, top, right, bottom}`` (right/bottom exclusive), or None when nothing differs."""
     if off_path is not None:
-        with Image.open(on_path) as on_image, Image.open(off_path) as off_image:
+        with _open_image(on_path) as on_image, _open_image(off_path) as off_image:
             # Premultiplied ("RGBa"): a fully transparent pixel is (0,0,0,0) whatever colour it
             # carries, so invisible leftovers don't count (live frames: 1 px too wide without it).
             on = on_image.convert("RGBA").convert("RGBa")
@@ -42,7 +56,7 @@ def drawn_bounds(on_path: str, off_path: str | None = None) -> dict | None:
             strongest = ImageChops.lighter(strongest, channel)
         del channels, diff
     else:
-        with Image.open(on_path) as on_image:
+        with _open_image(on_path) as on_image:
             on = on_image.convert("RGBA").convert("RGBa")
         channels = on.split()
         strongest = channels[0]

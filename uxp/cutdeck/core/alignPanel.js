@@ -125,7 +125,7 @@
   }
 
   // Effect Controls' Motion rows in its order, then Opacity. Uniform Scale is a checkbox
-  // (renderUniformScale); Blend Mode is not shown because it is not readable yet.
+  // (renderUniformScale); Blend Mode is a menu (renderBlendMode).
   const INPUTS = [
     ["align-position-x", "position", "x"],
     ["align-position-y", "position", "y"],
@@ -154,6 +154,17 @@
     }
     setText($("align-scale-label"), on || textLayerRows ? "Scale" : "Scale Height");
     setText($("align-scale-width-label"), textLayerRows ? "Horizontal Scale" : "Scale Width");
+  }
+
+  // Blend Mode is a menu of Premiere's own modes; an unlisted value shows blank, never a guess.
+  function renderBlendMode(field, busy) {
+    const el = $("align-blend-mode");
+    if (!el) return;
+    const known = !!(field && field.known && !field.animated);
+    const disabled = !known || !!busy;
+    if (el.disabled !== disabled) el.disabled = disabled;
+    const wanted = known ? String(field.value) : "";
+    if (document.activeElement !== el && el.value !== wanted) el.value = wanted;
   }
 
   // --- mount: move this panel's container into the root Premiere made for it ---------------

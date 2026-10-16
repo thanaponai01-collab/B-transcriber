@@ -129,7 +129,8 @@ function motionClip(name, o = {}) {
   const motion = { getMatchName: () => Promise.resolve("AE.ADBE Motion"), getParam: (i) => params[i] || null };
   // Opacity sits at chain index 0 on every clip, its param [0] the percent (PREMIERE_FACTS
   // "Component chain layout").
-  const opacityParams = [motionParam(o.opacity === undefined ? 100 : o.opacity)];
+  // [1] and [2] are both "Blend Mode" (Normal read 18 and 0 live); only [2] is the mode.
+  const opacityParams = [motionParam(o.opacity === undefined ? 100 : o.opacity), motionParam(18), motionParam(0)];
   const opacity = { getMatchName: () => Promise.resolve("AE.ADBE Opacity"), getParam: (i) => opacityParams[i] || null };
   // A Graphic's layers: Vector Motion (Motion's first six params) and one Text component per
   // o.texts entry, its Position at param [2] (Check Transform on a Graphic, 2026-09-24).
@@ -1244,4 +1245,18 @@ test("a Motion change made outside CutDeck re-measures the text instead of using
   clearSnapshotCache();
   await alignToFrame(ppro, "left", measure);
   assert.equal(measures, 3, "text Anchor Point changed: measured again");
+});
+
+test("setField writes Blend Mode to Opacity param [2] only, resets it to Normal, and rounds a typed value", async () => {
+  const a = motionClip("A");
+  const { ppro, undoSteps } = host([a]);
+  assert.equal((await readAlignTransform(null, ppro)).fields.blendMode.value, 0);
+  await setField(ppro, "blend-mode", "10");
+  assert.equal(a.opacityParams[2].value, 10);
+  assert.equal(a.opacityParams[1].value, 18, "param [1] is never written");
+  await setField(ppro, "blend-mode", "4.4");
+  assert.equal(a.opacityParams[2].value, 4);
+  await resetField(ppro, "blend-mode");
+  assert.equal(a.opacityParams[2].value, 0);
+  assert.equal(undoSteps.length, 3);
 });

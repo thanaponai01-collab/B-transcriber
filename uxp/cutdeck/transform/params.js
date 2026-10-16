@@ -93,7 +93,9 @@ function clearComponentCache(item = null) {
 // (PREMIERE_FACTS "Component chain layout" and the saved-.prproj row: "Opacity [0] is percent").
 // Blend Mode is not read: its param index and numeric encoding are unproven.
 const OPACITY_MATCH_NAME = "AE.ADBE Opacity";
-const OPACITY_PARAM_INDEX = { opacity: 0 };
+// Opacity has two params both named "Blend Mode" ([1] and [2]); [2] is the mode as a menu index
+// (PREMIERE_FACTS "Opacity component params"; the menu list is in index.html). [1] also moves with the mode and is never written.
+const OPACITY_PARAM_INDEX = { opacity: 0, blendMode: 2 };
 
 async function findComponent(item, matchName) {
   const comps = await inspectComponents(item);
@@ -153,7 +155,7 @@ async function readTransform(item) {
   const component = await findMotionComponent(item);
   if (!component) return null;
   const opacityComponent = await findOpacityComponent(item);
-  const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity] =
+  const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity, blendMode] =
     await Promise.all([
       readParamField(component, PARAM_INDEX.position),
       readParamField(component, PARAM_INDEX.scale),
@@ -167,8 +169,9 @@ async function readTransform(item) {
       readParamField(component, PARAM_INDEX.cropRight),
       readParamField(component, PARAM_INDEX.cropBottom),
       readParamField(opacityComponent, OPACITY_PARAM_INDEX.opacity),
+      readParamField(opacityComponent, OPACITY_PARAM_INDEX.blendMode),
     ]);
-  return { position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity };
+  return { position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity, blendMode };
 }
 
 // The sequence's own frame size, read the same dual-route way capabilityProbe.js and

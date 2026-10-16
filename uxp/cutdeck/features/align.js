@@ -70,7 +70,7 @@ const FIELD_STATE = {
   "anchor-x": ["anchor", "x"], "anchor-y": ["anchor", "y"],
   scale: ["scale", "value"], rotation: ["rotation", "value"],
   "scale-width": ["scaleWidth", "value"], "uniform-scale": ["uniformScale", "value"],
-  "anti-flicker": ["antiFlicker", "value"], opacity: ["opacity", "value"],
+  "anti-flicker": ["antiFlicker", "value"], opacity: ["opacity", "value"], "blend-mode": ["blendMode", "value"],
   "crop-left": ["cropLeft", "value"], "crop-top": ["cropTop", "value"],
   "crop-right": ["cropRight", "value"], "crop-bottom": ["cropBottom", "value"],
 };

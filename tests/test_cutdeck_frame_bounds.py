@@ -102,3 +102,19 @@ def test_single_frame_request_dispatch(tmp_path):
     assert not single_path.exists()
     assert (tmp_path / "cutdeck-bounds-last-on.png").exists()
 
+
+
+def test_a_frame_premiere_still_holds_open_is_retried(tmp_path, monkeypatch):
+    on, off = _frames(tmp_path)
+    real_open, refusals = Image.open, []
+
+    def busy_open(path, *args, **kwargs):
+        if len(refusals) < 3:
+            refusals.append(path)
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(frame_bounds.Image, "open", busy_open)
+    monkeypatch.setattr(frame_bounds.time, "sleep", lambda s: None)
+    assert frame_bounds.drawn_bounds(on, off) == {"left": 11, "top": 904, "right": 429, "bottom": 991}
+    assert len(refusals) == 3

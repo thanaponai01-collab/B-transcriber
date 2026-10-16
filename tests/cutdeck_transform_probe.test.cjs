@@ -95,6 +95,10 @@ const oneFinding = (report, id) => {
   return hits[0];
 };
 
+// The default chain holds Opacity and Motion, and both are dumped.
+const motionParamsFinding = (report) =>
+  findingById(report, "transformParams").find((f) => f.evidence.matchName === "AE.ADBE Motion");
+
 // --- question 1: real match names and param indices ---------------------------------------
 
 test("probe reports every component by index with its match name", async () => {
@@ -109,7 +113,7 @@ test("probe reports every component by index with its match name", async () => {
 
 test("probe finds the Motion component and reports its params BY INDEX", async () => {
   const report = await capability.probeTransformParams(makeHost());
-  const params = oneFinding(report, "transformParams").evidence;
+  const params = motionParamsFinding(report).evidence;
   assert.equal(params.matchName, "AE.ADBE Motion");
   assert.equal(params.componentIndex, 1);
   assert.deepEqual(params.params.map((p) => [p.index, p.name]), [
@@ -121,7 +125,7 @@ test("probe finds the Motion component and reports its params BY INDEX", async (
 
 test("probe records the RAW wrapper shape, not just the unwrapped value", async () => {
   const report = await capability.probeTransformParams(makeHost());
-  const params = oneFinding(report, "transformParams").evidence.params;
+  const params = motionParamsFinding(report).evidence.params;
 
   const position = params[0];
   assert.equal(position.rawJson, '{"value":{"x":960,"y":540}}');
@@ -139,7 +143,7 @@ test("probe records the RAW wrapper shape, not just the unwrapped value", async 
 
 test("probe reports isTimeVarying per param so animated clips can be skipped, not flattened", async () => {
   const report = await capability.probeTransformParams(makeHost());
-  const params = oneFinding(report, "transformParams").evidence.params;
+  const params = motionParamsFinding(report).evidence.params;
   assert.equal(params[0].isTimeVarying, false);
   assert.equal(params[3].isTimeVarying, true);
 });
@@ -243,7 +247,7 @@ test("a host call that THROWS is recorded, and the probe keeps going", async () 
   assert.equal(report.complete, true, "one broken geometry call must not abort the probe");
   // The other route still answered, so the probe still has a frame size to report.
   assert.equal(oneFinding(report, "sequenceGeometry").answer, "1920x1080");
-  assert.equal(findingById(report, "transformParams").length, 1, "params were still read");
+  assert.equal(findingById(report, "transformParams").length, 2, "params were still read");
 });
 
 test("one param whose getStartValue rejects does not lose the other params", async () => {
@@ -278,12 +282,29 @@ test("a clip with no Motion or Transform component is reported as such", async (
     item: {
       getComponentChain: () => Promise.resolve({
         getComponentCount: () => 1,
-        getComponentAtIndex: () => component("Opacity", "AE.ADBE Opacity", []),
+        getComponentAtIndex: () => component("Lumetri Color", "AE.ADBE Lumetri", []),
       }),
     },
   });
   const report = await capability.probeTransformParams(host);
   assert.equal(oneFinding(report, "transform").answer, "not found");
+});
+
+test("Opacity params are dumped by index, with keyframe support, so Blend Mode can be found", async () => {
+  const blend = param("Blend Mode", 0);
+  blend.areKeyframesSupported = () => Promise.resolve(false);
+  const host = makeHost({
+    item: {
+      getComponentChain: () => Promise.resolve({
+        getComponentCount: () => 1,
+        getComponentAtIndex: () => component("Opacity", "AE.ADBE Opacity", [param("Opacity", 100), blend]),
+      }),
+    },
+  });
+  const report = await capability.probeTransformParams(host);
+  const params = oneFinding(report, "transformParams").evidence.params;
+  assert.equal(params[1].name, "Blend Mode");
+  assert.equal(params[1].keyframesSupported, false);
 });
 
 // --- the formatter extraction was behavior-preserving -------------------------------------

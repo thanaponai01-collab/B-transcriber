@@ -468,6 +468,10 @@ function formatEffectChainReport(report) {
    does NOT, a clip with non-square pixels, an Adjustment Layer, and a graphic. */
 const TRANSFORM_COMPONENT_HINTS = ["motion", "transform"];
 const GRAPHIC_TEXT_MATCH_NAME = "AE.ADBE Text";
+// Opacity is dumped too: its param list is where Effect Controls' Blend Mode lives, and that
+// param's index and value encoding are unproven (PREMIERE_FACTS). Run it on a clip set to
+// Multiply, then again on Normal, and diff the two dumps.
+const OPACITY_MATCH_NAME = "AE.ADBE Opacity";
 
 function looksLikeTransformComponent(displayName, matchName) {
   const haystack = `${displayName || ""} ${matchName || ""}`.toLowerCase();
@@ -682,7 +686,7 @@ async function probeTransformParams(ppro) {
       allComponents.push({ index: i, displayName, matchName });
       // A Graphic's Text layer (AE.ADBE Text) is read too: whether its params carry the text's
       // own position/size is the open question for aligning text, not the whole canvas.
-      if (looksLikeTransformComponent(displayName, matchName) || matchName === GRAPHIC_TEXT_MATCH_NAME) {
+      if (looksLikeTransformComponent(displayName, matchName) || matchName === GRAPHIC_TEXT_MATCH_NAME || matchName === OPACITY_MATCH_NAME) {
         transformComponents.push({ index: i, displayName, matchName, component });
       }
     }
@@ -723,8 +727,11 @@ async function probeTransformParams(ppro) {
           ? await attempt("getStartValue", () => param.getStartValue())
           : { ok: false, error: "no getStartValue on this param" };
 
+        const keyframesRead = await attempt("areKeyframesSupported", () =>
+          (typeof param.areKeyframesSupported === "function" ? param.areKeyframesSupported() : null));
         const entry = Object.assign(
-          { index: p, name, isTimeVarying: timeVaryingRead.ok ? timeVaryingRead.value : `error: ${timeVaryingRead.error}` },
+          { index: p, name, isTimeVarying: timeVaryingRead.ok ? timeVaryingRead.value : `error: ${timeVaryingRead.error}`,
+            keyframesSupported: keyframesRead.ok ? keyframesRead.value : `error: ${keyframesRead.error}` },
           startRead.ok ? describeParamValue(startRead.value) : { present: false, error: startRead.error }
         );
         // getStartValue() resolves EMPTY (no error) on a Graphic's Source Text, which holds the
