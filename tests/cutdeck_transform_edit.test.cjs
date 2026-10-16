@@ -1153,3 +1153,95 @@ test("align as group moves the selection's outer box to the frame edge, keeping 
   close(b.params[0].value[1], 0.3, "y untouched");
   assert.deepEqual(undoSteps, ["CutDeck: Align left as group"]);
 });
+
+// --- Reset: Effect Controls' per-row reset arrow ----------------------------------------------
+
+const { resetField } = require("../uxp/cutdeck/transform/edit.js");
+const { clearSnapshotCache } = require("../uxp/cutdeck/transform/snapshot.js");
+const { clearBoundsCache } = require("../uxp/cutdeck/transform/frameBounds.js");
+
+test("resetField puts a point back on both axes, on every selected clip, in one undo step", async () => {
+  const a = motionClip("A", { position: [0.1, 0.9], anchor: [0, 1] });
+  const b = motionClip("B", { position: [0.7, 0.2], anchor: [0.25, 0.25], source: "3840 x 2160 (1.0)" });
+  const { ppro, undoSteps } = host([a, b]);
+  assert.deepEqual(await resetField(ppro, "position"), { done: 2, skipped: [] });
+  assert.deepEqual(a.params[0].value, [0.5, 0.5]);
+  assert.deepEqual(b.params[0].value, [0.5, 0.5]);
+  await resetField(ppro, "anchor");
+  assert.deepEqual(a.params[5].value, [0.5, 0.5], "anchor to the source centre");
+  assert.deepEqual(b.params[5].value, [0.5, 0.5]);
+  assert.deepEqual(undoSteps, ["CutDeck: Reset Position", "CutDeck: Reset Anchor Point"]);
+});
+
+test("resetField restores each Effect Controls default and skips a keyframed value", async () => {
+  const a = motionClip("A", { scale: 40, scaleWidth: 70, uniform: false, rotation: 33, crop: [5, 6, 7, 8], antiFlicker: 0.5, opacity: 20 });
+  const k = motionClip("K", { keyframedPosition: true });
+  const { ppro } = host([a, k]);
+  for (const row of ["scale", "scale-width", "uniform-scale", "rotation", "anti-flicker", "crop-left", "crop-bottom", "opacity"]) {
+    await resetField(ppro, row);
+  }
+  assert.equal(a.params[1].value, 100);
+  assert.equal(a.params[2].value, 100);
+  assert.equal(a.params[3].value, true);
+  assert.equal(a.params[4].value, 0);
+  assert.equal(a.params[6].value, 0);
+  assert.equal(a.params[7].value, 0);
+  assert.equal(a.params[10].value, 0);
+  assert.equal(a.params[8].value, 6, "Crop Top not asked for, kept");
+  assert.equal(a.opacityParams[0].value, 100);
+  const kept = await resetField(ppro, "position");
+  assert.deepEqual(kept.skipped, ['"K" has this value keyframed.']);
+  assert.deepEqual(k.params[0].value, [0.5, 0.5]);
+  await assert.rejects(resetField(ppro, "nope"), /Unknown field/);
+});
+
+test("resetField on a text Graphic resets the text layer's own value; its Position is refused", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true, scale: 88 }, LIVE_TEXT));
+  const { ppro, undoSteps } = host([g]);
+  await resetField(ppro, "anchor");
+  assert.deepEqual(g.textAnchors[0].value, [0, 0], "text Anchor Point to [0,0]");
+  assert.deepEqual(g.params[5].value, [0.5, 0.5], "Motion anchor untouched");
+  g.textScales[0].value = 140;
+  await resetField(ppro, "scale");
+  assert.equal(g.textScales[0].value, 100);
+  assert.equal(g.params[1].value, 88, "Motion Scale untouched");
+  const refused = await resetField(ppro, "position");
+  assert.equal(refused.done, 0);
+  assert.match(refused.skipped[0], /no fixed default/);
+  assert.deepEqual(undoSteps, ["CutDeck: Reset Anchor Point", "CutDeck: Reset Scale"]);
+});
+
+test("a text Graphic's Horizontal Scale and Uniform rows write its text layer", async () => {
+  const g = motionClip("Graphic", Object.assign({ graphic: true, scaleWidth: 81 }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  const view = await readAlignTransform(await ppro.Project.getActiveProject().then((p) => p.getActiveSequence()), ppro);
+  assert.equal(view.layer, "text");
+  assert.equal(view.fields.scaleWidth.value, 100, "the text's Horizontal Scale, not Motion's 81");
+  await setField(ppro, "uniform-scale", "off");
+  await setField(ppro, "scale-width", "120");
+  const tp = (await g.getComponentChain()).getComponentAtIndex(3);
+  assert.equal(tp.getParam(5).value, false);
+  assert.equal(tp.getParam(4).value, 120);
+  assert.equal(g.params[2].value, 81, "Motion Scale Width untouched");
+});
+
+// --- The cached text box follows every value that moves the text ------------------------------
+
+test("a Motion change made outside CutDeck re-measures the text instead of using a stale box", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", Object.assign({ graphic: true }, LIVE_TEXT));
+  const { ppro } = host([g]);
+  let measures = 0;
+  const measure = async () => { measures += 1; return TEXT_BOX; };
+  await setAnchor(ppro, "top-left", measure);
+  await setAnchor(ppro, "center", measure);
+  assert.equal(measures, 1, "CutDeck's own anchor move keeps the box: no second measure");
+  g.params[1].value = 88; // Effect Controls: Motion Scale 88
+  clearSnapshotCache();
+  await setAnchor(ppro, "center", measure);
+  assert.equal(measures, 2, "Motion Scale changed: measured again");
+  g.textAnchors[0].value = [0.05, -0.06]; // Effect Controls: text Anchor Point
+  clearSnapshotCache();
+  await alignToFrame(ppro, "left", measure);
+  assert.equal(measures, 3, "text Anchor Point changed: measured again");
+});

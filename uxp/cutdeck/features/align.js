@@ -6,7 +6,7 @@ const frameBounds = require("../transform/frameBounds.js");
 const { activeProjectAndSequence } = require("../host/project.js");
 const {
   describeField, readAlignTransform, readAlignState, clipModel, editLevel, editSummary,
-  setField, setAnchor, alignToFrame, alignToFrameAsGroup, alignToSelection, distribute, parseFieldValue, EDIT_FIELDS,
+  setField, resetField, setAnchor, alignToFrame, alignToFrameAsGroup, alignToSelection, distribute, parseFieldValue, EDIT_FIELDS,
 } = require("../transform/edit.js");
 const { PROBES, runProbe, createProbesFeature } = require("./probes.js");
 
@@ -282,6 +282,14 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
         () => setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget }),
         (st) => showTypedValue(st, field, text),
         (res) => editSummary(`Set ${field}`, res),
+        (res) => editLevel(res),
+      );
+    },
+    onResetField: (row) => {
+      return executeWithOptimisticConfirm(
+        () => resetField(ppro, row, { layerTarget: ctl.state.activeLayerTarget }),
+        null,
+        (res) => editSummary(`Reset ${row}`, res),
         (res) => editLevel(res),
       );
     },

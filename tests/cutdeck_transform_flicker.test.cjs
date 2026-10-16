@@ -73,13 +73,19 @@ test("measureDrawnBounds isolates via track muting without disabling clip on tim
   assert.equal(track0Muted, false, "Track 0 must be restored to unmuted");
 });
 
-test("getCachedBounds retains cached bounds across floating point precision variations", () => {
+test("cached bounds hold only while the transform signature is unchanged", () => {
+  const { updateCachedBounds } = require("../uxp/cutdeck/transform/frameBounds.js");
   const item = {};
-  setCachedBounds(item, { left: 10, top: 20, right: 100, bottom: 200 }, 100, 0, "0:100", { x: 0.27910, y: 0.50000 });
+  setCachedBounds(item, { left: 10, top: 20, right: 100, bottom: 200 }, "0:100", "sig-a");
+  assert.deepEqual(getCachedBounds(item, "0:100", "sig-a"), { left: 10, top: 20, right: 100, bottom: 200 });
 
-  // Floating point precision difference of 0.0002 (~0.3px in 1080p) between written and readback
-  const cached = getCachedBounds(item, 100, 0, "0:100", { x: 0.27930, y: 0.50000 });
-  assert.notEqual(cached, null, "Bounds cache should hit even with minor subpixel precision difference");
+  // CutDeck's own move: shifted box, new values adopted.
+  updateCachedBounds(item, 5, -2, "0:100", "sig-b");
+  assert.deepEqual(getCachedBounds({}, "0:100", "sig-b"), { left: 15, top: 18, right: 105, bottom: 198 });
+
+  // Anything else changed a value (Effect Controls, Motion Scale...): measure again.
+  assert.equal(getCachedBounds(item, "0:100", "sig-c"), null);
+  assert.equal(getCachedBounds(item, "0:100", "sig-b"), null, "a stale entry is dropped, not kept");
 });
 
 test("readAlignTransform inspects component chain only once per item", async () => {

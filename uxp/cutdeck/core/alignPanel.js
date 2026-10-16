@@ -41,9 +41,13 @@
   // Shown the way Effect Controls shows them, digit for digit: one fixed decimal (Part 1a's live
   // probe: "-510.8, 44.9"; a whole value reads "100.0"), Anti-flicker two ("0.00"), and Rotation
   // past a full turn as turns x degrees ("1x10.0" = 370°). transform/edit.js parses that form back.
+  // A text layer's Scale and Horizontal Scale read as whole numbers in Effect Controls ("100",
+  // live 2026-10-16), so they are shown that way while the rows are a text layer's.
   const DECIMALS = { "anti-flicker": 2 };
+  const TEXT_DECIMALS = { scale: 0, "scale-width": 0 };
+  let textLayerRows = false;
   function formatNum(n, field) {
-    const digits = DECIMALS[field] || 1;
+    const digits = textLayerRows && field in TEXT_DECIMALS ? TEXT_DECIMALS[field] : (DECIMALS[field] || 1);
     const fixed = (Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits)).toFixed(digits);
     return fixed === "-0.0" || fixed === "-0.00" ? fixed.slice(1) : fixed;
   }
@@ -138,7 +142,8 @@
     ["align-opacity", "opacity", "value"],
   ];
 
-  // Uniform Scale on: one Scale. Off: Effect Controls relabels it Scale Height beside Scale Width.
+  // Uniform Scale on: one Scale. Off: Effect Controls relabels Motion's Scale to Scale Height
+  // beside Scale Width. A text layer's Transform calls its width row Horizontal Scale.
   function renderUniformScale(field, busy) {
     const box = $("align-uniform-scale");
     const known = !!(field && field.known && !field.animated);
@@ -147,7 +152,8 @@
       if (box.checked !== on) box.checked = on;
       if (box.disabled !== (!known || !!busy)) box.disabled = !known || !!busy;
     }
-    setText($("align-scale-label"), on ? "Scale" : "Scale Height");
+    setText($("align-scale-label"), on || textLayerRows ? "Scale" : "Scale Height");
+    setText($("align-scale-width-label"), textLayerRows ? "Horizontal Scale" : "Scale Width");
   }
 
   // --- mount: move this panel's container into the root Premiere made for it ---------------
@@ -266,6 +272,7 @@
     if (transform) line = available ? (transform.clipName || "") : (transform.reason || "Unavailable.");
     setText($("align-transform-clip"), line);
     const fields = available ? (transform.fields || {}) : {};
+    textLayerRows = available && transform.layer === "text";
     for (const [id, name, key] of INPUTS) renderInput(id, fields[name], key, busy);
     renderUniformScale(available ? fields.uniformScale : null, busy);
     renderTextLayerSwitcher(transform && transform.textLayers, transform ? transform.activeLayerTarget : 0);
@@ -285,6 +292,22 @@
     const needPlayhead = !!(state.transform && state.transform.needPlayheadOver);
     const tooltip = state.transform ? state.transform.tooltip : null;
     renderBusy(busyVis, hasClip, needPlayhead, tooltip);
+    renderTextPositionReset(textLayerRows);
+  }
+
+  // A text layer's Position has no fixed default (transform/edit.js RESET_FIELDS), so its reset
+  // is off while the rows are a text layer's.
+  function renderTextPositionReset(text) {
+    const el = container();
+    const node = el && typeof el.querySelector === "function" ? el.querySelector('[data-reset="position"]') : null;
+    if (!node) return;
+    if (!text) {
+      if (typeof node.setAttribute === "function") node.setAttribute("title", "Reset Position");
+      return;
+    }
+    if (!node.disabled) node.disabled = true;
+    if (node.classList) node.classList.toggle("disabled", true);
+    if (typeof node.setAttribute === "function") node.setAttribute("title", "A text layer's Position has no fixed default");
   }
 
   // --- bind: listeners once, intents out ---------------------------------------------------
@@ -297,10 +320,6 @@
     const refresh = $("align-refresh");
     if (refresh) refresh.addEventListener("click", () => intents.onRefresh());
 
-    const scaleReset = $("align-scale-reset");
-    if (scaleReset) scaleReset.addEventListener("click", () => intents.onSetField("scale", "100"));
-    const rotReset = $("align-rotation-reset");
-    if (rotReset) rotReset.addEventListener("click", () => intents.onSetField("rotation", "0"));
     const uniform = $("align-uniform-scale");
     if (uniform) uniform.addEventListener("change", (e) => intents.onSetField("uniform-scale", e.target.checked ? "on" : "off"));
 
@@ -451,6 +470,12 @@
       el.addEventListener("pointerenter", triggerPoll);
       el.addEventListener("focusin", triggerPoll);
     }
+    // Each row's reset arrow, as in Effect Controls: one value back to its default, one Ctrl+Z.
+    el.querySelectorAll("[data-reset]").forEach((node) => {
+      node.addEventListener("click", () => {
+        if (!node.disabled) intents.onResetField(node.getAttribute("data-reset"));
+      });
+    });
     el.querySelectorAll("[data-anchor]").forEach((node) => {
       node.addEventListener("click", () => {
         el.querySelectorAll("[data-anchor]").forEach((c) => c.classList.remove("active"));

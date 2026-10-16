@@ -50,6 +50,66 @@ function textTarget(layers) {
   return Boolean(layers && layers.onlyText && layers.texts && layers.texts.length > 0);
 }
 
+// A text-only Graphic's rows come from its text layer's Transform, the group Effect Controls
+// shows under Text > Transform (live 2026-10-16: Position 494.9, 852.0 · Scale 100 · Horizontal
+// Scale 100 greyed · Uniform Scale · Rotation 0.0 · Anchor Point 112.1, -68.5). Every other row
+// (Anti-flicker, Crop, Opacity) is the clip's own Motion/Opacity, as in Effect Controls' Video
+// section.
+function textFields(text, frameSize, anchorFrame, transform) {
+  const fields = {
+    position: describeField(text.position, true, frameSize),
+    scale: describeField(text.scale, false),
+    rotation: describeField(text.rotation, false),
+    anchor: describeField(text.anchorPoint, true, anchorFrame),
+    ...effectControlsExtras(transform),
+    uniformScale: describeField(text.uniformScale, false),
+    scaleWidth: describeField(text.horizontalScale, false),
+  };
+  if (fields.uniformScale.value !== false && fields.scaleWidth.known) fields.scaleWidth.locked = true;
+  return fields;
+}
+
+// Every value that moves where a clip is drawn: Motion, Vector Motion and each text layer. A
+// cached text box (transform/frameBounds.js) is good only while this string is unchanged, so a
+// change made in Effect Controls (Motion Scale, a text Anchor Point...) re-measures the text.
+const SIGNATURE_MOTION = ["position", "anchorPoint", "scale", "scaleWidth", "uniformScale", "rotation",
+  "cropLeft", "cropTop", "cropRight", "cropBottom"];
+const SIGNATURE_LAYER = ["position", "anchorPoint", "scale", "scaleWidth", "horizontalScale", "uniformScale", "rotation"];
+function boundsSignature(clip) {
+  const pick = (entry) => {
+    if (!entry) return null;
+    if (entry.isTimeVarying) return "animated";
+    const point = transformGeometry.pointXY(entry.value);
+    if (point) return [point.x, point.y];
+    return entry.value === undefined ? null : entry.value;
+  };
+  const values = (source, names) => (source ? names.map((n) => pick(source[n])) : null);
+  const layers = clip.layers || {};
+  return JSON.stringify([
+    values(clip.transform, SIGNATURE_MOTION),
+    values(layers.vectorMotion, SIGNATURE_LAYER),
+    (layers.texts || []).map((t) => values(t, SIGNATURE_LAYER)),
+  ]);
+}
+
+function targetTexts(layers, layerTarget) {
+  if (layerTarget === "all") return layers.texts.slice();
+  const i = typeof layerTarget === "number" && layerTarget >= 0 && layerTarget < layers.texts.length ? layerTarget : 0;
+  return [layers.texts[i]];
+}
+
+// After CutDeck's own write: re-read the clips and carry each cached text box along (moved by
+// dx, dy) under its new signature. `updates` = [{ item, key, dx, dy }].
+async function shiftCachedBounds(ppro, seq, updates) {
+  if (!updates.length) return;
+  const fresh = await readSnapshot(ppro, { seq, forceRefresh: true });
+  for (const u of updates) {
+    const now = fresh.clips.find((c) => c.key === u.key);
+    if (now) frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, boundsSignature(now));
+    else frameBounds.invalidateBounds(u.item, u.key);
+  }
+}
+
 async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
   const layerTarget = options && options.layerTarget !== undefined ? options.layerTarget : 0;
   let snap;
@@ -85,12 +145,7 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
 
   // B4: Check if unmeasured Graphic text has playhead outside clip
   if (primaryClip.isGraphic && textTarget(primaryClip.layers)) {
-    const isTextGraphic = true;
-    const primaryText = primaryClip.layers.texts[0];
-    const textScale = staticValue(primaryText.scale) || 100;
-    const textRot = staticValue(primaryText.rotation) || 0;
-    const textPos = transformGeometry.pointXY(staticValue(primaryText.position));
-    const cached = frameBounds.getCachedBounds(primaryClip.item, textScale, textRot, primaryClip.key, textPos);
+    const cached = frameBounds.getCachedBounds(primaryClip.item, primaryClip.key, boundsSignature(primaryClip));
     if (!cached && primaryClip.playheadOver === false) {
       const texts = primaryClip.layers.texts;
       const textLayers = texts.length > 1
@@ -104,13 +159,8 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
         reason: null,
         needPlayheadOver: true,
         tooltip: "Move the playhead over it first to measure text bounds.",
-        fields: {
-          position: describeField(activeText.position, true, frameSize),
-          scale: describeField(activeText.scale, false, frameSize),
-          rotation: describeField(activeText.rotation, false, frameSize),
-          anchor: describeField(activeText.anchorPoint, true, anchorFrame),
-          ...effectControlsExtras(primaryClip.transform),
-        },
+        layer: "text",
+        fields: textFields(activeText, frameSize, anchorFrame, primaryClip.transform),
         textLayers,
         activeLayerTarget: layerTarget,
       };
@@ -126,18 +176,12 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
 
     const targetIdx = (layerTarget === "all" || typeof layerTarget !== "number" || layerTarget < 0 || layerTarget >= texts.length) ? 0 : layerTarget;
     const activeText = texts[targetIdx];
-    const fields = {
-      position: describeField(activeText.position, true, frameSize),
-      scale: describeField(activeText.scale, false, frameSize),
-      rotation: describeField(activeText.rotation, false, frameSize),
-      anchor: describeField(activeText.anchorPoint, true, anchorFrame),
-      ...effectControlsExtras(primaryClip.transform),
-    };
     return {
       clipName,
       available: true,
       reason: null,
-      fields,
+      layer: "text",
+      fields: textFields(activeText, frameSize, anchorFrame, primaryClip.transform),
       textLayers,
       activeLayerTarget: layerTarget,
     };
@@ -260,16 +304,8 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       if (clip.isGraphic) {
         m.layers = clip.layers;
         const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
-        let textScale = 100;
-        let textRot = 0;
-        let textPos = null;
-        if (isTextGraphic) {
-          const primaryText = m.layers.texts[0];
-          textScale = staticValue(primaryText.scale) || 100;
-          textRot = staticValue(primaryText.rotation) || 0;
-          textPos = transformGeometry.pointXY(staticValue(primaryText.position));
-        }
-        const cached = isTextGraphic ? frameBounds.getCachedBounds(clip.item, textScale, textRot, clip.key, textPos) : null;
+        const signature = boundsSignature(clip);
+        const cached = isTextGraphic ? frameBounds.getCachedBounds(clip.item, clip.key, signature) : null;
         if (cached) {
           m.drawn = cached;
         } else {
@@ -285,7 +321,7 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
           if (!drawnBounds) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
           m.drawn = drawnBounds;
           if (isTextGraphic) {
-            frameBounds.setCachedBounds(clip.item, m.drawn, textScale, textRot, clip.key, textPos);
+            frameBounds.setCachedBounds(clip.item, m.drawn, clip.key, signature);
           }
         }
       }
@@ -304,31 +340,21 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       const boundsShift = planned.boundsShift || null;
       delete planned.boundsShift;
       if (planned.layerWrites) {
-        let firstPos = null;
-        for (const w of planned.layerWrites) {
-          paramWrites.push(Object.assign({ name: clip.name }, w));
-          if (!firstPos && w.field === "text Position" && w.value) {
-            firstPos = w.value;
-          }
-        }
-        clipBoundsUpdates.push({ item: clip.item, dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0, key: clip.key, newPos: firstPos });
-        done += 1;
+        for (const w of planned.layerWrites) paramWrites.push(Object.assign({ name: clip.name }, w));
       } else {
         writes.push({ item: clip.item, name: clip.name, values: planned });
-        done += 1;
-        if (boundsShift) {
-          const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
-          const newPos = isTextGraphic ? null : (planned.position || null);
-          clipBoundsUpdates.push({ item: clip.item, dx: boundsShift.dx, dy: boundsShift.dy, key: clip.key, newPos });
-        }
+      }
+      done += 1;
+      // Every plan here either keeps the picture put (anchor) or moves it by boundsShift.
+      if (m.drawn) {
+        clipBoundsUpdates.push({ item: clip.item, key: clip.key,
+          dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0 });
       }
     }
     if (done && (writes.length > 0 || paramWrites.length > 0)) {
       await transformApply.applyMotionValues(ppro, project, label, writes, paramWrites);
     }
-    for (const u of clipBoundsUpdates) {
-      frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, u.newPos);
-    }
+    await shiftCachedBounds(ppro, seq, clipBoundsUpdates);
   // Text layer Position writes are not proven live yet: log before / written / read back, so one
   // run in Premiere shows whether the write took and in what units (UXPLogs).
   for (const w of paramWrites) {
@@ -697,7 +723,16 @@ const EDIT_FIELDS = {
 };
 
 // The params a text-only Graphic takes from its text layer; every other field is the clip's own.
-const TEXT_LAYER_PARAMS = new Set(["position", "anchorPoint", "scale", "rotation"]);
+// Each maps to the text layer's [value entry, param handle] (transform/params.js readGraphicLayers).
+const TEXT_FIELDS = {
+  position: ["position", "param"],
+  anchorPoint: ["anchorPoint", "anchorParam"],
+  scale: ["scale", "scaleParam"],
+  scaleWidth: ["horizontalScale", "horizontalScaleParam"],
+  uniformScale: ["uniformScale", "uniformParam"],
+  rotation: ["rotation", "rotationParam"],
+};
+const TEXT_LAYER_PARAMS = new Set(Object.keys(TEXT_FIELDS));
 
 // Typed text to a value. Rotation also takes Effect Controls' own "turns x degrees" form
 // ("1x10" = 370, "-1x-10" = -370), so a value copied from Effect Controls pastes back unchanged.
@@ -735,6 +770,7 @@ async function setField(ppro, field, text, options = {}) {
   const writes = [];
   const paramWrites = [];
   const skipped = [];
+  const boundsUpdates = [];
   let done = 0;
   for (const clip of clips) {
     if (clip.isGraphic && TEXT_LAYER_PARAMS.has(spec.param)) {
@@ -747,7 +783,7 @@ async function setField(ppro, field, text, options = {}) {
         let textSkipped = false;
         for (const idx of textsToTarget) {
           const t = layers.texts[idx];
-          const entry = t[spec.param];
+          const entry = t[TEXT_FIELDS[spec.param][0]];
           if (entry && entry.isTimeVarying) {
             skipped.push(`"${clip.name}" has this value keyframed.`);
             textSkipped = true;
@@ -764,8 +800,15 @@ async function setField(ppro, field, text, options = {}) {
 
         let clipWrote = false;
         let deltaPx = 0;
-        let lastNorm = null;
-        if (spec.axis) {
+        if (spec.param === "scaleWidth" || spec.param === "uniformScale") {
+          // Horizontal Scale and Uniform Scale: the same value on each targeted text layer.
+          const paramName = TEXT_FIELDS[spec.param][1];
+          for (const t of targetTexts(layers, layerTarget)) {
+            if (!t[paramName]) continue;
+            paramWrites.push({ param: t[paramName], field: `text ${spec.param}`, value: number, name: clip.name });
+            clipWrote = true;
+          }
+        } else if (spec.axis) {
           const refIdx = textsToTarget[0];
           const refText = layers.texts[refIdx];
           const refEntry = refText && refText[spec.param];
@@ -779,7 +822,6 @@ async function setField(ppro, field, text, options = {}) {
               if (!current) continue;
               current[spec.axis] += deltaPx;
               const norm = transformGeometry.framePixelsToNormalized(current, frame.width, frame.height);
-              if (tIdx === refIdx) lastNorm = norm;
 
               if (spec.param === "anchorPoint") {
                 // B5: Typed Anchor on text must compensate Position so the text stays frozen on screen
@@ -857,7 +899,7 @@ async function setField(ppro, field, text, options = {}) {
           if (spec.param === "position" && typeof deltaPx === "number" && layerTarget === "all") {
             const dx = spec.axis === "x" ? deltaPx : 0;
             const dy = spec.axis === "y" ? deltaPx : 0;
-            frameBounds.updateCachedBounds(clip.item, dx, dy, clip.key, lastNorm);
+            boundsUpdates.push({ item: clip.item, key: clip.key, dx, dy });
           } else {
             frameBounds.invalidateBounds(clip.item, clip.key);
           }
@@ -885,6 +927,73 @@ async function setField(ppro, field, text, options = {}) {
   }
   if (writes.length || paramWrites.length) {
     await transformApply.applyMotionValues(ppro, project, `CutDeck: Set ${field}`, writes, paramWrites);
+    await shiftCachedBounds(ppro, seq, boundsUpdates);
+  }
+  return { done, skipped };
+}
+
+// Each row's reset, the value Effect Controls' reset arrow puts back. Motion: Position the
+// sequence centre and Anchor Point the source centre (both [0.5, 0.5] normalized; a Graphic's
+// canvas is the sequence frame), Scale 100, Uniform on, Rotation 0, Anti-flicker 0, Crop 0,
+// Opacity 100. A text layer: Anchor Point [0, 0] (a new text layer reads [0,0], PREMIERE_FACTS
+// "Graphic Text layer"); its Position has no fixed default (it is where the text was placed),
+// so that reset is refused rather than guessed.
+const RESET_FIELDS = {
+  position: { param: "position", label: "Position", motion: { x: 0.5, y: 0.5 } },
+  anchor: { param: "anchorPoint", label: "Anchor Point", motion: { x: 0.5, y: 0.5 }, text: { x: 0, y: 0 } },
+  scale: { param: "scale", label: "Scale", motion: 100, text: 100 },
+  "scale-width": { param: "scaleWidth", label: "Scale Width", motion: 100, text: 100 },
+  "uniform-scale": { param: "uniformScale", label: "Uniform Scale", motion: true, text: true },
+  rotation: { param: "rotation", label: "Rotation", motion: 0, text: 0 },
+  "anti-flicker": { param: "antiFlicker", label: "Anti-flicker Filter", motion: 0 },
+  "crop-left": { param: "cropLeft", label: "Crop Left", motion: 0 },
+  "crop-top": { param: "cropTop", label: "Crop Top", motion: 0 },
+  "crop-right": { param: "cropRight", label: "Crop Right", motion: 0 },
+  "crop-bottom": { param: "cropBottom", label: "Crop Bottom", motion: 0 },
+  opacity: { param: "opacity", label: "Opacity", motion: 100 },
+};
+
+// Resets one row on every selected clip (both axes of a point together) in ONE transaction, so
+// one Ctrl+Z puts it back. Keyframed values are skipped, never flattened.
+async function resetField(ppro, row, options = {}) {
+  const spec = RESET_FIELDS[row];
+  if (!spec) throw new Error(`Unknown field "${row}".`);
+  const layerTarget = options && options.layerTarget !== undefined ? options.layerTarget : "all";
+  const { project, sequence: seq } = await activeProjectAndSequence(ppro);
+  const snap = await readSnapshot(ppro, { seq });
+  if (snap.clips.length === 0) throw new Error("Select a clip on the timeline.");
+
+  const writes = [];
+  const paramWrites = [];
+  const skipped = [];
+  let done = 0;
+  for (const clip of snap.clips) {
+    if (clip.isGraphic && TEXT_FIELDS[spec.param] && textTarget(clip.layers)) {
+      if (spec.text === undefined) {
+        skipped.push(`"${clip.name}": a text layer's ${spec.label} has no fixed default.`);
+        continue;
+      }
+      const [entryName, paramName] = TEXT_FIELDS[spec.param];
+      const texts = targetTexts(clip.layers, layerTarget);
+      if (texts.some((t) => t[entryName] && t[entryName].isTimeVarying)) {
+        skipped.push(`"${clip.name}" has this value keyframed.`);
+        continue;
+      }
+      if (texts.some((t) => !t[paramName])) {
+        skipped.push(`"${clip.name}": could not reach its text ${spec.label}.`);
+        continue;
+      }
+      for (const t of texts) paramWrites.push({ param: t[paramName], field: `text ${spec.param}`, value: spec.text, name: clip.name });
+      done += 1;
+      continue;
+    }
+    const entry = clip.transform[spec.param];
+    if (entry && entry.isTimeVarying) { skipped.push(`"${clip.name}" has this value keyframed.`); continue; }
+    writes.push({ item: clip.item, name: clip.name, values: { [spec.param]: spec.motion } });
+    done += 1;
+  }
+  if (writes.length || paramWrites.length) {
+    await transformApply.applyMotionValues(ppro, project, `CutDeck: Reset ${spec.label}`, writes, paramWrites);
   }
   return { done, skipped };
 }
@@ -897,6 +1006,9 @@ module.exports = {
   editLevel,
   editSummary,
   setField,
+  resetField,
+  RESET_FIELDS,
+  boundsSignature,
   setAnchor,
   alignToFrame,
   alignToFrameAsGroup,

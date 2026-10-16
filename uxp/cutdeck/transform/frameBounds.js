@@ -235,46 +235,41 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
 
 // In-memory bounds cache: prevents repeating the slow frame export + clip disable/enable on
 // every subsequent alignment or anchor action. Dual WeakMap (object-reference) and bounded Map
-// (track:start key) ensures 100% cache hits across UXP proxy wrapper instances with capped memory.
+// (track:start key) ensures cache hits across UXP proxy wrapper instances with capped memory.
+// An entry holds only while `signature` (every transform value that moves the drawn picture:
+// Motion, Vector Motion and each text layer, built by transform/edit.js) is unchanged, so an
+// edit made anywhere, Effect Controls included, means a fresh measure instead of a stale box.
 let boundsCache = new WeakMap();
 const boundedCache = new Map();
 const MAX_BOUNDED_ENTRIES = 50;
-const POS_TOLERANCE = 0.002; // ~2-4 pixels in 1080p, safely accommodates float32/64 representation drift
 
-function getCachedBounds(item, scale = 100, rotation = 0, key = null, position = null) {
-  let entry = null;
-  if (item && typeof item === "object") entry = boundsCache.get(item);
+function findEntry(item, key) {
+  let entry = item && typeof item === "object" ? boundsCache.get(item) : null;
   if (!entry && key && boundedCache.has(key)) {
     entry = boundedCache.get(key);
     if (entry && item && typeof item === "object") boundsCache.set(item, entry);
   }
+  return entry || null;
+}
+
+function getCachedBounds(item, key = null, signature = null) {
+  const entry = findEntry(item, key);
   if (!entry) return null;
-  if (Math.abs(scale - entry.scale) > 0.1 || Math.abs(rotation - entry.rotation) > 0.1) {
-    if (item && typeof item === "object") boundsCache.delete(item);
-    if (key) boundedCache.delete(key);
+  if (entry.signature !== signature) {
+    invalidateBounds(item, key);
     return null;
-  }
-  if (position && entry.posX !== null && entry.posY !== null) {
-    if (Math.abs(position.x - entry.posX) > POS_TOLERANCE || Math.abs(position.y - entry.posY) > POS_TOLERANCE) {
-      if (item && typeof item === "object") boundsCache.delete(item);
-      if (key) boundedCache.delete(key);
-      return null;
-    }
   }
   return { left: entry.left, top: entry.top, right: entry.right, bottom: entry.bottom };
 }
 
-function setCachedBounds(item, bounds, scale = 100, rotation = 0, key = null, position = null) {
+function setCachedBounds(item, bounds, key = null, signature = null) {
   if (!bounds) return;
   const entry = {
     left: Number(bounds.left),
     top: Number(bounds.top),
     right: Number(bounds.right),
     bottom: Number(bounds.bottom),
-    scale: scale || 100,
-    rotation: rotation || 0,
-    posX: position && typeof position.x === "number" ? position.x : null,
-    posY: position && typeof position.y === "number" ? position.y : null,
+    signature,
   };
   if (item && typeof item === "object") boundsCache.set(item, entry);
   if (key) {
@@ -286,22 +281,15 @@ function setCachedBounds(item, bounds, scale = 100, rotation = 0, key = null, po
   }
 }
 
-function updateCachedBounds(item, dx = 0, dy = 0, key = null, newPos = null) {
-  let entry = item && typeof item === "object" ? boundsCache.get(item) : null;
-  if (!entry && key && boundedCache.has(key)) entry = boundedCache.get(key);
+// After CutDeck's own write: the picture moved by (dx, dy) and its values now read `signature`.
+function updateCachedBounds(item, dx = 0, dy = 0, key = null, signature = null) {
+  const entry = findEntry(item, key);
   if (!entry) return;
   entry.left += dx;
   entry.right += dx;
   entry.top += dy;
   entry.bottom += dy;
-  if (newPos) {
-    const px = typeof newPos.x === "number" ? newPos.x : (Array.isArray(newPos) ? newPos[0] : null);
-    const py = typeof newPos.y === "number" ? newPos.y : (Array.isArray(newPos) ? newPos[1] : null);
-    if (typeof px === "number" && typeof py === "number") {
-      entry.posX = px;
-      entry.posY = py;
-    }
-  }
+  entry.signature = signature;
 }
 
 function invalidateBounds(item, key = null) {

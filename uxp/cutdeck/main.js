@@ -189,6 +189,7 @@ alignPanel.bind({
   onReset: align.onReset,
   onProbe: align.onProbe,
   onSetField: align.onSetField,
+  onResetField: align.onResetField,
   onSlideField: align.onSlideField,
   onCommitField: align.onCommitField,
   onAnchor: align.onAnchor,

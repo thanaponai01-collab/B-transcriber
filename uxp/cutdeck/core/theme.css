@@ -1062,30 +1062,19 @@
   .val-unit[hidden] {
     display: none !important;
   }
-  .transform-reset-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 24px;
-    box-sizing: border-box;
-    background: var(--bg-0);
-    border: 1px solid var(--line-0);
-    border-radius: 4px;
-    color: var(--fg-2);
-    font-size: 10px;
-    font-weight: 400;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  /* Effect Controls' per-row reset arrow: one click, one undo step. */
+  .transform-reset {
+    flex-shrink: 0;
+    margin-left: 2px;
+    padding: 3px;
   }
-  .transform-reset-btn:hover {
-    background: var(--bg-1);
-    color: var(--fg-white);
-    border-color: var(--line-1);
+  .transform-reset svg {
+    width: 12px;
+    height: 12px;
   }
-  .transform-reset-btn:active {
-    background: var(--bg-2);
+  .transform-reset.disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
   .transform-tools-container {

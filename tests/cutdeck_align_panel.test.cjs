@@ -128,8 +128,13 @@ function makeStub() {
         child.parentElement = node;
         return child;
       },
-      querySelectorAll: (sel) =>
-        (sel === "[data-act]" ? node.children.filter((c) => c.getAttribute("data-act") !== null) : []),
+      // "[attr]" and '[attr="value"]' over direct children: all the panel asks for.
+      querySelectorAll: (sel) => {
+        const m = /^\[([\w-]+)(?:="([^"]*)")?\]$/.exec(sel);
+        if (!m) return [];
+        return node.children.filter((c) => c.getAttribute(m[1]) !== null && (m[2] === undefined || c.getAttribute(m[1]) === m[2]));
+      },
+      querySelector: (sel) => node.querySelectorAll(sel)[0] || null,
       addEventListener(type, fn) { (node.listeners[type] = node.listeners[type] || []).push(fn); },
       listeners: {},
     };
@@ -153,8 +158,13 @@ function makeStub() {
   el("align-transform-clip");
   el("align-transform-fields");
   el("align-text-layer-switcher");
-  el("align-scale-reset");
-  el("align-rotation-reset");
+  for (const row of ["position", "scale", "rotation", "anchor"]) {
+    const reset = el(`reset-${row}`);
+    reset.setAttribute("data-act", "align-reset");
+    reset.setAttribute("data-needs-clip", "");
+    reset.setAttribute("data-reset", row);
+    container.appendChild(reset);
+  }
   for (const [id, field] of [["align-position-x", "position-x"], ["align-position-y", "position-y"],
     ["align-scale", "scale"], ["align-rotation", "rotation"], ["align-anchor-x", "anchor-x"], ["align-anchor-y", "anchor-y"],
     ["align-scale-width", "scale-width"], ["align-anti-flicker", "anti-flicker"], ["align-crop-left", "crop-left"],
@@ -164,6 +174,7 @@ function makeStub() {
   }
   el("align-uniform-scale");
   el("align-scale-label");
+  el("align-scale-width-label");
 
   const body = el("__body__");
   body.appendChild(container);
@@ -638,14 +649,47 @@ test("bind raises onSetField with the field name and typed text when an input ch
   delete global.document;
 });
 
-test("clicking reset buttons raises onSetField with default values", () => {
+test("each row's reset arrow raises onResetField with its row", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
   const raised = [];
-  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField: (f, v) => raised.push([f, v]), onAnchor() {}, onAlign() {} });
-  nodes.get("align-scale-reset").listeners.click.forEach((fn) => fn());
-  nodes.get("align-rotation-reset").listeners.click.forEach((fn) => fn());
-  assert.deepEqual(raised, [["scale", "100"], ["rotation", "0"]]);
+  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField() {}, onResetField: (row) => raised.push(row), onAnchor() {}, onAlign() {} });
+  for (const row of ["position", "scale", "rotation", "anchor"]) nodes.get(`reset-${row}`).listeners.click.forEach((fn) => fn());
+  assert.deepEqual(raised, ["position", "scale", "rotation", "anchor"]);
+  delete global.document;
+});
+
+test("a text layer's rows read as Effect Controls' Text > Transform", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const known = (value) => ({ known: true, animated: false, value });
+  alignPanel.render({
+    sequence: { name: "S" },
+    transform: { clipName: "Graphic", available: true, reason: null, layer: "text", fields: {
+      position: { known: true, animated: false, x: 494.94, y: 852 },
+      scale: known(100), scaleWidth: Object.assign(known(100), { locked: true }), uniformScale: known(true),
+      rotation: known(0), anchor: { known: true, animated: false, x: 112.09, y: -68.54 },
+    } },
+    status: { text: "", level: "ready" },
+  });
+  assert.equal(nodes.get("align-scale").value, "100");
+  assert.equal(nodes.get("align-scale-width").value, "100");
+  assert.equal(nodes.get("align-rotation").value, "0.0");
+  assert.equal(nodes.get("align-anchor-x").value, "112.1");
+  assert.equal(nodes.get("align-scale-width-label").textContent, "Horizontal Scale");
+  assert.equal(nodes.get("reset-position").disabled, true, "a text layer's Position has no default to reset to");
+  assert.equal(nodes.get("reset-scale").disabled, false);
+
+  alignPanel.render({
+    sequence: { name: "S" },
+    transform: { clipName: "Clip", available: true, reason: null, fields: {
+      position: { known: true, animated: false, x: 960, y: 540 }, scale: known(100), uniformScale: known(true),
+    } },
+    status: { text: "", level: "ready" },
+  });
+  assert.equal(nodes.get("align-scale").value, "100.0");
+  assert.equal(nodes.get("align-scale-width-label").textContent, "Scale Width");
+  assert.equal(nodes.get("reset-position").disabled, false);
   delete global.document;
 });
 

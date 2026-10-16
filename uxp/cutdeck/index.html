@@ -295,6 +295,7 @@
               </div>
             </div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="position" title="Reset Position"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <!-- Scale -->
@@ -308,14 +309,13 @@
                 <input type="text" id="align-scale" class="transform-input" data-field="scale" title="Scale (%) - Drag to scrub, click to edit" hidden>
               </div>
             </div>
-            <div class="input-col">
-              <div id="align-scale-reset" class="transform-reset-btn" role="button" data-act="align-scale-reset" data-needs-clip title="Reset Scale to 100%">Reset 100%</div>
-            </div>
+            <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="scale" title="Reset Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <div class="transform-row">
-          <div class="transform-field-label" title="Scale Width">Scale Width</div>
+          <div id="align-scale-width-label" class="transform-field-label" title="Scale Width">Scale Width</div>
           <div class="transform-field-inputs">
             <div class="input-col">
               <div class="input-axis-wrap">
@@ -326,6 +326,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="scale-width" title="Reset Scale Width"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <!-- Uniform Scale -->
@@ -337,6 +338,7 @@
               <span class="setting-subtext">Uniform Scale</span>
             </label>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="uniform-scale" title="Reset Uniform Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <!-- Rotation -->
@@ -350,10 +352,9 @@
                 <input type="text" id="align-rotation" class="transform-input" data-field="rotation" title="Rotation (°) - Drag to scrub, click to edit" hidden>
               </div>
             </div>
-            <div class="input-col">
-              <div id="align-rotation-reset" class="transform-reset-btn" role="button" data-act="align-rotation-reset" data-needs-clip title="Reset Rotation to 0°">Reset 0°</div>
-            </div>
+            <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="rotation" title="Reset Rotation"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <!-- Anchor -->
@@ -373,6 +374,7 @@
               </div>
             </div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="anchor" title="Reset Anchor Point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <div class="transform-row">
@@ -386,6 +388,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="anti-flicker" title="Reset Anti-flicker Filter"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
         <div class="transform-row">
           <div class="transform-field-label" title="Crop Left">Crop Left</div>
@@ -399,6 +402,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-left" title="Reset Crop Left"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
         <div class="transform-row">
           <div class="transform-field-label" title="Crop Top">Crop Top</div>
@@ -412,6 +416,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-top" title="Reset Crop Top"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
         <div class="transform-row">
           <div class="transform-field-label" title="Crop Right">Crop Right</div>
@@ -425,6 +430,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-right" title="Reset Crop Right"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
         <div class="transform-row">
           <div class="transform-field-label" title="Crop Bottom">Crop Bottom</div>
@@ -438,6 +444,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-bottom" title="Reset Crop Bottom"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
 
         <!-- Opacity (Effect Controls' Opacity section; Blend Mode is not readable yet) -->
@@ -453,6 +460,7 @@
             </div>
             <div class="input-col"></div>
           </div>
+          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="opacity" title="Reset Opacity"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
       </div>
     </div>
