@@ -13,7 +13,7 @@ const assert = require("node:assert/strict");
 const fake = require("./fakes/premiere.cjs");
 const geometry = require("../uxp/cutdeck/transform/geometry.js");
 const { applyMotionValues } = require("../uxp/cutdeck/transform/apply.js");
-const { setAnchor, alignToFrame, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
+const { setAnchor, alignToFrame, alignToFrameAsGroup, alignToSelection, distribute, setField, readAlignTransform } = require("../uxp/cutdeck/transform/edit.js");
 const { readSnapshot } = require("../uxp/cutdeck/transform/snapshot.js");
 const { createAlignFeature } = require("../uxp/cutdeck/features/align.js");
 
@@ -123,10 +123,14 @@ function motionClip(name, o = {}) {
   const params = [
     motionParam(v.position, { point: true, keyframed: !!o.keyframedPosition }),
     motionParam(v.scale), motionParam(v.scaleWidth), motionParam(v.uniform), motionParam(v.rotation),
-    motionParam(v.anchor, { point: true }), motionParam(false),
+    motionParam(v.anchor, { point: true }), motionParam(v.antiFlicker || 0),
     ...v.crop.map((c) => motionParam(c)),
   ];
   const motion = { getMatchName: () => Promise.resolve("AE.ADBE Motion"), getParam: (i) => params[i] || null };
+  // Opacity sits at chain index 0 on every clip, its param [0] the percent (PREMIERE_FACTS
+  // "Component chain layout").
+  const opacityParams = [motionParam(o.opacity === undefined ? 100 : o.opacity)];
+  const opacity = { getMatchName: () => Promise.resolve("AE.ADBE Opacity"), getParam: (i) => opacityParams[i] || null };
   // A Graphic's layers: Vector Motion (Motion's first six params) and one Text component per
   // o.texts entry, its Position at param [2] (Check Transform on a Graphic, 2026-09-24).
   const vmParams = [motionParam([0.5, 0.5], { point: true }), motionParam(o.vmScale || 100), motionParam(100),
@@ -141,10 +145,11 @@ function motionClip(name, o = {}) {
     return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6] };
   });
   const extra = o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : [];
-  const chain = o.graphic ? (o.noVectorMotion ? [motion, ...texts, ...extra] : [motion, vm, ...texts, ...extra]) : [motion];
+  const chain = [opacity, ...(o.graphic ? (o.noVectorMotion ? [motion, ...texts, ...extra] : [motion, vm, ...texts, ...extra]) : [motion])];
   return {
     name,
     params,
+    opacityParams,
     texts: texts.map((t) => t.position),
     textAnchors: texts.map((t) => t.anchor),
     textScales: texts.map((t) => t.scale),
@@ -1078,3 +1083,73 @@ test("Slice 4 B5: typed anchor on text compensates text position so text stays f
   close(g.texts[0].value[0] * 1920, 1060, "Position X compensated to 1060");
 });
 
+
+// --- the other Effect Controls rows (Motion 2, 3, 6-10 and Opacity) -------------------------------
+
+test("readAlignTransform reports every Effect Controls row, Scale Width locked while Uniform Scale is on", async () => {
+  const a = motionClip("A", { scaleWidth: 80, antiFlicker: 0.25, crop: [10, 20, 30, 40], opacity: 65 });
+  const { ppro } = host([a]);
+  const { fields } = await readAlignTransform(null, ppro);
+  assert.deepEqual(fields.uniformScale, { known: true, animated: false, value: true });
+  assert.deepEqual(fields.scaleWidth, { known: true, animated: false, value: 80, locked: true });
+  assert.equal(fields.antiFlicker.value, 0.25);
+  assert.deepEqual([fields.cropLeft.value, fields.cropTop.value, fields.cropRight.value, fields.cropBottom.value], [10, 20, 30, 40]);
+  assert.equal(fields.opacity.value, 65);
+
+  const b = motionClip("B", { uniform: false, scaleWidth: 80 });
+  const { fields: free } = await readAlignTransform(null, host([b]).ppro);
+  assert.equal(free.scaleWidth.locked, undefined);
+});
+
+test("setField writes Opacity on the Opacity component and the Motion rows by their own index", async () => {
+  const a = motionClip("A");
+  const { ppro, undoSteps } = host([a]);
+  await setField(ppro, "opacity", "40%");
+  assert.equal(a.opacityParams[0].value, 40);
+  await setField(ppro, "crop-left", "12.5");
+  assert.equal(a.params[7].value, 12.5);
+  await setField(ppro, "scale-width", "70");
+  assert.equal(a.params[2].value, 70);
+  await setField(ppro, "anti-flicker", "0.3");
+  assert.equal(a.params[6].value, 0.3);
+  await setField(ppro, "uniform-scale", "off");
+  assert.equal(a.params[3].value, false);
+  assert.equal(undoSteps.length, 5);
+});
+
+test("setField clamps to each param's range and reads Effect Controls' turns x degrees rotation", async () => {
+  const a = motionClip("A");
+  const { ppro } = host([a]);
+  await setField(ppro, "opacity", "150");
+  assert.equal(a.opacityParams[0].value, 100);
+  await setField(ppro, "crop-bottom", "-5");
+  assert.equal(a.params[10].value, 0);
+  await setField(ppro, "anti-flicker", "2");
+  assert.equal(a.params[6].value, 1);
+  await setField(ppro, "rotation", "1x10.0°");
+  assert.equal(a.params[4].value, 370);
+  await setField(ppro, "rotation", "-1x-10");
+  assert.equal(a.params[4].value, -370);
+  await assert.rejects(setField(ppro, "uniform-scale", "maybe"), /not on or off/);
+});
+
+test("Opacity on a text Graphic goes to the clip's Opacity, not a text layer", async () => {
+  const g = motionClip("G", { graphic: true, texts: [[0.3, 0.4]] });
+  const { ppro } = host([g]);
+  await setField(ppro, "opacity", "50");
+  assert.equal(g.opacityParams[0].value, 50);
+  assert.deepEqual(g.texts[0].value, [0.3, 0.4]);
+});
+
+test("align as group moves the selection's outer box to the frame edge, keeping the clips' layout", async () => {
+  // Two half-size 1280x720 clips (640x360 on screen) centred at x 700 and 1100: outer box 380..1420.
+  const a = motionClip("A", { scale: 50, position: [700 / 1920, 0.5] });
+  const b = motionClip("B", { scale: 50, position: [1100 / 1920, 0.3] });
+  const { ppro, undoSteps } = host([a, b]);
+  const result = await alignToFrameAsGroup(ppro, "left");
+  assert.deepEqual(result, { done: 2, skipped: [] });
+  close(a.params[0].value[0] * 1920, 320, "A left edge on the frame");
+  close(b.params[0].value[0] * 1920, 720, "B keeps its 400 px offset");
+  close(b.params[0].value[1], 0.3, "y untouched");
+  assert.deepEqual(undoSteps, ["CutDeck: Align left as group"]);
+});

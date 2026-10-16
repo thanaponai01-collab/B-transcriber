@@ -1,0 +1,1203 @@
+✔ start posts the chosen track, polls until ready, then import uses the saved SRT path (1.2563ms)
+✔ import before a range is ready is refused and imports nothing (0.1785ms)
+✔ a failed session surfaces its error (0.132ms)
+CutDeck Color Matte create: importFiles(C:\tmp\CutDeck Color Matte 1920x1080.prproj) returned true
+✔ cmProject: builds valid Color Matte XML and gzip .prproj bytes (4.1059ms)
+✔ cmProject: generates fresh UUIDs per invocation without dangling references (2.2165ms)
+✔ cmProject: rejects invalid dimensions (0.2785ms)
+✔ alLibrary: createColorMatteForSequence imports, flattens wrapper, and returns item (1.9329ms)
+✔ alLibrary: findColorMatteItem finds existing color matte in CutDeck bin or project root (0.3504ms)
+✔ alLibrary: findAdjustmentLayerItem ignores Color Matte and creates/finds true Adjustment Layer (0.8038ms)
+✔ alLibrary: caches found items per (project, WxH) and re-validates cheaply without re-walking bins (0.7322ms)
+✔ frameHold: findClipAtPlayhead identifies topmost video clip spanning playhead (0.6993ms)
+CutDeck FrameHold: importFiles(C:\tmp\CutDeck_Hold_1791968208654.png) returned true
+CutDeck: placed Frame Hold on V2 (3.0s, in temp folder) in 62 ms
+✔ frameHold: addFrameHold executes non-destructive freeze frame on track above (62.6347ms)
+CutDeck FrameHold: importFiles(C:\tmp\CutDeck_Hold_1791968208717.png) returned true
+CutDeck: moved "CutDeck_Hold_1791968208717.png" into CutDeck > Frame Holds
+CutDeck: placed Frame Hold on V2 (3.0s, in temp folder) in 63 ms
+CutDeck: placed Frame Hold clone on V2 (3.0s) in 1 ms
+✔ frameHold: handles Premiere importing file into rootItem instead of targetBin and auto-moves to Frame Holds (63.1874ms)
+✔ frameHold: addFrameHold with withoutExport: true clones clip 1 track up, trims In-point, and selects clip (0.9086ms)
+CutDeck FrameHold: importFiles(C:\Projects\MyClientProject\CutDeck\CutDeck_Hold_1791968208780.png) returned true
+CutDeck: placed Frame Hold on V2 (3.0s, in project CutDeck folder) in 139 ms
+CutDeck: placed 50 Adjustment Layer(s) in 4 ms { setup: 0, select: 1, plan: 1, gate: 0, commit: 1, verify: 1 }
+CutDeck: placed 200 Adjustment Layer(s) in 7 ms { setup: 0, select: 3, plan: 0, gate: 1, commit: 0, verify: 3 }
+✔ frameHold: saves export frame in project CutDeck folder when project.path is available (138.7193ms)
+✔ adjustmentLayer: placeMediaOnTimeline uses track item caching for high-speed O(N) verification (5.042ms)
+✔ adjustmentLayer: 200 items placement benchmark runs in milliseconds with minimal calls (8.2452ms)
+✔ adjust feature: onColorMatte triggers placeColorMattesOnTimeline and updates status (0.6339ms)
+✔ adjust feature: onAddFrameHold triggers addFrameHold and updates status (0.1535ms)
+✔ adjust feature: onAddFrameHold with withoutExport: true sets finish-in-Premiere status (0.0949ms)
+✔ frameHold: isolateClipTrackForExport mutes only other video and caption tracks, and restoreIsolatedTracks restores them (0.207ms)
+CutDeck FrameHold: importFiles(C:\tmp\CutDeck_Hold_1791968208934.png) returned true
+CutDeck: placed Frame Hold on V3 (2.0s, in temp folder) in 63 ms
+✔ frameHold: addFrameHold isolates selected clip track during exportSequenceFrame (63.691ms)
+CutDeck FrameHold: importFiles(C:\tmp\CutDeck_Hold_1791968208998.png) returned true
+CutDeck: placed Frame Hold on V3 (2.0s, in temp folder) in 63 ms
+✔ frameHold: correctly resolves selected clip track on higher track even when proxy wrapper references differ (62.4383ms)
+✔ every member name the panel reads is accounted for (6381.5268ms)
+✔ an API written from memory is caught (371.1222ms)
+✔ an API only the unreleased Premiere has is caught, even when Adobe's samples use it (369.699ms)
+✔ a name Adobe's samples only use behind @ts-expect-error (untyped) is caught (359.1825ms)
+CutDeck AL create: importFiles(C:\tmp\CutDeck 1080x1920.prproj) returned true
+CutDeck AL create: importFiles(C:\tmp\CutDeck 1080x1920.prproj) returned true
+CutDeck AL create: importFiles(C:\tmp\CutDeck 1080x1920.prproj) returned true
+CutDeck AL tidy: could not flatten import folders: Error: Could not complete "CutDeck: move Adjustment Layers into ADJ & FX".
+    at runTransaction (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\host\project.js:59:28)
+    at flattenImportWrappers (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\timeline\alLibrary.js:96:5)
+    at async Object.createAdjustmentLayerForSequence (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\timeline\alLibrary.js:346:3)
+    at async TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_al_autocreate.test.cjs:106:16)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+CutDeck AL create: "Adjustment Layer 1080x1920" landed inside the "CutDeck 1080x1920.prproj" bin
+CutDeck AL create: importFiles(C:\tmp\CutDeck 1080x1920.prproj) returned false
+✔ imports a gzip .prproj at the sequence size into ADJ & FX and returns the AL (5.7671ms)
+✔ moves the AL out of Premiere's import folder and removes the emptied folder (1.2104ms)
+✔ if the move fails, the folder (and the AL in it) is left alone and still used (1.1684ms)
+✔ flattening never touches folders CutDeck didn't make (0.1369ms)
+✔ flattens wrappers left by earlier runs, several at once (0.1301ms)
+✔ says so when nothing arrives (1.0939ms)
+✔ pickBestCandidate never hands back another size's AL when the size is known (0.312ms)
+✔ verdict 'works' when the AL lands in ADJ & FX at the right size and would be picked (4.032ms)
+✔ reports a sub-bin landing instead of claiming success (1.1767ms)
+✔ no verdict when nothing arrives (1.6364ms)
+✔ no verdict when CutDeck would still pick a different AL (1.7057ms)
+✔ stops before writing anything when no sequence is open (0.2836ms)
+✔ newItemsByName counts duplicates (0.1545ms)
+✔ resolveTopLayer: single clip returns its full span (1.0193ms)
+✔ resolveTopLayer: separated clips preserve the gap (0.1487ms)
+✔ resolveTopLayer: higher track clip wins overlapping region (0.1483ms)
+✔ resolveTopLayer (2026-09-21 dated fix): V2 under V4 and V3 does not introduce extra split points (0.166ms)
+✔ resolveTopLayer: clip underneath winning only uncovered tail (0.1497ms)
+✔ assignPlacementLanes: non-overlapping placements all assign to lane 0 (0.7656ms)
+✔ assignPlacementLanes (2026-09-21 tight cuts): overlapping transition spans stack into separate lanes (0.1408ms)
+✔ assignPlacementLanes: 3 fully overlapping placements require 3 lanes (0.1344ms)
+✔ planPlacements: span mode with selection (0.3491ms)
+✔ planPlacements: span mode fallback to In/Out then CTI (0.215ms)
+✔ planPlacements: per_clip mode with selection (0.1415ms)
+✔ planPlacements: transition mode on cuts with clamping (0.1508ms)
+✔ planPlacements: transition mode fallback to CTI when no cuts (0.083ms)
+✔ the seed is a one-AL project with no dangling references (1.7967ms)
+✔ builds the requested size, name and frame rate (2.3561ms)
+✔ leaves the seed's frame rate alone when none is given (0.7463ms)
+✔ every ObjectUID is fresh per build and every reference still resolves (1.9327ms)
+✔ rejects sizes that can't be a real frame (0.8828ms)
+✔ refuses a seed that isn't exactly one AL (0.3678ms)
+✔ gzipStored round-trips through zlib, including multi-block input (11.6808ms)
+✔ the .prproj bytes gunzip back to the built XML (1.897ms)
+✔ utf8Bytes matches Buffer for non-ASCII text (0.1357ms)
+pickPlacementTracks: could not read V2 items, assuming occupied: Error: track read failed
+    at Object.getTrackItems (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_al_track_pick.test.cjs:16:47)
+    at getTrackClipItemsOrThrow (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\host\trackItems.js:30:31)
+    at async readTrackSpans (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\timeline\adjustmentLayer.js:52:17)
+    at async Promise.all (index 1)
+    at async pickPlacementTracks (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\timeline\adjustmentLayer.js:87:20)
+    at async TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_al_track_pick.test.cjs:59:19)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+✔ track pick: empty V2 takes every non-overlapping placement (1.4921ms)
+✔ track pick: footage on V2 anywhere in the lane's range moves the whole lane up (0.3231ms)
+✔ track pick: overlapping placements stack on separate tracks, lower lane first (0.4901ms)
+✔ track pick: a full timeline places on the next, not-yet-existing track (0.304ms)
+✔ track pick: an unreadable track is treated as occupied, never placed on (1.6372ms)
+✔ track pick: footage above V1 doesn't pull a lane below it (0.2016ms)
+✔ track pick: nothing to place reads nothing and returns no targets (0.0684ms)
+✔ track pick: reads each track once, plus one re-read of the chosen track (0.1851ms)
+✔ track pick: footage appearing on the chosen track before placing aborts (0.4068ms)
+✔ track pick: the chosen track becoming unreadable before placing aborts (0.2988ms)
+✔ the manifest declares three panel entrypoints with distinct ids (1.0332ms)
+✔ there is exactly ONE top-level main, and no entrypoint carries its own (0.0848ms)
+✔ the manifest enables the ipc permission multi-panel plugins need (0.0635ms)
+✔ the existing Cut & Sync entrypoint is untouched (0.08ms)
+✔ the transform container exists and ships hidden (0.1675ms)
+✔ every $("id") in core/alignPanel.js resolves to an id in index.html (0.5141ms)
+✔ the transform panel's ids do not collide with the Cut & Sync panel's (0.3265ms)
+✔ mount moves the container into the given root and reveals it (0.9957ms)
+✔ mount is idempotent and a second mount into the same root moves nothing (0.3466ms)
+✔ mount reports failure instead of pretending, when there is nothing to mount (0.3308ms)
+✔ unmount hides the container again (0.3807ms)
+✔ render is idempotent: a second call with the same state changes nothing further (0.7522ms)
+✔ render puts the sequence name in the clip line's tooltip and disables every control while busy (0.3262ms)
+✔ the status bar stays hidden unless there is an error or a skipped clip (0.3033ms)
+✔ anchor and align controls are disabled while there is no editable clip; refresh and probe are not (0.2461ms)
+✔ renderTransform shows 'No sequence open' and blanks and disables every field when transform is null (0.2496ms)
+✔ renderTransform shows the reason in the clip line and disables the fields when the clip has no readable Transform (0.2317ms)
+✔ renderTransform shows 'Select a clip on the timeline.' when nothing is selected (0.8983ms)
+✔ renderTransform formats Position/Scale/Rotation/Anchor to one decimal, matching Effect Controls (0.5421ms)
+✔ renderTransform empties and disables a keyframed field instead of showing a possibly-wrong static number (0.4143ms)
+✔ renderTransform shows '—' for a field that could not be read at all (0.403ms)
+✔ bind raises the transform intent when the probe button is clicked (0.6965ms)
+✔ entrypoints.setup registers BOTH panel ids (0.1389ms)
+✔ entrypoints.setup is guarded, and runs after the main panel is already bound (0.1495ms)
+✔ transform/edit.js requires the transform host-discovery and geometry modules (0.0947ms)
+✔ Anchor Point is converted against the SOURCE frame, never the sequence frame (0.1571ms)
+✔ the transform panel's show hook starts the live poll, after mounting and the first read (0.11ms)
+✔ the poll never touches alignState.busy/status, so it cannot flicker the spinner or disable controls (0.1657ms)
+✔ no hide or destroy hook is registered (0.1084ms)
+✔ Transform panel attaches selection to the active sequence and moves it on switch (37.9665ms)
+✔ stopPolling unregisters global and target listeners and clears interval (16.0588ms)
+✔ Transform panel falls back to the fast poll without EventManager (0.2707ms)
+✔ a burst of events collapses into at most two reads (46.9945ms)
+✔ readAlignTransform names the clip via getName() (track items have no .name) (0.6926ms)
+✔ bind raises onSetField with the field name and typed text when an input changes (0.4056ms)
+✔ clicking reset buttons raises onSetField with default values (0.357ms)
+✔ a field the user is typing in is not overwritten by a re-render (0.2991ms)
+✔ index.html has nine anchor cells and six align buttons, each with a value the feature knows (0.424ms)
+✔ index.html's Phase 6 controls carry values the feature knows: two align targets, four distributions (0.6568ms)
+✔ scrubby drag raises onSlideField with intermediate values and onCommitField on release (0.4584ms)
+✔ arrow keys raise onSlideField with stepped values (0.3146ms)
+✔ Slice 3: onSetField applies planned transform values directly before confirm read (1.6834ms)
+✔ Slice 3: commitField awaits in-flight slidePromise without polling loop (26.0395ms)
+✔ Slice 3: adaptive poll interval drops to 1000ms idle and speeds to 150ms on activity (0.18ms)
+✔ Slice 4 B2: alignPanel renders text layer switcher when textLayers > 1 (0.4366ms)
+✔ Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver is true (0.1588ms)
+✔ an idle poll tick reads past the snapshot cache; a tick right after activity does not (93.1447ms)
+✔ align poll: fast right after activity, at most once a second when idle (6.4171ms)
+✔ the tick grid divides the broadcast rates this project actually uses (0.5544ms)
+✔ no range can be normalized until the Out-point convention is verified (0.303ms)
+✔ the two conventions differ by exactly one frame and nothing else (0.2019ms)
+✔ a one-frame range at 29.97 is one frame (0.0856ms)
+✔ 23.976 and 25 produce exact frame counts with no rounding (0.1138ms)
+✔ tick values past Number precision stay exact (0.1382ms)
+✔ Number survives frame-aligned ticks but not off-grid ones (0.0916ms)
+✔ unusable marks are rejected with a message the editor can act on (0.1629ms)
+✔ inexact tick values are refused rather than silently coerced (0.1225ms)
+✔ the probe identifies every frame rate this project has met (0.3534ms)
+✔ an exclusive host: one frame apart reads as exclusive and normalizes to 1 frame (0.693ms)
+✔ an inclusive host: identical marks read as inclusive (0.1755ms)
+✔ a wide range gives no verdict but hands the editor a decisive comparison (0.1442ms)
+✔ unset marks are recorded as the answer, not treated as a crash (0.0954ms)
+✔ a build whose mark calls throw still reports the timebase it did get (0.3611ms)
+✔ a timebase that is not an exact integer is called out rather than used (0.103ms)
+✔ a timebase off the broadcast grid is flagged, not quietly accepted (0.0878ms)
+✔ no host, no project and no sequence each stop cleanly with a finding (0.0863ms)
+✔ every report formats to something an editor can read and paste back (0.2523ms)
+✔ reports serialize to JSON — the panel logs them, and BigInt would throw (0.2948ms)
+✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.6194ms)
+✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1117ms)
+✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0789ms)
+✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0747ms)
+✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.3223ms)
+✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4378ms)
+✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1044ms)
+✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0563ms)
+✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1329ms)
+✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1888ms)
+✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.1174ms)
+✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.2892ms)
+✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.6051ms)
+✔ getTrackClipItems drops null entries Premiere returns (0.0912ms)
+✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.2727ms)
+✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1144ms)
+✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.152ms)
+✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0583ms)
+✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0686ms)
+✔ unwrapKeyframeValue leaves an already-plain value alone (0.0345ms)
+✔ unwrapKeyframeValue tolerates a missing keyframe (0.0218ms)
+✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0402ms)
+✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0345ms)
+✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0467ms)
+✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.105ms)
+✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0486ms)
+✔ trackItemName reads getName() — real track items have no .name (0.0908ms)
+✔ name fallback for AL detection works when only getName() exists (0.1261ms)
+✔ createController requires a render function (0.6813ms)
+✔ initializes state with busy false and default Ready status (0.4281ms)
+✔ setStatus updates state.status and invokes render (0.1186ms)
+✔ busy gate drops a second call (0.7335ms)
+✔ a thrown Error's message lands in status with level error (0.211ms)
+✔ status left busy by fn resets to Ready (0.1084ms)
+✔ status explicitly set to non-busy by fn is preserved (0.0877ms)
+✔ render is called on start and finish (0.1514ms)
+✔ act finishing in 50ms never renders showBusy: true (60.1956ms)
+✔ act taking longer than 150ms exposes showBusy: true after delay (203.3355ms)
+✔ golden: planner matches xml_recut.recut() frame-for-frame on the captured synced stack (2.8652ms)
+✔ golden: read-back of the planned result verifies clean; a 1-tick drift is caught (1.4123ms)
+✔ read-back: an item left behind inside a cut is reported, not ignored (0.1168ms)
+✔ ops: keep, move, trim, remove, split (0.1415ms)
+✔ head trim: a clip starting inside a cut keeps media continuity (0.0902ms)
+✔ sync: relative offset of surviving pieces across tracks is unchanged (0.1356ms)
+✔ refusal: whole plan, names clip and timecode, only when a cut lands inside (0.1954ms)
+✔ cutsToTicks: refuses a frame-grid mismatch and malformed lists (0.2997ms)
+✔ keepSubranges mirrors _keep_subranges edge cases (0.0983ms)
+CutDeck capability probe {
+  "probe": "marks-and-timing",
+  "complete": true,
+  "findings": [
+    {
+      "id": "bigint",
+      "question": "Does this UXP runtime support exact BigInt arithmetic?",
+      "answer": "yes",
+      "evidence": {
+        "checked": "BigInt('9007199254740993') + 1n"
+      }
+    },
+    {
+      "id": "sequence",
+      "question": "Is a sequence open?",
+      "answer": "yes",
+      "evidence": {
+        "name": "Interview"
+      }
+    },
+    {
+      "id": "timebase",
+      "question": "What is the true ticks-per-frame value?",
+      "answer": "8475667200",
+      "evidence": {
+        "returnedType": "string",
+        "matchesKnownRate": "29.97",
+        "ticksPerSecond": "254016000000",
+        "note": "divides 254016000000 exactly at 29.97 fps"
+      }
+    },
+    {
+      "id": "marks",
+      "question": "What do getInPoint/getOutPoint return right now?",
+      "answer": "both present",
+      "evidence": {
+        "in": {
+          "present": true,
+          "ticks": "254270016000",
+          "raw": "254270016000",
+          "seconds": 1
+        },
+        "out": {
+          "present": true,
+          "ticks": "2542700160000",
+          "raw": "2542700160000",
+          "seconds": 10
+        },
+        "end": {
+          "present": true,
+          "ticks": "7628100480000",
+          "raw": "7628100480000",
+          "seconds": 30
+        },
+        "inCall": "ok",
+        "outCall": "ok",
+        "note": "If no marks are set in Premiere, this line records what an UNSET mark looks like on this build — null, zero, or the sequence bounds. That is probe 1's unset-mark question."
+      }
+    },
+    {
+      "id": "outConvention",
+      "question": "Is the Out point inclusive or exclusive?",
+      "answer": "compare against Premiere",
+      "evidence": {
+        "deltaTicks": "2288430144000",
+        "durationIfExclusive": "270 frames",
+        "durationIfInclusive": "271 frames",
+        "how": "Read the marked duration Premiere itself shows in the Program Monitor. Whichever of these two numbers it equals is this build's convention. Marking In and Out on the SAME frame is the crispest test: 1 frame means exclusive, 0 frames means inclusive.",
+        "exclusiveNormalizes": {
+          "frames": "270",
+          "outExclusiveTicks": "2542700160000"
+        },
+        "inclusiveNormalizes": {
+          "frames": "271",
+          "outExclusiveTicks": "2551175827200"
+        }
+      }
+    },
+    {
+      "id": "zeroPoint",
+      "question": "Do marks sit in the same coordinate space as track item times?",
+      "answer": "no getZeroPoint on this build",
+      "evidence": {
+        "zeroPoint": {
+          "present": false,
+          "ticks": null,
+          "seconds": null
+        },
+        "note": "A shared offset cancels out of every equation in section 6, because marks and track item times are differenced against each other. It only matters for the destination's own append cursor."
+      }
+    }
+  ],
+  "verdict": null,
+  "ticksPerFrame": "8475667200"
+}
+✔ the driver offers exactly the helper's fixed commands (0.8331ms)
+✔ transform driver commands reject when no clip is selected (1.6264ms)
+✔ run_probe runs timing probe against fake host (2.2737ms)
+✔ run_probe rejects unknown probe name (0.1347ms)
+✔ inspect_selection inspects selection on active sequence (0.3002ms)
+✔ read_sequence reports the active sequence (0.3709ms)
+✔ add_markers adds every marker in one transaction, created inside it (0.3637ms)
+✔ a busy panel refuses a command instead of queueing behind the user (0.1541ms)
+✔ apply_cuts refuses a sequence other than the one the job analysed (0.2087ms)
+✔ apply_cuts for a retired file job refuses missing source identity (0.1681ms)
+✔ an unknown command is refused (0.1081ms)
+✔ keepRegistered registers, and registers again after a drop, backing off while it fails (0.2222ms)
+✔ keepRegistered stop clears pending timers and halts further registration (0.1096ms)
+✔ inspect_selection reports no graphic layers for a plain clip (0.4054ms)
+✔ the driver measures Graphics with the Transform panel's measure (1.0678ms)
+CutDeck: applied preset to 1 item(s) in 1 ms {
+  'create components': 0,
+  insert: 1,
+  'fetch params': 0,
+  values: 0,
+  'read In points': 0,
+  'enable keyframes': 0,
+  keyframes: 0,
+  interpolation: 0,
+  'read-back': 0
+}
+CutDeck: applied preset to 1 item(s) in 0 ms { 'create components': 0, insert: 0, 'fetch params': 0, values: 0 }
+CutDeck: applied preset to 1 item(s) in 0 ms {
+  'create components': 0,
+  insert: 0,
+  'fetch params': 0,
+  values: 0,
+  'read In points': 0,
+  'enable keyframes': 0,
+  keyframes: 0,
+  interpolation: 0,
+  'read-back': 0
+}
+CutDeck: applied preset to 3 item(s) in 0 ms {
+  'create components': 0,
+  insert: 0,
+  'fetch params': 0,
+  values: 0,
+  'read In points': 0,
+  'enable keyframes': 0,
+  keyframes: 0,
+  interpolation: 0,
+  'read-back': 0
+}
+✔ placeKeyframes adds each offset to the target's In point (0.8337ms)
+✔ capture stores keyframes as offsets from the clip's first frame, with their modes (0.6543ms)
+✔ apply replays keyframes at the target's own In point, with interpolation, and skips static set for them (1.4099ms)
+✔ a static-only preset runs exactly the two old transactions (0.2143ms)
+✔ read-back reports keyframes that didn't land where captured (e.g. a stopwatch-added extra) (0.4839ms)
+✔ point values ([x, y] as captured) are written as PointF, other values pass through (0.1606ms)
+✔ applyCapturedPresetToAll: 3 ALs, still 5 transactions, each AL keyed at its own In point (0.4062ms)
+CutDeck: "Transform" param[1] (Scale): expected keyframes at 84756672000 but found 0, 84756672000.
+✔ fake TickTime (static) models only declared members (1.5998ms)
+✔ fake TrackItemSelection (static) models only declared members (0.0854ms)
+✔ fake PointF (instance) models only declared members (0.0514ms)
+✔ fake Project (instance) models only declared members (0.0477ms)
+✔ fake CompoundAction (instance) models only declared members (0.053ms)
+✔ fake Constants (enums) models only declared members (0.0643ms)
+✔ the typings check itself catches an invented member (0.0793ms)
+✔ an Action created outside the transaction callback throws when added (0.2938ms)
+✔ actions apply only at commit, one undo step per transaction (0.1685ms)
+✔ a selection is only valid inside its callback (0.1759ms)
+✔ point keyframe values must be PointF, not arrays (0.1127ms)
+✔ interpolation values are the live ones, not the typings' alphabetical order (0.0655ms)
+Error: This preset could not be found — it may have been deleted.
+    at doApplyPreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\adjust.js:184:24)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\adjust.js:262:54
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onApplyPreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\adjust.js:262:44)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_adjust.test.cjs:91:16)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+Error: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.
+    at applyPresetToSelectedClips (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\adjust.js:221:13)
+    at async Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:7)
+    at async TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_adjust.test.cjs:133:3)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+✔ adjust: loadSettings loads defaults or merges saved JSON (0.8137ms)
+✔ adjust: applySettingChange updates state and persists settings (0.2379ms)
+✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3178ms)
+✔ adjust: onApplyPreset throws if preset id is not found (1.2931ms)
+✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.2797ms)
+✔ adjust: Alt mode with nothing selected says so and changes nothing (0.2279ms)
+✔ align: describeField handles missing, animated, points, and scalars (0.8342ms)
+✔ align: readAlignTransform returns unavailable when sequence or selection is missing (0.4852ms)
+✔ align: onRefresh runs through controller and updates alignState (1.0417ms)
+✔ align: poll skips reading if isMainBusy returns true (0.3929ms)
+Error: Name this preset first (the field next to Capture), then click Capture.
+    at doCapturePreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:63:23)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:88:46
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onCapturePreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:88:36)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_presets.test.cjs:89:17)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+✔ presets: loadCustomPresets reads array or defaults to empty (0.8081ms)
+✔ presets: onRemovePreset and onRenamePreset update presetStore and status (0.565ms)
+✔ presets: onChoosePresetFolder updates folder and presets (0.2056ms)
+✔ presets: onCapturePreset validates name (0.6063ms)
+Error: No clipboard API on this build. The full report is in the UXP Developer Tool console as JSON.
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:123:15)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_probes.test.cjs:45:16)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+Error: Unknown probe: nonexistent
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_probes.test.cjs:117:16)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+CutDeck transform params probe {
+  "probe": "transform-params",
+  "complete": false,
+  "findings": [
+    {
+      "id": "sequence",
+      "question": "Is a sequence open?",
+      "answer": "no",
+      "evidence": {
+        "detail": "no active sequence"
+      }
+    }
+  ]
+}
+✔ probes: onProbe('copystatus') copies text to clipboard and updates status (0.6955ms)
+✔ probes: onProbe('copystatus') fails gracefully when no clipboard API exists (0.5402ms)
+✔ every data-probe in index.html has a PROBES entry and vice versa (1.2073ms)
+✔ every non-special probe in PROBES satisfies the registry contract (0.1198ms)
+✔ generic probe dispatch sets startText, runs probe, logs json, and formats report into ready status (0.2862ms)
+✔ probes: unknown probe throws error caught by controller (0.2095ms)
+✔ features/align.js reuses transform probe from PROBES and runProbe (7.6441ms)
+✔ core/panel.js binds [data-probe] buttons to onProbe and closes overflow menu (0.8983ms)
+Error: The CutDeck helper restarted while this job ran; start it again
+    at follow (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\roughCut.js:92:13)
+    at doResume (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\roughCut.js:182:11)
+    at async Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:7)
+    at async TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_rough_cut.test.cjs:136:3)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+✔ roughCut.follow: stale source audio clears the result so the next cut can analyse again (1.0209ms)
+✔ roughCut.follow: a ready job from the retired XML route is cleared with a clear message (0.1556ms)
+✔ roughCut.follow: a native job for a sequence that isn't open cuts nothing and stays resumable (0.158ms)
+✔ roughCut.follow: no_cuts clears job without importing (0.142ms)
+✔ roughCut.follow: failed clears job and throws (0.118ms)
+✔ roughCut.onCut: a pending job is resumed, not replaced by a new one (0.637ms)
+✔ a running job is followed by pushed events, not status polling (0.1955ms)
+✔ a job the helper lost in a restart is cleared with its message (1.5749ms)
+✔ roughCut.follow: a cut that failed after its copy was made clears the job, so Resume cannot make a second copy (0.4755ms)
+✔ roughCut.follow: a cut that failed before any copy stays resumable (0.6417ms)
+✔ roughCut.onCut: warns about uncuttable clips while the helper analyses; a failed scan blocks nothing (1.0523ms)
+Error: Resume or dismiss the previous job before starting another operation.
+    at doSync (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\sync.js:15:13)
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onSync (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\sync.js:26:23)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_feature_sync.test.cjs:17:14)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.start (node:internal/test_runner/test:1242:17)
+    at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+✔ sync.onSync: blocks when unresumed job exists (2.258ms)
+✔ sync.onSync: executes syncSequence and reports ready on success (0.2608ms)
+✔ sync.onSync: reports error when problems are returned (0.1798ms)
+CutDeck measured bounds {"at":"50","folder":"C:\\Temp\\PluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":false}
+✔ saves the frame with the clip on, then off, switches it back on, and asks the helper for the box (20.9998ms)
+✔ refuses when the playhead is not over the clip, touching nothing (0.7828ms)
+✔ a failed second save still switches the clip back on (2.0079ms)
+✔ if the first frame is never written, the clip is never switched off (213.5921ms)
+✔ a clip that is already switched off is refused and left off (0.2501ms)
+CutDeck measured bounds {"at":"50","folder":"C:\\Temp\\PluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ when a clip is on track 0 (nothing underneath), it measures from a single frame with zero flicker and zero undo steps (15.8403ms)
+CutDeck measured bounds {"at":"50","folder":"C:\\Temp\\PluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":false}
+✔ when clips are underneath and track muting unavailable, re-enables clip immediately in its own transaction (30.3897ms)
+CutDeck measured bounds {"at":"50","folder":"C:TempPluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ a clip below that starts exactly at the playhead counts as underneath (start inclusive) (3.1752ms)
+CutDeck measured bounds {"at":"50","folder":"C:TempPluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ a clip below that ends exactly at the playhead does not count (end exclusive) (13.2592ms)
+CutDeck measured bounds {"at":"50","folder":"C:TempPluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ a clip below that starts after the playhead does not count (1.5764ms)
+CutDeck measured bounds {"at":"10","folder":"C:TempPluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ a playhead exactly on the clip's first tick is accepted (14.2171ms)
+CutDeck measured bounds {"at":"50","folder":"C:TempPluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ a frame whose size is still growing is not finished: the helper is asked only after two equal polls (45.4269ms)
+✔ a frame that never stops growing is an error, not a result (203.5073ms)
+✔ a frame that never appears is an error, not a result (203.0462ms)
+✔ a zero-byte frame that stays zero-byte is an error, not a result (199.724ms)
+Error: Name this preset first (the field next to Capture), then click Capture.
+    at doCapturePreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:63:23)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:88:46
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onCapturePreset (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\presets.js:88:36)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue54.test.cjs:160:17)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+✔ ATTACK [controller]: act handles non-Error thrown values (null, undefined, string, object) (1.0219ms)
+✔ ATTACK [controller]: concurrent burst of 5 calls drops all except the first (0.1468ms)
+✔ ATTACK [adjust]: applySettingChange handles null, undefined, empty patch gracefully (0.204ms)
+✔ ATTACK [adjust]: doAdjust handles placement failure gracefully through act() (0.1955ms)
+✔ ATTACK [roughCut]: corrupted localStorage JSON does not crash lastJob or clearJob (0.1909ms)
+✔ ATTACK [roughCut]: doResume with unexported prepared job warns user and clears job (0.2171ms)
+✔ ATTACK [presets]: doCapturePreset rejects whitespace-only preset name (0.6058ms)
+✔ ATTACK [presets]: doCapturePreset rejects when no clip is selected (0.3309ms)
+✔ ATTACK [align]: polling stops when controller is busy and survives host error (0.3248ms)
+CutDeck capability probe {
+  "unexpectedShape": true
+}
+CutDeck capability probe {}
+✔ ATTACK [probes]: probe.run rejecting recovers controller to error status and unsets busy (0.7716ms)
+✔ ATTACK [probes]: probe.format throwing recovers controller to error status and unsets busy (0.8705ms)
+✔ ATTACK [probes]: hostile probe names (null, undefined, empty, number) throw cleanly (0.7092ms)
+✔ ATTACK [probes]: concurrent burst of 5 probe calls drops secondary calls without race (0.2515ms)
+✔ ATTACK [probes]: syncmoves probe logReplacer correctly handles BigInt without throwing (0.2353ms)
+✔ ATTACK [probes]: copystatus falls back to the documented clipboard.setContent when writeText is missing (0.4723ms)
+✔ ATTACK [panel]: element with empty data-probe does not trigger onProbe (0.3522ms)
+Error: Unknown probe: null
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+Error: Unknown probe: undefined
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Error: Unknown probe: 
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Error: Unknown probe: 0
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Error: Unknown probe: 42
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Error: Unknown probe: [object Object]
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Error: Unknown probe: 
+    at handleProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:137:13)
+    at D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:47
+    at Object.act (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\controller.js:35:13)
+    at Object.onProbe (D:\01 - Antigravity\00 Claude\B-transcriber\uxp\cutdeck\features\probes.js:143:37)
+    at TestContext.<anonymous> (D:\01 - Antigravity\00 Claude\B-transcriber\tests\cutdeck_gate_issue55.test.cjs:67:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+✔ ATTACK [dead-code]: assemblyPlan.js is physically unresolvable and cannot be required (0.8344ms)
+✔ ATTACK [dead-code]: assembleProbe.js is physically unresolvable and cannot be required (0.2063ms)
+✔ ATTACK [dead-code]: no production file or test imports assemblyPlan or planAppend (154.6081ms)
+✔ ATTACK [timing-edge]: unverified convention rejects regardless of casing, type or whitespace (0.2616ms)
+✔ ATTACK [timing-edge]: non-integer, float, or invalid strings throw strict validation errors (0.2934ms)
+✔ ATTACK [timing-edge]: negative, zero, or non-positive sequence timebase is refused (0.1486ms)
+✔ ATTACK [timing-edge]: negative In point is strictly refused (0.1057ms)
+✔ ATTACK [timing-edge]: inverted and zero-length ranges are rejected (0.0965ms)
+✔ ATTACK [timing-edge]: out of bounds against sequence end is caught (0.1333ms)
+✔ ATTACK [timing-edge]: off-grid marks reject without silent rounding (0.1663ms)
+✔ PROPERTY: exact additive partition holds for any split point (0.1013ms)
+✔ PROPERTY: inclusive vs exclusive is consistently off-by-one frame across all frame rates (0.1208ms)
+✔ PROPERTY: deep scale invariance: arithmetic at 100 hours matches arithmetic at 0 hours (0.1085ms)
+✔ ATTACK [probe]: probe survives crashing sequence getters and reports clean findings (0.6362ms)
+✔ helper already running: no shell launch, no prompt (1.9493ms)
+✔ helper starts within the poll window (0.4485ms)
+✔ openPath is called with a plain string path, never something else (0.3045ms)
+✔ openPath failure is surfaced, not swallowed (0.3512ms)
+✔ timeout names Start CutDeck.cmd so a human knows what to do (0.1788ms)
+✔ a shell without openPath fails clearly instead of crashing (0.0864ms)
+✔ ensureHelperRunning throws when opts.version is missing (0.0863ms)
+✔ deriveHelperScriptPath finds the repo root from the plugin's own folder (Windows) (0.1105ms)
+✔ deriveHelperScriptPath finds the repo root from the plugin's own folder (posix) (0.1267ms)
+✔ deriveHelperScriptPath tolerates a trailing slash (0.1344ms)
+✔ deriveHelperScriptPath rejects a path that isn't the plugin's own folder (0.1796ms)
+✔ restartHelper waits until a helper with a new pid answers (0.2538ms)
+✔ restartHelper does nothing when no helper is running (0.0932ms)
+✔ restartHelper keeps a busy (or too old) helper (0.1743ms)
+✔ restartHelper says so when no helper comes back (0.8003ms)
+✔ the mismatch is recognised by its code, not its wording (0.1817ms)
+✔ a helper from before the code field is still recognised by its message (0.0763ms)
+✔ the start timeout points at helper.log, where a hidden helper records why it failed (0.1122ms)
+✔ restartHelper restarts a helper still running an older version (0.0797ms)
+✔ ensureHelperRunning restarts a stale-version helper instead of launching a doomed second one (0.1218ms)
+✔ ensureHelperRunning names the reason when a stale-version helper is busy (0.1272ms)
+✔ CUTDECK_BIN_NAME is 'CutDeck' (0.5328ms)
+✔ runTransaction runs through project.lockedAccess when host provides it (1.1654ms)
+✔ runTransaction runs directly when project.lockedAccess is absent (0.1043ms)
+✔ runTransaction throws when executeTransaction returns false (0.2239ms)
+✔ runTransaction preserves and rethrows exception from executeTransaction (0.0904ms)
+✔ runTransaction throws if project is missing (0.0909ms)
+✔ getOrCreateBin returns root if pathArray is empty (0.1349ms)
+✔ getOrCreateBin finds existing bin without executing transaction (0.1383ms)
+✔ getOrCreateBin creates missing single bin via transaction (0.1404ms)
+✔ getOrCreateBin creates nested bin hierarchy (0.1835ms)
+✔ getOrCreateBin throws user-facing error when transaction fails (0.1859ms)
+✔ getOrCreateBin throws if created bin cannot be found afterward (0.1229ms)
+✔ getOrCreateBin throws if project is missing or pathArray is invalid (0.1089ms)
+✔ activeProjectAndSequence throws if project is null (requireProject: true) (0.1054ms)
+✔ activeProjectAndSequence returns nulls if project is null and requireProject is false (0.0822ms)
+✔ activeProjectAndSequence throws default sequence error when sequence is missing (0.0787ms)
+✔ activeProjectAndSequence uses custom sequence error message when provided (0.0633ms)
+✔ activeProjectAndSequence returns null sequence when requireSequence is false (0.0532ms)
+✔ activeProjectAndSequence returns both project and sequence when present (0.0436ms)
+✔ TICKS_PER_SECOND equals 254016000000n (0.4995ms)
+✔ toTicks preserves BigInt values (0.1287ms)
+✔ toTicks converts safe integer numbers to BigInt (0.0769ms)
+✔ toTicks refuses inexact and unsafe numbers (0.315ms)
+✔ toTicks parses exact integer strings (0.1177ms)
+✔ toTicks refuses decimal strings and unparsable garbage (0.2866ms)
+✔ toTicks unwraps TickTime objects (0.3051ms)
+✔ toTicksOr returns converted value when valid, fallback on failure (0.1541ms)
+✔ ticks alias matches toTicks (0.1158ms)
+✔ makeTickTime creates TickTime factory from host ppro (0.5648ms)
+✔ an invalid frame count snaps the box back to the current setting (1.8892ms)
+✔ Enter on a Transform field raises onSetField once, not twice (0.9189ms)
+✔ classifier names each reading when the clip separates all three (0.962ms)
+✔ classifier refuses a verdict when readings coincide (clip at 0:00, or untrimmed head) (0.1067ms)
+✔ probe reports "sequence" when the host stores keyframes sequence-relative (0.9563ms)
+✔ probe reports "clip" when the host stores keyframes clip-relative (0.3813ms)
+✔ probe reports "media" when the host stores keyframes media-relative (1.052ms)
+✔ probe records interpolation constants and per-keyframe modes verbatim (0.408ms)
+✔ probe stops without a verdict unless exactly one clip is selected (0.134ms)
+✔ a throwing keyframe list is a finding, not a crash (0.1413ms)
+✔ probe is read-only: it never calls a create*Action or executeTransaction (0.3328ms)
+✔ mute probe reports each track and counts the muted ones without writing (1.9556ms)
+✔ mute probe warns when nothing reads muted (0.4228ms)
+✔ mute probe treats a failing isMuted as a finding, not a throw (0.4618ms)
+✔ mute probe says so when no project is open (0.1895ms)
+✔ text probe: same sizes means the two routes agree (0.8451ms)
+✔ text probe: a project item of another size makes the routes differ (0.3696ms)
+✔ text probe refuses anything but exactly one selected Graphic (0.3788ms)
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 57 of 57 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0.001,
+  reads: 0.005,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0.001,
+  'close gaps': 0,
+  'read-back': 0.001,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 57 of 57 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.003,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0.001,
+  'close gaps': 0,
+  'read-back': 0,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..4 of 4 moves (6 distinct positions on timeline)
+CutDeck close gaps: batch committed 4 of 4 moves (total done 4 of 4)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.001,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0,
+  'close gaps': 0,
+  'read-back': 0,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..2160 of 2160 moves (2165 distinct positions on timeline)
+CutDeck close gaps: batch committed 2160 of 2160 moves (total done 2160 of 2160)
+CutDeck rough cut timings (s): {
+  'read source': 0.003,
+  reads: 0.10700000000000001,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0.033,
+  'remove cut pieces': 0.004,
+  'close gaps': 0.008,
+  'read-back': 0.028,
+  'open copy': 0
+}
+scale test host reads: 42425
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 57 of 57 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.002,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0,
+  'close gaps': 0,
+  'read-back': 0,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 3 of 57 moves (total done 3 of 57)
+CutDeck close gaps: starting batch 3..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 54 of 54 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.001,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0.001,
+  'close gaps': 0,
+  'read-back': 0.001,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 57 of 57 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.003,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0,
+  'close gaps': 0,
+  'read-back': 0,
+  'open copy': 0
+}
+CutDeck split at cut edges: stale first handle; fresh read 1 of 3 at action 1
+CutDeck split at cut edges: stale first handle; fresh read 2 of 3 at action 1
+CutDeck split at cut edges: stale first handle; fresh read 1 of 3 at action 3
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 57 of 57 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.01,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0,
+  'close gaps': 0.001,
+  'read-back': 0,
+  'open copy': 0
+}
+CutDeck split at cut edges: stale first handle; fresh read 1 of 3 at action 1
+CutDeck split at cut edges: stale first handle; fresh read 2 of 3 at action 1
+CutDeck split at cut edges: stale first handle; fresh read 3 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+CutDeck close gaps: stale first handle; fresh read 1 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+CutDeck close gaps: stale first handle; fresh read 2 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 2 of 57 moves (total done 2 of 57)
+CutDeck close gaps: starting batch 2..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 55 moves (total done 2 of 57)
+CutDeck close gaps: stale first handle; fresh read 1 of 3 at action 3
+CutDeck close gaps: starting batch 2..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 55 of 55 moves (total done 57 of 57)
+CutDeck rough cut timings (s): {
+  'read source': 0,
+  reads: 0.003,
+  'make razor fillers': 0,
+  'trim razor fillers': 0,
+  'split at cut edges': 0,
+  'remove cut pieces': 0,
+  'close gaps': 0,
+  'read-back': 0.001,
+  'open copy': 0
+}
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+CutDeck close gaps: stale first handle; fresh read 1 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+CutDeck close gaps: stale first handle; fresh read 2 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+CutDeck close gaps: stale first handle; fresh read 3 of 3 at action 1
+CutDeck close gaps: starting batch 0..57 of 57 moves (66 distinct positions on timeline)
+CutDeck close gaps: batch committed 0 of 57 moves (total done 0 of 57)
+✔ source audio snapshot: changed timing refuses before cloning or editing (5.0843ms)
+✔ source audio snapshot: changed source in refuses before cloning or editing (0.5625ms)
+✔ source audio snapshot: changed media refuses before cloning or editing (0.4879ms)
+✔ source audio snapshot: changed disabled clip refuses before cloning or editing (0.5738ms)
+✔ source audio snapshot: changed speed refuses before cloning or editing (0.879ms)
+✔ source audio snapshot: changed muted track refuses before cloning or editing (1.0732ms)
+✔ source audio snapshot: changed duration refuses before cloning or editing (0.2841ms)
+✔ source audio snapshot: enumeration order changes still apply the exact golden (12.0077ms)
+✔ golden: native apply on the captured synced stack equals the XML route's recut, source untouched (7.8647ms)
+✔ refuses before any edit: a sped-up clip under a cut (0.802ms)
+✔ refuses before any edit: a transition a cut lands inside (0.6095ms)
+✔ findUncuttable names what a cut inside In/Out would refuse, and edits nothing (0.8009ms)
+✔ findUncuttable is empty when nothing in the range is refusable (0.4092ms)
+✔ refuses a cut list from another frame rate (0.1023ms)
+✔ a split never harms the next clip on the same track (clones park past the end) (1.4464ms)
+✔ scale: 432 cuts across a 5-track synced clip — exact result, no long clones parked (255.6695ms)
+✔ a clone Premiere returns empty once is asked for again, and the cut is still exact (3.3162ms)
+✔ a clone that stays empty still stops the cut, saying where (1.1949ms)
+✔ a cut that fails after the copy exists renames the copy (FAILED) and says so on the error (1.0915ms)
+✔ a refusal before the copy is made leaves no copy and no copyCreated flag (0.4342ms)
+✔ stale handle mid-batch in close gaps: commits partial batch, re-reads, and completes exact cut (3.8829ms)
+✔ stale handle mid-batch in split at cut edges: commits partial batch, re-reads, and completes exact cut (3.5783ms)
+✔ stale first handle in split: fresh read recovers an exact cut (11.604ms)
+✔ persistently stale first handle in split: bounded failure leaves source untouched (1.8467ms)
+✔ stale first handle in move: fresh read recovers an exact cut (4.8897ms)
+✔ persistently stale first handle in move: bounded failure leaves source untouched (4.027ms)
+✔ a host that behaves as Route A hopes: every probe passes, your sequence untouched, marks restored (9.4523ms)
+✔ marks that only apply once committed: P2 reports the two-transaction route (2.6762ms)
+✔ an absolute move is reported as absolute, not guessed as relative (3.9649ms)
+✔ refuses to run on its own test copy, and stops cleanly without a project (0.2845ms)
+✔ classifyMove (0.1238ms)
+✔ places each clip on its own tracks at its planned start, in a _Synced copy (4.7768ms)
+✔ refuses to run on a _Synced sequence, before calling the helper (0.3078ms)
+✔ reports the clips at the back, drift, and items with no media file (1.0148ms)
+✔ read-back flags a clip that lands shorter than its file (Source Monitor marks) (0.7049ms)
+✔ read-back flags clips that did not land when later track indexes create no track (0.5616ms)
+✔ read-back flags audio that snapped to a frame (1.136ms)
+✔ read-back flags originals left behind on the copy (1.0162ms)
+✔ a failed match stops before any copy is made (0.2273ms)
+✔ assignTracks: synced clips get their own tracks, the rest share the first ones (0.1378ms)
+✔ startTicks snaps video to the nearest frame and keeps audio exact (0.1037ms)
+✔ groupClips: timeline order, recorder audio stands alone, same-file clips at different starts stay apart (0.1375ms)
+✔ preserves colorLabel on V1 and V2+ when clips have custom label colors in the bin (0.5827ms)
+✔ preserves colorLabel when set on source timeline trackItem (timeline override) (0.4371ms)
+✔ restores V1 clip color if host placement resets V1 to default track color (0.4789ms)
+✔ a placing failure renames the synced copy (FAILED) so a rerun cannot be confused with it (0.3375ms)
+✔ formatReport says why an unmatched clip was refused (0.1638ms)
+✔ there is no Project Bin setting: nothing reads it, so the page must not offer it (0.696ms)
+✔ every captured preset gets a quick button, rounding the grid up to whole rows of three (1.6393ms)
+✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (2.6144ms)
+✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.2287ms)
+✔ fileNameFor keeps readable names (incl. Thai) and strips characters Windows rejects (0.612ms)
+✔ parsePresetFile: foreign JSON is ignored, broken CutDeck files are errors (0.1755ms)
+✔ no folder linked: add / rename / remove work on localStorage exactly as before (1.4022ms)
+✔ choosing a folder writes one file per preset, named after it (0.7044ms)
+✔ two presets with the same name get distinct files (0.3881ms)
+✔ a v1 cutdeck-presets.json is split into per-preset files and set aside (0.2627ms)
+✔ rename writes the new file and drops the old one (0.3044ms)
+✔ remove moves the file into Removed/, never deletes it (1.2604ms)
+✔ edits re-scan the folder, so another machine's new preset survives (0.4034ms)
+✔ unreadable CutDeck files are skipped and reported; foreign JSON is ignored silently (0.3572ms)
+✔ a stale token falls back to the saved path (0.2681ms)
+✔ unreachable folder: cached presets shown with an error, and edits are refused (0.8771ms)
+✔ shows the stage and percentage the helper reported (0.4578ms)
+✔ names the analyzed reference audio once the helper reports it (0.0839ms)
+✔ falls back to the static message before any phase is reported (0.0698ms)
+✔ malformed progress never renders undefined or NaN (0.101ms)
+✔ percentage is rounded and clamped to 0-100 (0.1317ms)
+✔ CEP script tag exposes the window global the panel reads (0.8113ms)
+✔ ripple probe (track ripple): a later camera after empty space is caught as a mismatch (9.3661ms)
+✔ ripple probe (all ripple): a later camera after empty space is caught as a mismatch (1.7881ms)
+✔ ripple probe: per-track ripple on a plain stack is exact, and says the empty-space case was not tested (1.0153ms)
+✔ ripple probe: sync-lock ripple double-shifts a plain stack and is reported (0.9833ms)
+✔ ripple probe on the golden synced stack is a mismatch under per-track ripple (3.6311ms)
+✔ the ripple probe is in the diagnostics menu (0.4362ms)
+✔ a cold-start permission denial is retried, not surfaced (6.6845ms)
+✔ a helper that is not listening yet is retried (32.6923ms)
+✔ the last failure is reported once the attempts run out (0.5441ms)
+✔ a sent request is never sent twice (14.9501ms)
+✔ a helper error reply resolves as a failure without reconnecting (15.5797ms)
+✔ a helper error reply keeps its machine-readable code (15.7425ms)
+✔ requests reuse one open connection (61.8608ms)
+✔ a connection the helper closes while idle is reopened on the next call (31.3792ms)
+✔ overlapping calls go out together on one socket and replies find them by id (16.0062ms)
+✔ an old helper's reply without an id still answers the oldest call (14.9793ms)
+✔ watch follows pushed job events to the finished job (14.7975ms)
+✔ watching a job that already finished resolves from the reply (15.9734ms)
+✔ a dropped connection fails a watch instead of hanging (15.5461ms)
+✔ a Premiere command from the helper is run by onCall and answered (31.9042ms)
+✔ a connection that runs no commands refuses a call rather than ignoring it (31.1383ms)
+✔ a failed call still lets the next call through (30.9749ms)
+✔ rpc default URL is ws://localhost:7891 and is passed to createSocket (31.5308ms)
+✔ createRpc allows custom url override (14.9003ms)
+✔ manifest.json network permissions strictly match rpc URL and contain no invalid IP literals (0.4869ms)
+✔ retired socket probe files and registrations do not exist (0.7499ms)
+✔ close() rejects calls still waiting for a reply instead of leaving them hanging (13.7252ms)
+✔ close() fails a job watch instead of leaving it hanging (15.4414ms)
+✔ every file named in KNOWN_EXCEPTIONS exists (0.4757ms)
+✔ (a) executeTransaction( appears only in host/project.js (or known exceptions) (19.7625ms)
+✔ (b) 254016000000 and TICKS_PER_SECOND = appear only in host/ticks.js (or known exceptions) (8.7507ms)
+✔ (c) layer direction: no module imports upward (lower layer requiring higher layer) (28.0486ms)
+✔ (e) a feature file requires no other feature file except probes.js (2.8635ms)
+✔ (d) require('premierepro') at module scope appears only in main.js (or known exceptions) (10.3218ms)
+✔ (e) workflow.VERSION matches cutdeck/helper.py VERSION and helperStart.js has no version literal (12.2355ms)
+✔ verdict 'clone-works' when the clone lands on a new track with all its audio (12.5344ms)
+✔ live 2026-09-24 case: clone drops audio, placing from the file lands V + all audio (6.628ms)
+✔ falls back to the separate-audio route when placing from the file lands nothing (5.2132ms)
+✔ flags duplicated audio — the problem the user saw with XML (11.8808ms)
+✔ reports audio snapping to a whole frame (10.3064ms)
+✔ says so when the clone does not create a track (2.6826ms)
+✔ refuses to run on its own test copy (0.3559ms)
+✔ stops before copying when no clip has audio (0.2894ms)
+✔ groupUnits pairs a video with the audio from the same file, start and In only (0.676ms)
+✔ classifySubframe (0.1624ms)
+✔ the plugin has JS files to check (0.8417ms)
+✔ parses: capabilityProbe.js (44.6256ms)
+✔ parses: core\alignPanel.js (38.7957ms)
+✔ parses: core\clubFridayPanel.js (30.6853ms)
+✔ parses: core\panel.js (31.9783ms)
+✔ parses: core\progressText.js (32.0344ms)
+✔ parses: core\rpc.js (30.632ms)
+✔ parses: features\adjust.js (30.9106ms)
+✔ parses: features\align.js (30.4888ms)
+✔ parses: features\clubFriday.js (29.7023ms)
+✔ parses: features\controller.js (29.1114ms)
+✔ parses: features\driver.js (29.0298ms)
+✔ parses: features\presets.js (28.766ms)
+✔ parses: features\probes.js (32.4509ms)
+✔ parses: features\roughCut.js (30.254ms)
+✔ parses: features\sync.js (27.853ms)
+✔ parses: helperStart.js (30.4294ms)
+✔ parses: host\components.js (30.6837ms)
+✔ parses: host\project.js (28.5384ms)
+✔ parses: host\sequenceRead.js (30.0796ms)
+✔ parses: host\ticks.js (29.1951ms)
+✔ parses: host\trackItems.js (28.519ms)
+✔ parses: layoutProbe.js (31.7735ms)
+✔ parses: main.js (29.6829ms)
+✔ parses: presetStore.js (28.2957ms)
+✔ parses: rippleProbe.js (28.2683ms)
+✔ parses: roughCutProbe.js (30.2861ms)
+✔ parses: syncProbe.js (30.3506ms)
+✔ parses: timeline\adjustmentLayer.js (29.1983ms)
+✔ parses: timeline\alLibrary.js (29.8917ms)
+✔ parses: timeline\alPlacement.js (29.2591ms)
+✔ parses: timeline\alProject.js (29.151ms)
+✔ parses: timeline\alSeedData.js (30.396ms)
+✔ parses: timeline\cmProject.js (29.529ms)
+✔ parses: timeline\cutPlanApply.js (30.5803ms)
+✔ parses: timeline\effects.js (30.9319ms)
+✔ parses: timeline\frameHold.js (31.4086ms)
+✔ parses: timeline\nativeCut.js (28.4855ms)
+✔ parses: timeline\nativeSync.js (28.2848ms)
+✔ parses: timelineRange.js (32.1842ms)
+✔ parses: transform\apply.js (29.7305ms)
+✔ parses: transform\cropBox.js (31.0841ms)
+✔ parses: transform\edit.js (33.0803ms)
+✔ parses: transform\frameBounds.js (29.3288ms)
+✔ parses: transform\geometry.js (30.335ms)
+✔ parses: transform\params.js (30.6748ms)
+✔ parses: transform\snapshot.js (29.2319ms)
+✔ parses: workflow.js (29.9982ms)
+✔ dragging the left edge to x=192 crops 10% left (0.9301ms)
+✔ corner drag sets two sides (0.1323ms)
+✔ an edge can't cross the opposite edge (0.0901ms)
+✔ at 50% scale the pointer still lands on the edge (0.6131ms)
+✔ rotated 90°: dragging toward screen-right moves the source top edge (0.13ms)
+✔ moving the box keeps its size and stays inside the source (0.1215ms)
+✔ preview <-> sequence round-trips (0.0896ms)
+✔ cropToMotionValues uses apply.js field names (0.0703ms)
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group"],"onlyText":false,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[],"delta":{"x":-11,"y":0}}
+CutDeck text layer align fell back to Motion: not text-only
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group"],"onlyText":false,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[],"delta":{"x":740,"y":0}}
+CutDeck text layer align fell back to Motion: not text-only
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group"],"onlyText":false,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[],"delta":{"x":0,"y":89}}
+CutDeck text layer align fell back to Motion: not text-only
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0,"y":0.9027777777777778},"wrote":{"x":-0.005729166666666666,"y":0.9027777777777778},"readBack":{"value":[-0.005729166666666666,0.9027777777777778]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}},{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.25,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":0,"y":-904}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0,"y":0.9027777777777778},"wrote":{"x":0,"y":0.06574074074074077},"readBack":{"value":[0,0.06574074074074077]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.25,"y":0.5},"wrote":{"x":0.25,"y":-0.337037037037037},"readBack":{"value":[0.25,-0.337037037037037]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":200},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0,"y":0.9027777777777778},"wrote":{"x":-0.005729166666666666,"y":0.9027777777777778},"readBack":{"value":[-0.005729166666666666,0.9027777777777778]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0,"y":0.9027777777777778},"wrote":{"x":-0.011458333333333333,"y":0.9027777777777778},"readBack":{"value":[-0.011458333333333333,0.9027777777777778]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text","AE.ADBE Shape"],"onlyText":false,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer align fell back to Motion: not text-only
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":true,"value":[0,0.9027777777777778]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer align fell back to Motion: text Position unreadable or keyframed
+CutDeck text layer write {"clip":"Graphic","field":"text Anchor Point","before":[0.11203125,-0.032777777777777774],"wrote":{"x":0.005729166666666666,"y":-0.06574074074074077},"readBack":{"value":[0.005729166666666666,-0.06574074074074077]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":[0.11203125,0.87],"wrote":{"x":0.005729166666666666,"y":0.837037037037037},"readBack":{"value":[0.005729166666666666,0.837037037037037]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Anchor Point","before":[0.11203125,-0.032777777777777774],"wrote":{"x":-0.3796875,"y":-0.06574074074074077},"readBack":{"value":[-0.3796875,-0.06574074074074077]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":[0.11203125,0.87],"wrote":{"x":-0.3796875,"y":0.837037037037037},"readBack":{"value":[-0.3796875,0.837037037037037]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Anchor Point","before":[0.11203125,-0.032777777777777774],"wrote":{"x":0.11458333333333333,"y":-0.025462962962962982},"readBack":{"value":[0.11458333333333333,-0.025462962962962982]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":[0.11203125,0.87],"wrote":{"x":0.11458333333333333,"y":0.8773148148148148},"readBack":{"value":[0.11458333333333333,0.8773148148148148]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.11458333333333333,0.8773148148148148]},"anchorPoint":{"isTimeVarying":false,"value":[0.11458333333333333,-0.025462962962962982]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.11458333333333333,"y":0.8773148148148148},"wrote":{"x":0.10885416666666667,"y":0.8773148148148148},"readBack":{"value":[0.10885416666666667,0.8773148148148148]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.11203125,0.87]},"anchorPoint":{"isTimeVarying":false,"value":[0.11203125,-0.032777777777777774]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.11203125,"y":0.87},"wrote":{"x":0.10630208333333334,"y":0.87},"readBack":{"value":[0.10630208333333334,0.87]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.10630208333333334,0.87]},"anchorPoint":{"isTimeVarying":false,"value":[0.11203125,-0.032777777777777774]}}],"delta":{"x":1502,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.10630208333333334,"y":0.87},"wrote":{"x":0.8885937500000001,"y":0.87},"readBack":{"value":[0.8885937500000001,0.87]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Anchor Point","before":[0.11203125,-0.032777777777777774],"wrote":{"x":0.0057291666666665925,"y":-0.06574074074074077},"readBack":{"value":[0.0057291666666665925,-0.06574074074074077]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":[0.8885937500000001,0.87],"wrote":{"x":0.7822916666666667,"y":0.837037037037037},"readBack":{"value":[0.7822916666666667,0.837037037037037]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.7822916666666667,0.837037037037037]},"anchorPoint":{"isTimeVarying":false,"value":[0.0057291666666665925,-0.06574074074074077]}}],"delta":{"x":-751,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.7822916666666667,"y":0.837037037037037},"wrote":{"x":0.39114583333333336,"y":0.837037037037037},"readBack":{"value":[0.39114583333333336,0.837037037037037]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.39114583333333336,0.837037037037037]},"anchorPoint":{"isTimeVarying":false,"value":[0.0057291666666665925,-0.06574074074074077]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.39114583333333336,"y":0.837037037037037},"wrote":{"x":0.3854166666666667,"y":0.837037037037037},"readBack":{"value":[0.3854166666666667,0.837037037037037]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.11203125,0.87]},"anchorPoint":{"isTimeVarying":false,"value":[0.11203125,-0.032777777777777774]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.11203125,"y":0.87},"wrote":{"x":0.10630208333333334,"y":0.87},"readBack":{"value":[0.10630208333333334,0.87]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.11203125,0.87]},"anchorPoint":{"isTimeVarying":false,"value":[0.11203125,-0.032777777777777774]}}],"delta":{"x":-11,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.11203125,"y":0.87},"wrote":{"x":0.10630208333333334,"y":0.87},"readBack":{"value":[0.10630208333333334,0.87]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.10630208333333334,0.87]},"anchorPoint":{"isTimeVarying":false,"value":[0.11203125,-0.032777777777777774]}}],"delta":{"x":1502,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.10630208333333334,"y":0.87},"wrote":{"x":0.8885937500000001,"y":0.87},"readBack":{"value":[0.8885937500000001,0.87]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.5,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-0.5,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.5,"y":0.5},"wrote":{"x":0.49973958333333335,"y":0.5},"readBack":{"value":[0.49973958333333335,0.5]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.5,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":0,"y":95.5}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.5,"y":0.5},"wrote":{"x":0.5,"y":0.5884259259259259},"readBack":{"value":[0.5,0.5884259259259259]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.5,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":760,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.5,"y":0.5},"wrote":{"x":0.8958333333333333,"y":0.5},"readBack":{"value":[0.8958333333333333,0.5]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.2,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}},{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.6,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-200,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.2,"y":0.5},"wrote":{"x":0.09583333333333334,"y":0.5},"readBack":{"value":[0.09583333333333334,0.5]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.6,"y":0.5},"wrote":{"x":0.4958333333333333,"y":0.5},"readBack":{"value":[0.4958333333333333,0.5]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Graphic Group","AE.ADBE Text","AE.ADBE Text"],"onlyText":true,"vectorMotion":{"position":{"isTimeVarying":false,"value":[0.5,0.5]},"scale":{"isTimeVarying":false,"value":100},"scaleWidth":{"isTimeVarying":false,"value":100},"uniformScale":{"isTimeVarying":false,"value":true},"rotation":{"isTimeVarying":false,"value":0},"anchorPoint":{"isTimeVarying":false,"value":[0.5,0.5]}},"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.09583333333333334,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}},{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.4958333333333333,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":1520,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.09583333333333334,"y":0.5},"wrote":{"x":0.8875,"y":0.5},"readBack":{"value":[0.8875,0.5]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.4958333333333333,"y":0.5},"wrote":{"x":1.2874999999999999,"y":0.5},"readBack":{"value":[1.2874999999999999,0.5]}}
+CutDeck text layer align sees: {"seen":["AE.ADBE Motion","AE.ADBE Text"],"onlyText":true,"vectorMotion":null,"texts":[{"hasParam":true,"position":{"isTimeVarying":false,"value":[0.5,0.5]},"anchorPoint":{"isTimeVarying":false,"value":[0,0]}}],"delta":{"x":-400,"y":0}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":{"x":0.5,"y":0.5},"wrote":{"x":0.29166666666666663,"y":0.5},"readBack":{"value":[0.29166666666666663,0.5]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Anchor Point","before":[0,0],"wrote":{"x":-0.18749999999999994,"y":-0.12962962962962962},"readBack":{"value":[-0.18749999999999994,-0.12962962962962962]}}
+CutDeck text layer write {"clip":"Graphic","field":"text Position","before":[0.29166666666666663,0.5],"wrote":{"x":0.10416666666666667,"y":0.37037037037037035},"readBack":{"value":[0.10416666666666667,0.37037037037037035]}}
+✔ moving the anchor with the compensated Position moves no source pixel (1.6443ms)
+✔ anchor top-left of an unscaled 1280x720 clip centred in 1080p puts Position on its corner (0.8655ms)
+✔ anchor targets sit on the cropped picture, not the full source (0.2185ms)
+✔ aligned bounds land on each frame edge and centre (0.7423ms)
+✔ positive rotation turns clockwise on screen (y down): right of the anchor lands below it (0.1902ms)
+✔ sequenceToSource undoes sourceToSequence, whatever the scale and rotation (0.3005ms)
+✔ a 90° rotation swaps the rendered width and height (0.1351ms)
+✔ applyMotionValues writes points as PointF and numbers as-is, all in one undo step (1.1401ms)
+✔ applyMotionValues refuses before writing anything when a clip has no Motion (0.5669ms)
+✔ setAnchor top-left keeps the picture in place: Anchor → [0,0], Position → the old corner (2.2557ms)
+✔ alignToFrame left moves a half-size centred clip to x = its half width (0.9449ms)
+✔ edits skip, with a reason, clips that are keyframed or have non-square pixels, and still do the rest (1.0348ms)
+✔ a non-square sequence is refused rather than guessed (0.9497ms)
+✔ setField writes one axis in pixels, keeping the other axis as it was (0.8339ms)
+✔ setField refuses text that is not a number and skips a keyframed value (0.2724ms)
+✔ setField sets every selected clip at once, each axis in its own frame, in one undo step (0.5333ms)
+✔ Align left on a Graphic moves its measured text box to x = 0 (0.7537ms)
+✔ Align centre and bottom on a Graphic use the text box, not the canvas (0.554ms)
+✔ Anchor top-left on a Graphic lands on its text box corner, and the text stays put (0.3864ms)
+✔ a Graphic is skipped with a reason when it cannot be measured; other clips still move (1.3501ms)
+✔ Align left on a text Graphic moves the text layer's own Position, not the Graphic's Motion (0.6151ms)
+✔ every text layer in the Graphic moves together (0.3646ms)
+✔ the shift is undone through Motion and Vector Motion scale (0.4505ms)
+✔ a shape layer or a keyframed text Position moves the whole Graphic instead, leaving nothing behind (0.4744ms)
+✔ Anchor top-left on a text Graphic sets the text's own Anchor Point, and the text stays put (0.3565ms)
+✔ the text anchor is found through a moved Motion (the live 751,468 / 11,468) (0.2703ms)
+✔ Anchor centre then Align left still lands the text's left edge on the frame (0.5203ms)
+✔ readAlignTransform on a text Graphic reads the text layer transform, not Motion (0.908ms)
+✔ setField on a text Graphic writes to the text layer's params, leaving Motion untouched (0.703ms)
+✔ setField on a Graphic with shapeLayer falls back to writing Motion (0.1899ms)
+✔ setField on a Graphic with keyframed text skips with explanation (0.1645ms)
+✔ consecutive alignments and anchor changes on a Graphic use cached bounds with zero re-measurement (1.0203ms)
+✔ B3: re-enable never compounds inside the edit write transaction (0.2748ms)
+✔ bounds cache hits even when clip object reference changes if key (track:start) matches (1.9075ms)
+✔ alignToFrame hcenter on odd-width text does not decrease X by 0.5 on consecutive clicks (0.7213ms)
+✔ alignToFrame vcenter on odd-height text does not decrease Y on consecutive clicks (0.4555ms)
+✔ consecutive align clicks when already aligned do not add undo steps (noop) (0.3808ms)
+✔ unionBounds spans every box; alignShiftTo aligns to that box, not the frame (0.1117ms)
+✔ distributeShifts: centres even out, the outer two stay, results follow input order (0.1459ms)
+✔ distributeShifts gaps: equal space between neighbours whatever their widths (0.0828ms)
+✔ distributeFrameShifts centers: spaces element centers evenly across the sequence frame (0.1062ms)
+✔ distributeFrameShifts gaps: equal margins on screen edges and equal gaps between elements (0.0783ms)
+✔ alignToSelection left lines every clip's left edge up on the leftmost clip (0.399ms)
+✔ alignToSelection needs two clips and writes nothing with one (0.3017ms)
+✔ distribute h-centers spaces three clips' centres evenly, in one undo step (0.5453ms)
+✔ distribute v-gaps makes the vertical gaps equal for clips of different heights (0.3611ms)
+✔ distribute needs three usable clips: two, or three with one keyframed, is refused untouched (1.609ms)
+✔ distribute with to='frame' spaces 2 clips across sequence frame with equal margins and gaps (0.6137ms)
+✔ distribute with to='frame' needs at least 2 usable clips; 1 is refused (0.3645ms)
+✔ distribute with to='frame' on single Graphic with 2 text layers distributes across frame (0.4691ms)
+✔ setField on a multi-text Graphic preserves relative positions between text layers (0.254ms)
+✔ setAnchor on a multi-text Graphic falls back to Motion anchor and does not collapse text positions (0.2693ms)
+✔ isGraphic returns true for a clip with AE.ADBE Text even without AE.ADBE Graphic Group (0.2359ms)
+✔ alignToFrame on multi-text Graphic shifts bounds cache once, not multiplied by layer count (0.4876ms)
+✔ setField on multi-text Graphic scales proportionally and rotates with relative delta (0.3162ms)
+✔ alignToSelection on a single Graphic with multiple text layers aligns text layers inside the graphic (0.6726ms)
+✔ distribute on a single Graphic with 3 text layers evenly distributes their positions (0.3772ms)
+✔ alignToFrame and setAnchor work on a Graphic clip without Vector Motion (0.4572ms)
+✔ scrubbing properties updates host live during drag and commits on release (0.8772ms)
+✔ Slice 2: setAnchor on one clip performs at most 1 full read of sequence / items (0.2735ms)
+✔ Slice 4 B1: readAlignTransform and setField on Graphic with shapeLayer target Motion, not text (0.2697ms)
+✔ Slice 4 B2: setField with layerTarget selects specific text layer or all (0.3828ms)
+✔ Slice 4 B4: unmeasured Graphic text with playhead outside clip returns needPlayheadOver flag (0.2175ms)
+✔ Slice 4 B5: typed anchor on text compensates text position so text stays frozen on screen (0.2778ms)
+CutDeck measured bounds {"at":"50","folder":"C:\\Temp\\PluginData","bounds":{"left":11,"top":904,"right":429,"bottom":991},"singleFrame":true}
+✔ measureDrawnBounds isolates via track muting without disabling clip on timeline (2.7863ms)
+✔ getCachedBounds retains cached bounds across floating point precision variations (0.3194ms)
+✔ readAlignTransform inspects component chain only once per item (4.7094ms)
+CutDeck measured bounds {"at":"50","folder":"C:\\Temp\\PluginData","bounds":{"left":10,"top":10,"right":100,"bottom":100},"singleFrame":true}
+✔ measureDrawnBounds skips muting and disables nothing when other tracks have no overlapping clips (9.4382ms)
+✔ findMotionComponent matches by matchName, not displayName (0.7016ms)
+✔ findMotionComponent returns null, never throws, when there is no chain or no Motion (0.1288ms)
+✔ readTransform returns null for an item with no readable Motion component — the panel's 'unavailable' case (0.1038ms)
+✔ readTransform reads Position/Scale/Rotation/Anchor Point by the PROVEN indices (0.6398ms)
+✔ readTransform reports isTimeVarying per field, independently (0.2171ms)
+✔ readTransform survives one param throwing without losing the other three (0.2375ms)
+✔ readSequenceFrameSize reads SequenceSettings.getVideoFrameRect(), falling back to Sequence.getFrameSize() (0.2301ms)
+✔ normalizedToFramePixels reproduces Part 1a's live cross-check against Effect Controls (0.1295ms)
+✔ normalizedToFramePixels accepts both the array and {x,y} point shapes (0.658ms)
+✔ normalizedToFramePixels returns null instead of a wrong number for bad input (0.2395ms)
+✔ live 720p-in-1080p run: Position converts against the sequence, Anchor Point against the source (0.1546ms)
+✔ live non-square run: a 2.0-PAR 1280x720 source still stores Anchor Point against 1280x720 (0.1364ms)
+✔ parseVideoInfoSize reads the Video Info strings the live runs returned (0.0844ms)
+✔ parseVideoInfoSize keeps a non-square aspect and reports a missing one as null, never 1 (0.0418ms)
+✔ parseVideoInfoSize returns null for text without a size (0.0277ms)
+✔ readSourceFrameSize finds the Video Info column by ColumnID (0.1482ms)
+✔ readSourceFrameSize returns null, never throws, when the source size cannot be read (0.1014ms)
+✔ readAnchorFrameSize uses the source frame, falls back to the sequence frame only for a Graphic, else null (0.2018ms)
+✔ probe reports every component by index with its match name (3.8999ms)
+✔ probe finds the Motion component and reports its params BY INDEX (1.3739ms)
+✔ probe records the RAW wrapper shape, not just the unwrapped value (0.7638ms)
+✔ probe reports isTimeVarying per param so animated clips can be skipped, not flattened (0.4028ms)
+✔ probe reads BOTH frame-size routes and says whether they agree (0.4719ms)
+✔ probe flags disagreement between the two frame-size routes (0.2655ms)
+✔ probe finds a source resolution column in the project-columns metadata (0.3729ms)
+✔ probe reports the Video-Info column being absent as a finding, not a crash (0.313ms)
+✔ probe survives a build with no Metadata API at all (0.2126ms)
+✔ probe survives getProjectColumnsMetadata throwing (0.336ms)
+✔ probe records which selection getter the item really exposes (0.2448ms)
+✔ no host, no project, no sequence and no selection each stop cleanly (0.171ms)
+✔ a host call that THROWS is recorded, and the probe keeps going (0.1667ms)
+✔ one param whose getStartValue rejects does not lose the other params (0.2841ms)
+✔ an item with no component chain is a finding, not a crash (0.1743ms)
+✔ a clip with no Motion or Transform component is reported as such (0.5377ms)
+✔ formatFindings reproduces each probe's original header and body byte for byte (0.3264ms)
+✔ the transform report renders the real probe output as text (0.3727ms)
+✔ the Check Transform menu item is wired through to the probe (1.1868ms)
+✔ captures exact tick strings and rejects missing marks (2.3826ms)
+✔ prepare sends the native audio-track read and never exports XML (move 6) (1.7748ms)
+✔ a second call reuses the existing CutDeck bin instead of creating another (0.4204ms)
+✔ bin creation runs through project.lockedAccess when the host provides it (0.1118ms)
+✔ bin creation still works when the host has no lockedAccess (0.1332ms)
+✔ the audio read carries a clip's speed when it is not 100%, and nothing when it is (0.3949ms)
+✔ the audio read asks the host about a track's clips together, keeping their order (5.2018ms)
+✔ every $("id") in core/panel.js resolves to an id in uxp/cutdeck/index.html (2.0967ms)
+✔ getElementById/classList/textContent/addEventListener appear in no panel file except core/panel.js, core/alignPanel.js, core/clubFridayPanel.js (4.4952ms)
+✔ every seam file named in the allowlist actually exists (0.2213ms)
+✔ no #rrggbb literal outside core/theme.css (within uxp/cutdeck) (2.7908ms)
+✔ panel.render is idempotent: a second call with the same state mutates nothing further (1.9521ms)
+✔ panel.render does zero property mutations when called again with the same state (0.4946ms)
+ℹ tests 658
+ℹ suites 0
+ℹ pass 658
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7558.9343

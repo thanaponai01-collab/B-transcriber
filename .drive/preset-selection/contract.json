@@ -1,0 +1,37 @@
+{
+  "criteria": [
+    {
+      "stage": "prove",
+      "statement": "Selected Adjustment Layers receive Transform Zoom and Invert"
+    }
+  ],
+  "max_seconds": 3600,
+  "timeout_seconds": 120,
+  "max_attempts": 4,
+  "stages": [
+    {
+      "inputs": [
+        "uxp/cutdeck/features/adjust.js",
+        "uxp/cutdeck/host/trackItems.js",
+        "tests/cutdeck_preset_adjustment_selection.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_component_access.test.cjs"
+      ],
+      "id": "prove",
+      "skill": "correctness-gate",
+      "command": [
+        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+        "--test",
+        "tests/cutdeck_preset_adjustment_selection.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_component_access.test.cjs"
+      ]
+    }
+  ],
+  "oracle_files": [
+    "tests/cutdeck_preset_adjustment_selection.test.cjs"
+  ],
+  "target": "local",
+  "goal": "Allow Alt-click presets on selected Adjustment Layers, excluding audio and placing no new layer",
+  "actions": []
+}

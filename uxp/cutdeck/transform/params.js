@@ -34,7 +34,10 @@ const PARAM_INDEX = {
   rotation: 4,
   anchorPoint: 5,
   // 6 Anti-flicker, then Crop Left/Top/Right/Bottom in percent (PREMIERE_FACTS "Motion param
-  // indices"). Phase 5's rendered bounds need the crop; nothing else here reads it.
+  // indices"). Phase 5's rendered bounds need the crop; the panel shows all of them, the same
+  // rows Effect Controls lists under Motion (labels confirmed in the 26.5.2 executable's
+  // $$$/MediaCore/AEFilters/Motion/kStr*LabelText strings, REA string scan 2026-10-16).
+  antiFlicker: 6,
   cropLeft: 7,
   cropTop: 8,
   cropRight: 9,
@@ -86,14 +89,26 @@ function clearComponentCache(item = null) {
   else itemComponentCache = new WeakMap();
 }
 
+// Opacity is chain index 0 on every clip, its param [0] the percent Effect Controls shows
+// (PREMIERE_FACTS "Component chain layout" and the saved-.prproj row: "Opacity [0] is percent").
+// Blend Mode is not read: its param index and numeric encoding are unproven.
+const OPACITY_MATCH_NAME = "AE.ADBE Opacity";
+const OPACITY_PARAM_INDEX = { opacity: 0 };
+
+async function findComponent(item, matchName) {
+  const comps = await inspectComponents(item);
+  if (!comps) return null;
+  const entry = comps.find((c) => c.matchName === matchName);
+  return entry ? entry.component : null;
+}
+
+const findOpacityComponent = (item) => findComponent(item, OPACITY_MATCH_NAME);
+
 // Searches the item's component chain for the real Motion component. Never throws: a missing
 // chain, a component that won't report its match name, or a host with no getComponentChain at
 // all are all "not found", same as capabilityProbe.js's looksLikeTransformComponent scan.
 async function findMotionComponent(item) {
-  const comps = await inspectComponents(item);
-  if (!comps) return null;
-  const entry = comps.find((c) => c.matchName === MOTION_MATCH_NAME);
-  return entry ? entry.component : null;
+  return findComponent(item, MOTION_MATCH_NAME);
 }
 
 // Reads one param by index off an already-found component. Returns null when the param itself
@@ -130,14 +145,15 @@ async function readParamField(component, index) {
   }
 }
 
-// Reads the Motion component's four semantic fields for `item`. Returns null when the item has
+// Reads every Motion param plus Opacity's percent for `item`. Returns null when the item has
 // no readable Motion component at all — the panel's "unavailable" case, per Phase 1's
 // definition of done. Each field is independently null-able so one bad param doesn't take the
-// other three down with it.
+// others down with it.
 async function readTransform(item) {
   const component = await findMotionComponent(item);
   if (!component) return null;
-  const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint, cropLeft, cropTop, cropRight, cropBottom] =
+  const opacityComponent = await findOpacityComponent(item);
+  const [position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity] =
     await Promise.all([
       readParamField(component, PARAM_INDEX.position),
       readParamField(component, PARAM_INDEX.scale),
@@ -145,12 +161,14 @@ async function readTransform(item) {
       readParamField(component, PARAM_INDEX.uniformScale),
       readParamField(component, PARAM_INDEX.rotation),
       readParamField(component, PARAM_INDEX.anchorPoint),
+      readParamField(component, PARAM_INDEX.antiFlicker),
       readParamField(component, PARAM_INDEX.cropLeft),
       readParamField(component, PARAM_INDEX.cropTop),
       readParamField(component, PARAM_INDEX.cropRight),
       readParamField(component, PARAM_INDEX.cropBottom),
+      readParamField(opacityComponent, OPACITY_PARAM_INDEX.opacity),
     ]);
-  return { position, scale, scaleWidth, uniformScale, rotation, anchorPoint, cropLeft, cropTop, cropRight, cropBottom };
+  return { position, scale, scaleWidth, uniformScale, rotation, anchorPoint, antiFlicker, cropLeft, cropTop, cropRight, cropBottom, opacity };
 }
 
 // The sequence's own frame size, read the same dual-route way capabilityProbe.js and
@@ -347,6 +365,9 @@ async function readGraphicLayers(item) {
 
 module.exports = {
   MOTION_MATCH_NAME,
+  OPACITY_MATCH_NAME,
+  OPACITY_PARAM_INDEX,
+  findOpacityComponent,
   GRAPHIC_GROUP_MATCH_NAME,
   TEXT_MATCH_NAME,
   TEXT_PARAM_INDEX,

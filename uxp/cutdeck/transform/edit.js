@@ -21,7 +21,29 @@ function describeField(entry, isPoint, frameSize) {
       : null;
     return px ? { known: true, animated: false, x: px.x, y: px.y } : { known: false };
   }
-  return typeof entry.value === "number" ? { known: true, animated: false, value: entry.value } : { known: false };
+  return typeof entry.value === "number" || typeof entry.value === "boolean"
+    ? { known: true, animated: false, value: entry.value }
+    : { known: false };
+}
+
+// The rows Effect Controls lists under Motion and Opacity beyond the four the panel always had.
+// They are the clip's own Motion/Opacity values, a Graphic included (its text layers' transform
+// only replaces Position/Scale/Rotation/Anchor). Scale Width is greyed while Uniform Scale is
+// on, as in Effect Controls.
+function effectControlsExtras(transform) {
+  const t = transform || {};
+  const extras = {
+    uniformScale: describeField(t.uniformScale, false),
+    scaleWidth: describeField(t.scaleWidth, false),
+    antiFlicker: describeField(t.antiFlicker, false),
+    cropLeft: describeField(t.cropLeft, false),
+    cropTop: describeField(t.cropTop, false),
+    cropRight: describeField(t.cropRight, false),
+    cropBottom: describeField(t.cropBottom, false),
+    opacity: describeField(t.opacity, false),
+  };
+  if (extras.uniformScale.value !== false && extras.scaleWidth.known) extras.scaleWidth.locked = true;
+  return extras;
 }
 
 function textTarget(layers) {
@@ -87,6 +109,7 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
           scale: describeField(activeText.scale, false, frameSize),
           rotation: describeField(activeText.rotation, false, frameSize),
           anchor: describeField(activeText.anchorPoint, true, anchorFrame),
+          ...effectControlsExtras(primaryClip.transform),
         },
         textLayers,
         activeLayerTarget: layerTarget,
@@ -108,6 +131,7 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
       scale: describeField(activeText.scale, false, frameSize),
       rotation: describeField(activeText.rotation, false, frameSize),
       anchor: describeField(activeText.anchorPoint, true, anchorFrame),
+      ...effectControlsExtras(primaryClip.transform),
     };
     return {
       clipName,
@@ -125,6 +149,7 @@ async function readAlignTransform(seqOrSnapshot, ppro = null, options = {}) {
     scale: describeField(transform.scale, false, frameSize),
     rotation: describeField(transform.rotation, false, frameSize),
     anchor: describeField(transform.anchorPoint, true, anchorFrame),
+    ...effectControlsExtras(transform),
   };
   return { clipName, available: true, reason: null, fields };
 }
@@ -548,6 +573,21 @@ async function alignToSelection(ppro, edge, measure = null) {
   }, measure, group);
 }
 
+// Premiere's own third align mode, "Align to Video Frame as Group" (Properties panel strings
+// $$$/Premiere/HSL/TransformControlsView/AlignToVideoFrameAsGroup, REA string scan 2026-10-16):
+// the selection's outer box goes to the frame edge and every clip moves by the same amount, so
+// their layout relative to each other is kept.
+async function alignToFrameAsGroup(ppro, edge, measure = null) {
+  if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
+  const group = (models, frame, skipped) => {
+    if (models.length < 1) throw new Error(`Select a clip to align.${skippedNote(skipped)}`);
+    return transformGeometry.alignShift(transformGeometry.unionBounds(models.map(clipBounds)), frame, edge);
+  };
+  return editSelectedClips(ppro, `CutDeck: Align ${edge} as group`, (ctx, seqFrame, shift) => (
+    moveBy(ctx, seqFrame, shift.dx, shift.dy)
+  ), measure, group);
+}
+
 const skippedNote = (skipped) => (skipped.length ? ` Skipped: ${skipped.join(" ")}` : "");
 
 const DISTRIBUTE = {
@@ -642,9 +682,40 @@ const EDIT_FIELDS = {
   "position-y": { param: "position", axis: "y" },
   "anchor-x": { param: "anchorPoint", axis: "x" },
   "anchor-y": { param: "anchorPoint", axis: "y" },
-  scale: { param: "scale" },
+  scale: { param: "scale", min: 0 },
   rotation: { param: "rotation" },
+  // The other Effect Controls rows. Ranges are the params' own units: Crop and Opacity are
+  // percent, Anti-flicker 0..1, so a typed value outside is clamped rather than sent.
+  "scale-width": { param: "scaleWidth", min: 0 },
+  "uniform-scale": { param: "uniformScale", bool: true },
+  "anti-flicker": { param: "antiFlicker", min: 0, max: 1 },
+  "crop-left": { param: "cropLeft", min: 0, max: 100 },
+  "crop-top": { param: "cropTop", min: 0, max: 100 },
+  "crop-right": { param: "cropRight", min: 0, max: 100 },
+  "crop-bottom": { param: "cropBottom", min: 0, max: 100 },
+  opacity: { param: "opacity", min: 0, max: 100 },
 };
+
+// The params a text-only Graphic takes from its text layer; every other field is the clip's own.
+const TEXT_LAYER_PARAMS = new Set(["position", "anchorPoint", "scale", "rotation"]);
+
+// Typed text to a value. Rotation also takes Effect Controls' own "turns x degrees" form
+// ("1x10" = 370, "-1x-10" = -370), so a value copied from Effect Controls pastes back unchanged.
+function parseFieldValue(spec, text) {
+  const raw = String(text).trim();
+  if (spec.bool) {
+    if (/^(true|on|1)$/i.test(raw)) return true;
+    if (/^(false|off|0)$/i.test(raw)) return false;
+    throw new Error(`"${text}" is not on or off.`);
+  }
+  const typed = raw.replace(/[%°]/g, "").trim();
+  const turns = spec.param === "rotation" ? /^(-?\d+)\s*x\s*(-?[\d.]+)$/i.exec(typed) : null;
+  const number = turns ? Number(turns[1]) * 360 + Number(turns[2]) : Number(typed);
+  if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
+  const min = spec.min === undefined ? -Infinity : spec.min;
+  const max = spec.max === undefined ? Infinity : spec.max;
+  return Math.min(max, Math.max(min, number));
+}
 
 // Sets the typed value on EVERY selected clip (Effect Controls can only do one at a time). A
 // point axis is converted per clip, in that clip's own frame, keeping its other axis. Clips
@@ -652,9 +723,7 @@ const EDIT_FIELDS = {
 async function setField(ppro, field, text, options = {}) {
   const spec = EDIT_FIELDS[field];
   if (!spec) throw new Error(`Unknown field "${field}".`);
-  const typed = String(text).replace(/[%°]/g, "").trim();
-  const number = Number(typed);
-  if (typed === "" || !Number.isFinite(number)) throw new Error(`"${text}" is not a number.`);
+  const number = parseFieldValue(spec, text);
   const layerTarget = (options && options.layerTarget !== undefined) ? options.layerTarget : "all";
 
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
@@ -668,7 +737,7 @@ async function setField(ppro, field, text, options = {}) {
   const skipped = [];
   let done = 0;
   for (const clip of clips) {
-    if (clip.isGraphic) {
+    if (clip.isGraphic && TEXT_LAYER_PARAMS.has(spec.param)) {
       const layers = clip.layers;
       if (textTarget(layers)) {
         const textsToTarget = (layerTarget === "all")
@@ -830,7 +899,10 @@ module.exports = {
   setField,
   setAnchor,
   alignToFrame,
+  alignToFrameAsGroup,
   alignToSelection,
   distribute,
   textTarget,
+  parseFieldValue,
+  EDIT_FIELDS,
 };

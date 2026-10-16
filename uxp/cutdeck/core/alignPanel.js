@@ -38,11 +38,36 @@
   }
 
   // --- transform field formatting -----------------------------------------------------------
-  // One decimal place matches the precision Part 1a's live probe confirmed against Effect
-  // Controls' own readout (e.g. "-510.8, 44.9") — more would imply false precision, fewer would
-  // stop matching it digit for digit.
-  function formatNum(n) {
-    return (Math.round(n * 10) / 10).toString();
+  // Shown the way Effect Controls shows them, digit for digit: one fixed decimal (Part 1a's live
+  // probe: "-510.8, 44.9"; a whole value reads "100.0"), Anti-flicker two ("0.00"), and Rotation
+  // past a full turn as turns x degrees ("1x10.0" = 370°). transform/edit.js parses that form back.
+  const DECIMALS = { "anti-flicker": 2 };
+  function formatNum(n, field) {
+    const digits = DECIMALS[field] || 1;
+    const fixed = (Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits)).toFixed(digits);
+    return fixed === "-0.0" || fixed === "-0.00" ? fixed.slice(1) : fixed;
+  }
+  function formatField(field, n) {
+    if (field === "rotation" && Math.abs(n) >= 360) {
+      const turns = Math.trunc(n / 360);
+      return `${turns}x${formatNum(n - turns * 360, field)}`;
+    }
+    return formatNum(n, field);
+  }
+  function parseShown(field, text) {
+    const turns = field === "rotation" ? /^(-?\d+)\s*x\s*(-?[\d.]+)$/i.exec(String(text).trim()) : null;
+    return turns ? Number(turns[1]) * 360 + Number(turns[2]) : parseFloat(text) || 0;
+  }
+  // The params' own ranges (Crop and Opacity percent, Anti-flicker 0..1), so a scrub stops where
+  // Effect Controls stops. Anti-flicker scrubs in hundredths.
+  const LIMITS = {
+    scale: [0, Infinity], "scale-width": [0, Infinity], "anti-flicker": [0, 1], opacity: [0, 100],
+    "crop-left": [0, 100], "crop-top": [0, 100], "crop-right": [0, 100], "crop-bottom": [0, 100],
+  };
+  const STEP = { "anti-flicker": 0.01 };
+  function clampField(field, n) {
+    const range = LIMITS[field];
+    return range ? Math.min(range[1], Math.max(range[0], n)) : n;
   }
 
   // Phase 2: each value is an input. One that can't be edited safely (unread, or keyframed —
@@ -85,21 +110,45 @@
       }
     }
   }
+  // A `locked` field (Scale Width while Uniform Scale is on) keeps its value but is greyed, as
+  // in Effect Controls.
   function renderInput(id, field, key, busy) {
     const el = $(id);
     if (!field || !field.known) return setInput(el, "", "—", true);
     if (field.animated) return setInput(el, "", "keyframed", true);
-    return setInput(el, formatNum(field[key]), "", !!busy);
+    const name = el && typeof el.getAttribute === "function" ? el.getAttribute("data-field") : null;
+    return setInput(el, formatField(name, field[key]), "", !!busy || !!field.locked);
   }
 
+  // Effect Controls' Motion rows in its order, then Opacity. Uniform Scale is a checkbox
+  // (renderUniformScale); Blend Mode is not shown because it is not readable yet.
   const INPUTS = [
     ["align-position-x", "position", "x"],
     ["align-position-y", "position", "y"],
     ["align-scale", "scale", "value"],
+    ["align-scale-width", "scaleWidth", "value"],
     ["align-rotation", "rotation", "value"],
     ["align-anchor-x", "anchor", "x"],
     ["align-anchor-y", "anchor", "y"],
+    ["align-anti-flicker", "antiFlicker", "value"],
+    ["align-crop-left", "cropLeft", "value"],
+    ["align-crop-top", "cropTop", "value"],
+    ["align-crop-right", "cropRight", "value"],
+    ["align-crop-bottom", "cropBottom", "value"],
+    ["align-opacity", "opacity", "value"],
   ];
+
+  // Uniform Scale on: one Scale. Off: Effect Controls relabels it Scale Height beside Scale Width.
+  function renderUniformScale(field, busy) {
+    const box = $("align-uniform-scale");
+    const known = !!(field && field.known && !field.animated);
+    const on = known ? field.value !== false : true;
+    if (box) {
+      if (box.checked !== on) box.checked = on;
+      if (box.disabled !== (!known || !!busy)) box.disabled = !known || !!busy;
+    }
+    setText($("align-scale-label"), on ? "Scale" : "Scale Height");
+  }
 
   // --- mount: move this panel's container into the root Premiere made for it ---------------
 
@@ -218,6 +267,7 @@
     setText($("align-transform-clip"), line);
     const fields = available ? (transform.fields || {}) : {};
     for (const [id, name, key] of INPUTS) renderInput(id, fields[name], key, busy);
+    renderUniformScale(available ? fields.uniformScale : null, busy);
     renderTextLayerSwitcher(transform && transform.textLayers, transform ? transform.activeLayerTarget : 0);
     return available;
   }
@@ -251,6 +301,8 @@
     if (scaleReset) scaleReset.addEventListener("click", () => intents.onSetField("scale", "100"));
     const rotReset = $("align-rotation-reset");
     if (rotReset) rotReset.addEventListener("click", () => intents.onSetField("rotation", "0"));
+    const uniform = $("align-uniform-scale");
+    if (uniform) uniform.addEventListener("change", (e) => intents.onSetField("uniform-scale", e.target.checked ? "on" : "off"));
 
     for (const [id] of INPUTS) {
       const input = $(id);
@@ -310,7 +362,7 @@
 
           if (typeof e.preventDefault === "function" && e.cancelable) e.preventDefault();
           const startX = e.clientX;
-          const startVal = parseFloat(input.value) || 0;
+          const startVal = parseShown(field, input.value);
           let isDragging = false;
 
           const onPointerMove = (me) => {
@@ -325,10 +377,9 @@
               }
             }
             if (isDragging) {
-              const step = me.shiftKey ? 10 : (me.altKey || me.ctrlKey ? 0.1 : 1);
-              let nextVal = startVal + dx * step;
-              if (field === "scale") nextVal = Math.max(0, nextVal);
-              const formatted = formatNum(nextVal);
+              const step = (STEP[field] || 1) * (me.shiftKey ? 10 : (me.altKey || me.ctrlKey ? 0.1 : 1));
+              const nextVal = clampField(field, startVal + dx * step);
+              const formatted = formatField(field, nextVal);
               input.value = formatted;
               if (valText) valText.textContent = formatted;
               if (typeof intents.onSlideField === "function") {
@@ -374,15 +425,14 @@
           if (e.key === "Enter") {
             exitEditMode(true);
           } else if (e.key === "Escape") {
-            input.value = formatNum(parseFloat(valText ? valText.textContent : input.value) || 0);
+            input.value = formatField(field, parseShown(field, valText ? valText.textContent : input.value));
             exitEditMode(false);
           } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
             if (typeof e.preventDefault === "function") e.preventDefault();
-            const step = e.shiftKey ? 10 : (e.altKey || e.ctrlKey ? 0.1 : 1);
+            const step = (STEP[field] || 1) * (e.shiftKey ? 10 : (e.altKey || e.ctrlKey ? 0.1 : 1));
             const delta = e.key === "ArrowUp" ? step : -step;
-            let next = (parseFloat(input.value) || 0) + delta;
-            if (field === "scale") next = Math.max(0, next);
-            input.value = formatNum(next);
+            const next = clampField(field, parseShown(field, input.value) + delta);
+            input.value = formatField(field, next);
             if (valText) valText.textContent = input.value;
             if (typeof intents.onSlideField === "function") {
               intents.onSlideField(field, input.value);

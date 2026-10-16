@@ -156,9 +156,14 @@ function makeStub() {
   el("align-scale-reset");
   el("align-rotation-reset");
   for (const [id, field] of [["align-position-x", "position-x"], ["align-position-y", "position-y"],
-    ["align-scale", "scale"], ["align-rotation", "rotation"], ["align-anchor-x", "anchor-x"], ["align-anchor-y", "anchor-y"]]) {
+    ["align-scale", "scale"], ["align-rotation", "rotation"], ["align-anchor-x", "anchor-x"], ["align-anchor-y", "anchor-y"],
+    ["align-scale-width", "scale-width"], ["align-anti-flicker", "anti-flicker"], ["align-crop-left", "crop-left"],
+    ["align-crop-top", "crop-top"], ["align-crop-right", "crop-right"], ["align-crop-bottom", "crop-bottom"],
+    ["align-opacity", "opacity"]]) {
     el(id).setAttribute("data-field", field);
   }
+  el("align-uniform-scale");
+  el("align-scale-label");
 
   const body = el("__body__");
   body.appendChild(container);
@@ -349,7 +354,7 @@ test("renderTransform shows 'Select a clip on the timeline.' when nothing is sel
   delete global.document;
 });
 
-test("renderTransform formats Position/Scale/Rotation/Anchor to one decimal, matching Effect Controls", () => {
+test("renderTransform formats Position/Scale/Rotation/Anchor to one fixed decimal, as Effect Controls shows 960.0, 540.0", () => {
   const { nodes } = makeStub();
   const alignPanel = loadAlignPanel();
   alignPanel.render({
@@ -370,7 +375,7 @@ test("renderTransform formats Position/Scale/Rotation/Anchor to one decimal, mat
   assert.equal(nodes.get("align-transform-clip").textContent, "Lowerthird 2026.png");
   const values = ["align-position-x", "align-position-y", "align-scale", "align-rotation", "align-anchor-x", "align-anchor-y"]
     .map((id) => nodes.get(id).value);
-  assert.deepEqual(values, ["-510.8", "44.9", "162", "0", "2", "60.5"]);
+  assert.deepEqual(values, ["-510.8", "44.9", "162.0", "0.0", "2.0", "60.5"]);
   assert.equal(nodes.get("align-scale").disabled, false);
   delete global.document;
 });
@@ -398,7 +403,7 @@ test("renderTransform empties and disables a keyframed field instead of showing 
     assert.equal(nodes.get(id).disabled, true);
     assert.equal(nodes.get(id).getAttribute("placeholder"), "keyframed");
   }
-  assert.equal(nodes.get("align-scale").value, "100");
+  assert.equal(nodes.get("align-scale").value, "100.0");
   assert.equal(nodes.get("align-scale").disabled, false);
   delete global.document;
 });
@@ -658,7 +663,7 @@ test("a field the user is typing in is not overwritten by a re-render", () => {
     busy: false, status: { text: "Ready", level: "ready" },
   });
   assert.equal(typing.value, "15");
-  assert.equal(nodes.get("align-rotation").value, "0");
+  assert.equal(nodes.get("align-rotation").value, "0.0");
   delete global.document;
 });
 
@@ -670,10 +675,10 @@ test("index.html has nine anchor cells and six align buttons, each with a value 
   assert.deepEqual([...edges].sort(), [...ALIGN_EDGES].sort());
 });
 
-test("index.html's Phase 6 controls carry values the feature knows: two align targets, four distributions", async () => {
+test("index.html's Phase 6 controls carry values the feature knows: three align targets, four distributions", async () => {
   const targets = [...html.matchAll(/data-align-to="([^"]+)"/g)].map((m) => m[1]);
   const kinds = [...html.matchAll(/data-distribute="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(targets, ["frame", "selection"]);
+  assert.deepEqual(targets, ["frame", "selection", "group"]);
   assert.deepEqual([...kinds].sort(), ["h-centers", "h-gaps", "v-centers", "v-gaps"]);
   // Each kind must be one distribute() accepts (it throws "Unknown distribution" otherwise; here
   // it fails on the missing project first, which proves only that the name was not rejected).
@@ -710,17 +715,17 @@ test("scrubby drag raises onSlideField with intermediate values and onCommitFiel
 
   // Move by +10px (dx = 10, step = 1 -> nextVal = 110)
   winListeners.pointermove[0]({ clientX: 110 });
-  assert.equal(scaleInput.value, "110");
-  assert.deepEqual(slideCalls, [["scale", "110"]]);
+  assert.equal(scaleInput.value, "110.0");
+  assert.deepEqual(slideCalls, [["scale", "110.0"]]);
 
   // Move by +20px (dx = 20 -> nextVal = 120)
   winListeners.pointermove[0]({ clientX: 120 });
-  assert.equal(scaleInput.value, "120");
-  assert.deepEqual(slideCalls, [["scale", "110"], ["scale", "120"]]);
+  assert.equal(scaleInput.value, "120.0");
+  assert.deepEqual(slideCalls, [["scale", "110.0"], ["scale", "120.0"]]);
 
   // Pointerup
   winListeners.pointerup[0]();
-  assert.deepEqual(commitCalls, [["scale", "120"]]);
+  assert.deepEqual(commitCalls, [["scale", "120.0"]]);
 
   delete global.window;
   delete global.document;
@@ -739,12 +744,12 @@ test("arrow keys raise onSlideField with stepped values", () => {
   const rotInput = nodes.get("align-rotation");
   rotInput.value = "0";
   rotInput.listeners.keydown[0]({ key: "ArrowUp", preventDefault() {} });
-  assert.equal(rotInput.value, "1");
-  assert.deepEqual(slideCalls, [["rotation", "1"]]);
+  assert.equal(rotInput.value, "1.0");
+  assert.deepEqual(slideCalls, [["rotation", "1.0"]]);
 
   rotInput.listeners.keydown[0]({ key: "ArrowDown", preventDefault() {} });
-  assert.equal(rotInput.value, "0");
-  assert.deepEqual(slideCalls, [["rotation", "1"], ["rotation", "0"]]);
+  assert.equal(rotInput.value, "0.0");
+  assert.deepEqual(slideCalls, [["rotation", "1.0"], ["rotation", "0.0"]]);
 
   delete global.document;
 });
@@ -1060,4 +1065,90 @@ test("an idle poll tick reads past the snapshot cache; a tick right after activi
   } finally {
     global.setInterval = realSetInterval; global.clearInterval = realClearInterval; Date.now = realNow;
   }
+});
+
+// --- the Effect Controls rows beyond Position/Scale/Rotation/Anchor -------------------------------
+
+function renderEffectControls(alignPanel, extra) {
+  alignPanel.render({
+    sequence: { name: "S" },
+    transform: { clipName: "c", available: true, reason: null, fields: Object.assign({
+      position: { known: true, animated: false, x: 960, y: 540 }, scale: { known: true, animated: false, value: 100 },
+      rotation: { known: true, animated: false, value: 370 }, anchor: { known: true, animated: false, x: 640, y: 360 },
+      uniformScale: { known: true, animated: false, value: true },
+      scaleWidth: { known: true, animated: false, value: 100, locked: true },
+      antiFlicker: { known: true, animated: false, value: 0.5 },
+      cropLeft: { known: true, animated: false, value: 10 }, cropTop: { known: true, animated: false, value: 0 },
+      cropRight: { known: true, animated: false, value: 0 }, cropBottom: { known: true, animated: false, value: 25.25 },
+      opacity: { known: true, animated: false, value: 80 },
+    }, extra) },
+    busy: false, status: { text: "Ready", level: "ready" },
+  });
+}
+
+test("the extra rows read as Effect Controls shows them: turns x degrees, 0.50, Scale Width greyed under Uniform Scale", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  renderEffectControls(alignPanel, {});
+  const value = (id) => nodes.get(id).value;
+  assert.equal(value("align-rotation"), "1x10.0");
+  assert.equal(value("align-anti-flicker"), "0.50");
+  assert.deepEqual(["align-crop-left", "align-crop-bottom", "align-opacity"].map(value), ["10.0", "25.3", "80.0"]);
+  assert.equal(value("align-scale-width"), "100.0");
+  assert.equal(nodes.get("align-scale-width").disabled, true);
+  assert.equal(nodes.get("align-uniform-scale").checked, true);
+  assert.equal(nodes.get("align-scale-label").textContent, "Scale");
+  delete global.document;
+});
+
+test("Uniform Scale off frees Scale Width and relabels Scale as Scale Height", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  renderEffectControls(alignPanel, {
+    uniformScale: { known: true, animated: false, value: false },
+    scaleWidth: { known: true, animated: false, value: 80 },
+  });
+  assert.equal(nodes.get("align-uniform-scale").checked, false);
+  assert.equal(nodes.get("align-scale-width").disabled, false);
+  assert.equal(nodes.get("align-scale-label").textContent, "Scale Height");
+  delete global.document;
+});
+
+test("ticking Uniform Scale raises onSetField with on/off", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const raised = [];
+  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField: (f, v) => raised.push([f, v]), onAnchor() {}, onAlign() {} });
+  const box = nodes.get("align-uniform-scale");
+  box.listeners.change[0]({ target: { checked: false } });
+  box.listeners.change[0]({ target: { checked: true } });
+  assert.deepEqual(raised, [["uniform-scale", "off"], ["uniform-scale", "on"]]);
+  delete global.document;
+});
+
+test("scrubbing stops at a param's range and Anti-flicker scrubs in hundredths", () => {
+  const { nodes } = makeStub();
+  const alignPanel = loadAlignPanel();
+  const slides = [];
+  const winListeners = {};
+  global.window = {
+    addEventListener: (type, fn) => { (winListeners[type] = winListeners[type] || []).push(fn); },
+    removeEventListener: (type, fn) => { winListeners[type] = (winListeners[type] || []).filter((h) => h !== fn); },
+  };
+  alignPanel.bind({ onProbe() {}, onRefresh() {}, onSetField() {}, onSlideField: (f, v) => slides.push([f, v]),
+    onCommitField() {}, onAnchor() {}, onAlign() {} });
+  const opacity = nodes.get("align-opacity");
+  opacity.value = "95.0";
+  opacity.listeners.pointerdown[0]({ clientX: 0, button: 0, preventDefault() {} });
+  winListeners.pointermove[0]({ clientX: 50 });
+  winListeners.pointerup[0]();
+  const flicker = nodes.get("align-anti-flicker");
+  flicker.value = "0.00";
+  flicker.listeners.keydown[0]({ key: "ArrowUp", preventDefault() {} });
+  const rotation = nodes.get("align-rotation");
+  rotation.value = "1x10.0";
+  rotation.listeners.keydown[0]({ key: "ArrowUp", preventDefault() {} });
+  assert.deepEqual(slides, [["opacity", "100.0"], ["anti-flicker", "0.01"], ["rotation", "1x11.0"]]);
+  delete global.window;
+  delete global.document;
 });

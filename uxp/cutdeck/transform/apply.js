@@ -10,11 +10,13 @@
 // before the transaction; every Action and Keyframe is created inside the callback
 // (PREMIERE_FACTS "executeTransaction + CompoundAction").
 
-const { findMotionComponent, PARAM_INDEX, clearComponentCache } = require("./params.js");
+const { findMotionComponent, findOpacityComponent, PARAM_INDEX, OPACITY_PARAM_INDEX, clearComponentCache } = require("./params.js");
 const { clearSnapshotCache } = require("./snapshot.js");
 const { runTransaction } = require("../host/project.js");
 
-// `writes` = [{ item, name, values: { position?: {x,y}, anchorPoint?: {x,y}, scale?, rotation? } }].
+// `writes` = [{ item, name, values: { position?: {x,y}, anchorPoint?: {x,y}, scale?, rotation?, ... } }]:
+// any Motion PARAM_INDEX field, or `opacity` (the Opacity component's percent). Booleans
+// (Uniform Scale) pass through as-is: createKeyframe is declared to take one (premierepro.txt).
 // `paramWrites` = [{ param, field, value, name }]: params the caller already holds (a Graphic's
 // text layer Position). Everything lands in ONE transaction, so one Ctrl+Z undoes the whole
 // batch. Throws before touching anything if a clip's Motion or a param can't be found.
@@ -24,8 +26,10 @@ async function applyMotionValues(ppro, project, label, writes, paramWrites = [],
     const component = await findMotionComponent(w.item);
     if (!component) throw new Error(`"${w.name}" has no Motion effect to write to.`);
     for (const [field, value] of Object.entries(w.values)) {
+      const onOpacity = field in OPACITY_PARAM_INDEX;
+      const owner = onOpacity ? await findOpacityComponent(w.item) : component;
       let param = null;
-      try { param = component.getParam(PARAM_INDEX[field]); } catch (_) { param = null; }
+      try { param = owner && owner.getParam(onOpacity ? OPACITY_PARAM_INDEX[field] : PARAM_INDEX[field]); } catch (_) { param = null; }
       if (!param) throw new Error(`Could not reach ${field} on "${w.name}".`);
       prepared.push({ param, field, value, name: w.name });
     }
@@ -42,7 +46,7 @@ async function applyMotionValues(ppro, project, label, writes, paramWrites = [],
       else if (act) compound.addAction(act);
     }
     for (const { param, field, value, name } of prepared) {
-      const v = typeof value === "number" ? value : new ppro.PointF(value.x, value.y);
+      const v = typeof value === "number" || typeof value === "boolean" ? value : new ppro.PointF(value.x, value.y);
       const setAction = param.createSetValueAction(param.createKeyframe(v), true);
       if (!setAction || !compound.addAction(setAction)) {
         throw new Error(`Premiere refused to set ${field} on "${name}".`);

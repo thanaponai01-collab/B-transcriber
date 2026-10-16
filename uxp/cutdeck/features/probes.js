@@ -7,6 +7,7 @@ const syncProbe = () => require("../syncProbe.js");
 const roughCutProbe = () => require("../roughCutProbe.js");
 const layoutProbe = () => require("../layoutProbe.js");
 const rippleProbe = () => require("../rippleProbe.js");
+const addEditProbe = () => require("../addEditProbe.js");
 
 const PROBES = [
   {
@@ -79,6 +80,20 @@ const PROBES = [
     logLabel: "CutDeck ripple delete probe",
   },
   {
+    id: "addedit",
+    startText: "Copying this sequence, then asking the Cutter Probe plugin for one native Add Edit on the copy…",
+    run: (ppro, deps) => addEditProbe().probeAddEdit(ppro, deps),
+    format: (report) => addEditProbe().formatAddEditReport(report),
+    logLabel: "CutDeck native Add Edit probe",
+  },
+  {
+    id: "addeditcheck",
+    startText: "Reading the Add Edit test copy: selection, and before/after state…",
+    run: (ppro) => addEditProbe().checkAddEdit(ppro),
+    format: (report) => addEditProbe().formatCheckReport(report),
+    logLabel: "CutDeck native Add Edit check",
+  },
+  {
     id: "mutestate",
     startText: "Reading every track's mute state…",
     run: (ppro) => layoutProbe().probeMuteState(ppro),
@@ -94,9 +109,9 @@ const PROBES = [
   },
 ];
 
-async function runProbe(probeEntry, ppro, ctl) {
+async function runProbe(probeEntry, ppro, ctl, deps = {}) {
   ctl.setStatus(probeEntry.startText, "busy");
-  const report = await probeEntry.run(ppro);
+  const report = await probeEntry.run(ppro, deps);
   if (probeEntry.logReplacer) {
     console.log(probeEntry.logLabel || `CutDeck ${probeEntry.id} probe`, JSON.stringify(report, probeEntry.logReplacer, 2));
   } else {
@@ -109,6 +124,7 @@ async function runProbe(probeEntry, ppro, ctl) {
 function createProbesFeature({
   ppro,
   ctl,
+  rpc = null,
   clipboard = typeof navigator !== "undefined" && navigator.clipboard ? navigator.clipboard : null,
   onCapturePreset = null,
 }) {
@@ -136,7 +152,7 @@ function createProbesFeature({
     if (!entry) {
       throw new Error(`Unknown probe: ${name}`);
     }
-    return runProbe(entry, ppro, ctl);
+    return runProbe(entry, ppro, ctl, { rpc });
   }
 
   return {

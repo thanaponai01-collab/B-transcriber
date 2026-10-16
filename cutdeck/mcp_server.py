@@ -108,7 +108,8 @@ def create_server(backend: Backend) -> FastMCP:
 
     @server.tool(annotations=write)
     async def premiere_set_transform_field(field: str, value: float) -> dict:
-        """Set a transform property (position-x, position-y, scale, rotation, anchor-x, anchor-y)
+        """Set a transform property (position-x, position-y, scale, scale-width, uniform-scale 1/0,
+        rotation, anchor-x, anchor-y, anti-flicker 0-1, crop-left/top/right/bottom %, opacity %)
         on selected clips in Premiere. Needs the CutDeck panel open."""
         return await backend.premiere("set_transform_field", {"field": field, "value": value})
 
@@ -121,7 +122,8 @@ def create_server(backend: Backend) -> FastMCP:
     @server.tool(annotations=write)
     async def premiere_align_clips(edge: str, to: str = "frame") -> dict:
         """Align selected clips to the sequence frame or selection bounding box (left, hcenter, right,
-        top, vcenter, bottom). 'to' can be 'frame' or 'selection'. Needs the CutDeck panel open."""
+        top, vcenter, bottom). 'to' can be 'frame', 'selection' or 'group' (the selection's outer box
+        to the frame, every clip moved together). Needs the CutDeck panel open."""
         return await backend.premiere("align_clips", {"edge": edge, "to": to})
 
     @server.tool(annotations=write)

@@ -33,3 +33,9 @@ are refused. Requirement: clubfriday/README.md; checks: tests/test_clubfriday.py
   CLAUDE.md for active engine decisions. This pass does not rewrite historical specs.
 
 Read [features](FEATURES.md) for area paths and [work](BUILD.md) for Next.
+
+## Native cutter prototype — 2026-10-16
+- Owner request: use Premiere native cutting internally in the existing Rough Cut system; no manual cutting toolbar. Build a disposable native bridge spike first; do not integrate until real-host behavior is verified.
+- Owner supplied Premiere Pro 26.0 C++ SDK under files/ and approved installation of Visual Studio 2022 C++ Build Tools, MSVC v143 and Windows SDK 10.0.26100.
+- First check is a read-only Control Surface plugin that enumerates host commands. Only after load/enumeration proof may a separately bounded split test run on a disposable sequence copy. Existing source preservation and exact read-back remain required.
+- Investigation: docs/research/cutdeck-native-cutter-2026-10-16.md. Prototype source: tools/native-cutter-spike/. Existing RUN.json belongs to earlier work and is preserved.

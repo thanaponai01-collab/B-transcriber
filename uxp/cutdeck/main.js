@@ -75,6 +75,7 @@ const presets = createPresetsFeature({ ppro, ctl: mainCtl, presetStore, storage 
 const probes = createProbesFeature({
   ppro,
   ctl: mainCtl,
+  rpc,
   clipboard: typeof navigator !== "undefined" ? navigator.clipboard : null,
   uxp,
   onCapturePreset: presets.onCapturePreset,

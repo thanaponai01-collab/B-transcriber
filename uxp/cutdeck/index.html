@@ -101,6 +101,18 @@
           </svg>
           <span>Test Ripple Delete</span>
         </div>
+        <div id="addeditprobe" class="dropdown-item" role="button" data-act="addeditprobe" data-probe="addedit" title="Needs the CutDeck Cutter Probe Control Surface plugin. Open a sequence with one video clip and its audio, deselect everything, then run: copies the sequence and has Premiere add one native edit to all tracks on the copy, 120 frames into the clip. Your sequence is not edited.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8h16M4 16h16"/><path d="M12 4v16"/>
+          </svg>
+          <span>Test Native Add Edit</span>
+        </div>
+        <div id="addeditcheckprobe" class="dropdown-item" role="button" data-act="addeditcheckprobe" data-probe="addeditcheck" title="Read-only. After Test Native Add Edit: click one piece in the test copy (links), or press Ctrl+Z / Ctrl+Shift+Z (undo), then run this.">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12l5 5L20 6"/>
+          </svg>
+          <span>Check Add Edit</span>
+        </div>
         <div id="mutestateprobe" class="dropdown-item" role="button" data-act="mutestateprobe" data-probe="mutestate" title="Read-only. Mute one track in Premiere first, then run this to see whether it reads muted.">
           <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/>
@@ -287,7 +299,7 @@
 
         <!-- Scale -->
         <div class="transform-row">
-          <div class="transform-field-label">Scale</div>
+          <div id="align-scale-label" class="transform-field-label">Scale</div>
           <div class="transform-field-inputs">
             <div class="input-col">
               <div class="input-axis-wrap">
@@ -299,6 +311,31 @@
             <div class="input-col">
               <div id="align-scale-reset" class="transform-reset-btn" role="button" data-act="align-scale-reset" data-needs-clip title="Reset Scale to 100%">Reset 100%</div>
             </div>
+          </div>
+        </div>
+
+        <div class="transform-row">
+          <div class="transform-field-label" title="Scale Width">Scale Width</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-scale-width" class="transform-input" data-field="scale-width" title="Scale Width (%), greyed while Uniform Scale is on - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+
+        <!-- Uniform Scale -->
+        <div class="transform-row">
+          <div class="transform-field-label"></div>
+          <div class="transform-field-inputs">
+            <label class="checkbox-container" title="Uniform Scale: Scale sets both width and height">
+              <input type="checkbox" id="align-uniform-scale" data-act="align-uniform-scale" data-needs-clip>
+              <span class="setting-subtext">Uniform Scale</span>
+            </label>
           </div>
         </div>
 
@@ -321,7 +358,7 @@
 
         <!-- Anchor -->
         <div class="transform-row">
-          <div class="transform-field-label">Anchor</div>
+          <div class="transform-field-label">Anchor Point</div>
           <div class="transform-field-inputs">
             <div class="input-col">
               <div class="input-axis-wrap">
@@ -335,6 +372,86 @@
                 <input type="text" id="align-anchor-y" class="transform-input" data-field="anchor-y" title="Anchor Point Y (source px) - Drag to scrub, click to edit" hidden>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div class="transform-row">
+          <div class="transform-field-label" title="Anti-flicker Filter">Anti-flicker Filter</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <input type="text" id="align-anti-flicker" class="transform-input" data-field="anti-flicker" title="Anti-flicker Filter (0 to 1) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-field-label" title="Crop Left">Crop Left</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-crop-left" class="transform-input" data-field="crop-left" title="Crop Left (%) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-field-label" title="Crop Top">Crop Top</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-crop-top" class="transform-input" data-field="crop-top" title="Crop Top (%) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-field-label" title="Crop Right">Crop Right</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-crop-right" class="transform-input" data-field="crop-right" title="Crop Right (%) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-field-label" title="Crop Bottom">Crop Bottom</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-crop-bottom" class="transform-input" data-field="crop-bottom" title="Crop Bottom (%) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
+          </div>
+        </div>
+
+        <!-- Opacity (Effect Controls' Opacity section; Blend Mode is not readable yet) -->
+        <div class="transform-row">
+          <div class="transform-field-label" title="Opacity">Opacity</div>
+          <div class="transform-field-inputs">
+            <div class="input-col">
+              <div class="input-axis-wrap">
+                <span class="val-text">—</span>
+                <span class="val-unit">%</span>
+                <input type="text" id="align-opacity" class="transform-input" data-field="opacity" title="Opacity (%) - Drag to scrub, click to edit" hidden>
+              </div>
+            </div>
+            <div class="input-col"></div>
           </div>
         </div>
       </div>
@@ -369,6 +486,7 @@
           <div class="align-row">
             <div class="pill-mini active" role="button" data-align-to="frame" title="Align to the sequence frame">Frame</div>
             <div class="pill-mini" role="button" data-align-to="selection" title="Align to the outer box of the selected clips (2 or more)">Selection</div>
+            <div class="pill-mini" role="button" data-align-to="group" title="Align to Video Frame as Group: the selection's outer box goes to the frame, every clip moves together">Group</div>
           </div>
           <div class="align-row">
             <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="left" title="Align Left">

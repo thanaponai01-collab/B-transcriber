@@ -1,0 +1,6 @@
+{
+  "claim": "Selected Adjustment Layers must receive the preset",
+  "before": "includeAdjustmentLayers: true",
+  "file": "uxp/cutdeck/features/adjust.js",
+  "after": "includeAdjustmentLayers: false"
+}

@@ -70,3 +70,10 @@ has not been rechecked. Reload the panel and restart the helper for protocol cut
 No real-host success is claimed from the offline tests.
 Also live: run *Test Ripple Delete* on the synced multicam sequence; `exact` with the
 empty-space case tested would justify replacing the per-piece moves with ripple remove.
+
+## Native cutter bridge spike — 2026-10-16
+- Aim/proof before build: `pwsh -File tools/native-cutter-spike/build.ps1` must produce an x64 `output/native-cutter-spike/CutDeckCutterProbe.acsrf` exporting EntryPoint against the supplied Adobe SDK. A native harness must load it, enumerate a synthetic host catalog, refuse unsupported host identity, and release acquired suites. Real Premiere must then load it and produce a complete host command catalog before any cutting implementation is enabled.
+- Status: build pending; experimental and uncommitted. No production Rough Cut integration or new panel controls.
+- Next for this spike: build and verify the read-only plugin, then activate it in Premiere to collect the real command catalog. SDK and binary outputs remain local.
+Native cutter diagnostic follow-up: observed Premiere PID 37516 loads/starts/connects, acquires both suites, then GetCommandRef returns 1348563565 ('Parm'). Hypothesis: missing plugin-side CommandSuite prevents host command handler creation. Next isolated experiment registers SDK CommandSuite1 with zero user buttons and no execution; verify native harness and then require a real host command catalog. No production integration or cutting yet. | pending live proof | uncommitted
+Zero-button CommandSuite1 diagnostic builds with warnings-as-errors; verify.ps1 passes loader, string ownership, failure/partial coverage, zero buttons, invalid-button rejection and zero execution. Real host experiment requires replacement/restart; not yet proven. | synthetic checks passed; live pending | uncommitted

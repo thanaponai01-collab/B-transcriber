@@ -28,6 +28,7 @@ const {
   setField,
   setAnchor,
   alignToFrame,
+  alignToFrameAsGroup,
   alignToSelection,
   distribute,
 } = require("../transform/edit.js");
@@ -220,7 +221,8 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
   }
 
   async function alignClips({ edge, to = "frame" }) {
-    const r = await (to === "selection" ? alignToSelection(ppro, edge, measure) : alignToFrame(ppro, edge, measure));
+    const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
+    const r = await run(ppro, edge, measure);
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }

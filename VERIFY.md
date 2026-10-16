@@ -1,3 +1,4 @@
+include: .drive/preset-selection/VERIFY.md
 # VERIFY
 
 include: verification/rough-cut.md

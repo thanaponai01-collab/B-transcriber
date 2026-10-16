@@ -84,3 +84,6 @@ test_projects/*
 # Rebuildable agent context and private verification evidence
 .project-context/
 .verify-evidence/
+
+# Adobe Premiere Pro C++ SDK: licensed, kept local only
+files/

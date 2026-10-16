@@ -6,7 +6,7 @@ const frameBounds = require("../transform/frameBounds.js");
 const { activeProjectAndSequence } = require("../host/project.js");
 const {
   describeField, readAlignTransform, readAlignState, clipModel, editLevel, editSummary,
-  setField, setAnchor, alignToFrame, alignToSelection, distribute,
+  setField, setAnchor, alignToFrame, alignToFrameAsGroup, alignToSelection, distribute, parseFieldValue, EDIT_FIELDS,
 } = require("../transform/edit.js");
 const { PROBES, runProbe, createProbesFeature } = require("./probes.js");
 
@@ -62,6 +62,27 @@ function subscribeSequenceEvents(ppro, handler) {
     console.error("CutDeck: sequence event subscribe failed, polling instead", error);
     return null;
   }
+}
+
+// Where each typed field lives in the panel state, so the value shows before Premiere confirms.
+const FIELD_STATE = {
+  "position-x": ["position", "x"], "position-y": ["position", "y"],
+  "anchor-x": ["anchor", "x"], "anchor-y": ["anchor", "y"],
+  scale: ["scale", "value"], rotation: ["rotation", "value"],
+  "scale-width": ["scaleWidth", "value"], "uniform-scale": ["uniformScale", "value"],
+  "anti-flicker": ["antiFlicker", "value"], opacity: ["opacity", "value"],
+  "crop-left": ["cropLeft", "value"], "crop-top": ["cropTop", "value"],
+  "crop-right": ["cropRight", "value"], "crop-bottom": ["cropBottom", "value"],
+};
+
+function showTypedValue(st, field, text) {
+  const at = FIELD_STATE[field];
+  const target = at && st && st.fields && st.fields[at[0]];
+  if (!target) return;
+  let value;
+  try { value = parseFieldValue(EDIT_FIELDS[field], text); } catch (_) { return; }
+  target[at[1]] = value;
+  if (field === "uniform-scale" && st.fields.scaleWidth) st.fields.scaleWidth.locked = value !== false;
 }
 
 function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = null, isMounted = null, isMainBusy = null }) {
@@ -207,17 +228,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     }
     return executeWithOptimisticConfirm(
       () => setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget }),
-      (st) => {
-        const num = parseFloat(String(text).replace(/[%°]/g, "").trim());
-        if (Number.isFinite(num) && st && st.fields) {
-          if (field === "position-x" && st.fields.position) st.fields.position.x = num;
-          else if (field === "position-y" && st.fields.position) st.fields.position.y = num;
-          else if (field === "anchor-x" && st.fields.anchor) st.fields.anchor.x = num;
-          else if (field === "anchor-y" && st.fields.anchor) st.fields.anchor.y = num;
-          else if (field === "scale" && st.fields.scale) st.fields.scale.value = num;
-          else if (field === "rotation" && st.fields.rotation) st.fields.rotation.value = num;
-        }
-      },
+      (st) => showTypedValue(st, field, text),
       (res) => editSummary(`Set ${field}`, res),
       (res) => editLevel(res),
     );
@@ -269,17 +280,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     onSetField: (field, text) => {
       return executeWithOptimisticConfirm(
         () => setField(ppro, field, text, { layerTarget: ctl.state.activeLayerTarget }),
-        (st) => {
-          const num = parseFloat(String(text).replace(/[%°]/g, "").trim());
-          if (Number.isFinite(num) && st && st.fields) {
-            if (field === "position-x" && st.fields.position) st.fields.position.x = num;
-            else if (field === "position-y" && st.fields.position) st.fields.position.y = num;
-            else if (field === "anchor-x" && st.fields.anchor) st.fields.anchor.x = num;
-            else if (field === "anchor-y" && st.fields.anchor) st.fields.anchor.y = num;
-            else if (field === "scale" && st.fields.scale) st.fields.scale.value = num;
-            else if (field === "rotation" && st.fields.rotation) st.fields.rotation.value = num;
-          }
-        },
+        (st) => showTypedValue(st, field, text),
         (res) => editSummary(`Set ${field}`, res),
         (res) => editLevel(res),
       );
@@ -295,15 +296,18 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       );
     },
     onAlign: (edge, to = "frame") => {
-      const toSelection = to === "selection";
+      const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
+      const suffix = to === "selection" ? " to selection" : to === "group" ? " as group" : "";
       return executeWithOptimisticConfirm(
-        () => (toSelection ? alignToSelection : alignToFrame)(ppro, edge, measure),
+        () => run(ppro, edge, measure),
         null,
-        (res) => editSummary(`Aligned ${edge}${toSelection ? " to selection" : ""}`, res),
+        (res) => editSummary(`Aligned ${edge}${suffix}`, res),
         (res) => editLevel(res),
       );
     },
     onDistribute: (kind, to = "frame") => {
+      // "As group" has no distribute of its own: spacing the clips is within their outer box.
+      if (to === "group") to = "selection";
       return executeWithOptimisticConfirm(
         () => distribute(ppro, kind, measure, to),
         null,
