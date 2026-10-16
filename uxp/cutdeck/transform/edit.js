@@ -6,6 +6,7 @@
 
 const trackItems = require("../host/trackItems.js");
 const transformParams = require("./params.js");
+const { unwrapKeyframeValue } = require("../host/components.js");
 const transformGeometry = require("./geometry.js");
 const transformApply = require("./apply.js");
 const frameBounds = require("./frameBounds.js");
@@ -931,8 +932,26 @@ async function setField(ppro, field, text, options = {}) {
   if (writes.length || paramWrites.length) {
     await transformApply.applyMotionValues(ppro, project, `CutDeck: Set ${field}`, writes, paramWrites);
     await shiftCachedBounds(ppro, seq, boundsUpdates);
+    if (spec.param === "blendMode") done -= await checkBlendModeTook(writes, number, skipped);
   }
   return { done, skipped };
+}
+
+// Blend Mode is not proven to take (PREMIERE_FACTS "Opacity component params"): read both Blend
+// Mode params back, log them, and report any clip where [2] is not what was written. Returns how
+// many clips did not take it, so the panel never says "Set" for a change Premiere ignored.
+async function checkBlendModeTook(writes, wanted, skipped) {
+  let missed = 0;
+  for (const w of writes) {
+    const component = await transformParams.findOpacityComponent(w.item);
+    const read = async (i) => {
+      try { return unwrapKeyframeValue(await component.getParam(i).getStartValue()); } catch (e) { return `read failed: ${e && e.message}`; }
+    };
+    const mode = await read(transformParams.OPACITY_PARAM_INDEX.blendMode);
+    console.log("CutDeck blend mode write", JSON.stringify({ clip: w.name, wrote: wanted, param1: await read(1), param2: mode }));
+    if (mode !== wanted) { missed += 1; skipped.push(`"${w.name}": Premiere kept Blend Mode ${mode}.`); }
+  }
+  return missed;
 }
 
 // Each row's reset, the value Effect Controls' reset arrow puts back. Motion: Position the
