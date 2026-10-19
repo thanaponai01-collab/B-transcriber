@@ -17,8 +17,9 @@ function harness({ playhead = 50, itemStart = 10, sizeFor = () => 99, lower = []
     getStartTime: () => Promise.resolve(fake.tickTime(itemStart)),
     getEndTime: () => Promise.resolve(fake.tickTime(100)),
     getTrackIndex: () => Promise.resolve(1),
-    createSetDisabledAction: (d) => fake.action(() => { disabled = d; }),
+    createSetDisabledAction: (d) => { disableCalls.push(d); return fake.action(() => { disabled = d; }); },
   };
+  const disableCalls = [];
   const muteCalls = [];
   const lowerTrack = {
     isMuted: () => Promise.resolve(false),
@@ -45,19 +46,21 @@ function harness({ playhead = 50, itemStart = 10, sizeFor = () => 99, lower = []
   const rpcAtPolls = [];
   const rpc = () => { rpcAtPolls.push(polls.length); return Promise.resolve({ bounds: BOUNDS }); };
   const run = () => measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT });
-  return { run, muteCalls, rpcAtPolls };
+  return { run, muteCalls, disableCalls, rpcAtPolls };
 }
 
 test("a clip below that starts exactly at the playhead counts as underneath (start inclusive)", async () => {
   const h = harness({ lower: [[50, 100]] });
   await h.run();
-  assert.deepEqual(h.muteCalls, [true, false], "the track below is muted for the save, then restored");
+  assert.deepEqual(h.disableCalls, [true, false], "the Graphic is switched off for the second save, then back on");
+  assert.deepEqual(h.muteCalls, [], "the track below is never muted");
 });
 
 test("a clip below that ends exactly at the playhead does not count (end exclusive)", async () => {
   const h = harness({ lower: [[10, 50]] });
   await h.run();
   assert.deepEqual(h.muteCalls, [], "nothing underneath: no track is touched");
+  assert.deepEqual(h.disableCalls, [], "and the Graphic stays on");
 });
 
 test("a clip below that starts after the playhead does not count", async () => {

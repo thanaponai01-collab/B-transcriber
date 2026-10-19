@@ -1,0 +1,19 @@
+{
+  "goal": "Measuring a text Graphic's box no longer blacks out the Program Monitor: hide only the Graphic, never mute other tracks",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 300,
+  "max_seconds": 3600,
+  "criteria": [
+    {"statement": "With clips above/below, the measure mutes no track, switches only the Graphic off for the second save, and it is back on before the helper rpc", "stage": "prove"},
+    {"statement": "All CutDeck panel tests and the Adobe API check pass", "stage": "suite"}
+  ],
+  "oracle_files": ["tests/cutdeck_measure_no_mute.test.cjs"],
+  "stages": [
+    {"id": "prove", "skill": "correctness-gate", "command": ["node", "--test", "tests/cutdeck_measure_no_mute.test.cjs"],
+     "inputs": ["uxp/cutdeck/transform", "tests/cutdeck_measure_no_mute.test.cjs"]},
+    {"id": "suite", "skill": "correctness-gate", "command": ["node", "--test", "tests/*.cjs"],
+     "inputs": ["uxp/cutdeck", "tests"]}
+  ],
+  "actions": []
+}

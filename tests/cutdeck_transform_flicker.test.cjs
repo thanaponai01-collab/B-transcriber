@@ -7,7 +7,7 @@ const { measureDrawnBounds, getCachedBounds, setCachedBounds } = require("../uxp
 
 const WAIT = { timeoutMs: 200, intervalMs: 1 };
 
-test("measureDrawnBounds isolates via track muting without disabling clip on timeline", async () => {
+test("measureDrawnBounds with footage underneath switches only the Graphic off, never mutes a track", async () => {
   const { project, undoSteps } = fake.createProject();
   let disabledCalls = [];
   let disabledState = false;
@@ -67,10 +67,11 @@ test("measureDrawnBounds isolates via track muting without disabling clip on tim
 
   const res = await measureDrawnBounds({ ppro, project, seq, item, frame: { width: 1920, height: 1080 }, rpc, uxp, wait: WAIT, keepDisabled: true });
 
-  assert.equal(disabledCalls.length, 0, `Expected 0 calls to createSetDisabledAction, but got: ${JSON.stringify(disabledCalls)}`);
-  assert.equal(undoSteps.length, 0, `Expected 0 undo steps burned for measurement, but got: ${JSON.stringify(undoSteps)}`);
-  assert.equal(written.length, 1, `Expected only 1 frame export (single frame), but got ${written.length}`);
-  assert.equal(track0Muted, false, "Track 0 must be restored to unmuted");
+  // Muting the footage track blacked out the Program Monitor (user report 2026-10-19).
+  assert.deepEqual(disabledCalls, [true, false], "only the Graphic goes off, then back on");
+  assert.equal(undoSteps.length, 2, `hide + show only, got: ${JSON.stringify(undoSteps)}`);
+  assert.equal(written.length, 2, "an on frame and an off frame for the diff");
+  assert.equal(track0Muted, false, "Track 0 is never muted");
 });
 
 test("cached bounds hold only while the transform signature is unchanged", () => {

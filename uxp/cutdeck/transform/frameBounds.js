@@ -51,26 +51,17 @@ function joinPath(folderPath, name) {
   return folderPath.endsWith(sep) ? folderPath + name : folderPath + sep + name;
 }
 
-// Checks whether there are active (unmuted, enabled) video clips on other tracks (underneath or above)
-// at `time`. When false, the background behind the Graphic is empty/black and nothing occludes it,
-// so we only need to export ONE frame and NEVER mute or disable anything — zero flicker and zero delay.
-async function hasOtherClips(seq, itemTrackIndex, time, mode = "all") {
+// Checks whether there are active (unmuted, enabled) video clips on other tracks at `time`. When
+// false, the background behind the Graphic is empty/black and nothing occludes it, so we only
+// need to export ONE frame and switch nothing off — zero flicker and zero delay.
+async function hasOtherClips(seq, itemTrackIndex, time) {
   if (!seq) return true;
   if (typeof seq.getVideoTrackCount !== "function") return false;
   if (typeof seq.getVideoTrack !== "function") return false;
   try {
     const atTicks = toTicks(time, "playhead");
     const trackCount = await seq.getVideoTrackCount();
-    let startTrack = 0;
-    let endTrack = trackCount;
-    if (mode === "underneath") {
-      if (itemTrackIndex <= 0) return false;
-      endTrack = Math.min(itemTrackIndex, trackCount);
-    } else if (mode === "above") {
-      startTrack = itemTrackIndex + 1;
-      if (startTrack >= trackCount) return false;
-    }
-    for (let t = startTrack; t < endTrack; t++) {
+    for (let t = 0; t < trackCount; t++) {
       if (t === itemTrackIndex) continue;
       const track = await seq.getVideoTrack(t);
       if (!track) continue;
@@ -91,65 +82,6 @@ async function hasOtherClips(seq, itemTrackIndex, time, mode = "all") {
   } catch (_) {
     return true;
   }
-}
-
-async function hasClipsUnderneath(seq, item, time) {
-  if (!seq || !item || typeof item.getTrackIndex !== "function") return true;
-  try {
-    const itemTrackIndex = await item.getTrackIndex();
-    return hasOtherClips(seq, itemTrackIndex, time, "underneath");
-  } catch (_) {
-    return true;
-  }
-}
-
-// Temporarily mutes video tracks other than item's track (e.g. tracks underneath or above)
-// so that exportSequenceFrame can capture the Graphic item on a clean/transparent background
-// WITHOUT disabling the clip, burning undo steps, or flickering the clip on the timeline.
-// Uses Promise.all to mute/unmute concurrently.
-async function muteOtherVideoTracks(seq, itemTrackIndex) {
-  if (!seq || typeof seq.getVideoTrackCount !== "function" || typeof seq.getVideoTrack !== "function") {
-    return null;
-  }
-  const tracksMuted = [];
-  try {
-    const trackCount = await seq.getVideoTrackCount();
-    const trackIndices = [];
-    for (let t = 0; t < trackCount; t++) {
-      if (t !== itemTrackIndex) trackIndices.push(t);
-    }
-    const tracks = await Promise.all(trackIndices.map((t) => seq.getVideoTrack(t)));
-    const muteChecks = await Promise.all(tracks.map(async (track) => {
-      if (!track || typeof track.isMuted !== "function") return { track, wasMuted: null };
-      const wasMuted = await track.isMuted();
-      return { track, wasMuted };
-    }));
-    if (muteChecks.some((c) => c.wasMuted === null)) return null;
-
-    const toMute = muteChecks.filter((c) => !c.wasMuted).map((c) => c.track);
-    await Promise.all(toMute.map((track) => {
-      if (typeof track.setMute !== "function") {
-        throw new Error("setMute not available on track");
-      }
-      tracksMuted.push(track);
-      return track.setMute(true);
-    }));
-    return tracksMuted;
-  } catch (_) {
-    await restoreMutedTracks(tracksMuted);
-    return null;
-  }
-}
-
-async function restoreMutedTracks(tracksMuted) {
-  if (!Array.isArray(tracksMuted) || tracksMuted.length === 0) return;
-  await Promise.all(tracksMuted.map(async (track) => {
-    try {
-      if (track && typeof track.setMute === "function") {
-        await track.setMute(false);
-      }
-    } catch (_) {}
-  }));
 }
 
 async function deleteEntry(folder, name) {
@@ -181,25 +113,16 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
     await waitForFile(folder, name, wait);
   };
 
+  // Nothing else drawn at the playhead: the frame is the Graphic on black, one save, nothing
+  // switched. Otherwise only the Graphic goes off for the second save. Muting the other tracks
+  // instead blacked out the whole Program Monitor for the measure (user report 2026-10-19).
   const itemTrackIndex = typeof item.getTrackIndex === "function" ? await item.getTrackIndex() : null;
-  const hasUnderneath = await hasClipsUnderneath(seq, item, time);
-  const hasAbove = itemTrackIndex !== null ? await hasOtherClips(seq, itemTrackIndex, time, "above") : true;
-  let mutedTracks = null;
-  // If nothing is underneath and nothing is above, no muting or toggling is needed at all:
-  // single frame capture on a clean background.
-  let singleFrame = !hasUnderneath && !hasAbove;
-
-  if ((hasUnderneath || hasAbove) && itemTrackIndex !== null) {
-    mutedTracks = await muteOtherVideoTracks(seq, itemTrackIndex);
-    if (mutedTracks !== null) {
-      singleFrame = true;
-    }
-  }
+  const singleFrame = itemTrackIndex !== null && !(await hasOtherClips(seq, itemTrackIndex, time));
 
   try {
     await save(onName);
 
-    if (hasUnderneath && !singleFrame) {
+    if (!singleFrame) {
       runTransaction(project, "CutDeck: measure (hide clip)", (compound) => {
         compound.addAction(item.createSetDisabledAction(true));
       });
@@ -225,9 +148,6 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
     const bounds = reply ? reply.bounds : null;
     return bounds;
   } finally {
-    if (mutedTracks) {
-      await restoreMutedTracks(mutedTracks);
-    }
     deleteEntry(folder, onName);
     if (!singleFrame) deleteEntry(folder, offName);
   }
@@ -328,7 +248,6 @@ function clearBoundsCache() {
 
 module.exports = {
   hasOtherClips,
-  hasClipsUnderneath,
   measureDrawnBounds,
   measureTextLayer,
   waitForFile,
