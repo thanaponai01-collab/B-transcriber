@@ -1449,3 +1449,82 @@ test("Anchor on Text 2 of two uses Text 2's box, checked against Text 2 measured
   close(pt(g.textAnchors[1]).y, -177.535, "Text 2 anchor on its box top");
   assert.deepEqual(g.textAnchors[0].value, [0, 0], "Text 1 untouched");
 });
+
+// --- Align by Premiere's blue text box (the box its own Properties > Align uses) ---------------
+//
+// Same trusted box as the anchor: Align left / top on Text 2 puts its box edge on the frame
+// edge, so the text Position is what Premiere's native Align gives (x 0, y 177.535), not the
+// letters' edge (x -11.333 here).
+
+test("Align left / top on a text Graphic (to frame, and as group) moves its blue box to the frame edge", async () => {
+  for (const run of [alignToFrame, alignToFrameAsGroup]) {
+    for (const [edge, axis, want] of [["left", "x", 0], ["top", "y", 177.535]]) {
+      clearBoundsCache();
+      const pos = { x: -10.333, y: 352.577 };
+      const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+      const { ppro } = host([g]);
+      const result = await run(ppro, edge, async () => drawnAt(T2.ink, pos, { x: 0, y: 0 }), { textBoxes: async () => [T2] });
+      assert.deepEqual(result, { done: 1, skipped: [] }, `${run.name} ${edge}`);
+      close(pt(g.texts[0])[axis], want, `${run.name} ${edge}: text Position ${axis}`);
+    }
+  }
+});
+
+test("Align by the box keeps the bounds cache true: a second align re-uses it and still trusts the box", async () => {
+  clearBoundsCache();
+  const pos = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+  const { ppro } = host([g]);
+  let measured = 0;
+  const measure = async () => { measured += 1; return drawnAt(T2.ink, pos, { x: 0, y: 0 }); };
+  const textBoxes = async () => [T2];
+  assert.deepEqual(await alignToFrame(ppro, "left", measure, { textBoxes }), { done: 1, skipped: [] });
+  assert.deepEqual(await alignToFrame(ppro, "top", measure, { textBoxes }), { done: 1, skipped: [] });
+  assert.equal(measured, 1, "the second align used the shifted cache");
+  close(pt(g.texts[0]).x, 0, "left by the box");
+  close(pt(g.texts[0]).y, 177.535, "top by the box");
+});
+
+test("Align with a stale save falls back to the letters, with a note", async () => {
+  clearBoundsCache();
+  const pos = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+  const { ppro } = host([g]);
+  const drawn = drawnAt(T2.ink, pos, { x: 0, y: 0 });
+  const stale = { box: T2.box, ink: Object.assign({}, T2.ink, { right: T2.ink.right + 20 }) };
+  const result = await alignToFrame(ppro, "left", async () => drawn, { textBoxes: async () => [stale] });
+  assert.equal(result.done, 1);
+  assert.match(result.notes[0], /letters/);
+  assert.match(result.notes[0], /[Ss]ave the project/);
+  close(pt(g.texts[0]).x, pos.x - drawn.left, "the letters' left edge on x = 0");
+});
+
+test("Align top to selection lines up two text Graphics' blue boxes", async () => {
+  clearBoundsCache();
+  const pA = { x: -10.333, y: 352.577 };
+  const pB = { x: 645, y: 521 };
+  const a = motionClip("A", { graphic: true, texts: [norm(pA)] });
+  const b = motionClip("B", { graphic: true, texts: [norm(pB)] });
+  const { ppro } = host([a, b]);
+  const measure = async ({ item }) => (item === a ? drawnAt(T2.ink, pA, { x: 0, y: 0 }) : drawnAt(T1.ink, pB, { x: 0, y: 0 }));
+  const result = await alignToSelection(ppro, "top", measure, { textBoxes: async ({ clip }) => (clip.item === a ? [T2] : [T1]) });
+  assert.deepEqual(result, { done: 2, skipped: [] });
+  close(pt(a.texts[0]).y, pA.y, "A's box is the top one");
+  close(pt(b.texts[0]).y, pA.y + T2.box.top - T1.box.top, "B's box top on A's box top");
+});
+
+test("Align left to selection inside one Graphic lines up each text layer's blue box", async () => {
+  clearBoundsCache();
+  const p1 = { x: 645, y: 521 };
+  const p2 = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(p1), norm(p2)] });
+  const { ppro } = host([g]);
+  const measure = async () => {
+    const visible = g.textOpacities.map((o, i) => (o.value > 0 ? i : -1)).filter((i) => i >= 0);
+    return geometry.unionBounds(visible.map((i) => (i === 0 ? drawnAt(T1.ink, p1, { x: 0, y: 0 }) : drawnAt(T2.ink, p2, { x: 0, y: 0 }))));
+  };
+  const result = await alignToSelection(ppro, "left", measure, { textBoxes: async () => [T1, T2] });
+  assert.deepEqual(result, { done: 1, skipped: [] });
+  close(pt(g.texts[0]).x, p2.x, "Text 1's box left on Text 2's box left");
+  close(pt(g.texts[1]).x, p2.x, "Text 2 already leftmost");
+});

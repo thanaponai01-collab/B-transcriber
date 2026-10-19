@@ -316,7 +316,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
       const suffix = to === "selection" ? " to selection" : to === "group" ? " as group" : "";
       return executeWithOptimisticConfirm(
-        () => run(ppro, edge, measure, { layerTarget: ctl.state.activeLayerTarget }),
+        () => run(ppro, edge, measure, { layerTarget: ctl.state.activeLayerTarget, textBoxes }),
         null,
         (res) => editSummary(`Aligned ${edge}${suffix}`, res),
         (res) => editLevel(res),
@@ -326,7 +326,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       // "As group" has no distribute of its own: spacing the clips is within their outer box.
       if (to === "group") to = "selection";
       return executeWithOptimisticConfirm(
-        () => distribute(ppro, kind, measure, to),
+        () => distribute(ppro, kind, measure, to, { textBoxes }),
         null,
         (res) => editSummary(`Distributed ${kind}${to === "frame" ? " across frame" : ""}`, res),
         (res) => editLevel(res),

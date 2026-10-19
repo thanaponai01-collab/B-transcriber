@@ -226,19 +226,19 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
 
   async function alignClips({ edge, to = "frame", layer = null }) {
     const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
-    const r = await run(ppro, edge, measure, layerOptions(layer));
+    const r = await run(ppro, edge, measure, { ...layerOptions(layer), textBoxes: align ? align.textBoxes : null });
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }
-    return { done: r.done, skipped: r.skipped, edge, to };
+    return { done: r.done, skipped: r.skipped, notes: r.notes || [], edge, to };
   }
 
   async function distributeClips({ kind, to = "frame" }) {
-    const r = await distribute(ppro, kind, measure, to);
+    const r = await distribute(ppro, kind, measure, to, { textBoxes: align ? align.textBoxes : null });
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }
-    return { done: r.done, skipped: r.skipped, kind, to };
+    return { done: r.done, skipped: r.skipped, notes: r.notes || [], kind, to };
   }
 
   const handlers = {
