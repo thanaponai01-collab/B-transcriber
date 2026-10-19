@@ -93,6 +93,15 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     if (ensureHelper) await ensureHelper();
     return frameBounds.measureDrawnBounds({ ppro, rpc, uxp, ...args });
   } : null;
+  // A text Graphic's per-layer blue boxes, from the helper (cutdeck/text_box.py reads the newest
+  // save and the font: UXP can't read Source Text). Project.path, Sequence.name,
+  // VideoClipTrackItem.getTrackIndex/getStartTime: premierepro.txt:489, 587, 728-729.
+  const textBoxes = rpc ? async ({ project, seq, clip }) => {
+    if (ensureHelper) await ensureHelper();
+    const [track, start] = await Promise.all([clip.item.getTrackIndex(), clip.item.getStartTime()]);
+    const reply = await rpc({ type: "text_box", project: project.path, sequence: seq.name, track, start_ticks: start.ticks });
+    return reply.layers;
+  } : null;
   let alignPollTimer = null;
   let pollInFlight = false;
   let pollAgain = false;
@@ -297,7 +306,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     onCommitField: (field, text) => commitField(field, text),
     onAnchor: (target) => {
       return executeWithOptimisticConfirm(
-        () => setAnchor(ppro, target, measure, { layerTarget: ctl.state.activeLayerTarget }),
+        () => setAnchor(ppro, target, measure, { layerTarget: ctl.state.activeLayerTarget, textBoxes }),
         null,
         (res) => editSummary(`Anchor set to ${target}`, res),
         (res) => editLevel(res),
@@ -337,6 +346,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     noteActivity,
     currentPollInterval,
     measure,
+    textBoxes,
     refresh: refreshAlignSequence,
     poll: () => {
       noteActivity();

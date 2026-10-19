@@ -140,7 +140,7 @@ function motionClip(name, o = {}) {
     // Text layer Transform: [2] Position, [3] Scale, [4] Horizontal Scale, [5] Uniform,
     // [6] Rotation, [8] Anchor Point; all points as fractions of the canvas (live 2026-09-24).
     const tp = [null, null, motionParam(pos, { point: true, keyframed: !!o.keyframedText }),
-      motionParam(100), motionParam(100), motionParam(true), motionParam(0),
+      motionParam((o.textScaleValues || [])[i] || 100), motionParam(100), motionParam(true), motionParam(0),
       // [7] the text layer's own Opacity (percent, 100 by default).
       motionParam((o.textOpacities || [])[i] === undefined ? 100 : o.textOpacities[i], { keyframed: !!o.keyframedTextOpacity }),
       motionParam((o.textAnchors || [])[i] || [0, 0], { point: true })];
@@ -1351,4 +1351,101 @@ test("a text layer added to a Graphic shows up on the next read (same item, no C
   } finally {
     Date.now = realNow;
   }
+});
+
+// --- Anchor snaps to Premiere's blue text box (the box its Properties panel aligns by) ---------
+//
+// `textBoxes` gives each text layer's box and predicted letters (ink) in the layer's own space
+// (the helper's text_box rpc, from the saved project and the font). The prediction is trusted
+// only when its letters land where the frame measure saw them; otherwise the anchor goes on the
+// measured letters as before, with a note saying why. Live numbers, EP35 `Editing`, 2026-10-19:
+// Premiere's own Align buttons put Text 2's box at x 0..1149.271, y -177.535..61.081 and Text 1's
+// at 0..782.11, -120.817..41.567 (Scale 105).
+const T2 = { box: { left: 0, right: 1149.271, top: -177.535, bottom: 61.081 },
+  ink: { left: 11.2, right: 1140, top: -136.1, bottom: 40.6 } };
+const T1 = { box: { left: 0, right: 782.11, top: -120.817, bottom: 41.567 },
+  ink: { left: 7.6, right: 780, top: -77.5, bottom: 23.2 } };
+// Where a layer's letters are drawn on screen: Position + Scale · (p − Anchor), Motion default.
+const drawnAt = (ink, pos, anchor, s = 1) => ({
+  left: Math.round(pos.x + s * (ink.left - anchor.x)), right: Math.round(pos.x + s * (ink.right - anchor.x)),
+  top: Math.round(pos.y + s * (ink.top - anchor.y)), bottom: Math.round(pos.y + s * (ink.bottom - anchor.y)),
+});
+const norm = (p) => [p.x / 1920, p.y / 1080];
+
+test("Anchor top-left on a text Graphic lands on Premiere's blue box corner, not on the letters", async () => {
+  clearBoundsCache();
+  const pos = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+  const { ppro, undoSteps } = host([g]);
+  const result = await setAnchor(ppro, "top-left", async () => drawnAt(T2.ink, pos, { x: 0, y: 0 }),
+    { textBoxes: async () => [T2] });
+  assert.deepEqual(result, { done: 1, skipped: [] });
+  close(pt(g.textAnchors[0]).x, 0, "anchor x on the box's left edge");
+  close(pt(g.textAnchors[0]).y, -177.535, "anchor y on the box's top edge");
+  close(pt(g.texts[0]).x, -10.333, "position x: the text stays put");
+  close(pt(g.texts[0]).y, 352.577 - 177.535, "position y: the text stays put");
+  assert.deepEqual(undoSteps, ["CutDeck: Anchor top-left"]);
+});
+
+test("the box corner is found through the text layer's own Scale (Text 1 at 105%)", async () => {
+  clearBoundsCache();
+  const pos = { x: 645, y: 521 };
+  const anchor = { x: 6.381, y: -78.857 };
+  for (const [target, want] of [["top-left", [0, -120.817]], ["bottom-right", [782.11, 41.567]], ["center", [391.055, -39.625]]]) {
+    const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)], textAnchors: [norm(anchor)], textScaleValues: [105] });
+    const { ppro } = host([g]);
+    await setAnchor(ppro, target, async () => drawnAt(T1.ink, pos, anchor, 1.05), { textBoxes: async () => [T1] });
+    close(pt(g.textAnchors[0]).x, want[0], `${target} anchor x`);
+    close(pt(g.textAnchors[0]).y, want[1], `${target} anchor y`);
+    close(pt(g.texts[0]).x, 645 + 1.05 * (want[0] - anchor.x), `${target} position x`);
+    close(pt(g.texts[0]).y, 521 + 1.05 * (want[1] - anchor.y), `${target} position y`);
+  }
+});
+
+test("a prediction that does not match the drawn letters is not used: anchor on the letters, with a note", async () => {
+  clearBoundsCache();
+  const pos = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+  const { ppro } = host([g]);
+  const drawn = drawnAt(T2.ink, pos, { x: 0, y: 0 });
+  // A stale save: the letters it predicts are 20 px wider than what is drawn now.
+  const stale = { box: T2.box, ink: Object.assign({}, T2.ink, { right: T2.ink.right + 20 }) };
+  const result = await setAnchor(ppro, "top-left", async () => drawn, { textBoxes: async () => [stale] });
+  assert.equal(result.done, 1);
+  assert.deepEqual(result.skipped, []);
+  assert.match(result.notes[0], /letters/);
+  assert.match(result.notes[0], /[Ss]ave the project/);
+  close(pt(g.texts[0]).x, drawn.left, "position on the measured letters' corner");
+  close(pt(g.texts[0]).y, drawn.top, "position y on the measured letters' corner");
+});
+
+test("no box (a reason from the helper, or the helper failing) keeps the letters' corner and says why", async () => {
+  for (const textBoxes of [async () => [{ reason: "the text is centre aligned" }], async () => { throw new Error("helper down"); }]) {
+    clearBoundsCache();
+    const pos = { x: -10.333, y: 352.577 };
+    const g = motionClip("Graphic", { graphic: true, texts: [norm(pos)] });
+    const { ppro } = host([g]);
+    const drawn = drawnAt(T2.ink, pos, { x: 0, y: 0 });
+    const result = await setAnchor(ppro, "top-left", async () => drawn, { textBoxes });
+    assert.equal(result.done, 1);
+    assert.match(result.notes[0], /centre aligned|helper down/);
+    close(pt(g.texts[0]).x, drawn.left, "letters' corner x");
+  }
+});
+
+test("Anchor on Text 2 of two uses Text 2's box, checked against Text 2 measured alone", async () => {
+  clearBoundsCache();
+  const p1 = { x: 645, y: 521 };
+  const p2 = { x: -10.333, y: 352.577 };
+  const g = motionClip("Graphic", { graphic: true, texts: [norm(p1), norm(p2)] });
+  const { ppro } = host([g]);
+  const alone = async () => {
+    const visible = g.textOpacities.map((o, i) => (o.value > 0 ? i : -1)).filter((i) => i >= 0);
+    assert.deepEqual(visible, [1], "measured with Text 1 hidden");
+    return drawnAt(T2.ink, p2, { x: 0, y: 0 });
+  };
+  const result = await setAnchor(ppro, "top-left", alone, { layerTarget: 1, textBoxes: async () => [T1, T2] });
+  assert.deepEqual(result, { done: 1, skipped: [] });
+  close(pt(g.textAnchors[1]).y, -177.535, "Text 2 anchor on its box top");
+  assert.deepEqual(g.textAnchors[0].value, [0, 0], "Text 1 untouched");
 });

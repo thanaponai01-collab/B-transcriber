@@ -217,11 +217,11 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
   const layerOptions = (layer) => (Number.isInteger(layer) ? { layerTarget: layer } : {});
 
   async function setAnchorCmd({ target, layer = null }) {
-    const r = await setAnchor(ppro, target, measure, layerOptions(layer));
+    const r = await setAnchor(ppro, target, measure, { ...layerOptions(layer), textBoxes: align ? align.textBoxes : null });
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }
-    return { done: r.done, skipped: r.skipped, target };
+    return { done: r.done, skipped: r.skipped, notes: r.notes || [], target };
   }
 
   async function alignClips({ edge, to = "frame", layer = null }) {

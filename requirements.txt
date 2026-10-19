@@ -50,6 +50,10 @@ pydantic>=2.0.0
 # CutDeck <-> Premiere panel helper (cutdeck/helper.py, :7891) — Python is the
 # WebSocket server, the panel is the client (UXP exposes no listen API).
 websockets>=13.0
+# Transform panel text box (cutdeck/text_box.py): font metrics + shaped advance, the box
+# Premiere's Properties panel aligns text by.
+fonttools>=4.50
+uharfbuzz>=0.40
 
 # Eval
 jiwer>=3.0.0

@@ -456,6 +456,19 @@ test("bind raises the transform intent when the probe button is clicked", () => 
   delete global.document;
 });
 
+// The Text 1 / Text 2 / All switcher did nothing live (2026-10-19): main.js never bound
+// onSelectTextLayer, and the panel's guard skipped the call silently.
+test("main.js binds every intent the align panel calls", () => {
+  const panelSrc = fs.readFileSync(alignJsPath, "utf8");
+  const used = [...new Set([...panelSrc.matchAll(/intents\.(on\w+)/g)].map((m) => m[1]))];
+  const bindAt = mainJs.indexOf("alignPanel.bind({");
+  assert.ok(bindAt !== -1, "no alignPanel.bind({ ... }) call found in main.js");
+  const block = mainJs.slice(bindAt, mainJs.indexOf("});", bindAt));
+  for (const name of used) {
+    assert.match(block, new RegExp(`\\b${name}:`), `main.js never binds ${name}`);
+  }
+});
+
 // --- bootstrap: the new panel must not be able to take the shipped one down -----------------
 
 test("entrypoints.setup registers BOTH panel ids", () => {
