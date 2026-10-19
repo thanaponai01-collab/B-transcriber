@@ -212,17 +212,21 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
     return { done: r.done, skipped: r.skipped, field, value: Number(value) };
   }
 
-  async function setAnchorCmd({ target }) {
-    const r = await setAnchor(ppro, target, measure);
+  // `layer`: one text layer (0-based) of a multi-text Graphic, as the panel's Text 1 / Text 2
+  // switcher; left out = the whole Graphic.
+  const layerOptions = (layer) => (Number.isInteger(layer) ? { layerTarget: layer } : {});
+
+  async function setAnchorCmd({ target, layer = null }) {
+    const r = await setAnchor(ppro, target, measure, layerOptions(layer));
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }
     return { done: r.done, skipped: r.skipped, target };
   }
 
-  async function alignClips({ edge, to = "frame" }) {
+  async function alignClips({ edge, to = "frame", layer = null }) {
     const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
-    const r = await run(ppro, edge, measure);
+    const r = await run(ppro, edge, measure, layerOptions(layer));
     if (align && typeof align.refresh === "function") {
       try { await align.refresh(); } catch (_) {}
     }

@@ -140,9 +140,11 @@ function motionClip(name, o = {}) {
     // Text layer Transform: [2] Position, [3] Scale, [4] Horizontal Scale, [5] Uniform,
     // [6] Rotation, [8] Anchor Point; all points as fractions of the canvas (live 2026-09-24).
     const tp = [null, null, motionParam(pos, { point: true, keyframed: !!o.keyframedText }),
-      motionParam(100), motionParam(100), motionParam(true), motionParam(0), motionParam(0),
+      motionParam(100), motionParam(100), motionParam(true), motionParam(0),
+      // [7] the text layer's own Opacity (percent, 100 by default).
+      motionParam((o.textOpacities || [])[i] === undefined ? 100 : o.textOpacities[i], { keyframed: !!o.keyframedTextOpacity }),
       motionParam((o.textAnchors || [])[i] || [0, 0], { point: true })];
-    return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6] };
+    return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6], opacity: tp[7] };
   });
   const extra = o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : [];
   const chain = [opacity, ...(o.graphic ? (o.noVectorMotion ? [motion, ...texts, ...extra] : [motion, vm, ...texts, ...extra]) : [motion])];
@@ -154,6 +156,7 @@ function motionClip(name, o = {}) {
     textAnchors: texts.map((t) => t.anchor),
     textScales: texts.map((t) => t.scale),
     textRotations: texts.map((t) => t.rotation),
+    textOpacities: texts.map((t) => t.opacity),
     source: o.source || "1280 x 720 (1.0)",
     getComponentChain: () => Promise.resolve({ getComponentCount: () => chain.length, getComponentAtIndex: (i) => chain[i] }),
     getProjectItem: () => Promise.resolve(o.graphic ? null : { clipName: name }),
@@ -1244,4 +1247,108 @@ test("a Motion change made outside CutDeck re-measures the text instead of using
   clearSnapshotCache();
   await alignToFrame(ppro, "left", measure);
   assert.equal(measures, 3, "text Anchor Point changed: measured again");
+});
+
+// --- one text layer of several: measured on its own, with the other text layers hidden --------
+
+// A fake frame measure for a two-layer Graphic: what is drawn is every text layer whose own
+// Opacity is above 0 (the real measure diffs the saved frames), so it shows which layers were
+// hidden while it ran.
+const LAYER_BOXES = [{ left: 100, top: 200, right: 500, bottom: 300 }, { left: 900, top: 600, right: 1300, bottom: 700 }];
+function layerMeasure(g, seen = []) {
+  return async () => {
+    const visible = g.textOpacities.map((o, i) => (o.value > 0 ? i : -1)).filter((i) => i >= 0);
+    seen.push(visible);
+    return geometry.unionBounds(visible.map((i) => LAYER_BOXES[i]));
+  };
+}
+
+test("Align left on Text 2 measures that layer alone, moves only it, and shows Text 1 again", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]] });
+  const { ppro, undoSteps } = host([g]);
+  const seen = [];
+  const result = await alignToFrame(ppro, "left", layerMeasure(g, seen), { layerTarget: 1 });
+  assert.deepEqual(result, { done: 1, skipped: [] });
+  assert.deepEqual(seen, [[1]], "measured with Text 1 hidden");
+  close(textPx(g.texts[1]).x, 0.6 * 1920 - 900, "Text 2 left edge 900 moved to 0");
+  close(textPx(g.texts[0]).x, 0.1 * 1920, "Text 1 untouched");
+  assert.equal(g.textOpacities[0].value, 100, "Text 1 shown again");
+  assert.deepEqual(undoSteps, ["CutDeck: measure (hide other text)", "CutDeck: measure (show other text)", "CutDeck: Align left"]);
+});
+
+test("a measured text layer is cached under its own key: a second align on it does not measure", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]] });
+  g.getStartTime = () => Promise.resolve({ ticks: "0" });
+  g.getTrackIndex = () => Promise.resolve(1);
+  const { ppro } = host([g]);
+  const seen = [];
+  await alignToFrame(ppro, "left", layerMeasure(g, seen), { layerTarget: 1 });
+  await alignToFrame(ppro, "top", layerMeasure(g, seen), { layerTarget: 1 });
+  assert.equal(seen.length, 1, "Text 2's box carried along after CutDeck's own move");
+  close(textPx(g.texts[1]).y, 0.6 * 1080 - 600, "Text 2 top edge 600 moved to 0");
+  await alignToFrame(ppro, "left", layerMeasure(g, seen), { layerTarget: 0 });
+  assert.deepEqual(seen[1], [0], "Text 1 has its own box, measured with Text 2 hidden");
+});
+
+test("Anchor top-left on Text 2 sets only its own Anchor Point, on its own box, and it stays put", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]] });
+  const { ppro } = host([g]);
+  await setAnchor(ppro, "top-left", layerMeasure(g), { layerTarget: 1 });
+  close(pt(g.textAnchors[1]).x, 900 - 0.6 * 1920, "text 2 anchor x (box corner, in the layer)");
+  close(pt(g.textAnchors[1]).y, 600 - 0.6 * 1080, "text 2 anchor y");
+  close(pt(g.texts[1]).x, 900, "text 2 position x on the corner"); close(pt(g.texts[1]).y, 600, "text 2 position y");
+  assert.deepEqual(g.textAnchors[0].value, [0, 0], "Text 1 anchor untouched");
+  assert.deepEqual(g.params[5].value, [0.5, 0.5], "Motion Anchor untouched");
+});
+
+test("align to selection inside one Graphic lines up each text layer's measured box, through Motion scale", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]], scale: 50 });
+  const { ppro, undoSteps } = host([g]);
+  const seen = [];
+  const result = await alignToSelection(ppro, "left", layerMeasure(g, seen));
+  assert.deepEqual(result, { done: 1, skipped: [] });
+  assert.deepEqual(seen, [[0], [1]], "each layer measured alone");
+  close(textPx(g.texts[0]).x, 0.1 * 1920, "Text 1 is already leftmost");
+  close(textPx(g.texts[1]).x, 0.6 * 1920 - 2 * 800, "800 px on screen is 1600 px in the layer at Motion 50%");
+  assert.equal(undoSteps[undoSteps.length - 1], "CutDeck: Align left text layers");
+});
+
+test("distribute across the frame inside one Graphic spaces the text layers' measured boxes", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]] });
+  const { ppro } = host([g]);
+  await distribute(ppro, "h-gaps", layerMeasure(g), "frame");
+  // Widths 400 + 400 in 1920: three gaps of 373.33. Text 1 left 100 -> 373.33, Text 2 left 900 -> 1146.67.
+  close(textPx(g.texts[0]).x, 0.1 * 1920 + (1120 / 3 - 100), "Text 1");
+  close(textPx(g.texts[1]).x, 0.6 * 1920 + (1120 / 3 * 2 + 400 - 900), "Text 2");
+});
+
+test("a keyframed Opacity on another text layer is refused with a reason, nothing written", async () => {
+  clearBoundsCache();
+  const g = motionClip("Graphic", { graphic: true, texts: [[0.1, 0.25], [0.6, 0.6]], keyframedTextOpacity: true });
+  const { ppro, undoSteps } = host([g]);
+  const result = await alignToFrame(ppro, "left", layerMeasure(g), { layerTarget: 1 });
+  assert.equal(result.done, 0);
+  assert.match(result.skipped[0], /can't hide its other text layers/);
+  assert.deepEqual(undoSteps, []);
+});
+
+test("a text layer added to a Graphic shows up on the next read (same item, no CutDeck write)", async () => {
+  const { readGraphicLayers } = require("../uxp/cutdeck/transform/params.js");
+  const text = () => ({ getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: () => null });
+  const chain = [{ getMatchName: () => Promise.resolve("AE.ADBE Motion"), getParam: () => null }, text()];
+  const item = { getComponentChain: () => Promise.resolve({ getComponentCount: () => chain.length, getComponentAtIndex: (i) => chain[i] }) };
+  assert.equal((await readGraphicLayers(item)).texts.length, 1);
+  chain.push(text()); // Essential Graphics: New Layer > Text (live 2026-10-19: Premiere keeps the same item)
+  const realNow = Date.now;
+  Date.now = () => realNow() + 600; // the next poll cycle
+  try {
+    assert.equal((await readGraphicLayers(item)).texts.length, 2);
+  } finally {
+    Date.now = realNow;
+  }
 });

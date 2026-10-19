@@ -45,14 +45,16 @@ const PARAM_INDEX = {
 };
 
 // In-memory component inspection cache per item: avoids traversing the component chain
-// multiple times per poll cycle (previously 4x per item per tick).
+// multiple times per poll cycle (previously 4x per item per tick). Held for one poll cycle only:
+// Premiere hands back the same item for a Graphic, so a text layer added in Essential Graphics
+// stayed invisible to the panel until reload when this never expired (live 2026-10-19).
 let itemComponentCache = new WeakMap();
+const COMPONENT_CACHE_MS = 500;
 
 async function inspectComponents(item) {
   if (!item || typeof item.getComponentChain !== "function") return null;
-  if (typeof item === "object" && itemComponentCache.has(item)) {
-    return itemComponentCache.get(item);
-  }
+  const cached = typeof item === "object" ? itemComponentCache.get(item) : null;
+  if (cached && Date.now() - cached.at < COMPONENT_CACHE_MS) return cached.comps;
   let chain;
   try {
     chain = await item.getComponentChain();
@@ -79,7 +81,7 @@ async function inspectComponents(item) {
     comps.push({ component, matchName, index: i });
   }
   if (typeof item === "object") {
-    itemComponentCache.set(item, comps);
+    itemComponentCache.set(item, { at: Date.now(), comps });
   }
   return comps;
 }
@@ -311,13 +313,13 @@ async function readAnchorFrameSize(ppro, item, seq) {
 
 // A Graphic's own layers. Its Text layer (AE.ADBE Text, 22 params) carries the text's own
 // Transform, the one Premiere's Properties panel shows under the text: [2] Position, [3] Scale,
-// [4] Horizontal Scale, [5] Uniform, [6] Rotation, [8] Anchor Point (Check Transform on a
+// [4] Horizontal Scale, [5] Uniform, [6] Rotation, [7] Opacity, [8] Anchor Point (Check Transform on a
 // Graphic, 2026-09-24). Position AND Anchor Point are both stored as fractions of the Graphic's
 // canvas (the sequence frame): live [0.1120, 0.8700] = Properties 215.1, 939.6 and
 // [0.1120, -0.0327] = 215.1, -35.4 in 1920x1080, and a written Position read back as written.
 // Its Vector Motion (Graphic Group) has Motion's first six params in the same order.
 const TEXT_MATCH_NAME = "AE.ADBE Text";
-const TEXT_PARAM_INDEX = { position: 2, scale: 3, horizontalScale: 4, uniformScale: 5, rotation: 6, anchorPoint: 8 };
+const TEXT_PARAM_INDEX = { position: 2, scale: 3, horizontalScale: 4, uniformScale: 5, rotation: 6, opacity: 7, anchorPoint: 8 };
 const KNOWN_GRAPHIC_COMPONENTS = new Set(["AE.ADBE Opacity", MOTION_MATCH_NAME, GRAPHIC_GROUP_MATCH_NAME, TEXT_MATCH_NAME]);
 
 // Reads a Graphic's Vector Motion (scale, scale width, uniform, rotation) and every Text layer's
@@ -342,12 +344,13 @@ async function readGraphicLayers(item) {
       result.vectorMotion = { position, scale, scaleWidth, uniformScale, rotation, anchorPoint };
     } else if (matchName === TEXT_MATCH_NAME) {
       const getParam = (i) => { try { return component.getParam(i); } catch (_) { return null; } };
-      const [position, scale, horizontalScale, uniformScale, rotation, anchorPoint] = await Promise.all([
+      const [position, scale, horizontalScale, uniformScale, rotation, opacity, anchorPoint] = await Promise.all([
         readParamField(component, TEXT_PARAM_INDEX.position),
         readParamField(component, TEXT_PARAM_INDEX.scale),
         readParamField(component, TEXT_PARAM_INDEX.horizontalScale),
         readParamField(component, TEXT_PARAM_INDEX.uniformScale),
         readParamField(component, TEXT_PARAM_INDEX.rotation),
+        readParamField(component, TEXT_PARAM_INDEX.opacity),
         readParamField(component, TEXT_PARAM_INDEX.anchorPoint),
       ]);
       result.texts.push({
@@ -357,7 +360,8 @@ async function readGraphicLayers(item) {
         horizontalScaleParam: getParam(TEXT_PARAM_INDEX.horizontalScale),
         uniformParam: getParam(TEXT_PARAM_INDEX.uniformScale),
         rotationParam: getParam(TEXT_PARAM_INDEX.rotation),
-        position, scale, horizontalScale, uniformScale, rotation, anchorPoint,
+        opacityParam: getParam(TEXT_PARAM_INDEX.opacity),
+        position, scale, horizontalScale, uniformScale, rotation, opacity, anchorPoint,
       });
     }
   }

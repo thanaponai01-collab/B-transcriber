@@ -297,7 +297,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     onCommitField: (field, text) => commitField(field, text),
     onAnchor: (target) => {
       return executeWithOptimisticConfirm(
-        () => setAnchor(ppro, target, measure),
+        () => setAnchor(ppro, target, measure, { layerTarget: ctl.state.activeLayerTarget }),
         null,
         (res) => editSummary(`Anchor set to ${target}`, res),
         (res) => editLevel(res),
@@ -307,7 +307,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       const run = to === "selection" ? alignToSelection : to === "group" ? alignToFrameAsGroup : alignToFrame;
       const suffix = to === "selection" ? " to selection" : to === "group" ? " as group" : "";
       return executeWithOptimisticConfirm(
-        () => run(ppro, edge, measure),
+        () => run(ppro, edge, measure, { layerTarget: ctl.state.activeLayerTarget }),
         null,
         (res) => editSummary(`Aligned ${edge}${suffix}`, res),
         (res) => editLevel(res),

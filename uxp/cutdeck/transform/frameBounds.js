@@ -233,6 +233,30 @@ async function measureDrawnBounds({ ppro, project, seq, item, frame, rpc, uxp, w
   }
 }
 
+// One text layer's drawn box in a Graphic with several. A frame diff sees every layer the
+// Graphic draws, so the OTHER text layers' own Opacity (Text [7], transform/params.js) goes to 0
+// for the measure and back to its value after, each as one transaction, like the clip hide
+// above (ComponentParam.createKeyframe / createSetValueAction, premierepro.txt:164,169, the
+// write apply.js runs). Refused, with nothing written, when another layer's Opacity is keyframed
+// or unreadable: a set value there would not put the animation back.
+// `measureOne()` is measureDrawnBounds for the clip.
+async function measureTextLayer(project, texts, index, measureOne) {
+  const others = texts.filter((_, i) => i !== index);
+  if (others.some((t) => !t.opacityParam || !t.opacity || t.opacity.isTimeVarying || typeof t.opacity.value !== "number")) {
+    throw new Error("can't hide its other text layers to measure one (Opacity keyframed or unreadable).");
+  }
+  const shown = others.filter((t) => t.opacity.value !== 0);
+  const setOpacity = (label, valueOf) => runTransaction(project, label, (compound) => {
+    for (const t of shown) compound.addAction(t.opacityParam.createSetValueAction(t.opacityParam.createKeyframe(valueOf(t)), true));
+  });
+  if (shown.length) setOpacity("CutDeck: measure (hide other text)", () => 0);
+  try {
+    return await measureOne();
+  } finally {
+    if (shown.length) setOpacity("CutDeck: measure (show other text)", (t) => t.opacity.value);
+  }
+}
+
 // In-memory bounds cache: prevents repeating the slow frame export + clip disable/enable on
 // every subsequent alignment or anchor action. Dual WeakMap (object-reference) and bounded Map
 // (track:start key) ensures cache hits across UXP proxy wrapper instances with capped memory.
@@ -306,6 +330,7 @@ module.exports = {
   hasOtherClips,
   hasClipsUnderneath,
   measureDrawnBounds,
+  measureTextLayer,
   waitForFile,
   getCachedBounds,
   setCachedBounds,
