@@ -5,6 +5,7 @@ and a separate ClubFriday quote workspace. Sources: [SYSTEM_SPEC.md](SYSTEM_SPEC
 [ClubFriday requirements](clubfriday/README.md), [agent decisions](CLAUDE.md).
 
 ## Decisions and constraints in force
+- Text geometry follow-up (2026-10-19): reverse engineer Premiere's native text bounds for accurate alignment and anchor placement in the existing Transform UXP panel. Evidence and remaining live checks: [native text bounds](docs/research/cutdeck-native-text-bounds-2026-10-19.md). Native geometry must be validated before replacing rendered measurement.
 - Engine A is faster_whisper; Engine B is passthrough; LLM reconciliation is off
   (transcribe/config.yaml). The older two-active-engine narrative is historical intent.
 - Select-only reconciliation, sequential GPU model residency, engine contract boundary

@@ -85,9 +85,29 @@ function formatMuteStateReport(report) {
 
 const dims = (s) => (s ? `${s.width}x${s.height}` : null);
 
+// Names observed in this installed executable's scripting registrations. Inspect
+// exposure only: binary registration alone is not permission to call an accessor.
+function runtimeGraphicsExports(ppro) {
+  const names = new Set([
+    ...Object.getOwnPropertyNames(ppro || {}).filter((name) => /graphic|text|layer/i.test(name)),
+    "Graphics", "GraphicsTrackItemObject", "GraphicsTrackItem", "TextLayerObject", "TextDocument",
+  ]);
+  return [{ name: "<module>", type: "module", members: Object.getOwnPropertyNames(ppro || {}) }, ...Array.from(names, (name) => {
+    try {
+      const value = ppro && ppro[name];
+      return { name, type: typeof value,
+        members: value && (typeof value === "object" || typeof value === "function")
+          ? Object.getOwnPropertyNames(value) : [] };
+    } catch (error) {
+      return { name, error: String(error) };
+    }
+  })];
+}
+
 async function probeTextCanvas(ppro) {
+  const exports = runtimeGraphicsExports(ppro);
   const found = await activeSequence(ppro);
-  if (found.error) return { probe: "text-canvas", complete: false, error: found.error };
+  if (found.error) return { probe: "text-canvas", complete: false, error: found.error, runtimeGraphicsExports: exports };
   const { seq } = found;
   const sel = await attempt(() => seq.getSelection());
   let items = [];
@@ -96,7 +116,7 @@ async function probeTextCanvas(ppro) {
     items = got.ok && got.value ? got.value : [];
   }
   if (items.length !== 1) {
-    return { probe: "text-canvas", complete: false, error: `select exactly one Graphic clip (${items.length} selected)` };
+    return { probe: "text-canvas", complete: false, error: `select exactly one Graphic clip (${items.length} selected)`, runtimeGraphicsExports: exports };
   }
   const item = items[0];
   const graphic = await attempt(() => transformParams.isGraphic(item));
@@ -124,6 +144,7 @@ async function probeTextCanvas(ppro) {
     && (sequenceFrame.width !== anchorFrame.width || sequenceFrame.height !== anchorFrame.height));
   return {
     probe: "text-canvas", complete: true, clipHasProjectItem: hasProjectItem,
+    runtimeGraphicsExports: exports,
     sequenceFrame: dims(sequenceFrame), projectItemSize: dims(sourceFrame), canvasUsedByShiftRoutes: dims(anchorFrame),
     routesDiffer, positions,
   };

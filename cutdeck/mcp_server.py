@@ -114,17 +114,19 @@ def create_server(backend: Backend) -> FastMCP:
         return await backend.premiere("set_transform_field", {"field": field, "value": value})
 
     @server.tool(annotations=write)
-    async def premiere_set_anchor(target: str) -> dict:
+    async def premiere_set_anchor(target: str, layer: int | None = None) -> dict:
         """Set 9-point anchor target (top-left, top, top-right, left, center, right, bottom-left,
-        bottom, bottom-right) on selected clips while preserving picture position. Needs the CutDeck panel open."""
-        return await backend.premiere("set_anchor", {"target": target})
+        bottom, bottom-right) on selected clips while preserving picture position. `layer` (0-based)
+        targets one text layer of a multi-text Graphic by its own measured box. Needs the CutDeck panel open."""
+        return await backend.premiere("set_anchor", {"target": target, **({"layer": layer} if layer is not None else {})})
 
     @server.tool(annotations=write)
-    async def premiere_align_clips(edge: str, to: str = "frame") -> dict:
+    async def premiere_align_clips(edge: str, to: str = "frame", layer: int | None = None) -> dict:
         """Align selected clips to the sequence frame or selection bounding box (left, hcenter, right,
         top, vcenter, bottom). 'to' can be 'frame', 'selection' or 'group' (the selection's outer box
-        to the frame, every clip moved together). Needs the CutDeck panel open."""
-        return await backend.premiere("align_clips", {"edge": edge, "to": to})
+        to the frame, every clip moved together). `layer` (0-based) aligns one text layer of a
+        multi-text Graphic by its own measured box. Needs the CutDeck panel open."""
+        return await backend.premiere("align_clips", {"edge": edge, "to": to, **({"layer": layer} if layer is not None else {})})
 
     @server.tool(annotations=write)
     async def premiere_distribute_clips(kind: str, to: str = "frame") -> dict:

@@ -1,0 +1,29 @@
+{
+  "goal": "CutDeck Transform anchor presets on a text Graphic snap to Premiere's blue text box corner (the box its Properties panel aligns by), falling back to the measured letters with a stated reason when the box can't be trusted",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 300,
+  "max_seconds": 14400,
+  "criteria": [
+    {"statement": "Diagnosis: the anchor lands on the ink box; Premiere's box rule (1 em tall, centred capHeight/2 above baseline, x 0..shaped advance) is recorded from live native Align on two sizes", "stage": "diagnose"},
+    {"statement": "Helper predicts the box and ink per text layer from the newest save + font, matching the live-measured edges within 0.01 px, and gives a reason for unproven cases", "stage": "helper"},
+    {"statement": "Panel anchors to the box corner (through Motion, Vector Motion and the layer's own scale) when the predicted letters match the measured ones, else keeps the letters' corner with a note", "stage": "panel"},
+    {"statement": "No regressions: every CutDeck panel test (incl. Adobe API check) and the helper/prproj Python tests pass", "stage": "suites"}
+  ],
+  "oracle_files": ["tests/test_text_box.py", "tests/cutdeck_transform_edit.test.cjs"],
+  "stages": [
+    {"id": "diagnose", "skill": "debug-protocol",
+     "command": ["python", "-c", "import sys; t=open('docs/PREMIERE_FACTS.md',encoding='utf-8').read(); sys.exit(0 if 'capHeight / 2' in t and '-120.817' in t else 1)"],
+     "inputs": ["docs/PREMIERE_FACTS.md"]},
+    {"id": "helper", "skill": "correctness-gate",
+     "command": ["python", "-m", "pytest", "-q", "tests/test_text_box.py"],
+     "inputs": ["cutdeck", "tests/test_text_box.py", "requirements.txt"]},
+    {"id": "panel", "skill": "correctness-gate",
+     "command": ["node", "--test", "tests/cutdeck_transform_edit.test.cjs"],
+     "inputs": ["uxp/cutdeck", "tests/cutdeck_transform_edit.test.cjs", "tests/fakes"]},
+    {"id": "suites", "skill": "correctness-gate",
+     "command": ["node", "--test", "tests/*.cjs"],
+     "inputs": ["uxp/cutdeck", "tests", "tools/adobe/check-api.mjs", "cutdeck"]}
+  ],
+  "actions": []
+}

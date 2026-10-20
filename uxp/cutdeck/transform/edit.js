@@ -100,13 +100,46 @@ function targetTexts(layers, layerTarget) {
   return [layers.texts[i]];
 }
 
+// The one text layer an edit measures and moves: its index when the panel targets one layer of a
+// text-only Graphic with several (the Text 1 / Text 2 switcher), else null, and the Graphic is
+// measured and moved as a whole.
+function measuredLayer(layers, layerTarget) {
+  return layers && layers.onlyText && layers.texts.length > 1 && Number.isInteger(layerTarget)
+    && layerTarget >= 0 && layerTarget < layers.texts.length ? layerTarget : null;
+}
+
+// A text layer's cached box lives under its own key, never the item's (that is the whole Graphic).
+const layerKey = (clip, index) => (clip.key ? `${clip.key}#text${index}` : null);
+
+// Where a Graphic (index null) or one of its text layers is drawn, sequence px: the cached box
+// while the clip's boundsSignature holds, else measured (one text layer with the others hidden,
+// frameBounds.measureTextLayer) and cached. Null when it draws nothing at the playhead; throws
+// the reason when it can't be measured.
+async function drawnBox(project, seq, seqFrame, clip, measure, index = null) {
+  const isText = Boolean(clip.layers && clip.layers.texts && clip.layers.texts.length > 0);
+  const item = index === null ? clip.item : null;
+  const key = index === null ? clip.key : layerKey(clip, index);
+  const signature = boundsSignature(clip);
+  const cached = isText ? frameBounds.getCachedBounds(item, key, signature) : null;
+  if (cached) return cached;
+  if (!measure) throw new Error("a Graphic needs its text measured, which isn't available here.");
+  const measureOne = () => measure({ project, seq, item: clip.item, frame: seqFrame });
+  const measured = index === null
+    ? await measureOne()
+    : await frameBounds.measureTextLayer(project, clip.layers.texts, index, measureOne);
+  const box = measured && measured.bounds ? measured.bounds : (measured && typeof measured.left === "number" ? measured : null);
+  if (box && isText) frameBounds.setCachedBounds(item, box, key, signature);
+  return box;
+}
+
 // After CutDeck's own write: re-read the clips and carry each cached text box along (moved by
-// dx, dy) under its new signature. `updates` = [{ item, key, dx, dy }].
+// dx, dy) under its new signature. `updates` = [{ item, key, dx, dy, clipKey? }]: `clipKey` is the
+// clip's own key when `key` is one of its text layers' (layerKey).
 async function shiftCachedBounds(ppro, seq, updates) {
   if (!updates.length) return;
   const fresh = await readSnapshot(ppro, { seq, forceRefresh: true });
   for (const u of updates) {
-    const now = fresh.clips.find((c) => c.key === u.key);
+    const now = fresh.clips.find((c) => c.key === (u.clipKey || u.key));
     if (now) frameBounds.updateCachedBounds(u.item, u.dx, u.dy, u.key, boundsSignature(now));
     else frameBounds.invalidateBounds(u.item, u.key);
   }
@@ -281,7 +314,14 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
 // A Graphic's canvas is the whole frame, so its geometry says nothing about where its text is.
 // For a Graphic, `measure` (transform/frameBounds.js) finds the box its text is actually drawn
 // in, and the plan uses that (`model.drawn`, sequence px).
-async function editSelectedClips(ppro, label, plan, measure = null, group = null) {
+//
+// `layerTarget` (a text layer index) on a text-only Graphic with several text layers measures and
+// moves that layer alone (measuredLayer); "all" or a single-layer Graphic keeps the whole box.
+//
+// `textBoxes({ project, seq, clip })`, when given, is asked for a text-only Graphic's per-layer
+// blue boxes (the helper's text_box rpc) and the plan gets them as `m.textBoxes` (or the failure
+// as `m.textBoxError`). A plan's `note` is reported in the result's `notes`, the clip still done.
+async function editSelectedClips(ppro, label, plan, measure = null, group = null, layerTarget = "all", textBoxes = null) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
   const snap = await readSnapshot(ppro, { seq });
   if (snap.clips.length === 0) throw new Error("Select a clip on the timeline.");
@@ -293,6 +333,7 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
   const writes = [];
   const paramWrites = [];
   const skipped = [];
+  const notes = [];
   const clipBoundsUpdates = [];
   let done = 0;
   const modelResults = await Promise.all(clips.map(async (clip) => {
@@ -305,25 +346,21 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       if (m.skip) { skipped.push(m.skip); continue; }
       if (clip.isGraphic) {
         m.layers = clip.layers;
-        const isTextGraphic = m.layers && m.layers.texts && m.layers.texts.length > 0;
-        const signature = boundsSignature(clip);
-        const cached = isTextGraphic ? frameBounds.getCachedBounds(clip.item, clip.key, signature) : null;
-        if (cached) {
-          m.drawn = cached;
-        } else {
-          if (!measure) { skipped.push(`"${clip.name}": a Graphic needs its text measured, which isn't available here.`); continue; }
-          let measured = null;
+        m.textIndex = measuredLayer(clip.layers, layerTarget);
+        let box = null;
+        try {
+          box = await drawnBox(project, seq, seqFrame, clip, measure, m.textIndex);
+        } catch (error) {
+          skipped.push(`"${clip.name}": ${(error && error.message) || error}`);
+          continue;
+        }
+        if (!box) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
+        m.drawn = box;
+        if (textBoxes && clip.layers && clip.layers.onlyText) {
           try {
-            measured = await measure({ project, seq, item: clip.item, frame: seqFrame });
+            m.textBoxes = await textBoxes({ project, seq, clip });
           } catch (error) {
-            skipped.push(`"${clip.name}": ${(error && error.message) || error}`);
-            continue;
-          }
-          const drawnBounds = measured && measured.bounds ? measured.bounds : (measured && typeof measured.left === "number" ? measured : null);
-          if (!drawnBounds) { skipped.push(`"${clip.name}" draws nothing at the playhead.`); continue; }
-          m.drawn = drawnBounds;
-          if (isTextGraphic) {
-            frameBounds.setCachedBounds(clip.item, m.drawn, clip.key, signature);
+            m.textBoxError = (error && error.message) || String(error);
           }
         }
       }
@@ -341,6 +378,8 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       }
       const boundsShift = planned.boundsShift || null;
       delete planned.boundsShift;
+      if (planned.note) notes.push(`"${clip.name}": ${planned.note}`);
+      delete planned.note;
       if (planned.layerWrites) {
         for (const w of planned.layerWrites) paramWrites.push(Object.assign({ name: clip.name }, w));
       } else {
@@ -349,8 +388,11 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
       done += 1;
       // Every plan here either keeps the picture put (anchor) or moves it by boundsShift.
       if (m.drawn) {
-        clipBoundsUpdates.push({ item: clip.item, key: clip.key,
+        const one = m.textIndex !== null && m.textIndex !== undefined;
+        clipBoundsUpdates.push({ item: one ? null : clip.item, key: one ? layerKey(clip, m.textIndex) : clip.key, clipKey: clip.key,
           dx: (boundsShift && boundsShift.dx) || 0, dy: (boundsShift && boundsShift.dy) || 0 });
+        // One layer moved: the whole Graphic's box changed shape, not just place.
+        if (one && boundsShift) frameBounds.invalidateBounds(clip.item, clip.key);
       }
     }
     if (done && (writes.length > 0 || paramWrites.length > 0)) {
@@ -364,36 +406,43 @@ async function editSelectedClips(ppro, label, plan, measure = null, group = null
     try { after = (await w.param.getStartValue()).value; } catch (e) { after = `read failed: ${e && e.message}`; }
     console.log("CutDeck text layer write", JSON.stringify({ clip: w.name, field: w.field, before: w.before, wrote: w.value, readBack: after }));
   }
-  return { done, skipped };
+  return notes.length ? { done, skipped, notes } : { done, skipped };
 }
 
-// Nothing done is an error; some clips skipped is a warning the panel shows; all done is quiet.
-function editLevel({ done, skipped }) {
+// Nothing done is an error; some clips skipped (or done with a note) is a warning the panel
+// shows; all done is quiet.
+function editLevel({ done, skipped, notes }) {
   if (!done) return "error";
-  return skipped.length ? "warn" : "ready";
+  return skipped.length || (notes && notes.length) ? "warn" : "ready";
 }
 
-function editSummary(verb, { done, skipped }) {
+function editSummary(verb, { done, skipped, notes }) {
   const head = done ? `${verb} on ${done} clip${done === 1 ? "" : "s"}.` : "Nothing changed.";
-  return skipped.length ? `${head} Skipped: ${skipped.join(" ")}` : head;
+  const noted = notes && notes.length ? `${head} ${notes.join(" ")}` : head;
+  return skipped.length ? `${noted} Skipped: ${skipped.join(" ")}` : noted;
 }
 
 // Phases 3/4: move the anchor to one of nine points on the visible (cropped) picture, and move
 // Position with it so the picture stays exactly where it is.
-async function setAnchor(ppro, target, measure = null) {
+async function setAnchor(ppro, target, measure = null, options = {}) {
   if (!transformGeometry.ANCHOR_TARGETS[target]) throw new Error(`Unknown anchor point "${target}".`);
-  return editSelectedClips(ppro, `CutDeck: Anchor ${target}`, ({ model, source, crop, drawn, layers }, seqFrame) => {
+  return editSelectedClips(ppro, `CutDeck: Anchor ${target}`, (ctx, seqFrame) => {
+    const { model, source, crop, drawn, layers, textIndex } = ctx;
     if (drawn) {
-      // The target on the drawn box, in the frame. Text Graphic: the TEXT's own Anchor Point
-      // goes there (Premiere's Properties panel), else the Graphic's Motion anchor does. Either
-      // way Position moves onto it, so nothing moves on screen.
-      const onScreen = transformGeometry.anchorTargetPoint(drawn, target);
-      const layerWrites = textLayerAnchor(layers, model, source, onScreen);
-      if (layerWrites) return { layerWrites };
+      // The target on the text's blue box when it can be trusted (textBoxTarget), else on the
+      // drawn letters, in the frame. Text Graphic: the TEXT's own Anchor Point goes there
+      // (Premiere's Properties panel), else the Graphic's Motion anchor does. Either way
+      // Position moves onto it, so nothing moves on screen.
+      const snapped = textBoxTarget(ctx, target);
+      const onScreen = (snapped && snapped.point) || transformGeometry.anchorTargetPoint(drawn, target);
+      const note = snapped && snapped.note ? { note: `anchored to the letters, not the text box: ${snapped.note}.` } : {};
+      const layerWrites = textLayerAnchor(layers, model, source, onScreen, textIndex);
+      if (layerWrites) return { layerWrites, ...note };
       const anchorPx = transformGeometry.sequenceToSource(onScreen, model);
       return {
         anchorPoint: transformGeometry.framePixelsToNormalized(anchorPx, source.width, source.height),
         position: transformGeometry.framePixelsToNormalized(onScreen, seqFrame.width, seqFrame.height),
+        ...note,
       };
     }
     const rect = transformGeometry.visibleSourceRect(source, crop);
@@ -403,16 +452,18 @@ async function setAnchor(ppro, target, measure = null) {
       anchorPoint: transformGeometry.framePixelsToNormalized(anchorPx, source.width, source.height),
       position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height),
     };
-  }, measure);
+  }, measure, null, layerOption(options), options && options.textBoxes);
 }
+
+const layerOption = (options) => (options && options.layerTarget !== undefined ? options.layerTarget : "all");
 
 // Moves every text layer of a Graphic by `delta` sequence pixels, through the text layers' own
 // Position, the way Premiere's Properties panel aligns text, leaving the Graphic's Motion alone.
 // The shift is undone through Motion's and Vector Motion's scale and rotation (translation
 // doesn't change a shift), then normalized to the Graphic's canvas. Returns null when that
 // can't be done exactly (a non-text layer, a keyframed or unreadable value), so the caller moves
-// the whole Graphic instead and nothing is left behind.
-function textLayerShift(layers, model, source, delta) {
+// the whole Graphic instead and nothing is left behind. `only` (an index) moves that layer alone.
+function textLayerShift(layers, model, source, delta, only = null) {
   // Not proven live yet: log what it saw (raw stored text Position / Anchor Point, to pin their
   // units against the Properties panel), and why it falls back when it does.
   const summary = layers && {
@@ -451,7 +502,7 @@ function textLayerShift(layers, model, source, delta) {
     position: origin, anchor: origin, scaleX: scaleWidth / 100, scaleY: scale / 100, rotation,
   });
   const writes = [];
-  for (const text of layers.texts) {
+  for (const text of only === null || only === undefined ? layers.texts : [layers.texts[only]]) {
     const current = transformGeometry.pointXY(staticValue(text.position));
     if (!current || !text.param) return why("text Position unreadable or keyframed");
     writes.push({
@@ -481,12 +532,79 @@ function layerModel(position, anchorPoint, scaleEntry, widthEntry, uniformEntry,
   };
 }
 
+// How far (sequence px, each edge) the letters the save predicts may sit from the letters the
+// frame measure saw: anti-aliasing is 1-2 px (live 2026-10-19: within 1.5 px at 105%); a stale
+// save (other size or text) is off by far more.
+const TEXT_BOX_TOLERANCE = 4;
+
+// A text Graphic's blue boxes (PREMIERE_FACTS "Premiere's blue text box") carried to the screen:
+// `{ placed: [{ entry, toScreen }] }`, or `{ note }` saying why the letters' box is used instead,
+// or null when no box was asked for. `textBoxes` holds each layer's box and predicted letters
+// (ink) in the layer's own space; each is carried to the screen through the layer's transform,
+// Vector Motion and Motion, and trusted only when the letters land where they were measured.
+function placedTextBoxes({ model, source, drawn, layers, textIndex, textBoxes, textBoxError }) {
+  if (textBoxError) return { note: textBoxError };
+  if (!textBoxes || !layers || !layers.onlyText) return null;
+  const vm = layers.vectorMotion;
+  const vmModel = vm ? layerModel(vm.position, vm.anchorPoint, vm.scale, vm.scaleWidth, vm.uniformScale, vm.rotation, source) : null;
+  if (vm && !vmModel) return { note: "its Vector Motion is keyframed" };
+  const one = textIndex !== null && textIndex !== undefined;
+  const indices = one ? [textIndex] : layers.texts.map((_, i) => i);
+  const placed = [];
+  for (const i of indices) {
+    const entry = textBoxes[i];
+    if (!entry || !entry.box) return { note: (entry && entry.reason) || "the last save has no text for this layer" };
+    if (!entry.ink) return { note: "the last save's text draws no letters" };
+    const t = layers.texts[i];
+    const textModel = layerModel(t.position, t.anchorPoint, t.scale, t.horizontalScale, t.uniformScale, t.rotation, source);
+    if (!textModel) return { note: "its text transform is keyframed" };
+    const toScreen = (p) => {
+      const inGroup = transformGeometry.sourceToSequence(p, textModel);
+      return transformGeometry.sourceToSequence(vmModel ? transformGeometry.sourceToSequence(inGroup, vmModel) : inGroup, model);
+    };
+    placed.push({ entry, toScreen });
+  }
+  const letters = transformGeometry.unionBounds(placed.map((p) => rectOnScreen(p.entry.ink, p.toScreen)));
+  if (["left", "top", "right", "bottom"].some((edge) => Math.abs(letters[edge] - drawn[edge]) > TEXT_BOX_TOLERANCE)) {
+    return { note: "the last save doesn't match what is drawn now; save the project and try again" };
+  }
+  return { placed };
+}
+
+// The screen-aligned box around `rect` (layer space) once `toScreen` has carried its corners.
+function rectOnScreen(rect, toScreen) {
+  const corners = [[rect.left, rect.top], [rect.right, rect.top], [rect.left, rect.bottom], [rect.right, rect.bottom]]
+    .map(([x, y]) => toScreen({ x, y }));
+  return { left: Math.min(...corners.map((c) => c.x)), right: Math.max(...corners.map((c) => c.x)),
+    top: Math.min(...corners.map((c) => c.y)), bottom: Math.max(...corners.map((c) => c.y)) };
+}
+
+// The anchor target on the blue box, in sequence px: `{ point }`, `{ note }` or null (placedTextBoxes).
+function textBoxTarget(ctx, target) {
+  const found = placedTextBoxes(ctx);
+  if (!found || found.note) return found;
+  const { placed } = found;
+  // One layer: the target on its own box, exact under rotation. Several: their outer box.
+  if (placed.length === 1) return { point: placed[0].toScreen(transformGeometry.anchorTargetPoint(placed[0].entry.box, target)) };
+  return { point: transformGeometry.anchorTargetPoint(transformGeometry.unionBounds(placed.map((p) => rectOnScreen(p.entry.box, p.toScreen))), target) };
+}
+
+// The blue box on screen (its screen-aligned outer box, what Premiere's Align lines up), as
+// `{ rect }`, `{ note }` or null (placedTextBoxes).
+function textBoxBounds(ctx) {
+  const found = placedTextBoxes(ctx);
+  if (!found || found.note) return found;
+  return { rect: transformGeometry.unionBounds(found.placed.map((p) => rectOnScreen(p.entry.box, p.toScreen))) };
+}
+
 // Moves each text layer's own Anchor Point to the text point drawn at `onScreen` (sequence px),
 // and its Position onto that same point, so the text stays put. The point is carried back
 // through Motion, then Vector Motion, then each text layer's own transform. Null when that
-// can't be done exactly, so the caller moves the Graphic's Motion anchor instead.
-function textLayerAnchor(layers, model, source, onScreen) {
-  if (!layers || !layers.onlyText || !layers.texts || layers.texts.length !== 1) return null;
+// can't be done exactly, so the caller moves the Graphic's Motion anchor instead. With several
+// text layers only the measured one (`only`) can take the box's point.
+function textLayerAnchor(layers, model, source, onScreen, only = null) {
+  const one = only !== null && only !== undefined;
+  if (!layers || !layers.onlyText || !layers.texts || (!one && layers.texts.length !== 1)) return null;
   const vm = layers.vectorMotion;
   let inGroup = transformGeometry.sequenceToSource(onScreen, model);
   if (vm) {
@@ -495,7 +613,7 @@ function textLayerAnchor(layers, model, source, onScreen) {
     inGroup = transformGeometry.sequenceToSource(inGroup, vmModel);
   }
   const writes = [];
-  for (const t of layers.texts) {
+  for (const t of one ? [layers.texts[only]] : layers.texts) {
     const textModel = layerModel(t.position, t.anchorPoint, t.scale, t.horizontalScale, t.uniformScale, t.rotation, source);
     if (!textModel || !t.param || !t.anchorParam) return null;
     const inText = transformGeometry.sequenceToSource(inGroup, textModel);
@@ -510,29 +628,87 @@ function textLayerAnchor(layers, model, source, onScreen) {
 }
 
 // Phase 5: line each clip's rendered (cropped, scaled, rotated) bounds up with the sequence frame.
-// For a Graphic, the bounds are its measured text box, and the text layers move.
-// Where a clip's picture is drawn, in sequence pixels: the measured box for a Graphic, else the
-// cropped source under the clip's transform.
-function clipBounds({ model, source, crop, drawn }) {
-  return drawn || transformGeometry.renderedBounds(model, transformGeometry.visibleSourceRect(source, crop));
+// For a Graphic, the bounds are its text's box, and the text layers move.
+// Where a clip's picture is drawn, in sequence pixels: for a Graphic, the blue text box when it
+// can be trusted (textBoxBounds), else the measured letters; else the cropped source under the
+// clip's transform.
+function clipBounds(ctx) {
+  const { model, source, crop, drawn } = ctx;
+  const box = drawn && textBoxBounds(ctx);
+  return (box && box.rect) || drawn || transformGeometry.renderedBounds(model, transformGeometry.visibleSourceRect(source, crop));
 }
+
+const lettersNote = (why) => `lined up by the letters, not the text box: ${why}.`;
 
 // The write that moves a clip's picture by (dx, dy) sequence pixels: its text layers for a
 // Graphic when that can be done exactly, else Motion Position.
 function moveBy(ctx, seqFrame, dx, dy) {
   if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return { noop: true };
-  const layerWrites = ctx.drawn ? textLayerShift(ctx.layers, ctx.model, ctx.source, { x: dx, y: dy }) : null;
-  if (layerWrites) return { layerWrites, boundsShift: { dx, dy } };
+  const box = ctx.drawn && textBoxBounds(ctx);
+  const note = box && box.note ? { note: lettersNote(box.note) } : {};
+  const layerWrites = ctx.drawn ? textLayerShift(ctx.layers, ctx.model, ctx.source, { x: dx, y: dy }, ctx.textIndex) : null;
+  if (layerWrites) return { layerWrites, boundsShift: { dx, dy }, ...note };
   const positionPx = { x: ctx.model.position.x + dx, y: ctx.model.position.y + dy };
-  return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height), boundsShift: { dx, dy } };
+  return { position: transformGeometry.framePixelsToNormalized(positionPx, seqFrame.width, seqFrame.height), boundsShift: { dx, dy }, ...note };
 }
 
-async function alignToFrame(ppro, edge, measure = null) {
+async function alignToFrame(ppro, edge, measure = null, options = {}) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
   return editSelectedClips(ppro, `CutDeck: Align ${edge}`, (ctx, seqFrame) => {
     const { dx, dy } = transformGeometry.alignShift(clipBounds(ctx), seqFrame, edge);
     return moveBy(ctx, seqFrame, dx, dy);
-  }, measure);
+  }, measure, null, layerOption(options), options && options.textBoxes);
+}
+
+// Lays out the text layers of ONE text-only Graphic by their own boxes: each layer's blue box
+// when it can be trusted against its letters (measured with the others hidden), else those
+// letters. `shifts(boxes, seqFrame)` gives each layer's {dx, dy} on screen, and each layer's
+// Position takes it back through Motion and Vector Motion (textLayerShift). One transaction =
+// one Ctrl+Z; the measure's hide/show steps come before it in History.
+async function moveTextLayersByBoxes(ppro, project, snap, clip, label, shifts, measure, textBoxes = null) {
+  const { sequence: seq, seqFrame } = snap;
+  if (!seqFrame) throw new Error("Could not read the sequence frame size.");
+  const m = await clipModel(ppro, clip, seqFrame, snap.seqAspect, seq);
+  if (m.skip) throw new Error(m.skip);
+  const boxCtx = { model: m.model, source: m.source, layers: clip.layers };
+  if (textBoxes) {
+    try {
+      boxCtx.textBoxes = await textBoxes({ project, seq, clip });
+    } catch (error) {
+      boxCtx.textBoxError = (error && error.message) || String(error);
+    }
+  }
+  const boxes = [];
+  const notes = [];
+  for (let i = 0; i < clip.layers.texts.length; i += 1) {
+    let box;
+    try {
+      box = await drawnBox(project, seq, seqFrame, clip, measure, i);
+    } catch (error) {
+      throw new Error(`"${clip.name}" text ${i + 1}: ${(error && error.message) || error}`);
+    }
+    if (!box) throw new Error(`"${clip.name}" text ${i + 1} draws nothing at the playhead.`);
+    const blue = textBoxes ? textBoxBounds(Object.assign({ drawn: box, textIndex: i }, boxCtx)) : null;
+    if (blue && blue.note) {
+      const note = `"${clip.name}" text ${i + 1}: ${lettersNote(blue.note)}`;
+      if (!notes.includes(note)) notes.push(note);
+    }
+    boxes.push((blue && blue.rect) || box);
+  }
+  const deltas = shifts(boxes, seqFrame);
+  const paramWrites = [];
+  deltas.forEach((d, i) => {
+    if (Math.abs(d.dx) < 1e-4 && Math.abs(d.dy) < 1e-4) return;
+    const writes = textLayerShift(clip.layers, m.model, m.source, { x: d.dx, y: d.dy }, i);
+    if (!writes) throw new Error(`"${clip.name}": its text layers can't be moved exactly (a keyframed or unreadable value).`);
+    for (const w of writes) paramWrites.push(Object.assign({ name: clip.name }, w));
+  });
+  if (paramWrites.length) {
+    await transformApply.applyMotionValues(ppro, project, label, [], paramWrites);
+    frameBounds.invalidateBounds(clip.item, clip.key);
+  }
+  await shiftCachedBounds(ppro, seq, deltas.map((d, i) => ({ item: null, key: layerKey(clip, i), clipKey: clip.key, dx: d.dx, dy: d.dy })));
+  return notes.length ? { done: 1, skipped: [], notes } : { done: 1, skipped: [] };
 }
 
 async function alignTextLayersInGraphic(ppro, project, seq, clip, layers, edge) {
@@ -580,7 +756,7 @@ async function alignTextLayersInGraphic(ppro, project, seq, clip, layers, edge) 
 }
 
 // Phase 6: every selected clip to the outer box of all their drawn bounds.
-async function alignToSelection(ppro, edge, measure = null) {
+async function alignToSelection(ppro, edge, measure = null, options = {}) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
   const snap = await readSnapshot(ppro, { seq });
@@ -588,6 +764,12 @@ async function alignToSelection(ppro, edge, measure = null) {
   if (clips.length === 1 && clips[0].isGraphic) {
     const layers = clips[0].layers;
     if (layers && layers.texts && layers.texts.length >= 2) {
+      if (measure && layers.onlyText) {
+        return moveTextLayersByBoxes(ppro, project, snap, clips[0], `CutDeck: Align ${edge} text layers`, (boxes) => {
+          const box = transformGeometry.unionBounds(boxes);
+          return boxes.map((b) => transformGeometry.alignShiftTo(b, box, edge));
+        }, measure, options && options.textBoxes);
+      }
       return alignTextLayersInGraphic(ppro, project, seq, clips[0], layers, edge);
     }
   }
@@ -598,14 +780,14 @@ async function alignToSelection(ppro, edge, measure = null) {
   return editSelectedClips(ppro, `CutDeck: Align ${edge} to selection`, (ctx, seqFrame, box) => {
     const { dx, dy } = transformGeometry.alignShiftTo(clipBounds(ctx), box, edge);
     return moveBy(ctx, seqFrame, dx, dy);
-  }, measure, group);
+  }, measure, group, "all", options && options.textBoxes);
 }
 
 // Premiere's own third align mode, "Align to Video Frame as Group" (Properties panel strings
 // $$$/Premiere/HSL/TransformControlsView/AlignToVideoFrameAsGroup, REA string scan 2026-10-16):
 // the selection's outer box goes to the frame edge and every clip moves by the same amount, so
 // their layout relative to each other is kept.
-async function alignToFrameAsGroup(ppro, edge, measure = null) {
+async function alignToFrameAsGroup(ppro, edge, measure = null, options = {}) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
   const group = (models, frame, skipped) => {
     if (models.length < 1) throw new Error(`Select a clip to align.${skippedNote(skipped)}`);
@@ -613,7 +795,7 @@ async function alignToFrameAsGroup(ppro, edge, measure = null) {
   };
   return editSelectedClips(ppro, `CutDeck: Align ${edge} as group`, (ctx, seqFrame, shift) => (
     moveBy(ctx, seqFrame, shift.dx, shift.dy)
-  ), measure, group);
+  ), measure, group, "all", options && options.textBoxes);
 }
 
 const skippedNote = (skipped) => (skipped.length ? ` Skipped: ${skipped.join(" ")}` : "");
@@ -673,7 +855,7 @@ async function distributeTextLayersInGraphic(ppro, project, seq, clip, layers, k
 }
 
 // Phase 6: distribute across the frame (equal margins on screen) or between outer selection.
-async function distribute(ppro, kind, measure = null, to = "selection") {
+async function distribute(ppro, kind, measure = null, to = "selection", options = {}) {
   const spec = DISTRIBUTE[kind];
   if (!spec) throw new Error(`Unknown distribution "${kind}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
@@ -685,6 +867,15 @@ async function distribute(ppro, kind, measure = null, to = "selection") {
     const layers = clips[0].layers;
     const minLayers = isFrame ? 2 : 3;
     if (layers && layers.texts && layers.texts.length >= minLayers) {
+      if (measure && layers.onlyText) {
+        const [axis, mode] = spec;
+        return moveTextLayersByBoxes(ppro, project, snap, clips[0],
+          `CutDeck: Distribute ${kind}${isFrame ? " across frame" : ""} text layers`, (boxes, frame) => {
+            const d = isFrame ? transformGeometry.distributeFrameShifts(boxes, frame, axis, mode)
+              : transformGeometry.distributeShifts(boxes, axis, mode);
+            return d.map((v) => ({ dx: axis === "x" ? v : 0, dy: axis === "y" ? v : 0 }));
+          }, measure, options && options.textBoxes);
+      }
       return distributeTextLayersInGraphic(ppro, project, seq, clips[0], layers, kind, spec, to);
     }
   }
@@ -701,7 +892,7 @@ async function distribute(ppro, kind, measure = null, to = "selection") {
   return editSelectedClips(ppro, `CutDeck: Distribute ${kind}${isFrame ? " across frame" : ""}`, (ctx, seqFrame, shifts, index) => {
     const d = shifts[index];
     return moveBy(ctx, seqFrame, spec[0] === "x" ? d : 0, spec[0] === "y" ? d : 0);
-  }, measure, group);
+  }, measure, group, "all", options && options.textBoxes);
 }
 
 // Phase 2: one typed value on the clip the panel shows, in the units the panel shows (px, %, °).

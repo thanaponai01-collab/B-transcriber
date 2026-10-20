@@ -105,11 +105,26 @@ def _parse_field_target(target: str) -> dict:
     return {"field": k.strip(), "value": float(v.strip())}
 
 
+def _layer_argument(args: dict) -> dict:
+    """Optional text layer (0-based) of a multi-text Graphic; absent = the whole Graphic."""
+    layer = args.get("layer")
+    if layer is None:
+        return {}
+    if isinstance(layer, bool) or not isinstance(layer, int) or layer < 0:
+        raise ValueError(f"layer must be a text layer index (0, 1, ...), got {layer!r}")
+    return {"layer": layer}
+
+
 def _set_anchor_arguments(args: dict, jobs) -> dict:
     target = args.get("target")
     if not isinstance(target, str) or target not in VALID_ANCHOR_TARGETS:
         raise ValueError(f"target must be one of: {', '.join(sorted(VALID_ANCHOR_TARGETS))}")
-    return {"target": target}
+    return {"target": target, **_layer_argument(args)}
+
+
+def _parse_anchor_target(target: str) -> dict:
+    parts = target.strip().split()
+    return {"target": parts[0], **({"layer": int(parts[1])} if len(parts) > 1 else {})}
 
 
 def _align_clips_arguments(args: dict, jobs) -> dict:
@@ -119,14 +134,14 @@ def _align_clips_arguments(args: dict, jobs) -> dict:
     to = args.get("to", "frame")
     if not isinstance(to, str) or to not in VALID_ALIGN_TO:
         raise ValueError(f"to must be one of: {', '.join(sorted(VALID_ALIGN_TO))}")
-    return {"edge": edge, "to": to}
+    return {"edge": edge, "to": to, **_layer_argument(args)}
 
 
 def _parse_align_target(target: str) -> dict:
     parts = target.strip().split()
     edge = parts[0]
     to = parts[1] if len(parts) > 1 else "frame"
-    return {"edge": edge, "to": to}
+    return {"edge": edge, "to": to, **({"layer": int(parts[2])} if len(parts) > 2 else {})}
 
 
 def _distribute_clips_arguments(args: dict, jobs) -> dict:
@@ -165,10 +180,10 @@ COMMANDS: dict[str, Command] = {
                                    ("field=value", _parse_field_target)),
     "set_anchor": Command(30, _set_anchor_arguments,
                           "Set 9-point anchor target on selected clips while preserving picture position.",
-                          ("target", lambda target: {"target": target.strip()})),
+                          ("target [layer]", _parse_anchor_target)),
     "align_clips": Command(30, _align_clips_arguments,
                            "Align selected clips to sequence frame or selection bounding box.",
-                           ("edge [to]", _parse_align_target)),
+                           ("edge [to] [layer]", _parse_align_target)),
     "distribute_clips": Command(30, _distribute_clips_arguments,
                                 "Distribute 3+ selected clips across frame or within selection.",
                                 ("kind [to]", _parse_distribute_target)),

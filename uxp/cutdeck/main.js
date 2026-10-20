@@ -195,6 +195,7 @@ alignPanel.bind({
   onAnchor: align.onAnchor,
   onAlign: align.onAlign,
   onDistribute: align.onDistribute,
+  onSelectTextLayer: align.onSelectTextLayer,
   onPoll: align.poll,
 });
 

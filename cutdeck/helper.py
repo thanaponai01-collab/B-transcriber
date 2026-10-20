@@ -25,7 +25,7 @@ import sys
 import uuid
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
-from cutdeck import frame_bounds, native_split, sequence_model
+from cutdeck import frame_bounds, native_split, sequence_model, text_box
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
@@ -209,6 +209,7 @@ class Jobs:
         "submit_transcribe": "_on_submit_transcribe",
         "plan_sync": "_on_plan_sync",
         "frame_bounds": "_on_frame_bounds",
+        "text_box": "_on_text_box",
         "native_split_request": "_on_native_split_request",
     }
 
@@ -328,6 +329,11 @@ class Jobs:
         # Transform panel: where a Graphic's text is drawn, from two saved frames. On a worker
         # thread, so other clients are answered while the PNGs are compared.
         return await asyncio.to_thread(frame_bounds.measure_request, req, _input_file)
+
+    async def _on_text_box(self, req: dict, client: Client | None) -> dict:
+        # Transform panel: Premiere's blue box for each text layer of a Graphic, from the newest
+        # save and the font (text_box.py). On a worker thread: it reads and shapes.
+        return await asyncio.to_thread(text_box.request, req)
 
     async def _on_native_split_request(self, req: dict, client: Client | None) -> dict:
         # The "Test Native Add Edit" probe: one fixed native command, guarded by the timecode.
