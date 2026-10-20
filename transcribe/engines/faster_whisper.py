@@ -176,7 +176,10 @@ class FasterWhisperEngine(Engine):
                  bias_prompt_budget: int = 200, batch_size: int = 8,
                  vad_threshold: float = 0.35, vad_min_silence_ms: int = 500,
                  config: dict | None = None, recover_short_spans: bool = False,
-                 bias_channel: str = "prompt"):
+                 bias_channel: str = "prompt",
+                 no_speech_threshold: float = 0.6,
+                 log_prob_threshold: float = -1.0,
+                 compression_ratio_threshold: float = 2.4):
         self._model_id = model_id
         self._device = device
         # compute_type override lets an 8GB card fall back to int8_float16 if a
@@ -186,6 +189,9 @@ class FasterWhisperEngine(Engine):
         self._bias_prompt_budget = bias_prompt_budget
         self._batch_size = batch_size
         self._recover_short_spans = recover_short_spans
+        self._no_speech_threshold = no_speech_threshold
+        self._log_prob_threshold = log_prob_threshold
+        self._compression_ratio_threshold = compression_ratio_threshold
         # How bias/glossary terms reach the decoder: "prompt" (initial_prompt, the
         # production behaviour), "hotwords" (faster-whisper's hotwords argument) or
         # "both". Only the harness should change this (item 4, arch-design doc).
@@ -305,6 +311,8 @@ class FasterWhisperEngine(Engine):
 
         while True:
             try:
+                if self._pipeline is not None:
+                    self._pipeline.last_speech_timestamp = 0.0
                 segments, _info = self._pipeline.transcribe(
                     audio_arr,
                     vad_filter=vad_filter,
@@ -323,9 +331,24 @@ class FasterWhisperEngine(Engine):
                 raise
 
     @staticmethod
-    def _words_of(segments) -> list[RecognizedToken]:
+    def _words_of(
+        segments,
+        no_speech_threshold: float | None = 0.6,
+        log_prob_threshold: float | None = -1.0,
+    ) -> list[RecognizedToken]:
         out = []
         for seg in segments:
+            no_speech = getattr(seg, "no_speech_prob", None)
+            avg_logprob = getattr(seg, "avg_logprob", None)
+            if (
+                no_speech_threshold is not None
+                and log_prob_threshold is not None
+                and no_speech is not None
+                and avg_logprob is not None
+                and no_speech > no_speech_threshold
+                and avg_logprob < log_prob_threshold
+            ):
+                continue
             for w in (seg.words or []):
                 if w.word.strip():  # keep w.word verbatim (its leading space marks the word boundary)
                     out.append(RecognizedToken(
@@ -423,7 +446,7 @@ class FasterWhisperEngine(Engine):
                 return tokens, bs
             clip = [{"start": w.start_s, "end": w.end_s} for w in windows]
         segments, bs = self._decode(tail_audio, clip, False, common, bs)
-        tail_tokens = self._words_of(segments)
+        tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
         if not tail_tokens:
             return tokens, bs
         for t in tail_tokens:
@@ -474,9 +497,9 @@ class FasterWhisperEngine(Engine):
             beam_size=beam_size if beam_size is not None else self._beam_size,
             word_timestamps=True,
             condition_on_previous_text=False,
-            compression_ratio_threshold=2.4,
-            log_prob_threshold=-1.0,
-            no_speech_threshold=0.6,
+            compression_ratio_threshold=self._compression_ratio_threshold,
+            log_prob_threshold=self._log_prob_threshold,
+            no_speech_threshold=self._no_speech_threshold,
         )
         if temperature is not None:
             common["temperature"] = temperature
@@ -504,7 +527,7 @@ class FasterWhisperEngine(Engine):
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
             self._note_segments(segments)
-            decoded = self._words_of(segments)
+            decoded = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
             if self._recover_short_spans:
                 # Batched clip timestamps are absolute. Group before recovery,
                 # convert to span-local times, then restore exactly one offset.
@@ -533,14 +556,14 @@ class FasterWhisperEngine(Engine):
             # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
             self._note_segments(segments)
-            for tok in self._words_of(segments):
+            for tok in self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         for run in long_runs:
             def decode_fn(win_audio):
                 nonlocal bs
                 segments, bs = self._decode(win_audio, None, False, common, bs)
-                win_tokens = self._words_of(segments)
+                win_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
                 win_tokens, bs = self._recover_truncated_tail(
                     win_tokens, win_audio, common, bs, require_speech=self._recover_short_spans)
                 return win_tokens

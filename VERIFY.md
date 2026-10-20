@@ -28,7 +28,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: disabled the zero-gap span merge in audio/windows.py, test_audio_windows/test_phase3_ingest went red, reverted
 
 ## Engines
-- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_config_validation.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_faster_whisper_short_span_recovery.py tests/test_hf_whisper_engines.py tests/test_phase4_typhoon.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_config_validation.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_faster_whisper_short_span_recovery.py tests/test_hf_whisper_engines.py tests/test_phase4_typhoon.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: no-op'd _release() in engines/base.py unload(), test_engine_base_unload went red; also removed gc.collect() and the empty_cache() call, and forced the CUDA check on, test_engine_unload_order went red on each (gc.collect() and empty_cache() removal had stayed green before), reverted
 

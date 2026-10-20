@@ -1,0 +1,48 @@
+{
+  "goal": "transcribe(faster_whisper): reset last_speech_timestamp per decode and enforce ignored no_speech/logprob segment gates (issue #69)",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 120,
+  "max_seconds": 3600,
+  "criteria": [
+    {
+      "statement": "self._pipeline.last_speech_timestamp is reset to 0.0 before every _pipeline.transcribe call in FasterWhisperEngine._decode",
+      "stage": "prove"
+    },
+    {
+      "statement": "Silent segments (no_speech_prob > no_speech_threshold and avg_logprob < log_prob_threshold) are dropped before _words_of emits tokens",
+      "stage": "prove"
+    },
+    {
+      "statement": "FasterWhisperEngine unit tests and regression engine tests pass",
+      "stage": "prove"
+    }
+  ],
+  "oracle_files": [
+    "tests/test_faster_whisper.py"
+  ],
+  "stages": [
+    {
+      "id": "prove",
+      "skill": "correctness-gate",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
+      ],
+      "inputs": [
+        "transcribe/engines/faster_whisper.py",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py"
+      ]
+    }
+  ],
+  "actions": []
+}

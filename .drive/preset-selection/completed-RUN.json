@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "contract": {
+    "criteria": [
+      {
+        "stage": "prove",
+        "statement": "Selected Adjustment Layers receive Transform Zoom and Invert"
+      }
+    ],
+    "max_seconds": 3600,
+    "timeout_seconds": 120,
+    "max_attempts": 4,
+    "stages": [
+      {
+        "inputs": [
+          "uxp/cutdeck/features/adjust.js",
+          "uxp/cutdeck/host/trackItems.js",
+          "tests/cutdeck_preset_adjustment_selection.test.cjs",
+          "tests/cutdeck_feature_adjust.test.cjs",
+          "tests/cutdeck_component_access.test.cjs"
+        ],
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+          "--test",
+          "tests/cutdeck_preset_adjustment_selection.test.cjs",
+          "tests/cutdeck_feature_adjust.test.cjs",
+          "tests/cutdeck_component_access.test.cjs"
+        ]
+      }
+    ],
+    "oracle_files": [
+      "tests/cutdeck_preset_adjustment_selection.test.cjs"
+    ],
+    "target": "local",
+    "goal": "Allow Alt-click presets on selected Adjustment Layers, excluding audio and placing no new layer",
+    "actions": []
+  },
+  "contract_hash": "e1fe77537c132328e326cf7b365d3de2b92a01c750baaec5447321a1dd47d28f",
+  "oracle_hash": "f4f9730204afc62dd8c36f8aa8093946b7da4a33a642470c2204f73e805ff973",
+  "started_at": 1791968136.2745278,
+  "status": "complete",
+  "proofs": {
+    "prove": {
+      "command": [
+        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+        "--test",
+        "tests/cutdeck_preset_adjustment_selection.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_component_access.test.cjs"
+      ],
+      "exit": 0,
+      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.5993ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1066ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0824ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0755ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2775ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4235ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1562ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0568ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1071ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1481ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.095ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.3875ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.1115ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.098ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.2736ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1123ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1462ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0599ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0504ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0423ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0234ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0455ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0354ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0463ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.117ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0447ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0793ms)\n✔ name fallback for AL detection works when only getName() exists (0.1237ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.8899ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2533ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3202ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0531ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.2801ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.2374ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.7779ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.1446ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.1191\n",
+      "at": 1791968233.1720479,
+      "seconds": 0.094,
+      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+    }
+  },
+  "attempts": {
+    "prove": 2
+  },
+  "journal": {},
+  "history": [
+    {
+      "stage": "prove",
+      "command": [
+        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+        "--test",
+        "tests/cutdeck_preset_adjustment_selection.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_component_access.test.cjs"
+      ],
+      "exit": 0,
+      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.605ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1076ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0868ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0783ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2772ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4282ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1358ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0607ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1165ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1549ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.0973ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.2797ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.0867ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.4519ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.4144ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1235ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1513ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0675ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0545ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0366ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0233ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0494ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0363ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0468ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.1006ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0415ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0722ms)\n✔ name fallback for AL detection works when only getName() exists (0.1256ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.9002ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2425ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3243ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0461ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.275ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.223ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.716ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.138ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 68.0345\n",
+      "at": 1791968197.6443734,
+      "seconds": 0.105,
+      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+    },
+    {
+      "stage": "prove",
+      "command": [
+        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
+        "--test",
+        "tests/cutdeck_preset_adjustment_selection.test.cjs",
+        "tests/cutdeck_feature_adjust.test.cjs",
+        "tests/cutdeck_component_access.test.cjs"
+      ],
+      "exit": 0,
+      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.5993ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1066ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0824ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0755ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2775ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4235ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1562ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0568ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1071ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1481ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.095ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.3875ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.1115ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.098ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.2736ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1123ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1462ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0599ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0504ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0423ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0234ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0455ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0354ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0463ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.117ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0447ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0793ms)\n✔ name fallback for AL detection works when only getName() exists (0.1237ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.8899ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2533ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3202ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0531ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.2801ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.2374ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.7779ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.1446ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.1191\n",
+      "at": 1791968233.1720479,
+      "seconds": 0.094,
+      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+    }
+  ]
+}

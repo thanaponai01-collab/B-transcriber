@@ -1,60 +1,74 @@
 {
   "version": 1,
   "contract": {
+    "goal": "transcribe(faster_whisper): reset last_speech_timestamp per decode and enforce ignored no_speech/logprob segment gates (issue #69)",
+    "target": "local",
+    "max_attempts": 4,
+    "timeout_seconds": 120,
+    "max_seconds": 3600,
     "criteria": [
       {
-        "stage": "prove",
-        "statement": "Selected Adjustment Layers receive Transform Zoom and Invert"
-      }
-    ],
-    "max_seconds": 3600,
-    "timeout_seconds": 120,
-    "max_attempts": 4,
-    "stages": [
+        "statement": "self._pipeline.last_speech_timestamp is reset to 0.0 before every _pipeline.transcribe call in FasterWhisperEngine._decode",
+        "stage": "prove"
+      },
       {
-        "inputs": [
-          "uxp/cutdeck/features/adjust.js",
-          "uxp/cutdeck/host/trackItems.js",
-          "tests/cutdeck_preset_adjustment_selection.test.cjs",
-          "tests/cutdeck_feature_adjust.test.cjs",
-          "tests/cutdeck_component_access.test.cjs"
-        ],
-        "id": "prove",
-        "skill": "correctness-gate",
-        "command": [
-          "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
-          "--test",
-          "tests/cutdeck_preset_adjustment_selection.test.cjs",
-          "tests/cutdeck_feature_adjust.test.cjs",
-          "tests/cutdeck_component_access.test.cjs"
-        ]
+        "statement": "Silent segments (no_speech_prob > no_speech_threshold and avg_logprob < log_prob_threshold) are dropped before _words_of emits tokens",
+        "stage": "prove"
+      },
+      {
+        "statement": "FasterWhisperEngine unit tests and regression engine tests pass",
+        "stage": "prove"
       }
     ],
     "oracle_files": [
-      "tests/cutdeck_preset_adjustment_selection.test.cjs"
+      "tests/test_faster_whisper.py"
     ],
-    "target": "local",
-    "goal": "Allow Alt-click presets on selected Adjustment Layers, excluding audio and placing no new layer",
+    "stages": [
+      {
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_faster_whisper.py",
+          "tests/test_faster_whisper_short_span_recovery.py",
+          "tests/test_faster_whisper_truncation_recovery.py",
+          "tests/test_faster_whisper_path_scoping.py",
+          "-v"
+        ],
+        "inputs": [
+          "transcribe/engines/faster_whisper.py",
+          "tests/test_faster_whisper.py",
+          "tests/test_faster_whisper_short_span_recovery.py",
+          "tests/test_faster_whisper_truncation_recovery.py",
+          "tests/test_faster_whisper_path_scoping.py"
+        ]
+      }
+    ],
     "actions": []
   },
-  "contract_hash": "e1fe77537c132328e326cf7b365d3de2b92a01c750baaec5447321a1dd47d28f",
-  "oracle_hash": "f4f9730204afc62dd8c36f8aa8093946b7da4a33a642470c2204f73e805ff973",
-  "started_at": 1791968136.2745278,
+  "contract_hash": "df99b56bb09ef8b540895716884dfaddbab9fc4beb8113dfbb8266fc4194088a",
+  "oracle_hash": "a1244d272a9d0eb7871054783a38ad0046422d08e600a8990f70b823c0f74731",
+  "started_at": 1792469406.189177,
   "status": "complete",
   "proofs": {
     "prove": {
       "command": [
-        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
-        "--test",
-        "tests/cutdeck_preset_adjustment_selection.test.cjs",
-        "tests/cutdeck_feature_adjust.test.cjs",
-        "tests/cutdeck_component_access.test.cjs"
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
       ],
       "exit": 0,
-      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.5993ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1066ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0824ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0755ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2775ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4235ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1562ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0568ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1071ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1481ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.095ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.3875ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.1115ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.098ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.2736ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1123ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1462ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0599ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0504ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0423ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0234ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0455ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0354ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0463ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.117ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0447ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0793ms)\n✔ name fallback for AL detection works when only getName() exists (0.1237ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.8899ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2533ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3202ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0531ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.2801ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.2374ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.7779ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.1446ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.1191\n",
-      "at": 1791968233.1720479,
-      "seconds": 0.094,
-      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.48s ==============================\n",
+      "at": 1792469520.5371745,
+      "seconds": 3.293,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
     }
   },
   "attempts": {
@@ -65,32 +79,38 @@
     {
       "stage": "prove",
       "command": [
-        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
-        "--test",
-        "tests/cutdeck_preset_adjustment_selection.test.cjs",
-        "tests/cutdeck_feature_adjust.test.cjs",
-        "tests/cutdeck_component_access.test.cjs"
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
       ],
       "exit": 0,
-      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.605ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1076ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0868ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0783ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2772ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4282ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1358ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0607ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1165ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1549ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.0973ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.2797ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.0867ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.4519ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.4144ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1235ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1513ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0675ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0545ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0366ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0233ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0494ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0363ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0468ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.1006ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0415ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0722ms)\n✔ name fallback for AL detection works when only getName() exists (0.1256ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.9002ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2425ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3243ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0461ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.275ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.223ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.716ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.138ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 68.0345\n",
-      "at": 1791968197.6443734,
-      "seconds": 0.105,
-      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.53s ==============================\n",
+      "at": 1792469513.600636,
+      "seconds": 3.277,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
     },
     {
       "stage": "prove",
       "command": [
-        "C:/Users/thana/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe",
-        "--test",
-        "tests/cutdeck_preset_adjustment_selection.test.cjs",
-        "tests/cutdeck_feature_adjust.test.cjs",
-        "tests/cutdeck_component_access.test.cjs"
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
       ],
       "exit": 0,
-      "output": "✔ isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not (0.5993ms)\n✔ isTrackItemSelected returns false, not throws, when getIsSelected() rejects (0.1066ms)\n✔ isTrackItemSelected falls back to a function-typed isSelected when getIsSelected is absent (0.0824ms)\n✔ isTrackItemSelected falls back to a plain isSelected/selected property last (0.0755ms)\n✔ getSelectedTrackItems prefers seq.getSelection() when it returns items (0.2775ms)\n✔ getSelectedTrackItems falls back to a per-track scan using the FIXED getIsSelected route (0.4235ms)\n✔ getFirstSelectedTrackItem returns null when nothing is selected (0.1562ms)\n✔ getSelectedTrackItems returns [] for a null sequence, never throws (0.0568ms)\n✔ getTrackClipItemsOrThrow returns items from track.getTrackItems (0.1071ms)\n✔ getTrackClipItemsOrThrow passes CLIP constant from ppro when available (0.1481ms)\n✔ getTrackClipItemsOrThrow falls back across multiple signatures on failure (0.095ms)\n✔ getTrackClipItemsOrThrow throws when all attempts fail instead of masking as empty (0.3875ms)\n✔ getTrackClipItems returns [] when getTrackClipItemsOrThrow throws (0.1115ms)\n✔ getTrackClipItems drops null entries Premiere returns (0.098ms)\n✔ getSelectedVideoClips excludes Audio clips and Adjustment Layers (0.2736ms)\n✔ getSelectedVideoClips trusts isAdjustmentLayer() over the clip name (0.1123ms)\n✔ getSelectedVideoClips reads only the video tracks getTrackIndex() names (0.1462ms)\n✔ getSelectedVideoClips returns [] for null sequence or empty selection (0.0599ms)\n✔ unwrapKeyframeValue strips the documented {value:{value:X}} double wrapper (0.0504ms)\n✔ unwrapKeyframeValue leaves an already-plain value alone (0.0423ms)\n✔ unwrapKeyframeValue tolerates a missing keyframe (0.0234ms)\n✔ isFixedComponent matches Premiere's own fixed effects, case- and whitespace-insensitively (0.0455ms)\n✔ getTrackClipItemsOrThrow returns [] for null or malformed track (0.0354ms)\n✔ getSelectedTrackItems gracefully handles seq.getSelection returning non-array items (0.0463ms)\n✔ getSelectedVideoClips excludes items matching ppro.AudioClipTrackItem instance (0.117ms)\n✔ unwrapKeyframeValue handles nested nulls and primitives safely (0.0447ms)\n✔ trackItemName reads getName() — real track items have no .name (0.0793ms)\n✔ name fallback for AL detection works when only getName() exists (0.1237ms)\nError: This preset could not be found — it may have been deleted.\n    at doApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:184:24)\n    at D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:54\n    at Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:13)\n    at Object.onApplyPreset (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:262:44)\n    at TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:91:16)\n    at Test.runInAsyncScope (node:async_hooks:227:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)\n    at Test.postRun (node:internal/test_runner/test:1522:19)\n    at Test.run (node:internal/test_runner/test:1447:12)\nError: Select the clip(s) or Adjustment Layer(s) to apply [Zoom] to, then Alt+click it again.\n    at applyPresetToSelectedClips (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\adjust.js:221:13)\n    at async Object.act (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\uxp\\cutdeck\\features\\controller.js:35:7)\n    at async TestContext.<anonymous> (D:\\01 - Antigravity\\00 Claude\\B-transcriber\\tests\\cutdeck_feature_adjust.test.cjs:133:3)\n    at async Test.run (node:internal/test_runner/test:1389:7)\n    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)\n✔ adjust: loadSettings loads defaults or merges saved JSON (0.8899ms)\n✔ adjust: applySettingChange updates state and persists settings (0.2533ms)\n✔ adjust: onAdjust invokes placeAdjustmentLayersOnTimeline and updates status (0.3202ms)\n✔ adjust: onApplyPreset throws if preset id is not found (1.0531ms)\n✔ adjust: Alt mode applies the preset to the selected clips, placing no AL (0.2801ms)\n✔ adjust: Alt mode with nothing selected says so and changes nothing (0.2374ms)\n✔ Alt preset Transform Zoom applies to selected Adjustment Layers and excludes linked audio (1.7779ms)\n✔ Alt preset Invert applies to selected Adjustment Layers and excludes linked audio (0.1446ms)\nℹ tests 36\nℹ suites 0\nℹ pass 36\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.1191\n",
-      "at": 1791968233.1720479,
-      "seconds": 0.094,
-      "inputs_hash": "45097e8d21e8253c7dc496db81c12363df3038c0902984453c3a6579eeb1d191"
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.48s ==============================\n",
+      "at": 1792469520.5371745,
+      "seconds": 3.293,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
     }
   ]
 }
