@@ -106,6 +106,11 @@ def words_for_job(conn, job_id: int, engine_slot: str = "a") -> list[Word]:
     if result is None or not result.raw_words_json:
         return []
     raw = json.loads(result.raw_words_json)
+    if any(w.get("subdivided") for w in raw):
+        return [
+            Word(w["text"], w["start_ms"], w["end_ms"], w.get("confidence"))
+            for w in raw if w["text"].strip()
+        ]
     pieces: list[Piece] = [
         (w["text"], w["start_ms"], w["end_ms"], w.get("confidence"))
         for w in raw

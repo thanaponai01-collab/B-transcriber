@@ -768,22 +768,29 @@ class FasterWhisperEngine(Engine):
                                           temperature=temperature, beam_size=beam_size,
                                           **kwargs)
 
+        cues, sub_words = split_cues(words, self._cue_policy, return_words=True)
         tokens = [
             RecognizedToken(
                 text=text, start_ms=start, end_ms=end,
                 confidence=conf, script=detect_script(text),
             )
-            for text, start, end, conf in split_cues(words, self._cue_policy)
+            for text, start, end, conf in cues
         ]
 
         return EngineResult(
             tokens=tokens,
             engine_name="faster_whisper",
             timestamps_final=True,  # phrase cues are final; skip re-align
-            # 5.4: keep the raw per-word list. Tokens persisted to the DB are phrase
+            # 5.4: keep the subdivided per-word list. Tokens persisted to the DB are phrase
             # cues; word granularity is re-derived on demand from here (CutDeck Phase
             # 5 filler excision needs word-level cuts inside a cue).
-            raw={"segments": list(self._segment_stats), "words": [{"text": t, "start_ms": s, "end_ms": e, "confidence": c} for t, s, e, c in words]},
+            raw={
+                "segments": list(self._segment_stats),
+                "words": [
+                    {"text": w.text, "start_ms": w.start_ms, "end_ms": w.end_ms, "confidence": w.confidence, "subdivided": True}
+                    for w in sub_words
+                ],
+            },
         )
 
     def _release(self) -> None:

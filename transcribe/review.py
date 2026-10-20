@@ -21,9 +21,30 @@ class ReviewWindow:
     priority: int
 
 
-def suspicion_reasons(cue: dict) -> list[str]:
-    from pythainlp.corpus import thai_words
-    from pythainlp.tokenize import word_tokenize
+_KNOWN_THAI_WORDS: frozenset[str] | None = None
+
+
+def _get_known_thai_words() -> frozenset[str]:
+    global _KNOWN_THAI_WORDS
+    if _KNOWN_THAI_WORDS is None:
+        from pythainlp.corpus import thai_words
+        from transcribe.thai.atoms import (
+            TRAILING_PARTICLES,
+            _DEMONSTRATIVES,
+            _NUMERAL_ONE_FORMS,
+        )
+        _KNOWN_THAI_WORDS = (
+            frozenset(thai_words())
+            | TRAILING_PARTICLES
+            | _DEMONSTRATIVES
+            | _NUMERAL_ONE_FORMS
+        )
+    return _KNOWN_THAI_WORDS
+
+
+def suspicion_reasons(cue: dict, words: list[str] | None = None) -> list[str]:
+
+
 
     text = cue['text']
     duration = cue['end_ms'] - cue['start_ms']
@@ -35,8 +56,13 @@ def suspicion_reasons(cue: dict) -> list[str]:
     confidence = cue.get('confidence')
     if confidence is not None and confidence < .8:
         reasons.append('low recognition confidence')
-    known = thai_words()
-    unknown = [t for t in word_tokenize(text, keep_whitespace=False)
+    known = _get_known_thai_words()
+    if words is None:
+        from pythainlp.tokenize import word_tokenize
+        tokens = word_tokenize(text, keep_whitespace=False)
+    else:
+        tokens = words
+    unknown = [t for t in tokens
                if re.fullmatch(r'[ก-๛]+', t) and t not in known and t != 'ๆ']
     if unknown:
         reasons.append('unfamiliar Thai fragments: ' + ', '.join(dict.fromkeys(unknown)))

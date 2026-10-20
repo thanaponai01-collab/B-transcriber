@@ -53,7 +53,7 @@ _PARTICLE_OVERSHOOT_MS = 500
 _PARTICLE_OVERSHOOT_CHARS = 8
 
 
-def split_cues(words, policy: CuePolicy | None = None):
+def split_cues(words, policy: CuePolicy | None = None, *, return_words: bool = False):
     """Group word pieces into subtitle-length phrase cues.
 
     `words`: list of (text, start_ms, end_ms, confidence) — confidence is the
@@ -76,8 +76,8 @@ def split_cues(words, policy: CuePolicy | None = None):
     """
     policy = policy or CuePolicy()
     if policy.algorithm == "dp":
-        return _split_dp(words, policy)
-    return _split_greedy(words, policy)
+        return _split_dp(words, policy, return_words=return_words)
+    return _split_greedy(words, policy, return_words=return_words)
 
 
 def _sentence_boundary_offsets(text: str) -> list[int]:
@@ -106,13 +106,13 @@ def _sentence_boundary_offsets(text: str) -> list[int]:
     return offsets
 
 
-def _prepare(words, policy: CuePolicy):
+def _prepare(words, policy: CuePolicy, *, return_words: bool = False):
     """Shared front half of both algorithms: rebuild the per-character timeline,
     glue break-atoms, and locate crfcut sentence starts in the glued coordinates.
 
     Returns (timed, boundary_offsets), or (None, None) when there is no text.
     """
-    from cutdeck.words import timed_tokens
+    from cutdeck.words import timed_tokens, Word
     from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
     # 1-3. per-character timeline -> real word boundaries -> mapped time spans.
@@ -120,17 +120,20 @@ def _prepare(words, policy: CuePolicy):
     # implementation of Thai word-timeline reconstruction, not two.
     full_text, raw_timed = timed_tokens(words)
     if not full_text:
-        return None, None
+        return (None, None, []) if return_words else (None, None)
 
     # 3.5. glue bound units into atoms before any break decision runs.
     timed = glue_atoms(raw_timed, policy.lexicon or default_lexicon({}))
 
     # sentence-start offsets in the same char coordinates as `timed`.
     boundary_offsets = snap_boundary_offsets(_sentence_boundary_offsets(full_text), timed)
+    if return_words:
+        sub_words = [Word(t, s, e, conf) for t, s, e, conf, _pos in raw_timed if t.strip()]
+        return timed, boundary_offsets, sub_words
     return timed, boundary_offsets
 
 
-def _split_greedy(words, policy: CuePolicy):
+def _split_greedy(words, policy: CuePolicy, *, return_words: bool = False):
     """Group word pieces into subtitle-length phrase cues at real word boundaries.
 
     Whisper word-pieces for spaceless Thai are sub-word and only sporadically
@@ -165,7 +168,11 @@ def _split_greedy(words, policy: CuePolicy):
     space_min_chars = policy.space_min_chars
     space_min_ms = policy.space_min_ms
 
-    timed, boundary_offsets = _prepare(words, policy)
+    if return_words:
+        timed, boundary_offsets, sub_words = _prepare(words, policy, return_words=True)
+    else:
+        timed, boundary_offsets = _prepare(words, policy)
+        sub_words = []
     if timed is None:
         return []
     boundary_idx = 0
@@ -292,6 +299,8 @@ def _split_greedy(words, policy: CuePolicy):
         cur.append((t, s, e, conf))
     if cur:
         _close()
+    if return_words:
+        return cues, sub_words
     return cues
 
 
@@ -374,7 +383,7 @@ def _dp_split_segment(timed, real_idx, seg_start, seg_end,
     return cues
 
 
-def _split_dp(words, policy: CuePolicy):
+def _split_dp(words, policy: CuePolicy, *, return_words: bool = False):
     """Cost-minimising cue split (HANDOFF_CEILING_BREAK §5): a classic
     subtitle line-breaking DP over pythainlp's real word boundaries, replacing
     the greedy fill's "close the instant the character budget is hit,
@@ -397,7 +406,11 @@ def _split_dp(words, policy: CuePolicy):
     """
     gap_ms = policy.gap_ms
 
-    timed, boundary_offsets = _prepare(words, policy)
+    if return_words:
+        timed, boundary_offsets, sub_words = _prepare(words, policy, return_words=True)
+    else:
+        timed, boundary_offsets = _prepare(words, policy)
+        sub_words = []
     if timed is None:
         return []
 
@@ -429,4 +442,6 @@ def _split_dp(words, policy: CuePolicy):
         cues.extend(_dp_split_segment(timed, real_idx, seg_start, seg_end,
                                        policy.target_ms, policy.target_chars,
                                        policy.space_min_chars, policy.space_min_ms))
+    if return_words:
+        return cues, sub_words
     return cues
