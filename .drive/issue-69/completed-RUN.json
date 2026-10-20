@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "contract": {
+    "goal": "transcribe(faster_whisper): reset last_speech_timestamp per decode and enforce ignored no_speech/logprob segment gates (issue #69)",
+    "target": "local",
+    "max_attempts": 4,
+    "timeout_seconds": 120,
+    "max_seconds": 3600,
+    "criteria": [
+      {
+        "statement": "self._pipeline.last_speech_timestamp is reset to 0.0 before every _pipeline.transcribe call in FasterWhisperEngine._decode",
+        "stage": "prove"
+      },
+      {
+        "statement": "Silent segments (no_speech_prob > no_speech_threshold and avg_logprob < log_prob_threshold) are dropped before _words_of emits tokens",
+        "stage": "prove"
+      },
+      {
+        "statement": "FasterWhisperEngine unit tests and regression engine tests pass",
+        "stage": "prove"
+      }
+    ],
+    "oracle_files": [
+      "tests/test_faster_whisper.py"
+    ],
+    "stages": [
+      {
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_faster_whisper.py",
+          "tests/test_faster_whisper_short_span_recovery.py",
+          "tests/test_faster_whisper_truncation_recovery.py",
+          "tests/test_faster_whisper_path_scoping.py",
+          "-v"
+        ],
+        "inputs": [
+          "transcribe/engines/faster_whisper.py",
+          "tests/test_faster_whisper.py",
+          "tests/test_faster_whisper_short_span_recovery.py",
+          "tests/test_faster_whisper_truncation_recovery.py",
+          "tests/test_faster_whisper_path_scoping.py"
+        ]
+      }
+    ],
+    "actions": []
+  },
+  "contract_hash": "df99b56bb09ef8b540895716884dfaddbab9fc4beb8113dfbb8266fc4194088a",
+  "oracle_hash": "a1244d272a9d0eb7871054783a38ad0046422d08e600a8990f70b823c0f74731",
+  "started_at": 1792469406.189177,
+  "status": "complete",
+  "proofs": {
+    "prove": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.48s ==============================\n",
+      "at": 1792469520.5371745,
+      "seconds": 3.293,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
+    }
+  },
+  "attempts": {
+    "prove": 2
+  },
+  "journal": {},
+  "history": [
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.53s ==============================\n",
+      "at": 1792469513.600636,
+      "seconds": 3.277,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
+    },
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 28 items\n\ntests/test_faster_whisper.py::test_decode_resets_last_speech_timestamp_per_call PASSED [  3%]\ntests/test_faster_whisper.py::test_words_of_drops_silent_garbage_segments PASSED [  7%]\ntests/test_faster_whisper.py::test_words_of_boundary_and_custom_thresholds PASSED [ 10%]\ntests/test_faster_whisper.py::test_faster_whisper_engine_init_threshold_attributes PASSED [ 14%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovers_tail_in_short_span_with_absolute_timestamps PASSED [ 17%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_short_span_retries_once_without_touching_other_spans PASSED [ 21%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[False] PASSED [ 25%]\ntests/test_faster_whisper_short_span_recovery.py::test_silence_tail_does_not_trigger_retry[True] PASSED [ 28%]\ntests/test_faster_whisper_short_span_recovery.py::test_empty_retry_is_bounded_when_decoder_still_returns_nothing PASSED [ 32%]\ntests/test_faster_whisper_short_span_recovery.py::test_disabled_flag_preserves_original_batch_path PASSED [ 35%]\ntests/test_faster_whisper_short_span_recovery.py::test_retry_uses_detected_speech_clips_and_keeps_their_offset PASSED [ 39%]\ntests/test_faster_whisper_short_span_recovery.py::test_stretched_last_word_is_preserved_when_retry_region_has_no_speech PASSED [ 42%]\ntests/test_faster_whisper_short_span_recovery.py::test_recovery_setting_reaches_engine_through_pipeline_config PASSED [ 46%]\ntests/test_faster_whisper_short_span_recovery.py::test_real_vad_rejects_silence_without_loading_asr PASSED [ 50%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_picks_largest_gap_not_fixed_offset PASSED [ 53%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_none_when_fewer_than_two_in_range PASSED [ 57%]\ntests/test_faster_whisper_truncation_recovery.py::test_find_safe_cut_ignores_gaps_outside_lookback PASSED [ 60%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_dropped_tail_and_cuts_at_real_gap PASSED [ 64%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_when_suspicious_word_ends_well_short_of_window_end PASSED [ 67%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_last_word_duration_is_normal PASSED [ 71%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_no_safe_cut_available PASSED [ 75%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_recovery_when_tail_audio_too_short PASSED [ 78%]\ntests/test_faster_whisper_truncation_recovery.py::test_empty_tokens_returns_unchanged PASSED [ 82%]\ntests/test_faster_whisper_truncation_recovery.py::test_recovers_trailing_gap_after_normal_last_word PASSED [ 85%]\ntests/test_faster_whisper_truncation_recovery.py::test_no_trailing_gap_recovery_when_window_ends_close_to_last_word PASSED [ 89%]\ntests/test_faster_whisper_path_scoping.py::test_register_cuda_dll_dirs_returns_pre_mutation_path PASSED [ 92%]\ntests/test_faster_whisper_path_scoping.py::test_unload_restores_path_to_pre_load_value PASSED [ 96%]\ntests/test_faster_whisper_path_scoping.py::test_unload_is_idempotent_on_path_restore PASSED [100%]\n\n============================= 28 passed in 2.48s ==============================\n",
+      "at": 1792469520.5371745,
+      "seconds": 3.293,
+      "inputs_hash": "6d7b7b0ab7bba6ee0b6de3f274620d0b1c2633330e97490a6ab9de5bc3c86720"
+    }
+  ]
+}

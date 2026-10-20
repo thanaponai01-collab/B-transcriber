@@ -1,0 +1,48 @@
+{
+  "goal": "transcribe(faster_whisper): batch long-run windows and truncated-tail recoveries, and record segment stats on long runs (issue #70)",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 120,
+  "max_seconds": 3600,
+  "criteria": [
+    {
+      "statement": "Multi-window long_runs are decoded via batched clip_timestamps (batch_size=bs) rather than one _decode call per window, and still pass through decode_windows(..., cut_seams=True)",
+      "stage": "prove"
+    },
+    {
+      "statement": "last_segment_stats includes segment stats (with global start_ms/end_ms) from long_runs as well as normal spans",
+      "stage": "prove"
+    },
+    {
+      "statement": "FasterWhisperEngine unit tests and regression engine tests pass",
+      "stage": "prove"
+    }
+  ],
+  "oracle_files": [
+    "tests/test_faster_whisper.py"
+  ],
+  "stages": [
+    {
+      "id": "prove",
+      "skill": "correctness-gate",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py",
+        "-v"
+      ],
+      "inputs": [
+        "transcribe/engines/faster_whisper.py",
+        "tests/test_faster_whisper.py",
+        "tests/test_faster_whisper_short_span_recovery.py",
+        "tests/test_faster_whisper_truncation_recovery.py",
+        "tests/test_faster_whisper_path_scoping.py"
+      ]
+    }
+  ],
+  "actions": []
+}

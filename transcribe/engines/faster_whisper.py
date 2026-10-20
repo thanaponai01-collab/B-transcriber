@@ -20,6 +20,8 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from transcribe.audio import AudioWindow, Window, WindowPolicy, decode_windows, speech_windows
 from transcribe.contracts import EngineInput, EngineResult, RecognizedToken, detect_script
 from transcribe.cues import (
@@ -270,14 +272,14 @@ class FasterWhisperEngine(Engine):
         except Exception:
             return None
 
-    def _note_segments(self, segments) -> None:
-        """Keep each segment's decode statistics (absolute-time paths only; the long-run
-        window path is window-relative and does not record)."""
+    def _note_segments(self, segments, offset_ms: int = 0) -> None:
+        """Keep each segment's decode statistics."""
         for g in segments:
             if getattr(g, "avg_logprob", None) is None:
                 continue
             self._segment_stats.append({
-                "start_ms": int(g.start * 1000), "end_ms": int(g.end * 1000),
+                "start_ms": int(g.start * 1000) + offset_ms,
+                "end_ms": int(g.end * 1000) + offset_ms,
                 "avg_logprob": g.avg_logprob, "no_speech_prob": g.no_speech_prob,
                 "compression_ratio": g.compression_ratio})
 
@@ -308,6 +310,15 @@ class FasterWhisperEngine(Engine):
         is HF-pipeline-specific). Returns (segments, batch_size_used) so the
         caller's next call starts from whatever size succeeded."""
         import torch
+
+        # BatchedInferencePipeline asserts duration >= duration_after_vad when formatting
+        # VAD log info (faster_whisper/transcribe.py:460). For overlapping clips,
+        # sum(clip durations) can exceed audio_arr length. Pad audio_arr with zeros so
+        # duration >= duration_after_vad without altering any clip content.
+        if clip_timestamps and len(audio_arr) > 0:
+            tot_dur_samples = int(sum((c["end"] - c["start"]) for c in clip_timestamps) * _SR)
+            if tot_dur_samples > len(audio_arr):
+                audio_arr = np.pad(audio_arr, (0, tot_dur_samples - len(audio_arr)), mode="constant")
 
         while True:
             try:
@@ -378,6 +389,140 @@ class FasterWhisperEngine(Engine):
                 best_i, best_gap = i, gap
         return best_i
 
+    @staticmethod
+    def _group_segments_by_window(segments, windows: list[Window]) -> list[list]:
+        grouped = [[] for _ in windows]
+        if not windows or not segments:
+            return grouped
+
+        seek_map = {int(round(w.start_s * 100)): idx for idx, w in enumerate(windows)}
+        all_have_matching_seek = all(
+            getattr(s, "seek", None) is not None and getattr(s, "seek", None) in seek_map
+            for s in segments
+        )
+        if all_have_matching_seek:
+            for s in segments:
+                grouped[seek_map[s.seek]].append(s)
+            return grouped
+
+        # Fallback for mocks without seek: stream sequentially matching chunk order
+        win_idx = 0
+        prev_start = -1.0
+        for seg in segments:
+            while win_idx < len(windows) - 1 and (
+                (prev_start >= 0 and seg.start < prev_start - 0.1)
+                or (seg.start > windows[win_idx].end_s + 0.1)
+            ):
+                win_idx += 1
+                prev_start = -1.0
+            grouped[win_idx].append(seg)
+            prev_start = seg.start
+        return grouped
+
+    def _plan_truncated_tail(self, tokens, sub_audio, *, require_speech=False):
+        """Check if an early-EOS truncated tail is suspected. If so, return
+        (tokens, kept, tail_audio, tail_start_ms, clip) for redecoding; otherwise None."""
+        if not tokens and not require_speech:
+            return None
+        last = tokens[-1] if tokens else None
+        win_dur_ms = len(sub_audio) / _SR * 1000
+        dur = last.end_ms - last.start_ms if last else 0
+        trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
+
+        if last is None:
+            kept = []
+            tail_start_ms = 0
+        elif dur >= _TRUNCATION_TAIL_MS:
+            # (A) the last word itself is the suspect — discard it too and
+            # redecode from a genuine inter-token pause before it.
+            cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
+            if cut_i is None:
+                return None
+            kept = tokens[:cut_i + 1]
+            tail_start_ms = tokens[cut_i + 1].start_ms
+        elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
+            # (B) the last word is trustworthy — keep it, redecode only the
+            # real leftover audio after it.
+            kept = tokens
+            tail_start_ms = last.end_ms
+        else:
+            return None
+
+        tail_audio = sub_audio[int(tail_start_ms / 1000 * _SR):]
+        if len(tail_audio) < _SR * 0.5:
+            return None
+
+        clip = None
+        if require_speech:
+            # Detect actual speech again in the omitted region. VAD padding on
+            # the original span is not evidence that its trailing audio is speech.
+            windows = speech_windows(tail_audio, self._window_policy)
+            if not windows:
+                return None
+            clip = [{"start": w.start_s, "end": w.end_s} for w in windows]
+        return tokens, kept, tail_audio, tail_start_ms, clip
+
+    def _batch_recover_tails(self, tail_candidates, common, bs):
+        """Batch-redecode candidate tails.
+        tail_candidates: list of (key, plan) where plan is (tokens, kept, tail_audio, tail_start_ms, clip).
+        Returns ({key: merged_tokens}, bs)."""
+        recovered_map = {}
+        if not tail_candidates:
+            return recovered_map, bs
+
+        if len(tail_candidates) == 1:
+            key, (orig_tokens, kept, tail_audio, tail_start_ms, clip) = tail_candidates[0]
+            segments, bs = self._decode(tail_audio, clip, False, common, bs)
+            tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
+            if not tail_tokens:
+                recovered_map[key] = orig_tokens
+            else:
+                for t in tail_tokens:
+                    t.start_ms += tail_start_ms
+                    t.end_ms += tail_start_ms
+                recovered_map[key] = kept + tail_tokens
+            return recovered_map, bs
+
+        # Multiple candidate tails: concatenate audio into a single array and batch-decode clips
+        combined_audio = np.concatenate([plan[2] for _, plan in tail_candidates])
+        combined_clips = []
+        offset_samples = 0
+        tail_ranges = []
+
+        for key, (orig_tokens, kept, tail_audio, tail_start_ms, clip) in tail_candidates:
+            offset_s = offset_samples / _SR
+            dur_s = len(tail_audio) / _SR
+            start_clip_idx = len(combined_clips)
+            if clip:
+                for c in clip:
+                    combined_clips.append({"start": offset_s + c["start"], "end": offset_s + c["end"]})
+            else:
+                combined_clips.append({"start": offset_s, "end": offset_s + dur_s})
+            end_clip_idx = len(combined_clips)
+            tail_ranges.append((key, orig_tokens, kept, tail_start_ms, start_clip_idx, end_clip_idx, offset_samples))
+            offset_samples += len(tail_audio)
+
+        segments, bs = self._decode(combined_audio, combined_clips, False, common, bs)
+        dummy_windows = [
+            Window(start_s=c["start"], end_s=c["end"], span_index=idx)
+            for idx, c in enumerate(combined_clips)
+        ]
+        grouped_segs = self._group_segments_by_window(segments, dummy_windows)
+
+        for key, orig_tokens, kept, tail_start_ms, start_idx, end_idx, offset_samp in tail_ranges:
+            tail_segs = [seg for sub in grouped_segs[start_idx:end_idx] for seg in sub]
+            tail_tokens = self._words_of(tail_segs, self._no_speech_threshold, self._log_prob_threshold)
+            if not tail_tokens:
+                recovered_map[key] = orig_tokens
+            else:
+                offset_ms = int(offset_samp / _SR * 1000)
+                for t in tail_tokens:
+                    t.start_ms = t.start_ms - offset_ms + tail_start_ms
+                    t.end_ms = t.end_ms - offset_ms + tail_start_ms
+                recovered_map[key] = kept + tail_tokens
+
+        return recovered_map, bs
+
     def _recover_truncated_tail(self, tokens, sub_audio, common, bs, *, require_speech=False):
         """Detect and recover content dropped by an early-EOS decode within one
         decode window. Two independent failure modes, both early-EOS, that
@@ -407,44 +552,10 @@ class FasterWhisperEngine(Engine):
         require_speech gates retries on VAD evidence and also permits one retry
         for a completely empty decode. False preserves legacy long-span behavior.
         """
-        if not tokens and not require_speech:
+        plan = self._plan_truncated_tail(tokens, sub_audio, require_speech=require_speech)
+        if plan is None:
             return tokens, bs
-        last = tokens[-1] if tokens else None
-        win_dur_ms = len(sub_audio) / _SR * 1000
-        dur = last.end_ms - last.start_ms if last else 0
-        trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
-
-        if last is None:
-            kept = []
-            tail_start_ms = 0
-        elif dur >= _TRUNCATION_TAIL_MS:
-            # (A) the last word itself is the suspect — discard it too and
-            # redecode from a genuine inter-token pause before it.
-            cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
-            if cut_i is None:
-                return tokens, bs
-            kept = tokens[:cut_i + 1]
-            tail_start_ms = tokens[cut_i + 1].start_ms
-        elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
-            # (B) the last word is trustworthy — keep it, redecode only the
-            # real leftover audio after it.
-            kept = tokens
-            tail_start_ms = last.end_ms
-        else:
-            return tokens, bs
-
-        tail_audio = sub_audio[int(tail_start_ms / 1000 * _SR):]
-        if len(tail_audio) < _SR * 0.5:
-            return tokens, bs
-
-        clip = None
-        if require_speech:
-            # Detect actual speech again in the omitted region. VAD padding on
-            # the original span is not evidence that its trailing audio is speech.
-            windows = speech_windows(tail_audio, self._window_policy)
-            if not windows:
-                return tokens, bs
-            clip = [{"start": w.start_s, "end": w.end_s} for w in windows]
+        _orig, kept, tail_audio, tail_start_ms, clip = plan
         segments, bs = self._decode(tail_audio, clip, False, common, bs)
         tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
         if not tail_tokens:
@@ -454,6 +565,8 @@ class FasterWhisperEngine(Engine):
             t.end_ms += tail_start_ms
 
         merged = kept + tail_tokens
+        win_dur_ms = len(sub_audio) / _SR * 1000
+        last = tokens[-1] if tokens else None
         logger.info("Recovered truncated tail: redecoded from %.2fs -> %d token(s) "
                     "(window ends %.2fs, last kept word ended %.2fs)",
                     tail_start_ms / 1000, len(tail_tokens), win_dur_ms / 1000,
@@ -541,12 +654,22 @@ class FasterWhisperEngine(Engine):
                     else:
                         outside.append(tok)
                 decoded = outside
+                tail_candidates = []
+                normal_tokens_map = {}
                 for win, span_tokens in zip(normal, grouped):
                     local = [replace(t, start_ms=t.start_ms - win.start_ms,
                                      end_ms=t.end_ms - win.start_ms) for t in span_tokens]
                     span_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
-                    local, bs = self._recover_truncated_tail(
-                        local, span_audio, common, bs, require_speech=True)
+                    plan = self._plan_truncated_tail(local, span_audio, require_speech=True)
+                    if plan is not None:
+                        tail_candidates.append((win, plan))
+                    else:
+                        normal_tokens_map[win] = local
+                if tail_candidates:
+                    recovered_map, bs = self._batch_recover_tails(tail_candidates, common, bs)
+                    normal_tokens_map.update(recovered_map)
+                for win in normal:
+                    local = normal_tokens_map[win]
                     decoded.extend(replace(t, start_ms=t.start_ms + win.start_ms,
                                            end_ms=t.end_ms + win.start_ms) for t in local)
             for tok in decoded:
@@ -559,26 +682,48 @@ class FasterWhisperEngine(Engine):
             for tok in self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold):
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
-        for run in long_runs:
-            def decode_fn(win_audio):
-                nonlocal bs
-                segments, bs = self._decode(win_audio, None, False, common, bs)
-                win_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
-                win_tokens, bs = self._recover_truncated_tail(
-                    win_tokens, win_audio, common, bs, require_speech=self._recover_short_spans)
-                return win_tokens
+        if long_runs:
+            all_long_windows = [win for run in long_runs for win in run]
+            long_clip = [{"start": w.start_s, "end": w.end_s} for w in all_long_windows]
+            segments, bs = self._decode(audio, long_clip, False, common, bs)
+            self._note_segments(segments)
+            grouped_segs = self._group_segments_by_window(segments, all_long_windows)
 
-            run_windows = [
-                AudioWindow(audio[int(win.start_s * _SR):int(win.end_s * _SR)],
-                            win.start_ms, win.end_ms)
-                for win in run
-            ]
-            logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
-                        run[0].start_s, run[-1].end_s, len(run_windows))
-            for tok in decode_windows(run_windows, decode_fn,
-                                       seam_window_ms=int(self._window_policy.overlap_s * 1000),
-                                       cut_seams=True):
-                words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
+            window_tokens_map = {}
+            tail_candidates = []
+            for win, w_segs in zip(all_long_windows, grouped_segs):
+                toks = self._words_of(w_segs, self._no_speech_threshold, self._log_prob_threshold)
+                local = [replace(t, start_ms=t.start_ms - win.start_ms,
+                                 end_ms=t.end_ms - win.start_ms) for t in toks]
+                win_audio = audio[int(win.start_s * _SR):int(win.end_s * _SR)]
+                plan = self._plan_truncated_tail(
+                    local, win_audio, require_speech=self._recover_short_spans)
+                if plan is not None:
+                    tail_candidates.append((win, plan))
+                else:
+                    window_tokens_map[win] = local
+
+            if tail_candidates:
+                recovered_map, bs = self._batch_recover_tails(tail_candidates, common, bs)
+                window_tokens_map.update(recovered_map)
+
+            for run in long_runs:
+                run_tokens_queue = [list(window_tokens_map[win]) for win in run]
+
+                def decode_fn(_win_audio):
+                    return run_tokens_queue.pop(0)
+
+                run_windows = [
+                    AudioWindow(audio[int(win.start_s * _SR):int(win.end_s * _SR)],
+                                win.start_ms, win.end_ms)
+                    for win in run
+                ]
+                logger.info("Long pause-free span %.1fs-%.1fs decoded as %d overlapping window(s)",
+                            run[0].start_s, run[-1].end_s, len(run_windows))
+                for tok in decode_windows(run_windows, decode_fn,
+                                           seam_window_ms=int(self._window_policy.overlap_s * 1000),
+                                           cut_seams=True):
+                    words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
 
         words.sort(key=lambda w: w[1])
         return words
