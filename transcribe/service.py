@@ -94,9 +94,10 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     engine_a, engine_b = planning.canonical_engine_names(config)
 
     store.init_db(db_path)
+    media_sha256 = store.sha256_of_file(media_path)
     conn = store.connect(db_path)
     try:
-        media_id = store.create_media(conn, media_path)
+        media_id = store.create_media(conn, media_path, sha256=media_sha256)
         cached = None
         if not glossary:
             bias_terms = store.get_bias_term_strings(conn)
@@ -117,8 +118,12 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     finally:
         conn.close()
 
-    job_id, cues = pipeline_run.run_file_job(media_path, config, db_path, ingest_result,
-                                           glossary=glossary)
+    try:
+        job_id, cues = pipeline_run.run_file_job(media_path, config, db_path, ingest_result,
+                                                 glossary=glossary, sha256=media_sha256)
+    except TypeError:
+        job_id, cues = pipeline_run.run_file_job(media_path, config, db_path, ingest_result,
+                                                 glossary=glossary)
     conn = store.connect(db_path)
     try:
         words = words_for_job(conn, job_id)

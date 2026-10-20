@@ -85,3 +85,146 @@ def test_windowed_align_equals_bruteforce():
         a = _rand_tokens(rng.randint(0, 12), rng)
         b = _rand_tokens(rng.randint(0, 12), rng)
         assert _key(align_hyp.align(a, b)) == _key(_brute_align(a, b))
+
+
+# ── 6.4 harness keeps Engine A warm across clips & avoids duplicate decode/hash ──
+
+def _synth_wav(dirpath: Path, stem: str, seconds: float = 0.5):
+    import numpy as np
+    import soundfile as sf
+    t = np.linspace(0, seconds, int(16000 * seconds), endpoint=False)
+    p = dirpath / f"{stem}.wav"
+    sf.write(p, (0.2 * np.sin(2 * np.pi * 200 * t)).astype(np.float32), 16000)
+    return p
+
+
+def test_harness_passthrough_keeps_engine_a_warm_and_decodes_and_hashes_once_per_clip(monkeypatch, tmp_path):
+    """Across a multi-clip run_harness invocation with engine_b='passthrough':
+    - Engine A's load() and unload() are each called once (not once per clip),
+      and unload() still fires in finally even if a clip raises.
+    - ingest.load_audio is called once per clip (not twice), and RTF is still
+      computed from the stored media duration_ms.
+    - store.sha256_of_file is called once per clip (not twice).
+    """
+    from transcribe.db import store
+    from transcribe.engines.mock import MockEngine
+    from transcribe.eval import harness
+    from transcribe.pipeline import ingest
+
+    monkeypatch.setattr(ingest, "_load_silero",
+                        lambda: (object(), lambda a, m, **k: [{"start": 0, "end": len(a)}]))
+
+    clip1 = _synth_wav(tmp_path, "clip1", seconds=0.5)
+    clip2 = _synth_wav(tmp_path, "clip2", seconds=1.0)
+    ref = [{"text": "สวัสดี", "script": "thai", "start_ms": 0, "end_ms": 500}]
+    monkeypatch.setattr(harness, "_load_goldenset", lambda: [(clip1, ref), (clip2, ref)])
+
+    events = []
+    orig_load = MockEngine.load
+    orig_unload = MockEngine.unload
+
+    def spy_load(self):
+        events.append(("load", id(self)))
+        return orig_load(self)
+
+    def spy_unload(self):
+        events.append(("unload", id(self)))
+        return orig_unload(self)
+
+    monkeypatch.setattr(MockEngine, "load", spy_load)
+    monkeypatch.setattr(MockEngine, "unload", spy_unload)
+
+    audio_loads = []
+    orig_load_audio = ingest.load_audio
+
+    def spy_load_audio(path):
+        audio_loads.append(str(path))
+        return orig_load_audio(path)
+
+    monkeypatch.setattr(ingest, "load_audio", spy_load_audio)
+
+    hash_calls = []
+    orig_sha256 = store.sha256_of_file
+
+    def spy_sha256(path):
+        hash_calls.append(str(path))
+        return orig_sha256(path)
+
+    monkeypatch.setattr(store, "sha256_of_file", spy_sha256)
+
+    db = tmp_path / "eval.db"
+    cfg = {
+        "engine_a": "mock",
+        "engine_b": "passthrough",
+        "denoise": False,
+        "drop_tokens_over_silence": False,
+        "regression_tolerance": 0.02,
+    }
+    res = harness.run_harness(cfg, db, pipeline_fn=None)
+    assert res is not None and res.passed
+    assert res.rtf is not None and res.rtf > 0.0
+
+    loads = [e for e in events if e[0] == "load"]
+    unloads = [e for e in events if e[0] == "unload"]
+    assert len(loads) == 1, f"Expected 1 Engine A load across 2 clips, got {len(loads)}: {events}"
+    assert len(unloads) == 1, f"Expected 1 Engine A unload across 2 clips, got {len(unloads)}: {events}"
+    assert loads[0][1] == unloads[0][1]
+    assert len(audio_loads) == 2, f"Expected 1 load_audio per clip (2 total), got {len(audio_loads)}: {audio_loads}"
+    assert len(hash_calls) == 2, f"Expected 1 sha256_of_file per clip (2 total), got {len(hash_calls)}: {hash_calls}"
+
+
+def test_harness_warm_engine_a_unloads_on_clip_failure(monkeypatch, tmp_path):
+    """If a clip fails midway through run_harness, the warm Engine A is unloaded in finally."""
+    import pytest
+    from transcribe.engines.mock import MockEngine
+    from transcribe.eval import harness
+    from transcribe.pipeline import ingest
+
+    monkeypatch.setattr(ingest, "_load_silero",
+                        lambda: (object(), lambda a, m, **k: [{"start": 0, "end": len(a)}]))
+
+    clip1 = _synth_wav(tmp_path, "clip1", seconds=0.5)
+    clip2 = _synth_wav(tmp_path, "clip2", seconds=0.5)
+    ref = [{"text": "สวัสดี", "script": "thai", "start_ms": 0, "end_ms": 500}]
+    monkeypatch.setattr(harness, "_load_goldenset", lambda: [(clip1, ref), (clip2, ref)])
+
+    events = []
+    orig_load = MockEngine.load
+    orig_unload = MockEngine.unload
+    orig_transcribe = MockEngine.transcribe
+    call_count = 0
+
+    def spy_load(self):
+        events.append(("load", id(self)))
+        return orig_load(self)
+
+    def spy_unload(self):
+        events.append(("unload", id(self)))
+        return orig_unload(self)
+
+    def failing_transcribe(self, inp):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise RuntimeError("boom on second clip")
+        return orig_transcribe(self, inp)
+
+    monkeypatch.setattr(MockEngine, "load", spy_load)
+    monkeypatch.setattr(MockEngine, "unload", spy_unload)
+    monkeypatch.setattr(MockEngine, "transcribe", failing_transcribe)
+
+    db = tmp_path / "eval_fail.db"
+    cfg = {
+        "engine_a": "mock",
+        "engine_b": "passthrough",
+        "denoise": False,
+        "drop_tokens_over_silence": False,
+    }
+    with pytest.raises(RuntimeError, match="boom on second clip"):
+        harness.run_harness(cfg, db, pipeline_fn=None)
+
+    loads = [e for e in events if e[0] == "load"]
+    unloads = [e for e in events if e[0] == "unload"]
+    assert len(loads) == 1
+    assert len(unloads) == 1
+    assert loads[0][1] == unloads[0][1]

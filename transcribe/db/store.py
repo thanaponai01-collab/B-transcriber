@@ -335,17 +335,39 @@ def sha256_of_file(path: str) -> str:
     return h.hexdigest()
 
 
-def create_media(conn: sqlite3.Connection, path: str, duration_ms: Optional[int] = None) -> int:
-    digest = sha256_of_file(path)
+def create_media(
+    conn: sqlite3.Connection,
+    path: str,
+    duration_ms: Optional[int] = None,
+    sha256: Optional[str] = None,
+) -> int:
+    digest = sha256 if sha256 is not None else sha256_of_file(path)
     cur = conn.execute(
         "INSERT OR IGNORE INTO media (path, duration_ms, sha256) VALUES (?, ?, ?)",
         (path, duration_ms, digest),
     )
+    if duration_ms is not None and not cur.lastrowid:
+        conn.execute(
+            "UPDATE media SET duration_ms = ? WHERE sha256 = ? AND duration_ms IS NULL",
+            (duration_ms, digest),
+        )
     conn.commit()
     if cur.lastrowid:
         return cur.lastrowid
     row = conn.execute("SELECT id FROM media WHERE sha256 = ?", (digest,)).fetchone()
     return row["id"]
+
+
+def set_media_duration(conn: sqlite3.Connection, media_id: int, duration_ms: int) -> None:
+    conn.execute("UPDATE media SET duration_ms = ? WHERE id = ?", (duration_ms, media_id))
+    conn.commit()
+
+
+def get_media_by_sha256(conn: sqlite3.Connection, sha256: str) -> Optional[MediaRow]:
+    row = conn.execute("SELECT * FROM media WHERE sha256 = ?", (sha256,)).fetchone()
+    if row is None:
+        return None
+    return MediaRow(**dict(row))
 
 
 def get_media(conn: sqlite3.Connection, media_id: int) -> Optional[MediaRow]:

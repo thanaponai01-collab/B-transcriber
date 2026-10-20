@@ -119,18 +119,21 @@ def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: 
 
 def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
                 device: str, config: dict,
-                keep_engine_a_resident: bool = False) -> tuple[Hypotheses, object | None]:
+                keep_engine_a_resident: bool = False,
+                engine_a=None) -> tuple[Hypotheses, object | None]:
     """Produce both hypotheses, reusing whatever a resumed job already cached."""
+    caller_owns_a = engine_a is not None
     tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, resident_a = _run_engine_a(
         conn, job_id, plan, inputs, device, config,
-        keep_resident=keep_engine_a_resident,
+        keep_resident=keep_engine_a_resident or caller_owns_a,
+        engine=engine_a,
     )
     try:
         tokens_b = _run_engine_b(
             conn, job_id, plan, inputs, device, config,
             final_a, pseudo_b_tokens, pseudo_b_raw_words)
     except Exception:
-        if resident_a is not None:
+        if resident_a is not None and not caller_owns_a:
             try:
                 resident_a.unload()
             finally:
@@ -138,7 +141,7 @@ def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
                 _free_vram()
         raise
 
-    if resident_a is not None and not final_a:
+    if resident_a is not None and not final_a and not caller_owns_a:
         # Non-final timestamps require forced alignment in refine(), which loads
         # CTC aligner into VRAM; unload A now to preserve the one-model-at-a-time rule.
         try:
@@ -151,12 +154,14 @@ def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
     return Hypotheses(tokens_a=tokens_a, timestamps_final_a=final_a, tokens_b=tokens_b), resident_a
 
 
-def _run_engine_a(conn, job_id, plan, inputs, device, config, keep_resident: bool = False):
+def _run_engine_a(conn, job_id, plan, inputs, device, config,
+                  keep_resident: bool = False, engine=None):
     """Hypothesis A, plus the self-ensemble pseudo-B decoded inside A's own
     residency (never a second model load).
 
     Returns (tokens_a, timestamps_final_a, pseudo_b_tokens, pseudo_b_raw_words, resident_engine).
     """
+    caller_owns_engine = engine is not None
     if plan.skip_engine_a:
         cached_a = store.get_engine_result(conn, job_id, "a")
         logger.info("Job %d: reusing cached engine-a result (resume)", job_id)
@@ -169,17 +174,21 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config, keep_resident: boo
         # landing in this exact window hits it), but a resumed self-ensemble job
         # must not silently emit result_b_tokens=None.
         if plan.self_ensemble_enabled and not plan.skip_engine_b:
-            engine = build_engine(plan.engine_a_name, device, config)
-            _log_vram("pre-engine-a-self-ensemble-resume")
-            with _engine_residency(engine, "engine-a-self-ensemble-resume"):
+            if caller_owns_engine:
                 pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
-            del engine
+            else:
+                eng = build_engine(plan.engine_a_name, device, config)
+                _log_vram("pre-engine-a-self-ensemble-resume")
+                with _engine_residency(eng, "engine-a-self-ensemble-resume"):
+                    pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(eng, plan, inputs)
+                del eng
         _free_vram()
-        return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, None
+        return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, engine
 
-    engine = build_engine(plan.engine_a_name, device, config)
-    _log_vram("pre-engine-a")
-    if not keep_resident:
+    if not caller_owns_engine:
+        engine = build_engine(plan.engine_a_name, device, config)
+        _log_vram("pre-engine-a")
+    if not keep_resident and not caller_owns_engine:
         with _engine_residency(engine, "engine-a"):
             _log_vram("engine-a-loaded")
             tokens_a, final_a, raw_words_a = _transcribe_with(
@@ -208,8 +217,9 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config, keep_resident: boo
         return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, None
     else:
         try:
-            engine.load()
-            _log_vram("engine-a-loaded")
+            if not caller_owns_engine:
+                engine.load()
+                _log_vram("engine-a-loaded")
             tokens_a, final_a, raw_words_a = _transcribe_with(
                 engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
                 "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
@@ -233,11 +243,12 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config, keep_resident: boo
             store.update_job_phase(conn, job_id, PHASE_ENGINE_A_DONE)
             return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, engine
         except Exception:
-            try:
-                engine.unload()
-            finally:
-                del engine
-                _free_vram()
+            if not caller_owns_engine:
+                try:
+                    engine.unload()
+                finally:
+                    del engine
+                    _free_vram()
             raise
 
 

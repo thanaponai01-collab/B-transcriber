@@ -82,9 +82,15 @@ def run_file(
     config: dict,
     db_path: Path,
     ingest_result: ingest.IngestResult | None = None,
+    *,
+    sha256: str | None = None,
+    engine_a=None,
 ) -> list[dict]:
     """Run the pipeline and return the token dicts. See `run_file_job`."""
-    return run_file_job(audio_path, config, db_path, ingest_result)[1]
+    return run_file_job(
+        audio_path, config, db_path, ingest_result,
+        sha256=sha256, engine_a=engine_a,
+    )[1]
 
 
 def run_file_job(
@@ -93,6 +99,9 @@ def run_file_job(
     db_path: Path,
     ingest_result: ingest.IngestResult | None = None,
     glossary: tuple[str, ...] | list[str] = (),
+    *,
+    sha256: str | None = None,
+    engine_a=None,
 ) -> tuple[int, list[dict]]:
     """
     Run the full pipeline on one audio file; returns `(job_id, tokens)`.
@@ -129,7 +138,7 @@ def run_file_job(
     engine_a_name, engine_b_name = planning.canonical_engine_names(config)
 
     # ── Media record ──────────────────────────────────────────────────────────
-    media_id = store.create_media(conn, audio_path)
+    media_id = store.create_media(conn, audio_path, sha256=sha256)
 
     # 4.1 (GAP-8): a 'failed' job with matching media, engines, version and
     # settings/bias is resumable — reuse it instead of starting over from scratch, so
@@ -176,6 +185,8 @@ def run_file_job(
             ingest_result = None
         if ingest_result is None:
             ingest_result = _ingest_for_plan(audio_path, config, job_plan)
+        if getattr(ingest_result, "duration_ms", None) is not None:
+            store.set_media_duration(conn, media_id, ingest_result.duration_ms)
         chunks = ingest_result.chunks
         # The exact array the VAD/spans came from — feed it to the engine so the
         # silence filter can never drop words the engine heard (3.2).
@@ -200,37 +211,38 @@ def run_file_job(
 
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
         coverage_enabled = bool((config.get("coverage_guard") or {}).get("enabled", False))
-        keep_engine_a = coverage_enabled and (
-            job_plan.engine_b_name == "passthrough" or job_plan.self_ensemble_enabled
-        ) and not job_plan.skip_engine_a
+        caller_owns_engine_a = engine_a is not None
+        keep_engine_a = caller_owns_engine_a or (
+            coverage_enabled and (
+                job_plan.engine_b_name == "passthrough" or job_plan.self_ensemble_enabled
+            ) and not job_plan.skip_engine_a
+        )
 
         resident_engine_a = None
         try:
+            decode_inputs = engine_run.DecodeInputs(
+                chunks=chunks,
+                full_audio=engine_audio if job_plan.needs_full_audio else None,
+                bias_terms=bias_terms,
+                bias_weights=bias_weights,
+                speech_spans=speech_spans,
+            )
             try:
                 run_res = engine_run.run_engines(
-                    conn, job_id, job_plan,
-                    engine_run.DecodeInputs(
-                        chunks=chunks,
-                        full_audio=engine_audio if job_plan.needs_full_audio else None,
-                        bias_terms=bias_terms,
-                        bias_weights=bias_weights,
-                        speech_spans=speech_spans,
-                    ),
-                    device, config,
+                    conn, job_id, job_plan, decode_inputs, device, config,
                     keep_engine_a_resident=keep_engine_a,
+                    engine_a=engine_a,
                 )
             except TypeError:
-                run_res = engine_run.run_engines(
-                    conn, job_id, job_plan,
-                    engine_run.DecodeInputs(
-                        chunks=chunks,
-                        full_audio=engine_audio if job_plan.needs_full_audio else None,
-                        bias_terms=bias_terms,
-                        bias_weights=bias_weights,
-                        speech_spans=speech_spans,
-                    ),
-                    device, config,
-                )
+                try:
+                    run_res = engine_run.run_engines(
+                        conn, job_id, job_plan, decode_inputs, device, config,
+                        keep_engine_a_resident=keep_engine_a,
+                    )
+                except TypeError:
+                    run_res = engine_run.run_engines(
+                        conn, job_id, job_plan, decode_inputs, device, config,
+                    )
             if isinstance(run_res, tuple) and len(run_res) == 2:
                 hypotheses, resident_engine_a = run_res
             else:
@@ -255,10 +267,10 @@ def run_file_job(
             if coverage_enabled:
                 pipeline_tokens = _fill_coverage_gaps(
                     pipeline_tokens, ingest_result, job_plan, device, config,
-                    engine=resident_engine_a,
+                    engine=resident_engine_a or engine_a,
                 )
         finally:
-            if resident_engine_a is not None:
+            if resident_engine_a is not None and not caller_owns_engine_a:
                 try:
                     resident_engine_a.unload()
                 finally:

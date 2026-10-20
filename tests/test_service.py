@@ -178,3 +178,23 @@ def test_hotwords_channel_ranks_by_weight_and_rejects_bad_value():
     assert fw.FasterWhisperEngine._build_hotwords(inp) == "b c a"
     with pytest.raises(ValueError):
         fw.FasterWhisperEngine(bias_channel="nope")
+
+
+def test_transcribe_hashes_file_once_on_uncached_run(monkeypatch, tmp_path):
+    from transcribe import service
+    from transcribe.db import store
+    _patch_vad(monkeypatch)
+    wav, db = _wav(), _db(tmp_path)
+
+    hash_calls = []
+    orig_sha256 = store.sha256_of_file
+
+    def spy_sha256(path):
+        hash_calls.append(str(path))
+        return orig_sha256(path)
+
+    monkeypatch.setattr(store, "sha256_of_file", spy_sha256)
+
+    res = service.transcribe(wav, config=_CFG, db_path=db)
+    assert not res.cached
+    assert len(hash_calls) == 1, f"Expected sha256_of_file called once on uncached transcribe(), got {len(hash_calls)}: {hash_calls}"

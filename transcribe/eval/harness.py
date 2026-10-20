@@ -105,14 +105,18 @@ def _cue_excluded(audio_path: Path, config: dict) -> bool:
     return audio_path.stem in (config.get("eval_cue_metric_exclude") or [])
 
 
-def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict) -> str:
+def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict,
+              *, audio_sha256: str | None = None) -> str:
     """Pair only identical media, references and scoring policies.
 
     Missing paths support synthetic pipeline_fn fixtures; real gold media are
     content-hashed. Sample names keep identical-content clips distinct.
     """
-    audio_hash = (store.sha256_of_file(str(audio_path)) if audio_path.is_file()
-                  else "missing:" + audio_path.as_posix())
+    if audio_sha256 is not None:
+        audio_hash = audio_sha256
+    else:
+        audio_hash = (store.sha256_of_file(str(audio_path)) if audio_path.is_file()
+                      else "missing:" + audio_path.as_posix())
     payload = {"sample": audio_path.stem, "audio": audio_hash, "reference": ref_tokens,
                "normalization": config.get("normalization", {}),
                "boundary_tol_ms": float(config.get("boundary_tol_ms", 300.0))}
@@ -152,12 +156,26 @@ def run_harness(
     if establish_baseline and experiment:
         raise ValueError("baseline establishment requires a production run, not an experiment")
     store.init_db(db_path)
+    samples = _load_goldenset()
+    if not samples:
+        # An empty gold set scores 0.0 on every metric. Writing that as a passing
+        # eval_run poisons the baseline: the gate is `new > last × 1.02`, so a
+        # zero baseline makes every future real run fail forever. Refuse to write.
+        print("[harness] WARNING: goldenset is empty - add audio+json pairs to "
+              "eval/goldenset/. No eval_run recorded.")
+        return None
+
     # #5: eval transcription writes media/job/token rows. Keep those OUT of the
     # caller's DB (the editor and flywheel read it) by sending run_file to a
     # throwaway scratch DB. eval_run *history* still goes to db_path below, so the
     # regression gate stays coherent across runs.
     scratch_dir: Path | None = None
-    if pipeline_fn is None:
+    scratch_db: Path | None = None
+    warm_engine_a = None
+    using_real_pipeline = pipeline_fn is None
+    if using_real_pipeline:
+        import torch
+        from transcribe.pipeline import engine_run
         from transcribe.pipeline import run as pipeline_run
         scratch_dir = Path(tempfile.mkdtemp(prefix="eval_scratch_"))
         scratch_db = scratch_dir / "scratch.db"
@@ -172,19 +190,17 @@ def run_harness(
             store.upsert_bias_term(_dst, _t.term, _t.term_type, _t.script, _t.added_by, _t.weight)
         _src.close()
         _dst.close()
-        def pipeline_fn(audio_path, cfg):
-            return pipeline_run.run_file(str(audio_path), cfg, scratch_db)
 
-    samples = _load_goldenset()
-    if not samples:
-        # An empty gold set scores 0.0 on every metric. Writing that as a passing
-        # eval_run poisons the baseline: the gate is `new > last × 1.02`, so a
-        # zero baseline makes every future real run fail forever. Refuse to write.
-        print("[harness] WARNING: goldenset is empty - add audio+json pairs to "
-              "eval/goldenset/. No eval_run recorded.")
-        if scratch_dir is not None:
-            shutil.rmtree(scratch_dir, ignore_errors=True)
-        return None
+        # In single-engine mode (engine_b == "passthrough" or self-ensemble),
+        # keep Engine A loaded once across all clips instead of loading and
+        # unloading the 1.5 GB model per clip.
+        if config.get("engine_a") and (
+            config.get("engine_b", "passthrough") == "passthrough"
+            or bool((config.get("self_ensemble") or {}).get("enabled", False))
+        ):
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            warm_engine_a = engine_run.build_engine(config["engine_a"], device, config)
+            warm_engine_a.load()
 
     tol = float(config.get("boundary_tol_ms", 300.0))
 
@@ -201,40 +217,68 @@ def run_harness(
     total_hyp_lint_violations = 0
     total_ref_lint_violations = 0
 
-    for audio_path, ref_tokens in samples:
-        key = _clip_key(audio_path, ref_tokens, config)
-        if key in clips_by_key:
-            raise ValueError(f"duplicate golden sample: {audio_path}")
-        t0 = time.perf_counter()
-        hyp_tokens = pipeline_fn(audio_path, config)
-        total_wall_s += time.perf_counter() - t0
-        total_audio_s += _audio_duration_s(audio_path)
-        # Pass config so reference and hypothesis are normalized identically.
-        m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
-        if _cue_excluded(audio_path, config):
-            # Zero only the cue-boundary micro-F1 inputs: text metrics and the
-            # overlapping_cues hard invariant still count this clip.
-            m = dataclasses.replace(m, ref_cues=0, hyp_cues=0, matched_cues=0, cue_boundary_error_rate=0.0)
-        clip_metrics.append(m)
-        clips_by_key[key] = m
+    try:
+        for audio_path, ref_tokens in samples:
+            file_sha256 = store.sha256_of_file(str(audio_path)) if audio_path.is_file() else None
+            key = _clip_key(audio_path, ref_tokens, config, audio_sha256=file_sha256)
+            if key in clips_by_key:
+                raise ValueError(f"duplicate golden sample: {audio_path}")
+            t0 = time.perf_counter()
+            if using_real_pipeline:
+                try:
+                    hyp_tokens = pipeline_run.run_file(
+                        str(audio_path), config, scratch_db,
+                        sha256=file_sha256, engine_a=warm_engine_a,
+                    )
+                except TypeError:
+                    hyp_tokens = pipeline_run.run_file(str(audio_path), config, scratch_db)
+            else:
+                hyp_tokens = pipeline_fn(audio_path, config)
+            total_wall_s += time.perf_counter() - t0
+            if using_real_pipeline and scratch_db is not None and file_sha256 is not None:
+                _sconn = store.connect(scratch_db)
+                try:
+                    _media = store.get_media_by_sha256(_sconn, file_sha256)
+                finally:
+                    _sconn.close()
+                if _media is not None and _media.duration_ms is not None:
+                    total_audio_s += _media.duration_ms / 1000.0
+                else:
+                    total_audio_s += _audio_duration_s(audio_path)
+            else:
+                total_audio_s += _audio_duration_s(audio_path)
+            # Pass config so reference and hypothesis are normalized identically.
+            m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
+            if _cue_excluded(audio_path, config):
+                # Zero only the cue-boundary micro-F1 inputs: text metrics and the
+                # overlapping_cues hard invariant still count this clip.
+                m = dataclasses.replace(m, ref_cues=0, hyp_cues=0, matched_cues=0, cue_boundary_error_rate=0.0)
+            clip_metrics.append(m)
+            clips_by_key[key] = m
 
-        hyp_violations = find_cue_legality_violations(hyp_tokens, lexicon)
-        ref_violations = find_cue_legality_violations(ref_tokens, lexicon)
-        total_hyp_lint_violations += len(hyp_violations)
-        total_ref_lint_violations += len(ref_violations)
-        if hyp_violations:
-            detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in hyp_violations)
-            _safe_print(f"[harness] cue_legality VIOLATION {audio_path.stem}: {detail}")
-        if ref_violations:
-            # The gold recuts define taste — a violation the reference also
-            # commits means the lexicon is wrong, not the hypothesis. Printed,
-            # never hidden (§5).
-            detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in ref_violations)
-            _safe_print(f"[harness] cue_legality REFERENCE also violates (lexicon may be wrong, "
-                        f"not a hyp bug) {audio_path.stem}: {detail}")
-
-    if scratch_dir is not None:
-        shutil.rmtree(scratch_dir, ignore_errors=True)
+            hyp_violations = find_cue_legality_violations(hyp_tokens, lexicon)
+            ref_violations = find_cue_legality_violations(ref_tokens, lexicon)
+            total_hyp_lint_violations += len(hyp_violations)
+            total_ref_lint_violations += len(ref_violations)
+            if hyp_violations:
+                detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in hyp_violations)
+                _safe_print(f"[harness] cue_legality VIOLATION {audio_path.stem}: {detail}")
+            if ref_violations:
+                # The gold recuts define taste — a violation the reference also
+                # commits means the lexicon is wrong, not the hypothesis. Printed,
+                # never hidden (§5).
+                detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in ref_violations)
+                _safe_print(f"[harness] cue_legality REFERENCE also violates (lexicon may be wrong, "
+                            f"not a hyp bug) {audio_path.stem}: {detail}")
+    finally:
+        if warm_engine_a is not None:
+            try:
+                warm_engine_a.unload()
+            finally:
+                del warm_engine_a
+                engine_run._free_vram()
+        if scratch_dir is not None:
+            shutil.rmtree(scratch_dir, ignore_errors=True)
 
     agg = EvalMetrics.aggregate(clip_metrics)
 
