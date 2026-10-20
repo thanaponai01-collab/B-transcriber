@@ -97,13 +97,76 @@ class WindowPolicy:
     max_span_s: float = 25.0
     overlap_s: float = 4.0
     whole_clip_on_silence: bool = False
+    speech_pad_ms: int = 400
 
 
-def speech_windows(audio, policy: WindowPolicy | None = None) -> list[Window]:
+def _extract_span_range(s) -> tuple[float, float] | None:
+    if hasattr(s, "start_ms") and hasattr(s, "end_ms"):
+        start_ms, end_ms = s.start_ms, s.end_ms
+    elif isinstance(s, (tuple, list)) and len(s) >= 2:
+        start_ms, end_ms = s[0], s[1]
+    else:
+        return None
+    if end_ms <= start_ms:
+        return None
+    return (float(start_ms) / 1000.0, float(end_ms) / 1000.0)
+
+
+def _pad_speech_spans(
+    spans: list[tuple[float, float]],
+    pad_s: float,
+    total_dur_s: float,
+) -> list[tuple[float, float]]:
+    """Pad speech spans by `pad_s`, splitting pauses under 2*pad_s evenly.
+
+    Matches faster_whisper.vad's get_speech_timestamps padding logic:
+    - First span padded left by pad_s (clamped at 0.0).
+    - Last span padded right by pad_s (clamped at total_dur_s).
+    - Between consecutive spans with silence < 2*pad_s: the silence is split
+      evenly so the padded spans meet at the midpoint (reported gap 0.0).
+    - Between consecutive spans with silence >= 2*pad_s: both sides padded by pad_s.
+    """
+    n = len(spans)
+    if n == 0 or pad_s <= 0:
+        return list(spans)
+
+    new_spans: list[tuple[float, float]] = []
+    for i in range(n):
+        s_i, e_i = spans[i]
+        if i == 0:
+            s = max(0.0, s_i - pad_s)
+        else:
+            prev_e = spans[i - 1][1]
+            gap = max(0.0, s_i - prev_e)
+            s = s_i - (gap / 2.0 if gap < 2 * pad_s else pad_s)
+            s = max(0.0, s)
+
+        if i == n - 1:
+            e = min(total_dur_s, e_i + pad_s) if total_dur_s > 0 else (e_i + pad_s)
+        else:
+            next_s = spans[i + 1][0]
+            gap = max(0.0, next_s - e_i)
+            e = e_i + (gap / 2.0 if gap < 2 * pad_s else pad_s)
+            if total_dur_s > 0:
+                e = min(total_dur_s, e)
+        new_spans.append((s, e))
+    return new_spans
+
+
+def speech_windows(
+    audio,
+    policy: WindowPolicy | None = None,
+    speech_spans: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None = None,
+) -> list[Window]:
     """Detect speech in `audio` (16kHz mono float32) and return decodable windows.
 
     Detection, zero-gap merge and over-long split all happen here; callers do
     not compose them.
+
+    When `speech_spans` is provided (e.g. from ingest), derives padded, merged,
+    and split decode windows directly from those spans, avoiding a redundant
+    full-file Silero VAD pass. Falls back to `faster_whisper.vad` VAD when
+    `speech_spans` is empty or None.
 
     Returns `[]` when VAD finds no speech and `policy.whole_clip_on_silence` is
     False — the caller then decides what "no speech detected" means for it
@@ -112,13 +175,42 @@ def speech_windows(audio, policy: WindowPolicy | None = None) -> list[Window]:
     like any other.
     """
     policy = policy or WindowPolicy()
-    spans = _vad_speech_spans(audio, policy.vad_threshold, policy.vad_min_silence_ms)
-    if not spans:
-        if not policy.whole_clip_on_silence:
-            return []
-        spans = [(0.0, len(audio) / _SR)]
-    if policy.merge_max_gap_s is not None:
-        spans = _merge_contiguous_spans(spans, policy.merge_max_gap_s)
+    total_dur_s = (len(audio) / _SR) if audio is not None and hasattr(audio, "__len__") and len(audio) > 0 else 0.0
+
+    if speech_spans:
+        raw_spans = []
+        for item in speech_spans:
+            rng = _extract_span_range(item)
+            if rng is not None:
+                raw_spans.append(rng)
+        raw_spans.sort(key=lambda x: (x[0], x[1]))
+        merged_raw: list[tuple[float, float]] = []
+        for s, e in raw_spans:
+            if merged_raw and s <= merged_raw[-1][1]:
+                merged_raw[-1] = (merged_raw[-1][0], max(merged_raw[-1][1], e))
+            else:
+                merged_raw.append((s, e))
+
+        if not merged_raw:
+            if not policy.whole_clip_on_silence:
+                return []
+            spans = [(0.0, total_dur_s)]
+        else:
+            pad_s = policy.speech_pad_ms / 1000.0
+            clip_dur = total_dur_s if total_dur_s > 0 else (merged_raw[-1][1] + pad_s)
+            padded = _pad_speech_spans(merged_raw, pad_s, clip_dur)
+            if policy.merge_max_gap_s is not None:
+                spans = _merge_contiguous_spans(padded, policy.merge_max_gap_s)
+            else:
+                spans = padded
+    else:
+        spans = _vad_speech_spans(audio, policy.vad_threshold, policy.vad_min_silence_ms)
+        if not spans:
+            if not policy.whole_clip_on_silence:
+                return []
+            spans = [(0.0, total_dur_s)]
+        if policy.merge_max_gap_s is not None:
+            spans = _merge_contiguous_spans(spans, policy.merge_max_gap_s)
 
     windows: list[Window] = []
     for span_index, (start_s, end_s) in enumerate(spans):

@@ -315,3 +315,25 @@ def test_long_runs_batched_tail_recoveries(monkeypatch):
     texts = [w[0].strip() for w in words]
     assert "ต่อหนึ่ง" in texts
     assert "ต่อสอง" in texts
+
+
+def test_transcribe_threads_speech_spans(monkeypatch):
+    import transcribe.engines.faster_whisper as fw
+    from transcribe.contracts import EngineInput
+    from transcribe.audio import Window
+    engine = FasterWhisperEngine(device="cpu")
+    engine._model = object()
+    audio = np.zeros(16000 * 5, dtype=np.float32)
+
+    captured = {}
+    def fake_speech_windows(a, p, **kw):
+        captured.update(kw)
+        return [Window(start_s=0.0, end_s=5.0, span_index=0)]
+
+    monkeypatch.setattr(fw, "speech_windows", fake_speech_windows)
+    engine._decode = lambda a, c, b, com, bs: ([], bs)
+
+    inp = EngineInput(audio=audio, speech_spans=((1000, 4000),))
+    engine.transcribe(inp)
+    assert captured.get("speech_spans") == ((1000, 4000),)
+

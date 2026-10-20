@@ -162,7 +162,7 @@ class Qwen3ASREngine(Engine):
             text=text, start_ms=0, end_ms=0, confidence=None, script=detect_script(text),
         )]
 
-    def _speech_spans_s(self, audio) -> list[tuple[float, float]]:
+    def _speech_spans_s(self, audio, speech_spans=()) -> list[tuple[float, float]]:
         """Real speech spans (seconds) via the shared windowing seam
         (`transcribe.audio.speech_windows`). Falls back to one whole-clip span
         when VAD finds nothing (silence, or a clip too short/quiet for Silero to
@@ -184,7 +184,11 @@ class Qwen3ASREngine(Engine):
         head-to-head. 8.0s is a starting point (roughly 2-3x a typical A cue,
         not 1:1 — Qwen3-ASR is an LLM-decoder model that likely benefits from
         more context than a single short cue), tunable via config."""
-        return [(w.start_s, w.end_s) for w in speech_windows(audio, self._window_policy)]
+        if speech_spans:
+            wins = speech_windows(audio, self._window_policy, speech_spans=speech_spans)
+        else:
+            wins = speech_windows(audio, self._window_policy)
+        return [(w.start_s, w.end_s) for w in wins]
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._model is not None, "load() must be called first"
@@ -203,7 +207,7 @@ class Qwen3ASREngine(Engine):
                 raw={"language": getattr(result, "language", None), "text": text},
             )
 
-        spans = self._speech_spans_s(inp.audio)
+        spans = self._speech_spans_s(inp.audio, inp.speech_spans)
         whole_clip = len(spans) == 1 and spans[0] == (0.0, len(inp.audio) / _SAMPLE_RATE)
         slices = [inp.audio] if whole_clip else [
             inp.audio[int(s * _SAMPLE_RATE):int(e * _SAMPLE_RATE)] for s, e in spans

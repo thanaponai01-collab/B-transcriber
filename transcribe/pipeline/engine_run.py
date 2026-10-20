@@ -42,6 +42,7 @@ class DecodeInputs:
     full_audio: object | None
     bias_terms: list[str]
     bias_weights: dict
+    speech_spans: tuple[tuple[int, int], ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,14 +83,15 @@ def _engine_residency(engine, stage: str):
 
 
 @contextmanager
-def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: int):
+def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: int,
+                  engine=None):
     """Engine A, resident for the duration, as `redecode(lo_ms, hi_ms) -> cue dicts`.
 
     Used by the coverage guard after the main decode, so it keeps the one-model-at-a-time
     rule. Each excerpt is decoded alone: no bias prompt, no earlier text as context.
+    If `engine` is passed, the caller manages its residency lifecycle.
     """
-    engine = build_engine(plan.engine_a_name, device, config)
-    with _engine_residency(engine, "coverage-guard"):
+    if engine is not None:
         def redecode(lo_ms: int, hi_ms: int) -> list[dict]:
             excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
             if not len(excerpt):
@@ -99,26 +101,61 @@ def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: 
                      "script": t.script, "confidence": t.confidence}
                     for t in res.tokens]
         yield redecode
-    del engine
-    _free_vram()
+    else:
+        eng = build_engine(plan.engine_a_name, device, config)
+        with _engine_residency(eng, "coverage-guard"):
+            def redecode(lo_ms: int, hi_ms: int) -> list[dict]:
+                excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
+                if not len(excerpt):
+                    return []
+                res = eng.transcribe(EngineInput(audio=excerpt, language_hint="th"))
+                return [{"text": t.text, "start_ms": t.start_ms + lo_ms, "end_ms": t.end_ms + lo_ms,
+                         "script": t.script, "confidence": t.confidence}
+                        for t in res.tokens]
+            yield redecode
+        del eng
+        _free_vram()
 
 
 def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
-                device: str, config: dict) -> Hypotheses:
+                device: str, config: dict,
+                keep_engine_a_resident: bool = False) -> tuple[Hypotheses, object | None]:
     """Produce both hypotheses, reusing whatever a resumed job already cached."""
-    tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words = _run_engine_a(
-        conn, job_id, plan, inputs, device, config)
-    tokens_b = _run_engine_b(
+    tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, resident_a = _run_engine_a(
         conn, job_id, plan, inputs, device, config,
-        final_a, pseudo_b_tokens, pseudo_b_raw_words)
-    return Hypotheses(tokens_a=tokens_a, timestamps_final_a=final_a, tokens_b=tokens_b)
+        keep_resident=keep_engine_a_resident,
+    )
+    try:
+        tokens_b = _run_engine_b(
+            conn, job_id, plan, inputs, device, config,
+            final_a, pseudo_b_tokens, pseudo_b_raw_words)
+    except Exception:
+        if resident_a is not None:
+            try:
+                resident_a.unload()
+            finally:
+                del resident_a
+                _free_vram()
+        raise
+
+    if resident_a is not None and not final_a:
+        # Non-final timestamps require forced alignment in refine(), which loads
+        # CTC aligner into VRAM; unload A now to preserve the one-model-at-a-time rule.
+        try:
+            resident_a.unload()
+        finally:
+            del resident_a
+            _free_vram()
+        resident_a = None
+
+    return Hypotheses(tokens_a=tokens_a, timestamps_final_a=final_a, tokens_b=tokens_b), resident_a
 
 
-def _run_engine_a(conn, job_id, plan, inputs, device, config):
+def _run_engine_a(conn, job_id, plan, inputs, device, config, keep_resident: bool = False):
     """Hypothesis A, plus the self-ensemble pseudo-B decoded inside A's own
     residency (never a second model load).
 
-    Returns (tokens_a, timestamps_final_a, pseudo_b_tokens, pseudo_b_raw_words).
+    Returns (tokens_a, timestamps_final_a, pseudo_b_tokens, pseudo_b_raw_words, resident_engine).
     """
     if plan.skip_engine_a:
         cached_a = store.get_engine_result(conn, job_id, "a")
@@ -138,35 +175,70 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config):
                 pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
             del engine
         _free_vram()
-        return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words
+        return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, None
 
     engine = build_engine(plan.engine_a_name, device, config)
     _log_vram("pre-engine-a")
-    with _engine_residency(engine, "engine-a"):
-        _log_vram("engine-a-loaded")
-        tokens_a, final_a, raw_words_a = _transcribe_with(
-            engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
-            "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
-            temperature=plan.temperature_a, beam_size=plan.beam_size_a,
+    if not keep_resident:
+        with _engine_residency(engine, "engine-a"):
+            _log_vram("engine-a-loaded")
+            tokens_a, final_a, raw_words_a = _transcribe_with(
+                engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
+                "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
+                temperature=plan.temperature_a, beam_size=plan.beam_size_a,
+                speech_spans=inputs.speech_spans,
+            )
+            pseudo_b_tokens = pseudo_b_raw_words = None
+            if plan.self_ensemble_enabled:
+                pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
+                logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
+                            "beam_size=%s) from Engine A's residency, %d tokens",
+                            plan.temperature_b, plan.beam_size_b, len(pseudo_b_tokens))
+        store.save_engine_result(
+            conn, job_id, "a", plan.engine_a_name,
+            _tokens_to_json(tokens_a), final_a,
+            json.dumps(raw_words_a) if raw_words_a is not None else None,
         )
-        pseudo_b_tokens = pseudo_b_raw_words = None
-        if plan.self_ensemble_enabled:
-            pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
-            logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
-                        "beam_size=%s) from Engine A's residency, %d tokens",
-                        plan.temperature_b, plan.beam_size_b, len(pseudo_b_tokens))
-    store.save_engine_result(
-        conn, job_id, "a", plan.engine_a_name,
-        _tokens_to_json(tokens_a), final_a,
-        json.dumps(raw_words_a) if raw_words_a is not None else None,
-    )
-    stats = getattr(engine, "last_segment_stats", None)
-    if isinstance(stats, list) and stats:
-        store.save_engine_segments(conn, job_id, "a", json.dumps(stats))
-    store.update_job_phase(conn, job_id, PHASE_ENGINE_A_DONE)
-    del engine
-    _free_vram()
-    return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words
+        stats = getattr(engine, "last_segment_stats", None)
+        if isinstance(stats, list) and stats:
+            store.save_engine_segments(conn, job_id, "a", json.dumps(stats))
+        store.update_job_phase(conn, job_id, PHASE_ENGINE_A_DONE)
+        del engine
+        _free_vram()
+        return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, None
+    else:
+        try:
+            engine.load()
+            _log_vram("engine-a-loaded")
+            tokens_a, final_a, raw_words_a = _transcribe_with(
+                engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
+                "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
+                temperature=plan.temperature_a, beam_size=plan.beam_size_a,
+                speech_spans=inputs.speech_spans,
+            )
+            pseudo_b_tokens = pseudo_b_raw_words = None
+            if plan.self_ensemble_enabled:
+                pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
+                logger.info("Self-ensemble: decoded second hypothesis (temperature=%s, "
+                            "beam_size=%s) from Engine A's residency, %d tokens",
+                            plan.temperature_b, plan.beam_size_b, len(pseudo_b_tokens))
+            store.save_engine_result(
+                conn, job_id, "a", plan.engine_a_name,
+                _tokens_to_json(tokens_a), final_a,
+                json.dumps(raw_words_a) if raw_words_a is not None else None,
+            )
+            stats = getattr(engine, "last_segment_stats", None)
+            if isinstance(stats, list) and stats:
+                store.save_engine_segments(conn, job_id, "a", json.dumps(stats))
+            store.update_job_phase(conn, job_id, PHASE_ENGINE_A_DONE)
+            return tokens_a, final_a, pseudo_b_tokens, pseudo_b_raw_words, engine
+        except Exception:
+            try:
+                engine.unload()
+            finally:
+                del engine
+                _free_vram()
+            raise
 
 
 def _run_engine_b(conn, job_id, plan, inputs, device, config,
@@ -195,6 +267,7 @@ def _run_engine_b(conn, job_id, plan, inputs, device, config,
                 engine, inputs.chunks, inputs.full_audio, inputs.bias_terms,
                 inputs.bias_weights, None, plan.engine_batch_size,
                 chunk_overlap_ms=plan.chunk_overlap_ms,
+                speech_spans=inputs.speech_spans,
             )
         del engine
 
@@ -216,7 +289,8 @@ def _decode_self_ensemble_b(engine, plan: JobPlan, inputs: DecodeInputs):
     """
     res = engine.transcribe(
         EngineInput(audio=inputs.full_audio, bias_terms=inputs.bias_terms,
-                    bias_weights=inputs.bias_weights, language_hint="th"),
+                    bias_weights=inputs.bias_weights, language_hint="th",
+                    speech_spans=inputs.speech_spans),
         temperature=plan.temperature_b,
         beam_size=plan.beam_size_b,
     )
@@ -225,7 +299,8 @@ def _decode_self_ensemble_b(engine, plan: JobPlan, inputs: DecodeInputs):
 
 
 def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint,
-                     batch_size, chunk_overlap_ms=750, temperature=None, beam_size=None):
+                     batch_size, chunk_overlap_ms=750, temperature=None, beam_size=None,
+                     speech_spans=()):
     """Run one engine over the audio → (global-timestamped tokens, word_level, raw_words).
 
     Whole-file engines get the full track in a single call (their own VAD and
@@ -246,7 +321,8 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
     """
     if getattr(engine, "prefers_whole_file", False):
         inp = EngineInput(audio=full_audio, bias_terms=bias_terms,
-                           bias_weights=bias_weights, language_hint=language_hint)
+                           bias_weights=bias_weights, language_hint=language_hint,
+                           speech_spans=speech_spans)
         overrides = {}
         if temperature is not None:
             overrides["temperature"] = temperature

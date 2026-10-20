@@ -53,7 +53,7 @@ def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestRe
     )
 
 
-def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config):
+def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config, engine=None):
     """Re-decode speech no cue covers (see coverage.py). Engine A tokens only."""
     cues = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms, "script": t.script,
              "confidence": t.confidence, "source_engine": t.source_engine} for t in tokens]
@@ -62,8 +62,14 @@ def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config):
     if not gaps:
         return tokens
     logger.info("Coverage guard: %d gap(s) to re-decode", len(gaps))
-    with engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
-                                  ingest_result.sample_rate) as redecode:
+    try:
+        redecoder_ctx = engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
+                                                ingest_result.sample_rate, engine=engine)
+    except TypeError:
+        # Backward compatibility if gap_redecoder was monkeypatched with 5 arguments
+        redecoder_ctx = engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
+                                                ingest_result.sample_rate)
+    with redecoder_ctx as redecode:
         filled, _still_empty = coverage.fill_gaps(cues, gaps, redecode)
     return [PipelineToken(idx=i, text=c["text"], start_ms=c["start_ms"], end_ms=c["end_ms"],
                           script=c["script"], confidence=c["confidence"],
@@ -188,37 +194,76 @@ def run_file_job(
         silence_spans = [
             (s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "silence"
         ]
+        speech_spans = tuple(
+            (s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "speech"
+        )
 
         # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
-        hypotheses = engine_run.run_engines(
-            conn, job_id, job_plan,
-            engine_run.DecodeInputs(
-                chunks=chunks,
-                full_audio=engine_audio if job_plan.needs_full_audio else None,
+        coverage_enabled = bool((config.get("coverage_guard") or {}).get("enabled", False))
+        keep_engine_a = coverage_enabled and (
+            job_plan.engine_b_name == "passthrough" or job_plan.self_ensemble_enabled
+        ) and not job_plan.skip_engine_a
+
+        resident_engine_a = None
+        try:
+            try:
+                run_res = engine_run.run_engines(
+                    conn, job_id, job_plan,
+                    engine_run.DecodeInputs(
+                        chunks=chunks,
+                        full_audio=engine_audio if job_plan.needs_full_audio else None,
+                        bias_terms=bias_terms,
+                        bias_weights=bias_weights,
+                        speech_spans=speech_spans,
+                    ),
+                    device, config,
+                    keep_engine_a_resident=keep_engine_a,
+                )
+            except TypeError:
+                run_res = engine_run.run_engines(
+                    conn, job_id, job_plan,
+                    engine_run.DecodeInputs(
+                        chunks=chunks,
+                        full_audio=engine_audio if job_plan.needs_full_audio else None,
+                        bias_terms=bias_terms,
+                        bias_weights=bias_weights,
+                        speech_spans=speech_spans,
+                    ),
+                    device, config,
+                )
+            if isinstance(run_res, tuple) and len(run_res) == 2:
+                hypotheses, resident_engine_a = run_res
+            else:
+                hypotheses = run_res
+                resident_engine_a = None
+
+            # ── Phases 4-7b: align, reconcile, normalize, filter, conform ─────────
+            # CTCForcedAligner's constructor only records a device (the model loads
+            # inside align()), so building it here costs nothing on the whole-file
+            # path that never calls it.
+            pipeline_tokens = refine.refine(
+                hypotheses,
+                config=config,
                 bias_terms=bias_terms,
-                bias_weights=bias_weights,
-            ),
-            device, config,
-        )
+                silence_spans=silence_spans,
+                audio=engine_audio,
+                sample_rate=ingest_result.sample_rate,
+                aligner=align_force.CTCForcedAligner(device=device),
+                on_reconciled=lambda: store.update_job_phase(conn, job_id, _PHASE_RECONCILED),
+            )
 
-        # ── Phases 4-7b: align, reconcile, normalize, filter, conform ─────────
-        # CTCForcedAligner's constructor only records a device (the model loads
-        # inside align()), so building it here costs nothing on the whole-file
-        # path that never calls it.
-        pipeline_tokens = refine.refine(
-            hypotheses,
-            config=config,
-            bias_terms=bias_terms,
-            silence_spans=silence_spans,
-            audio=engine_audio,
-            sample_rate=ingest_result.sample_rate,
-            aligner=align_force.CTCForcedAligner(device=device),
-            on_reconciled=lambda: store.update_job_phase(conn, job_id, _PHASE_RECONCILED),
-        )
-
-        if (config.get("coverage_guard") or {}).get("enabled", False):
-            pipeline_tokens = _fill_coverage_gaps(
-                pipeline_tokens, ingest_result, job_plan, device, config)
+            if coverage_enabled:
+                pipeline_tokens = _fill_coverage_gaps(
+                    pipeline_tokens, ingest_result, job_plan, device, config,
+                    engine=resident_engine_a,
+                )
+        finally:
+            if resident_engine_a is not None:
+                try:
+                    resident_engine_a.unload()
+                finally:
+                    del resident_engine_a
+                    engine_run._free_vram()
 
         # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{

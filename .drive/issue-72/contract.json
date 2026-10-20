@@ -1,0 +1,73 @@
+{
+  "goal": "transcribe(audio): derive whole-file decode windows from ingest speech spans to drop the second full-file Silero VAD pass (issue #72)",
+  "target": "local",
+  "max_attempts": 4,
+  "timeout_seconds": 120,
+  "max_seconds": 3600,
+  "criteria": [
+    {
+      "statement": "speech_windows derives padded/merged/split windows directly from speech_spans when present, falling back to VAD only when speech_spans is empty",
+      "stage": "prove"
+    },
+    {
+      "statement": "EngineInput, DecodeInputs, FasterWhisperEngine, and run_file thread speech_spans from ingest_result to speech_windows",
+      "stage": "prove"
+    },
+    {
+      "statement": "All unit tests and regression test suite pass",
+      "stage": "regression"
+    }
+  ],
+  "oracle_files": [
+    "tests/test_audio_windows.py"
+  ],
+  "stages": [
+    {
+      "id": "prove",
+      "skill": "correctness-gate",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_audio_windows.py",
+        "tests/test_faster_whisper.py",
+        "-v"
+      ],
+      "inputs": [
+        "transcribe/contracts.py",
+        "transcribe/audio/windows.py",
+        "transcribe/pipeline/engine_run.py",
+        "transcribe/pipeline/run.py",
+        "transcribe/engines/faster_whisper.py",
+        "tests/test_audio_windows.py",
+        "tests/test_faster_whisper.py"
+      ]
+    },
+    {
+      "id": "regression",
+      "skill": "verify-loop",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_smoke.py",
+        "tests/test_coverage_guard.py",
+        "tests/test_engine_safety_resume_identity.py",
+        "tests/test_engine_unload_order.py",
+        "-v"
+      ],
+      "inputs": [
+        "transcribe/contracts.py",
+        "transcribe/audio/windows.py",
+        "transcribe/pipeline/engine_run.py",
+        "transcribe/pipeline/run.py",
+        "transcribe/engines/faster_whisper.py",
+        "tests/test_smoke.py",
+        "tests/test_coverage_guard.py",
+        "tests/test_engine_safety_resume_identity.py",
+        "tests/test_engine_unload_order.py"
+      ]
+    }
+  ],
+  "actions": []
+}

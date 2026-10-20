@@ -574,7 +574,8 @@ class FasterWhisperEngine(Engine):
         return merged, bs
 
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
-                             temperature=None, beam_size=None) -> list[tuple[str, int, int, float | None]]:
+                             temperature=None, beam_size=None,
+                             speech_spans=()) -> list[tuple[str, int, int, float | None]]:
         """Decode the whole file, splitting+stitching any pause-free run too long
         for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
         the anti-hallucination knobs are all supported by the batched signature
@@ -626,7 +627,11 @@ class FasterWhisperEngine(Engine):
         # window. So a one-window run is a normal span, and a multi-window run is
         # a long pause-free span that needs decode-per-window plus a stitch.
         runs: list[list[Window]] = []
-        for w in speech_windows(audio, self._window_policy):
+        if speech_spans:
+            raw_windows = speech_windows(audio, self._window_policy, speech_spans=speech_spans)
+        else:
+            raw_windows = speech_windows(audio, self._window_policy)
+        for w in raw_windows:
             if runs and runs[-1][0].span_index == w.span_index:
                 runs[-1].append(w)
             else:
@@ -751,8 +756,12 @@ class FasterWhisperEngine(Engine):
                           if inp.bias_terms and self._bias_channel in ("hotwords", "both") else None)
         self._segment_stats = []
 
+        kwargs = {}
+        if inp.speech_spans:
+            kwargs["speech_spans"] = inp.speech_spans
         words = self._transcribe_batched(audio, inp.language_hint, initial_prompt,
-                                          temperature=temperature, beam_size=beam_size)
+                                          temperature=temperature, beam_size=beam_size,
+                                          **kwargs)
 
         tokens = [
             RecognizedToken(

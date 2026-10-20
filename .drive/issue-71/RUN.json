@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "contract": {
+    "goal": "Keep Engine A resident across coverage_guard instead of reloading 1.5 GB weights (issue #71)",
+    "target": "local",
+    "max_attempts": 4,
+    "timeout_seconds": 120,
+    "max_seconds": 3600,
+    "criteria": [
+      {
+        "statement": "When coverage_guard.enabled is true and engine_b is passthrough, engine.load() is called once and engine.unload() is called once at the end even when speech gaps trigger re-decoding",
+        "stage": "prove"
+      },
+      {
+        "statement": "All pipeline coverage, engine safety resume identity, unload order, and smoke tests pass",
+        "stage": "regression"
+      }
+    ],
+    "oracle_files": [
+      "tests/test_coverage_guard.py"
+    ],
+    "stages": [
+      {
+        "id": "prove",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_coverage_guard.py",
+          "-v"
+        ],
+        "inputs": [
+          "transcribe/pipeline/engine_run.py",
+          "transcribe/pipeline/run.py",
+          "tests/test_coverage_guard.py"
+        ]
+      },
+      {
+        "id": "regression",
+        "skill": "verify-loop",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_coverage_guard.py",
+          "tests/test_engine_safety_resume_identity.py",
+          "tests/test_engine_unload_order.py",
+          "tests/test_smoke.py",
+          "-v"
+        ],
+        "inputs": [
+          "transcribe/pipeline/engine_run.py",
+          "transcribe/pipeline/run.py",
+          "tests/test_coverage_guard.py",
+          "tests/test_engine_safety_resume_identity.py",
+          "tests/test_engine_unload_order.py",
+          "tests/test_smoke.py"
+        ]
+      }
+    ],
+    "actions": []
+  },
+  "contract_hash": "785450dc7e147debb2b271878d94aab1ffadcb139b36bfa5f7d9a35b2af32b5c",
+  "oracle_hash": "a8d0bf3ca98fbc2c2112cea209a3afdaaa61cdf23f7a800b10dc4cdcd1a14dee",
+  "started_at": 1792472194.5935585,
+  "status": "complete",
+  "proofs": {
+    "prove": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 8 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 12%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 25%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 37%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 50%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 62%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 75%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 87%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 8 passed, 2 warnings in 4.24s ========================\n",
+      "at": 1792472222.5525007,
+      "seconds": 5.171,
+      "inputs_hash": "0ecc139019c93f39ddfe8f99a7568326a5a71e8f982eb014cdaa8c36ed9ac3cf"
+    },
+    "regression": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "tests/test_engine_safety_resume_identity.py",
+        "tests/test_engine_unload_order.py",
+        "tests/test_smoke.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 38 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [  2%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [  5%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [  7%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 10%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 13%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 15%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 18%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 21%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error \ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error PASSED [ 23%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_success_unloads_before_persisting PASSED [ 26%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_database_matches_only_same_fingerprint PASSED [ 28%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity PASSED [ 31%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_legacy_database_migrates_idempotently PASSED [ 34%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_mapping_order_does_not_change_identity PASSED [ 36%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs PASSED [ 39%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_prompt_term_order_is_part_of_identity PASSED [ 42%]\ntests/test_engine_unload_order.py::test_release_then_gc_then_empty_cache PASSED [ 44%]\ntests/test_engine_unload_order.py::test_teardown_continues_when_release_raises PASSED [ 47%]\ntests/test_engine_unload_order.py::test_no_cuda_skips_empty_cache_but_still_collects PASSED [ 50%]\ntests/test_engine_unload_order.py::test_torch_missing_is_harmless PASSED [ 52%]\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [ 55%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [ 57%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [ 60%]\ntests/test_smoke.py::test_align_identical PASSED                         [ 63%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [ 65%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 68%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 71%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 73%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 76%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 78%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 81%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 84%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 86%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 89%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 92%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 94%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 97%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n============= 38 passed, 2 warnings, 16 subtests passed in 5.73s ==============\n",
+      "at": 1792472227.729314,
+      "seconds": 6.678,
+      "inputs_hash": "81e225953bfd11aa3eed69f298a4c813aa4b1b4a222dccc9461acd2846ea22e9"
+    }
+  },
+  "attempts": {
+    "prove": 2,
+    "regression": 2
+  },
+  "journal": {},
+  "history": [
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 8 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 12%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 25%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 37%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 50%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 62%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 75%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 87%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 8 passed, 2 warnings in 4.24s ========================\n",
+      "at": 1792472197.7550793,
+      "seconds": 5.194,
+      "inputs_hash": "0ecc139019c93f39ddfe8f99a7568326a5a71e8f982eb014cdaa8c36ed9ac3cf"
+    },
+    {
+      "stage": "regression",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "tests/test_engine_safety_resume_identity.py",
+        "tests/test_engine_unload_order.py",
+        "tests/test_smoke.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 38 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [  2%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [  5%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [  7%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 10%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 13%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 15%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 18%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 21%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error \ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error PASSED [ 23%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_success_unloads_before_persisting PASSED [ 26%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_database_matches_only_same_fingerprint PASSED [ 28%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity PASSED [ 31%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_legacy_database_migrates_idempotently PASSED [ 34%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_mapping_order_does_not_change_identity PASSED [ 36%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs PASSED [ 39%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_prompt_term_order_is_part_of_identity PASSED [ 42%]\ntests/test_engine_unload_order.py::test_release_then_gc_then_empty_cache PASSED [ 44%]\ntests/test_engine_unload_order.py::test_teardown_continues_when_release_raises PASSED [ 47%]\ntests/test_engine_unload_order.py::test_no_cuda_skips_empty_cache_but_still_collects PASSED [ 50%]\ntests/test_engine_unload_order.py::test_torch_missing_is_harmless PASSED [ 52%]\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [ 55%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [ 57%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [ 60%]\ntests/test_smoke.py::test_align_identical PASSED                         [ 63%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [ 65%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 68%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 71%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 73%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 76%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 78%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 81%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 84%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 86%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 89%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 92%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 94%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 97%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n============= 38 passed, 2 warnings, 16 subtests passed in 5.64s ==============\n",
+      "at": 1792472209.1576898,
+      "seconds": 6.607,
+      "inputs_hash": "81e225953bfd11aa3eed69f298a4c813aa4b1b4a222dccc9461acd2846ea22e9"
+    },
+    {
+      "stage": "prove",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 8 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 12%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 25%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 37%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 50%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 62%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 75%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 87%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================== 8 passed, 2 warnings in 4.24s ========================\n",
+      "at": 1792472222.5525007,
+      "seconds": 5.171,
+      "inputs_hash": "0ecc139019c93f39ddfe8f99a7568326a5a71e8f982eb014cdaa8c36ed9ac3cf"
+    },
+    {
+      "stage": "regression",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_coverage_guard.py",
+        "tests/test_engine_safety_resume_identity.py",
+        "tests/test_engine_unload_order.py",
+        "tests/test_smoke.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 38 items\n\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [  2%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [  5%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [  7%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 10%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 13%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 15%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 18%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 21%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error \ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_all_engine_failure_paths_unload_and_preserve_error PASSED [ 23%]\ntests/test_engine_safety_resume_identity.py::EngineFailureCleanupTests::test_success_unloads_before_persisting PASSED [ 26%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_database_matches_only_same_fingerprint PASSED [ 28%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_decode_and_bias_changes_invalidate_identity PASSED [ 31%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_legacy_database_migrates_idempotently PASSED [ 34%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_mapping_order_does_not_change_identity PASSED [ 36%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs \ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_pipeline_resumes_same_inputs_and_restarts_changed_inputs PASSED [ 39%]\ntests/test_engine_safety_resume_identity.py::ResumeFingerprintTests::test_prompt_term_order_is_part_of_identity PASSED [ 42%]\ntests/test_engine_unload_order.py::test_release_then_gc_then_empty_cache PASSED [ 44%]\ntests/test_engine_unload_order.py::test_teardown_continues_when_release_raises PASSED [ 47%]\ntests/test_engine_unload_order.py::test_no_cuda_skips_empty_cache_but_still_collects PASSED [ 50%]\ntests/test_engine_unload_order.py::test_torch_missing_is_harmless PASSED [ 52%]\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [ 55%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [ 57%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [ 60%]\ntests/test_smoke.py::test_align_identical PASSED                         [ 63%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [ 65%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 68%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 71%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 73%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 76%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 78%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 81%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 84%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 86%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 89%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 92%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 94%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 97%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [100%]\n\n============================== warnings summary ===============================\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n============= 38 passed, 2 warnings, 16 subtests passed in 5.73s ==============\n",
+      "at": 1792472227.729314,
+      "seconds": 6.678,
+      "inputs_hash": "81e225953bfd11aa3eed69f298a4c813aa4b1b4a222dccc9461acd2846ea22e9"
+    }
+  ]
+}
