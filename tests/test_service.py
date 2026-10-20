@@ -49,6 +49,36 @@ def test_transcribe_returns_job_id_and_reuses_cache(monkeypatch, tmp_path):
     conn.close()
 
 
+def test_transcribe_skips_cache_when_bias_term_added_or_config_changed(monkeypatch, tmp_path):
+    from transcribe import service
+    from transcribe.db import store
+    _patch_vad(monkeypatch)
+    wav, db = _wav(), _db(tmp_path)
+
+    first = service.transcribe(wav, config=_CFG, db_path=db)
+    assert not first.cached
+    initial_job_id = first.job_id
+
+    # Same config and bias -> cache hit
+    hit = service.transcribe(wav, config=_CFG, db_path=db)
+    assert hit.cached and hit.job_id == initial_job_id
+
+    # Promoting a bias term causes cache miss and runs a new job
+    conn = store.connect(db)
+    store.upsert_bias_term(conn, "ใหม่", "brand", "thai", "flywheel", weight=1.5)
+    conn.close()
+
+    after_bias = service.transcribe(wav, config=_CFG, db_path=db)
+    assert not after_bias.cached
+    assert after_bias.job_id != initial_job_id
+
+    # Changing config (e.g. engine setting) causes cache miss and runs a new job
+    cfg_modified = dict(_CFG, engines={"faster_whisper": {"model_id": "different"}})
+    after_cfg = service.transcribe(wav, config=cfg_modified, db_path=db)
+    assert not after_cfg.cached
+    assert after_cfg.job_id not in (initial_job_id, after_bias.job_id)
+
+
 def test_default_store_comes_from_config(tmp_path):
     from transcribe.db import store
     target = tmp_path / "x.db"

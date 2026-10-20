@@ -443,17 +443,19 @@ def find_finished_job(
     engine_a: str,
     engine_b: str,
     pipeline_version: str,
+    resume_fingerprint: Optional[str] = None,
 ) -> Optional[JobRow]:
     """The most recent completed job for this exact (media, engine pair, pipeline
-    version) that still holds its tokens — a transcript we can reuse instead of
-    running ASR again. The token check skips jobs whose bulk rows were purged
-    (`purge_job_transcript_data`): they are 'done' but empty."""
+    version, resume fingerprint) that still holds its tokens — a transcript we can
+    reuse instead of running ASR again. The token check skips jobs whose bulk rows
+    were purged (`purge_job_transcript_data`): they are 'done' but empty."""
     row = conn.execute(
         "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
-        "AND pipeline_version = ? AND status = 'done' AND job_phase = 'written' "
+        "AND pipeline_version = ? AND resume_fingerprint IS ? "
+        "AND status = 'done' AND job_phase = 'written' "
         "AND EXISTS (SELECT 1 FROM token WHERE token.job_id = job.id) "
         "ORDER BY id DESC LIMIT 1",
-        (media_id, engine_a, engine_b, pipeline_version),
+        (media_id, engine_a, engine_b, pipeline_version, resume_fingerprint),
     ).fetchone()
     if row is None:
         return None

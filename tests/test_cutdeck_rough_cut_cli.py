@@ -216,7 +216,7 @@ def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
     from cutdeck import audio_extract
     from transcribe.db import store
     from transcribe.pipeline import run as run_mod
-    from transcribe.pipeline.plan import canonical_engine_names
+    from transcribe.pipeline.plan import canonical_engine_names, resume_fingerprint
 
     db = tmp_path / "t.db"
     store.init_db(db)
@@ -227,7 +227,9 @@ def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
         conn = store.connect(db_path)
         media_id = store.create_media(conn, path)
         a, b = canonical_engine_names(config)
-        job_id = store.create_job(conn, media_id, a, b, run_mod.PIPELINE_VERSION)
+        rf = resume_fingerprint(config, store.get_bias_term_strings(conn),
+                                store.get_bias_term_weights(conn))
+        job_id = store.create_job(conn, media_id, a, b, run_mod.PIPELINE_VERSION, rf)
         store.bulk_create_tokens(conn, [dict(
             job_id=job_id, idx=0, text="x", start_ms=0, end_ms=100, script="latin",
             confidence=None, source_engine="a", speaker_id=None)])

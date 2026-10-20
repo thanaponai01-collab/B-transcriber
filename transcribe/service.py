@@ -97,8 +97,14 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     conn = store.connect(db_path)
     try:
         media_id = store.create_media(conn, media_path)
-        cached = (None if glossary else
-                  store.find_finished_job(conn, media_id, engine_a, engine_b, PIPELINE_VERSION))
+        cached = None
+        if not glossary:
+            bias_terms = store.get_bias_term_strings(conn)
+            bias_weights = store.get_bias_term_weights(conn)
+            rf = planning.resume_fingerprint(config, bias_terms, bias_weights)
+            cached = store.find_finished_job(
+                conn, media_id, engine_a, engine_b, PIPELINE_VERSION, rf
+            )
         if cached is not None:
             cues = [{"idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms,
                      "script": t.script, "confidence": t.confidence,

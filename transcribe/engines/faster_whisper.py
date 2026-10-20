@@ -470,9 +470,12 @@ class FasterWhisperEngine(Engine):
         if not tail_candidates:
             return recovered_map, bs
 
+        tail_common = {k: v for k, v in common.items() if k not in ("initial_prompt", "hotwords")}
+        tail_common["initial_prompt"] = None
+
         if len(tail_candidates) == 1:
             key, (orig_tokens, kept, tail_audio, tail_start_ms, clip) = tail_candidates[0]
-            segments, bs = self._decode(tail_audio, clip, False, common, bs)
+            segments, bs = self._decode(tail_audio, clip, False, tail_common, bs)
             tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
             if not tail_tokens:
                 recovered_map[key] = orig_tokens
@@ -502,7 +505,7 @@ class FasterWhisperEngine(Engine):
             tail_ranges.append((key, orig_tokens, kept, tail_start_ms, start_clip_idx, end_clip_idx, offset_samples))
             offset_samples += len(tail_audio)
 
-        segments, bs = self._decode(combined_audio, combined_clips, False, common, bs)
+        segments, bs = self._decode(combined_audio, combined_clips, False, tail_common, bs)
         dummy_windows = [
             Window(start_s=c["start"], end_s=c["end"], span_index=idx)
             for idx, c in enumerate(combined_clips)
@@ -556,7 +559,9 @@ class FasterWhisperEngine(Engine):
         if plan is None:
             return tokens, bs
         _orig, kept, tail_audio, tail_start_ms, clip = plan
-        segments, bs = self._decode(tail_audio, clip, False, common, bs)
+        tail_common = {k: v for k, v in common.items() if k not in ("initial_prompt", "hotwords")}
+        tail_common["initial_prompt"] = None
+        segments, bs = self._decode(tail_audio, clip, False, tail_common, bs)
         tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
         if not tail_tokens:
             return tokens, bs

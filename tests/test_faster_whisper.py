@@ -337,3 +337,75 @@ def test_transcribe_threads_speech_spans(monkeypatch):
     engine.transcribe(inp)
     assert captured.get("speech_spans") == ((1000, 4000),)
 
+
+def test_recover_truncated_tail_strips_initial_prompt_and_hotwords():
+    engine = FasterWhisperEngine.__new__(FasterWhisperEngine)
+    engine._no_speech_threshold = 0.6
+    engine._log_prob_threshold = -1.0
+    win_dur_ms = 9000
+    tokens = [
+        RecognizedToken("มา", 0, 300, 0.9, "thai"),
+        RecognizedToken("เขา", 2000, 2300, 0.9, "thai"),
+        RecognizedToken("อง", 2300, win_dur_ms, 0.9, "thai"),
+    ]
+    sub_audio = np.zeros(int(win_dur_ms / 1000 * 16000), dtype=np.float32)
+
+    captured_common = {}
+
+    def fake_decode(audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        captured_common.update(common_kwargs)
+        return [FakeSegment(words=[FakeWord(" ต่อ", 0.0, 1.0)])], bs
+
+    engine._decode = fake_decode
+    incoming_common = {
+        "language": "th",
+        "task": "transcribe",
+        "initial_prompt": "prompt context words",
+        "hotwords": "hotword1 hotword2",
+        "beam_size": 5,
+    }
+    merged, bs = engine._recover_truncated_tail(tokens, sub_audio, incoming_common, bs=4)
+
+    assert captured_common.get("initial_prompt") is None
+    assert "hotwords" not in captured_common
+    assert captured_common.get("beam_size") == 5
+    assert captured_common.get("language") == "th"
+
+
+def test_batch_recover_tails_strips_initial_prompt_and_hotwords():
+    engine = FasterWhisperEngine.__new__(FasterWhisperEngine)
+    engine._no_speech_threshold = 0.6
+    engine._log_prob_threshold = -1.0
+    win_dur_ms = 9000
+    tokens = [
+        RecognizedToken("มา", 0, 300, 0.9, "thai"),
+        RecognizedToken("เขา", 2000, 2300, 0.9, "thai"),
+        RecognizedToken("อง", 2300, win_dur_ms, 0.9, "thai"),
+    ]
+    sub_audio = np.zeros(int(win_dur_ms / 1000 * 16000), dtype=np.float32)
+    plan = engine._plan_truncated_tail(tokens, sub_audio)
+    assert plan is not None
+
+    captured = []
+
+    def fake_decode(audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        captured.append(dict(common_kwargs))
+        return [FakeSegment(words=[FakeWord(" ต่อ", 0.0, 1.0)], seek=0)], bs
+
+    engine._decode = fake_decode
+    incoming_common = {
+        "language": "th",
+        "initial_prompt": "prompt context words",
+        "hotwords": "hotword1 hotword2",
+        "beam_size": 5,
+    }
+    # Single candidate branch
+    engine._batch_recover_tails([("key1", plan)], incoming_common, bs=4)
+    assert captured[0].get("initial_prompt") is None
+    assert "hotwords" not in captured[0]
+
+    # Multiple candidates branch
+    engine._batch_recover_tails([("key1", plan), ("key2", plan)], incoming_common, bs=4)
+    assert captured[1].get("initial_prompt") is None
+    assert "hotwords" not in captured[1]
+
