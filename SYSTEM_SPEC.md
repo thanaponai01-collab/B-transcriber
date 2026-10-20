@@ -28,6 +28,19 @@ B-transcriber/
 ├── scripts/                   # learn_from_srt.py, export_job.py, preflight.py
 ├── cutdeck/                   # Part B: rough-cut planning + FCP7 XML export
 └── transcribe/                # the package
+    ├── service.py             # unified transcription entry point (shared DB, sha256 cache)
+    ├── review.py              # targeted acoustic review & suspicion reasons
+    ├── contracts.py           # engine contracts & token data structures
+    ├── audio/                 # decode, VAD windowing, and span stitching
+    ├── cues/                  # cue splitting and layout policies
+    ├── db/                    # SQLite persistence (schema.sql + store.py)
+    ├── editor/                # FastAPI review & correction editor
+    ├── engines/               # ASR adapters (faster_whisper, qwen3_asr, etc.)
+    ├── eval/                  # metrics (v4), paired regression gate, evaluation harness
+    ├── flywheel/              # correction capture, diffing, bias index, prompt injection
+    ├── pipeline/              # orchestration (run.py), plan, refine, coverage guard (coverage.py)
+    ├── subtitles/             # subtitle formatting and layout
+    └── thai/                  # Thai language atoms and lint rules
 ```
 
 ---
@@ -47,6 +60,11 @@ dataclasses; nothing outside `engines/` may import a concrete model.
 
 Rule: `confidence=None` if the engine gives none — **never faked**.
 
+### 2.1 Service & Review — `transcribe/service.py` and `transcribe/review.py`
+
+- **`service.py`** — The single transcription entry point for all frontends (CLI, web editor, Rough Cut, helper daemon, MCP). Wraps `pipeline.run.run_file_job`, anchors all callers to the shared database path (`store.resolve_db_path`), provides sha256 transcript caching, passes job glossaries into `EngineInput.bias_terms`, attaches `job_id`, and surfaces `coverage_gaps` and `review_flags` on the returned `Transcript`.
+- **`review.py`** — Targeted acoustic review (`suspicion_reasons(cue) -> list[str]`). Evaluates cues for acoustic and lexical anomalies: short duration (<500 ms), high character density (>25 chars/sec), low recognition confidence (<0.8), unfamiliar Thai fragments outside PyThaiNLP corpus and colloquial atoms, and high compression ratio segments. Produces ranked `review_flags` prioritizing human inspection or targeted re-decode without generating text or inventing word timings.
+
 ---
 
 ## 3. Engines — `transcribe/engines/`
@@ -61,8 +79,9 @@ thresholds, batch_size, bias budget) — an engine/model/compute swap is a YAML 
 | `null_engine.py` | **Engine B (active)** `passthrough` | single-engine fallback — no second hypothesis | active |
 | `whisper_thai.py` | `whisper_thai` | same checkpoint via HF transformers — slower per-chunk fallback | registered |
 | `whisper_multi.py` | `whisper_multi` | `openai/whisper-large-v3` — multilingual code-switch slot | registered |
-| `funasr.py` | `funasr` | `SenseVoiceSmall` (imports fine on this venv; needs `hub="hf"`). Tried 2026-07-15: gate rejected it (WER_latin regressed; it reports `confidence=None` so it can never win a Thai disagreement) | registered, gated off |
-| `typhoon_rt.py` | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate; NeMo not installed yet | adapter built, mock-tested |
+| `qwen3_asr.py` | `qwen3_asr` | `Qwen/Qwen3-ASR-1.7B` via `qwen_asr`. LLM-decoder ASR candidate for code-switching; own internal VAD segmentation (`speech_windows`, capped at `max_span_s: 8.0`); context prompt injection. Probed with real disagreements; **not activated** because model transliterates English loanwords into Thai script (model quality, not a reconciler bug; docs/ENGINES.md:53-70). | built, not activated |
+| `typhoon_rt.py` | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. **Rejected**: regresses `cer_thai` and `wer_latin` vs baseline (docs/ENGINES.md:46-52). Do not retry without new evidence. | rejected |
+| `funasr.py` | `funasr` | `SenseVoiceSmall`. **Retired**: model has no Thai support (only zh/en/yue/ja/ko); auto-detects Thai as Cantonese and emits CJK garbage (docs/ENGINES.md:31-40). Do not re-probe without a different model. | retired |
 | `mock.py` | `mock` | canned tokens, no GPU — used by all pipeline tests | tests only |
 | `base.py` / `registry.py` | — | `Engine` ABC (`load → transcribe → unload`), `@register` + `get_engine()` | — |
 
@@ -105,6 +124,9 @@ audio
  ├─[normalize.py]   deterministic text policy (§6) → _filter_hallucinations (loop
  │                  collapse + >3× repeat drop) → drop_tokens_over_silence (VAD overlap)
  │
+ ├─[coverage.py]    coverage guard — detects speech gaps (≥600ms) and re-decodes them
+ │                  within Engine A residency; unfilled gaps reported, never invented
+ │
  └─[align_force.py] ONLY when timestamps_final is False: word expansion + CTC forced
                     alignment (torchaudio MMS_FA, LinearFallbackAligner on failure).
                     faster-whisper cues skip this entirely.
@@ -115,7 +137,7 @@ audio
 CLI: `python -m transcribe.pipeline.run audio.wav --config transcribe/config.yaml`.
 `PIPELINE_VERSION = "1.0.0"`.
 
-Behind that one entry point, three **internal** seams (private to
+Behind that one entry point, four **internal** seams (private to
 `transcribe/pipeline/`, absent from its `__init__` exports — `run_file`'s own
 interface is unchanged and is what every caller depends on):
 `plan.py` decides everything pure (engine names incl. the canonical
@@ -123,7 +145,10 @@ interface is unchanged and is what every caller depends on):
 whether ingest must cut chunks) as a function of config plus one resume phase, with
 no engine instantiated; `engine_run.py` owns the load → decode → unload → `del` →
 `empty_cache` → persist → advance-phase bracket once, for both the real-Engine-B
-and self-ensemble-pseudo-B cases; `refine.py` is the post-decode token pipeline
+and self-ensemble-pseudo-B cases; `coverage.py` finds speech gaps (≥600 ms) that
+produced no cue (`find_gaps`), detects isolated orphan cues adjacent to gaps
+(`find_orphans`), and offers gaps a second decode (`fill_gaps`) within Engine A's
+residency without generating text; `refine.py` is the post-decode token pipeline
 (align → reconcile → normalize → filter → silence drop → conditional word
 expansion → conditional forced alignment → cue conform), taking its aligner as an
 injected dependency.
@@ -170,24 +195,32 @@ lives in `config.yaml`.
 
 ## 7. Evaluation — `transcribe/eval/`
 
-- **`metrics.py`** — three signals on well-defined units (`METRICS_VERSION = 2`):
-  - **`cer_thai`** — char error rate over the Thai stream (primary Thai signal;
+- **`metrics.py`** — five gated signals on well-defined units (`METRICS_VERSION = 4`):
+  - **`cer_thai`** — character error rate over Thai-script content (primary Thai signal;
     tokenization-free because Thai has no word boundaries)
   - **`wer_latin`** — case-insensitive word error over Latin/digit runs
-  - **`boundary_error_rate`** — `1 − F1` of Thai↔Latin switch *timestamps* within
-    `boundary_tol_ms`. Since v2, switch points are derived **character-by-character
-    inside every token** (a switch inside a `mixed` phrase cue counts, with its
-    timestamp linearly interpolated across the cue span) and the corpus number is a
-    **micro-F1** over summed matched/ref/hyp counts, so hallucinated switches on
-    monolingual clips are penalized. (v1 used token-level script only — at phrase-cue
-    granularity that pinned BER at a structural 0.0.)
-  - `wer` — coarse sanity number, **never the gate**
-- **`harness.py`** — `run_harness()` runs the golden set (`eval/goldenset/*.json` +
+  - **`boundary_error_rate`** (BER) — temporal switch-point error (`1 − micro-F1`
+    over character-interpolated switch timestamps within `boundary_tol_ms`)
+  - **`cue_boundary_error_rate`** (cue_BER, v3) — `1 − micro-F1` of ref vs hyp cue-start
+    timestamps (matched within tolerance; tokens are phrase cues, so each token start_ms
+    is a cue boundary)
+  - **`speech_coverage_miss`** (coverage_miss, v4) — ms of reference cue time that no
+    hypothesis cue overlaps, divided by total reference cue time (`missed_speech_ms / ref_speech_ms`).
+    Catches speech that produced no text at all, which CER averages away.
+  - **Hard invariant:** `overlapping_cues == 0` asserted on hyp cues alone (not a rate;
+    any overlap fails the gate).
+  - **Descriptive-only stats:** `wer` (coarse sanity number, **never the gate**),
+    `cue_count_delta` (hyp cue count − ref cue count), `shortest_cue_ms` (shortest hyp cue duration),
+    `nonzero_gap_count` (positive gap count between consecutive hyp cues), and
+    `orphan_cues` (isolated hyp cues under 300 ms with clear time to adjacent cues ≥300 ms).
+- **`gate.py` / `harness.py`** — `run_harness()` runs the golden set (`eval/goldenset/*.json` +
   audio/AV pair) through the pipeline in a scratch DB (bias index mirrored in),
   aggregates corpus-level rates, records an `eval_run` stamped with
-  `metrics_version`, and **fails** if `cer_thai`, `wer_latin`, or BER regresses beyond
-  `regression_tolerance` (+`regression_abs_floor`) vs the last passing **production**
-  run of the **same metrics version**. CLI `--engine-b X` / `--llm-enabled` /
+  `metrics_version`, and **fails** if any of the five gated signals (`cer_thai`,
+  `wer_latin`, `boundary_error_rate`, `cue_boundary_error_rate`, `speech_coverage_miss`)
+  regresses beyond `regression_tolerance` (+`regression_abs_floor`) via paired delta
+  bootstrap 95% CIs vs the last passing **production** run of the **same metrics version**,
+  or if `overlapping_cues > 0`. CLI `--engine-b X` / `--llm-enabled` /
   `--experiment` mark A/B probes that are judged against the baseline but can never
   become it. An empty gold set refuses to write a run.
 

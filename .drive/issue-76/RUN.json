@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "contract": {
+    "goal": "docs(spec): sync SYSTEM_SPEC.md with METRICS_VERSION=4, service.py, coverage.py, review.py, and qwen3_asr.py (issue #76)",
+    "target": "local",
+    "max_attempts": 4,
+    "timeout_seconds": 120,
+    "max_seconds": 3600,
+    "criteria": [
+      {
+        "statement": "SYSTEM_SPEC.md describes service.py, coverage.py, review.py, and qwen3_asr.py",
+        "stage": "spec-sync"
+      },
+      {
+        "statement": "SYSTEM_SPEC.md reflects funasr as retired, typhoon_rt as rejected, and qwen3_asr as built/not activated",
+        "stage": "spec-sync"
+      },
+      {
+        "statement": "SYSTEM_SPEC.md documents METRICS_VERSION = 4 with 5 gated signals, overlapping_cues, and orphan_cues",
+        "stage": "spec-sync"
+      },
+      {
+        "statement": "All relevant regression and smoke tests pass",
+        "stage": "regression"
+      }
+    ],
+    "oracle_files": [
+      "tests/test_system_spec_sync.py"
+    ],
+    "stages": [
+      {
+        "id": "spec-sync",
+        "skill": "evolve-maintain",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_system_spec_sync.py",
+          "-v"
+        ],
+        "inputs": [
+          "SYSTEM_SPEC.md",
+          "tests/test_system_spec_sync.py"
+        ]
+      },
+      {
+        "id": "regression",
+        "skill": "correctness-gate",
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_smoke.py",
+          "tests/test_metrics_v4.py",
+          "tests/test_service.py",
+          "tests/test_review.py",
+          "tests/test_coverage_guard.py",
+          "tests/test_qwen3_asr.py",
+          "-v"
+        ],
+        "inputs": [
+          "SYSTEM_SPEC.md",
+          "tests/test_system_spec_sync.py",
+          "transcribe"
+        ]
+      }
+    ],
+    "actions": []
+  },
+  "contract_hash": "9ead782702853da20b3b3ccfb26e8c4c2643beca43c25e7833d55f37a979937a",
+  "oracle_hash": "7f7ad63cd5c7e11e31bd8b6ec13702cdcfab4ed70ace2a935629e43963594035",
+  "started_at": 1792481266.3610857,
+  "status": "complete",
+  "proofs": {
+    "spec-sync": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_system_spec_sync.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 3 items\n\ntests/test_system_spec_sync.py::test_system_spec_contains_required_modules PASSED [ 33%]\ntests/test_system_spec_sync.py::test_system_spec_engine_table_statuses PASSED [ 66%]\ntests/test_system_spec_sync.py::test_system_spec_metrics_version_and_signals PASSED [100%]\n\n============================== 3 passed in 0.04s ==============================\n",
+      "at": 1792481508.2984335,
+      "seconds": 0.398,
+      "inputs_hash": "75bbbc14b44332afd94ced9fd39a2ab52d35ef651141082189736a40be08d4b9"
+    },
+    "regression": {
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_smoke.py",
+        "tests/test_metrics_v4.py",
+        "tests/test_service.py",
+        "tests/test_review.py",
+        "tests/test_coverage_guard.py",
+        "tests/test_qwen3_asr.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 59 items\n\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [  1%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [  3%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [  5%]\ntests/test_smoke.py::test_align_identical PASSED                         [  6%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [  8%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 10%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 11%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 13%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 15%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 16%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 18%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 20%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 22%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 23%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 25%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 27%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 28%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [ 30%]\ntests/test_metrics_v4.py::test_version_bumped PASSED                     [ 32%]\ntests/test_metrics_v4.py::test_dropped_cue_counts_its_full_duration PASSED [ 33%]\ntests/test_metrics_v4.py::test_wrong_text_over_real_speech_is_not_a_coverage_miss PASSED [ 35%]\ntests/test_metrics_v4.py::test_no_timestamps_means_zero_not_a_crash PASSED [ 37%]\ntests/test_metrics_v4.py::test_orphan_is_short_and_isolated PASSED       [ 38%]\ntests/test_metrics_v4.py::test_aggregate_weights_by_reference_speech PASSED [ 40%]\ntests/test_metrics_v4.py::test_resolve_db_path_is_repo_anchored_not_cwd PASSED [ 42%]\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache PASSED [ 44%]\ntests/test_service.py::test_transcribe_skips_cache_when_bias_term_added_or_config_changed PASSED [ 45%]\ntests/test_service.py::test_default_store_comes_from_config PASSED       [ 47%]\ntests/test_service.py::test_callers_share_one_db_and_one_bias_index PASSED [ 49%]\ntests/test_service.py::test_glossary_reaches_the_engine_and_skips_cache PASSED [ 50%]\ntests/test_service.py::test_review_flags_rank_by_reasons_and_use_decode_stats PASSED [ 52%]\ntests/test_service.py::test_transcript_reports_uncovered_speech PASSED   [ 54%]\ntests/test_service.py::test_hotwords_channel_ranks_by_weight_and_rejects_bad_value PASSED [ 55%]\ntests/test_service.py::test_transcribe_hashes_file_once_on_uncached_run PASSED [ 57%]\ntests/test_review.py::test_colloquial_particles_do_not_trigger_unfamiliar_thai_fragments PASSED [ 59%]\ntests/test_review.py::test_multicue_high_compression_segment_does_not_blanket_flag_nonrepetitive_cues PASSED [ 61%]\ntests/test_review.py::test_suspicion_reasons_uses_provided_words_without_retokenizing PASSED [ 62%]\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 64%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 66%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 67%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 69%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 71%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 72%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 74%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 76%]\ntests/test_qwen3_asr.py::test_registered PASSED                          [ 77%]\ntests/test_qwen3_asr.py::test_transcribe_maps_text_confidence_none_real_timestamps PASSED [ 79%]\ntests/test_qwen3_asr.py::test_transcribe_multi_span_gets_real_per_span_timestamps PASSED [ 81%]\ntests/test_qwen3_asr.py::test_long_span_is_capped_at_max_span_s PASSED   [ 83%]\ntests/test_qwen3_asr.py::test_max_span_s_is_configurable PASSED          [ 84%]\ntests/test_qwen3_asr.py::test_empty_text_yields_no_tokens PASSED         [ 86%]\ntests/test_qwen3_asr.py::test_language_hint_maps_iso_code_to_full_name PASSED [ 88%]\ntests/test_qwen3_asr.py::test_transcribe_batch_maps_each_input_in_order PASSED [ 89%]\ntests/test_qwen3_asr.py::test_transcribe_batch_empty_input_yields_empty_output PASSED [ 91%]\ntests/test_qwen3_asr.py::test_audio_passed_as_array_sample_rate_tuple_when_no_path PASSED [ 93%]\ntests/test_qwen3_asr.py::test_audio_path_reused_verbatim_when_given PASSED [ 94%]\ntests/test_qwen3_asr.py::test_bias_terms_packed_into_context_slot PASSED [ 96%]\ntests/test_qwen3_asr.py::test_no_bias_terms_yields_empty_context PASSED  [ 98%]\ntests/test_qwen3_asr.py::test_unload_clears_model_without_error PASSED   [100%]\n\n============================== warnings summary ===============================\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================= 59 passed, 2 warnings in 19.17s =======================\n",
+      "at": 1792481508.7189531,
+      "seconds": 21.478,
+      "inputs_hash": "1e84bf4f4bd78d2ecd15daa8373454d948c233f80e1a1cce5b0923e3bdb75f1e"
+    }
+  },
+  "attempts": {
+    "spec-sync": 2,
+    "regression": 2
+  },
+  "journal": {},
+  "history": [
+    {
+      "stage": "spec-sync",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_system_spec_sync.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 3 items\n\ntests/test_system_spec_sync.py::test_system_spec_contains_required_modules PASSED [ 33%]\ntests/test_system_spec_sync.py::test_system_spec_engine_table_statuses PASSED [ 66%]\ntests/test_system_spec_sync.py::test_system_spec_metrics_version_and_signals PASSED [100%]\n\n============================== 3 passed in 0.04s ==============================\n",
+      "at": 1792481467.2379441,
+      "seconds": 0.39,
+      "inputs_hash": "75bbbc14b44332afd94ced9fd39a2ab52d35ef651141082189736a40be08d4b9"
+    },
+    {
+      "stage": "regression",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_smoke.py",
+        "tests/test_metrics_v4.py",
+        "tests/test_service.py",
+        "tests/test_review.py",
+        "tests/test_coverage_guard.py",
+        "tests/test_qwen3_asr.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 59 items\n\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [  1%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [  3%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [  5%]\ntests/test_smoke.py::test_align_identical PASSED                         [  6%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [  8%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 10%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 11%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 13%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 15%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 16%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 18%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 20%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 22%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 23%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 25%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 27%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 28%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [ 30%]\ntests/test_metrics_v4.py::test_version_bumped PASSED                     [ 32%]\ntests/test_metrics_v4.py::test_dropped_cue_counts_its_full_duration PASSED [ 33%]\ntests/test_metrics_v4.py::test_wrong_text_over_real_speech_is_not_a_coverage_miss PASSED [ 35%]\ntests/test_metrics_v4.py::test_no_timestamps_means_zero_not_a_crash PASSED [ 37%]\ntests/test_metrics_v4.py::test_orphan_is_short_and_isolated PASSED       [ 38%]\ntests/test_metrics_v4.py::test_aggregate_weights_by_reference_speech PASSED [ 40%]\ntests/test_metrics_v4.py::test_resolve_db_path_is_repo_anchored_not_cwd PASSED [ 42%]\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache PASSED [ 44%]\ntests/test_service.py::test_transcribe_skips_cache_when_bias_term_added_or_config_changed PASSED [ 45%]\ntests/test_service.py::test_default_store_comes_from_config PASSED       [ 47%]\ntests/test_service.py::test_callers_share_one_db_and_one_bias_index PASSED [ 49%]\ntests/test_service.py::test_glossary_reaches_the_engine_and_skips_cache PASSED [ 50%]\ntests/test_service.py::test_review_flags_rank_by_reasons_and_use_decode_stats PASSED [ 52%]\ntests/test_service.py::test_transcript_reports_uncovered_speech PASSED   [ 54%]\ntests/test_service.py::test_hotwords_channel_ranks_by_weight_and_rejects_bad_value PASSED [ 55%]\ntests/test_service.py::test_transcribe_hashes_file_once_on_uncached_run PASSED [ 57%]\ntests/test_review.py::test_colloquial_particles_do_not_trigger_unfamiliar_thai_fragments PASSED [ 59%]\ntests/test_review.py::test_multicue_high_compression_segment_does_not_blanket_flag_nonrepetitive_cues PASSED [ 61%]\ntests/test_review.py::test_suspicion_reasons_uses_provided_words_without_retokenizing PASSED [ 62%]\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 64%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 66%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 67%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 69%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 71%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 72%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 74%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 76%]\ntests/test_qwen3_asr.py::test_registered PASSED                          [ 77%]\ntests/test_qwen3_asr.py::test_transcribe_maps_text_confidence_none_real_timestamps PASSED [ 79%]\ntests/test_qwen3_asr.py::test_transcribe_multi_span_gets_real_per_span_timestamps PASSED [ 81%]\ntests/test_qwen3_asr.py::test_long_span_is_capped_at_max_span_s PASSED   [ 83%]\ntests/test_qwen3_asr.py::test_max_span_s_is_configurable PASSED          [ 84%]\ntests/test_qwen3_asr.py::test_empty_text_yields_no_tokens PASSED         [ 86%]\ntests/test_qwen3_asr.py::test_language_hint_maps_iso_code_to_full_name PASSED [ 88%]\ntests/test_qwen3_asr.py::test_transcribe_batch_maps_each_input_in_order PASSED [ 89%]\ntests/test_qwen3_asr.py::test_transcribe_batch_empty_input_yields_empty_output PASSED [ 91%]\ntests/test_qwen3_asr.py::test_audio_passed_as_array_sample_rate_tuple_when_no_path PASSED [ 93%]\ntests/test_qwen3_asr.py::test_audio_path_reused_verbatim_when_given PASSED [ 94%]\ntests/test_qwen3_asr.py::test_bias_terms_packed_into_context_slot PASSED [ 96%]\ntests/test_qwen3_asr.py::test_no_bias_terms_yields_empty_context PASSED  [ 98%]\ntests/test_qwen3_asr.py::test_unload_clears_model_without_error PASSED   [100%]\n\n============================== warnings summary ===============================\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================= 59 passed, 2 warnings in 18.73s =======================\n",
+      "at": 1792481474.7918987,
+      "seconds": 21.386,
+      "inputs_hash": "1e84bf4f4bd78d2ecd15daa8373454d948c233f80e1a1cce5b0923e3bdb75f1e"
+    },
+    {
+      "stage": "spec-sync",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_system_spec_sync.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 3 items\n\ntests/test_system_spec_sync.py::test_system_spec_contains_required_modules PASSED [ 33%]\ntests/test_system_spec_sync.py::test_system_spec_engine_table_statuses PASSED [ 66%]\ntests/test_system_spec_sync.py::test_system_spec_metrics_version_and_signals PASSED [100%]\n\n============================== 3 passed in 0.04s ==============================\n",
+      "at": 1792481508.2984335,
+      "seconds": 0.398,
+      "inputs_hash": "75bbbc14b44332afd94ced9fd39a2ab52d35ef651141082189736a40be08d4b9"
+    },
+    {
+      "stage": "regression",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_smoke.py",
+        "tests/test_metrics_v4.py",
+        "tests/test_service.py",
+        "tests/test_review.py",
+        "tests/test_coverage_guard.py",
+        "tests/test_qwen3_asr.py",
+        "-v"
+      ],
+      "exit": 0,
+      "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.4, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\ncachedir: .pytest_cache\nrootdir: E:\\Me\\5.Claude\\Transcriber_v2\nplugins: anyio-4.13.0\ncollecting ... collected 59 items\n\ntests/test_smoke.py::test_regressed_abs_floor PASSED                     [  1%]\ntests/test_smoke.py::test_db_init_and_crud PASSED                        [  3%]\ntests/test_smoke.py::test_mock_engine_full_pipeline PASSED               [  5%]\ntests/test_smoke.py::test_align_identical PASSED                         [  6%]\ntests/test_smoke.py::test_reconciler_no_generation PASSED                [  8%]\ntests/test_smoke.py::test_reconciler_agreement_skips_llm PASSED          [ 10%]\ntests/test_smoke.py::test_normalization_boundary_spacing PASSED          [ 11%]\ntests/test_smoke.py::test_normalization_exception_lexicon PASSED         [ 13%]\ntests/test_smoke.py::test_normalization_exception_lexicon_gets_boundary_spacing PASSED [ 15%]\ntests/test_smoke.py::test_wer_perfect PASSED                             [ 16%]\ntests/test_smoke.py::test_wer_all_wrong PASSED                           [ 18%]\ntests/test_smoke.py::test_boundary_detection PASSED                      [ 20%]\ntests/test_smoke.py::test_temporal_boundary_penalizes_wrong_timing PASSED [ 22%]\ntests/test_smoke.py::test_cer_thai_is_tokenization_free PASSED           [ 23%]\ntests/test_smoke.py::test_wer_latin_is_case_insensitive PASSED           [ 25%]\ntests/test_smoke.py::test_normalize_thai_digits PASSED                   [ 27%]\ntests/test_smoke.py::test_normalize_mai_yamok_canonical PASSED           [ 28%]\ntests/test_smoke.py::test_eval_normalizes_gold_and_hyp_identically PASSED [ 30%]\ntests/test_metrics_v4.py::test_version_bumped PASSED                     [ 32%]\ntests/test_metrics_v4.py::test_dropped_cue_counts_its_full_duration PASSED [ 33%]\ntests/test_metrics_v4.py::test_wrong_text_over_real_speech_is_not_a_coverage_miss PASSED [ 35%]\ntests/test_metrics_v4.py::test_no_timestamps_means_zero_not_a_crash PASSED [ 37%]\ntests/test_metrics_v4.py::test_orphan_is_short_and_isolated PASSED       [ 38%]\ntests/test_metrics_v4.py::test_aggregate_weights_by_reference_speech PASSED [ 40%]\ntests/test_metrics_v4.py::test_resolve_db_path_is_repo_anchored_not_cwd PASSED [ 42%]\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache PASSED [ 44%]\ntests/test_service.py::test_transcribe_skips_cache_when_bias_term_added_or_config_changed PASSED [ 45%]\ntests/test_service.py::test_default_store_comes_from_config PASSED       [ 47%]\ntests/test_service.py::test_callers_share_one_db_and_one_bias_index PASSED [ 49%]\ntests/test_service.py::test_glossary_reaches_the_engine_and_skips_cache PASSED [ 50%]\ntests/test_service.py::test_review_flags_rank_by_reasons_and_use_decode_stats PASSED [ 52%]\ntests/test_service.py::test_transcript_reports_uncovered_speech PASSED   [ 54%]\ntests/test_service.py::test_hotwords_channel_ranks_by_weight_and_rejects_bad_value PASSED [ 55%]\ntests/test_service.py::test_transcribe_hashes_file_once_on_uncached_run PASSED [ 57%]\ntests/test_review.py::test_colloquial_particles_do_not_trigger_unfamiliar_thai_fragments PASSED [ 59%]\ntests/test_review.py::test_multicue_high_compression_segment_does_not_blanket_flag_nonrepetitive_cues PASSED [ 61%]\ntests/test_review.py::test_suspicion_reasons_uses_provided_words_without_retokenizing PASSED [ 62%]\ntests/test_coverage_guard.py::test_find_gaps_reports_uncovered_speech_only PASSED [ 64%]\ntests/test_coverage_guard.py::test_short_uncovered_speech_is_not_a_gap PASSED [ 66%]\ntests/test_coverage_guard.py::test_orphan_next_to_gap PASSED             [ 67%]\ntests/test_coverage_guard.py::test_fill_gaps_keeps_only_tokens_inside_gap_and_never_invents PASSED [ 69%]\ntests/test_coverage_guard.py::test_pipeline_refills_a_gap_when_guard_enabled PASSED [ 71%]\ntests/test_coverage_guard.py::test_coverage_guard_keeps_engine_a_resident_without_reloading PASSED [ 72%]\ntests/test_coverage_guard.py::test_coverage_guard_resident_unloads_on_pipeline_error PASSED [ 74%]\ntests/test_coverage_guard.py::test_coverage_guard_unloads_before_second_model_when_dual_engine PASSED [ 76%]\ntests/test_qwen3_asr.py::test_registered PASSED                          [ 77%]\ntests/test_qwen3_asr.py::test_transcribe_maps_text_confidence_none_real_timestamps PASSED [ 79%]\ntests/test_qwen3_asr.py::test_transcribe_multi_span_gets_real_per_span_timestamps PASSED [ 81%]\ntests/test_qwen3_asr.py::test_long_span_is_capped_at_max_span_s PASSED   [ 83%]\ntests/test_qwen3_asr.py::test_max_span_s_is_configurable PASSED          [ 84%]\ntests/test_qwen3_asr.py::test_empty_text_yields_no_tokens PASSED         [ 86%]\ntests/test_qwen3_asr.py::test_language_hint_maps_iso_code_to_full_name PASSED [ 88%]\ntests/test_qwen3_asr.py::test_transcribe_batch_maps_each_input_in_order PASSED [ 89%]\ntests/test_qwen3_asr.py::test_transcribe_batch_empty_input_yields_empty_output PASSED [ 91%]\ntests/test_qwen3_asr.py::test_audio_passed_as_array_sample_rate_tuple_when_no_path PASSED [ 93%]\ntests/test_qwen3_asr.py::test_audio_path_reused_verbatim_when_given PASSED [ 94%]\ntests/test_qwen3_asr.py::test_bias_terms_packed_into_context_slot PASSED [ 96%]\ntests/test_qwen3_asr.py::test_no_bias_terms_yields_empty_context PASSED  [ 98%]\ntests/test_qwen3_asr.py::test_unload_clears_model_without_error PASSED   [100%]\n\n============================== warnings summary ===============================\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:16: DeprecationWarning: aifc was removed in Python 3.13. Please be aware that you are currently NOT using standard 'aifc', but instead a separately installed 'standard-aifc'.\n    import aifc\n\ntests/test_service.py::test_transcribe_returns_job_id_and_reuses_cache\n  C:\\Users\\thana\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\audioread\\rawread.py:19: DeprecationWarning: sunau was removed in Python 3.13. Please be aware that you are currently NOT using standard 'sunau', but instead a separately installed 'standard-sunau'.\n    import sunau\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n======================= 59 passed, 2 warnings in 19.17s =======================\n",
+      "at": 1792481508.7189531,
+      "seconds": 21.478,
+      "inputs_hash": "1e84bf4f4bd78d2ecd15daa8373454d948c233f80e1a1cce5b0923e3bdb75f1e"
+    }
+  ]
+}
