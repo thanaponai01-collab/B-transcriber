@@ -30,8 +30,7 @@ are refused. Requirement: clubfriday/README.md; checks: tests/test_clubfriday.py
   native editing, separate shared services, and refuse changed source audio before edits.
   Acceptance: verification/rough-cut-retirement.md.
 - Real GPU accuracy, Premiere insertion and browser interactions need separate proof.
-- SYSTEM_SPEC.md has historical engine/status/count notes; use current config and
-  CLAUDE.md for active engine decisions. This pass does not rewrite historical specs.
+- SYSTEM_SPEC.md was synchronized (2026-10-20, issue #76) with active engine statuses, service.py, coverage.py, review.py, and METRICS_VERSION=4.
 
 Read [features](FEATURES.md) for area paths and [work](BUILD.md) for Next.
 

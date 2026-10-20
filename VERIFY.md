@@ -23,7 +23,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: broke the silence-gap comparison in cues/split.py (gap_ms x1000), test_cues_* went red, reverted
 
 ## Audio ingest
-- test: `python -m pytest tests/test_audio_decode.py tests/test_audio_windows.py tests/test_denoise_inmemory.py tests/test_phase3_ingest.py tests/test_stitch_fuzzy_seam_text.py tests/test_stitch_seam_window.py tests/test_stitch_subword_coincidence.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_audio_decode.py tests/test_audio_windows.py tests/test_denoise_inmemory.py tests/test_phase3_ingest.py tests/test_stitch_fuzzy_seam_text.py tests/test_stitch_seam_window.py tests/test_stitch_subword_coincidence.py tests/test_audio_windows_speech_spans.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: disabled the zero-gap span merge in audio/windows.py, test_audio_windows/test_phase3_ingest went red, reverted
 
@@ -33,7 +33,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: no-op'd _release() in engines/base.py unload(), test_engine_base_unload went red; also removed gc.collect() and the empty_cache() call, and forced the CUDA check on, test_engine_unload_order went red on each (gc.collect() and empty_cache() removal had stayed green before), reverted
 
 ## Reconcile and pipeline
-- test: `python -m pytest tests/test_console_safe_print.py tests/test_export_job_layout.py tests/test_improvements_202607.py tests/test_job_resumability.py tests/test_engine_safety_resume_identity.py tests/test_phase1_robustness.py tests/test_phase2_config.py tests/test_phase3_llm_reconcile.py tests/test_pipeline_plan.py tests/test_pipeline_refine.py tests/test_pipeline_run_config_fallbacks.py tests/test_smoke.py tests/test_thai_atoms.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_console_safe_print.py tests/test_export_job_layout.py tests/test_improvements_202607.py tests/test_job_resumability.py tests/test_engine_safety_resume_identity.py tests/test_phase1_robustness.py tests/test_phase2_config.py tests/test_phase3_llm_reconcile.py tests/test_pipeline_plan.py tests/test_pipeline_refine.py tests/test_pipeline_run_config_fallbacks.py tests/test_smoke.py tests/test_thai_atoms.py tests/test_coverage_guard.py tests/test_review.py tests/test_service.py tests/test_system_spec_sync.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: narrowed the candidate set in reconcile.py to engine A only, test_smoke went red, reverted
 
@@ -43,7 +43,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: swapped first/last edge token in thai/lint.py, test_thai_lint went red, reverted
 
 ## Eval harness and gate
-- test: `python -m pytest tests/test_eval_aggregation.py tests/test_eval_baseline_partitioning.py tests/test_eval_gate.py tests/test_eval_paired.py tests/test_eval_run_schema_migration.py tests/test_metrics_v2.py tests/test_metrics_v3.py tests/test_passage_review.py tests/test_phase6_evalperf.py tests/test_phase7_makegold.py tests/test_phase_a_ci.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_eval_aggregation.py tests/test_eval_baseline_partitioning.py tests/test_eval_gate.py tests/test_eval_paired.py tests/test_eval_run_schema_migration.py tests/test_metrics_v2.py tests/test_metrics_v3.py tests/test_metrics_v4.py tests/test_passage_review.py tests/test_phase6_evalperf.py tests/test_phase7_makegold.py tests/test_phase_a_ci.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: made the gate skip the regression test in eval/gate.py, test_eval_gate went red, reverted
 
