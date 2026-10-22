@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CutDeck Text Probe</title>
+<style>
+	body { background: #232323; color: #ddd; font: 12px sans-serif; margin: 8px; }
+	button { margin: 2px 0; }
+	.prop { border-top: 1px solid #444; padding: 6px 0; }
+	pre { white-space: pre-wrap; word-break: break-all; background: #1a1a1a; padding: 4px; margin: 4px 0; }
+	input { width: 70%; }
+</style>
+</head>
+<body>
+<p>Select one or more Graphic / MOGRT clips in the timeline, then Read.</p>
+<button id="read">Read selected</button>
+<div id="out"></div>
+<script>
+// Same call CSInterface.evalScript makes (CSInterface.js shipped with installed CEP panels).
+function evalHost(script) {
+	return new Promise(function (resolve) { window.__adobe_cep__.evalScript(script, resolve); });
+}
+
+// An ExtendScript string literal with every non-ASCII char escaped, so Thai survives the bridge.
+function esString(s) {
+	return '"' + s.replace(/[\\"]/g, '\\$&').replace(/[^\x20-\x7e]/g, function (ch) {
+		return '\\u' + ('0000' + ch.charCodeAt(0).toString(16)).slice(-4);
+	}) + '"';
+}
+
+// The value to write: Source Text JSON gets a new textEditValue; a plain string is replaced whole.
+function newValue(raw, text) {
+	var doc;
+	try { doc = JSON.parse(raw); } catch (e) { return text; }
+	if (!doc || typeof doc.textEditValue !== 'string') return text;
+	doc.textEditValue = text;
+	// One run covers the whole string, so its length must follow the text.
+	if (Array.isArray(doc.fontTextRunLength) && doc.fontTextRunLength.length === 1) doc.fontTextRunLength = [text.length];
+	return JSON.stringify(doc);
+}
+
+function textProps(item) {
+	var found = [];
+	item.components.forEach(function (comp) {
+		comp.props.forEach(function (p) {
+			if (p.name === 'Source Text') found.push({ comp: comp.index, label: comp.name, p: p });
+		});
+	});
+	if (item.mgt) item.mgt.props.forEach(function (p) {
+		if (p.type === 'string') found.push({ comp: -1, label: 'MOGRT ' + item.mgt.name, p: p });
+	});
+	return found;
+}
+
+function el(tag, text) { var e = document.createElement(tag); if (text !== undefined) e.textContent = text; return e; }
+
+async function read() {
+	var out = document.getElementById('out');
+	out.textContent = '';
+	var res = JSON.parse(await evalHost('tp_read()'));
+	console.log('tp_read', res);
+	if (!res.ok) { out.appendChild(el('pre', 'Error: ' + res.error)); return; }
+	if (!res.items.length) { out.appendChild(el('p', 'Nothing selected.')); return; }
+	res.items.forEach(function (item) {
+		out.appendChild(el('h4', item.name + (item.isMGT ? ' (MOGRT)' : '')));
+		var props = textProps(item);
+		if (!props.length) out.appendChild(el('p', 'No Source Text or string MOGRT property found.'));
+		props.forEach(function (t) {
+			var box = el('div'); box.className = 'prop';
+			box.appendChild(el('div', t.label + ' [' + t.comp + '] > ' + t.p.name + ' [' + t.p.index + '] : ' + t.p.type));
+			// Escaped, so a binary value shows its bytes instead of rendering as one odd glyph.
+			box.appendChild(el('pre', t.p.error ? 'getValue error: ' + t.p.error
+				: 'length ' + t.p.value.length + ' codes ' + Array.from(t.p.value.slice(0, 64), function (ch) {
+					return ch.charCodeAt(0).toString(16);
+				}).join(' ') + '\n' + JSON.stringify(t.p.value)));
+			var input = el('input'); input.value = 'ทดสอบข้อความภาษาไทย';
+			var btn = el('button', 'Write');
+			var result = el('pre');
+			btn.onclick = async function () {
+				var v = newValue(t.p.value, input.value);
+				var w = JSON.parse(await evalHost('tp_write(' + item.index + ',' + t.comp + ',' + t.p.index + ',' + esString(v) + ')'));
+				console.log('tp_write', w);
+				result.textContent = w.ok ? 'setValue returned: ' + w.result + '\nafter:\n' + w.after : 'Error: ' + w.error;
+			};
+			box.appendChild(input); box.appendChild(btn); box.appendChild(result);
+			out.appendChild(box);
+		});
+	});
+}
+
+document.getElementById('read').onclick = read;
+</script>
+</body>
+</html>
