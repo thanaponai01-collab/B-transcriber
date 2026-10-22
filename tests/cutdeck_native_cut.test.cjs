@@ -84,6 +84,12 @@ test("refuses before any edit: a transition a cut lands inside", async () => {
   assert.equal(h.transactions, 0);
 });
 
+test("a null entry in a track's transition list is skipped, not a crash", async () => {
+  const h = fakeHost(golden.before, { transitions: [{ kind: "video", track: 0, null: true }] });
+  const r = await applyNativeCut(h.ppro, h.project, h.source, golden, "Null transition");
+  assert.equal(r.cuts, golden.cuts_frames.length);
+});
+
 test("findUncuttable names what a cut inside In/Out would refuse, and edits nothing", async () => {
   const h = fakeHost(golden.before, {
     speedOf: (r) => (r.kind === "video" && r.track === 1 ? 2 : 1),

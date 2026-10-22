@@ -51,7 +51,8 @@ async function readItems(ppro, seq, cuts) {
   for (const [kind, count, get] of [["video", s.videoTracks, (i) => seq.getVideoTrack(i)], ["audio", s.audioTracks, (i) => seq.getAudioTrack(i)]]) {
     for (let t = 0; t < count; t++) {
       const track = await get(t);
-      const found = track ? (await track.getTrackItems(type, false)) || [] : [];
+      // Null entries come back here as they do for clips (host/trackItems.js); a null has no position.
+      const found = track ? ((await track.getTrackItems(type, false)) || []).filter((x) => x != null) : [];
       if (!found.length) continue;
       const trackTransitions = await Promise.all(found.map(async (x) => {
         const [startTick, endTick] = await Promise.all([x.getStartTime(), x.getEndTime()]);

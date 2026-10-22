@@ -110,6 +110,7 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | `isAdjustmentLayer()` | WORKS | Exists on **track items only**, not on `ProjectItem`. | HANDOFF_CUTDECK_AL_FX_NEXT |
 | `getTrackItems(TrackItemType.CLIP, false)` | WORKS | Pass `Constants.TrackItemType.CLIP` from runtime `ppro.Constants`, never a literal. | `host/trackItems.js` |
 | `getSpeed/isSpeedReversed/getType` | UNPROBED | Used as refusal gates in the cut planner. | `nativeCut.js` |
+| `getTrackItems(...)` null entries | CATCH | The list can contain `null` items, for CLIP (2026-09-24) and for TRANSITION (2026-10-22, crashed the native rough cut at `getStartTime`). Filter them out before you use the list. | `host/trackItems.js`, `timeline/nativeCut.js` readItems |
 | `AudioClipTrackItem.isDisabled()` | WORKS | Reads each clip's own state: on sequence "test" (6 audio tracks, the same recording on A1–A4) A1's clip read enabled and the clips on A2–A6 read disabled, so Rough Cut's JSON read analysed A1 only. A failed read would count as "on". | Rough Cut job e8b96443 `source.xml`, live 2026-09-24 |
 | `AudioTrack.isMuted()` | OPEN | Called live without error; all 6 tracks of "test" read not-muted, which is also what a failed read defaults to, so a muted track still has to be tried. With no Reference Audio chosen, the first un-muted track with clips is analysed (the XML route used the export's track `<enabled>`). | Rough Cut job e8b96443, live 2026-09-24 |
 
