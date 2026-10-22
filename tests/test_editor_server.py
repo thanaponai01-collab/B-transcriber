@@ -35,7 +35,7 @@ def client(monkeypatch):
 
 @pytest.mark.parametrize("fmt", ["srt", "vtt"])
 def test_export_unknown_job_is_404(client, fmt):
-    assert client.get(f"/jobs/999999/export/{fmt}").status_code == 404
+    assert client.get(f"/jobs/999999/export/{fmt}?fps=25").status_code == 404
 
 
 @pytest.mark.parametrize("fps", ["-5", "0", "nan", "inf"])
@@ -50,5 +50,10 @@ def test_export_valid_job_still_works(client):
 
 def test_empty_correction_does_not_export_a_blank_cue(client):
     client.post(f"/jobs/{client.job_id}/save", json={"tokens": [{"idx": 0, "text": ""}]})
-    r = client.get(f"/jobs/{client.job_id}/export/srt")
+    r = client.get(f"/jobs/{client.job_id}/export/srt?fps=25")
     assert r.status_code == 200 and "-->" not in r.text
+
+
+@pytest.mark.parametrize("query", ["", "?fps=12.5"])
+def test_srt_export_needs_a_known_frame_rate(client, query):
+    assert client.get(f"/jobs/{client.job_id}/export/srt{query}").status_code == 422

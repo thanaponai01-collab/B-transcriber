@@ -18,9 +18,10 @@ Each feature lists the commands that prove it. A check passes when its command e
 Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-09-28): 1036 pytest passed / 8 skipped, 558 node passed.
 
 ## Cue segmentation and subtitles
-- test: `python -m pytest tests/test_align_srt.py tests/test_compare_subtitles.py tests/test_cue_conform.py tests/test_cues_grouping.py tests/test_cues_policy_config.py tests/test_cues_short_tail.py tests/test_cues_space_break.py tests/test_cues_split_dp.py tests/test_subtitle_layout.py tests/test_subtitles.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_align_srt.py tests/test_compare_subtitles.py tests/test_cue_conform.py tests/test_cues_grouping.py tests/test_cues_policy_config.py tests/test_cues_short_tail.py tests/test_cues_space_break.py tests/test_cues_split_dp.py tests/test_subtitle_layout.py tests/test_subtitles.py tests/test_srt_roundtrip.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: broke the silence-gap comparison in cues/split.py (gap_ms x1000), test_cues_* went red, reverted
+- fail-proof (2026-10-22, frame-exact SRT): in subtitles.frame_cues, wrote the nearest ms instead of the floor, dropped the one-frame minimum, dropped the sub-frame gap close, and dropped the overlap guard; test_subtitles went red on each, reverted
 
 ## Audio ingest
 - test: `python -m pytest tests/test_audio_decode.py tests/test_audio_windows.py tests/test_denoise_inmemory.py tests/test_phase3_ingest.py tests/test_stitch_fuzzy_seam_text.py tests/test_stitch_seam_window.py tests/test_stitch_subword_coincidence.py tests/test_audio_windows_speech_spans.py -q -p no:cacheprovider`
@@ -86,6 +87,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 
 ## Blind spots
 - ClubFriday: the browser page (clubfriday/static/app.js) has no automated check, and nothing here transcribes a real range or imports the SRT into live Premiere; the backend runs against a fake helper and extractor.
+- SRT placement in live Premiere is manual: `python -m tools.srt_roundtrip make DIR --fps N`, drag the file onto a test sequence (Subtitle, Source timecode), then `python -m tools.srt_roundtrip check FILE.srt` reads the captions back through the panel's Caption Timing probe.
 - No real run of the pipeline: nothing here transcribes real audio on GPU. `transcribe.pipeline.run` on a real file and `transcribe.eval.harness` on the gold set are manual.
 - CutDeck panel checks run against `tests/fakes/premiere.cjs`, not live Premiere; real-host behaviour is only in docs/PREMIERE_FACTS.md.
 - Panel fail-proof includes the historical cases above and the Rough Cut source guard

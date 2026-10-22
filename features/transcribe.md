@@ -28,7 +28,7 @@
 
 ## Export a job to SRT/VTT
 - what: Write a job's tokens (with corrections applied) to SRT or VTT next to the media.
-- cli: `python scripts/export_job.py <job_id> [--vtt] [--fps N]` @ scripts/export_job.py
+- cli: `python scripts/export_job.py <job_id> --fps N [--vtt]` @ scripts/export_job.py (`--fps` required: cues snap to that sequence's frames; the editor's SRT button needs its fps field too)
 - trace: `main` > `write_subtitles` @ transcribe/subtitles/__init__.py
 - verify: Reconcile and pipeline; covered by tests/test_export_job_layout.py
 
@@ -58,7 +58,12 @@
 - cli: `tools.make_gold` (draft, from-srt, freeze); `tools.make_finetune_set` (from-srt, from-corrections, stats)
 - verify: Eval harness and gate / Correction flywheel; proven by --help
 
+## SRT round trip in Premiere
+- what: Write frame-rate stress SRTs, then read the placed captions back from Premiere and compare frame by frame.
+- cli: `python -m tools.srt_roundtrip` (make, check) @ tools/srt_roundtrip.py
+- verify: tests/test_srt_roundtrip.py (comparison logic); the live run is manual
+
 ## Subtitle layout profile
 - what: Learn personal line-break layout profile from corrected SRTs and apply to new SRTs.
-- cli: `python -m tools.subtitle_layout` (learn, apply) @ tools/subtitle_layout.py
+- cli: `python -m tools.subtitle_layout` (learn, apply --fps N) @ tools/subtitle_layout.py
 - verify: Thai cue legality lint; proven by --help

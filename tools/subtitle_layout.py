@@ -1,7 +1,7 @@
 """Fit a personal layout profile or apply it without changing cue timing.
 
 python -m tools.subtitle_layout learn corrected1.srt corrected2.srt --output style.json
-python -m tools.subtitle_layout apply source.srt --profile style.json --output laid-out.srt
+python -m tools.subtitle_layout apply source.srt --profile style.json --output laid-out.srt --fps 25
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ def main():
     apply.add_argument('source', type=Path)
     apply.add_argument('--profile', required=True, type=Path)
     apply.add_argument('--output', required=True, type=Path)
+    apply.add_argument('--fps', required=True, type=float, help='target sequence frame rate')
     args = parser.parse_args()
     if args.command == 'learn':
         references = [p.read_text(encoding='utf-8-sig') for p in args.references]
@@ -40,7 +41,7 @@ def main():
         profile = LayoutProfile(**json.loads(args.profile.read_text(encoding='utf-8'))['profile'])
         cues = read_subtitles(args.source.read_text(encoding='utf-8-sig'), preserve_line_breaks=True)
         result = layout_cues(cues, profile)
-        args.output.write_text(write_subtitles(result, 'srt'), encoding='utf-8')
+        args.output.write_text(write_subtitles(result, 'srt', fps=args.fps), encoding='utf-8')
         print(f'{len(result)} cues; {sum(chr(10) in c["text"] for c in result)} multiline; timings preserved')
 
 

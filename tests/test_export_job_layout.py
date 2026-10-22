@@ -25,7 +25,7 @@ def test_export_layout_uses_saved_corrections_and_keeps_timing(tmp_path, monkeyp
     profile = tmp_path / 'profile.json'
     profile.write_text(json.dumps({'profile': {'target_line_chars': 12, 'wrap_threshold_chars': 15}}))
     monkeypatch.setattr(sys, 'argv', ['export_job', str(job), '--db', str(db),
-                        '--out-dir', str(tmp_path / 'export'), '--layout-profile', str(profile), '--vtt'])
+                        '--out-dir', str(tmp_path / 'export'), '--layout-profile', str(profile), '--vtt', '--fps', '25'])
     export_job.main()
     for ext in ('srt', 'vtt'):
         parsed = read_subtitles((tmp_path / 'export' / f'source.{ext}').read_text(encoding='utf-8'),
@@ -33,3 +33,11 @@ def test_export_layout_uses_saved_corrections_and_keeps_timing(tmp_path, monkeyp
         assert parsed[0]['text'].replace('\n', '') == 'ลูกต้องการการดูแลจากเราอยู่'
         assert '\n' in parsed[0]['text']
         assert (parsed[0]['start_ms'], parsed[0]['end_ms']) == (1000, 3000)
+
+
+def test_export_refuses_srt_without_a_frame_rate(monkeypatch):
+    monkeypatch.setattr(sys, 'argv', ['export_job', '1'])
+    import pytest
+    with pytest.raises(SystemExit) as exc:
+        export_job.main()
+    assert exc.value.code == 2  # argparse: --fps is required

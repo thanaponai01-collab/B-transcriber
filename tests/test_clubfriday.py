@@ -1,11 +1,15 @@
 """ClubFriday backend: quote SRT rules and the session flow, with a fake helper and extractor."""
 import time
 from types import SimpleNamespace
+from urllib.parse import unquote
 
 import pytest
 from fastapi.testclient import TestClient
 
 import clubfriday.server as server
+from transcribe.timebase import Timebase
+
+PAL = Timebase(25, 1)
 
 
 def q(start, end, *lines):
@@ -13,9 +17,10 @@ def q(start, end, *lines):
 
 
 def test_quotes_srt_orders_by_start_and_formats_stamps():
-    out = server.quotes_srt([q(3_661_005, 3_662_000, "b"), q(0, 1500, "a1", "a2")])
-    assert out == ("1\n00:00:00,000 --> 00:00:01,500\na1\na2\n\n"
-                   "2\n01:01:01,005 --> 01:01:02,000\nb\n\n")
+    out = server.quotes_srt([q(3_661_005, 3_662_000, "b"), q(0, 1500, "a1", "a2")], PAL)
+    # snapped to 25 fps frames: 1500 ms is frame 37.5 -> 38 = 1520 ms
+    assert out == ("1\n00:00:00,000 --> 00:00:01,520\na1\na2\n\n"
+                   "2\n01:01:01,000 --> 01:01:02,000\nb\n\n")
 
 
 @pytest.mark.parametrize("quotes", [
@@ -28,7 +33,7 @@ def test_quotes_srt_orders_by_start_and_formats_stamps():
 ])
 def test_quotes_srt_rejects_bad_input(quotes):
     with pytest.raises(ValueError):
-        server.quotes_srt(quotes)
+        server.quotes_srt(quotes, PAL)
 
 
 CUES = [{"text": "หนึ่ง", "start_ms": 0, "end_ms": 1000},
@@ -65,7 +70,7 @@ def fake_extractor(snapshot, path, track):
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    fake_sequence = SimpleNamespace(tracks=[object()], ticks_per_frame=254016000000 // 25)
+    fake_sequence = SimpleNamespace(tracks=[object()], ticks_per_frame=254016000000 // 25, timebase=PAL)
     monkeypatch.setattr(server, "from_panel_json", lambda _: fake_sequence)
     monkeypatch.setattr(server, "range_from_ticks", lambda seq, ctx: (25, 75))
     project = tmp_path / "proj" / "p.prproj"
@@ -122,6 +127,16 @@ def test_exports_write_bom_crlf_srt_beside_the_project(client, tmp_path):
     assert text.count("-->") == 3
 
 
+def test_exports_snap_to_the_sequence_frame_rate(client, monkeypatch):
+    sid = ready_session(client)["id"]
+    ntsc = SimpleNamespace(tracks=[object()], timebase=Timebase(30000, 1001))
+    monkeypatch.setattr(server, "from_panel_json", lambda _: ntsc)
+    path = unquote(client.get(f"/api/sessions/{sid}/transcript.srt").headers["X-ClubFriday-Export-Path"])
+    text = open(path, encoding="utf-8-sig").read()
+    # 10 000 ms is frame 299.7 at 29.97 -> frame 300 = 10 010 ms
+    assert "00:00:10,010 --> 00:00:11,011" in text
+
+
 def test_exports_wait_for_ready_and_quotes(client):
     sid = ready_session(client)["id"]
     assert client.get(f"/api/sessions/{sid}/quotes.srt").status_code == 400  # no quotes chosen yet
@@ -169,7 +184,7 @@ def test_quote_edit_becomes_correction_in_shared_store(tmp_path, monkeypatch):
             return {"state": "succeeded", "transcript_job_id": job_id, "next_offset": None,
                     "cues": [{**c, "idx": i} for i, c in enumerate(CUES)]}
 
-    fake_sequence = SimpleNamespace(tracks=[object()], ticks_per_frame=254016000000 // 25)
+    fake_sequence = SimpleNamespace(tracks=[object()], ticks_per_frame=254016000000 // 25, timebase=PAL)
     monkeypatch.setattr(server, "from_panel_json", lambda _: fake_sequence)
     monkeypatch.setattr(server, "range_from_ticks", lambda seq, ctx: (25, 75))
     project = tmp_path / "proj" / "p.prproj"

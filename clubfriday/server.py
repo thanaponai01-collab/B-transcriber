@@ -28,11 +28,14 @@ from cutdeck.helper import range_from_ticks
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 from transcribe.db import store
 from transcribe.flywheel import diff as flywheel_diff
+from transcribe.subtitles import frame_cues
+from transcribe.timebase import Timebase
 
 HERE = Path(__file__).parent
 
 
-def quotes_srt(quotes: list[dict]) -> str:
+def quotes_srt(quotes: list[dict], tb: Timebase) -> str:
+    """SRT for the sequence the range came from, snapped to its frames (frame_cues)."""
     if not quotes:
         raise ValueError("Select at least one quote before exporting")
 
@@ -42,16 +45,18 @@ def quotes_srt(quotes: list[dict]) -> str:
         seconds, millis = divmod(rest, 1000)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
-    blocks, previous_end = [], 0
-    for index, quote in enumerate(sorted(quotes, key=lambda q: q["start_ms"]), 1):
+    quotes = sorted(quotes, key=lambda q: q["start_ms"])
+    previous_end = 0
+    for quote in quotes:
         start, end = quote["start_ms"], quote["end_ms"]
         if start < previous_end or end <= start:
             raise ValueError("Quotes overlap or have invalid timing; remove duplicate or overlapping selections")
         lines = quote["lines"]
         if not 1 <= len(lines) <= 3 or any(not line.strip() or "\n" in line or "\r" in line for line in lines):
             raise ValueError("Use one to three non-empty lines for each exported quote")
-        blocks.append(f"{index}\n{stamp(start)} --> {stamp(end)}\n" + "\n".join(lines))
         previous_end = end
+    blocks = [f"{index}\n{stamp(q['start_ms'])} --> {stamp(q['end_ms'])}\n" + "\n".join(q["lines"])
+              for index, q in enumerate(frame_cues(quotes, tb), 1)]
     return "\n\n".join(blocks) + "\n\n"
 
 
@@ -137,6 +142,11 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
 
     def save(session: dict):
         write_json(folder(session["id"]) / "session.json", session)
+
+    def sequence_timebase(session_id: str) -> Timebase:
+        """Frame rate of the sequence the range was read from, saved at session start."""
+        snapshot = json.loads((folder(session_id) / "snapshot.json").read_text(encoding="utf-8"))
+        return from_panel_json(snapshot["sequence"]).timebase
 
     async def export_path(session: dict, kind: str) -> Path:
         context = session["context"]
@@ -333,7 +343,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             if session["state"] != "ready":
                 raise HTTPException(409, "Wait for transcription before exporting")
             try:
-                contents = quotes_srt(session["quotes"])
+                contents = quotes_srt(session["quotes"], sequence_timebase(session_id))
             except ValueError as exc:
                 raise HTTPException(400, str(exc))
             path = await export_path(session, "quotes")
@@ -350,7 +360,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
                 raise HTTPException(409, "Wait for transcription before exporting")
             try:
                 contents = quotes_srt([{**cue, "lines": cue["text"].splitlines()}
-                                      for cue in session["cues"]])
+                                      for cue in session["cues"]], sequence_timebase(session_id))
             except ValueError as exc:
                 raise HTTPException(400, str(exc))
             path = await export_path(session, "transcript")

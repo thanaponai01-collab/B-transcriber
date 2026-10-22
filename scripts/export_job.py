@@ -1,9 +1,9 @@
 """Export a job's tokens to SRT (default) next to the source media.
 
 Usage:
-    python scripts/export_job.py <job_id> [<name>] [--db transcriber.db]
-    python scripts/export_job.py <job_id> --vtt          # also emit .vtt
-    python scripts/export_job.py <job_id> --out-dir DIR  # override destination
+    python scripts/export_job.py <job_id> [<name>] --fps 25 [--db transcriber.db]
+    python scripts/export_job.py <job_id> --fps 25 --vtt          # also emit .vtt
+    python scripts/export_job.py <job_id> --fps 25 --out-dir DIR  # override destination
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ def main() -> None:
     parser.add_argument("job_id", type=int)
     parser.add_argument("name", nargs="?", default=None, help="output filename stem (default: derived from source media)")
     parser.add_argument("--db", default=str(ROOT / "transcriber.db"))
-    parser.add_argument("--fps", type=float, default=None,
+    parser.add_argument("--fps", type=float, required=True,
                          help="target sequence frame rate (e.g. 23.976, 25, 29.97); "
-                              "quantizes cue boundaries to frame ticks so Premiere import "
-                              "doesn't re-round them. Varies per clip, so pass it explicitly.")
+                              "snaps cues to that sequence's frames so Premiere shows exactly "
+                              "the file's timing. Varies per project, so pass it explicitly.")
     parser.add_argument("--out-dir", default=None, help="destination directory (default: source media's directory)")
     parser.add_argument("--vtt", action="store_true", help="also export .vtt alongside .srt")
     parser.add_argument("--layout-profile", type=Path, help="personal display profile; keeps cue timings")
@@ -60,7 +60,7 @@ def main() -> None:
         rows = layout_cues(rows, profile)
     srt_path = out_dir / f"{stem}.srt"
     srt_path.write_text(write_subtitles(rows, "srt", fps=args.fps), encoding="utf-8")
-    suffix = f" (quantized to {args.fps} fps)" if args.fps else ""
+    suffix = f" (snapped to {args.fps} fps frames)"
 
     # safe_print: both `out_dir` (the source media's folder) and `stem` (derived
     # from the media filename) are Thai on every real job here, and the .srt is

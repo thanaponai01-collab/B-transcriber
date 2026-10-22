@@ -1,6 +1,5 @@
 """Acceptance tests for transcribe/subtitles/ — the shared SRT/VTT read+write
-module (issue #7). Covers frame-rate quantization (moved from
-test_fps_quantize.py), SRT parsing (moved from test_phase7_makegold.py's
+module (issue #7). Covers frame-exact cue snapping, SRT parsing (moved from test_phase7_makegold.py's
 srt-parsing assertions), and the write->read round trip this module makes
 newly expressible.
 
@@ -12,72 +11,95 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from transcribe.subtitles import _quantize_ms, _quantize_tokens, read_subtitles, write_subtitles
+import math
+from fractions import Fraction
+
+import pytest
+
+from transcribe.subtitles import frame_cues, read_subtitles, write_subtitles
+from transcribe.timebase import Timebase, frame_to_ms
 
 
-# ── frame-rate quantization (moved from test_fps_quantize.py) ─────────────────
+# ── frame-exact cues ──────────────────────────────────────────────────────────
+# Premiere snaps each SRT time to a frame of the sequence. Every boundary we
+# write must already name one frame, whichever way Premiere rounds, so what we
+# wrote is what the timeline shows.
 
-def test_quantize_ms_snaps_to_frame_boundary():
-    fps = 25.0  # frame_ms = 40
-    assert _quantize_ms(0, fps) == 0
-    assert _quantize_ms(39, fps) == 40
-    assert _quantize_ms(21, fps) == 40
-    assert _quantize_ms(19, fps) == 0
-
-
-def test_quantize_ms_handles_ntsc_drop_frame_rate():
-    fps = 29.97
-    frame_ms = 1000.0 / fps
-    # The quantized ms (an int) can't be an exact multiple of the
-    # irrational-ish frame_ms, but it must land on the *same* frame index
-    # as the pre-quantized value — that's the actual invariant Premiere cares
-    # about (which frame the cue boundary snaps to).
-    ms = 12345
-    q = _quantize_ms(ms, fps)
-    assert round(q / frame_ms) == round(ms / frame_ms)
+RATES = [Timebase(25, 1), Timebase(50, 1), Timebase(24000, 1001),
+         Timebase(30000, 1001), Timebase(60000, 1001)]
 
 
-def test_quantize_tokens_never_collapses_a_cue():
-    # A very short cue whose start/end round to the same frame must not
-    # become zero-duration — that would make it invisible/unselectable
-    # in Premiere.
-    toks = [{"text": "x", "start_ms": 100, "end_ms": 105}]
-    out = _quantize_tokens(toks, fps=25.0)
-    assert out[0]["end_ms"] > out[0]["start_ms"]
+def _frame_of(ms: int, tb: Timebase, rounding) -> int:
+    return rounding(Fraction(ms * tb.fps_num, tb.fps_den * 1000))
 
 
-def test_quantize_ms_matches_old_float_math_frame_index():
-    # Pin: routing _quantize_ms through transcribe.timebase's exact rational
-    # math (issue #12) must land on the same frame index as the old
-    # `1000.0 / fps` float approach, at the standard NTSC decimal rates —
-    # the sizing check in CLAUDE.md puts the drift at ~0.6ms over ten
-    # minutes, comfortably sub-frame, so frame identity should hold exactly
-    # even though the millisecond value itself may shift by ~1ms. Reproduces
-    # the pre-#12 formula inline (not by calling the new code) so this is an
-    # independent oracle, and separately bounds that sub-ms shift directly
-    # rather than only checking frame-index parity.
-    for fps in (23.976, 29.97, 59.94):
-        frame_ms = 1000.0 / fps
-        for ms in (0, 1, 999, 1001, 12345, 999_999):
-            old_ms = round(round(ms / frame_ms) * frame_ms)
-            new_ms = _quantize_ms(ms, fps)
-            assert abs(new_ms - old_ms) <= 2, (fps, ms, old_ms, new_ms)
-            old_frame_index = round(old_ms / frame_ms)
-            new_frame_index = round(new_ms / frame_ms)
-            assert new_frame_index == old_frame_index, (fps, ms)
+@pytest.mark.parametrize("tb", RATES, ids=lambda tb: f"{tb.fps_num}/{tb.fps_den}")
+def test_every_boundary_names_one_frame_under_round_or_ceil(tb):
+    cues = [{"text": "x", "start_ms": ms, "end_ms": ms + 777} for ms in range(0, 600_000, 1_013)]
+    for cue in frame_cues(cues, tb):
+        for ms in (cue["start_ms"], cue["end_ms"]):
+            nearest = _frame_of(ms, tb, round)
+            assert _frame_of(ms, tb, math.ceil) == nearest, (ms, tb)
+            assert frame_to_ms(nearest, tb) - 1 < ms <= frame_to_ms(nearest, tb)
+
+
+def test_frame_cues_snaps_to_nearest_frame():
+    out = frame_cues([{"text": "x", "start_ms": 1019, "end_ms": 2021}], Timebase(25, 1))
+    assert (out[0]["start_ms"], out[0]["end_ms"]) == (1000, 2040)
+
+
+def test_sub_frame_cue_keeps_one_frame():
+    # Premiere drops a cue shorter than a frame (PREMIERE_FACTS "Sub-frame SRT cue").
+    out = frame_cues([{"text": "x", "start_ms": 75_889, "end_ms": 75_890}], Timebase(30000, 1001))
+    frames = [_frame_of(out[0][k], Timebase(30000, 1001), round) for k in ("start_ms", "end_ms")]
+    assert frames[1] - frames[0] == 1
+
+
+def test_cues_sharing_a_frame_never_overlap():
+    cues = [{"text": "a", "start_ms": 1000, "end_ms": 1010},
+            {"text": "b", "start_ms": 1010, "end_ms": 1015},
+            {"text": "c", "start_ms": 1015, "end_ms": 2000}]
+    out = frame_cues(cues, Timebase(25, 1))
+    assert [(c["start_ms"], c["end_ms"]) for c in out] == [(1000, 1040), (1040, 1080), (1080, 2000)]
+
+
+def test_pushed_cues_never_overlap_a_later_cue_past_a_real_gap():
+    # a and b are each stretched to one frame, so b ends on frame 27; c starts 40 ms
+    # after b's raw end (not a sub-frame gap) yet its nearest frame is 26.
+    cues = [{"text": "a", "start_ms": 1000, "end_ms": 1001},
+            {"text": "b", "start_ms": 1002, "end_ms": 1003},
+            {"text": "c", "start_ms": 1043, "end_ms": 2000}]
+    out = frame_cues(cues, Timebase(25, 1))
+    assert [(c["start_ms"], c["end_ms"]) for c in out] == [(1000, 1040), (1040, 1080), (1080, 2000)]
+
+
+def test_gapless_cues_stay_gapless_on_the_frame():
+    tb = Timebase(30000, 1001)
+    cues = [{"text": str(i), "start_ms": i * 1237, "end_ms": (i + 1) * 1237} for i in range(200)]
+    out = frame_cues(cues, tb)
+    assert all(a["end_ms"] == b["start_ms"] for a, b in zip(out, out[1:]))
+
+
+def test_sub_frame_gap_closes_but_a_real_gap_stays():
+    tb = Timebase(25, 1)
+    cues = [{"text": "a", "start_ms": 0, "end_ms": 1019},      # end -> frame 25
+            {"text": "b", "start_ms": 1044, "end_ms": 2000},   # 25 ms gap -> would be frame 26
+            {"text": "c", "start_ms": 2080, "end_ms": 3000}]   # 2-frame gap is a pause
+    out = frame_cues(cues, tb)
+    assert out[1]["start_ms"] == out[0]["end_ms"] == 1000
+    assert out[2]["start_ms"] - out[1]["end_ms"] == 80
+
+
+def test_write_subtitles_with_fps_writes_frame_exact_stamps():
+    content = write_subtitles([{"text": "hello", "start_ms": 1001, "end_ms": 2003}], "srt", fps=29.97)
+    # frames 30 and 60 at 30000/1001: 1001.0 ms and 2002.0 ms exactly
+    assert "00:00:01,001 --> 00:00:02,002" in content
 
 
 def test_write_subtitles_without_fps_is_unquantized_passthrough():
     tokens = [{"text": "hello", "start_ms": 1001, "end_ms": 2003}]
     content = write_subtitles(tokens, "srt")
     assert "00:00:01,001 --> 00:00:02,003" in content
-
-
-def test_write_subtitles_with_fps_quantizes_boundaries():
-    tokens = [{"text": "hello", "start_ms": 1001, "end_ms": 2003}]
-    content = write_subtitles(tokens, "srt", fps=25.0)
-    # 1001ms -> nearest 40ms tick = 1000ms; 2003ms -> 2000ms
-    assert "00:00:01,000 --> 00:00:02,000" in content
 
 
 def test_write_subtitles_rejects_unknown_format():

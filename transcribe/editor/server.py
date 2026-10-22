@@ -139,7 +139,7 @@ def save_corrections(job_id: int, req: SaveRequest):
 
 
 @app.get("/jobs/{job_id}/export/srt")
-def export_srt_endpoint(job_id: int, fps: float | None = Query(None, gt=0, allow_inf_nan=False)):
+def export_srt_endpoint(job_id: int, fps: float = Query(..., gt=0, allow_inf_nan=False)):
     conn = _conn()
     if store.get_job(conn, job_id) is None:
         conn.close()
@@ -153,7 +153,10 @@ def export_srt_endpoint(job_id: int, fps: float | None = Query(None, gt=0, allow
         text = corrections.get(t.idx, t.text)
         token_dicts.append({"text": text, "start_ms": t.start_ms, "end_ms": t.end_ms})
 
-    content = write_subtitles(token_dicts, "srt", fps=fps)
+    try:
+        content = write_subtitles(token_dicts, "srt", fps=fps)
+    except ValueError as exc:  # a decimal fps that names no known frame rate
+        raise HTTPException(422, str(exc))
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8",
                              headers={"Content-Disposition": f"attachment; filename=job{job_id}.srt"})
 

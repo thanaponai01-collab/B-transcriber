@@ -1,4 +1,4 @@
-/* Read-only probes for two questions PREMIERE_FACTS still lists as unproven.
+/* Read-only probes for questions PREMIERE_FACTS still lists as unproven.
    Adobe API source: reference/adobe/api/premierepro.txt (Sequence.get*Track/get*TrackCount,
    Video/Audio/CaptionTrack.isMuted, Sequence.getSelection, TrackItemSelection.getTrackItems,
    VideoClipTrackItem.getProjectItem).
@@ -12,6 +12,13 @@
       alignTextLayersInGraphic, and readAnchorFrameSize (project-item size, else sequence frame)
       in textLayerShift and textLayerAnchor. They agree unless the Graphic has a project item
       whose size differs from the sequence.
+   3. captionTiming: on which frames did an imported SRT's captions land? Reads every caption
+      item's start/end ticks and the sequence's ticks per frame (Sequence.getTimebase, Sequence.
+      getCaptionTrackCount/getCaptionTrack, CaptionTrack.getTrackItems). getTrackItems is typed
+      as returning [], so caption items' getStartTime/getEndTime come from the clip track items'
+      declaration and the live readback in PREMIERE_FACTS "UI caption placement"; the probe
+      reports the item's members instead of guessing when they are missing.
+      tools/srt_roundtrip.py compares the result with the SRT frame by frame.
 
    Nothing here writes. A failed call is a finding, never a throw. */
 
@@ -164,4 +171,55 @@ function formatTextCanvasReport(report) {
     ...rows, verdict].join("\n");
 }
 
-module.exports = { probeMuteState, formatMuteStateReport, probeTextCanvas, formatTextCanvasReport };
+const ticksOf = (t) => (t && t.ticks !== undefined ? String(t.ticks) : null);
+
+async function readCaptionItems(track, ppro) {
+  const clipType = ppro.Constants && ppro.Constants.TrackItemType ? ppro.Constants.TrackItemType.CLIP : 1;
+  const got = await attempt(() => track.getTrackItems(clipType, false));
+  if (!got.ok) return { error: got.error };
+  const items = [];
+  for (const item of (got.value || []).filter((it) => it != null)) {
+    if (typeof item.getStartTime !== "function" || typeof item.getEndTime !== "function") {
+      return { error: "caption items have no getStartTime/getEndTime", members: Object.getOwnPropertyNames(Object.getPrototypeOf(item) || item) };
+    }
+    const start = await attempt(() => item.getStartTime());
+    const end = await attempt(() => item.getEndTime());
+    if (!start.ok || !end.ok) return { error: start.error || end.error };
+    items.push({ start_ticks: ticksOf(start.value), end_ticks: ticksOf(end.value) });
+  }
+  items.sort((a, b) => (BigInt(a.start_ticks) < BigInt(b.start_ticks) ? -1 : 1));
+  return { items };
+}
+
+async function probeCaptionTiming(ppro) {
+  const found = await activeSequence(ppro);
+  if (found.error) return { probe: "caption-timing", complete: false, error: found.error };
+  const { seq } = found;
+  const tpf = await attempt(() => seq.getTimebase());
+  if (!tpf.ok) return { probe: "caption-timing", complete: false, error: `getTimebase: ${tpf.error}` };
+  const count = await attempt(() => seq.getCaptionTrackCount());
+  if (!count.ok) return { probe: "caption-timing", complete: false, error: count.error };
+  const tracks = [];
+  for (let i = 0; i < count.value; i++) {
+    const track = await attempt(() => seq.getCaptionTrack(i));
+    tracks.push({ index: i, ...(track.ok && track.value ? await readCaptionItems(track.value, ppro) : { error: track.error || "no track" }) });
+  }
+  return { probe: "caption-timing", complete: true, sequence_name: seq.name, ticks_per_frame: String(tpf.value), tracks };
+}
+
+function formatCaptionTimingReport(report) {
+  if (!report.complete) return `Caption timing: ${report.error}.`;
+  if (report.tracks.length === 0) return "Caption timing: this sequence has no caption track. Drag the SRT onto the timeline first.";
+  const tpf = BigInt(report.ticks_per_frame);
+  const lines = report.tracks.map((t) => {
+    if (t.error) return `  C${t.index + 1}: could not read (${t.error})`;
+    if (t.items.length === 0) return `  C${t.index + 1}: no captions`;
+    const first = t.items[0], last = t.items[t.items.length - 1];
+    return `  C${t.index + 1}: ${t.items.length} captions, frames ${BigInt(first.start_ticks) / tpf}-${BigInt(last.end_ticks) / tpf}`;
+  });
+  return ["Caption timing (read-only):", ...lines,
+    "Compare with the SRT: python -m tools.srt_roundtrip <file.srt> --fps <rate>"].join("\n");
+}
+
+module.exports = { probeMuteState, formatMuteStateReport, probeTextCanvas, formatTextCanvasReport,
+  probeCaptionTiming, formatCaptionTimingReport };

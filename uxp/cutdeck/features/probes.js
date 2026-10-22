@@ -107,6 +107,13 @@ const PROBES = [
     format: (report) => layoutProbe().formatTextCanvasReport(report),
     logLabel: "CutDeck text canvas probe",
   },
+  {
+    id: "captiontiming",
+    startText: "Reading where this sequence's captions sit, frame by frame…",
+    run: (ppro) => layoutProbe().probeCaptionTiming(ppro),
+    format: (report) => layoutProbe().formatCaptionTimingReport(report),
+    logLabel: "CutDeck caption timing probe",
+  },
 ];
 
 async function runProbe(probeEntry, ppro, ctl, deps = {}) {

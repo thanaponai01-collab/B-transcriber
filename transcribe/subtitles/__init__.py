@@ -18,10 +18,11 @@ media.fps_num/fps_den back today. See issue #7.
 from __future__ import annotations
 
 import re
+from fractions import Fraction
 from typing import Literal
 
 from transcribe.contracts import detect_script
-from transcribe.timebase import Timebase, frame_to_ms, ms_to_frame
+from transcribe.timebase import Timebase, ms_to_frame
 
 Format = Literal["srt", "vtt"]
 
@@ -39,35 +40,43 @@ def _srt_ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
     return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms)
 
 
-def _quantize_ms(ms: int, fps: float) -> int:
-    """Round a millisecond timestamp to the nearest frame boundary at fps.
+def _frame_start_ms(frame: int, tb: Timebase) -> int:
+    """The whole millisecond at or just before ``frame`` starts (floor, exact math).
 
-    fps is still accepted as a human decimal (this is the CLI/editor-facing
-    boundary) but is converted to an exact (fps_num, fps_den) pair via
-    ``Timebase.from_decimal_fps`` before any arithmetic — no ``1000.0 / fps``
-    float division here. See issue #12.
+    Premiere snaps an SRT time to a frame of the sequence. A stamp up to 1 ms
+    before the frame's exact start names that frame whether Premiere rounds to
+    the nearest frame or up; writing the *nearest* millisecond instead could land
+    just after the start and be pushed to the next frame by rounding up. It
+    fails only if Premiere rounds down, which the live round trip
+    (tools/srt_roundtrip.py) checks.
     """
-    tb = Timebase.from_decimal_fps(fps)
-    return round(frame_to_ms(ms_to_frame(ms, tb), tb))
+    return frame * tb.fps_den * 1000 // tb.fps_num
 
 
-def _quantize_tokens(tokens: list[dict], fps: float) -> list[dict]:
-    """Snap start/end timestamps to frame boundaries.
+def frame_cues(cues: list[dict], tb: Timebase) -> list[dict]:
+    """Snap time-ordered cues to whole frames of the target sequence.
 
-    Editors (e.g. Premiere) round millisecond timecodes to the sequence's
-    own frame boundaries on import; if that rounding happens per-cue at
-    import time instead of once here, cue starts drift off the intended
-    frame, which is what forces the manual recut. Quantizing here makes
-    the boundary the editor will show explicit and reproducible.
+    Premiere does this rounding itself on import, cue by cue, and drops a cue
+    that rounds to zero frames (PREMIERE_FACTS "Sub-frame SRT cue"). Doing it
+    here instead makes the file say exactly what the timeline will show:
+
+    * every boundary is the nearest frame, written as ``_frame_start_ms``
+    * every cue lasts at least one frame
+    * no cue starts before the previous one ends, even when both snap to one frame
+    * a gap shorter than one frame is rounding noise and closes on the frame;
+      a gapless input stays gapless
     """
-    one_frame_ms = round(frame_to_ms(1, Timebase.from_decimal_fps(fps)))
-    out = []
-    for tok in tokens:
-        start = _quantize_ms(tok["start_ms"], fps)
-        end = _quantize_ms(tok["end_ms"], fps)
-        if end <= start:
-            end = start + one_frame_ms
-        out.append({**tok, "start_ms": start, "end_ms": end})
+    frame_ms = Fraction(tb.fps_den * 1000, tb.fps_num)
+    out: list[dict] = []
+    prev_end_ms, prev_end = None, 0
+    for cue in cues:
+        start = ms_to_frame(cue["start_ms"], tb)
+        if prev_end_ms is not None and cue["start_ms"] - prev_end_ms < frame_ms:
+            start = prev_end
+        start = max(start, prev_end)
+        end = max(ms_to_frame(cue["end_ms"], tb), start + 1)
+        out.append({**cue, "start_ms": _frame_start_ms(start, tb), "end_ms": _frame_start_ms(end, tb)})
+        prev_end_ms, prev_end = cue["end_ms"], end
     return out
 
 
@@ -90,24 +99,25 @@ def _ms_to_vtt(ms: int) -> str:
 def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -> str:
     """Format a token list (dicts with text/start_ms/end_ms) as SRT or VTT text.
 
-    fps: if given, quantizes cue boundaries to the target sequence's frame
-    rate before formatting (varies per clip/target sequence, so must be
-    passed per call — see the module docstring and issue #7).
+    fps: if given, snaps cues to the target sequence's frames (``frame_cues``)
+    before formatting. Varies per clip/target sequence, so it is passed per
+    call (module docstring, issue #7); every Premiere-facing export passes it.
 
     Returns the formatted text; writing it to disk is the caller's job.
     """
     _check_format(fmt)
+    # A blank cue is invalid output, and a blank line inside a cue's text would
+    # end the cue early and corrupt the file, so both are dropped/collapsed here.
+    # Blanks go before frame snapping so they never push a real cue.
+    cues = [t for t in tokens if t["text"].strip()]
     if fps:
-        tokens = _quantize_tokens(tokens, fps)
+        cues = frame_cues(cues, Timebase.from_decimal_fps(fps))
 
     ms_to_ts = _ms_to_srt if fmt == "srt" else _ms_to_vtt
 
     lines: list[str] = []
     if fmt == "vtt":
         lines += ["WEBVTT", ""]
-    # A blank cue is invalid output, and a blank line inside a cue's text would
-    # end the cue early and corrupt the file, so both are dropped/collapsed here.
-    cues = [t for t in tokens if t["text"].strip()]
     for i, tok in enumerate(cues, 1):
         if fmt == "srt":
             lines.append(str(i))

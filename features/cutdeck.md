@@ -65,6 +65,7 @@
 - click: `#alcreateprobe` @ uxp/cutdeck/index.html
 - click: `#syncmovesprobe` @ uxp/cutdeck/index.html
 - click: `#nativecutprobe` @ uxp/cutdeck/index.html
+- click: `#captiontimingprobe` @ uxp/cutdeck/index.html (also `python -m cutdeck.premiere_cli run_probe captiontiming`; read by tools/srt_roundtrip.py)
 - trace: `bindTabs` @ uxp/cutdeck/core/panel.js > `onTab` @ uxp/cutdeck/main.js
 - note: `alcreate`, `syncmoves` and `nativecut` probes edit the project (they say so in their tooltips); the others are read-only
 - verify: CutDeck panel (UXP)

@@ -68,7 +68,7 @@
   <h1>Transcriber Editor</h1>
   <select id="job-select"><option value="">— select job —</option></select>
   <button id="btn-load">Load</button>
-  <input id="fps-input" type="number" step="0.001" placeholder="fps (optional)" title="Target sequence frame rate — quantizes cue boundaries to frame ticks so Premiere import doesn't re-round them" style="width: 110px; background: #222; color: #e0e0e0; border: 1px solid #444; padding: 4px 8px; border-radius: 4px;">
+  <input id="fps-input" type="number" step="0.001" placeholder="fps (needed for SRT)" title="Target sequence frame rate — snaps cues to that sequence's frames so Premiere shows exactly the file's timing" style="width: 110px; background: #222; color: #e0e0e0; border: 1px solid #444; padding: 4px 8px; border-radius: 4px;">
   <button id="btn-srt">↓ SRT</button>
   <button id="btn-vtt">↓ VTT</button>
   <button id="btn-save">Save corrections</button>
@@ -231,7 +231,9 @@ function fpsQuery() {
   return fps ? `?fps=${fps}` : '';
 }
 document.getElementById('btn-srt').addEventListener('click', () => {
-  if (currentJobId) window.open(`/jobs/${currentJobId}/export/srt${fpsQuery()}`);
+  if (!currentJobId) return;
+  if (!fpsQuery()) { alert('Enter the Premiere sequence frame rate first (e.g. 25, 29.97, 50).'); return; }
+  window.open(`/jobs/${currentJobId}/export/srt${fpsQuery()}`);
 });
 document.getElementById('btn-vtt').addEventListener('click', () => {
   if (currentJobId) window.open(`/jobs/${currentJobId}/export/vtt${fpsQuery()}`);

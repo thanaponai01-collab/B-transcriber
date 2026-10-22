@@ -73,3 +73,32 @@ test("text probe refuses anything but exactly one selected Graphic", async () =>
   const notGraphic = await patched({ isGraphic: async () => false }, () => probe.probeTextCanvas(pproFor(selected([{}]))));
   assert.match(probe.formatTextCanvasReport(notGraphic), /not a Graphic/);
 });
+
+const caption = (start, end) => ({ getStartTime: async () => ({ ticks: String(start) }), getEndTime: async () => ({ ticks: String(end) }) });
+const captionSeq = (tracks) => ({
+  name: "Ep 1",
+  getTimebase: async () => "10160640000",
+  getCaptionTrackCount: async () => tracks.length,
+  getCaptionTrack: async (i) => tracks[i],
+});
+const TPF = 10160640000n; // 25 fps
+
+test("caption probe reads every caption's ticks in time order with the sequence timebase", async () => {
+  const track = { getTrackItems: async () => [caption(TPF * 50n, TPF * 75n), null, caption(0n, TPF * 50n)] };
+  const report = await probe.probeCaptionTiming(pproFor(captionSeq([track])));
+  assert.equal(report.complete, true);
+  assert.equal(report.ticks_per_frame, "10160640000");
+  assert.deepEqual(report.tracks[0].items.map((i) => i.start_ticks), ["0", String(TPF * 50n)]);
+  assert.match(probe.formatCaptionTimingReport(report), /C1: 2 captions, frames 0-75/);
+});
+
+test("caption probe reports missing timing members instead of guessing", async () => {
+  const track = { getTrackItems: async () => [{ getName: async () => "x" }] };
+  const report = await probe.probeCaptionTiming(pproFor(captionSeq([track])));
+  assert.match(report.tracks[0].error, /no getStartTime/);
+});
+
+test("caption probe says so when there is no caption track", async () => {
+  const report = await probe.probeCaptionTiming(pproFor(captionSeq([])));
+  assert.match(probe.formatCaptionTimingReport(report), /no caption track/);
+});
