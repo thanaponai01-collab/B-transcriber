@@ -274,10 +274,22 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     }
     const batch = moves.slice(at, at + MOVE_BATCH);
     console.log(`CutDeck close gaps: starting batch ${at}..${at + batch.length} of ${moves.length} moves (${fresh.size} distinct positions on timeline)`);
+    const found = batch.map(({ key }) => { const list = fresh.get(key); return list && list.shift(); });
+    // Live 2026-10-25: the read after a committed 3,000-move batch lacked ~370 clips that had not
+    // moved. Moves only go left, so a clip not yet moved is still there: read again before failing.
+    const lost = found.findIndex((c) => !c);
+    if (lost >= 0) {
+      const missing = found.filter((c) => !c).length;
+      if (++stalledReads > STALE_READ_RETRIES) {
+        throw new Error(`close gaps: clip at ${batch[lost].key.replace("|", " track ")} vanished (batch item ${lost} of ${batch.length}, global ${at + lost}; `
+          + `${missing} of ${batch.length} missing after ${STALE_READ_RETRIES} fresh reads)`);
+      }
+      console.log(`CutDeck close gaps: ${missing} of ${batch.length} clips missing from the read; fresh read ${stalledReads} of ${STALE_READ_RETRIES}`);
+      await new Promise((resolve) => setTimeout(resolve, 500 * stalledReads));
+      continue;
+    }
     const builders = batch.map(({ key, by, start }, batchIdx) => {
-      const list = fresh.get(key);
-      const c = list && list.shift();
-      if (!c) throw new Error(`close gaps: clip at ${key.replace("|", " track ")} vanished (batch item ${batchIdx} of ${batch.length}, global ${at + batchIdx})`);
+      const c = found[batchIdx];
       const dt = tick(-by);
       return Object.assign(() => c.item.createMoveAction(dt), {
         what: `${key.replace("|", " track ")}, shift ${-by} ticks from start ${start}`,

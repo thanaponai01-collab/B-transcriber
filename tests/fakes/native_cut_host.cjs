@@ -6,7 +6,8 @@ const path = require("node:path");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track" } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false } = {}) {
+  // nullClipRead({ kind, track, moveCalls }): true makes that clip read return null entries (live 2026-10-25).
   // rippleMode: what a ripple remove shifts. "track": later clips on that clip's own track;
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
   let guid = 0;
@@ -90,7 +91,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   const wrapTrack = (seq, kind, i) => ({ isMuted: async () => !!seq.tracks[kind][i].muted,
     getTrackItems: (type) => (type === 2
     ? transitions.filter((x) => seq === src && x.kind === kind && x.track === i).map((x) => (x.null ? null : { getStartTime: async () => ({ ticks: x.start.toString() }), getEndTime: async () => ({ ticks: x.end.toString() }) }))
-    : seq.tracks[kind][i].map(wrapItem)) });
+    : seq.tracks[kind][i].map((r) => (nullClipRead({ kind, track: i, moveCalls }) ? null : wrapItem(r)))) });
   const wrapSeq = (seq) => ({ get name() { return seq.name; }, guid: { toString: () => seq.id }, _seq: seq,
     getVideoTrackCount: async () => seq.tracks.video.length, getAudioTrackCount: async () => seq.tracks.audio.length,
     getVideoTrack: async (i) => wrapTrack(seq, "video", i), getAudioTrack: async (i) => wrapTrack(seq, "audio", i),

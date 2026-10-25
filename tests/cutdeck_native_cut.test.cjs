@@ -206,6 +206,33 @@ test("stale handle mid-batch in split at cut edges: commits partial batch, re-re
   assert.ok(r.steps >= 6, `expected at least 6 steps with split batch, got ${r.steps}`);
 });
 
+/* Live 2026-10-25: after a committed close-gaps batch, the next read lacked ~370 clips that had
+   not moved (one "vanished" from audio track 0). A clip nothing moved onto can't be gone, so the
+   read is retried. Here the fake returns null entries on audio reads after the first moves. */
+function nullAudioReads(times) {
+  let left = times;
+  let lastMoves = -1;
+  return ({ kind, moveCalls }) => {
+    if (kind !== "audio" || moveCalls === 0 || left === 0) return false;
+    if (moveCalls !== lastMoves) { lastMoves = moveCalls; left--; } // one bad read per move count
+    return true;
+  };
+}
+
+test("close gaps: a read missing clips is retried and the cut is still exact", async () => {
+  const h = fakeHost(golden.before, { staleMoveCalls: new Set([4]), nullClipRead: nullAudioReads(1) });
+  await applyNativeCut(h.ppro, h.project, h.source, golden, "missing-once");
+  assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "missing-once")),
+    golden.after.map((x) => JSON.stringify(x)).sort());
+});
+
+test("close gaps: clips missing on every fresh read still stop the cut, saying how many", async () => {
+  const h = fakeHost(golden.before, { staleMoveCalls: new Set([4]), nullClipRead: ({ kind, moveCalls }) => kind === "audio" && moveCalls > 0 });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "missing").then(() => null, (e) => e);
+  assert.match(error.message, /close gaps: clip at audio track \d+\|\d+ vanished .*\d+ of \d+ missing after 3 fresh reads/);
+  assert.equal(error.copyCreated, true);
+});
+
 for (const stage of ["split", "move"]) {
   test(`stale first handle in ${stage}: fresh read recovers an exact cut`, async () => {
     // Include a stale first handle after a partial commit, not just the initial batch.
