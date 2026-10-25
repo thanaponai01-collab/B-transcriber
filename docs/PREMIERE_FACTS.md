@@ -216,7 +216,7 @@ menu is gone. ExtendScript is supported only through Sept 2026. Don't build on i
 
 None of this runs on the installed 26.5. It is what to plan for. Source: `reference/adobe/api/premierepro-preview.txt`
 (member diff, `@adobe/premierepro@27.0.0-beta.57` vs 26.5.1) and Adobe's sample panel (`reference/adobe/samples/`,
-pinned b481f14). `check-api` rejects 27-only names until the pin moves to an installed version.
+pinned e37d1ea (docs fe96210)). `check-api` rejects 27-only names until the pin moves to an installed version.
 
 | API | Status | What changes / why it matters | Proof |
 |---|---|---|---|
@@ -227,6 +227,8 @@ pinned b481f14). `check-api` rejects 27-only names until the pin moves to an ins
 | `PointKeyframe.value` / `ComponentParam.getValueAtTime` | BREAKING in 27.0 | Point values are typed as `{value: [x, y]}` (was `{value: PointF}`). `host/components.js unwrapKeyframeValue` passes arrays through untouched, so on 27 every `position.x` / `anchorPoint.x` in the Transform panel would read `undefined`. Probe on 27.0, then normalise `[x, y]` → `{x, y}` in that one function. | preview diff; `host/components.js:22` |
 | `Application.version` | REMOVED in 27.0 typings | The panel does not read it (grep, 2026-10-07). | preview diff |
 | `ProjectItem.type` | CHANGED in 27.0 | Now `Constants.ProjectItemType` (ROOT, BIN, CLIP, COMPOUND, FILE, STYLE) instead of a bare number: a typed way to tell bins from clips without `FolderItem.cast` probing. | preview diff |
+| `ClipProjectItem.createDetachProxyAction()` | ANNOUNCED (untyped) | Detaches proxies from a clip item, one Action per item inside `project.executeTransaction` (one undo step); the sample guards with `hasProxy()` first. Not in any typings (the sample uses `@ts-expect-error`). Nothing in CutDeck uses proxies. Do not use until probed live. | samples e37d1ea `src/projectPanel.ts` |
+| `Constants.ProjectItemColorLabel.CARIBBEAN` | ANNOUNCED 27.0 | A new label colour; enum numeric value unproven. Nothing reads label colours today. | preview diff; docs fe96210 `constants` |
 
 ---
 
