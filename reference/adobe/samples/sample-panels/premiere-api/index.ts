@@ -96,6 +96,7 @@ import {
   setProjectPanelMetadata,
   setXMPMetadata,
 } from "./src/metadata";
+import { setSDKEventMessage } from "./src/pluginSupport";
 import {
   getActiveProduction,
   getScratchDiskSettings,
@@ -130,6 +131,7 @@ import {
   createBin,
   createSmartBin,
   createSubClips,
+  detachProxiesFromClipProjectItems,
   getFirstProjectItemColorLabel,
   getFirstProjectItemId,
   getFirstProjectItemType,
@@ -463,7 +465,33 @@ async function setComponentInstanceNameClicked() {
   }
 }
 
+// PluginSupport
+
+async function setSdkEventMessageClicked() {
+  const success = await setSDKEventMessage("Sending an event!");
+  if (success) {
+    log(`Successfully sent a message to the Event Panel!`);
+  } else {
+    log(`Failed to send an event message`, "red");
+  }
+}
+
 // Project Panel
+
+async function createDetachProxyActionClicked() {
+  const project = await ppro.Project.getActiveProject();
+  if (!project) {
+    log(`Failed to get project`, "red");
+    return;
+  }
+
+  const result = await detachProxiesFromClipProjectItems(project);
+  if (result) {
+    log("Successfully removed all proxies from the selected ClipProjectItems")
+  } else {
+    log("Failed to remove all proxies", "red");
+  }
+}
 
 async function checkClipIsStillClicked() {
   const project = await ppro.Project.getActiveProject();
@@ -3108,7 +3136,9 @@ window.addEventListener("load", async () => {
   /* 27.1.0 button event registration */
   registerClick("component-getinstancename", getComponentInstanceNameClicked);
   registerClick("component-createsetinstancenameaction", setComponentInstanceNameClicked);
+  registerClick("pluginsupport-setsdkeventmessage", setSdkEventMessageClicked);
   registerClick("projectpanel-isstill", checkClipIsStillClicked);
+  registerClick("projectpanel-createdetachproxyaction", createDetachProxyActionClicked);
   registerClick("sequenceeditor-razor-all-tracks", razorAllTracksClicked);
   registerClick("sequenceeditor-razor-video-tracks", razorVideoTracksClicked);
 
