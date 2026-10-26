@@ -380,10 +380,11 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     textBoxes,
     refresh: refreshAlignSequence,
     // The pointer entering the panel reads fresh: an Effect Controls drag made while the idle
-    // poll was backed off shows as soon as the user comes back.
+    // poll was backed off shows as soon as the user comes back. Not mid-playback: a full read
+    // there stutters the preview, and the timer reads once the playhead stops.
     poll: () => {
       noteActivity();
-      return pollAlignTransform({ forceRefresh: true });
+      return pollAlignTransform({ forceRefresh: true, skipWhilePlaying: true });
     },
     startPolling: startAlignPolling,
     stopPolling: stopAlignPolling,

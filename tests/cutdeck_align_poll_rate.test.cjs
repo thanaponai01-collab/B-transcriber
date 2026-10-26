@@ -95,3 +95,34 @@ test("align poll: no full reads while the playhead moves, reads again once it st
   align.stopPolling();
   assert.ok(selectionReads >= 1, "the poll did not resume after the playhead stopped");
 });
+
+test("align poll: the pointer entering the panel does not read fully while the playhead moves", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 1_000_000 });
+  let playhead = 0;
+  let playing = true;
+  let selectionReads = 0;
+  const seq = {
+    name: "S",
+    getPlayerPosition: async () => ({ ticks: String(playing ? (playhead += 1000) : playhead) }),
+    getSelection: async () => { selectionReads++; return { getTrackItems: async () => [] }; },
+  };
+  const ppro = { Project: { getActiveProject: () => ({ getActiveSequence: () => seq }) } };
+  const ctl = createController({ render: () => {}, initialState: { sequence: null, transform: null } });
+  const align = createAlignFeature({ ppro, ctl });
+  const run = async (ms) => {
+    for (let i = 0; i < ms / 150; i++) {
+      t.mock.timers.tick(150);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+  align.startPolling();
+  await run(150);  // first tick only records where the playhead is
+  selectionReads = 0;
+  for (let i = 0; i < 3; i++) { await align.poll(); await run(1000); }
+  assert.equal(selectionReads, 0, `${selectionReads} full reads from the pointer while the playhead was moving`);
+  playing = false;
+  await run(300);  // one tick sees the last move, the next sees it still
+  await align.poll();
+  align.stopPolling();
+  assert.ok(selectionReads >= 1, "the pointer did not read once the playhead stopped");
+});
