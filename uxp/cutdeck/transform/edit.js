@@ -238,6 +238,7 @@ async function readAlignState(ppro, options = {}) {
   const seq = snap.sequence;
   return {
     sequence: seq ? { name: seq.name || "(unnamed)" } : null,
+    frame: snap.seqFrame || null,
     transform: await readAlignTransform(snap, ppro, options),
   };
 }

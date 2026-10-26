@@ -50,10 +50,13 @@
 - status: traced: read the three bindings and main.js wiring; not run
 
 ## Panel navigation and tools
-- what: Switch tabs, open Settings, reload the panel, and run read-only diagnostic probes from the overflow menu.
+- what: One CutDeck panel with four tabs (Cut, FX, Transform, Align; the last one used reopens), Settings, reload, and diagnostic probes folded under Probes in the overflow menu.
 - click: `#tab-edit` @ uxp/cutdeck/index.html
 - click: `#tab-adj` @ uxp/cutdeck/index.html
+- click: `#tab-transform` @ uxp/cutdeck/index.html
+- click: `#tab-align` @ uxp/cutdeck/index.html
 - click: `#tools-toggle` @ uxp/cutdeck/index.html
+- click: `#menu-item-probes` @ uxp/cutdeck/index.html
 - click: `#menu-item-settings` @ uxp/cutdeck/index.html
 - click: `#menu-item-reload` @ uxp/cutdeck/index.html
 - click: `#copystatus` @ uxp/cutdeck/index.html
@@ -69,15 +72,16 @@
 - trace: `bindTabs` @ uxp/cutdeck/core/panel.js > `onTab` @ uxp/cutdeck/main.js
 - note: `alcreate`, `syncmoves` and `nativecut` probes edit the project (they say so in their tooltips); the others are read-only
 - verify: CutDeck panel (UXP)
-- status: suspected: entry points found in the markup; only the tab binding read
+- status: tested: tab switching, per-tab views, busy dot, remembered tab and the Probes fold are covered by tests/cutdeck_one_panel.test.cjs (2026-10-26); not yet run in Premiere
 
-## Transform panel
-- what: Edit selected clips' position, scale, rotation and anchor, set a 9-point anchor, align and distribute clips.
+## Transform and Align tabs
+- what: Transform tab: edit the selected clip's Motion (incl. Crop) and Opacity rows, laid out as Effect Controls' fx blocks with fold and block reset. Align tab: a frame drawing whose edges and center lines align and whose nine dots on the clip set the anchor, plus Frame/Selection/Group and Distribute.
 - click: `#align-refresh` @ uxp/cutdeck/index.html
 - click: `#align-probe` @ uxp/cutdeck/index.html
 - click: `#align-scale-reset` @ uxp/cutdeck/index.html
 - click: `#align-rotation-reset` @ uxp/cutdeck/index.html
 - click: `#align-copy` @ uxp/cutdeck/index.html
+- click: `#align-line-left` (and the other five `#align-line-*`) @ uxp/cutdeck/index.html
 - trace: `alignPanel` @ uxp/cutdeck/main.js > `bind` @ uxp/cutdeck/core/alignPanel.js
 - needs: clips selected in Premiere; with none selected these only refuse ("Select a clip")
 - verify: CutDeck panel (UXP)

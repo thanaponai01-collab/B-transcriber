@@ -101,15 +101,6 @@
     border-bottom: 1px solid var(--line-0);
     flex-shrink: 0;
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 600;
-    font-size: 12px;
-    color: var(--fg-0);
-    letter-spacing: -0.1px;
-  }
   .status-dot {
     width: 6px;
     height: 6px;
@@ -432,50 +423,6 @@
   }
   .action-card:hover:not(.disabled) svg {
     stroke: var(--fg-white);
-  }
-
-  /* Settings Help Box */
-  .setting-help-box {
-    background: var(--bg-0);
-    border: 1px solid var(--line-0);
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-top: 8px;
-  }
-  .help-box-title {
-    font-size: 9.5px;
-    font-weight: 700;
-    color: var(--fg-0);
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-  }
-  .help-section {
-    margin-bottom: 6px;
-  }
-  .help-section:last-child {
-    margin-bottom: 0;
-  }
-  .help-tool-name {
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--fg-1);
-    margin-bottom: 2px;
-  }
-  .help-item {
-    font-size: 9px;
-    color: var(--fg-2);
-    line-height: 1.4;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 2px;
-  }
-  .help-item strong {
-    color: var(--fg-1);
   }
 
   /* Status Bar */
@@ -850,11 +797,6 @@
     border-color: var(--accent-danger-line-armed);
     color: var(--fg-white);
   }
-  .setting-divider {
-    height: 1px;
-    background: var(--bg-2);
-    margin: 7px 0 5px 0;
-  }
   .diag-grid {
     display: flex;
     flex-direction: column;
@@ -884,10 +826,10 @@
     pointer-events: none;
   }
 
-  #view-transform {
-    padding: 10px 12px;
-    box-sizing: border-box;
-    width: 100%;
+  /* Transform and Align share #view-tools; the inner views sit flush inside it. */
+  .tools-panel > .view-panel {
+    margin-top: 0;
+    overflow-y: visible;
   }
 
   /* Transform & Align panel. Flexbox and margins only: UXP has no CSS Grid and no `gap`
@@ -1077,85 +1019,6 @@
     pointer-events: none;
   }
 
-  .transform-tools-container {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    margin-top: 4px;
-    margin-bottom: 8px;
-  }
-  .transform-tool-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    background: var(--bg-2);
-    border: 1px solid var(--line-1);
-    border-radius: 5px;
-    padding: 6px;
-  }
-  .tool-card-anchor {
-    align-items: center;
-  }
-  .tool-card-align {
-    flex: 1;
-    margin-left: 6px;
-  }
-  .anchor-grid {
-    display: flex;
-    flex-direction: column;
-    padding: 2px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-0);
-    border-radius: 4px;
-  }
-  .anchor-row {
-    display: flex;
-    flex-direction: row;
-  }
-  .anchor-cell {
-    width: 18px;
-    height: 18px;
-    margin: 1px;
-    border: 1px solid var(--line-1);
-    border-radius: 3px;
-    background: var(--bg-2);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.12s, border-color 0.12s;
-  }
-  .anchor-cell:hover {
-    border-color: var(--fg-2);
-    background: var(--bg-3);
-  }
-  .anchor-cell:hover .anchor-dot {
-    background: var(--fg-1);
-  }
-  .anchor-cell.active {
-    border-color: var(--fg-white);
-    background: var(--bg-4);
-  }
-  .anchor-cell.active .anchor-dot {
-    background: var(--fg-white);
-    width: 5px;
-    height: 5px;
-  }
-  .anchor-dot {
-    width: 3.5px;
-    height: 3.5px;
-    border-radius: 50%;
-    background: var(--fg-3);
-    pointer-events: none;
-    transition: background 0.12s, width 0.12s, height 0.12s;
-  }
-
-  .transform-align {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    flex: 1;
-  }
   .align-row {
     display: flex;
     flex-direction: row;
@@ -1213,4 +1076,152 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+  }
+
+  /* --- One panel, four tabs (docs/research/cutdeck-one-panel-plan.md) -------------------
+     Flex and margins only: Grid and aspect-ratio gave 0x0 tiles in this UXP build (see
+     .fx-preset-grid), and UXP has no CSS transitions (known-issues.md). */
+  .header .tabs {
+    flex: 1;
+    margin: 0 6px;
+    min-width: 0;
+  }
+  .header .status-dot { flex-shrink: 0; }
+  .tab-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 3px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .tab-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    margin-right: 3px;
+  }
+  /* The tab an action started on, while it runs. */
+  .tab-btn.busy::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--fg-white);
+  }
+  .view-hint {
+    margin-top: 8px;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--fg-3);
+  }
+
+  /* Transform tab: Effect Controls' fx blocks. */
+  .fx-block { margin-bottom: 4px; }
+  .fx-head {
+    display: flex;
+    align-items: center;
+    height: 24px;
+  }
+  .fx-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--fg-0);
+    font-size: 11px;
+  }
+  .fx-arrow {
+    width: 12px;
+    color: var(--fg-3);
+  }
+  .fx-badge {
+    font-size: 10px;
+    font-style: italic;
+    color: var(--fg-2);
+    border: 1px solid var(--line-1);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-right: 6px;
+  }
+  .fx-block .transform-row { padding-left: 12px; }
+  .fx-subhead {
+    margin: 6px 0 2px 12px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line-0);
+    font-size: 10px;
+    color: var(--fg-3);
+  }
+  .fx-block.closed .transform-row,
+  .fx-block.closed .fx-subhead { display: none; }
+
+  /* Align tab: the frame drawing. renderFrame sizes it and places every line and dot in px. */
+  .align-targets .pill-mini { flex: 1; text-align: center; }
+  .al-label { margin-top: 10px; }
+  .al-frame-wrap {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 8px 0 6px;
+  }
+  .al-frame {
+    position: relative;
+    width: 100%;
+    height: 160px;
+    background: var(--bg-0);
+    border: 1px solid var(--line-1);
+    border-radius: 4px;
+  }
+  .al-line {
+    position: absolute;
+    display: flex;
+    cursor: pointer;
+  }
+  .al-line.v { flex-direction: row; }
+  .al-line.h { flex-direction: column; }
+  .al-line.start { justify-content: flex-start; }
+  .al-line.end { justify-content: flex-end; }
+  .al-line.mid { justify-content: center; }
+  .al-mark { background: var(--line-1); }
+  .al-line.v .al-mark { width: 2px; height: 100%; }
+  .al-line.h .al-mark { height: 2px; width: 100%; }
+  .al-line.mid .al-mark { background: var(--line-0); }
+  .al-line.v.mid .al-mark { width: 1px; }
+  .al-line.h.mid .al-mark { height: 1px; }
+  .al-line:hover .al-mark { background: var(--fg-0); }
+  .al-clip {
+    position: absolute;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 2px;
+  }
+  .al-dot {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .al-dot-mark {
+    width: 5px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--fg-2);
+  }
+  .al-dot:hover .al-dot-mark { background: var(--fg-white); }
+  .al-dot.active { border: 1px solid var(--fg-white); }
+  .al-dot.active .al-dot-mark { background: var(--fg-white); }
+
+  /* ⋯ menu: the probes fold under one item. */
+  .dropdown-sub { display: none; }
+  .dropdown-sub.open { display: block; }
+  .dropdown-sub .dropdown-item { padding-left: 18px; }
+  .dropdown-arrow {
+    margin-left: auto;
+    color: var(--fg-3);
   }

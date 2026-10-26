@@ -22,11 +22,29 @@ const { createDriver, keepRegistered } = require("./features/driver.js");
 
 const storage = typeof localStorage !== "undefined" ? localStorage : null;
 
+// The panel reopens on the last tab used. Storage can be missing or throw; the FX tab is the default.
+const TABS = ["edit", "adj", "transform", "align"];
+const TAB_KEY = "cutdeck.tab";
+function loadTab() {
+  try {
+    const saved = storage && storage.getItem(TAB_KEY);
+    return TABS.includes(saved) ? saved : "adj";
+  } catch (_) {
+    return "adj";
+  }
+}
+function saveTab(name) {
+  try {
+    if (storage) storage.setItem(TAB_KEY, name);
+  } catch (_) { /* the tab is a convenience; nothing else depends on it */ }
+}
+const isToolsTab = (name) => name === "transform" || name === "align";
+
 // The controllers: hold state, serialize actions (act), and notify panel renders.
 const mainCtl = createController({
   render: panel.render,
   initialState: {
-    sequence: null, tab: "adj", cutMode: "protected", audioTrack: null,
+    sequence: null, tab: loadTab(), cutMode: "protected", audioTrack: null,
     settings: loadSettings(storage), customPresets: loadCustomPresets(storage),
     presetFile: { path: null, error: null }, job: null,
   },
@@ -34,7 +52,7 @@ const mainCtl = createController({
 
 const alignCtl = createController({
   render: alignPanel.render,
-  initialState: { sequence: null, transform: null },
+  initialState: { sequence: null, frame: null, transform: null },
 });
 
 const presetStore = createPresetStore({
@@ -86,7 +104,8 @@ const align = createAlignFeature({
   uxp,
   rpc,
   ensureHelper,
-  isMounted: () => alignPanel.isMounted(),
+  // Transform reads run only while the Transform or Align tab is showing.
+  isMounted: () => isToolsTab(mainCtl.state.tab),
   isMainBusy: () => mainCtl.state.busy,
 });
 
@@ -100,28 +119,6 @@ const driverRpc = createRpc({
   onClose: () => driverRegistration && driverRegistration.onClose(),
 });
 driverRegistration = keepRegistered({ rpc: driverRpc, version: workflow.VERSION, commands: driver.commands });
-
-const cfPanel = require("./core/clubFridayPanel.js").createClubFridayPanel(document);
-const cf = require("./features/clubFriday.js").createClubFriday({
-  fetch: (...args) => fetch(...args), ensureHelper, render: cfPanel.render,
-  launch: async () => {
-    const script = (await helperStart.findHelperScript()).replace("Start CutDeck (Hidden).vbs", "Start ClubFriday (Hidden).vbs");
-    const error = await uxp.shell.openPath(script, "Start ClubFriday transcription");
-    if (error) throw new Error(error);
-  },
-  importSrt: async (path, context) => {
-    const project = await ppro.Project.getActiveProject();
-    if (!project || project.guid.toString() !== context.project_id) throw new Error("Open the original Premiere project before importing this range.");
-    const host = require("./host/project.js");
-    const bin = host.asBinLike(await host.getOrCreateBin(project, ["CutDeck", "ClubFriday"]));
-    if (!await project.importFiles([path], true, bin, false)) throw new Error("Premiere could not import the SRT.");
-  },
-});
-cfPanel.bind(cf, async () => {
-  await cf.restore();
-  const error = await uxp.shell.openExternal("http://127.0.0.1:8010", "Open ClubFriday quote editor");
-  if (error) throw new Error(error);
-});
 
 let sequenceActivatedListener = null;
 let tornDown = false;
@@ -168,7 +165,15 @@ panel.bind({
   onSync: sync.onSync,
   onResumeJob: roughCut.onResumeJob,
   onDismissJob: roughCut.onDismissJob,
-  onTab: (name) => { mainCtl.state.tab = name; mainCtl.render(); },
+  onTab: (name) => {
+    mainCtl.state.tab = name;
+    saveTab(name);
+    mainCtl.render();
+    if (isToolsTab(name)) {
+      alignCtl.render();
+      align.refresh().catch((error) => alignCtl.setStatus(error.message || String(error), "error"));
+    }
+  },
   onCutMode: roughCut.onCutMode,
   onAdjust: adjust.onAdjust,
   onColorMatte: adjust.onColorMatte,
@@ -204,32 +209,22 @@ try {
   const { entrypoints } = uxp;
   entrypoints.setup({
     panels: {
-      "cutdeck.clubfriday.panel": { show(rootNode) { cfPanel.mount(rootNode); cf.restore(); } },
       "cutdeck.panel": { show() {} },
-      "cutdeck.align.panel": {
-        show(rootNode) {
-          if (!alignPanel.mount(rootNode)) {
-            console.error("CutDeck: could not mount #view-transform into the transform panel root.");
-            return;
-          }
-          alignCtl.render();
-          ensureHelper().catch(() => { /* helper start will be retried on demand */ });
-          align.refresh().catch((error) => {
-            alignCtl.setStatus(error.message || String(error), "error");
-          });
-          align.startPolling();
-        },
-      },
     },
   });
 } catch (error) {
-  console.error("CutDeck: entrypoints.setup() failed; the Transform panel will not open.", error);
+  console.error("CutDeck: entrypoints.setup() failed.", error);
 }
 
 // Startup
 const savedJob = roughCut.lastJob();
 mainCtl.state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 mainCtl.render();
+alignCtl.render();
+align.startPolling();
+if (isToolsTab(mainCtl.state.tab)) {
+  align.refresh().catch((error) => alignCtl.setStatus(error.message || String(error), "error"));
+}
 restartHelperOnStart();
 helperRestart.finally(() => driverRegistration.start());
 

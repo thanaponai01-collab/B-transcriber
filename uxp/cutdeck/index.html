@@ -7,11 +7,26 @@
 </head>
 <body>
 
-  <!-- Header -->
+  <!-- Header: helper dot, the four tabs, the menu. No name row: Premiere's panel tab says CutDeck. -->
   <div class="header">
-    <div class="brand">
-      <span>CutDeck</span>
-      <div id="dot" class="status-dot"></div>
+    <div id="dot" class="status-dot" title="CutDeck helper"></div>
+    <div class="tabs">
+      <div id="tab-edit" class="tab-btn" role="button" title="Cut">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+        <span>Cut</span>
+      </div>
+      <div id="tab-adj" class="tab-btn active" role="button" title="FX">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <span>FX</span>
+      </div>
+      <div id="tab-transform" class="tab-btn" role="button" title="Transform">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>
+        <span>Transform</span>
+      </div>
+      <div id="tab-align" class="tab-btn" role="button" title="Align">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="5" y="14" width="14" height="4" rx="1"/></svg>
+        <span>Align</span>
+      </div>
     </div>
 
     <div class="header-actions">
@@ -39,97 +54,106 @@
           </svg>
           <span>Copy Status</span>
         </div>
-        <div id="timingprobe" class="dropdown-item" role="button" data-act="timingprobe" data-probe="timing">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-          <span>Check Timing</span>
+        <div class="dropdown-divider"></div>
+        <!-- Probes are live-check tools, folded under one item so the menu stays short. -->
+        <div id="menu-item-probes" class="dropdown-item" role="button" title="Show or hide the probes">
+          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/></svg>
+          <span>Probes</span>
+          <span id="menu-probes-arrow" class="dropdown-arrow">▸</span>
         </div>
-        <div id="motionprobe" class="dropdown-item" role="button" data-act="motionprobe" data-probe="motion">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <path d="M3 9h18M9 21V9"/>
-          </svg>
-          <span>Check AL Scale</span>
-        </div>
-        <div id="effectprobe" class="dropdown-item" role="button" data-act="effectprobe" data-probe="effect">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
-          </svg>
-          <span>Check Effect Chain</span>
-        </div>
-        <div id="transformprobe" class="dropdown-item" role="button" data-act="transformprobe" data-probe="transform">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="1"/>
-            <circle cx="12" cy="12" r="1.5"/>
-            <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
-          </svg>
-          <span>Check Transform</span>
-        </div>
-        <div id="keyframeprobe" class="dropdown-item" role="button" data-act="keyframeprobe" data-probe="keyframe" title="Read-only. Select one clip with a keyframe at the playhead first.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3l5 9-5 9-5-9z"/>
-          </svg>
-          <span>Check Keyframes</span>
-        </div>
-        <div id="alcreateprobe" class="dropdown-item" role="button" data-act="alcreateprobe" data-probe="alcreate" title="Adds one item: imports an Adjustment Layer sized to the active sequence into CutDeck &gt; ADJ &amp; FX.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="5" width="18" height="14" rx="2"/>
-            <path d="M12 9v6M9 12h6"/>
-          </svg>
-          <span>Try Creating AL</span>
-        </div>
-        <div id="syncmovesprobe" class="dropdown-item" role="button" data-act="syncmovesprobe" data-probe="syncmoves" title="Copies the active sequence, then tests moving one camera clip and its audio on the copy. Your sequence is not edited.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 7h10M4 12h14M4 17h7"/>
-            <path d="M17 14l3 3-3 3"/>
-          </svg>
-          <span>Test Sync Moves</span>
-        </div>
-        <div id="nativecutprobe" class="dropdown-item" role="button" data-act="nativecutprobe" data-probe="nativecut" title="Copies the active sequence, then tests the native rough-cut edits (place a marked span, move, remove, split, effects) on the copy. Select one camera clip first to test that one. Your sequence is not edited; it also adds one test sequence and briefly sets that clip's In/Out.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12h6M14 12h6"/>
-            <path d="M12 5v14"/>
-          </svg>
-          <span>Test Native Cut</span>
-        </div>
-        <div id="rippleprobe" class="dropdown-item" role="button" data-act="rippleprobe" data-probe="ripple" title="Copies the active sequence, then cuts two short spans on the copy with ripple delete and checks the result against the Rough Cut plan. Your sequence is not edited.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12h4M16 12h4"/><path d="M10 9l2 3-2 3M14 9l-2 3 2 3"/>
-          </svg>
-          <span>Test Ripple Delete</span>
-        </div>
-        <div id="addeditprobe" class="dropdown-item" role="button" data-act="addeditprobe" data-probe="addedit" title="Needs the CutDeck Cutter Probe Control Surface plugin. Open a sequence with one video clip and its audio, deselect everything, then run: copies the sequence and has Premiere add one native edit to all tracks on the copy, 120 frames into the clip. Your sequence is not edited.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 8h16M4 16h16"/><path d="M12 4v16"/>
-          </svg>
-          <span>Test Native Add Edit</span>
-        </div>
-        <div id="addeditcheckprobe" class="dropdown-item" role="button" data-act="addeditcheckprobe" data-probe="addeditcheck" title="Read-only. After Test Native Add Edit: click one piece in the test copy (links), or press Ctrl+Z / Ctrl+Shift+Z (undo), then run this.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12l5 5L20 6"/>
-          </svg>
-          <span>Check Add Edit</span>
-        </div>
-        <div id="mutestateprobe" class="dropdown-item" role="button" data-act="mutestateprobe" data-probe="mutestate" title="Read-only. Mute one track in Premiere first, then run this to see whether it reads muted.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/>
-          </svg>
-          <span>Check Mute State</span>
-        </div>
-        <div id="textcanvasprobe" class="dropdown-item" role="button" data-act="textcanvasprobe" data-probe="textcanvas" title="Read-only. Select one Graphic with text first.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 6h14M12 6v12M9 18h6"/>
-          </svg>
-          <span>Check Text Canvas</span>
-        </div>
-        <div id="captiontimingprobe" class="dropdown-item" role="button" data-act="captiontimingprobe" data-probe="captiontiming" title="Read-only. Drag the SRT onto the timeline first; reads every caption's start and end frame.">
-          <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 12h4M13 12h4"/>
-          </svg>
-          <span>Check Caption Timing</span>
+        <div id="menu-probes" class="dropdown-sub">
+          <div id="timingprobe" class="dropdown-item" role="button" data-act="timingprobe" data-probe="timing">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>Check Timing</span>
+          </div>
+          <div id="motionprobe" class="dropdown-item" role="button" data-act="motionprobe" data-probe="motion">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M9 21V9"/>
+            </svg>
+            <span>Check AL Scale</span>
+          </div>
+          <div id="effectprobe" class="dropdown-item" role="button" data-act="effectprobe" data-probe="effect">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
+            </svg>
+            <span>Check Effect Chain</span>
+          </div>
+          <div id="transformprobe" class="dropdown-item" role="button" data-act="transformprobe" data-probe="transform">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="1"/>
+              <circle cx="12" cy="12" r="1.5"/>
+              <path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>
+            </svg>
+            <span>Check Transform</span>
+          </div>
+          <div id="keyframeprobe" class="dropdown-item" role="button" data-act="keyframeprobe" data-probe="keyframe" title="Read-only. Select one clip with a keyframe at the playhead first.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l5 9-5 9-5-9z"/>
+            </svg>
+            <span>Check Keyframes</span>
+          </div>
+          <div id="alcreateprobe" class="dropdown-item" role="button" data-act="alcreateprobe" data-probe="alcreate" title="Adds one item: imports an Adjustment Layer sized to the active sequence into CutDeck &gt; ADJ &amp; FX.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <path d="M12 9v6M9 12h6"/>
+            </svg>
+            <span>Try Creating AL</span>
+          </div>
+          <div id="syncmovesprobe" class="dropdown-item" role="button" data-act="syncmovesprobe" data-probe="syncmoves" title="Copies the active sequence, then tests moving one camera clip and its audio on the copy. Your sequence is not edited.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 7h10M4 12h14M4 17h7"/>
+              <path d="M17 14l3 3-3 3"/>
+            </svg>
+            <span>Test Sync Moves</span>
+          </div>
+          <div id="nativecutprobe" class="dropdown-item" role="button" data-act="nativecutprobe" data-probe="nativecut" title="Copies the active sequence, then tests the native rough-cut edits (place a marked span, move, remove, split, effects) on the copy. Select one camera clip first to test that one. Your sequence is not edited; it also adds one test sequence and briefly sets that clip's In/Out.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 12h6M14 12h6"/>
+              <path d="M12 5v14"/>
+            </svg>
+            <span>Test Native Cut</span>
+          </div>
+          <div id="rippleprobe" class="dropdown-item" role="button" data-act="rippleprobe" data-probe="ripple" title="Copies the active sequence, then cuts two short spans on the copy with ripple delete and checks the result against the Rough Cut plan. Your sequence is not edited.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 12h4M16 12h4"/><path d="M10 9l2 3-2 3M14 9l-2 3 2 3"/>
+            </svg>
+            <span>Test Ripple Delete</span>
+          </div>
+          <div id="addeditprobe" class="dropdown-item" role="button" data-act="addeditprobe" data-probe="addedit" title="Needs the CutDeck Cutter Probe Control Surface plugin. Open a sequence with one video clip and its audio, deselect everything, then run: copies the sequence and has Premiere add one native edit to all tracks on the copy, 120 frames into the clip. Your sequence is not edited.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 8h16M4 16h16"/><path d="M12 4v16"/>
+            </svg>
+            <span>Test Native Add Edit</span>
+          </div>
+          <div id="addeditcheckprobe" class="dropdown-item" role="button" data-act="addeditcheckprobe" data-probe="addeditcheck" title="Read-only. After Test Native Add Edit: click one piece in the test copy (links), or press Ctrl+Z / Ctrl+Shift+Z (undo), then run this.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 12l5 5L20 6"/>
+            </svg>
+            <span>Check Add Edit</span>
+          </div>
+          <div id="mutestateprobe" class="dropdown-item" role="button" data-act="mutestateprobe" data-probe="mutestate" title="Read-only. Mute one track in Premiere first, then run this to see whether it reads muted.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/>
+            </svg>
+            <span>Check Mute State</span>
+          </div>
+          <div id="textcanvasprobe" class="dropdown-item" role="button" data-act="textcanvasprobe" data-probe="textcanvas" title="Read-only. Select one Graphic with text first.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 6h14M12 6v12M9 18h6"/>
+            </svg>
+            <span>Check Text Canvas</span>
+          </div>
+          <div id="captiontimingprobe" class="dropdown-item" role="button" data-act="captiontimingprobe" data-probe="captiontiming" title="Read-only. Drag the SRT onto the timeline first; reads every caption's start and end frame.">
+            <svg class="dropdown-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 12h4M13 12h4"/>
+            </svg>
+            <span>Check Caption Timing</span>
+          </div>
         </div>
         <div class="dropdown-divider"></div>
         <div id="menu-item-reload" class="dropdown-item" role="button" data-act="menu-item-reload">
@@ -144,29 +168,23 @@
     </div>
   </div>
 
-  <!-- Job Recovery Banner (issue #46) -->
-  <div id="job-banner">
-    <div class="job-title">Previous job in progress</div>
-    <div class="job-actions">
-      <div id="resume" class="btn-secondary" role="button" data-act="resume">Resume Job</div>
-      <div id="dismiss" class="btn-secondary" role="button" data-act="dismiss">Dismiss</div>
-    </div>
-  </div>
-
-  <!-- Sequence Card -->
-  <div id="seq-card" class="sequence-card" role="button" data-act="seq-card" title="Click to refresh timeline marks">
-    <div id="sequence">No sequence open</div>
-    <div id="range" class="range-badge">--:--</div>
-  </div>
-
-  <!-- Segmented Tabs -->
-  <div class="tabs">
-    <div id="tab-edit" class="tab-btn" role="button" data-act="tab-edit">Cut &amp; Sync</div>
-    <div id="tab-adj" class="tab-btn active" role="button" data-act="tab-adj">Adj &amp; FX</div>
-  </div>
-
-  <!-- PAGE 1: CUT & SYNC -->
+  <!-- CUT TAB: the sequence card and resume banner live here only -->
   <div id="view-edit" class="view-panel">
+    <!-- Job Recovery Banner (issue #46) -->
+    <div id="job-banner">
+      <div class="job-title">Previous job in progress</div>
+      <div class="job-actions">
+        <div id="resume" class="btn-secondary" role="button" data-act="resume">Resume Job</div>
+        <div id="dismiss" class="btn-secondary" role="button" data-act="dismiss">Dismiss</div>
+      </div>
+    </div>
+
+    <!-- Sequence Card -->
+    <div id="seq-card" class="sequence-card" role="button" data-act="seq-card" title="Click to refresh timeline marks">
+      <div id="sequence">No sequence open</div>
+      <div id="range" class="range-badge">--:--</div>
+    </div>
+
     <div id="sync" class="btn-primary" role="button" data-act="sync" title="Matches every clip by its own audio and lays each on its own tracks in a copy named &lt;sequence&gt;_Synced. Your sequence is not edited. The Audio Track setting below is for Rough Cut only.">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3"/>
@@ -211,7 +229,7 @@
     </div>
   </div>
 
-  <!-- PAGE 2: ADJUSTMENT LAYER & FX -->
+  <!-- FX TAB -->
   <div id="view-adj" class="view-panel active">
     <div class="action-cards-grid">
       <!-- Adjustment Layer -->
@@ -246,339 +264,307 @@
          in a 3x3 grid. Same Click/Ctrl+Click/Shift+Click gestures as the Adjustment Layer card
          above — each one places the AL that way AND applies that preset's real effect to it. -->
     <div id="fx-preset-buttons" class="fx-preset-grid"></div>
+    <div class="view-hint">Click spans all · Ctrl each clip · Shift every cut</div>
   </div>
 
-  <!-- Status Bar -->
-  <div class="status-card">
-    <div id="status-icon" class="status-icon"></div>
-    <div id="status" role="status">Ready</div>
-  </div>
-
-  <!-- ============================================================================
-       SECOND PANEL: Transform & Align (manifest entrypoint cutdeck.align.panel)
-
-       Premiere gives a plugin one main HTML document however many panel entrypoints
-       it declares — there is no per-entrypoint "main". So this is the transform
-       panel's container, living in the shared document and moved into its own panel
-       root by core/alignPanel.js's mount(), called from the entrypoints.setup()
-       show() hook in main.js. It ships hidden so it never flashes inside the Cut &
-       Sync panel before its own panel is opened.
-       ============================================================================ -->
-  <div id="view-transform" hidden>
-    <!-- Clip & Sequence Header Card -->
-    <div class="header transform-clip-card">
-      <div class="transform-clip-info">
-        <div id="align-transform-clip" class="transform-clip">No sequence open</div>
-      </div>
-      <div class="header-actions">
-        <div id="align-refresh" class="icon-btn" role="button" data-act="align-refresh" title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 21v-5h-5"/></svg>
+  <!-- TRANSFORM AND ALIGN TABS. core/alignPanel.js renders inside #view-tools; core/panel.js
+       shows it for either tab and picks the view. -->
+  <div id="view-tools" class="view-panel tools-panel">
+    <div id="view-transform" class="view-panel">
+      <!-- Clip line, like the top of Effect Controls -->
+      <div class="header transform-clip-card">
+        <div class="transform-clip-info">
+          <div id="align-transform-clip" class="transform-clip">No sequence open</div>
         </div>
-        <div id="align-probe" class="icon-btn" role="button" data-act="align-probe" title="Check Transform: report this clip's Motion params (read-only)">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+        <div class="header-actions">
+          <div id="align-refresh" class="icon-btn" role="button" data-act="align-refresh" title="Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 21v-5h-5"/></svg>
+          </div>
+          <div id="align-probe" class="icon-btn" role="button" data-act="align-probe" title="Check Transform: report this clip's Motion params (read-only)">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Transform Parameter Inputs (styled to match Image 3) -->
-    <div class="transform-section">
       <div id="align-text-layer-switcher" class="pills-grid-mini" style="margin-bottom: 6px;" hidden></div>
       <div id="align-transform-fields" class="transform-fields">
-        <!-- Position -->
-        <div class="transform-row">
-          <div class="transform-field-label">Position</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <input type="text" id="align-position-x" class="transform-input" data-field="position-x" title="Position X (px) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <input type="text" id="align-position-y" class="transform-input" data-field="position-y" title="Position Y (px) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
+        <div id="fx-block-motion" class="fx-block">
+          <div class="fx-head">
+            <div class="fx-toggle" role="button" data-fold="fx-block-motion" title="Show or hide Motion"><span class="fx-arrow">▾</span><span class="fx-badge">fx</span><span class="fx-name">Motion</span></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset-block="motion" title="Reset Motion"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="position" title="Reset Position"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
+          <!-- Position -->
+          <div class="transform-row">
+            <div class="transform-field-label">Position</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <input type="text" id="align-position-x" class="transform-input" data-field="position-x" title="Position X (px) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <input type="text" id="align-position-y" class="transform-input" data-field="position-y" title="Position Y (px) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="position" title="Reset Position"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
 
-        <!-- Scale -->
-        <div class="transform-row">
-          <div id="align-scale-label" class="transform-field-label">Scale</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-scale" class="transform-input" data-field="scale" title="Scale (%) - Drag to scrub, click to edit" hidden>
+          <!-- Scale -->
+          <div class="transform-row">
+            <div id="align-scale-label" class="transform-field-label">Scale</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-scale" class="transform-input" data-field="scale" title="Scale (%) - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
+              <div class="input-col"></div>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="scale" title="Reset Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="scale" title="Reset Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
 
-        <div class="transform-row">
-          <div id="align-scale-width-label" class="transform-field-label" title="Scale Width">Scale Width</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-scale-width" class="transform-input" data-field="scale-width" title="Scale Width (%), greyed while Uniform Scale is on - Drag to scrub, click to edit" hidden>
+          <div class="transform-row">
+            <div id="align-scale-width-label" class="transform-field-label" title="Scale Width">Scale Width</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-scale-width" class="transform-input" data-field="scale-width" title="Scale Width (%), greyed while Uniform Scale is on - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
+              <div class="input-col"></div>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="scale-width" title="Reset Scale Width"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="scale-width" title="Reset Scale Width"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
 
-        <!-- Uniform Scale -->
-        <div class="transform-row">
-          <div class="transform-field-label"></div>
-          <div class="transform-field-inputs">
-            <label class="checkbox-container" title="Uniform Scale: Scale sets both width and height">
-              <input type="checkbox" id="align-uniform-scale" data-act="align-uniform-scale" data-needs-clip>
-              <span class="setting-subtext">Uniform Scale</span>
-            </label>
+          <!-- Uniform Scale -->
+          <div class="transform-row">
+            <div class="transform-field-label"></div>
+            <div class="transform-field-inputs">
+              <label class="checkbox-container" title="Uniform Scale: Scale sets both width and height">
+                <input type="checkbox" id="align-uniform-scale" data-act="align-uniform-scale" data-needs-clip>
+                <span class="setting-subtext">Uniform Scale</span>
+              </label>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="uniform-scale" title="Reset Uniform Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="uniform-scale" title="Reset Uniform Scale"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
 
-        <!-- Rotation -->
-        <div class="transform-row">
-          <div class="transform-field-label">Rotation</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">°</span>
-                <input type="text" id="align-rotation" class="transform-input" data-field="rotation" title="Rotation (°) - Drag to scrub, click to edit" hidden>
+          <!-- Rotation -->
+          <div class="transform-row">
+            <div class="transform-field-label">Rotation</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">°</span>
+                  <input type="text" id="align-rotation" class="transform-input" data-field="rotation" title="Rotation (°) - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
+              <div class="input-col"></div>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="rotation" title="Reset Rotation"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="rotation" title="Reset Rotation"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
 
-        <!-- Anchor -->
-        <div class="transform-row">
-          <div class="transform-field-label">Anchor Point</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <input type="text" id="align-anchor-x" class="transform-input" data-field="anchor-x" title="Anchor Point X (source px) - Drag to scrub, click to edit" hidden>
+          <!-- Anchor -->
+          <div class="transform-row">
+            <div class="transform-field-label">Anchor Point</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <input type="text" id="align-anchor-x" class="transform-input" data-field="anchor-x" title="Anchor Point X (source px) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <input type="text" id="align-anchor-y" class="transform-input" data-field="anchor-y" title="Anchor Point Y (source px) - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
             </div>
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <input type="text" id="align-anchor-y" class="transform-input" data-field="anchor-y" title="Anchor Point Y (source px) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="anchor" title="Reset Anchor Point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="anchor" title="Reset Anchor Point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
 
-        <div class="transform-row">
-          <div class="transform-field-label" title="Anti-flicker Filter">Anti-flicker Filter</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <input type="text" id="align-anti-flicker" class="transform-input" data-field="anti-flicker" title="Anti-flicker Filter (0 to 1) - Drag to scrub, click to edit" hidden>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Anti-flicker Filter">Anti-flicker Filter</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <input type="text" id="align-anti-flicker" class="transform-input" data-field="anti-flicker" title="Anti-flicker Filter (0 to 1) - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
+              <div class="input-col"></div>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="anti-flicker" title="Reset Anti-flicker Filter"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="anti-flicker" title="Reset Anti-flicker Filter"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          <div class="fx-subhead">Crop</div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Crop Left">Crop Left</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-crop-left" class="transform-input" data-field="crop-left" title="Crop Left (%) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col"></div>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="crop-left" title="Reset Crop Left"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Crop Top">Crop Top</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-crop-top" class="transform-input" data-field="crop-top" title="Crop Top (%) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col"></div>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="crop-top" title="Reset Crop Top"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Crop Right">Crop Right</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-crop-right" class="transform-input" data-field="crop-right" title="Crop Right (%) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col"></div>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="crop-right" title="Reset Crop Right"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Crop Bottom">Crop Bottom</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-crop-bottom" class="transform-input" data-field="crop-bottom" title="Crop Bottom (%) - Drag to scrub, click to edit" hidden>
+                </div>
+              </div>
+              <div class="input-col"></div>
+            </div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="motion" data-reset="crop-bottom" title="Reset Crop Bottom"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
         </div>
-        <div class="transform-row">
-          <div class="transform-field-label" title="Crop Left">Crop Left</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-crop-left" class="transform-input" data-field="crop-left" title="Crop Left (%) - Drag to scrub, click to edit" hidden>
+        <div id="fx-block-opacity" class="fx-block">
+          <div class="fx-head">
+            <div class="fx-toggle" role="button" data-fold="fx-block-opacity" title="Show or hide Opacity"><span class="fx-arrow">▾</span><span class="fx-badge">fx</span><span class="fx-name">Opacity</span></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset-block="opacity" title="Reset Opacity"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Opacity">Opacity</div>
+            <div class="transform-field-inputs">
+              <div class="input-col">
+                <div class="input-axis-wrap">
+                  <span class="val-text">—</span>
+                  <span class="val-unit">%</span>
+                  <input type="text" id="align-opacity" class="transform-input" data-field="opacity" title="Opacity (%) - Drag to scrub, click to edit" hidden>
+                </div>
               </div>
+              <div class="input-col"></div>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="opacity" data-reset="opacity" title="Reset Opacity"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-left" title="Reset Crop Left"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
-        <div class="transform-row">
-          <div class="transform-field-label" title="Crop Top">Crop Top</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-crop-top" class="transform-input" data-field="crop-top" title="Crop Top (%) - Drag to scrub, click to edit" hidden>
-              </div>
+          <div class="transform-row">
+            <div class="transform-field-label" title="Blend Mode">Blend Mode</div>
+            <div class="transform-field-inputs">
+              <select id="align-blend-mode" class="setting-select" data-field="blend-mode" title="Blend Mode" data-needs-clip>
+                <option value="0">Normal</option>
+                <option value="1">Dissolve</option>
+                <option value="3">Darken</option>
+                <option value="4">Multiply</option>
+                <option value="5">Color Burn</option>
+                <option value="6">Linear Burn</option>
+                <option value="7">Darker Color</option>
+                <option value="9">Lighten</option>
+                <option value="10">Screen</option>
+                <option value="11">Color Dodge</option>
+                <option value="12">Linear Dodge (Add)</option>
+                <option value="13">Lighter Color</option>
+                <option value="15">Overlay</option>
+                <option value="16">Soft Light</option>
+                <option value="17">Hard Light</option>
+                <option value="18">Vivid Light</option>
+                <option value="19">Linear Light</option>
+                <option value="20">Pin Light</option>
+                <option value="21">Hard Mix</option>
+                <option value="23">Difference</option>
+                <option value="24">Exclusion</option>
+                <option value="25">Subtract</option>
+                <option value="26">Divide</option>
+                <option value="28">Hue</option>
+                <option value="29">Saturation</option>
+                <option value="30">Color</option>
+                <option value="31">Luminosity</option>
+              </select>
             </div>
-            <div class="input-col"></div>
+            <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-block="opacity" data-reset="blend-mode" title="Reset Blend Mode"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
           </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-top" title="Reset Crop Top"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
-        <div class="transform-row">
-          <div class="transform-field-label" title="Crop Right">Crop Right</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-crop-right" class="transform-input" data-field="crop-right" title="Crop Right (%) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
-            <div class="input-col"></div>
-          </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-right" title="Reset Crop Right"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
-        <div class="transform-row">
-          <div class="transform-field-label" title="Crop Bottom">Crop Bottom</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-crop-bottom" class="transform-input" data-field="crop-bottom" title="Crop Bottom (%) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
-            <div class="input-col"></div>
-          </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="crop-bottom" title="Reset Crop Bottom"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        </div>
-
-        <!-- Opacity and Blend Mode (Effect Controls' Opacity section) -->
-        <div class="transform-row">
-          <div class="transform-field-label" title="Opacity">Opacity</div>
-          <div class="transform-field-inputs">
-            <div class="input-col">
-              <div class="input-axis-wrap">
-                <span class="val-text">—</span>
-                <span class="val-unit">%</span>
-                <input type="text" id="align-opacity" class="transform-input" data-field="opacity" title="Opacity (%) - Drag to scrub, click to edit" hidden>
-              </div>
-            </div>
-            <div class="input-col"></div>
-          </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="opacity" title="Reset Opacity"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
-        <div class="transform-row">
-          <div class="transform-field-label" title="Blend Mode">Blend Mode</div>
-          <div class="transform-field-inputs">
-            <select id="align-blend-mode" class="setting-select" data-field="blend-mode" title="Blend Mode" data-needs-clip>
-              <option value="0">Normal</option>
-              <option value="1">Dissolve</option>
-              <option value="3">Darken</option>
-              <option value="4">Multiply</option>
-              <option value="5">Color Burn</option>
-              <option value="6">Linear Burn</option>
-              <option value="7">Darker Color</option>
-              <option value="9">Lighten</option>
-              <option value="10">Screen</option>
-              <option value="11">Color Dodge</option>
-              <option value="12">Linear Dodge (Add)</option>
-              <option value="13">Lighter Color</option>
-              <option value="15">Overlay</option>
-              <option value="16">Soft Light</option>
-              <option value="17">Hard Light</option>
-              <option value="18">Vivid Light</option>
-              <option value="19">Linear Light</option>
-              <option value="20">Pin Light</option>
-              <option value="21">Hard Mix</option>
-              <option value="23">Difference</option>
-              <option value="24">Exclusion</option>
-              <option value="25">Subtract</option>
-              <option value="26">Divide</option>
-              <option value="28">Hue</option>
-              <option value="29">Saturation</option>
-              <option value="30">Color</option>
-              <option value="31">Luminosity</option>
-            </select>
-          </div>
-          <div class="transform-reset icon-btn" role="button" data-act="align-reset" data-needs-clip data-reset="blend-mode" title="Reset Blend Mode"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 3v5h5"/></svg></div>
         </div>
       </div>
+      <div class="view-hint">Drag a value to scrub · click to type</div>
     </div>
 
-    <!-- Quick Tools: Anchor 9-Point & Sequence Frame Align -->
-    <div class="transform-tools transform-tools-container">
-      <!-- 9-Point Anchor Tool -->
-      <div class="transform-tool-card tool-card-anchor" title="Anchor Point: 9-point placement (picture stays put)">
-        <div class="anchor-grid">
-          <div class="anchor-row">
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-left" title="Top Left"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top" title="Top Center"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-right" title="Top Right"><div class="anchor-dot"></div></div>
-          </div>
-          <div class="anchor-row">
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="left" title="Center Left"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="center" title="Center"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="right" title="Center Right"><div class="anchor-dot"></div></div>
-          </div>
-          <div class="anchor-row">
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-left" title="Bottom Left"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom" title="Bottom Center"><div class="anchor-dot"></div></div>
-            <div class="anchor-cell" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-right" title="Bottom Right"><div class="anchor-dot"></div></div>
+    <div id="view-align" class="view-panel">
+      <div class="align-row align-targets">
+        <div class="pill-mini active" role="button" data-align-to="frame" title="Align to the sequence frame">Frame</div>
+        <div class="pill-mini" role="button" data-align-to="selection" title="Align to the outer box of the selected clips (2 or more)">Selection</div>
+        <div class="pill-mini" role="button" data-align-to="group" title="Align to Video Frame as Group: the selection's outer box goes to the frame, every clip moves together">Group</div>
+      </div>
+      <!-- The frame drawing: its edges and center lines align, the dots on the clip set the
+           anchor. Sized and laid out in px by renderFrame in core/alignPanel.js. -->
+      <div id="align-frame-wrap" class="al-frame-wrap">
+        <div id="align-frame" class="al-frame">
+          <div id="align-line-left" class="al-line v start" role="button" data-act="align-edge" data-needs-clip data-align="left" title="Align left"><div class="al-mark"></div></div>
+          <div id="align-line-right" class="al-line v end" role="button" data-act="align-edge" data-needs-clip data-align="right" title="Align right"><div class="al-mark"></div></div>
+          <div id="align-line-top" class="al-line h start" role="button" data-act="align-edge" data-needs-clip data-align="top" title="Align top"><div class="al-mark"></div></div>
+          <div id="align-line-bottom" class="al-line h end" role="button" data-act="align-edge" data-needs-clip data-align="bottom" title="Align bottom"><div class="al-mark"></div></div>
+          <div id="align-line-hcenter" class="al-line v mid" role="button" data-act="align-edge" data-needs-clip data-align="hcenter" title="Align horizontal center"><div class="al-mark"></div></div>
+          <div id="align-line-vcenter" class="al-line h mid" role="button" data-act="align-edge" data-needs-clip data-align="vcenter" title="Align vertical center"><div class="al-mark"></div></div>
+          <div id="align-clip-box" class="al-clip">
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-left" title="Anchor: Top Left"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="top" title="Anchor: Top Center"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="top-right" title="Anchor: Top Right"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="left" title="Anchor: Center Left"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="center" title="Anchor: Center"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="right" title="Anchor: Center Right"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-left" title="Anchor: Bottom Left"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom" title="Anchor: Bottom Center"><div class="al-dot-mark"></div></div>
+            <div class="al-dot" role="button" data-act="align-anchor" data-needs-clip data-anchor="bottom-right" title="Anchor: Bottom Right"><div class="al-dot-mark"></div></div>
           </div>
         </div>
       </div>
-
-      <!-- Align to Sequence Frame Tool -->
-      <div class="transform-tool-card tool-card-align" title="Aligns each clip's picture to the sequence frame, or to the outer box of the selected clips">
-        <div class="transform-align">
-          <div class="align-row">
-            <div class="pill-mini active" role="button" data-align-to="frame" title="Align to the sequence frame">Frame</div>
-            <div class="pill-mini" role="button" data-align-to="selection" title="Align to the outer box of the selected clips (2 or more)">Selection</div>
-            <div class="pill-mini" role="button" data-align-to="group" title="Align to Video Frame as Group: the selection's outer box goes to the frame, every clip moves together">Group</div>
+      <div class="view-hint">Edges and center lines align. Dots on the clip set its anchor.</div>
+      <div class="control-label al-label">Distribute</div>
+      <div class="align-row">
+        <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="h-centers" title="Distribute Horizontal Centers">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M4 8v8M20 8v8"/><rect x="9" y="7" width="6" height="10" rx="1"/></svg>
           </div>
-          <div class="align-row">
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="left" title="Align Left">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="7" y="14" width="14" height="4" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="hcenter" title="Align Horizontal Center">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="5" y="14" width="14" height="4" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="right" title="Align Right">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 3v18"/><rect x="7" y="6" width="10" height="4" rx="1"/><rect x="3" y="14" width="14" height="4" rx="1"/></svg>
-            </div>
+        <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="v-centers" title="Distribute Vertical Centers">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M8 4h8M8 20h8"/><rect x="7" y="9" width="10" height="6" rx="1"/></svg>
           </div>
-          <div class="align-row">
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="top" title="Align Top">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="7" width="4" height="14" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="vcenter" title="Align Vertical Center">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="align-edge" data-needs-clip data-align="bottom" title="Align Bottom">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="6" y="7" width="4" height="10" rx="1"/><rect x="14" y="3" width="4" height="14" rx="1"/></svg>
-            </div>
+        <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="h-gaps" title="Distribute Horizontal Gaps">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16M20 4v16"/><rect x="9" y="8" width="6" height="8" rx="1"/></svg>
           </div>
-        </div>
-      </div>
-
-      <!-- Distribute Tool: needs 3 or more clips; the outer two stay put -->
-      <div class="transform-tool-card tool-card-distribute" title="Distribute: across frame (with even margins) or within selection">
-        <div class="transform-align">
-          <div class="align-row">
-            <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="h-centers" title="Distribute Horizontal Centers">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M4 8v8M20 8v8"/><rect x="9" y="7" width="6" height="10" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="v-centers" title="Distribute Vertical Centers">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M8 4h8M8 20h8"/><rect x="7" y="9" width="10" height="6" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="h-gaps" title="Distribute Horizontal Gaps">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16M20 4v16"/><rect x="9" y="8" width="6" height="8" rx="1"/></svg>
-            </div>
-            <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="v-gaps" title="Distribute Vertical Gaps">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16M4 20h16"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg>
-            </div>
+        <div class="icon-btn align-btn" role="button" data-act="distribute" data-needs-clip data-distribute="v-gaps" title="Distribute Vertical Gaps">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16M4 20h16"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg>
           </div>
-        </div>
       </div>
     </div>
 
@@ -588,6 +574,12 @@
       <div id="align-status" role="status">Ready</div>
       <div id="align-copy" class="icon-btn" role="button" data-act="align-copy" title="Copy this report"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
     </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-card">
+    <div id="status-icon" class="status-icon"></div>
+    <div id="status" role="status">Ready</div>
   </div>
 
   <!-- Settings Modal (Opened by Settings in Dropdown Menu) -->
@@ -666,55 +658,9 @@
           </div>
         </div>
       </div>
-
-      <!-- Tool Shortcuts & Reference Guide -->
-      <div class="setting-divider"></div>
-      <div class="setting-help-box">
-        <div class="help-box-title">
-          <svg viewBox="0 0 24 24" width="12" height="12" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
-          ADJ &amp; FX Tools &amp; Shortcuts Guide
-        </div>
-        <div class="help-section">
-          <div class="help-tool-name">Adjustment Layer:</div>
-          <div class="help-item"><span class="key-tag">Click</span> Span 1 continuous AL over full selection</div>
-          <div class="help-item"><span class="key-tag">Ctrl+Click</span> Place 1 separate AL per selected clip (e.g. 3 clips = 3 ALs)</div>
-          <div class="help-item"><span class="key-tag">⇧ Shift+Click</span> 50/50 cut transition on every cut between selected clips (or at playhead)</div>
-        </div>
-        <div class="help-section">
-          <div class="help-tool-name">Quick-effect buttons (below Adjustment Layer):</div>
-          <div class="help-item"><span class="key-tag purple">Click</span> Span 1 AL over the selection and apply that preset's effect to it</div>
-          <div class="help-item"><span class="key-tag purple">Ctrl+Click</span> 1 AL per selected clip, each with that preset's effect applied</div>
-          <div class="help-item"><span class="key-tag purple">⇧ Shift+Click</span> 50/50 cut transition AL(s) with that preset's effect applied</div>
-          <div class="help-item"><span class="key-tag purple">Capture</span> (Settings) Name it, then save the selected clip/AL's real applied effects as a new quick-effect button</div>
-          <div class="help-item"><span class="key-tag purple">Edit</span> (Settings, below Capture) Rename a preset in its text field, or remove it with ×</div>
-        </div>
-        <div class="help-section">
-          <div class="help-tool-name">Settings Reference:</div>
-          <div class="help-item">• <strong>Transition (50/50)</strong>: Frame duration split evenly across the cut point (e.g. 16f = 8f left + 8f right).</div>
-          <div class="help-item">• <strong>Clamp</strong>: Shrinks transition on short clips to prevent bleeding into adjacent cuts.</div>
-          <div class="help-item">• <strong>Color</strong>: Timeline label color for created ALs.</div>
-        </div>
-      </div>
     </div>
   </div>
 
-  <div id="view-clubfriday" hidden style="padding:16px;overflow:auto;">
-    <h2>ClubFriday</h2>
-    <p>Mark In/Out on the timeline, then transcribe that range.</p>
-    <label>Audio track (blank = automatic)</label>
-    <input id="cf-track" type="text" placeholder="e.g. 1 for A1">
-    <button id="cf-start">Transcribe In/Out</button>
-    <button id="cf-restore">Load latest result</button>
-    <p id="cf-range"></p>
-    <p id="cf-status" role="status">Ready</p>
-    <button id="cf-import" disabled>Import SRT into project</button>
-    <button id="cf-editor">Open quote editor</button>
-    <p>After import: drag the SRT from CutDeck / ClubFriday onto the timeline. Choose Subtitle and Source timecode to align the captions.</p>
-  </div>
   <script src="main.js"></script>
 </body>
 </html>

@@ -71,6 +71,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof (2026-10-19, per-text-layer bounds): removed the hide-other-text write in `measureTextLayer` (uxp/cutdeck/transform/frameBounds.js); 5 tests in cutdeck_transform_edit.test.cjs went red; restored, 696/696 green. Live 2026-10-19: both text layers of a 2-text Graphic aligned left alone, each measured with the other hidden (PREMIERE_FACTS row "Measuring ONE text layer").
 - fail-proof: stashed the alignPanel.js/panel.js fixes, cutdeck_input_commit.test.cjs went red on both tests (bad frame count stayed in the box; Enter committed twice), restored
 - fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
+- fail-proof (2026-10-26, one panel, four tabs; tests/cutdeck_one_panel.test.cjs): each went red on its own and was restored, 726/726 green: dropped the `isMounted` tab gate in features/align.js (the poll read Premiere on the Cut tab); raised the frame drawing's height cap to 300 (9:16 drawn too tall); let the fx block reset include disabled rows; never cleared the busy-tab dot; gave `#tab-align` a `data-act` (busy would disable it); laid the frame out while its width is 0. Not yet run in Premiere (plan step 8).
 
 ## Topic Cut
 - test: `python -m pytest tests/test_cutdeck_topic_layout.py tests/test_cutdeck_topic_speakers.py -q -p no:cacheprovider`
@@ -83,7 +84,6 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test: `python -m pytest tests/test_clubfriday.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: dropped the range offset from cue times in clubfriday/server.py, test_session_reaches_ready_with_cues_shifted_by_range_offset went red, reverted
-- the panel half (uxp/cutdeck/features/clubFriday.js) is checked by tests/clubfriday_panel.test.cjs inside the CutDeck panel feature's `node --test tests/*.cjs`
 
 ## Blind spots
 - ClubFriday: the browser page (clubfriday/static/app.js) has no automated check, and nothing here transcribes a real range or imports the SRT into live Premiere; the backend runs against a fake helper and extractor.

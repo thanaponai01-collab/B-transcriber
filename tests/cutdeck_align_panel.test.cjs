@@ -1,18 +1,12 @@
-/* Phase 0a of the Transform & Align plan (docs/research/cutdeck-transform-panel-plan.md):
-   the second panel entrypoint.
+/* The Transform and Align tabs of the one CutDeck panel (docs/research/cutdeck-one-panel-plan.md).
 
-   The plan originally called for a second HTML document (align.html) with its own per-
-   entrypoint "main". That is not buildable: Adobe's manifest schema allows only type, id,
-   label, description, shortcut, icon and the *Size hints on an entrypoint, and `main` is a
-   single top-level property. Every panel in a plugin shares ONE document, and extra panels
-   are containers moved into their own root by the entrypoints.setup() show() hook. These
-   tests pin that corrected shape down.
+   Until 2026-10 Transform & Align was a second panel entrypoint whose container a show() hook
+   moved into its own root (Phase 0a of docs/research/cutdeck-transform-panel-plan.md). It is
+   now two tabs inside the main panel: core/panel.js shows #view-tools and picks the view,
+   core/alignPanel.js renders inside it. These tests pin that shape down, plus everything the
+   seam renders and binds.
 
-   What cannot be proven here: that Premiere actually opens the second panel and calls show().
-   That needs the host. What IS proven here is everything that would make it fail before it
-   got that far — a malformed manifest, a container that does not exist, ids that do not
-   resolve, a mount that does not move anything, and a bootstrap that could take the existing
-   Cut & Sync panel down with it. */
+   What cannot be proven here: how Premiere lays the tabs out. That needs the host. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -30,14 +24,10 @@ const alignJsPath = path.join(root, "uxp", "cutdeck", "core", "alignPanel.js");
 
 // --- manifest ------------------------------------------------------------------------------
 
-test("the manifest declares three panel entrypoints with distinct ids", () => {
+test("the manifest declares one panel entrypoint, CutDeck", () => {
   const panels = manifest.entrypoints.filter((e) => e.type === "panel");
-  assert.equal(panels.length, 3);
-  assert.deepEqual(panels.map((p) => p.id), ["cutdeck.panel", "cutdeck.align.panel", "cutdeck.clubfriday.panel"]);
-  assert.equal(new Set(panels.map((p) => p.id)).size, 3, "entrypoint ids must be unique");
-  for (const p of panels) {
-    assert.ok(p.label && p.label.default, `${p.id} needs a label`);
-  }
+  assert.deepEqual(panels.map((p) => p.id), ["cutdeck.panel"]);
+  assert.ok(panels[0].label && panels[0].label.default, "cutdeck.panel needs a label");
 });
 
 test("there is exactly ONE top-level main, and no entrypoint carries its own", () => {
@@ -64,9 +54,12 @@ test("the existing Cut & Sync entrypoint is untouched", () => {
 
 // --- the container and its ids -------------------------------------------------------------
 
-test("the transform container exists and ships hidden", () => {
-  assert.match(html, /<div id="view-transform" hidden>/,
-    "the container must ship hidden or it flashes inside the Cut & Sync panel");
+test("the Transform and Align views live in #view-tools, in the main panel's flow", () => {
+  assert.match(html, /<div id="view-tools" class="view-panel tools-panel">/);
+  const tools = html.slice(html.indexOf('id="view-tools"'));
+  assert.ok(tools.indexOf('id="view-transform"') !== -1, "the Transform view is not inside #view-tools");
+  assert.ok(tools.indexOf('id="view-align"') !== -1, "the Align view is not inside #view-tools");
+  assert.ok(tools.indexOf('id="align-status-card"') !== -1, "the transform status card is not inside #view-tools");
 });
 
 test('every $("id") in core/alignPanel.js resolves to an id in index.html', () => {
@@ -142,8 +135,7 @@ function makeStub() {
     return node;
   }
 
-  const container = el("view-transform");
-  container.hidden = true;
+  const container = el("view-tools");
   const probe = el("align-probe");
   probe.setAttribute("data-act", "align-probe");
   container.appendChild(probe);
@@ -191,66 +183,6 @@ function loadAlignPanel() {
   delete require.cache[require.resolve("../uxp/cutdeck/core/alignPanel.js")];
   return require("../uxp/cutdeck/core/alignPanel.js");
 }
-
-/* Stands in for the rootNode Premiere hands show(). It must reparent the way a real
-   appendChild does — detaching the node from its previous parent — or the test would pass
-   while the container stayed in the shared body in the real host. */
-function makePanelRoot() {
-  return {
-    children: [],
-    appendChild(child) {
-      if (child.parentElement) {
-        child.parentElement.children = child.parentElement.children.filter((c) => c !== child);
-      }
-      this.children.push(child);
-      child.parentElement = this;
-      return child;
-    },
-  };
-}
-
-test("mount moves the container into the given root and reveals it", () => {
-  const { container, body } = makeStub();
-  const alignPanel = loadAlignPanel();
-  const panelRoot = makePanelRoot();
-
-  assert.equal(container.hidden, true, "precondition: ships hidden");
-  assert.equal(alignPanel.mount(panelRoot), true);
-  assert.equal(container.parentElement, panelRoot, "container did not move into the panel root");
-  assert.equal(container.hidden, false, "mount must reveal the container");
-  assert.equal(body.children.includes(container), false, "container is still in the shared body");
-
-  delete global.document;
-});
-
-test("mount is idempotent and a second mount into the same root moves nothing", () => {
-  makeStub();
-  const alignPanel = loadAlignPanel();
-  const panelRoot = { children: [], appendChild(c) { this.children.push(c); c.parentElement = this; } };
-  alignPanel.mount(panelRoot);
-  alignPanel.mount(panelRoot);
-  assert.equal(panelRoot.children.length, 1, "the container was appended twice");
-  delete global.document;
-});
-
-test("mount reports failure instead of pretending, when there is nothing to mount", () => {
-  global.document = { getElementById: () => null };
-  const alignPanel = loadAlignPanel();
-  assert.equal(alignPanel.mount({ appendChild() {} }), false, "no container should be a reported failure");
-  assert.equal(alignPanel.mount(null), false, "no root should be a reported failure");
-  delete global.document;
-});
-
-test("unmount hides the container again", () => {
-  const { container } = makeStub();
-  const alignPanel = loadAlignPanel();
-  alignPanel.mount({ appendChild(c) { c.parentElement = this; } });
-  assert.equal(alignPanel.isMounted(), true);
-  assert.equal(alignPanel.unmount(), true);
-  assert.equal(container.hidden, true);
-  assert.equal(alignPanel.isMounted(), false);
-  delete global.document;
-});
 
 test("render is idempotent: a second call with the same state changes nothing further", () => {
   const { nodes } = makeStub();
@@ -471,12 +403,10 @@ test("main.js binds every intent the align panel calls", () => {
 
 // --- bootstrap: the new panel must not be able to take the shipped one down -----------------
 
-test("entrypoints.setup registers BOTH panel ids", () => {
-  for (const id of ["cutdeck.panel", "cutdeck.align.panel"]) {
-    assert.ok(mainJs.includes(`"${id}"`), `main.js never registers ${id}`);
-  }
+test("entrypoints.setup registers only the CutDeck panel", () => {
+  assert.ok(mainJs.includes('"cutdeck.panel"'), "main.js never registers cutdeck.panel");
+  assert.equal(mainJs.includes("cutdeck.align.panel"), false, "the retired Transform panel is still registered");
   assert.match(mainJs, /entrypoints\.setup\(/, "main.js never calls entrypoints.setup");
-  assert.match(mainJs, /alignPanel\.mount\(rootNode\)/, "the show hook never mounts the container");
 });
 
 test("entrypoints.setup is guarded, and runs after the main panel is already bound", () => {
@@ -509,16 +439,11 @@ test("Anchor Point is converted against the SOURCE frame, never the sequence fra
   assert.match(alignEditJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
 });
 
-test("the transform panel's show hook starts the live poll, after mounting and the first read", () => {
-  const showAt = mainJs.indexOf('"cutdeck.align.panel"');
-  assert.ok(showAt !== -1, "cutdeck.align.panel entrypoint is not registered");
-  const showBlock = mainJs.slice(showAt, mainJs.indexOf("},", showAt));
-  assert.match(showBlock, /alignPanel\.mount\(rootNode\)/);
-  assert.match(showBlock, /align\.refresh\(\)/);
-  assert.match(showBlock, /align\.startPolling\(\)/);
-  const mountAt = showBlock.indexOf("alignPanel.mount");
-  const pollAt = showBlock.indexOf("align.startPolling()");
-  assert.ok(mountAt < pollAt, "polling must start after the container is mounted");
+test("the transform poll starts with the panel and reads only on the Transform and Align tabs", () => {
+  assert.match(mainJs, /isMounted: \(\) => isToolsTab\(mainCtl\.state\.tab\)/);
+  assert.match(mainJs, /const isToolsTab = \(name\) => name === "transform" \|\| name === "align";/);
+  const startupAt = mainJs.indexOf("// Startup");
+  assert.ok(startupAt !== -1 && mainJs.indexOf("align.startPolling()", startupAt) !== -1, "polling does not start at startup");
 });
 
 test("the poll never touches alignState.busy/status, so it cannot flicker the spinner or disable controls", () => {
@@ -1029,8 +954,7 @@ test("Slice 3: adaptive poll interval drops to 1000ms idle and speeds to 150ms o
 
 test("Slice 4 B2: alignPanel renders text layer switcher when textLayers > 1", () => {
   const alignPanel = require(alignJsPath);
-  const { nodes, root } = makeStub();
-  alignPanel.mount(root);
+  const { nodes } = makeStub();
 
   const state = {
     sequence: { name: "Seq 1" },
@@ -1059,8 +983,7 @@ test("Slice 4 B2: alignPanel renders text layer switcher when textLayers > 1", (
 
 test("Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver is true", () => {
   const alignPanel = require(alignJsPath);
-  const { nodes, root } = makeStub();
-  alignPanel.mount(root);
+  const { nodes } = makeStub();
 
   // Stub anchor and align buttons
   const anchorBtn = nodes.get("align-anchor-top-left") || (() => {
@@ -1070,7 +993,7 @@ test("Slice 4 B4: alignPanel disables anchor/align buttons when needPlayheadOver
       getAttribute: (n) => (n === "data-act" ? "align-anchor" : null),
       setAttribute: () => {},
     };
-    nodes.get("view-transform").children.push(b);
+    nodes.get("view-tools").children.push(b);
     return b;
   })();
 

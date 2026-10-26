@@ -9,13 +9,13 @@ const panelJsSource = fs.readFileSync(panelJsPath, "utf8");
 const uxpHtmlPath = path.join(root, "uxp", "cutdeck", "index.html");
 const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
 
-/* The UI seam is one file PER PANEL DOCUMENT, not one file forever. Premiere gives a plugin a
-   single main HTML document however many panel entrypoints it declares, so both panels share
-   index.html — but each owns its own seam module, and DOM access stays confined to these.
+/* The UI seam is one file per area of the panel, not one file forever. CutDeck is one panel
+   (one index.html); core/panel.js owns the Cut and FX tabs and the frame around them,
+   core/alignPanel.js the Transform and Align tabs, and DOM access stays confined to these.
    Adding a name here is a deliberate architectural decision (see docs/arch-design-panel-ui.md),
    never a way to quiet this test: anything listed must also be held to the id-resolution and
    render-idempotence tests below. */
-const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js", "core/clubFridayPanel.js"];
+const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js"];
 
 function idsInHtml(html) {
   return new Set([...html.matchAll(/\bid="([a-zA-Z0-9_-]+)"/g)].map((m) => m[1]));
@@ -286,15 +286,15 @@ function makeDomStub() {
     "menu-item-reload", "menu-item-settings", "mode", "overflow-menu", "pill-silence",
     "pill-speech", "range", "refresh", "resume", "seq-card", "sequence", "setting-active-fx",
     "setting-bin", "setting-clamp", "setting-color", "setting-frames", "settings-modal",
-    "status", "status-icon", "sync", "tab-adj", "tab-edit", "timingprobe",
-    "tools-toggle", "view-adj", "view-edit",
+    "status", "status-icon", "sync", "tab-adj", "tab-align", "tab-edit", "tab-transform", "timingprobe",
+    "tools-toggle", "view-adj", "view-align", "view-edit", "view-tools", "view-transform",
   ];
   const dataActIds = new Set([
     "audio", "badge-active-fx", "badge-transition", "btn-adj",
     "btn-capture-preset", "btn-fx", "copystatus", "cut", "frame-dec", "frame-inc",
     "menu-item-reload", "menu-item-settings", "mode", "pill-silence", "pill-speech",
     "refresh", "seq-card", "setting-active-fx", "setting-bin", "setting-clamp",
-    "setting-color", "setting-frames", "sync", "tab-adj", "tab-edit",
+    "setting-color", "setting-frames", "sync",
     "timingprobe", "tools-toggle",
   ]);
 

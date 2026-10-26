@@ -119,6 +119,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget });
     lastStateJson = JSON.stringify(next);
     ctl.state.sequence = next.sequence;
+    ctl.state.frame = next.frame;
     ctl.state.transform = next.transform;
     ctl.render();
   }
@@ -151,6 +152,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
         if (nextJson !== lastStateJson) {
           lastStateJson = nextJson;
           ctl.state.sequence = next.sequence;
+          ctl.state.frame = next.frame;
           ctl.state.transform = next.transform;
           ctl.render();
         }
@@ -250,6 +252,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       if (nextJson !== lastStateJson) {
         lastStateJson = nextJson;
         ctl.state.sequence = next.sequence;
+        ctl.state.frame = next.frame;
         ctl.state.transform = next.transform;
         ctl.render();
       }

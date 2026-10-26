@@ -20,7 +20,6 @@ flowchart LR
   server --> sessions["output/clubfriday session files"]
   server --> srt["Project CutDeck/ClubFriday SRT"]
   backend --> helper["cutdeck/helper.py websocket helper"]
-  panel["uxp/cutdeck/features/clubFriday.js"] --> server
 ```
 
 | Arrow | Source evidence |
@@ -31,7 +30,6 @@ flowchart LR
 | Server -> sessions | clubfriday/server.py:111: atomic write_json persistence |
 | Server -> SRT | clubfriday/server.py:289, 306: BOM/CRLF writes |
 | Backend -> helper | cutdeck/ai_backend.py:54: localhost websocket exchange |
-| Panel -> server | uxp/cutdeck/features/clubFriday.js:7: HTTP request |
 
 ## Boundaries and placement
 - clubfriday/: API/UI, session lifecycle, timeline offset, quote rules and exports.

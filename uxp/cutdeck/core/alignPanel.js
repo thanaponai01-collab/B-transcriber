@@ -1,32 +1,19 @@
-/* The Transform & Align panel's UI seam — the counterpart to core/panel.js, under the same
+/* The Transform and Align tabs' UI seam — the counterpart to core/panel.js, under the same
    two-export contract (render(state) / bind(intents)) and the same rule: this is the only
-   place the transform panel is allowed to touch the DOM. See docs/arch-design-panel-ui.md and
-   tests/panel_ui_contract.test.cjs, whose seam allowlist now names both files rather than one.
+   place the transform controls are allowed to touch the DOM. See docs/arch-design-panel-ui.md
+   and tests/panel_ui_contract.test.cjs, whose seam allowlist names both files.
 
-   Why this module owns a job core/panel.js does not:
-
-   Premiere gives a plugin ONE main HTML document however many panel entrypoints it declares.
-   There is no per-entrypoint "main" field — Adobe's manifest schema allows only type, id,
-   label, description, shortcut, icon and the *Size hints on an entrypoint, and `main` is a
-   single top-level property. Extra panels are therefore containers inside that one shared
-   document, moved into their own panel root by the show() hook of entrypoints.setup(). So
-   this seam exposes mount(rootNode), which relocates #view-transform out of the shared body
-   and into the panel Premiere actually created for it.
-
-   The container ships `hidden` in index.html so it never flashes inside the Cut & Sync panel
-   before its own panel is opened; mount() reveals it once the move has happened.
-
-   Nothing here may depend on hide() or destroy() firing: Adobe documents both as "not working
-   as expected yet" in Premiere. unmount() exists for tests, and for a build where they work.
-   A transform panel that is never unmounted is correct behavior, not a leak. */
+   Until 2026-10 this was a second panel entrypoint whose container was moved into its own
+   panel root by a show() hook. It is now two tabs of the one CutDeck panel
+   (docs/research/cutdeck-one-panel-plan.md): core/panel.js shows and hides #view-tools and its
+   two views, and this seam renders inside that container only. */
 (function (global) {
   function $(id) {
     return document.getElementById(id);
   }
 
-  // The id of the one container this seam owns. Everything it renders lives inside it, so a
-  // single lookup is enough to move the whole panel.
-  const CONTAINER_ID = "view-transform";
+  // The one container this seam owns: the Transform view, the Align view and their status card.
+  const CONTAINER_ID = "view-tools";
 
   let current = null;
 
@@ -167,33 +154,8 @@
     if (document.activeElement !== el && el.value !== wanted) el.value = wanted;
   }
 
-  // --- mount: move this panel's container into the root Premiere made for it ---------------
-
   function container() {
     return $(CONTAINER_ID);
-  }
-
-  /* Relocates the container into rootNode and reveals it. Idempotent: mounting into the same
-     root twice is a no-op, and mounting into a different root moves it. Returns false when
-     there is nothing to mount, so the caller can report a real failure instead of assuming. */
-  function mount(rootNode) {
-    const el = container();
-    if (!el || !rootNode || typeof rootNode.appendChild !== "function") return false;
-    if (el.parentElement !== rootNode) rootNode.appendChild(el);
-    setHidden(el, false);
-    return true;
-  }
-
-  function unmount() {
-    const el = container();
-    if (!el) return false;
-    setHidden(el, true);
-    return true;
-  }
-
-  function isMounted() {
-    const el = container();
-    return !!(el && el.hidden === false);
   }
 
   // --- render: state -> screen -------------------------------------------------------------
@@ -212,8 +174,6 @@
     }
   }
 
-  // Every control is off while an action runs; the ones marked data-needs-clip are also off
-  // while there is no editable clip.
   // Every control is off while an action runs; the ones marked data-needs-clip are also off
   // while there is no editable clip.
   // B4: when needPlayheadOver is true, anchor/align/distribute buttons are disabled with tooltip.
@@ -290,6 +250,67 @@
     return available;
   }
 
+  // The Align tab's frame drawing takes the sequence's shape, capped in height so a 9:16 frame
+  // gets narrower instead of taller. Laid out in px (percent is not a documented UXP unit) and
+  // only when the size changes; clientWidth is 0 while the tab is hidden, so it waits until shown.
+  const FRAME_MAX_HEIGHT = 200;
+  const LINE_HIT = 12;
+  let frameKey = "";
+  function px(el, left, top, width, height) {
+    if (!el || !el.style) return;
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+    el.style.width = `${Math.round(width)}px`;
+    el.style.height = `${Math.round(height)}px`;
+  }
+  function frameBox(available, frame) {
+    const ratio = frame && frame.width > 0 && frame.height > 0 ? frame.height / frame.width : 9 / 16;
+    let width = available;
+    let height = width * ratio;
+    if (height > FRAME_MAX_HEIGHT) {
+      height = FRAME_MAX_HEIGHT;
+      width = height / ratio;
+    }
+    return { width: Math.round(width), height: Math.round(height) };
+  }
+  function renderFrame(frame) {
+    const wrap = $("align-frame-wrap");
+    const canvas = $("align-frame");
+    if (!wrap || !canvas) return;
+    const available = wrap.clientWidth || 0;
+    if (available <= 0) return;
+    const { width, height } = frameBox(available, frame);
+    const key = `${width}x${height}`;
+    if (key === frameKey) return;
+    frameKey = key;
+    if (canvas.style) {
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
+    layoutFrame(width - 2 * FRAME_BORDER, height - 2 * FRAME_BORDER);
+  }
+  // Lines and dots are placed inside the frame's 1px border (HTMLElement.style and clientWidth:
+  // reference/adobe/api/uxp.txt).
+  const FRAME_BORDER = 1;
+  function layoutFrame(width, height) {
+    const inner = width - 2 * LINE_HIT;
+    px($("align-line-left"), 0, 0, LINE_HIT, height);
+    px($("align-line-right"), width - LINE_HIT, 0, LINE_HIT, height);
+    px($("align-line-top"), LINE_HIT, 0, inner, LINE_HIT);
+    px($("align-line-bottom"), LINE_HIT, height - LINE_HIT, inner, LINE_HIT);
+    px($("align-line-hcenter"), (width - LINE_HIT) / 2, LINE_HIT, LINE_HIT, height - 2 * LINE_HIT);
+    px($("align-line-vcenter"), LINE_HIT, (height - LINE_HIT) / 2, inner, LINE_HIT);
+    const boxW = width * 0.38;
+    const boxH = height * 0.38;
+    px($("align-clip-box"), (width - boxW) / 2, (height - boxH) / 2, boxW, boxH);
+    const box = $("align-clip-box");
+    const dots = box && typeof box.querySelectorAll === "function" ? box.querySelectorAll("[data-anchor]") : [];
+    const DOT = 15;
+    dots.forEach((dot, i) => {
+      px(dot, (i % 3) * boxW / 2 - DOT / 2, Math.floor(i / 3) * boxH / 2 - DOT / 2, DOT, DOT);
+    });
+  }
+
   function render(state) {
     if (!state) return;
     current = state;
@@ -304,6 +325,7 @@
     const tooltip = state.transform ? state.transform.tooltip : null;
     renderBusy(busyVis, hasClip, needPlayhead, tooltip);
     renderTextPositionReset(textLayerRows);
+    renderFrame(state.frame);
   }
 
   // A text layer's Position has no fixed default (transform/edit.js RESET_FIELDS), so its reset
@@ -487,6 +509,27 @@
         if (!node.disabled) intents.onResetField(node.getAttribute("data-reset"));
       });
     });
+    // An fx block's header reset resets each of its rows in turn, skipping a row that is off.
+    el.querySelectorAll("[data-reset-block]").forEach((node) => {
+      node.addEventListener("click", (e) => {
+        if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+        if (node.disabled) return;
+        const block = node.getAttribute("data-reset-block");
+        el.querySelectorAll("[data-reset]").forEach((row) => {
+          if (row.getAttribute("data-block") === block && !row.disabled) intents.onResetField(row.getAttribute("data-reset"));
+        });
+      });
+    });
+    // Folding an fx block is presentation only, so it stays here and never reaches a controller.
+    el.querySelectorAll("[data-fold]").forEach((header) => {
+      header.addEventListener("click", () => {
+        const block = $(header.getAttribute("data-fold"));
+        if (!block) return;
+        const closed = block.classList.toggle("closed");
+        const arrow = header.querySelector ? header.querySelector(".fx-arrow") : null;
+        setText(arrow, closed ? "▸" : "▾");
+      });
+    });
     el.querySelectorAll("[data-anchor]").forEach((node) => {
       node.addEventListener("click", () => {
         el.querySelectorAll("[data-anchor]").forEach((c) => c.classList.remove("active"));
@@ -522,7 +565,7 @@
     }
   }
 
-  const exportObj = { render, bind, mount, unmount, isMounted, CONTAINER_ID };
+  const exportObj = { render, bind, CONTAINER_ID };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = exportObj;

@@ -94,11 +94,30 @@
     setValue(select, desiredValue);
   }
 
+  // Four tabs in one panel. Transform and Align share #view-tools, the container
+  // core/alignPanel.js renders into, so its status card shows on either of them.
   function renderTabs(tab) {
     setActive($("tab-edit"), tab === "edit");
     setActive($("tab-adj"), tab === "adj");
+    setActive($("tab-transform"), tab === "transform");
+    setActive($("tab-align"), tab === "align");
     setActive($("view-edit"), tab === "edit");
     setActive($("view-adj"), tab === "adj");
+    setActive($("view-tools"), tab === "transform" || tab === "align");
+    setActive($("view-transform"), tab === "transform");
+    setActive($("view-align"), tab === "align");
+  }
+
+  // The tab an action started on keeps a dot while it runs, so switching tabs mid-job still
+  // shows where the work is. Local because it only remembers a busy transition.
+  let busyTab = null;
+  function renderTabBusy(busy, tab) {
+    if (!busy) busyTab = null;
+    else if (busyTab === null) busyTab = tab;
+    for (const [id, name] of [["tab-edit", "edit"], ["tab-adj", "adj"], ["tab-transform", "transform"], ["tab-align", "align"]]) {
+      const el = $(id);
+      if (el && el.classList.contains("busy") !== (busyTab === name)) el.classList.toggle("busy", busyTab === name);
+    }
   }
 
   function renderCutMode(cutMode) {
@@ -269,15 +288,17 @@
     renderPresetFile(state.presetFile);
     renderJobBanner(state.job);
     renderBusy(state.showBusy !== undefined ? state.showBusy : state.busy);
+    renderTabBusy(!!state.busy, state.tab);
   }
 
   // --- bind: DOM events -> intents -----------------------------------------------------------
 
+  // The tabs carry no data-act, so renderBusy never disables them: tabs switch during a job.
   function bindTabs(intents) {
-    const tabEdit = $("tab-edit");
-    const tabAdj = $("tab-adj");
-    if (tabEdit) tabEdit.addEventListener("click", () => intents.onTab("edit"));
-    if (tabAdj) tabAdj.addEventListener("click", () => intents.onTab("adj"));
+    for (const [id, name] of [["tab-edit", "edit"], ["tab-adj", "adj"], ["tab-transform", "transform"], ["tab-align", "align"]]) {
+      const el = $(id);
+      if (el) el.addEventListener("click", () => intents.onTab(name));
+    }
   }
 
   function bindCutModePills(intents) {
@@ -319,6 +340,8 @@
     const closeBtn = $("close-settings");
     const settingsMenuItem = $("menu-item-settings");
     const reloadMenuItem = $("menu-item-reload");
+    const probesMenuItem = $("menu-item-probes");
+    const probesList = $("menu-probes");
 
     if (toggleBtn && overflowMenu) {
       toggleBtn.addEventListener("click", (e) => {
@@ -331,6 +354,13 @@
         e.stopPropagation();
         if (overflowMenu) overflowMenu.classList.remove("open");
         settingsModal.classList.add("open");
+      });
+    }
+    if (probesMenuItem && probesList) {
+      probesMenuItem.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = probesList.classList.toggle("open");
+        setText($("menu-probes-arrow"), open ? "▾" : "▸");
       });
     }
     if (closeBtn && settingsModal) {

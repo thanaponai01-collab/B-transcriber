@@ -26,3 +26,10 @@ Owner requested aggressive silence trimming without cutting any audible sound:
 ## Rough Cut lag: poll fix and ripple probe - 2026-10-12
 - Transform poll idle rate fixed (40 → ≤7 reads per 6 s idle). Diagnostics probe *Test Ripple Delete* (uxp/cutdeck/rippleProbe.js). Details ../docs/rough-cut.md.
 - Live 2026-10-12 ("2026-10-10 15-29-44_Synced"): 361 cuts, 659.9 s removed in 10 s, read-back clean, 8 undo steps.
+
+## One panel, four tabs - 2026-10-26
+Owner-approved design (plan: ../docs/research/cutdeck-one-panel-plan.md). Built, not yet run in Premiere.
+- The ClubFriday panel and the separate CutDeck Transform panel are gone; `manifest.json` declares only `cutdeck.panel`. The `clubfriday/` server and quote editor are unchanged.
+- Tabs Cut, FX, Transform, Align; no name row; sequence card and resume banner on Cut only; last tab remembered (`cutdeck.tab`). Transform reads run only on the Transform and Align tabs.
+- Transform as Effect Controls fx blocks (Motion incl. Crop, Opacity) with fold and block reset; Align as a frame drawing sized to the sequence (9:16 capped at 200 px tall). Probes folded under one menu item; the Settings shortcuts guide removed.
+- Proof: `node --test tests/*.cjs` 726/726; new tests/cutdeck_one_panel.test.cjs with six fail-proofs (VERIFY.md). Next: plan step 8 live check.

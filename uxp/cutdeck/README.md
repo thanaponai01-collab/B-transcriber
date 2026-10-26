@@ -66,7 +66,14 @@ when that isn't set up, not as a replacement for it.
 
 ## Use
 
-1. Open your source sequence. Set timeline In and Out marks. The panel reads
+CutDeck is one panel with four tabs: **Cut** (Sync and Rough Cut), **FX** (Adjustment
+Layer, Matte, Frame Hold and preset buttons), **Transform** (the selected clip's Motion,
+Crop and Opacity, laid out like Effect Controls) and **Align** (click an edge or center
+line of the frame drawing to align, a dot on the clip to set its anchor, or a Distribute
+button). It reopens on the last tab used. The Transform and Align tabs read Premiere only
+while one of them is showing.
+
+1. On the **Cut** tab, open your source sequence. Set timeline In and Out marks. The panel reads
    them automatically on open; click the refresh icon (top right) or the
    sequence card to re-read after changing the marks.
 2. Leave **Reference Audio** on its default to select the dialogue
@@ -87,8 +94,8 @@ Ctrl+Z), puts each synced clip on its own video and audio tracks. Clips that mat
 sit flat on the first tracks after a 30 s gap, and the status line says why. Your
 sequence is not edited, and Sync refuses to run on a `_Synced` copy.
 
-The diagnostics drawer (gear icon, top right) holds the read-only timing
-probe, the connection probe, and copy-status.
+The ⋯ menu (top right) holds Settings, Copy Status, the probes (folded under
+**Probes**) and Reload Panel.
 
 The result is a native Premiere sequence, not a file to import. Analysis files
 (`sequence.json`, `cuts.json`, `job.json`, `process.log`) stay in
