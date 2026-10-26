@@ -104,7 +104,7 @@ const align = createAlignFeature({
   uxp,
   rpc,
   ensureHelper,
-  // Transform reads run only while the Transform or Align tab is showing.
+  // Transform reads run only while the Transform or Align tab is showing (onTab also stops the poll).
   isMounted: () => isToolsTab(mainCtl.state.tab),
   isMainBusy: () => mainCtl.state.busy,
 });
@@ -169,7 +169,10 @@ panel.bind({
     mainCtl.state.tab = name;
     saveTab(name);
     mainCtl.render();
-    if (isToolsTab(name)) {
+    if (!isToolsTab(name)) {
+      align.stopPolling();
+    } else {
+      align.startPolling();
       alignCtl.render();
       align.refresh().catch((error) => alignCtl.setStatus(error.message || String(error), "error"));
     }
@@ -223,8 +226,9 @@ const savedJob = roughCut.lastJob();
 mainCtl.state.job = savedJob ? { id: savedJob.job_id, state: savedJob.state } : null;
 mainCtl.render();
 alignCtl.render();
-align.startPolling();
+// The poll and its Premiere listeners run only while the Transform or Align tab shows.
 if (isToolsTab(mainCtl.state.tab)) {
+  align.startPolling();
   align.refresh().catch((error) => alignCtl.setStatus(error.message || String(error), "error"));
 }
 restartHelperOnStart();

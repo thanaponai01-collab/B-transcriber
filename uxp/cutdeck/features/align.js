@@ -16,8 +16,12 @@ const transformProbe = PROBES.find((p) => p.id === "transform");
 // The panel keeps this heartbeat poll even with events: Premiere fires no event for a timeline
 // click or a Position drag in Effect Controls, so the poll is what picks those up
 // (tests/cutdeck_align_panel.test.cjs pins it).
+// Each idle read is a full re-read of every selected clip's params on Premiere's main thread, so
+// the idle rate backs off (doubling to MAX_IDLE_POLL_MS) while nothing changes; a change or any
+// activity brings it back to IDLE_POLL_MS.
 const FAST_POLL_MS = 150;
 const IDLE_POLL_MS = 1000;
+const MAX_IDLE_POLL_MS = 4000;
 const ACTIVITY_WINDOW_MS = 2000;
 
 // Subscribes `handler` to selection changes and sequence switches. EventManager and
@@ -106,9 +110,11 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let pollInFlight = false;
   let pollAgain = false;
   let lastActivityTime = 0;
+  let idlePollMs = IDLE_POLL_MS;
 
   function noteActivity() {
     lastActivityTime = Date.now();
+    idlePollMs = IDLE_POLL_MS;
   }
 
   let lastStateJson = "";
@@ -151,10 +157,13 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
         const nextJson = JSON.stringify(next);
         if (nextJson !== lastStateJson) {
           lastStateJson = nextJson;
+          idlePollMs = IDLE_POLL_MS;
           ctl.state.sequence = next.sequence;
           ctl.state.frame = next.frame;
           ctl.state.transform = next.transform;
           ctl.render();
+        } else if (forceRefresh) {
+          idlePollMs = Math.min(idlePollMs * 2, MAX_IDLE_POLL_MS);
         }
       } while (pollAgain);
     } catch (error) {
@@ -168,7 +177,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let unsubscribeEvents = null;
 
   function currentPollInterval() {
-    return (Date.now() - lastActivityTime < ACTIVITY_WINDOW_MS) ? FAST_POLL_MS : IDLE_POLL_MS;
+    return (Date.now() - lastActivityTime < ACTIVITY_WINDOW_MS) ? FAST_POLL_MS : idlePollMs;
   }
 
   function startAlignPolling() {
@@ -351,9 +360,11 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     measure,
     textBoxes,
     refresh: refreshAlignSequence,
+    // The pointer entering the panel reads fresh: an Effect Controls drag made while the idle
+    // poll was backed off shows as soon as the user comes back.
     poll: () => {
       noteActivity();
-      return pollAlignTransform();
+      return pollAlignTransform({ forceRefresh: true });
     },
     startPolling: startAlignPolling,
     stopPolling: stopAlignPolling,

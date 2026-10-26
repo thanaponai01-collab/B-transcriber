@@ -443,11 +443,12 @@ test("Anchor Point is converted against the SOURCE frame, never the sequence fra
   assert.match(alignEditJs, /position:\s*describeField\(transform\.position,\s*true,\s*frameSize\)/);
 });
 
-test("the transform poll starts with the panel and reads only on the Transform and Align tabs", () => {
+test("the transform poll runs only while the Transform or Align tab shows", () => {
   assert.match(mainJs, /isMounted: \(\) => isToolsTab\(mainCtl\.state\.tab\)/);
   assert.match(mainJs, /const isToolsTab = \(name\) => name === "transform" \|\| name === "align";/);
   const startupAt = mainJs.indexOf("// Startup");
-  assert.ok(startupAt !== -1 && mainJs.indexOf("align.startPolling()", startupAt) !== -1, "polling does not start at startup");
+  assert.match(mainJs.slice(startupAt), /if \(isToolsTab\(mainCtl\.state\.tab\)\) \{\s*align\.startPolling\(\);/, "polling does not start at startup on a tools tab");
+  assert.match(mainJs, /if \(!isToolsTab\(name\)\) \{\s*align\.stopPolling\(\);\s*\} else \{\s*align\.startPolling\(\);/, "a tab switch does not start/stop the poll");
 });
 
 test("the poll never touches alignState.busy/status, so it cannot flicker the spinner or disable controls", () => {
