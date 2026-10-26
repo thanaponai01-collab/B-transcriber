@@ -1053,12 +1053,6 @@
     white-space: nowrap;
     overflow: hidden;
   }
-  .tab-btn svg {
-    width: 12px;
-    height: 12px;
-    stroke: currentColor;
-    margin-right: 3px;
-  }
   /* The tab an action started on, while it runs. */
   .tab-btn.busy::after {
     content: "";
