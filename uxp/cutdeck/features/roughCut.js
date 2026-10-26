@@ -111,10 +111,10 @@ function createRoughCutFeature({
   // The cuts are applied natively to a copy of the analysed sequence.
   async function nativeCut(job) {
     const { project, sequence } = await activeProjectAndSequence(ppro, {
-      sequenceErrorMessage: `Open "${job.context.sequence_name}" to cut it, then Resume.`,
+      sequenceErrorMessage: `Open "${job.context.sequence_name}" to cut it, then Resume — or Dismiss it to start a new Rough Cut.`,
     });
     if (sequence.guid.toString() !== job.context.sequence_id) {
-      throw new Error(`Open "${job.context.sequence_name}" to cut it, then Resume.`);
+      throw new Error(`Open "${job.context.sequence_name}" to cut it, then Resume — or Dismiss it to start a new Rough Cut.`);
     }
     ctl.setStatus("Cutting a copy of your sequence in Premiere…", "busy");
     let r;

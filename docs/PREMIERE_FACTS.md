@@ -196,6 +196,7 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | Runtime errors | — | `%APPDATA%\Adobe\Premiere Pro\Logs\UXPLogs_*.log`, and UDT's DevTools console. | HANDOFF_CUTDECK_AL_FX_NEXT |
 | A syntax error in `main.js` | CATCH | The panel draws half and can't be clicked. `tests/cutdeck_syntax.test.cjs` runs `node --check` on every file. | 09-23 |
 | `typeof x === "function"` guards | CATCH | They silently skip a **wrong** API name. Check names with `tools/adobe/check-api.mjs`, not guards. | HANDOFF_CUTDECK_AL_FX_NEXT |
+| CSS `display: grid` | ABSENT | Adobe: "CSS Grid Layout is not available". The job banner's grid row drew nothing, so Resume/Dismiss were invisible and a stale job blocked Rough Cut; with flex they show. Use flex. | `reference/adobe/docs/resources/recipes/css-styling/`; live 2026-10-26 |
 | Panel compositing, Premiere 26.3.2.2 | BROKEN (26.3) | A UXP panel painted nothing (DevTools confirmed). Not seen on 26.5. | Ledger 08-29 |
 
 ## ClubFriday captions (26.5.2)

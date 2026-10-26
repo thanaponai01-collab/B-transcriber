@@ -158,10 +158,15 @@
     color: var(--accent-warn-text);
     margin-bottom: 5px;
   }
+  /* Flex, not grid: UXP has no CSS Grid (reference/adobe/docs/resources/recipes/css-styling). */
   .job-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    display: flex;
+  }
+  .job-actions > * {
+    flex: 1;
+  }
+  .job-actions > * + * {
+    margin-left: 6px;
   }
 
   /* Sequence Card */
