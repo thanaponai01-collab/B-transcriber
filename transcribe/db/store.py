@@ -115,6 +115,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for _name, _ddl in _schema_columns("eval_run"):
         _add("eval_run", _name, _ddl)
 
+    _add("engine_result", "raw_segments_json", "raw_segments_json TEXT")
+
     # media timebase (GAP-1/2)
     _add("media", "fps_num", "fps_num INTEGER")
     _add("media", "fps_den", "fps_den INTEGER")
