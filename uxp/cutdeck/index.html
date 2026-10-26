@@ -9,7 +9,8 @@
 
   <!-- Header: helper dot, the four tabs, the menu. No name row: Premiere's panel tab says CutDeck. -->
   <div class="header">
-    <div id="dot" class="status-dot" title="CutDeck helper"></div>
+    <!-- The panel's only status: white while busy, outlined on a problem; hover for the message. -->
+    <div id="dot" class="status-dot" role="status" title="Ready"></div>
     <div class="tabs">
       <div id="tab-edit" class="tab-btn" role="button" title="Cut">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
@@ -568,18 +569,6 @@
       </div>
     </div>
 
-    <!-- Quiet unless something went wrong or a clip was skipped. -->
-    <div id="align-status-card" class="status-card transform-status" hidden>
-      <div id="align-status-icon" class="status-icon"></div>
-      <div id="align-status" role="status">Ready</div>
-      <div id="align-copy" class="icon-btn" role="button" data-act="align-copy" title="Copy this report"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-    </div>
-  </div>
-
-  <!-- Status Bar -->
-  <div class="status-card">
-    <div id="status-icon" class="status-icon"></div>
-    <div id="status" role="status">Ready</div>
   </div>
 
   <!-- Settings Modal (Opened by Settings in Dropdown Menu) -->

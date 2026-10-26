@@ -46,19 +46,16 @@
 
   // --- render: state -> screen -------------------------------------------------------------
 
-  function renderStatus(status) {
-    if (!status) return;
-    setText($("status"), status.text);
+  // The header dot is the panel's only status: its colour says busy or error, its tooltip
+  // carries the message. On Transform and Align, core/alignPanel.js renders it instead.
+  function renderStatus(status, tab) {
+    if (!status || tab === "transform" || tab === "align") return;
     const dot = $("dot");
-    if (dot) {
-      dot.classList.toggle("busy", status.level === "busy");
-      dot.classList.toggle("error", status.level === "error");
-    }
-    const icon = $("status-icon");
-    if (icon) {
-      icon.classList.toggle("busy", status.level === "busy");
-      icon.classList.toggle("error", status.level === "error");
-    }
+    if (!dot) return;
+    dot.classList.toggle("busy", status.level === "busy");
+    dot.classList.toggle("error", status.level === "error");
+    dot.classList.toggle("warn", false);
+    if (dot.getAttribute("title") !== status.text) dot.setAttribute("title", status.text);
   }
 
   function renderSequence(sequence) {
@@ -95,7 +92,7 @@
   }
 
   // Four tabs in one panel. Transform and Align share #view-tools, the container
-  // core/alignPanel.js renders into, so its status card shows on either of them.
+  // core/alignPanel.js renders into, so its status shows on the dot on either of them.
   function renderTabs(tab) {
     setActive($("tab-edit"), tab === "edit");
     setActive($("tab-adj"), tab === "adj");
@@ -277,7 +274,7 @@
   function render(state) {
     if (!state) return;
     current = state;
-    renderStatus(state.status);
+    renderStatus(state.status, state.tab);
     renderSequence(state.sequence);
     renderAudioOptions(state.sequence, state.audioTrack);
     renderTabs(state.tab);

@@ -110,6 +110,7 @@
   }
   .status-dot.busy { background: var(--fg-white); }
   .status-dot.error { background: var(--fg-3); border: 1px solid var(--fg-1); }
+  .status-dot.warn { background: transparent; border: 1px solid var(--fg-1); }
 
   .header-actions {
     display: flex;
@@ -428,40 +429,6 @@
   }
   .action-card:hover:not(.disabled) svg {
     stroke: var(--fg-white);
-  }
-
-  /* Status Bar */
-  .status-card {
-    margin-top: 8px;
-    padding: 6px 8px;
-    background: var(--bg-0);
-    border: 1px solid var(--line-0);
-    border-radius: 5px;
-    display: flex;
-    align-items: flex-start;
-    height: 68px;
-    flex-shrink: 0;
-  }
-  .status-icon {
-    flex-shrink: 0;
-    margin-top: 3px;
-    margin-right: 6px;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--fg-2);
-  }
-  .status-icon.busy { background: var(--fg-white); }
-  .status-icon.error { background: var(--fg-3); border: 1px solid var(--fg-1); }
-  #status {
-    flex: 1;
-    font-size: 10px;
-    line-height: 1.35;
-    color: var(--fg-2);
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 100%;
-    overflow-y: auto;
   }
 
   /* Chrome-Style Floating Dropdown Menu (3-Dots Menu) */
@@ -1056,21 +1023,6 @@
     stroke: currentColor;
   }
 
-  .transform-status {
-    height: auto;
-    max-height: 160px;
-    margin-top: 6px;
-  }
-  #align-status {
-    flex: 1;
-    font-size: 10px;
-    line-height: 1.35;
-    color: var(--fg-2);
-    white-space: pre-wrap;
-    overflow-y: auto;
-    max-height: 148px;
-  }
-  .status-icon.warn { background: var(--fg-1); }
   .sr-only {
     position: absolute;
     width: 1px;

@@ -160,18 +160,18 @@
 
   // --- render: state -> screen -------------------------------------------------------------
 
-  // Quiet by default: the status bar shows only a problem ("error"), a skipped clip ("warn") or a
-  // report the user asked for ("info", the Check Transform probe).
+  // While Transform or Align shows (#view-tools active), this panel's status is the header dot:
+  // colour for busy, a problem ("error") or a skipped clip ("warn"); the message as its tooltip.
+  // core/panel.js renders the dot on the other tabs.
   function renderStatus(status) {
-    if (!status) return;
-    setHidden($("align-status-card"), !["error", "warn", "info"].includes(status.level));
-    setText($("align-status"), status.text);
-    const icon = $("align-status-icon");
-    if (icon) {
-      icon.classList.toggle("busy", status.level === "busy");
-      icon.classList.toggle("error", status.level === "error");
-      icon.classList.toggle("warn", status.level === "warn");
-    }
+    const tools = $("view-tools");
+    if (!status || !tools || !tools.classList.contains("active")) return;
+    const dot = $("dot");
+    if (!dot) return;
+    dot.classList.toggle("busy", status.level === "busy");
+    dot.classList.toggle("error", status.level === "error");
+    dot.classList.toggle("warn", status.level === "warn");
+    if (dot.getAttribute("title") !== status.text) dot.setAttribute("title", status.text);
   }
 
   // Every control is off while an action runs; the ones marked data-needs-clip are also off
@@ -348,8 +348,6 @@
   function bind(intents) {
     const probe = $("align-probe");
     if (probe) probe.addEventListener("click", () => intents.onProbe("transform"));
-    const copy = $("align-copy");
-    if (copy) copy.addEventListener("click", () => intents.onProbe("copystatus"));
     const refresh = $("align-refresh");
     if (refresh) refresh.addEventListener("click", () => intents.onRefresh());
 

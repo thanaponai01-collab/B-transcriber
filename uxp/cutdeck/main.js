@@ -184,7 +184,9 @@ panel.bind({
   onChoosePresetFolder: presets.onChoosePresetFolder,
   onCapturePreset: presets.onCapturePreset,
   onSettingChange: adjust.onSettingChange,
-  onProbe: probes.onProbe,
+  // Copy Status copies the status the dot shows: Transform and Align keep their own.
+  onProbe: (name, payload) => (name === "copystatus" && isToolsTab(mainCtl.state.tab)
+    ? align.onProbe(name) : probes.onProbe(name, payload)),
   onTeardown: teardown,
 });
 

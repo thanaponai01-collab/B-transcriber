@@ -286,7 +286,7 @@ function makeDomStub() {
     "menu-item-reload", "menu-item-settings", "mode", "overflow-menu", "pill-silence",
     "pill-speech", "range", "refresh", "resume", "seq-card", "sequence", "setting-active-fx",
     "setting-bin", "setting-clamp", "setting-color", "setting-frames", "settings-modal",
-    "status", "status-icon", "sync", "tab-adj", "tab-align", "tab-edit", "tab-transform", "timingprobe",
+    "sync", "tab-adj", "tab-align", "tab-edit", "tab-transform", "timingprobe",
     "tools-toggle", "view-adj", "view-align", "view-edit", "view-tools", "view-transform",
   ];
   const dataActIds = new Set([

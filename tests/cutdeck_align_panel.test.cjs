@@ -59,7 +59,7 @@ test("the Transform and Align views live in #view-tools, in the main panel's flo
   const tools = html.slice(html.indexOf('id="view-tools"'));
   assert.ok(tools.indexOf('id="view-transform"') !== -1, "the Transform view is not inside #view-tools");
   assert.ok(tools.indexOf('id="view-align"') !== -1, "the Align view is not inside #view-tools");
-  assert.ok(tools.indexOf('id="align-status-card"') !== -1, "the transform status card is not inside #view-tools");
+  assert.equal(html.indexOf('id="align-status-card"'), -1, "Transform and Align report on the header dot, not a card of their own");
 });
 
 test('every $("id") in core/alignPanel.js resolves to an id in index.html', () => {
@@ -74,13 +74,15 @@ test('every $("id") in core/alignPanel.js resolves to an id in index.html', () =
 
 test("the transform panel's ids do not collide with the Cut & Sync panel's", () => {
   // One shared document means one shared id namespace. A collision would have one panel
-  // silently rendering into the other's nodes.
+  // silently rendering into the other's nodes. The two shared on purpose: the header dot, which
+  // alignPanel.js writes only while #view-tools (which panel.js shows) is active.
+  const shared = new Set(["dot", "view-tools"]);
   const source = fs.readFileSync(alignJsPath, "utf8");
   const alignIds = [...source.matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]);
   const panelIds = new Set(
     [...fs.readFileSync(path.join(root, "uxp", "cutdeck", "core", "panel.js"), "utf8")
       .matchAll(/\$\("([a-zA-Z0-9_-]+)"\)/g)].map((m) => m[1]));
-  const collisions = alignIds.filter((id) => panelIds.has(id));
+  const collisions = alignIds.filter((id) => panelIds.has(id) && !shared.has(id));
   assert.deepEqual(collisions, [], `both seams claim these ids: ${collisions}`);
 });
 
@@ -136,6 +138,7 @@ function makeStub() {
   }
 
   const container = el("view-tools");
+  container.classList.add("active");
   const probe = el("align-probe");
   probe.setAttribute("data-act", "align-probe");
   container.appendChild(probe);
@@ -144,9 +147,7 @@ function makeStub() {
   anchorCell.setAttribute("data-needs-clip", "");
   container.appendChild(anchorCell);
   el("align-refresh").setAttribute("data-act", "align-refresh");
-  el("align-status-card");
-  el("align-status");
-  el("align-status-icon");
+  el("dot");
   el("align-transform-clip");
   el("align-transform-fields");
   el("align-text-layer-switcher");
@@ -222,7 +223,7 @@ test("render puts the sequence name in the clip line's tooltip and disables ever
 
   alignPanel.render({ sequence: { name: "CFD 94" }, busy: true, status: { text: "Working…", level: "busy" } });
   assert.equal(nodes.get("align-transform-clip").getAttribute("title"), "CFD 94");
-  assert.equal(nodes.get("align-status-icon").className.includes("busy"), true);
+  assert.equal(nodes.get("dot").className.includes("busy"), true);
   assert.equal(probe.disabled, true, "controls must be disabled while a job runs");
 
   alignPanel.render({ sequence: null, busy: false, status: { text: "Ready", level: "ready" } });
@@ -231,21 +232,24 @@ test("render puts the sequence name in the clip line's tooltip and disables ever
   delete global.document;
 });
 
-test("the status bar stays hidden unless there is an error or a skipped clip", () => {
-  const { nodes } = makeStub();
+test("on Transform and Align the header dot carries the status: colour for the level, message as its tooltip", () => {
+  const { nodes, container } = makeStub();
   const alignPanel = loadAlignPanel();
-  const card = () => nodes.get("align-status-card").hidden;
-  alignPanel.render({ sequence: null, busy: false, status: { text: "Ready", level: "ready" } });
-  assert.equal(card(), true);
-  alignPanel.render({ sequence: null, busy: true, status: { text: "Processing…", level: "busy" } });
-  assert.equal(card(), true);
+  const dot = nodes.get("dot");
   alignPanel.render({ sequence: null, busy: false, status: { text: "Skipped: x", level: "warn" } });
-  assert.equal(card(), false);
-  assert.equal(nodes.get("align-status").textContent, "Skipped: x");
+  assert.equal(dot.className, "warn");
+  assert.equal(dot.getAttribute("title"), "Skipped: x");
   alignPanel.render({ sequence: null, busy: false, status: { text: "Open a sequence first.", level: "error" } });
-  assert.equal(card(), false);
-  alignPanel.render({ sequence: null, busy: false, status: { text: "Transform report…", level: "info" } });
-  assert.equal(card(), false, "a Check Transform report must be visible");
+  assert.equal(dot.className, "error");
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Ready", level: "ready" } });
+  assert.equal(dot.className, "");
+  assert.equal(dot.getAttribute("title"), "Ready");
+
+  // Another tab is showing: core/panel.js owns the dot, so the poll's renders leave it alone.
+  container.classList.remove("active");
+  alignPanel.render({ sequence: null, busy: false, status: { text: "Open a sequence first.", level: "error" } });
+  assert.equal(dot.className, "");
+  assert.equal(dot.getAttribute("title"), "Ready");
   delete global.document;
 });
 
