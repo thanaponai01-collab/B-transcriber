@@ -73,6 +73,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
 - fail-proof (2026-10-26, one panel, four tabs; tests/cutdeck_one_panel.test.cjs): each went red on its own and was restored, 726/726 green: dropped the `isMounted` tab gate in features/align.js (the poll read Premiere on the Cut tab); raised the frame drawing's height cap to 300 (9:16 drawn too tall); let the fx block reset include disabled rows; never cleared the busy-tab dot; gave `#tab-align` a `data-act` (busy would disable it); laid the frame out while its width is 0. Not yet run in Premiere (plan step 8).
 - fail-proof (2026-10-26, poll cost; tests/cutdeck_align_poll_rate.test.cjs): made the idle read keep 1 s instead of doubling to 4 s while unchanged in uxp/cutdeck/features/align.js; both poll-rate tests went red; restored, 729/729 green. The poll and its Premiere listeners now start and stop with the Transform/Align tab (cutdeck_align_panel.test.cjs pins it). Not yet run in Premiere.
+- fail-proof (2026-10-26, playback; tests/cutdeck_align_poll_rate.test.cjs): disabled the playhead-moved skip in `pollAlignTransform` (uxp/cutdeck/features/align.js); the no-reads-during-playback test went red; restored, 730/730 green. Not yet run in Premiere.
 
 ## Topic Cut
 - test: `python -m pytest tests/test_cutdeck_topic_layout.py tests/test_cutdeck_topic_speakers.py -q -p no:cacheprovider`

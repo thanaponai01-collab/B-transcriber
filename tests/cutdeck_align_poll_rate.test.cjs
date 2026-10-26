@@ -9,13 +9,16 @@ const { createController } = require("../uxp/cutdeck/features/controller.js");
 test("align poll: fast right after activity, then backs off while idle and nothing changes", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 1_000_000 });
   let reads = 0;
-  const ppro = { Project: { getActiveProject: () => { reads++; return { getActiveSequence: () => null }; } } };
+  // A full read asks for the selection; the playhead check (which stays still here) does not.
+  const seq = { name: "S", getPlayerPosition: async () => ({ ticks: "0" }),
+    getSelection: async () => { reads++; return { getTrackItems: async () => [] }; } };
+  const ppro = { Project: { getActiveProject: () => ({ getActiveSequence: () => seq }) } };
   const ctl = createController({ render: () => {}, initialState: { sequence: null, transform: null } });
   const align = createAlignFeature({ ppro, ctl });
   const run = async (ms) => {
     for (let i = 0; i < ms / 150; i++) {
       t.mock.timers.tick(150);
-      for (let j = 0; j < 20; j++) await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
     }
   };
   align.startPolling();
@@ -61,4 +64,34 @@ test("align poll: a change or activity brings the idle rate back to once a secon
   t.mock.timers.tick(2500);
   assert.equal(align.currentPollInterval(), 1000, "activity did not reset the idle rate");
   align.stopPolling();
+});
+
+test("align poll: no full reads while the playhead moves, reads again once it stops", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 1_000_000 });
+  let playhead = 0;
+  let playing = true;
+  let selectionReads = 0;
+  const seq = {
+    name: "S",
+    getPlayerPosition: async () => ({ ticks: String(playing ? (playhead += 1000) : playhead) }),
+    getSelection: async () => { selectionReads++; return { getTrackItems: async () => [] }; },
+  };
+  const ppro = { Project: { getActiveProject: () => ({ getActiveSequence: () => seq }) } };
+  const ctl = createController({ render: () => {}, initialState: { sequence: null, transform: null } });
+  const align = createAlignFeature({ ppro, ctl });
+  const run = async (ms) => {
+    for (let i = 0; i < ms / 150; i++) {
+      t.mock.timers.tick(150);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+  align.startPolling();
+  await run(150);  // first tick only records where the playhead is
+  selectionReads = 0;
+  await run(6000);
+  assert.equal(selectionReads, 0, `${selectionReads} full reads while the playhead was moving`);
+  playing = false;
+  await run(3000);
+  align.stopPolling();
+  assert.ok(selectionReads >= 1, "the poll did not resume after the playhead stopped");
 });

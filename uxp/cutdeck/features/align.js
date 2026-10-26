@@ -134,10 +134,28 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
   let pendingSlide = null;
   let slidePromise = null;
 
+  // Premiere has no "is playing" read, but the playhead moving between two timer ticks means it
+  // is playing (or being scrubbed). Sequence.getPlayerPosition: premierepro.txt:575.
+  let lastPlayheadTicks = null;
+  async function playheadMoved() {
+    try {
+      const { sequence } = await activeProjectAndSequence(ppro, { requireProject: false, requireSequence: false });
+      if (!sequence || typeof sequence.getPlayerPosition !== "function") return false;
+      const position = await sequence.getPlayerPosition();
+      const ticks = position ? String(position.ticks) : null;
+      const moved = lastPlayheadTicks !== null && ticks !== lastPlayheadTicks;
+      lastPlayheadTicks = ticks;
+      return moved;
+    } catch (_) {
+      return false;
+    }
+  }
+
   let emptyPollCount = 0;
   // Coalesces bursts (a drag-select fires many events): one read at a time, plus one
-  // follow-up if more arrived meanwhile.
-  async function pollAlignTransform({ forceRefresh = false } = {}) {
+  // follow-up if more arrived meanwhile. A timer read (`skipWhilePlaying`) is skipped while the
+  // playhead moves: a full read queues dozens of calls on Premiere's main thread mid-playback.
+  async function pollAlignTransform({ forceRefresh = false, skipWhilePlaying = false } = {}) {
     if (ctl.state.busy) return;
     if (typeof isMainBusy === "function" && isMainBusy()) return;
     if (typeof isMounted === "function" && !isMounted()) return;
@@ -145,6 +163,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
     if (pollInFlight) { pollAgain = true; return; }
     pollInFlight = true;
     try {
+      if (skipWhilePlaying && await playheadMoved()) return;
       do {
         pollAgain = false;
         const next = await readAlignState(ppro, { layerTarget: ctl.state.activeLayerTarget, forceRefresh });
@@ -196,7 +215,7 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
       const now = Date.now();
       if (now - lastPollTime < currentPollInterval()) return;
       lastPollTime = now;
-      pollAlignTransform({ forceRefresh: now - lastActivityTime >= ACTIVITY_WINDOW_MS });
+      pollAlignTransform({ forceRefresh: now - lastActivityTime >= ACTIVITY_WINDOW_MS, skipWhilePlaying: true });
     }, FAST_POLL_MS);
   }
 
