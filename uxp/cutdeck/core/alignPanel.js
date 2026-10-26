@@ -250,12 +250,22 @@
     return available;
   }
 
-  // The Align tab's frame drawing takes the sequence's shape, capped in height so a 9:16 frame
-  // gets narrower instead of taller. Laid out in px (percent is not a documented UXP unit) and
-  // only when the size changes; clientWidth is 0 while the tab is hidden, so it waits until shown.
-  const FRAME_MAX_HEIGHT = 200;
+  // The Align tab's frame drawing takes the sequence's shape and the panel's size: as wide as
+  // the tab, capped at a share of the panel's height so a 9:16 frame gets narrower instead of
+  // taller. Laid out in px (percent is not a documented UXP unit) and only when the size changes;
+  // clientWidth is 0 while the tab is hidden, so it waits until shown. A ResizeObserver
+  // (reference/adobe/docs/uxp-api/reference-js/global-members/html-dom/resize-observer.md, UXP
+  // v8.1) re-lays it out as the panel is resized, between polls.
+  const FRAME_HEIGHT_SHARE = 0.45;
+  const FRAME_MIN_HEIGHT = 90;
   const LINE_HIT = 12;
   let frameKey = "";
+  let lastFrame = null;
+  let resizeObserver = null;
+  function frameMaxHeight() {
+    const panel = typeof document !== "undefined" && document.body ? document.body.clientHeight || 0 : 0;
+    return panel > 0 ? Math.max(FRAME_MIN_HEIGHT, panel * FRAME_HEIGHT_SHARE) : 200;
+  }
   function px(el, left, top, width, height) {
     if (!el || !el.style) return;
     el.style.left = `${Math.round(left)}px`;
@@ -267,8 +277,9 @@
     const ratio = frame && frame.width > 0 && frame.height > 0 ? frame.height / frame.width : 9 / 16;
     let width = available;
     let height = width * ratio;
-    if (height > FRAME_MAX_HEIGHT) {
-      height = FRAME_MAX_HEIGHT;
+    const maxHeight = frameMaxHeight();
+    if (height > maxHeight) {
+      height = maxHeight;
       width = height / ratio;
     }
     return { width: Math.round(width), height: Math.round(height) };
@@ -277,6 +288,12 @@
     const wrap = $("align-frame-wrap");
     const canvas = $("align-frame");
     if (!wrap || !canvas) return;
+    lastFrame = frame;
+    if (!resizeObserver && typeof ResizeObserver === "function") {
+      resizeObserver = new ResizeObserver(() => renderFrame(lastFrame));
+      resizeObserver.observe(wrap);
+      if (document.body) resizeObserver.observe(document.body);
+    }
     const available = wrap.clientWidth || 0;
     if (available <= 0) return;
     const { width, height } = frameBox(available, frame);
