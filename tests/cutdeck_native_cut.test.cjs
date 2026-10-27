@@ -233,6 +233,22 @@ test("close gaps: clips missing on every fresh read still stop the cut, saying h
   assert.equal(error.copyCreated, true);
 });
 
+/* Live 2026-10-27: close gaps committed all 8,589 moves, then the read-back was short 370 clips
+   ("missing" on audio track 2). Same short read as above, one step later: retried the same way. */
+test("read-back: a read missing clips is retried and the cut passes", async () => {
+  const h = fakeHost(golden.before, { nullClipRead: nullAudioReads(1) });
+  await applyNativeCut(h.ppro, h.project, h.source, golden, "readback-once");
+  assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "readback-once")),
+    golden.after.map((x) => JSON.stringify(x)).sort());
+});
+
+test("read-back: clips missing on every read still fail the cut", async () => {
+  const h = fakeHost(golden.before, { nullClipRead: ({ kind, moveCalls }) => kind === "audio" && moveCalls > 0 });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "readback-missing").then(() => null, (e) => e);
+  assert.match(error.message, /does not match the plan .*first: missing/);
+  assert.equal(error.copyCreated, true);
+});
+
 for (const stage of ["split", "move"]) {
   test(`stale first handle in ${stage}: fresh read recovers an exact cut`, async () => {
     // Include a stale first handle after a partial commit, not just the initial batch.

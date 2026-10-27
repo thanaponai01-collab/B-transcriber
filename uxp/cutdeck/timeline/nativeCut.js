@@ -353,10 +353,19 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     // each item on the copy by position and throws if one is not there.
     const items = before.items;
     const plan = planCutApply(items, cuts);
-    let steps, actual;
+    let steps, actual, problems;
     try {
       steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
-      actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
+      // Live 2026-10-27: right after the last close-gaps batch the read-back was short 370 clips, all
+      // "missing" — the same short read close gaps retries. Only a read with nothing but missing
+      // clips is retried; a misplaced or extra clip is a real mismatch.
+      for (let attempt = 0; ; attempt++) {
+        actual = (await timed("read-back", () => readItems(ppro, copy, null))).items;
+        problems = verifyReadBack(items, plan, actual);
+        if (!problems.length || attempt >= STALE_READ_RETRIES || !problems.every((p) => p.startsWith("missing "))) break;
+        console.log(`CutDeck read-back: ${problems.length} clips missing from the read; fresh read ${attempt + 1} of ${STALE_READ_RETRIES}`);
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      }
     } finally {
       await timed("open copy", async () => {
         await project.openSequence(copy);
@@ -364,7 +373,6 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
       });
     }
     const elapsedSeconds = (Date.now() - started) / 1000;
-    const problems = verifyReadBack(items, plan, actual);
     before.items = null;
     before.transitions = null;
     actual = null;
