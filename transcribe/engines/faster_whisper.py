@@ -316,7 +316,9 @@ class FasterWhisperEngine(Engine):
         # sum(clip durations) can exceed audio_arr length. Pad audio_arr with zeros so
         # duration >= duration_after_vad without altering any clip content.
         if clip_timestamps and len(audio_arr) > 0:
-            tot_dur_samples = int(sum((c["end"] - c["start"]) for c in clip_timestamps) * _SR)
+            # Per-clip int() mirrors the library's own sample conversion; one int() of
+            # the summed seconds can land a few samples short of it.
+            tot_dur_samples = sum(int(c["end"] * _SR) - int(c["start"] * _SR) for c in clip_timestamps)
             if tot_dur_samples > len(audio_arr):
                 audio_arr = np.pad(audio_arr, (0, tot_dur_samples - len(audio_arr)), mode="constant")
 
