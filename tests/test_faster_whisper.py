@@ -74,6 +74,23 @@ def test_decode_resets_last_speech_timestamp_per_call():
     assert engine._pipeline.transcribe_calls[1]["last_speech_timestamp_at_call"] == 0.0
 
 
+def test_group_segments_matches_library_seek_for_unround_clip_starts():
+    """faster-whisper 1.2.1 sets seek = int(int(start_s * 16000) / 16000 * 100), which
+    floors; clip starts like 15.746s (from a real job's tail recovery) then miss a
+    rounded key and the fallback shifted each tail's words onto its neighbour."""
+    from transcribe.audio import Window
+
+    starts = [0.0, 5.982, 13.484, 15.746, 17.788]
+    # Back-to-back, as _batch_recover_tails lays tails out in one array.
+    windows = [Window(s, e, i) for i, (s, e) in enumerate(zip(starts, starts[1:] + [22.59]))]
+    segments = [FakeSegment(words=[], start=s, end=s + 1.0, seek=int(int(s * 16000) / 16000 * 100))
+                for s in starts]
+
+    grouped = FasterWhisperEngine._group_segments_by_window(segments, windows)
+
+    assert grouped == [[seg] for seg in segments]
+
+
 def test_words_of_drops_silent_garbage_segments():
     seg_silent = FakeSegment(
         words=[FakeWord(" hallucination", 0.0, 1.0)],

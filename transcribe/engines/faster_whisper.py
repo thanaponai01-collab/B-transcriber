@@ -397,7 +397,9 @@ class FasterWhisperEngine(Engine):
         if not windows or not segments:
             return grouped
 
-        seek_map = {int(round(w.start_s * 100)): idx for idx, w in enumerate(windows)}
+        # Mirror the library's seek: int() to samples, then int() to 10 ms frames.
+        # A rounded key misses starts like 15.746s and drops to the fallback below.
+        seek_map = {int(int(w.start_s * _SR) / _SR * 100): idx for idx, w in enumerate(windows)}
         all_have_matching_seek = all(
             getattr(s, "seek", None) is not None and getattr(s, "seek", None) in seek_map
             for s in segments
