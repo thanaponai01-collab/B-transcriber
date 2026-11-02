@@ -148,6 +148,24 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   assert.ok(h.hostReads < 50000, `host reads ${h.hostReads}`);
 });
 
+test("an audio clip between frames (Native Sync) still gets a razor filler, and the cut is exact", async () => {
+  const rows = [["video", 0, 0, 100, 0], ["audio", 0, 0, 100, 0], ["audio", 1, 0, 100, 0]];
+  const h = fakeHost(rows, { snapCloneOffsets: true });
+  const off = TPF / 3n; // a recorder placed between frames
+  const rec = h.src.tracks.audio[1][0];
+  rec.start += off; rec.end += off;
+  const cuts = [[40n * TPF, 50n * TPF]];
+  await applyNativeCut(h.ppro, h.project, h.source, { cuts_frames: [[40, 50]], ticks_per_frame: golden.ticks_per_frame }, "rec");
+  const { planCutApply } = require("../uxp/cutdeck/timeline/cutPlanApply.js");
+  const items = [...h.src.tracks.video.flat(), ...h.src.tracks.audio.flat()].map((r) =>
+    ({ id: `${r.kind}${r.track}`, mediaType: r.kind, track: r.track, startTicks: r.start, endTicks: r.end, inTicks: r.in }));
+  const plan = planCutApply(items, cuts);
+  const want = items.flatMap((it, i) => plan.edits[i].pieces.map((p) => `${it.mediaType}|${it.track}|${p.startTicks}|${p.endTicks}|${p.inTicks}`)).sort();
+  const copy = h.sequences.find((s) => s.name === "rec");
+  const got = [...copy.tracks.video.flat(), ...copy.tracks.audio.flat()].map((r) => `${r.kind}|${r.track}|${r.start}|${r.end}|${r.in}`).sort();
+  assert.deepEqual(got, want);
+});
+
 /* Live 2026-09-24: Premiere returned undefined for one clone of 7,650, and a rerun went through. */
 function flakyClones(h, failures) {
   let calls = 0;

@@ -184,6 +184,10 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   const endNow = items.reduce((m, it) => (it.endTicks > m ? it.endTicks : m), 0n);
   const park = ((endNow + CLONE_GAP) / tpf) * tpf;
   const findIn = (seq, key, start) => all(seq).find((c) => lane(c) === key && c.start === start);
+  // Nothing else lies past the timeline's end, so the clip there is the lane's filler, wherever it
+  // landed: an audio-only clip Native Sync placed between frames is cloned by a between-frames
+  // offset, and that clone did not land on `park` (live, "razor filler on audio track 0 did not land").
+  const fillerIn = (seq, key) => all(seq).find((c) => lane(c) === key && c.start > endNow);
 
   // 1-2. fillers: clone each lane's source clip to `park`, then trim it to one frame.
   let seq = await read();
@@ -194,9 +198,20 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     return (ed) => (ed || editor()).createCloneTrackItemAction(src.item, dt, 0, 0, false, false);
   })).steps;
   seq = await read();
+  const landed = (key) => {
+    const f = fillerIn(seq, key);
+    if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land (nothing past the timeline end on that track)`);
+    if (f.start !== park) console.log(`CutDeck razor filler on ${key.replace("|", " track ")} landed ${f.start - park} ticks from park`);
+    return f;
+  };
+  // A filler between frames would put every razor clone between frames too: trim its head up to the
+  // next whole frame first (AudioClipTrackItem.createSetInPointAction, premierepro.txt:47; a head
+  // trim live, PREMIERE_FACTS.md).
+  const offFrame = [...sourceOf.keys()].map((key) => landed(key)).filter((f) => f.start % tpf !== 0n);
+  steps += tx("align razor fillers", offFrame.map((f) => () => f.item.createSetInPointAction(tick(f.inPoint + tpf - (f.start % tpf))))).steps;
+  if (offFrame.length) seq = await read();
   steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
-    const f = findIn(seq, key, park);
-    if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land`);
+    const f = landed(key);
     const dt = tick(f.inPoint + tpf);
     return () => f.item.createSetOutPointAction(dt);
   })).steps;
@@ -213,14 +228,15 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     const fillers = new Map();
     const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
       if (!fillers.has(key)) {
-        const f = findIn(seq, key, park);
+        const f = fillerIn(seq, key);
         if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
+        if (f.start % tpf !== 0n) throw new Error(`razor filler on ${key.replace("|", " track ")} sits ${f.start % tpf} ticks off a frame after aligning`);
         fillers.set(key, f);
       }
       const f = fillers.get(key);
-      const dt = tick(p - park);
+      const dt = tick(p - f.start);
       return Object.assign((ed) => (ed || editor()).createCloneTrackItemAction(f.item, dt, 0, 0, false, false),
-        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - park}` });
+        { what: `${key.replace("|", " track ")}, filler from ${f.path || "no media"}, edge at ${Number(p) / Number(TICKS_PER_SECOND)}s, offset ${p - f.start}` });
     });
     const res = tx("split at cut edges", razor, { allowPartial: true });
     steps += res.steps;
@@ -229,7 +245,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
   // 4. remove everything inside a cut, and the fillers — per media type.
   seq = await read({ inPoint: false });
-  const inside = (c) => c.start >= park || isInsideCut(c.start, c.end, cuts);
+  const inside = (c) => c.start > endNow || isInsideCut(c.start, c.end, cuts);
   let doomed = all(seq).filter(inside);
   if (doomed.length) {
     steps += 1;

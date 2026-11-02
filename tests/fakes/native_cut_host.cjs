@@ -6,7 +6,9 @@ const path = require("node:path");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneOffsets = false } = {}) {
+  // snapCloneOffsets: a clone's offset is rounded to whole frames (suspected from the live "razor
+  // filler on audio track 0 did not land" with a between-frames audio clip; unprobed).
   // nullClipRead({ kind, track, moveCalls }): true makes that clip read return null entries (live 2026-10-25).
   // rippleMode: what a ripple remove shifts. "track": later clips on that clip's own track;
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
@@ -137,7 +139,8 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
       createCloneTrackItemAction: (item, t) => {
         if (staleCloneCalls.has(++cloneCalls)) item._stale = true;
         if (item._stale) throw new Error("The script object is no longer valid.");
-        return act({ type: "clone", raw: item._raw, by: BigInt(t.ticks) });
+        const by = BigInt(t.ticks);
+        return act({ type: "clone", raw: item._raw, by: snapCloneOffsets ? (by < 0n ? -1n : 1n) * (((by < 0n ? -by : by) + TPF / 2n) / TPF) * TPF : by });
       },
       createRemoveItemsAction: (sel, ripple, mt) => act({ type: "remove", seq: s._seq, items: sel.items, mt, ripple }),
     }) },
