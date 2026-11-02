@@ -23,6 +23,7 @@ const STALE_READ_RETRIES = 3;
 
 const kindOf = (c) => c.kind; // "video" | "audio" from readSequence
 const itemKey = (c) => `${kindOf(c)}|${c.track}|${c.start}`;
+const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
 const asPlanItem = (c, extra = {}) => ({ id: itemKey(c), name: c.path ? String(c.path).split(/[\\/]/).pop() : "clip",
   mediaType: kindOf(c), track: c.track, startTicks: c.start, endTicks: c.end, inTicks: c.inPoint, ...extra });
 
@@ -71,6 +72,37 @@ async function readItems(ppro, seq, cuts) {
     }
   }
   return { items, transitions, videoTracks: s.videoTracks, audioTracks: s.audioTracks };
+}
+
+/* Native Sync puts audio between frames, and a clone lands a whole number of frames from its
+   source (live 2026-11-02: a filler cloned by a between-frames offset landed 1,058,400 ticks off
+   `park`; trimming it onto a frame then crashed Premiere). So each lane is cut at its own phase: the
+   sub-frame offset of the clip its razor filler is cloned from, added to every cut on that lane.
+   Returns lane -> { source, phase, cuts }; lanes no cut touches are not in it (phase 0). */
+function laneCuts(items, cuts, tpf) {
+  const lanes = new Map();
+  for (const it of items) {
+    if (lanes.has(lane(it)) || !overlapsCut(it.startTicks, it.endTicks, cuts)) continue;
+    const r = it.startTicks % tpf;
+    const phase = r * 2n > tpf ? r - tpf : r;
+    lanes.set(lane(it), { source: it, phase, cuts: phase ? cuts.map(([a, b]) => [a + phase, b + phase]) : cuts });
+  }
+  return lanes;
+}
+
+/* planCutApply per lane, each with its lane's cuts (laneCuts), so the read-back expects every piece
+   where its lane was actually cut. */
+function planByLane(items, cuts, tpf) {
+  const lanes = laneCuts(items, cuts, tpf);
+  const groups = new Map();
+  items.forEach((it, i) => { if (!groups.has(lane(it))) groups.set(lane(it), []); groups.get(lane(it)).push(i); });
+  const edits = new Array(items.length);
+  for (const [key, idx] of groups) {
+    const plan = planCutApply(idx.map((i) => items[i]), lanes.has(key) ? lanes.get(key).cuts : cuts);
+    if (plan.refusal) throw new Error(`Cannot cut natively: ${plan.refusal}`);
+    idx.forEach((i, j) => { edits[i] = plan.edits[j]; });
+  }
+  return { edits, removedTicks: cuts.reduce((sum, [a, b]) => sum + (b - a), 0n) };
 }
 
 /* Before the analysis runs: the clips inside In/Out that applyNativeCut would refuse if a cut lands
@@ -156,7 +188,6 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   // 16 s live), so they read just what their step uses.
   const read = (fields = {}) => timed("reads", () => readSequence(ppro, copy, { paths: false, ...fields }));
   const all = (seq) => [...seq.video, ...seq.audio];
-  const lane = (c) => `${c.kind || c.mediaType}|${c.track}`;
   let steps = 0;
   let stalledReads = 0;
   const advance = (label, result, at, total) => {
@@ -168,49 +199,47 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     return 0;
   };
 
-  // Where each track needs a razor: every cut edge strictly inside a clip. The edge at b is cut
-  // by a one-frame filler ending there, so the filler itself lies inside the cut.
+  // Where each track needs a razor: every cut edge strictly inside a clip, on that lane's cuts
+  // (laneCuts). The edge at b is cut by a one-frame filler ending there, so the filler itself lies
+  // inside the cut.
+  const lanes = laneCuts(items, cuts, tpf);
+  const cutsOf = (key) => (lanes.has(key) ? lanes.get(key).cuts : cuts);
   const edges = new Map(); // lane -> Set of filler starts
-  const sourceOf = new Map(); // lane -> an item on that track to make the filler from
   for (const it of items) {
-    for (const [a, b] of cuts) {
+    for (const [a, b] of cutsOf(lane(it))) {
       if (!(a < it.endTicks && b > it.startTicks)) continue;
       const at = new Set(edges.get(lane(it)) || []);
       if (a > it.startTicks) at.add(a);
       if (b < it.endTicks) at.add(b - tpf);
-      if (at.size) { edges.set(lane(it), at); if (!sourceOf.has(lane(it))) sourceOf.set(lane(it), it); }
+      if (at.size) edges.set(lane(it), at);
     }
   }
   const endNow = items.reduce((m, it) => (it.endTicks > m ? it.endTicks : m), 0n);
   const park = ((endNow + CLONE_GAP) / tpf) * tpf;
   const findIn = (seq, key, start) => all(seq).find((c) => lane(c) === key && c.start === start);
-  // Nothing else lies past the timeline's end, so the clip there is the lane's filler, wherever it
-  // landed: an audio-only clip Native Sync placed between frames is cloned by a between-frames
-  // offset, and that clone did not land on `park` (live, "razor filler on audio track 0 did not land").
+  // Nothing else lies past the timeline's end, so the clip there is the lane's filler.
   const fillerIn = (seq, key) => all(seq).find((c) => lane(c) === key && c.start > endNow);
 
-  // 1-2. fillers: clone each lane's source clip to `park`, then trim it to one frame.
+  // 1-2. fillers: clone each lane's source clip a whole number of frames, to `park` plus its phase,
+  // then trim it to one frame.
   let seq = await read();
-  steps += tx("make razor fillers", [...sourceOf].map(([key, it]) => {
+  steps += tx("make razor fillers", [...edges.keys()].map((key) => {
+    const it = lanes.get(key).source;
     const src = findIn(seq, key, it.startTicks);
     if (!src) throw new Error(`clip on ${key.replace("|", " track ")} vanished`);
-    const dt = tick(park - it.startTicks);
+    const dt = tick(park + lanes.get(key).phase - it.startTicks);
     return (ed) => (ed || editor()).createCloneTrackItemAction(src.item, dt, 0, 0, false, false);
   })).steps;
   seq = await read();
   const landed = (key) => {
     const f = fillerIn(seq, key);
     if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} did not land (nothing past the timeline end on that track)`);
-    if (f.start !== park) console.log(`CutDeck razor filler on ${key.replace("|", " track ")} landed ${f.start - park} ticks from park`);
+    // Never trimmed onto a frame: that crashed Premiere (laneCuts).
+    const want = park + lanes.get(key).phase;
+    if (f.start !== want) throw new Error(`razor filler on ${key.replace("|", " track ")} landed ${f.start - want} ticks from where its clip's phase puts it`);
     return f;
   };
-  // A filler between frames would put every razor clone between frames too: trim its head up to the
-  // next whole frame first (AudioClipTrackItem.createSetInPointAction, premierepro.txt:47; a head
-  // trim live, PREMIERE_FACTS.md).
-  const offFrame = [...sourceOf.keys()].map((key) => landed(key)).filter((f) => f.start % tpf !== 0n);
-  steps += tx("align razor fillers", offFrame.map((f) => () => f.item.createSetInPointAction(tick(f.inPoint + tpf - (f.start % tpf))))).steps;
-  if (offFrame.length) seq = await read();
-  steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
+  steps += tx("trim razor fillers", [...edges.keys()].map((key) => {
     const f = landed(key);
     const dt = tick(f.inPoint + tpf);
     return () => f.item.createSetOutPointAction(dt);
@@ -230,7 +259,6 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       if (!fillers.has(key)) {
         const f = fillerIn(seq, key);
         if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
-        if (f.start % tpf !== 0n) throw new Error(`razor filler on ${key.replace("|", " track ")} sits ${f.start % tpf} ticks off a frame after aligning`);
         fillers.set(key, f);
       }
       const f = fillers.get(key);
@@ -245,7 +273,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
   // 4. remove everything inside a cut, and the fillers — per media type.
   seq = await read({ inPoint: false });
-  const inside = (c) => c.start > endNow || isInsideCut(c.start, c.end, cuts);
+  const inside = (c) => c.start > endNow || isInsideCut(c.start, c.end, cutsOf(lane(c)));
   let doomed = all(seq).filter(inside);
   if (doomed.length) {
     steps += 1;
@@ -270,13 +298,17 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
 
   // 5. close the gaps, left to right so nothing lands on a piece not yet moved away.
   seq = await read({ end: false, inPoint: false });
-  const fastShift = createFastShiftFor(cuts);
+  const shifts = new Map(); // lane -> fastShift over that lane's cuts
+  const fastShift = (c) => {
+    if (!shifts.has(lane(c))) shifts.set(lane(c), createFastShiftFor(cutsOf(lane(c))));
+    return shifts.get(lane(c))(c.start);
+  };
   // Live 2026-10-01: one transaction of 16,506 moves failed at action 13,845 with "script object is
   // no longer valid" (handles read minutes earlier). So the moves go in batches, each from a fresh
   // read. A piece not yet moved still sits at its original start, so it is found by lane + start.
   // Live 2026-10-06: handles can still go stale mid-batch (e.g. action 179 of 3000). allowPartial
   // commits what succeeded so far, then the next iteration re-reads for fresh handles.
-  const moves = all(seq).map((c) => ({ key: `${lane(c)}|${c.start}`, start: c.start, by: fastShift(c.start) })).filter((m) => m.by > 0n)
+  const moves = all(seq).map((c) => ({ key: `${lane(c)}|${c.start}`, start: c.start, by: fastShift(c) })).filter((m) => m.by > 0n)
     .sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
   let at = 0;
   while (at < moves.length) {
@@ -368,10 +400,11 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     // The copy is a clone of the source, so the source read stands in for it; applyPlan finds
     // each item on the copy by position and throws if one is not there.
     const items = before.items;
-    const plan = planCutApply(items, cuts);
+    const tpf = toTicks(await copy.getTimebase());
+    const plan = planByLane(items, cuts, tpf);
     let steps, actual, problems;
     try {
-      steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+      steps = await applyPlan(ppro, project, copy, items, cuts, tpf, timed);
       // Live 2026-10-27: right after the last close-gaps batch the read-back was short 370 clips, all
       // "missing" — the same short read close gaps retries. Only a read with nothing but missing
       // clips is retried; a misplaced or extra clip is a real mismatch.
