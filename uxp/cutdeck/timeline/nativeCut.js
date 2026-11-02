@@ -204,12 +204,17 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
     if (f.start !== park) console.log(`CutDeck razor filler on ${key.replace("|", " track ")} landed ${f.start - park} ticks from park`);
     return f;
   };
-  // A filler between frames would put every razor clone between frames too: trim its head up to the
-  // next whole frame first (AudioClipTrackItem.createSetInPointAction, premierepro.txt:47; a head
-  // trim live, PREMIERE_FACTS.md).
+  // A filler between frames would put every razor clone between frames too: move it right to the
+  // next whole frame (AudioClipTrackItem.createMoveAction, premierepro.txt:44; audio moves by part
+  // of a frame, PREMIERE_FACTS.md). Not a head trim: a clone floors its in-point to a whole frame
+  // and lands early by what it dropped (live 2026-11-02), so the in-point must stay on a frame.
   const offFrame = [...sourceOf.keys()].map((key) => landed(key)).filter((f) => f.start % tpf !== 0n);
-  steps += tx("align razor fillers", offFrame.map((f) => () => f.item.createSetInPointAction(tick(f.inPoint + tpf - (f.start % tpf))))).steps;
+  steps += tx("align razor fillers", offFrame.map((f) => () => f.item.createMoveAction(tick(tpf - (f.start % tpf))))).steps;
   if (offFrame.length) seq = await read();
+  for (const key of sourceOf.keys()) {
+    const f = landed(key);
+    if (f.inPoint % tpf !== 0n) throw new Error(`razor filler on ${key.replace("|", " track ")} has its in-point ${f.inPoint % tpf} ticks off a frame; its clones would land early`);
+  }
   steps += tx("trim razor fillers", [...sourceOf.keys()].map((key) => {
     const f = landed(key);
     const dt = tick(f.inPoint + tpf);

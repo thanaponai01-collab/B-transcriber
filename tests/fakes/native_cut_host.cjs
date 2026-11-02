@@ -6,9 +6,10 @@ const path = require("node:path");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneOffsets = false } = {}) {
-  // snapCloneOffsets: a clone's offset is rounded to whole frames (suspected from the live "razor
-  // filler on audio track 0 did not land" with a between-frames audio clip; unprobed).
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneIn = false } = {}) {
+  // snapCloneIn: a clone's in-point is floored to a whole frame and its head grows by the same
+  // amount, so it lands that much early (live 2026-11-02, 59.94 fps: a razor filler whose in-point
+  // sat 1058400 ticks past a frame cloned to 1058400 ticks before its edge, one frame + 1058400 long).
   // nullClipRead({ kind, track, moveCalls }): true makes that clip read return null entries (live 2026-10-25).
   // rippleMode: what a ripple remove shifts. "track": later clips on that clip's own track;
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
@@ -54,7 +55,11 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
       if (!a.from.items.includes(a.pi._seq) && a.from !== rootBin) throw new Error("move must be called on the item's parent");
       a.from.items = a.from.items.filter((x) => x !== a.pi._seq); a.to.items.push(a.pi._seq);
     }
-    else if (a.type === "clone") { clones.push(r.end - r.start); overwrite(seqOf(r), { ...r, start: r.start + a.by, end: r.end + a.by }); }
+    else if (a.type === "clone") {
+      const early = snapCloneIn ? r.in % TPF : 0n;
+      clones.push(r.end - r.start + early);
+      overwrite(seqOf(r), { ...r, start: r.start + a.by - early, end: r.end + a.by, in: r.in - early });
+    }
     else if (a.type === "setIn") { r.start += a.t - r.in; r.in = a.t; }
     else if (a.type === "setOut") r.end = r.start + (a.t - r.in);
     else if (a.type === "move") {
@@ -139,8 +144,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
       createCloneTrackItemAction: (item, t) => {
         if (staleCloneCalls.has(++cloneCalls)) item._stale = true;
         if (item._stale) throw new Error("The script object is no longer valid.");
-        const by = BigInt(t.ticks);
-        return act({ type: "clone", raw: item._raw, by: snapCloneOffsets ? (by < 0n ? -1n : 1n) * (((by < 0n ? -by : by) + TPF / 2n) / TPF) * TPF : by });
+        return act({ type: "clone", raw: item._raw, by: BigInt(t.ticks) });
       },
       createRemoveItemsAction: (sel, ripple, mt) => act({ type: "remove", seq: s._seq, items: sel.items, mt, ripple }),
     }) },

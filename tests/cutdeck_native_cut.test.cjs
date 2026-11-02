@@ -150,10 +150,10 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
 
 test("an audio clip between frames (Native Sync) still gets a razor filler, and the cut is exact", async () => {
   const rows = [["video", 0, 0, 100, 0], ["audio", 0, 0, 100, 0], ["audio", 1, 0, 100, 0]];
-  const h = fakeHost(rows, { snapCloneOffsets: true });
-  const off = TPF / 3n; // a recorder placed between frames
+  const h = fakeHost(rows, { snapCloneIn: true });
+  const off = TPF / 4n; // a recorder Sync placed between frames: start and in-point both off a frame
   const rec = h.src.tracks.audio[1][0];
-  rec.start += off; rec.end += off;
+  rec.start += off; rec.end += off; rec.in += off;
   const cuts = [[40n * TPF, 50n * TPF]];
   await applyNativeCut(h.ppro, h.project, h.source, { cuts_frames: [[40, 50]], ticks_per_frame: golden.ticks_per_frame }, "rec");
   const { planCutApply } = require("../uxp/cutdeck/timeline/cutPlanApply.js");
