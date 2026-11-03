@@ -336,6 +336,9 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const timings = {};
   // Works for sync steps (transactions: errors must throw where they happen) and async reads.
   const timed = (label, fn) => {
+    // Live 2026-11-02: Premiere crashed mid-run and the log stopped at the last line logged, so the
+    // crashing call could not be named. Each step now says it is starting.
+    console.log(`CutDeck rough cut step: ${label}`);
     const t = Date.now();
     const done = () => { timings[label] = (timings[label] || 0) + (Date.now() - t) / 1000; };
     let out;
