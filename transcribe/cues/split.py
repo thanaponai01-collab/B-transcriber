@@ -174,7 +174,7 @@ def _split_greedy(words, policy: CuePolicy, *, return_words: bool = False):
         timed, boundary_offsets = _prepare(words, policy)
         sub_words = []
     if timed is None:
-        return []
+        return ([], []) if return_words else []
     boundary_idx = 0
 
     # 4. greedy group whole atoms into cues. Whitespace atoms are buffered and only
@@ -412,11 +412,11 @@ def _split_dp(words, policy: CuePolicy, *, return_words: bool = False):
         timed, boundary_offsets = _prepare(words, policy)
         sub_words = []
     if timed is None:
-        return []
+        return ([], []) if return_words else []
 
     real_idx = [k for k, tok in enumerate(timed) if tok[0].strip()]
     if not real_idx:
-        return []
+        return ([], []) if return_words else []
 
     # Hard split points: local index p (0..len(real_idx)) BEFORE which a cue
     # must start fresh, mirroring the greedy path's sentence/gap forcing.

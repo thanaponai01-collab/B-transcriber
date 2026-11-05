@@ -63,9 +63,10 @@ def test_cue_knobs_reach_the_splitter(monkeypatch):
 
     seen = {}
 
-    def fake_split(words, policy):
+    def fake_split(words, policy, return_words=False):
         seen["policy"] = policy
-        return [("สวัสดี", 0, 500, 0.9)]
+        cues = [("สวัสดี", 0, 500, 0.9)]
+        return (cues, []) if return_words else cues
 
     monkeypatch.setattr(fw, "split_cues", fake_split)
     monkeypatch.setattr(

@@ -138,3 +138,10 @@ def test_classifier_demonstrative_not_split_from_its_noun_or_itself():
         assert not c[0].startswith("คน") or c[0].startswith("คนนั้น"), f"คน orphaned from นั้น in {cues!r}"
     assert cues[0][0] == "เจอผู้หญิงคนนั้น"
     assert cues[1][0] == "เมื่อวาน"
+
+
+def test_no_words_returns_a_pair_when_words_are_requested():
+    # The engine unpacks (cues, sub_words); a decode that heard nothing must not crash it.
+    for algorithm in ("greedy", "dp"):
+        assert split_cues([], CuePolicy(algorithm=algorithm), return_words=True) == ([], [])
+        assert split_cues([], CuePolicy(algorithm=algorithm)) == []
