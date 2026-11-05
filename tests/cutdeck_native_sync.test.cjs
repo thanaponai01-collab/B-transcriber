@@ -256,7 +256,7 @@ test("places each clip on its own tracks at its planned start, in a _Synced copy
   assert.match(text, /Opened Shoot_Synced\. Ctrl\+Z once undoes the placing\./);
 });
 
-test("refuses to run on a _Synced sequence, before calling the helper", async () => {
+test("refuses to run on a _Synced sequence whose original is gone, before calling the helper", async () => {
   const host = fakeHost({ files: FILES, timeline: TIMELINE });
   host.original.name = "Shoot_Synced";
   const helper = fakeHelper(PLAN);
@@ -266,6 +266,18 @@ test("refuses to run on a _Synced sequence, before calling the helper", async ()
   assert.equal(helperStarted, false);
   assert.equal(helper.calls.length, 0);
   assert.equal(host.sequences.length, 1, "nothing was copied");
+});
+
+test("run on a _Synced copy, syncs its original instead", async () => {
+  const host = fakeHost({ files: FILES, timeline: TIMELINE });
+  await run(host, fakeHelper(PLAN));
+  host.sequences.unshift(host.sequences.splice(1, 1)[0]); // the copy is now active
+  assert.equal(host.sequences[0].name, "Shoot_Synced");
+  const { text, statuses, problems } = await run(host, fakeHelper(PLAN));
+  assert.ok(statuses.includes('"Shoot_Synced" is a synced copy; syncing "Shoot" instead…'));
+  assert.deepEqual(problems, []);
+  assert.match(text, /Opened Shoot_Synced\./);
+  assert.equal(host.sequences.length, 3, "a new copy was made from the original, not from the copy");
 });
 
 test("reports the clips at the back, drift, and items with no media file", async () => {

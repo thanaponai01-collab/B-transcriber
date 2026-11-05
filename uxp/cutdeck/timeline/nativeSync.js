@@ -239,11 +239,21 @@ function formatReport(name, plan, clips, skipped, problems) {
 
 /* deps: { rpc, ensureHelper, onStatus }. Returns { text, problems }. */
 async function syncSequence(ppro, deps) {
-  const { project, sequence: source } = await activeProjectAndSequence(ppro, {
+  const { project, sequence: active } = await activeProjectAndSequence(ppro, {
     sequenceErrorMessage: "Open the sequence with your camera and recorder clips first.",
   });
-  if (String(source.name).endsWith(SYNCED_SUFFIX)) {
-    throw new Error(`"${source.name}" is already a synced copy. Open the original sequence and run Sync on that.`);
+  let source = active;
+  if (String(active.name).endsWith(SYNCED_SUFFIX)) {
+    // A synced copy: sync its original instead (Project.getSequences premierepro.txt:478, Sequence.name :587).
+    const original = String(active.name).slice(0, -SYNCED_SUFFIX.length);
+    const matches = (await project.getSequences()).filter((s) => String(s.name) === original);
+    if (matches.length !== 1) {
+      throw new Error(`"${active.name}" is already a synced copy and its original "${original}" `
+        + (matches.length ? `matches ${matches.length} sequences` : "is not in the project")
+        + ". Open the original sequence and run Sync on that.");
+    }
+    source = matches[0];
+    deps.onStatus(`"${active.name}" is a synced copy; syncing "${original}" instead…`);
   }
   await deps.ensureHelper();
 
