@@ -248,6 +248,31 @@ def test_a_chance_coarse_peak_the_fine_match_refuses_is_unmatched(monkeypatch):
     assert got["host"].start_s >= 60
 
 
+# 9b. Live 2026-11-05 (three ~71 min clips of one show): piece 60-120 s of a clip won its coarse
+#     match at a repeated sound 1836 s away. The fine match refused it, and Sync gave up on the
+#     clip though every later piece pointed at the right place. A refused piece must not end the search.
+def test_a_coarse_peak_the_fine_match_refuses_does_not_stop_later_pieces(monkeypatch):
+    from cutdeck import sync_plan
+    s, ev = Shoot(), event(200, seed=41)
+    s.clip("rec", ev, "ev", 0, 200)
+    s.clip("cam", ev, "ev", 10, 190)
+    real = sync_plan.correlate_gcc_phat_detail
+    coarse_calls = []
+
+    def wrong_first_peak(ref, clip, rate, spectra=None):
+        offset, psr, runner_up = real(ref, clip, rate, spectra)
+        if rate == COARSE_RATE:
+            coarse_calls.append(offset)
+            if len(coarse_calls) == 1:  # a confident peak at the wrong place, still inside the overlap
+                return offset + 40.0, 50.0, 0.3
+        return offset, psr, runner_up
+
+    monkeypatch.setattr(sync_plan, "correlate_gcc_phat_detail", wrong_first_peak)
+    plan = s.plan()
+    assert len(coarse_calls) >= 2, "the next piece was tried"
+    assert_session_true(plan, s, ["rec", "cam"])
+
+
 # 10. A real match whose overlap opens on silence: the fine match steps along until it hears the
 #     shared sound, rather than calling the clip unmatched.
 def test_overlap_that_opens_on_silence_still_syncs():

@@ -17,7 +17,7 @@ against the whole session, then a fine match at FINE_RATE on a short window agai
 clip it overlaps most. The coarse match uses COARSE_CHUNK_S pieces of the clip, not all of it:
 two recorders' clocks drift apart (50 ppm is 180 ms over an hour), which smears a whole-clip
 match into two "equally good" places and rejects it — measured, 2026-09-24. The first piece
-that matches places the clip. When the overlap is long, the fine match also runs at its far
+whose match the fine pass confirms places the clip. When the overlap is long, the fine match also runs at its far
 end; a different answer there is the drift, reported rather than corrected.
 """
 
@@ -167,21 +167,32 @@ def _try_place(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: 
     if view is None:
         view = _view(session, clips, list(session.starts))
     composite, origin = view.composite, view.origin
-    found = None
+    refused = None  # why the last coarse candidate failed its fine check
     chunk_from = 0.0
     heard = 0  # pieces loud enough to try
-    while found is None and chunk_from + MIN_OVERLAP_S <= clip.duration_s:
+    while chunk_from + MIN_OVERLAP_S <= clip.duration_s:
         chunk = clip.coarse[int(chunk_from * COARSE_RATE):int((chunk_from + COARSE_CHUNK_S) * COARSE_RATE)]
         if float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2))) >= MIN_RMS:
             heard += 1
             offset, psr, runner_up = correlate_gcc_phat_detail(composite, _unit(chunk), COARSE_RATE, view.spectra)
             if psr >= MIN_PSR and runner_up <= MAX_RUNNER_UP:
-                found = (origin + offset - chunk_from, chunk_from, psr)
+                # A piece of repeated sound can win its coarse match at the wrong place (live
+                # 2026-11-05: piece 60-120 s peaked 1836 s away); the fine check refuses it, and
+                # a later piece may still find the right one.
+                placed = _confirm(clip, session, clips, loader, origin + offset - chunk_from, chunk_from, psr)
+                if not isinstance(placed, str):
+                    return placed
+                refused = placed
         chunk_from += COARSE_CHUNK_S
-    if found is None:
-        return (f"no shared sound with the session ({heard} piece(s) tried)" if heard
-                else "its audio is silent throughout")
-    coarse, matched_at, psr = found
+    if refused is not None:
+        return refused
+    return (f"no shared sound with the session ({heard} piece(s) tried)" if heard
+            else "its audio is silent throughout")
+
+
+def _confirm(clip: _Clip, session: _Session, clips: dict[str, _Clip], loader: Loader,
+             coarse: float, matched_at: float, psr: float) -> Placement | str:
+    """Confirm a coarse start at FINE_RATE: the placement, or why it was refused."""
     # The placed clip this one overlaps most is the fine reference; too little overlap with
     # everything placed means the peak landed on silence padding, not on shared sound.
     best, best_len = None, 0.0
