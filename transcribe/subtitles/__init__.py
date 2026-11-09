@@ -89,11 +89,7 @@ def _ms_to_srt(ms: int) -> str:
 
 
 def _ms_to_vtt(ms: int) -> str:
-    h = ms // 3_600_000
-    m = (ms % 3_600_000) // 60_000
-    s = (ms % 60_000) // 1000
-    ms_rem = ms % 1000
-    return f"{h:02d}:{m:02d}:{s:02d}.{ms_rem:03d}"
+    return _ms_to_srt(ms).replace(",", ".")
 
 
 def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -> str:

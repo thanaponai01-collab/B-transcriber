@@ -54,6 +54,7 @@ from cutdeck.contracts import (
     Label,
     Segment,
 )
+from cutdeck.segment import _max_silence_between, _silence_intervals
 from cutdeck.words import Word
 
 logger = logging.getLogger(__name__)
@@ -77,30 +78,6 @@ _RawCut = tuple[int, int, str, str, str]
 
 
 # ── silence detection helpers ─────────────────────────────────────────────────
-
-def _silence_intervals(spans: Optional[Iterable[_Span]]) -> list[tuple[int, int]]:
-    if not spans:
-        return []
-    out = [(s.start_ms, s.end_ms) for s in spans if getattr(s, "kind", None) == "silence"]
-    out.sort()
-    return out
-
-
-def _silence_overlap(lo: int, hi: int, silences: list[tuple[int, int]]) -> int:
-    """Longest silence overlap with the window [lo, hi]. 0 if none or hi<=lo."""
-    if hi <= lo:
-        return 0
-    longest = 0
-    for s, e in silences:
-        if e <= lo:
-            continue
-        if s >= hi:
-            break
-        ov = min(e, hi) - max(s, lo)
-        if ov > longest:
-            longest = ov
-    return longest
-
 
 # ── rule 1: silence cuts ──────────────────────────────────────────────────────
 
@@ -185,8 +162,8 @@ def filler_cuts(
         if word in safe:
             cuts.append((w.start_ms, w.end_ms, "filler", SOURCE_RULE, BLADE_WORD))
         elif word in contextual:
-            before = _silence_overlap(w.start_ms - iso, w.start_ms, silences)
-            after = _silence_overlap(w.end_ms, w.end_ms + iso, silences)
+            before = _max_silence_between(w.start_ms - iso, w.start_ms, silences)
+            after = _max_silence_between(w.end_ms, w.end_ms + iso, silences)
             if before >= iso and after >= iso:
                 cuts.append((w.start_ms, w.end_ms, "filler", SOURCE_RULE, BLADE_WORD))
     return cuts

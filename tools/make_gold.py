@@ -31,7 +31,7 @@ from transcribe.contracts import detect_script
 from transcribe.subtitles import read_subtitles
 
 
-def parse_srt(text: str) -> list[dict]:  # re-exported: moved here from this module
+def parse_srt(text: str) -> list[dict]:  # SRT-only wrapper over read_subtitles; tests call it
     return read_subtitles(text, "srt")
 
 

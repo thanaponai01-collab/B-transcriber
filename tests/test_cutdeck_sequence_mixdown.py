@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cutdeck.contracts import CUT, KEEP, CutConfig  # noqa: E402
+from cutdeck.contracts import CUT, CutConfig  # noqa: E402
 from cutdeck.sequence_mixdown import plan_from_mixdown  # noqa: E402
 from transcribe.pipeline import ingest as ingest_mod  # noqa: E402
 

@@ -91,28 +91,23 @@ def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: 
     rule. Each excerpt is decoded alone: no bias prompt, no earlier text as context.
     If `engine` is passed, the caller manages its residency lifecycle.
     """
-    if engine is not None:
+    def redecoder(eng):
         def redecode(lo_ms: int, hi_ms: int) -> list[dict]:
             excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
             if not len(excerpt):
                 return []
-            res = engine.transcribe(EngineInput(audio=excerpt, language_hint="th"))
+            res = eng.transcribe(EngineInput(audio=excerpt, language_hint="th"))
             return [{"text": t.text, "start_ms": t.start_ms + lo_ms, "end_ms": t.end_ms + lo_ms,
                      "script": t.script, "confidence": t.confidence}
                     for t in res.tokens]
-        yield redecode
+        return redecode
+
+    if engine is not None:
+        yield redecoder(engine)
     else:
         eng = build_engine(plan.engine_a_name, device, config)
         with _engine_residency(eng, "coverage-guard"):
-            def redecode(lo_ms: int, hi_ms: int) -> list[dict]:
-                excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
-                if not len(excerpt):
-                    return []
-                res = eng.transcribe(EngineInput(audio=excerpt, language_hint="th"))
-                return [{"text": t.text, "start_ms": t.start_ms + lo_ms, "end_ms": t.end_ms + lo_ms,
-                         "script": t.script, "confidence": t.confidence}
-                        for t in res.tokens]
-            yield redecode
+            yield redecoder(eng)
         del eng
         _free_vram()
 

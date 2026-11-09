@@ -253,12 +253,7 @@ function parseVideoInfoSize(text) {
 
 const VIDEO_INFO_COLUMN_ID = "Column.Intrinsic.VideoInfo";
 
-let projectItemSourceSizeCache = new WeakMap();
-
-function clearSourceFrameSizeCache(projectItem = null) {
-  if (projectItem && typeof projectItem === "object") projectItemSourceSizeCache.delete(projectItem);
-  else projectItemSourceSizeCache = new WeakMap();
-}
+const projectItemSourceSizeCache = new WeakMap();
 
 // The selected item's SOURCE frame size, which Anchor Point is normalized to. UXP has no
 // width/height on ProjectItem, ClipProjectItem or FootageInterpretation; the only read path is
@@ -390,6 +385,5 @@ module.exports = {
   readSequencePixelAspect,
   parseVideoInfoSize,
   readSourceFrameSize,
-  clearSourceFrameSizeCache,
   clearComponentCache,
 };

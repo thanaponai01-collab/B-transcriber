@@ -73,6 +73,3 @@ def prefers_whole_file(name: str) -> bool:
         _lazy_load(name)
     return bool(getattr(_REGISTRY[name], "prefers_whole_file", False))
 
-
-def list_engines() -> list[str]:
-    return list(_REGISTRY.keys())

@@ -5,7 +5,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 import numpy as np

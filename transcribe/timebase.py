@@ -56,10 +56,6 @@ class Timebase:
         """
         return self.fps_den == 1001
 
-    @property
-    def fps_fraction(self) -> Fraction:
-        return Fraction(self.fps_num, self.fps_den)
-
     @classmethod
     def from_decimal_fps(cls, fps: float) -> "Timebase":
         """Build a Timebase from a human-entered decimal fps (CLI args, UI fields).

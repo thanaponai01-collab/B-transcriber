@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from cutdeck.words import timed_tokens, words_from_pieces
 from transcribe.cues import CuePolicy, split_cues
-from transcribe.thai.atoms import BreakLexicon, default_lexicon, glue_atoms, snap_boundary_offsets
+from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
 
 def _group_words_into_cues(words, **policy_kwargs):

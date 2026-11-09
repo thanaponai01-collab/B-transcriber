@@ -2,7 +2,6 @@
 transcribe.service against one shared store."""
 
 import tempfile
-from pathlib import Path
 
 import numpy as np
 

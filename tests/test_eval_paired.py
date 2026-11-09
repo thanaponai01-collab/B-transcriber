@@ -1,5 +1,4 @@
 """Paired gate evidence, corpus identity, baseline lineage and uncertainty."""
-import dataclasses
 import json
 import sqlite3
 from pathlib import Path

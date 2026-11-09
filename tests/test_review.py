@@ -1,6 +1,5 @@
 """Tests for review flags, spoken-Thai lexicon, and word tokenization deduplication (issue #75)."""
 from unittest.mock import patch
-import pytest
 
 from transcribe import review
 from transcribe.service import review_flags

@@ -1,10 +1,9 @@
 """Tests for speech_windows derivation from ingest speech spans (issue #72)."""
 
 import numpy as np
-import pytest
 
 import transcribe.audio.windows as windows
-from transcribe.audio import Window, WindowPolicy, speech_windows
+from transcribe.audio import WindowPolicy, speech_windows
 
 _AUDIO = np.zeros(60 * 16000, dtype=np.float32)
 _NO_SPLIT = WindowPolicy(max_span_s=10_000.0)

@@ -13,7 +13,7 @@
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
 const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
-const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
+const { TICKS_PER_SECOND } = require("../host/ticks.js");
 const { PROBES, runProbe } = require("./probes.js");
 const { getSelectedTrackItems, getTrackClipItems, trackItemName } = require("../host/trackItems.js");
 const {

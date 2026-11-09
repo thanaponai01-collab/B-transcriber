@@ -473,19 +473,6 @@ def find_finished_job(
     return JobRow(**dict(row))
 
 
-def get_latest_job_for_media(conn: sqlite3.Connection, media_id: int) -> Optional[JobRow]:
-    """Most recently created job for this media, regardless of status — for
-    callers that ran run_file() in-process and only have the media path, not
-    the job_id run_file resolved/created internally."""
-    row = conn.execute(
-        "SELECT * FROM job WHERE media_id = ? ORDER BY id DESC LIMIT 1",
-        (media_id,),
-    ).fetchone()
-    if row is None:
-        return None
-    return JobRow(**dict(row))
-
-
 # ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(
@@ -564,14 +551,6 @@ def delete_correction(conn: sqlite3.Connection, job_id: int, token_idx: int) -> 
     conn.execute(
         "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
         (job_id, token_idx),
-    )
-    conn.commit()
-
-
-def update_correction_span(conn: sqlite3.Connection, correction_id: int, corrected_span: str) -> None:
-    conn.execute(
-        "UPDATE correction SET corrected_span = ? WHERE id = ?",
-        (corrected_span, correction_id),
     )
     conn.commit()
 
