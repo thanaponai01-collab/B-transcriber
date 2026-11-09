@@ -34,6 +34,7 @@ PORT = 7891
 VERSION = "cutdeck-6"  # JSON-only analysis and source-snapshot checking
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
 TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
+RESTARTING = "CutDeck helper is restarting; try again in a moment"
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -230,6 +231,8 @@ class Jobs:
                 return dict(job)  # duplicate request must never run a second time
             if self.active:
                 raise ValueError("CutDeck is already processing a sequence")
+            if self.restarting:
+                raise ValueError(RESTARTING)
             try:
                 return self._start(job, sequence_model.load(job["source_path"]))
             except ValueError as exc:
@@ -372,7 +375,10 @@ class Jobs:
         return job
 
     def _allocate(self, lane: str = "gpu") -> tuple[str, Path]:
-        """Claim a lane's next job folder, or refuse if that lane is busy."""
+        """Claim a lane's next job folder, or refuse if that lane is busy or the helper is
+        about to exit for a restart (the exit would cancel the job)."""
+        if self.restarting:
+            raise ValueError(RESTARTING)
         if lane == "gpu" and self.active:
             raise ValueError("CutDeck is already processing a sequence")
         if lane == "cpu" and self.cpu_active:
