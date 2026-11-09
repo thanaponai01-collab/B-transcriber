@@ -1543,3 +1543,17 @@ test("Align left to selection inside one Graphic lines up each text layer's blue
   close(pt(g.texts[0]).x, p2.x, "Text 1's box left on Text 2's box left");
   close(pt(g.texts[1]).x, p2.x, "Text 2 already leftmost");
 });
+
+test("a block reset through the real controller resets every row it names, not just the first", async () => {
+  const { createController } = require("../uxp/cutdeck/features/controller.js");
+  const a = motionClip("A", { position: [0.1, 0.9], scale: 40, rotation: 33 });
+  const { ppro, undoSteps } = host([a]);
+  const ctl = createController({ render() {}, initialState: { sequence: null, transform: null } });
+  const feature = createAlignFeature({ ppro, ctl });
+  await feature.onResetField(["position", "scale", "rotation"]);
+  assert.deepEqual(a.params[0].value, [0.5, 0.5]);
+  assert.equal(a.params[1].value, 100);
+  assert.equal(a.params[4].value, 0);
+  assert.deepEqual(undoSteps, ["CutDeck: Reset Position", "CutDeck: Reset Scale", "CutDeck: Reset Rotation"]);
+  assert.equal(ctl.state.status.level, "ready");
+});
