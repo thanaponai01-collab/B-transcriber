@@ -109,27 +109,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
-    # eval_run: every column's name/type/nullability/default is declared once,
-    # in schema.sql — backfill whichever ones a pre-existing database is still
-    # missing without re-typing any of them a second time here (issue #15).
-    for _name, _ddl in _schema_columns("eval_run"):
-        _add("eval_run", _name, _ddl)
-
-    _add("engine_result", "raw_segments_json", "raw_segments_json TEXT")
-
-    # media timebase (GAP-1/2)
-    _add("media", "fps_num", "fps_num INTEGER")
-    _add("media", "fps_den", "fps_den INTEGER")
-    _add("media", "is_vfr", "is_vfr INTEGER NOT NULL DEFAULT 0")
-
-    # correction reason (GAP-7)
-    _add("correction", "reason", "reason TEXT")
-    # sub-cue promotable span (5.3)
-    _add("correction", "corrected_span", "corrected_span TEXT")
-
-    # job resumability (4.1, GAP-8)
-    for name, ddl in _schema_columns("job"):
-        _add("job", name, ddl)
+    # Every column's name/type/nullability/default is declared once, in
+    # schema.sql — backfill whichever ones a pre-existing database is still
+    # missing, for every table, without re-typing any of them here (issue #15).
+    # A hand-typed list here forgot engine_result.raw_segments_json (65cc1b7).
+    tables = re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", _SCHEMA.read_text(encoding="utf-8"))
+    for table in tables:
+        for name, ddl in _schema_columns(table):
+            _add(table, name, ddl)
 
 
 # ── dataclasses mirroring schema rows ─────────────────────────────────────────

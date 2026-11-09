@@ -74,6 +74,28 @@ def test_decode_resets_last_speech_timestamp_per_call():
     assert engine._pipeline.transcribe_calls[1]["last_speech_timestamp_at_call"] == 0.0
 
 
+def test_decode_pads_audio_to_the_library_per_clip_sample_count():
+    """b6f41d0: faster-whisper converts each clip timestamp to samples with its own
+    int() and asserts the audio is at least their sum. One int() of the summed
+    seconds lands a sample short for these overlapping clips (28800 vs 28801)."""
+    seen = []
+
+    class LengthPipeline(FakeBatchedPipeline):
+        def transcribe(self, audio_arr, **kwargs):
+            seen.append(len(audio_arr))
+            return super().transcribe(audio_arr, **kwargs)
+
+    engine = FasterWhisperEngine.__new__(FasterWhisperEngine)
+    engine._pipeline = LengthPipeline()
+    clips = [{"start": 0.0, "end": 0.9 + 9e-05}, {"start": 0.1 + 3e-05, "end": 1.0}]
+    per_clip = sum(int(c["end"] * 16000) - int(c["start"] * 16000) for c in clips)
+    assert per_clip == 28801
+
+    engine._decode(np.zeros(16000, dtype=np.float32), clips, False, {}, 4)
+
+    assert seen == [per_clip]
+
+
 def test_group_segments_matches_library_seek_for_unround_clip_starts():
     """faster-whisper 1.2.1 sets seek = int(int(start_s * 16000) / 16000 * 100), which
     floors; clip starts like 15.746s (from a real job's tail recovery) then miss a
