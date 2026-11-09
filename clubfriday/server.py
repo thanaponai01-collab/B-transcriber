@@ -301,8 +301,13 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
                         session.update(state="failed", error=result.get("error", "Transcription failed"))
                     save(session)
                 except (RuntimeError, ValueError) as exc:
-                    # A disconnected helper can reconnect; do not destroy the saved job.
-                    session["connection_error"] = str(exc)
+                    if str(exc).startswith("Unknown job"):
+                        # The helper refused the job id: no later poll can succeed.
+                        session.update(state="failed", error="The helper no longer knows this transcription; start a new range.")
+                        save(session)
+                    else:
+                        # A disconnected helper can reconnect; do not destroy the saved job.
+                        session["connection_error"] = str(exc)
             return session
 
     @app.get("/api/sessions/{session_id}/audio")
