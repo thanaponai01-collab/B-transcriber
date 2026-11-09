@@ -228,3 +228,37 @@ def test_eval_run_round_trip_preserves_every_field():
         assert back.is_experiment is False
     finally:
         conn.close()
+
+
+def _addable_columns():
+    """(table, column) for every schema.sql column ALTER TABLE ADD COLUMN can
+    add: nullable or defaulted, not UNIQUE. These are the ones a schema bump can
+    introduce, so each must be backfilled on an old database."""
+    import re
+    text = store._SCHEMA.read_text(encoding="utf-8")
+    for table in re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", text):
+        for name, ddl in store._schema_columns(table):
+            up = ddl.upper()
+            if "UNIQUE" in up or ("NOT NULL" in up and "DEFAULT" not in up):
+                continue
+            yield table, name
+
+
+def test_migrate_backfills_every_addable_column_of_every_table():
+    """65cc1b7: engine_result.raw_segments_json was in schema.sql but missing
+    from _migrate's hand-typed list, so old databases lacked it. Drop each
+    addable column from a fresh database in turn; _migrate must put it back."""
+    pairs = list(_addable_columns())
+    assert ("engine_result", "raw_segments_json") in pairs
+    for table, column in pairs:
+        db = _tmp_path()
+        store.init_db(db)
+        conn = store.connect(db)
+        try:
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+            store._migrate(conn)
+            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            assert column in cols, f"_migrate did not backfill {table}.{column}"
+        finally:
+            conn.close()

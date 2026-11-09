@@ -151,6 +151,19 @@ _TRUNCATION_TAIL_MS = 1500
 _TRUNCATION_LOOKBACK_MS = 2500
 
 
+def _lib_samples(seconds: float) -> int:
+    """faster_whisper's own seconds-to-samples for one clip timestamp: int() of
+    that timestamp alone. Code that must agree with the library's sample counts
+    goes through here, so a change to its arithmetic is made once."""
+    return int(seconds * _SR)
+
+
+def _lib_seek(seconds: float) -> int:
+    """faster_whisper's segment.seek for a clip starting at `seconds`: its sample
+    offset, then int() to 10 ms frames."""
+    return int(_lib_samples(seconds) / _SR * 100)
+
+
 def _is_cuda_oom(e: Exception) -> bool:
     """True for a CUDA out-of-memory error, however the stack surfaces it."""
     try:
@@ -316,9 +329,9 @@ class FasterWhisperEngine(Engine):
         # sum(clip durations) can exceed audio_arr length. Pad audio_arr with zeros so
         # duration >= duration_after_vad without altering any clip content.
         if clip_timestamps and len(audio_arr) > 0:
-            # Per-clip int() mirrors the library's own sample conversion; one int() of
-            # the summed seconds can land a few samples short of it.
-            tot_dur_samples = sum(int(c["end"] * _SR) - int(c["start"] * _SR) for c in clip_timestamps)
+            # Per-clip conversion mirrors the library's own; one int() of the summed
+            # seconds can land a few samples short of it (b6f41d0).
+            tot_dur_samples = sum(_lib_samples(c["end"]) - _lib_samples(c["start"]) for c in clip_timestamps)
             if tot_dur_samples > len(audio_arr):
                 audio_arr = np.pad(audio_arr, (0, tot_dur_samples - len(audio_arr)), mode="constant")
 
@@ -397,9 +410,8 @@ class FasterWhisperEngine(Engine):
         if not windows or not segments:
             return grouped
 
-        # Mirror the library's seek: int() to samples, then int() to 10 ms frames.
-        # A rounded key misses starts like 15.746s and drops to the fallback below.
-        seek_map = {int(int(w.start_s * _SR) / _SR * 100): idx for idx, w in enumerate(windows)}
+        # A rounded key misses starts like 15.746s and drops to the fallback below (a9f1d89).
+        seek_map = {_lib_seek(w.start_s): idx for idx, w in enumerate(windows)}
         all_have_matching_seek = all(
             getattr(s, "seek", None) is not None and getattr(s, "seek", None) in seek_map
             for s in segments
@@ -562,18 +574,13 @@ class FasterWhisperEngine(Engine):
         plan = self._plan_truncated_tail(tokens, sub_audio, require_speech=require_speech)
         if plan is None:
             return tokens, bs
-        _orig, kept, tail_audio, tail_start_ms, clip = plan
-        tail_common = {k: v for k, v in common.items() if k not in ("initial_prompt", "hotwords")}
-        tail_common["initial_prompt"] = None
-        segments, bs = self._decode(tail_audio, clip, False, tail_common, bs)
-        tail_tokens = self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold)
-        if not tail_tokens:
+        # One tail redecode path: the batched one (fd6d21d had to strip the prompt in both).
+        recovered, bs = self._batch_recover_tails([(None, plan)], common, bs)
+        merged = recovered[None]
+        if merged is tokens:
             return tokens, bs
-        for t in tail_tokens:
-            t.start_ms += tail_start_ms
-            t.end_ms += tail_start_ms
-
-        merged = kept + tail_tokens
+        tail_start_ms = plan[3]
+        tail_tokens = merged[len(plan[1]):]
         win_dur_ms = len(sub_audio) / _SR * 1000
         last = tokens[-1] if tokens else None
         logger.info("Recovered truncated tail: redecoded from %.2fs -> %d token(s) "
