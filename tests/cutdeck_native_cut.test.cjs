@@ -198,6 +198,20 @@ test("a cut that fails after the copy exists renames the copy (FAILED) and says 
   assert.deepEqual(h.sequences.map((s) => s.name).sort(), ["Result (FAILED)", "Shoot"]);
 });
 
+test("a copy that makes two sequences marks both (FAILED) and flags copyCreated, so Resume cannot copy again", async () => {
+  const h = fakeHost(golden.before);
+  const getSequences = h.project.getSequences;
+  let calls = 0;
+  h.project.getSequences = async () => {
+    if (++calls === 2) h.sequences.push({ name: "Shoot Copy 2", id: "extra", tracks: { video: [], audio: [] } });
+    return getSequences();
+  };
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);
+  assert.match(error.message, /gave 2 new sequences/);
+  assert.equal(error.copyCreated, true);
+  assert.deepEqual(h.sequences.map((s) => s.name).sort(), ["Result (FAILED)", "Result (FAILED)", "Shoot"]);
+});
+
 test("a refusal before the copy is made leaves no copy and no copyCreated flag", async () => {
   const h = fakeHost(golden.before, { speedOf: () => 2 });
   const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "Result").then(() => null, (e) => e);

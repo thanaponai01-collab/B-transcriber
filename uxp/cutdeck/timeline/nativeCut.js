@@ -357,10 +357,12 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
   });
   const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
-  if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; nothing was cut`);
+  if (!created.length) throw new Error("Copying the sequence gave no new sequence; nothing was cut");
+  // From here a copy exists, so every failure goes through the catch below.
   const copy = created[0];
-  const copyItem = await copy.getProjectItem();
   try {
+    if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; nothing was cut`);
+    const copyItem = await copy.getProjectItem();
     runTransaction(project, "CutDeck: name copy", (compound) => {
       if (!compound.addAction(copyItem.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
     });
@@ -413,11 +415,14 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
   } catch (error) {
     // A half-cut copy must not pass for the result, nor collide with the next attempt's name.
-    try {
-      runTransaction(project, "CutDeck: mark failed copy", (compound) => {
-        compound.addAction(copyItem.createSetNameAction(`${resultName} (FAILED)`));
-      });
-    } catch (_) { /* the error below is the one that matters */ }
+    for (const seq of created) {
+      try {
+        const item = await seq.getProjectItem();
+        runTransaction(project, "CutDeck: mark failed copy", (compound) => {
+          compound.addAction(item.createSetNameAction(`${resultName} (FAILED)`));
+        });
+      } catch (_) { /* the error below is the one that matters */ }
+    }
     error.copyCreated = true;
     throw error;
   }

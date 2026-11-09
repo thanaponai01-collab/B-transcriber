@@ -177,9 +177,10 @@ test("an fx block's header reset resets each of its rows, skipping a disabled ro
   tools.appendChild(el("reset-opacity", { "data-act": "align-reset", "data-block": "opacity", "data-reset": "opacity" }));
   motion.children.find((c) => c.id === "reset-scale").disabled = true;
   const reset = [];
-  alignPanel.bind({ onResetField: (row) => reset.push(row) });
+  alignPanel.bind({ onResetField: (rows) => reset.push(rows) });
   header.click();
-  assert.deepEqual(reset, ["position", "rotation"]);
+  // One intent for the whole block: per-row intents would each hit the controller's busy guard.
+  assert.deepEqual(reset, [["position", "rotation"]]);
   delete global.document;
 });
 

@@ -325,11 +325,21 @@ function createAlignFeature({ ppro, ctl, uxp = null, rpc = null, ensureHelper = 
         (res) => editLevel(res),
       );
     },
-    onResetField: (row) => {
+    // One row, or a block's rows reset one after another inside one controller action.
+    onResetField: (rowOrRows) => {
+      const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
       return executeWithOptimisticConfirm(
-        () => resetField(ppro, row, { layerTarget: ctl.state.activeLayerTarget }),
+        async () => {
+          const total = { done: 0, skipped: [] };
+          for (const row of rows) {
+            const res = await resetField(ppro, row, { layerTarget: ctl.state.activeLayerTarget });
+            total.done = Math.max(total.done, res.done);
+            for (const s of res.skipped) if (!total.skipped.includes(s)) total.skipped.push(s);
+          }
+          return total;
+        },
         null,
-        (res) => editSummary(`Reset ${row}`, res),
+        (res) => editSummary(`Reset ${rows.join(", ")}`, res),
         (res) => editLevel(res),
       );
     },

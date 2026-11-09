@@ -530,9 +530,12 @@
         if (e && typeof e.stopPropagation === "function") e.stopPropagation();
         if (node.disabled) return;
         const block = node.getAttribute("data-reset-block");
+        // One intent for the block: one per row would each hit the controller's busy guard.
+        const rows = [];
         el.querySelectorAll("[data-reset]").forEach((row) => {
-          if (row.getAttribute("data-block") === block && !row.disabled) intents.onResetField(row.getAttribute("data-reset"));
+          if (row.getAttribute("data-block") === block && !row.disabled) rows.push(row.getAttribute("data-reset"));
         });
+        if (rows.length) intents.onResetField(rows);
       });
     });
     // Folding an fx block is presentation only, so it stays here and never reaches a controller.
