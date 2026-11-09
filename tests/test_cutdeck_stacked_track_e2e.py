@@ -13,7 +13,6 @@ energy detector so no model download or GPU is needed.
 """
 from pathlib import Path
 from urllib.parse import quote
-from xml.etree import ElementTree as ET
 
 import numpy as np
 import pytest
@@ -21,7 +20,7 @@ import pytest
 from cutdeck import rough_cut, sequence_model
 from cutdeck.helper import reference_audio_track
 from cutdeck.sequence_model import check_reference_audio
-from tests.sequence_fixture import from_fcp7_xml, panel_json_from_xml
+from tests.sequence_fixture import panel_json_from_xml
 import json
 from cutdeck.sequence_timing import frame_to_ticks
 from cutdeck.contracts import Timebase

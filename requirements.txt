@@ -16,7 +16,6 @@ faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-convert
                         #     --output_dir models/whisper-th-medium-ct2 --quantization float16 \
                         #     --copy_files tokenizer.json preprocessor_config.json
 funasr>=1.1.0
-openai-whisper>=20250625
 # Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree
 # (pytorch-lightning, optuna, wandb, ...) — kept commented out of the default
 # install. VERIFIED 2026-07-16: installs and imports cleanly on this 3.11.9

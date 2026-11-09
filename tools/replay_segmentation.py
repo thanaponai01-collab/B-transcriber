@@ -20,7 +20,7 @@ import json
 import sqlite3
 import statistics
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml

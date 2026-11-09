@@ -198,11 +198,6 @@ def _error_rate(ref: list | str, hyp: list | str) -> float:
     return _edit_distance(ref, hyp) / len(ref)
 
 
-# kept as a public name for callers/tests that want plain word edit distance
-def word_error_rate(reference: list[str], hypothesis: list[str]) -> float:
-    return _error_rate(reference, hypothesis)
-
-
 # ── stream extraction (tokenization-free) ──────────────────────────────────────
 
 def _thai_char_stream(tokens: list[dict]) -> str:

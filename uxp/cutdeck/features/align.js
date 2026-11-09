@@ -5,7 +5,7 @@
 const frameBounds = require("../transform/frameBounds.js");
 const { activeProjectAndSequence } = require("../host/project.js");
 const {
-  describeField, readAlignTransform, readAlignState, clipModel, editLevel, editSummary,
+  describeField, readAlignTransform, readAlignState, editLevel, editSummary,
   setField, resetField, setAnchor, alignToFrame, alignToFrameAsGroup, alignToSelection, distribute, parseFieldValue, EDIT_FIELDS,
 } = require("../transform/edit.js");
 const { PROBES, runProbe, createProbesFeature } = require("./probes.js");

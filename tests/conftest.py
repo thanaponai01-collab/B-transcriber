@@ -1,6 +1,5 @@
 """`live` tests need a real Premiere + CutDeck helper + panel. They are left out of every normal
 run (so nothing skips silently) and run only with `--live`, where a missing piece FAILS."""
-import pytest
 
 
 def pytest_addoption(parser):

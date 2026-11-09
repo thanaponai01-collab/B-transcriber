@@ -8,10 +8,13 @@ clip's drawn pixels in sequence coordinates, whatever sits under or over it.
 Proven live 2026-09-24 on a text Graphic: the difference was the text alone, 418 x 87 px.
 """
 
+import logging
 import time
 from pathlib import Path
 
 from PIL import Image, ImageChops
+
+logger = logging.getLogger(__name__)
 
 # Two renders of the same frame are NOT always identical: other clips' video can differ by 1/255
 # in a few pixels (live 2026-09-24: 3 pixels inside another clip, 1000 px from the text, made
@@ -97,5 +100,5 @@ def measure_request(req: dict, input_file) -> dict:
             try:
                 dest = Path(path).with_name(f"cutdeck-bounds-last-{side}.png")
                 Path(path).replace(dest)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning("could not keep %s frame as %s: %s", side, dest, exc)

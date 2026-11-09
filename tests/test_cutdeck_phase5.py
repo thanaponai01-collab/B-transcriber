@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cutdeck.contracts import CUT, KEEP, ROUGH_CUT_SEGMENT, CutConfig  # noqa: E402
+from cutdeck.contracts import CUT, ROUGH_CUT_SEGMENT, CutConfig  # noqa: E402
 from cutdeck.rules import (  # noqa: E402
     _adaptive_min_silence_ms,
     build_cut_spans,

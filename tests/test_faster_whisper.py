@@ -14,7 +14,6 @@ Issue #70:
 from dataclasses import dataclass
 from typing import Optional
 import numpy as np
-import pytest
 
 from transcribe.contracts import RecognizedToken
 from transcribe.engines.faster_whisper import FasterWhisperEngine

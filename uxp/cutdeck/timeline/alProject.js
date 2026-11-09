@@ -30,9 +30,9 @@ const isSide = (n) => Number.isInteger(n) && n > 0 && n <= MAX_SIDE;
 
 // Replaces exactly one match or throws: a seed that doesn't have the shape we patch must fail
 // loudly here, not import a silently-wrong AL.
-function replaceOnce(xml, pattern, replacement, what) {
+function replaceOnce(xml, pattern, replacement, what, seed = "AL") {
   const count = (xml.match(new RegExp(pattern.source, "g")) || []).length;
-  if (count !== 1) throw new Error(`AL seed: expected exactly one ${what}, found ${count}.`);
+  if (count !== 1) throw new Error(`${seed} seed: expected exactly one ${what}, found ${count}.`);
   return xml.replace(pattern, replacement);
 }
 
@@ -136,4 +136,7 @@ module.exports = {
   utf8Bytes,
   crc32,
   MAX_SIDE,
+  randomUuid,
+  isSide,
+  replaceOnce,
 };

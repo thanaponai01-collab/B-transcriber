@@ -19,32 +19,8 @@
 
 const { toTicks } = require("../host/ticks.js");
 const { runTransaction } = require("../host/project.js");
+const { waitForFile } = require("../host/files.js");
 
-async function fileSize(folder, name) {
-  try {
-    const entry = await folder.getEntry(name);
-    if (!entry) return null;
-    const meta = await entry.getMetadata();
-    return meta && typeof meta.size === "number" ? meta.size : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Waits until `name` exists with the same non-zero size on two polls in a row, or throws.
-async function waitForFile(folder, name, { timeoutMs = 10000, intervalMs = 20 } = {}) {
-  const t0 = Date.now();
-  let last = null;
-  while (Date.now() - t0 < timeoutMs) {
-    const size = await fileSize(folder, name);
-    if (size && size === last) return size;
-    last = size;
-    await sleep(intervalMs);
-  }
-  throw new Error("Premiere did not finish saving the frame in time.");
-}
 
 function joinPath(folderPath, name) {
   const sep = folderPath.includes("\\") ? "\\" : "/";

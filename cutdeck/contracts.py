@@ -127,10 +127,6 @@ class CutPlan:
     plan_version: str = PLAN_VERSION
 
     @property
-    def keep_spans(self) -> list[CutSpan]:
-        return [s for s in self.spans if s.action == KEEP]
-
-    @property
     def duration_ms(self) -> int:
         return self.spans[-1].src_out_ms if self.spans else 0
 

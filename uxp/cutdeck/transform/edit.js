@@ -11,7 +11,7 @@ const transformGeometry = require("./geometry.js");
 const transformApply = require("./apply.js");
 const frameBounds = require("./frameBounds.js");
 const { readSnapshot } = require("./snapshot.js");
-const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
+const { activeProjectAndSequence } = require("../host/project.js");
 
 function describeField(entry, isPoint, frameSize) {
   if (!entry) return { known: false };

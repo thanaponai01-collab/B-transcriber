@@ -16,7 +16,7 @@ All GPU-free. Run: python -m pytest tests/test_cutdeck_phase1.py -v
 
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest

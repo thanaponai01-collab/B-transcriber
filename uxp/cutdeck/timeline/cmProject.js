@@ -4,26 +4,11 @@
    with ImporterPrefs for color and no IsAdjustmentLayer flag. */
 
 const SEED_XML = require("./alSeedData.js");
-const { gzipStored, utf8Bytes, crc32, MAX_SIDE } = require("./alProject.js");
+const { gzipStored, utf8Bytes, crc32, MAX_SIDE, randomUuid, isSide, replaceOnce: alReplaceOnce } = require("./alProject.js");
 
 const colorMatteName = (width, height) => `Color Matte ${width}x${height}`;
 
-function randomUuid() {
-  const hex = [];
-  for (let i = 0; i < 16; i++) hex.push(Math.floor(Math.random() * 256));
-  hex[6] = (hex[6] & 0x0f) | 0x40; // version 4
-  hex[8] = (hex[8] & 0x3f) | 0x80; // RFC 4122 variant
-  const h = hex.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
-const isSide = (n) => Number.isInteger(n) && n > 0 && n <= MAX_SIDE;
-
-function replaceOnce(xml, pattern, replacement, what) {
-  const count = (xml.match(new RegExp(pattern.source, "g")) || []).length;
-  if (count !== 1) throw new Error(`Color Matte seed: expected exactly one ${what}, found ${count}.`);
-  return xml.replace(pattern, replacement);
-}
+const replaceOnce = (xml, pattern, replacement, what) => alReplaceOnce(xml, pattern, replacement, what, "Color Matte");
 
 function buildColorMatteProject({ width, height, ticksPerFrame, uuid = randomUuid, seedXml = SEED_XML }) {
   if (!isSide(width) || !isSide(height)) {

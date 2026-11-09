@@ -5,7 +5,6 @@ import json
 import shutil
 import subprocess
 from dataclasses import dataclass
-from fractions import Fraction
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from cutdeck.contracts import Timebase

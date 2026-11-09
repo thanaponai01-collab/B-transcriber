@@ -8,7 +8,6 @@ and that config.yaml points where it should. Exits non-zero on any blocker.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 

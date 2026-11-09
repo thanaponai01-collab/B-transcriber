@@ -5,7 +5,6 @@ import pytest
 
 from cutdeck.contracts import Timebase
 from cutdeck.sync import (
-    SyncResult,
     correlate_gcc_phat,
     sync_clip_to_reference,
 )

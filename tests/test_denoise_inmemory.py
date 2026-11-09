@@ -7,7 +7,7 @@ exercised, using a fake model/df_state/enhance_fn (DeepFilterNet itself need
 not be installed for this test).
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 
