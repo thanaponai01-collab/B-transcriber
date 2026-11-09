@@ -16,6 +16,7 @@ const {
   getSelectedVideoClips,
   trackItemName,
 } = require("../host/trackItems.js");
+const { sleep, waitForFile } = require("../host/files.js");
 
 const FRAME_HOLD_BIN_NAME = "Frame Holds";
 
@@ -150,42 +151,6 @@ async function isTrackSpanClear(seq, trackIndex, startTicks, endTicks, ppro) {
   }
 }
 
-async function fileSize(folder, name) {
-  try {
-    if (!folder || typeof folder.getEntry !== "function") return null;
-    const entry = await folder.getEntry(name);
-    if (!entry) return null;
-    const meta = await entry.getMetadata();
-    return meta && typeof meta.size === "number" && meta.size > 0 ? meta.size : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Waits until `name` exists with the same non-zero size on consecutive polls, or times out.
-// Resolves the race condition where exportSequenceFrame returns before the file is flushed to disk.
-async function waitForFile(folder, name, { timeoutMs = 10000, intervalMs = 30 } = {}) {
-  const t0 = Date.now();
-  let last = null;
-  let matches = 0;
-  while (Date.now() - t0 < timeoutMs) {
-    const size = await fileSize(folder, name);
-    if (size !== null) {
-      if (last !== null && size === last) {
-        matches++;
-        if (matches >= 2) return size;
-      } else {
-        matches = 0;
-        last = size;
-      }
-    }
-    await sleep(intervalMs);
-  }
-  return null;
-}
-
 // Resolves the folder for exported frame holds:
 // Prefers creating and using a "CutDeck" subfolder right beside the .prproj project file,
 // so that when the project directory is moved to another computer or disk, the hold media moves with it.
@@ -306,17 +271,23 @@ async function isolateClipTrackForExport(seq, itemTrackIndex) {
   return tracksMuted;
 }
 
-// Restores previously muted tracks back to unmuted state concurrently
+// Restores previously muted tracks back to unmuted state concurrently. Tries every track, then
+// throws if any stayed muted, so the user is told instead of left with a silent muted track.
+// VideoTrack/CaptionTrack.setMute(mute): Promise<boolean> (reference/adobe/api/premierepro.txt:757, :103).
 async function restoreIsolatedTracks(tracksMuted) {
   if (!Array.isArray(tracksMuted) || tracksMuted.length === 0) return;
-  await Promise.all(tracksMuted.map((track) => {
+  const results = await Promise.all(tracksMuted.map(async (track) => {
+    if (!track || typeof track.setMute !== "function") return true;
     try {
-      if (track && typeof track.setMute === "function") {
-        return track.setMute(false).catch(() => {});
-      }
-    } catch (_) {}
-    return Promise.resolve();
+      return (await track.setMute(false)) !== false;
+    } catch (_) {
+      return false;
+    }
   }));
+  const stuck = results.filter((ok) => !ok).length;
+  if (stuck) {
+    throw new Error(`Could not unmute ${stuck} track(s) after the Frame Hold export. Unmute them in the timeline.`);
+  }
 }
 
 // Locates the imported frame item across the project with retries for asynchronous indexing,
@@ -672,10 +643,7 @@ async function addFrameHold(ppro, options = {}) {
   // is flushed to disk. We MUST wait for non-zero file size on disk before
   // calling importFiles or Premiere receives a 0-byte file and silently fails to ingest.
   if (exportFolder && typeof exportFolder.getEntry === "function") {
-    const flushed = await waitForFile(exportFolder, fileName, { timeoutMs: 10000, intervalMs: 30 });
-    if (!flushed) {
-      throw new Error(`Premiere export of "${fileName}" timed out before the file was ready on disk.`);
-    }
+    await waitForFile(exportFolder, fileName, { timeoutMs: 10000, intervalMs: 30, stablePolls: 3 });
   }
   await sleep(60);
 

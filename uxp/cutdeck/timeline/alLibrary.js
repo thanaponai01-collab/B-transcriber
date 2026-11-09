@@ -214,7 +214,8 @@ function isColorMatteCandidate(name) {
 }
 
 // Find adjustment layer in project panel or active timeline, matching active sequence dimensions and fps
-async function findAdjustmentLayerItem(project, seq, ppro) {
+// Shared by the Adjustment Layer and Color Matte finders: `cache` and `isCandidate` pick the kind.
+async function findLibraryItem({ cache, isCandidate }, project, seq, ppro) {
   if (!project || typeof project.getRootItem !== "function") return null;
   const root = await project.getRootItem();
   if (!root) return null;
@@ -240,14 +241,14 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
 
   // Check cache first: if cached item is still valid in ADJ & FX or project, return it
   if (cacheKey) {
-    const cached = getCachedItem(alCache, project, cacheKey);
+    const cached = getCachedItem(cache, project, cacheKey);
     if (cached) {
       adjBin = await getOrCreateAdjBin(project).catch(() => null);
       if (await isItemValid(cached, adjBin)) {
         return cached;
       }
       // Stale cache item
-      const map = alCache.get(project);
+      const map = cache.get(project);
       if (map) map.delete(cacheKey);
     }
   }
@@ -260,10 +261,10 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
   try {
     if (!adjBin) adjBin = await getOrCreateAdjBin(project);
     const items = (await asBinLike(adjBin).getItems()) || [];
-    const candidates = items.filter((it) => it.type !== 2 && isAdjustmentLayerCandidate(it.name));
+    const candidates = items.filter((it) => it.type !== 2 && isCandidate(it.name));
     const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
     if (picked) {
-      if (cacheKey) setCachedItem(alCache, project, cacheKey, picked);
+      if (cacheKey) setCachedItem(cache, project, cacheKey, picked);
       return picked;
     }
   } catch (_) {}
@@ -302,7 +303,7 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
       }
 
       // Must be a clip item (type !== 2) matching adjustment layer criteria
-      if (it.type !== 2 && isAdjustmentLayerCandidate(it.name)) {
+      if (it.type !== 2 && isCandidate(it.name)) {
         allCandidates.push(it);
       }
     }
@@ -312,9 +313,13 @@ async function findAdjustmentLayerItem(project, seq, ppro) {
 
   const fallbackPicked = await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
   if (fallbackPicked && cacheKey) {
-    setCachedItem(alCache, project, cacheKey, fallbackPicked);
+    setCachedItem(cache, project, cacheKey, fallbackPicked);
   }
   return fallbackPicked;
+}
+
+async function findAdjustmentLayerItem(project, seq, ppro) {
+  return findLibraryItem({ cache: alCache, isCandidate: isAdjustmentLayerCandidate }, project, seq, ppro);
 }
 
 // Writes bytes to the plugin's temporary folder and returns the native path.
@@ -330,18 +335,19 @@ async function writeTempFile(fileName, bytes) {
 // exact size (timeline/alProject.js) and imports it into CutDeck > ADJ & FX. Returns the
 // imported project item, or throws saying what went wrong. Premiere may wrap an imported
 // project in a bin named after the file, so one level of sub-bins is searched too.
-async function createAdjustmentLayerForSequence(project, width, height, ticksPerFrame) {
+// Shared by the Adjustment Layer and Color Matte creators; `label` names the kind in logs and errors.
+async function createLibraryItemForSequence({ label, filePrefix, menuItem, build }, project, width, height, ticksPerFrame) {
   const w = Math.round(Number(width));
   const h = Math.round(Number(height));
-  const { bytes, name } = alProject.buildAdjustmentLayerPrproj({
+  const { bytes, name } = build({
     width: w,
     height: h,
     ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null,
   });
-  const filePath = await writeTempFile(`CutDeck ${w}x${h}.prproj`, bytes);
+  const filePath = await writeTempFile(`${filePrefix} ${w}x${h}.prproj`, bytes);
   const adjBin = asBinLike(await getOrCreateAdjBin(project));
   const imported = await project.importFiles([filePath], true, adjBin, false);
-  console.log(`CutDeck AL create: importFiles(${filePath}) returned`, imported);
+  console.log(`CutDeck ${label} create: importFiles(${filePath}) returned`, imported);
 
   await flattenImportWrappers(project, adjBin);
   const items = (await adjBin.getItems()) || [];
@@ -352,15 +358,20 @@ async function createAdjustmentLayerForSequence(project, width, height, ticksPer
     const children = (await asBinLike(it).getItems()) || [];
     const nested = children.find((c) => c.type !== 2 && c.name === name);
     if (nested) {
-      console.log(`CutDeck AL create: "${name}" landed inside the "${it.name}" bin`);
+      console.log(`CutDeck ${label} create: "${name}" landed inside the "${it.name}" bin`);
       return nested;
     }
   }
   throw new Error(
     `Tried to create "${name}" automatically (import returned ${imported}), but it did not appear in ` +
-    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > Adjustment Layer at ` +
+    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > ${menuItem} at ` +
     `${w}x${h}, name it "${w}x${h}", and drag it into that folder.`
   );
+}
+
+async function createAdjustmentLayerForSequence(project, width, height, ticksPerFrame) {
+  const build = (opts) => alProject.buildAdjustmentLayerPrproj(opts);
+  return createLibraryItemForSequence({ label: "AL", filePrefix: "CutDeck", menuItem: "Adjustment Layer", build }, project, width, height, ticksPerFrame);
 }
 
 let cmProject;
@@ -371,128 +382,13 @@ function getCmProject() {
 
 // Find Color Matte in project panel or active timeline, matching active sequence dimensions
 async function findColorMatteItem(project, seq, ppro) {
-  if (!project || typeof project.getRootItem !== "function") return null;
-  const root = await project.getRootItem();
-  if (!root) return null;
-
-  let targetWidth = null;
-  let targetHeight = null;
-  try {
-    if (seq && typeof seq.getSettings === "function") {
-      const st = await seq.getSettings();
-      const rect = st && typeof st.getVideoFrameRect === "function" ? await st.getVideoFrameRect() : null;
-      if (rect && rect.width && rect.height) {
-        targetWidth = rect.width;
-        targetHeight = rect.height;
-      }
-    }
-  } catch (_) {}
-
-  const cacheKey = (targetWidth && targetHeight) ? `${targetWidth}x${targetHeight}` : null;
-  let adjBin = null;
-
-  // Check cache first: if cached item is still valid in ADJ & FX or project, return it
-  if (cacheKey) {
-    const cached = getCachedItem(cmCache, project, cacheKey);
-    if (cached) {
-      adjBin = await getOrCreateAdjBin(project).catch(() => null);
-      if (await isItemValid(cached, adjBin)) {
-        return cached;
-      }
-      // Stale cache item
-      const map = cmCache.get(project);
-      if (map) map.delete(cacheKey);
-    }
-  }
-
-  // 1. Canonical home: Project panel > CutDeck > ADJ & FX
-  try {
-    if (!adjBin) adjBin = await getOrCreateAdjBin(project);
-    const items = (await asBinLike(adjBin).getItems()) || [];
-    const candidates = items.filter((it) => it.type !== 2 && isColorMatteCandidate(it.name));
-    const picked = await pickBestCandidate(candidates, targetWidth, targetHeight, seq, ppro);
-    if (picked) {
-      if (cacheKey) setCachedItem(cmCache, project, cacheKey, picked);
-      return picked;
-    }
-  } catch (_) {}
-
-  // 2. Fallback: search the whole project
-  async function getFolderChildren(folder) {
-    if (typeof folder.getItems === "function") {
-      try { return await folder.getItems(); } catch (_) {}
-    }
-    if (ppro && ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
-      try {
-        const bin = ppro.FolderItem.cast(folder);
-        if (bin && typeof bin.getItems === "function") {
-          return await bin.getItems();
-        }
-      } catch (_) {}
-    }
-    return [];
-  }
-
-  const allCandidates = [];
-  async function search(folder) {
-    const items = await getFolderChildren(folder);
-    if (!items || !items.length) return;
-
-    for (const it of items) {
-      const isBin = it.type === 2 || typeof it.getItems === "function" ||
-        (ppro && ppro.FolderItem && typeof ppro.FolderItem.cast === "function" && ppro.FolderItem.cast(it) !== null);
-
-      if (isBin) {
-        await search(it);
-        continue;
-      }
-
-      if (it.type !== 2 && isColorMatteCandidate(it.name)) {
-        allCandidates.push(it);
-      }
-    }
-  }
-
-  await search(root);
-  const fallbackPicked = await pickBestCandidate(allCandidates, targetWidth, targetHeight, seq, ppro);
-  if (fallbackPicked && cacheKey) {
-    setCachedItem(cmCache, project, cacheKey, fallbackPicked);
-  }
-  return fallbackPicked;
+  return findLibraryItem({ cache: cmCache, isCandidate: isColorMatteCandidate }, project, seq, ppro);
 }
 
 // Automatically creates a Color Matte .prproj at the sequence's exact size and imports it into CutDeck > ADJ & FX
 async function createColorMatteForSequence(project, width, height, ticksPerFrame) {
-  const w = Math.round(Number(width));
-  const h = Math.round(Number(height));
-  const { bytes, name } = getCmProject().buildColorMattePrproj({
-    width: w,
-    height: h,
-    ticksPerFrame: Number.isSafeInteger(ticksPerFrame) ? ticksPerFrame : null,
-  });
-  const filePath = await writeTempFile(`CutDeck Color Matte ${w}x${h}.prproj`, bytes);
-  const adjBin = asBinLike(await getOrCreateAdjBin(project));
-  const imported = await project.importFiles([filePath], true, adjBin, false);
-  console.log(`CutDeck Color Matte create: importFiles(${filePath}) returned`, imported);
-
-  await flattenImportWrappers(project, adjBin);
-  const items = (await adjBin.getItems()) || [];
-  const direct = items.find((it) => it.type !== 2 && it.name === name);
-  if (direct) return direct;
-  for (const it of items) {
-    if (it.type !== 2) continue;
-    const children = (await asBinLike(it).getItems()) || [];
-    const nested = children.find((c) => c.type !== 2 && c.name === name);
-    if (nested) {
-      console.log(`CutDeck Color Matte create: "${name}" landed inside the "${it.name}" bin`);
-      return nested;
-    }
-  }
-  throw new Error(
-    `Tried to create "${name}" automatically (import returned ${imported}), but it did not appear in ` +
-    `CutDeck > ${ADJ_BIN_NAME}. Create one by hand instead: File > New Item > Color Matte at ` +
-    `${w}x${h}, name it "${w}x${h}", and drag it into that folder.`
-  );
+  const build = (opts) => getCmProject().buildColorMattePrproj(opts);
+  return createLibraryItemForSequence({ label: "Color Matte", filePrefix: "CutDeck Color Matte", menuItem: "Color Matte", build }, project, width, height, ticksPerFrame);
 }
 
 module.exports = {

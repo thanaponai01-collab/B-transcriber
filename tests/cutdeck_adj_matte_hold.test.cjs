@@ -1169,6 +1169,18 @@ test("frameHold: isolateClipTrackForExport mutes only other video and caption tr
   assert.equal(muteStates.c0, false, "C0 must be restored to unmuted");
 });
 
+test("frameHold: restoreIsolatedTracks tries every track and reports the ones left muted", async () => {
+  const unmuted = [];
+  const ok = (key) => ({ setMute: async (m) => { if (!m) unmuted.push(key); return true; } });
+  const refused = { setMute: async () => false };
+  const throws = { setMute: async () => { throw new Error("locked"); } };
+  await assert.rejects(
+    frameHold.restoreIsolatedTracks([ok("v0"), refused, throws, ok("c0")]),
+    /Could not unmute 2 track\(s\)/,
+  );
+  assert.deepEqual(unmuted.sort(), ["c0", "v0"], "the tracks that can be unmuted still are");
+});
+
 test("frameHold: addFrameHold isolates selected clip track during exportSequenceFrame", async () => {
   let v0MutedDuringExport = null;
   let v1MutedDuringExport = null;
