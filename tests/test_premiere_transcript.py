@@ -62,7 +62,9 @@ def test_mock_job_exports_valid_premiere_transcript(monkeypatch):
     doc = transcript_for_job(conn, job_id)
     validate(doc, media_duration_s(conn, job_id))
 
-    assert doc["language"] == "th-th"
+    # ja-jp, not th-th: only then does Premiere 26.5 caption per segment (PREMIERE_FACTS.md).
+    assert doc["language"] == "ja-jp"
+    assert {s["language"] for s in doc["segments"]} == {"ja-jp"}
     assert [s["id"] for s in doc["speakers"]] == [SPEAKER_ID] and UUID4.match(SPEAKER_ID)
     assert {s["speaker"] for s in doc["segments"]} == {SPEAKER_ID}
     # No raw word timeline from the mock engine: each cue is one word, in seconds.

@@ -19,7 +19,11 @@ from cutdeck.words import Word, words_for_job
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = ROOT / "reference/adobe/samples/sample-panels/premiere-api/assets/transcript_format_spec.json"
-LANGUAGE = "th-th"
+# Not "th-th", on purpose. Premiere 26.5 accepts th-th, but "Create captions" then ignores the
+# segments and cuts Thai into 64-word paragraphs. With ja-jp (a spaceless language Premiere can
+# caption) it makes one caption per segment and keeps the Thai unspaced. Cost: Premiere labels the
+# transcript Japanese. Switch back when Premiere captions Thai (docs/PREMIERE_FACTS.md).
+LANGUAGE = "ja-jp"
 # token.speaker_id is null until diarization (v2), so every segment has this one speaker.
 # A fixed version-4 UUID keeps exports of the same job byte-identical.
 SPEAKER_ID = "3f2b8c1e-6d4a-4b7e-9a1c-5e8d2f0b7c64"
