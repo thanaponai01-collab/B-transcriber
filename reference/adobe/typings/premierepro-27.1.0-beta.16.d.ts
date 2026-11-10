@@ -722,7 +722,25 @@ export declare type C2PAServiceStatic = {
 
 export declare type C2PAService = {};
 
-export declare type CaptionTrackStatic = {};
+export declare type CaptionTrackStatic = {
+  /**
+   * Event Object for Track changed
+   * @readonly
+   */
+  readonly EVENT_TRACK_CHANGED: string;
+
+  /**
+   * Event Object for Track Info Changed
+   * @readonly
+   */
+  readonly EVENT_TRACK_INFO_CHANGED: string;
+
+  /**
+   * Event Object for Track Lock Changed
+   * @readonly
+   */
+  readonly EVENT_TRACK_LOCK_CHANGED: string;
+};
 
 export declare type CaptionTrack = {
   /**
@@ -1030,6 +1048,11 @@ export declare type ClipProjectItem = {
   getOriginatingProjectPath(): Promise<string>;
 
   /**
+   * Returns true if the ClipProjectItem represents a still image
+   */
+  isStill(): boolean;
+
+  /**
    * The name of this project item.
    * @readonly
    */
@@ -1150,9 +1173,21 @@ export declare type Color = {
 
 export declare type Component = {
   /**
+   * Returns an action which sets the instance name of this component
+   *
+   * @param instanceName
+   */
+  createSetInstanceNameAction(instanceName: string): Action;
+
+  /**
    * Returned Promise will be fullfilled with the value of display name for this component
    */
   getDisplayName(): Promise<string>;
+
+  /**
+   * Returned Promise will be fullfilled with the value of instance name for this component
+   */
+  getInstanceName(): Promise<string>;
 
   /**
    * Returned Promise will be fullfilled with the value of internal matchname for this component
@@ -3433,6 +3468,36 @@ export declare type SequenceEditorStatic = {
 
 export declare type SequenceEditor = {
   /**
+   * Create an action that will razor all tracks identified by media type at the specified position. alignToMediaType specifies which media type to align the razor position to.
+   *
+   * @param mediaType
+   * @param razorPosition
+   * @param alignToMediaType
+   */
+  createRazorAllTracksAction(
+    mediaType: Constants.MediaType.AUDIO | Constants.MediaType.VIDEO,
+    razorPosition: TickTime,
+    alignToMediaType: Constants.MediaType.AUDIO | Constants.MediaType.VIDEO
+  ): Action;
+
+  /**
+   * Create an action that will razor the track identified by media type and track index at the specified position. If razorLinkedTrackItems is true, linked track items will also be razored. alignToMediaType specifies which media type to align the razor position to.
+   *
+   * @param mediaType
+   * @param trackIndex
+   * @param razorPosition
+   * @param razorLinkedTrackItems
+   * @param alignToMediaType
+   */
+  createRazorTrackAction(
+    mediaType: Constants.MediaType.AUDIO | Constants.MediaType.DATA | Constants.MediaType.VIDEO,
+    trackIndex: number,
+    razorPosition: TickTime,
+    razorLinkedTrackItems: boolean,
+    alignToMediaType: Constants.MediaType.AUDIO | Constants.MediaType.VIDEO
+  ): Action;
+
+  /**
    * Create remove action for sequence
    *
    * @param trackItemSelection
@@ -4805,6 +4870,15 @@ export namespace Constants {
     EMBEDDED,
     NONE,
     SIDE_CAR,
+  }
+
+  /**
+   * @since 27.1
+   */
+  export enum CaptionTrackEvent {
+    TRACK_CHANGED,
+    INFO_CHANGED,
+    LOCK_CHANGED,
   }
 
   export enum ContentType {
