@@ -31,7 +31,7 @@ from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 7891
-VERSION = "cutdeck-6"  # JSON-only analysis and source-snapshot checking
+VERSION = "cutdeck-7"  # premiere_transcript: clip transcript JSON for Premiere
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
 TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
 RESTARTING = "CutDeck helper is restarting; try again in a moment"
@@ -208,6 +208,7 @@ class Jobs:
         "watch": "_on_watch",
         "prepare": "_on_prepare",
         "submit_transcribe": "_on_submit_transcribe",
+        "premiere_transcript": "_on_premiere_transcript",
         "plan_sync": "_on_plan_sync",
         "frame_bounds": "_on_frame_bounds",
         "text_box": "_on_text_box",
@@ -319,6 +320,22 @@ class Jobs:
                "result_path": str(folder / "result.json"),
                "log_path": str(folder / "process.log")}
         return self._launch(job, self._run_transcribe(job))
+
+    async def _on_premiere_transcript(self, req: dict, client: Client | None) -> dict:
+        # A finished transcribe job as Premiere clip-transcript JSON (cutdeck/premiere_transcript.py),
+        # for the panel's Transcript.importFromJSON. On a worker thread: it reads the store.
+        job = self._job(req.get("job_id"))
+        if job.get("job_type") != "transcribe" or job["state"] != "ready":
+            raise ValueError("Transcribe the clip first; that job has no finished transcript")
+        result = json.loads(Path(job["result_path"]).read_text(encoding="utf-8"))
+
+        def export():
+            import yaml
+            from cutdeck import premiere_transcript
+            config = yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8"))
+            return premiere_transcript.export(result["transcript_job_id"], config,
+                                              self.directory / job["job_id"] / "premiere_transcript.json")
+        return await asyncio.to_thread(export)
 
     async def _on_plan_sync(self, req: dict, client: Client | None) -> dict:
         clips = _plan_sync_clips(req)

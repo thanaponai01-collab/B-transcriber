@@ -11,7 +11,7 @@ const { activeProjectAndSequence } = require("./host/project.js");
 const { toTicks } = require("./host/ticks.js");
 const { getTrackClipItems } = require("./host/trackItems.js");
 const { mediaPath } = require("./host/sequenceRead.js");
-const VERSION = "cutdeck-6";
+const VERSION = "cutdeck-7";
 const guid = (object) => object.guid.toString();
 
 async function capture(ppro) {

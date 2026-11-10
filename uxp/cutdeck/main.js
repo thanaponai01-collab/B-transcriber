@@ -14,6 +14,7 @@ const { createPresetStore } = require("./presetStore.js");
 const { createController } = require("./features/controller.js");
 const { createRoughCutFeature, lastJob } = require("./features/roughCut.js");
 const { createSyncFeature } = require("./features/sync.js");
+const { createTranscriptFeature } = require("./features/transcript.js");
 const { createAdjustFeature, loadSettings } = require("./features/adjust.js");
 const { createPresetsFeature, loadCustomPresets } = require("./features/presets.js");
 const { createAlignFeature } = require("./features/align.js");
@@ -88,6 +89,7 @@ async function ensureHelper() {
 // Features
 const roughCut = createRoughCutFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, storage, progressText });
 const sync = createSyncFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, lastJob: roughCut.lastJob });
+const transcript = createTranscriptFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, lastJob: roughCut.lastJob });
 const adjust = createAdjustFeature({ ppro, ctl: mainCtl, storage });
 const presets = createPresetsFeature({ ppro, ctl: mainCtl, presetStore, storage });
 const probes = createProbesFeature({
@@ -163,6 +165,7 @@ panel.bind({
   onRefresh: roughCut.onRefresh,
   onCut: roughCut.onCut,
   onSync: sync.onSync,
+  onImportTranscript: transcript.onImportTranscript,
   onResumeJob: roughCut.onResumeJob,
   onDismissJob: roughCut.onDismissJob,
   onTab: (name) => {
