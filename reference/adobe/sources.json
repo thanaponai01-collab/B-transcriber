@@ -3,7 +3,7 @@
   "typings": [
     { "package": "@adobe/premierepro", "version": "26.5.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.5.1.d.ts", "why": "installed Premiere is 26.5" },
     { "package": "@adobe/premierepro", "version": "26.2.1", "file": "src/premierepro.d.ts", "saveAs": "premierepro-26.2.1.d.ts", "why": "manifest minVersion is 26.2.0; anything absent here is 26.3+ only" },
-    { "package": "@adobe/premierepro", "version": "27.0.0-beta.57", "file": "src/premierepro.d.ts", "saveAs": "premierepro-27.0.0-beta.57.d.ts", "preview": true, "why": "next Premiere, not installed: indexed into api/premierepro-preview.txt only; check-api does NOT accept its names" },
+    { "package": "@adobe/premierepro", "version": "27.1.0-beta.16", "file": "src/premierepro.d.ts", "saveAs": "premierepro-27.1.0-beta.16.d.ts", "preview": true, "why": "next Premiere (27.0.0 released 2026-11-05 with typings identical to 27.0.0-beta.57; 27.1 beta adds the native razor), not installed: indexed into api/premierepro-preview.txt only; check-api does NOT accept its names" },
     { "package": "@adobe/cc-ext-uxp-types", "version": "7.3.1", "file": "uxp/index.d.ts", "saveAs": "uxp-7.3.1.d.ts", "why": "UXP platform: storage, shell, network, xmp, os, fs" }
   ],
   "repos": [
