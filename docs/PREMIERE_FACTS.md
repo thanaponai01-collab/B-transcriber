@@ -211,6 +211,23 @@ Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Le
 | UI caption placement with Source timecode | WORKS | Dragging imported SRT to timeline, accepting Subtitle / Source timecode, created C1 in Edditing with first start 9.4094 s and last end 426.1590667 s, within unchanged marks 9.4094-426.2258. Thai text visible; save returned true. | Live 2026-10-06, CF_FINAL_TIMING and CF_SAVED readback |
 | Sub-frame SRT cue | CATCH | 204 input cues became 203 caption items: ASR cue 29 was only 1 ms (75.889-75.890 s), below one video frame. Preserve original transcript for review. | Live 2026-10-06, session a2ccc4ee0ca44155a3dd0cb93e7b57c4 |
 
+## Clip transcript import (Thai) (26.5.2)
+
+Premiere's own speech-to-text (on-device Speechmatics) has no Thai: `th` is missing from
+`AutoTranscription/SupportedLanguages.json` and there is no SpeechESL pack for it. CutDeck's
+**Thai Transcript** button (`features/transcript.js`) imports our ASR instead, as JSON built by
+`cutdeck/premiere_transcript.py` to Adobe's `transcript_format_spec.json`.
+
+| Fact | Status | Detail | Proof |
+|---|---|---|---|
+| `Transcript.importFromJSON` + `createImportTextSegmentsAction` with `language: "th-th"` | WORKS | Inside `lockedAccess` + `executeTransaction`, on a 32 s Thai mp3 (`Short2.mp3` copy) in a scratch project: transaction true, 19 segments / 134 words. No alternative language code was needed. | Live 2026-11-10, helper job `2f42433d74924555b70cc89f10179a92` |
+| `Transcript.hasTranscript(clip)` | WORKS (26.5) | false before the import, true after. `NOT IN 26.2.1`, so the panel feature-detects it. | Same run |
+| `Transcript.exportToJSON(clip)` round trip | WORKS | Returns the imported transcript unchanged: same 19 segments and 134 words, identical text, `eos`, `tags`, `type`; times equal within 4e-12 s; `th-th`, speaker id and name kept. It passes the same schema check. Use it to confirm an import, since transaction success alone proves nothing (see SRT rows above). | Same run, exported JSON compared word by word |
+| `Transcript.isLanguagePackAvailable` | WORKS (26.5) | `th-th` and `th-TH` return false, `en-us` and `en-US` return true. The import above still accepted `th-th`, so a missing pack does not block an imported transcript. `NOT IN 26.2.1`. | Live 2026-11-10, same session |
+| Text panel display of imported Thai words | OPEN | Not seen yet: the Text panel was not open, and no one has opened it on the probe clip. Thai has no spaces, so whether Premiere joins the words with spaces is the open question. | — |
+| "Create captions" from the imported transcript | OPEN | Not run: it is a UI click, and caption creation (`segmentIntoCaptions`, `createCaptionTrackFromClip`) is not in the UXP typings. | — |
+| Project panel selection | CATCH | `ProjectUtils.getSelection` reads the selection, but UXP has no setter. A live probe can't select a clip for the button, so the 2026-11-10 run answered only `getSelection` itself. All the other calls were real. | `reference/adobe/api/premierepro.txt` ProjectUtils.* |
+
 ## Not UXP: ExtendScript / QE DOM
 
 Retired. Premiere 26.3 silently ignores QE `razor`/`ripple_delete` on some installs, and the File > Scripts
