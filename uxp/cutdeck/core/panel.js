@@ -321,6 +321,8 @@
     if (cut) cut.addEventListener("click", () => intents.onCut());
     const sync = $("sync");
     if (sync) sync.addEventListener("click", () => intents.onSync());
+    const transcript = $("transcript");
+    if (transcript) transcript.addEventListener("click", () => intents.onImportTranscript());
   }
 
   function bindJobRecovery(intents) {
