@@ -124,9 +124,12 @@ engines:
     # Kept behind this flag for one release per the handoff's A/B discipline —
     # see TODO_LEDGER.md "DP cue split probe" for the harness verdict before
     # changing this default.
-    cue_split_algorithm: greedy   # greedy (default, unchanged) | dp -- probed 2026-08-04,
+    cue_split_algorithm: clause   # clause (active) | greedy | dp -- dp probed 2026-08-04,
                                   # NOT activated: cue_BER 0.3865 vs 0.3590 baseline (regression).
                                   # See TODO_LEDGER.md "DP cue split probe" for full numbers.
+                                  # clause -- greedy, then breaks moved/added at clause ends
+                                  # ACTIVATED 2026-11-11 (owner decision) on an UNRESOLVED
+                                  # harness verdict. `greedy` restores the old split. See TODO_LEDGER.md "Clause split".
     bias_prompt_budget: 200
     batch_size: 8                                # BatchedInferencePipeline parallel batch (3.1);
                                                  # auto-halves on CUDA OOM. Raise with int8_float16 headroom.

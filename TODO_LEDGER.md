@@ -1,5 +1,49 @@
 # TODO_LEDGER
 
+## Clause split (`cue_split_algorithm: clause`) — ACTIVATED on an unresolved gate — 2026-11-11
+
+Owner report: cues run too long, and a cue breaks before its sentence is finished.
+
+Diagnosis (9 hand-recut clips, 344 reference cues taken from `transcribe/finetune/manifest.jsonl`
+because the `*mine*.srt` files are no longer on `F:`; cached Engine A words, jobs 27, 29-31, 33-37):
+greedy breaks agree with the recut 89% of the time, but it misses 75 human breaks (62 inside cues
+over 20 chars) and only 15% of those have a pause of 300 ms or more. Cues over 30 chars: recut 16%,
+greedy 27%. Recuts close on a particle and open on a connective or subject pronoun; the splitter's
+only clause-opening word was `แล้วก็`.
+
+Built: `_split_clause` in `transcribe/cues/split.py` = greedy, then (1) a break with no pause or
+sentence boundary behind it moves to a clearly better clause boundary, (2) a cue over 26 chars is
+split at its best clause boundary if it has one. Word classes in `transcribe/thai/atoms.py`
+(`STRONG_OPENERS`, `WEAK_OPENERS`, `NON_OPENERS`, `DANGLING_ENDS`). Tests:
+`tests/test_cues_split_clause.py` (7). Thresholds tuned on 5 clips (CFD 90/92), checked on 4 held
+out (CFD 93, HON 155).
+
+| Check | greedy | clause |
+|---|---|---|
+| Word-position break error, tuning clips (1-F1, break on the same word as the recut) | 0.1151 | 0.0961 |
+| Word-position break error, held-out clips | 0.1420 | 0.1289 |
+| Time-based cue_BER (300 ms), tuning / held-out | 0.2329 / 0.1161 | 0.2000 / 0.1178 |
+| Held-out cues over 30 chars | 24% | 20% |
+| GPU harness, 9 gold clips, scratch DB: `cue_BER` | 0.3634 | 0.3583 |
+
+Harness: text metrics identical, `cue_count_delta` -26 -> -1, no overlaps, no legality violations,
+`shortest_cue_ms` 440 unchanged; verdict **UNRESOLVED** (paired delta CI [-0.045, +0.037]). Five clips
+better, two equal, two worse (one by 0.002). The clearly worse one is the Wealthy 40 clip (0.250 -> 0.359): its
+reference breaks after `เพราะว่า` / `แล้วก็` / `อยู่`, which is exactly what this pass moves.
+
+Also tried and dropped: a full clause-cost DP over every word boundary. It over-split and lost
+to greedy on the held-out clips (time-based cue_BER 0.178 vs 0.116).
+
+A first harness run without a duration floor produced a 260 ms cue; `_CLAUSE_MIN_MS = 500` fixed it
+(numbers above are with the floor).
+
+**Decision (user, 2026-11-11): activate.** `config.yaml` now sets `cue_split_algorithm: clause`; the
+code default (`CUE_SPLIT_ALGORITHM`) stays `greedy`. This accepts an unresolved verdict knowingly.
+
+Open: the shared `transcriber.db` has no baseline for this config yet (the A/B ran in a scratch DB), so
+run `python -m transcribe.eval.harness --config transcribe/config.yaml --establish-baseline` from the
+main checkout after merge; the word-position metric lives only in a scratch script, not in `tools/`.
+
 ## Segmentation replay vs 13 Premiere recuts — executed 2026-10-07
 
 `python -m tools.replay_segmentation [--grid KEY=V1,V2 ...]` (GPU-free; test `tests/test_replay_segmentation.py`).
