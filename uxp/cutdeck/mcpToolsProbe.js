@@ -30,7 +30,20 @@ async function probeMcpTools(_ppro, deps = {}) {
   const uxp = deps.uxp || require("uxp");
   const mcp = uxp.hSLScripting && uxp.hSLScripting.MCP;
   if (!mcp || typeof mcp.listMCPTools !== "function") {
-    return { available: false, uxpKeys: Object.keys(uxp).sort() };
+    const hsl = uxp.hSLScripting;
+    // require("uxp") hides its members from Object.keys (live: empty list), so read own names.
+    const names = new Set(Object.getOwnPropertyNames(uxp));
+    const proto = Object.getPrototypeOf(uxp);
+    if (proto && proto !== Object.prototype) Object.getOwnPropertyNames(proto).forEach((n) => names.add(n));
+    return {
+      available: false,
+      chain: [
+        ["hSLScripting", typeof hsl],
+        ["hSLScripting.MCP", hsl ? typeof hsl.MCP : "-"],
+        ["hSLScripting.MCP.listMCPTools", mcp ? typeof mcp.listMCPTools : "-"],
+      ],
+      uxpKeys: [...names].sort(),
+    };
   }
 
   const endpoints = {};
@@ -53,8 +66,9 @@ async function probeMcpTools(_ppro, deps = {}) {
 
 function formatMcpToolsReport(r) {
   if (!r.available) {
-    return "Premiere's MCP object (hSLScripting.MCP) is not exposed to CutDeck.\n" +
-      `require("uxp") keys: ${r.uxpKeys.join(", ")}`;
+    const chain = r.chain.map(([k, v]) => `  ${k}: ${v}`).join("\n");
+    return "Premiere's MCP object (hSLScripting.MCP) is not exposed to CutDeck.\n" + chain + "\n" +
+      `require("uxp") own names: ${r.uxpKeys.join(", ") || "(none)"}`;
   }
   const lines = [];
   for (const ep of ENDPOINTS) {
