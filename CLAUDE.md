@@ -35,7 +35,7 @@ write an Adobe API from memory. All sources are pinned in the repo
    BROKEN, ABSENT, proven enum values). Add a row after every live run.
 2. **`reference/adobe/api/premierepro.txt`** and **`reference/adobe/api/uxp.txt`**: one
    line per declared member (`grep "^SequenceEditor\." …`), generated from
-   `@adobe/premierepro@26.5.1` (the installed Premiere) and `@adobe/cc-ext-uxp-types`.
+   `@adobe/premierepro@27.0.0` (the installed Premiere) and `@adobe/cc-ext-uxp-types`.
    `NOT IN 26.2.1` marks members missing at the manifest's `minVersion` 26.2.0.
 3. **`reference/adobe/docs/`** (Adobe's `uxp-premiere-pro` docs) and
    **`reference/adobe/samples/`** (Adobe's sample panels).

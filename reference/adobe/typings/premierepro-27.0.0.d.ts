@@ -16,7 +16,6 @@ export declare type premierepro = {
   Action: Action;
   AddTransitionOptions: AddTransitionOptionsStatic;
   AppPreference: AppPreferenceStatic;
-  Application: Application;
   AudioClipTrackItem: AudioClipTrackItemStatic;
   AudioComponentChain: AudioComponentChainStatic;
   AudioFilterComponent: AudioFilterComponentStatic;
@@ -43,6 +42,8 @@ export declare type premierepro = {
   Media: Media;
   MediaManager: MediaManagerStatic;
   Metadata: MetadataStatic;
+  MogrtComment: MogrtCommentStatic;
+  MogrtText: MogrtTextStatic;
   ObjectMaskUtils: ObjectMaskUtilsStatic;
   OpenProjectOptions: OpenProjectOptionsStatic;
   OperationCompleteEvent: OperationCompleteEventStatic;
@@ -69,7 +70,7 @@ export declare type premierepro = {
   SourceMonitor: SourceMonitorStatic;
   TextSegments: TextSegmentsStatic;
   TickTime: TickTimeStatic;
-  TimeDisplay: TimeDisplay;
+  TimeDisplay: TimeDisplayStatic;
   TrackItemSelection: TrackItemSelectionStatic;
   TransitionFactory: TransitionFactoryStatic;
   UniqueSerializeable: UniqueSerializeableStatic;
@@ -372,12 +373,7 @@ export declare type AppPreferenceStatic = {
 
 export declare type AppPreference = {};
 
-export declare type Application = {
-  /**
-   * @readonly
-   */
-  readonly version: Promise<string>;
-};
+export declare type Application = {};
 
 export declare type AudioClipTrackItemStatic = {
   /**
@@ -1043,7 +1039,7 @@ export declare type ClipProjectItem = {
    * Get the type of the Project Item.
    * @readonly
    */
-  readonly type: number;
+  readonly type: Constants.ProjectItemType.CLIP | Constants.ProjectItemType.COMPOUND;
 };
 
 export declare type CloseProjectOptionsStatic = {
@@ -1192,9 +1188,11 @@ export declare type ComponentParam = {
   /**
    * Creates and returns a keyframe initialised with the ComponentParam's type and passed in value. This throws if the passed in value is not compatible with the component param type
    *
-   * @param inValue Input could be number, string, boolean, PointF, or Color depend on effect param type
+   * @param value Input could be number, string, boolean, PointF, Color, MogrtText, or MogrtComment depending on effect param type
    */
-  createKeyframe(inValue: number | string | boolean | PointF | Color): Keyframe;
+  createKeyframe(
+    value: number | string | boolean | PointF | Color | MogrtText | MogrtComment
+  ): Keyframe;
 
   /**
    * Returns an action which removes keyframe at specific time
@@ -1277,15 +1275,19 @@ export declare type ComponentParam = {
 
   /**
    * Returned promise will be fullfilled with the start value (keyframe) of the component param
+   * @returns Resolves to the component param's current value: a Keyframe (or PointKeyframe) for most params, or the typed value object for Color, MOGRT text (MogrtText), and MOGRT comment (MogrtComment) params
    */
-  getStartValue(): Promise<Keyframe>;
+  getStartValue(): Promise<Keyframe | PointKeyframe | Color | MogrtText | MogrtComment>;
 
   /**
    * Gets the value of component Param at the given time
    *
    * @param time The time at which to get the value of the component param
+   * @returns Resolves to an object wrapping the value: `value` is a number, string, or boolean for scalar params, or a [x, y] number array for Point params
    */
-  getValueAtTime(time: TickTime): Promise<number | string | boolean | PointF | Color>;
+  getValueAtTime(
+    time: TickTime
+  ): Promise<{ value: number | string | boolean | [x: number, y: number] }>;
 
   /**
    * Returns true if the parameter value varies over time (for the duration of the item)
@@ -1578,7 +1580,7 @@ export declare type FolderItem = {
    * Get the type of the Project Item.
    * @readonly
    */
-  readonly type: number;
+  readonly type: Constants.ProjectItemType.ROOT | Constants.ProjectItemType.BIN;
 };
 
 export declare type FootageInterpretation = {
@@ -1905,8 +1907,14 @@ export declare type Keyframe = {
   position: TickTime;
 
   /**
+   * An object wrapping the value: `value` is a number, string, or boolean for scalar params
    */
-  value: { value: string | number | boolean | Color | PointF };
+  get value(): { value: string | number | boolean };
+
+  /**
+   * An object wrapping the value: `value` is a number, string, or boolean for scalar params
+   */
+  set value(value: string | number | boolean);
 };
 
 export declare type MarkerStatic = {
@@ -2206,6 +2214,130 @@ export declare type MetadataStatic = {
 
 export declare type Metadata = {};
 
+export declare type MogrtCommentStatic = {};
+
+export declare type MogrtComment = {
+  /**
+   * Get the text content.
+   */
+  getText(): string;
+};
+
+export declare type MogrtTextStatic = {
+  /**
+   * Construct a MogrtText with a single empty text run.
+   * @constructor
+   */
+  new (): MogrtText;
+  (): MogrtText;
+};
+
+export declare type MogrtText = {
+  /**
+   * Get all caps. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getAllCaps(): boolean;
+
+  /**
+   * Get faux bold. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getFauxBold(): boolean;
+
+  /**
+   * Get faux italic. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getFauxItalic(): boolean;
+
+  /**
+   * Get font name. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getFontName(): string;
+
+  /**
+   * Get font size. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getFontSize(): number;
+
+  /**
+   * Get small caps. Throws if isUniformStyling() is false (mixed styling); check isUniformStyling() before calling.
+   */
+  getSmallCaps(): boolean;
+
+  /**
+   * Get the text content.
+   */
+  getText(): string;
+
+  /**
+   * Returns whether faux styles can be edited for this text parameter. Returns true for user-constructed instances (no author restrictions apply).
+   */
+  isFauxStylesEditable(): boolean;
+
+  /**
+   * Returns whether the font name can be edited for this text parameter. Returns true for user-constructed instances (no author restrictions apply).
+   */
+  isFontNameEditable(): boolean;
+
+  /**
+   * Returns whether the font size can be edited for this text parameter. Returns true for user-constructed instances (no author restrictions apply).
+   */
+  isFontSizeEditable(): boolean;
+
+  /**
+   * Returns true when all text shares a single uniform style (exactly one text run).
+   */
+  isUniformStyling(): boolean;
+
+  /**
+   * Set all caps across all runs. Throws if isFauxStylesEditable() is false.
+   *
+   * @param inAllCaps
+   */
+  setAllCaps(inAllCaps: boolean): boolean;
+
+  /**
+   * Set faux bold across all runs. Throws if isFauxStylesEditable() is false.
+   *
+   * @param inFauxBold
+   */
+  setFauxBold(inFauxBold: boolean): boolean;
+
+  /**
+   * Set faux italic across all runs. Throws if isFauxStylesEditable() is false.
+   *
+   * @param inFauxItalic
+   */
+  setFauxItalic(inFauxItalic: boolean): boolean;
+
+  /**
+   * Set font name across all runs. Throws if isFontNameEditable() is false.
+   *
+   * @param inFontName
+   */
+  setFontName(inFontName: string): boolean;
+
+  /**
+   * Set font size across all runs. Throws if isFontSizeEditable() is false.
+   *
+   * @param inFontSize
+   */
+  setFontSize(inFontSize: number): boolean;
+
+  /**
+   * Set small caps across all runs. Throws if isFauxStylesEditable() is false.
+   *
+   * @param inSmallCaps
+   */
+  setSmallCaps(inSmallCaps: boolean): boolean;
+
+  /**
+   * Set the text content. Collapses any multi-run styling to a single run.
+   *
+   * @param inText
+   */
+  setText(inText: string): boolean;
+};
+
 export declare type ObjectMaskUtilsStatic = {
   /**
    * Check if the project or sequence contains object mask. Returns true if at least one object mask exists.
@@ -2396,8 +2528,14 @@ export declare type PointKeyframe = {
   position: TickTime;
 
   /**
+   * An object wrapping the value: `value` is an [x, y] number array representing the PointF value
    */
-  value: { value: PointF };
+  get value(): { value: [x: number, y: number] };
+
+  /**
+   * An object wrapping the value: `value` is an [x, y] number array representing the PointF value
+   */
+  set value(value: PointF);
 };
 
 export declare type ProjectStatic = {
@@ -2512,7 +2650,7 @@ export declare type Project = {
    *
    * @param guid
    */
-  getSequence(guid: Guid): Sequence;
+  getSequence(guid: Guid): Promise<Sequence | null>;
 
   /**
    * Get an array of all sequences in this project.
@@ -2857,7 +2995,7 @@ export declare type ProjectItem = {
    * Get the type of the Project Item.
    * @readonly
    */
-  readonly type: number;
+  readonly type: Constants.ProjectItemType;
 };
 
 export declare type ProjectItemSelection = {
@@ -3887,6 +4025,24 @@ export declare type TickTimeStatic = {
   createWithTicks(ticks: string): TickTime;
 
   /**
+   * Convert a TickTime to a string using the current display format
+   *
+   * @param tickTime
+   * @param frameRate
+   * @param timeDisplay
+   */
+  timeToTimecode(tickTime: TickTime, frameRate: FrameRate, timeDisplay: TimeDisplay): string;
+
+  /**
+   * Convert a timecode string to a TickTime using the current display format
+   *
+   * @param timecode
+   * @param frameRate
+   * @param timeDisplay
+   */
+  timecodeToTime(timecode: string, frameRate: FrameRate, timeDisplay: TimeDisplay): TickTime;
+
+  /**
    * Invalid Tick Time Constant
    * @readonly
    */
@@ -3998,6 +4154,15 @@ export declare type TickTime = {
   readonly ticksNumber: number;
 };
 
+export declare type TimeDisplayStatic = {
+  /**
+   * Constructs a TimeDisplay object
+   * @constructor
+   */
+  new (): TimeDisplay;
+  (): TimeDisplay;
+};
+
 export declare type TimeDisplay = {
   /**
    * Read/Write property to get/set the time display type numeric code
@@ -4007,7 +4172,7 @@ export declare type TimeDisplay = {
 
 export declare type TrackItemSelectionStatic = {
   /**
-   * Create empty selection
+   * Create an empty TrackItemSelection to add track items to through a callback function. The selection object is valid for the lifetime and scope of the callback; it's not recommended to extract or use the selection object from outside the callback, nor use asynchronous code within the callback, to avoid any lifetime issues with the selection.
    *
    * @param undefined
    */
@@ -4473,7 +4638,7 @@ export declare type EventManagerStatic = {
    * @param target
    * @param eventName
    * @param eventHandler
-   * @param inCapturePhase
+   * @param useCapture
    */
   addEventListener(
     target: Project | Sequence | VideoTrack | AudioTrack | EncoderManager,
@@ -4484,7 +4649,7 @@ export declare type EventManagerStatic = {
       | Constants.SequenceEvent
       | Constants.OperationCompleteEvent,
     eventHandler: (event?: object) => void,
-    inCapturePhase?: boolean
+    useCapture?: boolean
   ): void;
 
   /**
@@ -4493,6 +4658,7 @@ export declare type EventManagerStatic = {
    * @param target
    * @param eventName
    * @param eventHandler
+   * @param useCapture
    */
   removeEventListener(
     target: Project | Sequence | VideoTrack | AudioTrack | EncoderManager,
@@ -4502,7 +4668,8 @@ export declare type EventManagerStatic = {
       | Constants.ProjectEvent
       | Constants.SequenceEvent
       | Constants.OperationCompleteEvent,
-    eventHandler: (event?: object) => void
+    eventHandler: (event?: object) => void,
+    useCapture?: boolean
   ): void;
 
   /**
@@ -4510,7 +4677,7 @@ export declare type EventManagerStatic = {
    *
    * @param eventName
    * @param eventHandler
-   * @param inCapturePhase
+   * @param useCapture
    */
   addGlobalEventListener(
     eventName:
@@ -4520,7 +4687,7 @@ export declare type EventManagerStatic = {
       | Constants.SequenceEvent
       | Constants.OperationCompleteEvent,
     eventHandler: (event?: object) => void,
-    inCapturePhase?: boolean
+    useCapture?: boolean
   ): void;
 
   /**
@@ -4528,6 +4695,7 @@ export declare type EventManagerStatic = {
    *
    * @param eventName
    * @param eventHandler
+   * @param useCapture
    */
   removeGlobalEventListener(
     eventName:
@@ -4536,7 +4704,8 @@ export declare type EventManagerStatic = {
       | Constants.ProjectEvent
       | Constants.SequenceEvent
       | Constants.OperationCompleteEvent,
-    eventHandler: (event?: object) => void
+    eventHandler: (event?: object) => void,
+    useCapture?: boolean
   ): void;
 };
 
@@ -4743,9 +4912,16 @@ export namespace Constants {
     PROJECT_ITEM_SELECTION_CHANGED,
   }
 
+  /**
+   * @since 25.6
+   */
   export enum ProjectItemColorLabel {
     VIOLET,
     IRIS,
+    /**
+     * @since 27.0
+     */
+    CARIBBEAN,
     LAVENDER,
     CERULEAN,
     FOREST,
@@ -4759,6 +4935,18 @@ export namespace Constants {
     GREEN,
     BROWN,
     YELLOW,
+  }
+
+  /**
+   * @since 27.0
+   */
+  export enum ProjectItemType {
+    BIN,
+    CLIP,
+    COMPOUND,
+    FILE,
+    ROOT,
+    STYLE,
   }
 
   export enum PropertyType {

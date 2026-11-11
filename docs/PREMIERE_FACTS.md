@@ -22,7 +22,7 @@ throws or misbehaves, don't use it · **ABSENT** not in the API at any version, 
 or build it in the helper · **UNPROBED** declared, never run in this project · **OPEN** partly
 run, question still open.
 
-Installed Premiere: **26.5** (manifest `minVersion` 26.2.0). Dates are 2026. "Ledger" means
+Installed Premiere: **27.0.0** since 2026-11-11; every live run below was on **26.5** unless it says otherwise (manifest `minVersion` 26.2.0). Dates are 2026. "Ledger" means
 `TODO_LEDGER.md`.
 
 ---
@@ -236,24 +236,25 @@ Premiere's own speech-to-text (on-device Speechmatics) has no Thai: `th` is miss
 Retired. Premiere 26.3 silently ignores QE `razor`/`ripple_delete` on some installs, and the File > Scripts
 menu is gone. ExtendScript is supported only through Sept 2026. Don't build on it (ledger 08-25).
 
-## Next Premiere (27.x): announced, not installed
+## Premiere 27: installed 27.0 (unprobed) and announced 27.1
 
-None of this runs on the installed 26.5. It is what to plan for. Source: `reference/adobe/api/premierepro-preview.txt`
-(member diff, `@adobe/premierepro@27.1.0-beta.16` vs 26.5.1; 27.0.0 shipped 2026-11-05 with typings identical to 27.0.0-beta.57) and Adobe's sample panel (`reference/adobe/samples/`,
-pinned e37d1ea (docs fe96210)). `check-api` rejects 27-only names until the pin moves to an installed version.
+Premiere 27.0.0 is installed (2026-11-11) and is the main typings pin, so `check-api` accepts 27.0 names; none of the 27.0 rows
+has been run live yet. 27.1 rows are still the `preview` pin (`reference/adobe/api/premierepro-preview.txt`, `@adobe/premierepro@27.1.0-beta.16`
+vs 27.0.0) and `check-api` rejects them. Sources: the 26.5.1 → 27.0.0 diff of `api/premierepro.txt` and Adobe's sample panel
+(`reference/adobe/samples/`, pinned e37d1ea (docs fe96210)).
 
 | API | Status | What changes / why it matters | Proof |
 |---|---|---|---|
-| `MogrtText` / `MogrtComment` (`getText/setText`, `get/setFontName`, `get/setFontSize`, faux bold/italic, all/small caps, `is*Editable`, `isUniformStyling`) | ANNOUNCED 27.0 | `ComponentParam.getStartValue()` can resolve a `MogrtText`, and `createKeyframe(mogrtText)` writes one. This is the typed route for the ClubFriday text write that is **REJECTED** on 26.5 (plain-string `createKeyframe` → "Illegal Parameter type", `typeof MogrtText` undefined). `setText` collapses multi-run styling to one run. Probe on 27.0 with the AE-authored `ClubFriday AE Test.mogrt` before building. | typings 27.0.0-beta.57; samples `src/keyframe.ts` |
+| `MogrtText` / `MogrtComment` (`getText/setText`, `get/setFontName`, `get/setFontSize`, faux bold/italic, all/small caps, `is*Editable`, `isUniformStyling`) | UNPROBED 27.0 | `ComponentParam.getStartValue()` can resolve a `MogrtText`, and `createKeyframe(mogrtText)` writes one. This is the typed route for the ClubFriday text write that is **REJECTED** on 26.5 (plain-string `createKeyframe` → "Illegal Parameter type", `typeof MogrtText` undefined). `setText` collapses multi-run styling to one run. Probe on 27.0 with the AE-authored `ClubFriday AE Test.mogrt` before building. | typings 27.0.0-beta.57; samples `src/keyframe.ts` |
 | `SequenceEditor.createRazorTrackAction(mediaType, trackIndex, razorPosition, razorLinkedTrackItems, alignToMediaType)`, `createRazorAllTracksAction(mediaType, razorPosition, alignToMediaType)` | ANNOUNCED 27.1 (typed) | A **native razor**, one Action per track, in a normal transaction (one undo step). Typed since `@adobe/premierepro@27.1.0-beta.16` (first seen in the sample with `@ts-expect-error`). Would replace Rough Cut's overwrite-as-razor (7,650 clones for 426 cuts) and revive the razor route marked dead in #18/#24. Do not use until probed live on 27.1. The razor row under *Placing* stays ABSENT for 26.x. | typings 27.1.0-beta.16; samples commit 8d75ef1 (2026-10-06) `src/sequenceEditor.ts` |
 | `ClipProjectItem.isStill()`, `Component.getInstanceName()` / `createSetInstanceNameAction(name)`, `CaptionTrack.EVENT_TRACK_CHANGED` / `EVENT_TRACK_INFO_CHANGED` / `EVENT_TRACK_LOCK_CHANGED` (`Constants.CaptionTrackEvent`) | ANNOUNCED 27.1 | New in the 27.1 beta typings. Nothing in the panel needs them; enum values unproven. | typings 27.1.0-beta.16 |
-| `TickTime.timeToTimecode` / `timecodeToTime(tc, frameRate, timeDisplay)` | ANNOUNCED 27.0 | Premiere's own timecode string conversion; frame rate from `(await seq.getSettings()).getVideoFrameRate()`, display from `getSequenceVideoTimeDisplayFormat()`. CutDeck does its own tick math (`host/ticks.js`), so nothing depends on it. | typings 27.0; samples `src/tickTime.ts` |
+| `TickTime.timeToTimecode` / `timecodeToTime(tc, frameRate, timeDisplay)` | UNPROBED 27.0 | Premiere's own timecode string conversion; frame rate from `(await seq.getSettings()).getVideoFrameRate()`, display from `getSequenceVideoTimeDisplayFormat()`. CutDeck does its own tick math (`host/ticks.js`), so nothing depends on it. | typings 27.0; samples `src/tickTime.ts` |
 | `Project.getSequence(guid)` | BREAKING in 27.0 | Returns `Promise<Sequence \| null>` (was sync `Sequence`). The panel does not call it today (grep, 2026-10-07); any new call must `await`. | preview diff |
-| `PointKeyframe.value` / `ComponentParam.getValueAtTime` | BREAKING in 27.0 | Point values are typed as `{value: [x, y]}` (was `{value: PointF}`). `host/components.js unwrapKeyframeValue` passes arrays through untouched, so on 27 every `position.x` / `anchorPoint.x` in the Transform panel would read `undefined`. Probe on 27.0, then normalise `[x, y]` → `{x, y}` in that one function. | preview diff; `host/components.js:22` |
+| `PointKeyframe.value` / `ComponentParam.getValueAtTime` | BREAKING in 27.0 (installed, unprobed) | Point values are typed as `{value: [x, y]}` (was `{value: PointF}`). `host/components.js unwrapKeyframeValue` passes arrays through untouched, so on 27 every `position.x` / `anchorPoint.x` in the Transform panel would read `undefined`. Probe on 27.0, then normalise `[x, y]` → `{x, y}` in that one function. | preview diff; `host/components.js:22` |
 | `Application.version` | REMOVED in 27.0 typings | The panel does not read it (grep, 2026-10-07). | preview diff |
 | `ProjectItem.type` | CHANGED in 27.0 | Now `Constants.ProjectItemType` (ROOT, BIN, CLIP, COMPOUND, FILE, STYLE) instead of a bare number: a typed way to tell bins from clips without `FolderItem.cast` probing. | preview diff |
 | `ClipProjectItem.createDetachProxyAction()` | ANNOUNCED (untyped) | Detaches proxies from a clip item, one Action per item inside `project.executeTransaction` (one undo step); the sample guards with `hasProxy()` first. Not in any typings (the sample uses `@ts-expect-error`). Nothing in CutDeck uses proxies. Do not use until probed live. | samples e37d1ea `src/projectPanel.ts` |
-| `Constants.ProjectItemColorLabel.CARIBBEAN` | ANNOUNCED 27.0 | A new label colour; enum numeric value unproven. Nothing reads label colours today. | preview diff; docs fe96210 `constants` |
+| `Constants.ProjectItemColorLabel.CARIBBEAN` | UNPROBED 27.0 | A new label colour; enum numeric value unproven. Nothing reads label colours today. | preview diff; docs fe96210 `constants` |
 
 ---
 
