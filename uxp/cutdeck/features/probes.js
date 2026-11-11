@@ -8,6 +8,7 @@ const roughCutProbe = () => require("../roughCutProbe.js");
 const layoutProbe = () => require("../layoutProbe.js");
 const rippleProbe = () => require("../rippleProbe.js");
 const addEditProbe = () => require("../addEditProbe.js");
+const mcpToolsProbe = () => require("../mcpToolsProbe.js");
 
 const PROBES = [
   {
@@ -113,6 +114,13 @@ const PROBES = [
     run: (ppro) => layoutProbe().probeCaptionTiming(ppro),
     format: (report) => layoutProbe().formatCaptionTimingReport(report),
     logLabel: "CutDeck caption timing probe",
+  },
+  {
+    id: "mcptools",
+    startText: "Listing the tools Premiere's built-in MCP servers expose…",
+    run: (ppro) => mcpToolsProbe().probeMcpTools(ppro),
+    format: (report) => mcpToolsProbe().formatMcpToolsReport(report),
+    logLabel: "CutDeck MCP tools probe",
   },
 ];
 

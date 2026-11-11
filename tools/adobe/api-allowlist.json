@@ -1,6 +1,15 @@
 {
   "_note": "Member names the panel reads that no Adobe typings/docs, built-in, CutDeck code or helper field explains. Each needs a reason. check-api.mjs lists entries that later became known elsewhere so they can be removed.",
   "names": {
-    "isSelected": "NOT an Adobe API. Deliberate probe/fallback, guarded by typeof: live probe proved `item.isSelected` is undefined and getIsSelected() is the real getter (transform-panel-plan.md Part 1a; host/trackItems.js comment). Kept only as a compatibility guess; never relied on."
+    "isSelected": "NOT an Adobe API. Deliberate probe/fallback, guarded by typeof: live probe proved `item.isSelected` is undefined and getIsSelected() is the real getter (transform-panel-plan.md Part 1a; host/trackItems.js comment). Kept only as a compatibility guess; never relied on.",
+    "hSLScripting": "Undocumented UXP module. Source: Adobe Premiere Pro.exe 27.0.0 strings and Premiere's own AI Assistant plugin (UXP/plugins/com.adobe.dva.creative-copilot/copilot.js, which calls require(\"uxp\").hSLScripting.MCP.getAssistantPreferences()). Probe-only (mcpToolsProbe.js), guarded by typeof; no live facts row yet.",
+    "MCP": "hSLScripting.MCP. Source: Adobe Premiere Pro.exe 27.0.0 strings and Premiere's own AI Assistant plugin (UXP/plugins/com.adobe.dva.creative-copilot/copilot.js, which calls require(\"uxp\").hSLScripting.MCP.getAssistantPreferences()). Probe-only (mcpToolsProbe.js), guarded by typeof; no live facts row yet.",
+    "listMCPTools": "hSLScripting.MCP.listMCPTools(endpoint). Source: its docstring in Adobe Premiere Pro.exe 27.0.0 strings and Premiere's own AI Assistant plugin (UXP/plugins/com.adobe.dva.creative-copilot/copilot.js, which calls require(\"uxp\").hSLScripting.MCP.getAssistantPreferences()). Probe-only (mcpToolsProbe.js), guarded by typeof; no live facts row yet.",
+    "annotations": "Field of an MCP tools/list entry (Model Context Protocol spec; the field names also appear in Adobe Premiere Pro.exe 27.0.0 strings). Data read from listMCPTools output in mcpToolsProbe.js, not a Premiere API.",
+    "_meta": "Field of an MCP tools/list entry (Model Context Protocol spec; the field names also appear in Adobe Premiere Pro.exe 27.0.0 strings). Data read from listMCPTools output in mcpToolsProbe.js, not a Premiere API.",
+    "readOnlyHint": "Field of an MCP tools/list entry (Model Context Protocol spec; the field names also appear in Adobe Premiere Pro.exe 27.0.0 strings). Data read from listMCPTools output in mcpToolsProbe.js, not a Premiere API.",
+    "destructiveHint": "Field of an MCP tools/list entry (Model Context Protocol spec; the field names also appear in Adobe Premiere Pro.exe 27.0.0 strings). Data read from listMCPTools output in mcpToolsProbe.js, not a Premiere API.",
+    "requiresSensitiveApproval": "Premiere-specific _meta field of an MCP tool (Adobe Premiere Pro.exe 27.0.0 strings; read by the AI Assistant plugin's approval logic). Data, not a Premiere API.",
+    "alwaysAvailable": "Premiere-specific _meta field of an MCP tool (Adobe Premiere Pro.exe 27.0.0 strings). Data, not a Premiere API."
   }
 }
