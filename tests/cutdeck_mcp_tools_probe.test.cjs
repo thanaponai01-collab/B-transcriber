@@ -64,5 +64,18 @@ test("mcp tools probe: says so when Premiere does not expose the MCP object to t
   const report = await probeMcpTools({}, { uxp: fakeUxp({ mcp: undefined, written }) });
   assert.equal(report.available, false);
   assert.deepEqual(written, {});
-  assert.match(formatMcpToolsReport(report), /not exposed/);
+  const text = formatMcpToolsReport(report);
+  assert.match(text, /not exposed/);
+  // Says which link of uxp.hSLScripting.MCP.listMCPTools is missing.
+  assert.match(text, /hSLScripting: undefined/);
+  // require("uxp") hides its members from Object.keys, so list own property names too.
+  assert.match(text, /storage/);
+});
+
+test("mcp tools probe: names the missing link when MCP exists without listMCPTools", async () => {
+  const report = await probeMcpTools({}, { uxp: fakeUxp({ mcp: {}, written: {} }) });
+  const text = formatMcpToolsReport(report);
+  assert.match(text, /hSLScripting: object/);
+  assert.match(text, /hSLScripting\.MCP: object/);
+  assert.match(text, /hSLScripting\.MCP\.listMCPTools: undefined/);
 });
