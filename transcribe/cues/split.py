@@ -21,7 +21,15 @@ from __future__ import annotations
 import logging
 
 from transcribe.cues.policy import CuePolicy
-from transcribe.thai.atoms import CLAUSE_CLOSERS, LEADING_CONNECTIVES, TRAILING_PARTICLES
+from transcribe.thai.atoms import (
+    CLAUSE_CLOSERS,
+    DANGLING_ENDS,
+    LEADING_CONNECTIVES,
+    NON_OPENERS,
+    STRONG_OPENERS,
+    TRAILING_PARTICLES,
+    WEAK_OPENERS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +85,155 @@ def split_cues(words, policy: CuePolicy | None = None, *, return_words: bool = F
     policy = policy or CuePolicy()
     if policy.algorithm == "dp":
         return _split_dp(words, policy, return_words=return_words)
+    if policy.algorithm == "clause":
+        return _split_clause(words, policy, return_words=return_words)
     return _split_greedy(words, policy, return_words=return_words)
+
+
+# Clause pass (_split_clause): evidence that a clause ends at a word boundary.
+# Weights follow the break rates measured on hand recuts (thai/atoms.py comment).
+_CLAUSE_PAUSE_MS = 100
+_CLAUSE_W_PAUSE = 2.0
+_CLAUSE_W_SPACE = 2.0
+_CLAUSE_W_CLOSER = 1.5
+_CLAUSE_W_STRONG_OPENER = 2.0
+_CLAUSE_W_WEAK_OPENER = 1.2
+_CLAUSE_W_NON_OPENER = -1.5
+_CLAUSE_W_DANGLING = -2.0
+_CLAUSE_LONG_CHARS = 26         # a cue longer than this is split if it has a clause boundary
+_CLAUSE_SPLIT_EVIDENCE = 3.0    # ...with at least this much evidence
+_CLAUSE_MIN_CHARS = 8           # neither side of a new or moved break may be shorter
+_CLAUSE_MIN_MS = 500            # ...or briefer
+_CLAUSE_MOVE_GAIN = 2.5         # a break moves only to a boundary this much better
+
+
+def _clause_evidence(left, right, space_between: bool) -> float:
+    """How strongly the boundary between two atoms looks like the end of a clause."""
+    lt, rt = left[0].strip(), right[0].strip()
+    score = 0.0
+    if right[1] - left[2] >= _CLAUSE_PAUSE_MS:
+        score += _CLAUSE_W_PAUSE
+    if space_between:
+        score += _CLAUSE_W_SPACE
+    if lt.endswith(tuple(TRAILING_PARTICLES)):
+        score += _CLAUSE_W_CLOSER
+    if rt in STRONG_OPENERS:
+        score += _CLAUSE_W_STRONG_OPENER
+    elif rt in WEAK_OPENERS:
+        score += _CLAUSE_W_WEAK_OPENER
+    elif rt in NON_OPENERS:
+        score += _CLAUSE_W_NON_OPENER
+    if lt in DANGLING_ENDS:
+        score += _CLAUSE_W_DANGLING
+    return score
+
+
+def _split_clause(words, policy: CuePolicy, *, return_words: bool = False):
+    """The greedy split, then two repairs that use the words themselves.
+
+    The greedy breaks agree with hand recuts about nine times in ten, so they are
+    kept. What it gets wrong is what it cannot see: it closes a cue wherever the
+    size budget runs out, and leaves a long cue whole when there is no pause in it.
+
+    1. A break with no pause and no sentence boundary behind it moves to a nearby
+       boundary where a clause ends, when one is clearly better.
+    2. A cue over `_CLAUSE_LONG_CHARS` is split at its best clause boundary, when
+       it has one.
+
+    Neither repair crosses a pause of `gap_ms` or a crfcut sentence boundary.
+    """
+    cues, sub_words = _split_greedy(words, policy, return_words=True)
+    timed, boundary_offsets = _prepare(words, policy)
+    if not cues or timed is None:
+        return (cues, sub_words) if return_words else cues
+
+    real = [k for k, tok in enumerate(timed) if tok[0].strip()]
+    chars = [len("".join(timed[k][0].split())) for k in real]
+    sentence_start = set()
+    b = 0
+    for i, k in enumerate(real):
+        while b < len(boundary_offsets) and timed[k][4] >= boundary_offsets[b]:
+            sentence_start.add(i)
+            b += 1
+
+    # Greedy cue ends as indices into `real`, recovered by counting characters.
+    ends, i = [], 0
+    for text, *_ in cues:
+        need = len("".join(text.split()))
+        while need > 0 and i < len(real):
+            need -= chars[i]
+            i += 1
+        ends.append(i)
+    if ends[-1] != len(real) or any(a >= c for a, c in zip([0] + ends, ends)):
+        logger.warning("clause split: could not map cues to atoms; keeping the greedy split")
+        return (cues, sub_words) if return_words else cues
+
+    def evidence(i: int) -> float:
+        """Evidence for a break before real atom i."""
+        return _clause_evidence(timed[real[i - 1]], timed[real[i]], real[i] - real[i - 1] > 1)
+
+    def fixed(i: int) -> bool:
+        """A break the audio or crfcut put there: never moved."""
+        return i in sentence_start or timed[real[i]][1] - timed[real[i - 1]][2] >= policy.gap_ms
+
+    def size(a: int, c: int) -> int:
+        return sum(chars[a:c])
+
+    def span(a: int, c: int) -> int:
+        return timed[real[c - 1]][2] - timed[real[a]][1]
+
+    def fits(a: int, c: int, limit_chars: int) -> bool:
+        return (_CLAUSE_MIN_CHARS <= size(a, c) <= limit_chars
+                and _CLAUSE_MIN_MS <= span(a, c) <= policy.target_ms + _PARTICLE_OVERSHOOT_MS)
+
+    limit = policy.target_chars + _PARTICLE_OVERSHOOT_CHARS
+
+    # 1. Move weak breaks to a clause boundary.
+    starts = [0] + ends[:-1]
+    for n in range(1, len(starts)):
+        at, lo, hi = starts[n], starts[n - 1], ends[n]
+        if fixed(at):
+            continue
+        best, best_score = at, evidence(at) + _CLAUSE_MOVE_GAIN
+        for cand in range(lo + 1, hi):
+            if cand == at or any(fixed(j) for j in range(min(cand, at) + 1, max(cand, at) + 1)):
+                continue
+            if evidence(cand) > best_score and fits(lo, cand, limit) and fits(cand, hi, limit):
+                best, best_score = cand, evidence(cand)
+        starts[n] = best
+        ends[n - 1] = best
+
+    # 2. Split long cues at their best clause boundary.
+    def split_long(a: int, c: int) -> list[int]:
+        if size(a, c) <= _CLAUSE_LONG_CHARS:
+            return [c]
+        best, best_score = None, _CLAUSE_SPLIT_EVIDENCE
+        for cand in range(a + 1, c):
+            if (size(a, cand) < _CLAUSE_MIN_CHARS or size(cand, c) < _CLAUSE_MIN_CHARS
+                    or span(a, cand) < _CLAUSE_MIN_MS or span(cand, c) < _CLAUSE_MIN_MS):
+                continue
+            if evidence(cand) >= best_score:
+                # ties go to the boundary nearest the middle
+                if best is None or evidence(cand) > best_score or (
+                        abs(size(a, cand) - size(cand, c)) < abs(size(a, best) - size(best, c))):
+                    best, best_score = cand, evidence(cand)
+        if best is None:
+            return [c]
+        return split_long(a, best) + split_long(best, c)
+
+    new_ends: list[int] = []
+    for a, c in zip(starts, ends):
+        new_ends.extend(split_long(a, c))
+
+    out: list[tuple[str, int, int, float | None]] = []
+    a = 0
+    for c in new_ends:
+        lo, hi = real[a], real[c - 1]
+        text = "".join(tok[0] for tok in timed[lo:hi + 1]).strip()
+        confs = [tok[3] for tok in timed[lo:hi + 1] if tok[3] is not None]
+        out.append((text, timed[lo][1], timed[hi][2], sum(confs) / len(confs) if confs else None))
+        a = c
+    return (out, sub_words) if return_words else out
 
 
 def _sentence_boundary_offsets(text: str) -> list[int]:

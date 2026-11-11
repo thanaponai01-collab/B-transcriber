@@ -75,6 +75,28 @@ LEADING_CONNECTIVES = frozenset({"แล้วก็"})
 
 CLAUSE_CLOSERS = frozenset({"ครับ", "ค่ะ", "คะ"})
 
+# Word classes for the clause-aware split (cues/split.py `_clause_split_segment`).
+# Measured on 1781 word boundaries in 9 hand-recut clips (TODO_LEDGER 2026-11-11):
+# a cue opens on a connective far more often than on any other word, often on a
+# subject pronoun, and almost never on a word that continues the phrase before it.
+STRONG_OPENERS = frozenset({
+    "แต่", "แต่ว่า", "ถ้า", "ถ้าเกิด", "ก็เลย", "ทำไม", "แล้วก็", "เพราะ", "เพราะว่า",
+    "คือ", "พอ", "ซึ่ง", "หรือว่า", "ดังนั้น", "เพราะฉะนั้น",
+})
+WEAK_OPENERS = frozenset({
+    "เขา", "เค้า", "หนู", "เรา", "มัน", "พี่", "ผม", "ฉัน", "คุณ", "แล้ว", "ก็",
+})
+# A cue opening on one of these reads as the tail of the cue before it.
+NON_OPENERS = frozenset({
+    "ให้", "ของ", "อะไร", "เป็น", "ได้", "ว่า", "ไป", "มา", "กับ", "กว่า", "ที่", "ที่จะ",
+    "อยู่", "ด้วย", "แล้ว ๆ",
+})
+# A cue ending on one of these is an unfinished clause.
+DANGLING_ENDS = STRONG_OPENERS | frozenset({
+    "ก็", "ยัง", "อาจจะ", "ที่จะ", "ที่", "กับ", "ว่า", "จะ", "ไม่", "ของ", "ให้", "ต้อง",
+    "อยาก", "แล้ว", "เป็น", "ใน", "และ", "หรือ", "โดย", "เพื่อ", "กำลัง", "ไม่ได้",
+})
+
 RULE_MAI_YAMOK = "mai_yamok"
 RULE_RECIPROCAL_PARTICLE = "reciprocal_particle"
 RULE_NUMERAL_UNIT = "numeral_unit"
