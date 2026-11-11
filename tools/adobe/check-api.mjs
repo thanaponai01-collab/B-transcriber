@@ -53,8 +53,9 @@ const parse = (file) => ts.createSourceFile(file, fs.readFileSync(file, "utf8"),
 //    name known: the panel must run on the installed Premiere. Its names are reported instead.
 const adobeTyped = new Set(), previewTyped = new Set();
 for (const t of sources.typings) declaredNames(parse(path.join(refDir, "typings", t.saveAs)), t.preview ? previewTyped : adobeTyped);
+const installed = sources.typings.find((t) => t.package === "@adobe/premierepro" && !t.preview);
 const premiere265 = new Set(), premiere262 = new Set();
-declaredNames(parse(path.join(refDir, "typings", "premierepro-26.5.1.d.ts")), premiere265);
+declaredNames(parse(path.join(refDir, "typings", installed.saveAs)), premiere265);
 declaredNames(parse(path.join(refDir, "typings", "premierepro-26.2.1.d.ts")), premiere262);
 
 // 2. Adobe docs + samples: names written as `.name` in the markdown / sample code.

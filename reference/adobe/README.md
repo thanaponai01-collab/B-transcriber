@@ -8,9 +8,9 @@ Everything needed to check a Premiere / UXP API **without going online**. Text o
 | `api/premierepro.txt` | **Start here.** Every Premiere member, one line: `Owner.member(signature) [static, since, NOT IN 26.2.1]  -- doc` | generated from `typings/` |
 | `api/premierepro-preview.txt` | What the **next** Premiere changes: members ADDED / REMOVED / CHANGED in the `preview` typings pin vs the installed one. Plan with it; `check-api` rejects ADDED names | generated from `typings/` |
 | `api/uxp.txt` | Same for the UXP platform (storage, shell, xmp, os, fs, DOM) | generated from `typings/` |
-| `typings/premierepro-26.5.1.d.ts` | Adobe's Premiere typings for the **installed** Premiere 26.5 | `@adobe/premierepro@26.5.1` |
+| `typings/premierepro-27.0.0.d.ts` | Adobe's Premiere typings for the **installed** Premiere 27.0 | `@adobe/premierepro@27.0.0` |
 | `typings/premierepro-26.2.1.d.ts` | The manifest's `minVersion` line; anything absent here needs 26.3+ | `@adobe/premierepro@26.2.1` |
-| `typings/premierepro-27.1.0-beta.16.d.ts` | **Preview pin** (`"preview": true`): the next Premiere, not installed (27.0.0 has shipped; its typings equal 27.0.0-beta.57) | `@adobe/premierepro@27.1.0-beta.16` |
+| `typings/premierepro-27.1.0-beta.16.d.ts` | **Preview pin** (`"preview": true`): the next Premiere, not installed | `@adobe/premierepro@27.1.0-beta.16` |
 | `typings/uxp-7.3.1.d.ts` | UXP platform typings (has gaps: e.g. `storage.localFileSystem` is missing) | `@adobe/cc-ext-uxp-types@7.3.1` |
 | `docs/` | Adobe's Premiere UXP docs: `ppro-reference/` (classes, constants, events), `uxp-api/` (platform), `resources/recipes/`, `plugins/` (manifest, entrypoints) | `AdobeDocs/uxp-premiere-pro` |
 | `samples/` | Adobe's own working sample panels (`sample-panels/premiere-api/src/*.ts`) | `AdobeDocs/uxp-premiere-pro-samples` |
