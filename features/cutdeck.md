@@ -96,6 +96,13 @@
 - verify: CutDeck helper
 - status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started. `premiere_rough_cut` proven against a real helper with a stubbed panel read (tests/test_cutdeck_mcp_backend.py, 2026-10-07); not run against live Premiere
 
+## Ask Premiere's AI Assistant (MCP)
+- what: `premiere_assistant_ask(prompt, timeout_s)` types a prompt into Adobe's own AI Assistant (beta) chat panel through Windows UI Automation, waits for the reply and returns `{done, text, credits, buttons}`. Windows only. Each prompt spends the user's Adobe credits.
+- trace: `premiere_assistant_ask` @ cutdeck/mcp_server.py > `ask` @ cutdeck/assistant.py > `_panel` @ cutdeck/assistant.py
+- needs: Premiere running with the AI Assistant panel already open (its toolbar button can't be reached). Not the helper, not the CutDeck panel.
+- verify: CutDeck helper
+- status: run live 2026-11-17 on Premiere 27.0.0.88 through the MCP tool: two read-only questions answered in 10-18 s. Not tried: a prompt that edits, the Permission mode approval flow, Thai text, Premiere Beta.
+
 ## Live Premiere CLI
 - what: Send one live command (status, read_sequence, apply_cuts, add_markers, run_probe, inspect_selection, transform/anchor/align/distribute) to the panel through the helper.
 - cli: `python -m cutdeck.premiere_cli <command>` @ cutdeck/premiere_cli.py :: --port
