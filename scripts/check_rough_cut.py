@@ -17,7 +17,7 @@ def main():
     else:
         python_tests = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "tests").glob("test_cutdeck*.py")
                               if p.name != "test_cutdeck_live_premiere.py")
-        python_tests += ["tests/test_clubfriday.py", "tests/test_pipeline_run_config_fallbacks.py",
+        python_tests += ["tests/test_subtitle_desk.py", "tests/test_pipeline_run_config_fallbacks.py",
                          "tests/test_job_resumability.py"]
         node_tests = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "tests").glob("*.cjs"))
     commands = [[sys.executable, "-m", "pytest", *python_tests, "-q", "-p", "no:cacheprovider"],

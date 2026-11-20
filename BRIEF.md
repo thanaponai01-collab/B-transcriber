@@ -1,8 +1,8 @@
 # Project brief
 
 Goal: local Thai-primary transcription and review, with CutDeck Premiere workflows
-and a separate ClubFriday quote workspace. Sources: [SYSTEM_SPEC.md](SYSTEM_SPEC.md),
-[ClubFriday requirements](clubfriday/README.md), [agent decisions](CLAUDE.md).
+and a separate SubtitleDesk quote workspace. Sources: [SYSTEM_SPEC.md](SYSTEM_SPEC.md),
+[SubtitleDesk requirements](subtitle_desk/README.md), [agent decisions](CLAUDE.md).
 
 ## Decisions and constraints in force
 - Text geometry follow-up (2026-10-19): reverse engineer Premiere's native text bounds for accurate alignment and anchor placement in the existing Transform UXP panel. Evidence and remaining live checks: [native text bounds](docs/research/cutdeck-native-text-bounds-2026-10-19.md). Native geometry must be validated before replacing rendered measurement.
@@ -10,21 +10,21 @@ and a separate ClubFriday quote workspace. Sources: [SYSTEM_SPEC.md](SYSTEM_SPEC
   (transcribe/config.yaml). The older two-active-engine narrative is historical intent.
 - Select-only reconciliation, sequential GPU model residency, engine contract boundary
   and metric regression gates remain mandatory (CLAUDE.md, STYLE_GUIDE.md).
-- ClubFriday preserves editable exact text, one to three lines and absolute timeline
+- SubtitleDesk preserves editable exact text, one to three lines and absolute timeline
   timestamps; saved quotes can be reopened. Exports use UTF-8 BOM and project-local
-  CutDeck/ClubFriday paths (clubfriday/README.md).
+  CutDeck/SubtitleDesk paths (subtitle_desk/README.md).
 - No automatic styled graphics or automatic caption timeline placement is promised.
 - Requirements and acceptance must not be inferred from implementation alone.
 
 ## Selected acceptance for this foundation
-ClubFriday adds the captured range offset to helper-relative cue times; quote and
+SubtitleDesk adds the captured range offset to helper-relative cue times; quote and
 full transcript exports preserve timeline timing and text. Empty/overlapping quotes
-are refused. Requirement: clubfriday/README.md; checks: tests/test_clubfriday.py.
+are refused. Requirement: subtitle_desk/README.md; checks: tests/test_subtitle_desk.py.
 
 ## Scope and unanswered questions
 - Current owner priority (2026-10-11): fix Rough Cut stopping midway and leaving
   FAILED copies; recover and record the architecture (docs/rough-cut.md).
-- Scope is repository context plus a ClubFriday backend verification slice.
+- Scope is repository context plus a SubtitleDesk backend verification slice.
 - Rough Cut reliability is the current owner priority; live-host confirmation remains pending.
 - Follow-up authorized 2026-10-11: retire XML-file Rough Cut, keep JSON analysis and
   native editing, separate shared services, and refuse changed source audio before edits.

@@ -208,7 +208,7 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
 
 <!-- start-here -->
 ## Start here
-Goal: local Thai transcription/review and Premiere workflows; selected context slice is ClubFriday.
+Goal: local Thai transcription/review and Premiere workflows; selected context slice is SubtitleDesk.
 intent: BRIEF.md
 work: BUILD.md
 features: FEATURES.md
@@ -218,7 +218,7 @@ commands: docs/commands.md
 Read [intent](BRIEF.md), [work](BUILD.md), [features](FEATURES.md), then [checks](VERIFY.md).
 Read [architecture](docs/architecture.md) for boundaries and [commands](docs/commands.md) before running tools.
 Checks cover selected backend behavior; real GPU, browser and Premiere behavior remain unverified.
-Read feature area includes for the task; read [ClubFriday work](work/clubfriday-history.md) for existing live evidence and deferred work.
+Read feature area includes for the task; read [SubtitleDesk work](work/subtitle_desk-history.md) for existing live evidence and deferred work.
 Changed decisions replace their brief/area entries; authorized updates refresh affected intent, evidence and Next; read-only reviews report gaps.
 Memory: use installed `C:/Users/thana/.claude/plugins/cache/thanaponai01-skills/top-tier-engineer/4.61.0/skills/project-context/scripts/context.py --repo . search QUERY`; upkeep uses `index --files` for changed context.
 <!-- /start-here -->

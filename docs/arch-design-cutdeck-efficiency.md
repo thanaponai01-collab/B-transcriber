@@ -26,7 +26,7 @@ spawns a GPU child only per job. Where time and memory actually go, in order of 
 
 Not a cost (checked, clean): helper idle footprint; helper responsiveness during Sync; the
 DeepFilterNet denoise in the silence-only path (`df` isn't installed, and the default preset runs
-with ASR, which skips denoise); ClubFriday polling (1.5-2 s, only while a job runs); disk
+with ASR, which skips denoise); SubtitleDesk polling (1.5-2 s, only while a job runs); disk
 (`transcriber.db` 9.9 MB with rough-cut transcripts now kept).
 
 ## Concept map
