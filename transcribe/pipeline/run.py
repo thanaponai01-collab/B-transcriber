@@ -30,7 +30,9 @@ from transcribe.pipeline import plan as planning
 
 logger = logging.getLogger(__name__)
 
-PIPELINE_VERSION = "1.0.0"
+# Finished transcripts are cached by media sha256 + this version: bump it when a
+# code change alters decode output, or cached media keep the old transcript.
+PIPELINE_VERSION = "1.0.1"
 
 # The phase vocabulary is defined once, in plan.py — resume semantics depend on
 # these exact strings. Named here too because this is where they are consumed.

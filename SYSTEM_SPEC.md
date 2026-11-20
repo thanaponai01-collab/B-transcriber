@@ -135,7 +135,7 @@ audio
 
 `run.py` entry: `run_file(audio_path, config, db_path) → list[token dict]`.
 CLI: `python -m transcribe.pipeline.run audio.wav --config transcribe/config.yaml`.
-`PIPELINE_VERSION = "1.0.0"`.
+`PIPELINE_VERSION = "1.0.1"` (part of the transcript cache key; bump it when decode output changes).
 
 Behind that one entry point, four **internal** seams (private to
 `transcribe/pipeline/`, absent from its `__init__` exports — `run_file`'s own
