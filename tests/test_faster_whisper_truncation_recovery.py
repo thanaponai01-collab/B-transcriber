@@ -260,3 +260,12 @@ def test_1300_ms_last_piece_without_zero_length_pieces_is_not_redecoded():
     eng._decode = _no_redecode
     merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(2.6 * _SR)), {}, 8)
     assert merged is tokens
+
+
+def test_trailing_gap_recovery_keeps_a_zero_length_last_piece():
+    # The redecode starts at the piece's own timestamp, so dropping it loses it.
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2180), _tok("ไง", 2180, 2180)]
+    eng._decode = _redecode_to(" recovered")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(9 * _SR), {}, 8)
+    assert [t.text for t in merged] == ["มา", "เขา", "ไง", " recovered"]

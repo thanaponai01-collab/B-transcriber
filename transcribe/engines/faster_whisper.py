@@ -148,6 +148,10 @@ _LONG_SPAN_OVERLAP_S = 4.0
 # plus there being meaningful leftover audio to redecode (checked below via
 # the tail-audio length) — not on how close it lands to the window edge.
 _TRUNCATION_TAIL_MS = 1500
+# When zero-length pieces follow it, a shorter stretch already counts (#94:
+# a 1300 ms vowel mark before two 0 ms pieces dropped a clause). Over 4 real
+# files + gold audio this flagged only that window and a 6.5 s one.
+_TRUNCATION_COLLAPSED_TAIL_MS = 1000
 _TRUNCATION_LOOKBACK_MS = 2500
 
 
@@ -440,22 +444,29 @@ class FasterWhisperEngine(Engine):
         (tokens, kept, tail_audio, tail_start_ms, clip) for redecoding; otherwise None."""
         if not tokens and not require_speech:
             return None
+        # Zero-length pieces at the end mean Whisper ran out of timeline: the
+        # suspect is the last piece with a duration, and less stretch counts (#94).
+        body = tokens
+        while body and body[-1].end_ms <= body[-1].start_ms:
+            body = body[:-1]
+        stretch_ms = _TRUNCATION_TAIL_MS if body is tokens else _TRUNCATION_COLLAPSED_TAIL_MS
+        suspect = body[-1] if body else None
         last = tokens[-1] if tokens else None
         win_dur_ms = len(sub_audio) / _SR * 1000
-        dur = last.end_ms - last.start_ms if last else 0
+        dur = suspect.end_ms - suspect.start_ms if suspect else 0
         trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
 
         if last is None:
             kept = []
             tail_start_ms = 0
-        elif dur >= _TRUNCATION_TAIL_MS:
-            # (A) the last word itself is the suspect — discard it too and
-            # redecode from a genuine inter-token pause before it.
-            cut_i = self._find_safe_cut(tokens[:-1], last.start_ms)
+        elif dur >= stretch_ms:
+            # (A) the suspect itself is stretched — discard it and what follows,
+            # and redecode from a genuine inter-token pause before it.
+            cut_i = self._find_safe_cut(body[:-1], suspect.start_ms)
             if cut_i is None:
                 return None
-            kept = tokens[:cut_i + 1]
-            tail_start_ms = tokens[cut_i + 1].start_ms
+            kept = body[:cut_i + 1]
+            tail_start_ms = body[cut_i + 1].start_ms
         elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
             # (B) the last word is trustworthy — keep it, redecode only the
             # real leftover audio after it.
