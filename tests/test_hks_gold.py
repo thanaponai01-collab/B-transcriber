@@ -82,7 +82,7 @@ def test_a_held_frame_of_the_footage_is_a_still_and_covers_its_cut():
     v2 = [{**clip(15, 40, 145), "frame_hold": 145.0}]
     yt = gold(*outputs(show([list(a1), v2], a1))).yt
     assert yt.cuts == [Cut(20, 30, True), Cut(40, 30, True)]
-    assert yt.covers == [SourceRange(FOOT, 145, 170, 15, 40)]
+    assert yt.covers == [SourceRange(FOOT, 145, 145, 15, 40)]
 
 
 def test_a_full_hd_file_at_default_scale_frames_like_a_720p_file_at_150():

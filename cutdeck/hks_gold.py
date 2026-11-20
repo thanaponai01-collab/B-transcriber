@@ -138,7 +138,10 @@ def edit_drops(project: dict, problems: list[str]) -> list[tuple[float, float]] 
 
 
 def _range(clip: dict) -> SourceRange:
-    return SourceRange(_media(clip), clip["source_in"], clip["source_out"], clip["start"], clip["end"])
+    """A held clip's source is the one frame it shows, not the range it was trimmed from."""
+    held = clip.get("frame_hold")
+    return SourceRange(_media(clip), clip["source_in"] if held is None else held,
+                       clip["source_out"] if held is None else held, clip["start"], clip["end"])
 
 
 def _offset(r: SourceRange) -> float:

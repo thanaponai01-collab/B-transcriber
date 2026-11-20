@@ -102,8 +102,8 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 
   Nothing else waits on them: Phase 1, 2.1, 2.3–2.6, 5.2, 5.5 and the reels of 6.2 can start.
   (2.5 can detect inset changes and stills now; whether a cut there is legal waits on question 2.)
-  Reader gaps found (→ 0.5): `hks_gold` does not count `CutDeck_Hold_*.png` stills as covers
-  (20261110), and misses some zooms (20261117 @ 330, 20261012 @ 261).
+  Reader gaps found (→ 0.5, closed): `hks_gold` did not count `CutDeck_Hold_*.png` stills as
+  covers (20261110), and misread some pictures (20261117 @ 330, 20261012 @ 261).
 - [x] **0.4** Scorer `cutdeck/hks_score.py`: a proposed keep list vs the gold body keeps, in
   source time per file. It reports:
   - seconds agreement, keep precision and recall;
@@ -123,9 +123,13 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 
   **Done:** 20261110 reads 29 uncovered of 82. The "missed zooms" were Premiere **Frame Hold**
   clips (one frozen frame, here a zoomed chat screenshot): the reader returns `frame_hold`, and
-  `hks_gold` and the audit treat a held clip as a still. Re-run on all 11: 26 → 3 of 1,190
-  samples differ. The 3 are the closing stack (slowed footage under a `LAYER_ZOOM` Transform),
+  `hks_gold` and the audit treat a held clip as a still. Re-run on all 11: 37 → 3 of 1,190
+  samples differ (the 26 of 1,118 came from a first script that sampled differently).
+  The 3 are the closing stack (slowed footage under a `LAYER_ZOOM` Transform),
   listed with their cause in [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md), reader finding 2.
+  Nine cuts under a held frame moved to covered (20261001 25 → 23, 20261002 25 → 24, 20261003
+  30 → 29, 20261112 35 → 32, 20261117 18 → 16): 285 uncovered in all, 270 on a camera change.
+  For 4.3: a held frame of the footage is a cover kind the user uses in 9 of 11 episodes.
 - [x] **0.6** Holdout. Every threshold so far was tuned on 20261120. Keep 20261002, 20261109 and
   20261118 out of all tuning from here on; a step that says "on the gold set" tunes on the other
   eight and reports the holdout score once, at the end. → verify: `hks_score` and `hks_audit`
@@ -204,7 +208,7 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   the studio inset of the news-clip layout, and still pictures (the last two pending audit
   question 2). Whole-frame difference misses the inset changes (11–17, below the threshold of
   20), so the inset is measured on its own box. → verify:
-  - recall: of the 277 camera-change cuts and the 15 inset and still cuts of the audit, the
+  - recall: of the 270 camera-change cuts and the 13 inset and still cuts of the audit, the
     share detected;
   - precision: on a hand-labelled 10 min of 20261120, the share of detections that are real.
 - [ ] **2.6** Host vs guest turns (`topic_speakers`) → verify: the host prompt cuts of story 1
@@ -310,7 +314,7 @@ checked on the user's hand cut first, before Phase 4 exists.
 - The Essential Sound **Dialogue** preset on the footage audio (no proven API for it).
 
 ## Order and why
-1. 0.1 → 0.4 (done), then 0.5 and 0.6: everything after is measured against the gold set.
+1. 0.1 → 0.6 (done): everything after is measured against the gold set.
 2. Phase 1 next to Phase 2 (2.1–2.6 on all 11 episodes): the spike decides the output form; the
    analysis is useful either way (markers).
 3. Phase 3, then the mechanical finishing on the user's hand cut: 5.1 / 5.2 / 5.5 and the reels
