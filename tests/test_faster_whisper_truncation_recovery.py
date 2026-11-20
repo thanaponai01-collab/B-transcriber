@@ -269,3 +269,11 @@ def test_trailing_gap_recovery_keeps_a_zero_length_last_piece():
     eng._decode = _redecode_to(" recovered")
     merged, _ = eng._recover_truncated_tail(tokens, np.zeros(9 * _SR), {}, 8)
     assert [t.text for t in merged] == ["มา", "เขา", "ไง", " recovered"]
+
+
+def test_stretched_piece_with_no_pause_to_cut_on_still_gets_trailing_gap_recovery():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 2000), _tok("นะ", 2000, 2000)]
+    eng._decode = _redecode_to(" recovered")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(9 * _SR), {}, 8)
+    assert [t.text for t in merged] == ["มา", "นะ", " recovered"]

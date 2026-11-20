@@ -455,18 +455,18 @@ class FasterWhisperEngine(Engine):
         win_dur_ms = len(sub_audio) / _SR * 1000
         dur = suspect.end_ms - suspect.start_ms if suspect else 0
         trailing_gap_ms = win_dur_ms - last.end_ms if last else win_dur_ms
+        cut_i = self._find_safe_cut(body[:-1], suspect.start_ms) if dur >= stretch_ms else None
 
         if last is None:
             kept = []
             tail_start_ms = 0
-        elif dur >= stretch_ms:
+        elif cut_i is not None:
             # (A) the suspect itself is stretched — discard it and what follows,
             # and redecode from a genuine inter-token pause before it.
-            cut_i = self._find_safe_cut(body[:-1], suspect.start_ms)
-            if cut_i is None:
-                return None
             kept = body[:cut_i + 1]
             tail_start_ms = body[cut_i + 1].start_ms
+        elif body is tokens and dur >= _TRUNCATION_TAIL_MS:
+            return None  # a stretched last piece with no pause to cut on
         elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
             # (B) the last word is trustworthy — keep it, redecode only the
             # real leftover audio after it.
