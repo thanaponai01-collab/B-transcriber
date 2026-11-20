@@ -49,13 +49,20 @@ Rule: an uncovered cut in the YT body is allowed only on a camera change.
 
 **Threshold.** Calibrated on 20261120. Its 24 uncovered cuts are:
 
-- the 20 angle changes of the earlier hand check (diff 27.7–95.8);
-- the 2 same-shot cuts (0.56 s → diff 6.0, 1.6 s → diff 12.7);
-- 2 more angle changes (diff ≥ 29.8). The reader counts them now and the old 22-cut hand count
-  did not: the reader no longer treats a main shot on V3 as a cover (plan step 0.2).
+- 22 cuts with diff 27.7–95.8;
+- the 2 same-shot cuts of the hand check (0.56 s → diff 6.0, 1.6 s → diff 12.7).
 
-The threshold sits at 20, in the gap between 12.7 and 27.7. Across all episodes I looked at 13
-cuts between 20 and 33. All 13 are real picture changes except one (the punch-in below).
+The hand check counted 22 uncovered cuts (20 angle changes, 2 same-shot). Which 2 of the 22
+above it left out is not identified. On the 18:12 save (`p9`) the reader gives 24 uncovered
+cuts with `min_jump_frames` 1 and 4 alike, so the difference is not the 3-frame jumps.
+The hand check's low end of "27" is most likely the punch-in at tl 681.92, diff 27.7 (inferred).
+
+The threshold sits at 20, in the gap between 12.7 and 27.7. I looked at the frames of 38 cuts
+above it:
+
+- 13 cuts with diff 20–33: 12 are real picture changes; 1 is the punch-in (below).
+- All 25 cuts with diff 33–60: all are real picture changes (full frame, inset or window).
+- The 239 cuts at 60 or more are counted as camera changes by the threshold alone.
 
 **Below 20 the number alone cannot decide.** I looked at all 17 such cuts:
 
@@ -98,9 +105,14 @@ cuts between 20 and 33. All 13 are real picture changes except one (the punch-in
 - The other 29 uncovered cuts are all camera changes, inside the 15–38 range of the other
   episodes.
 
-**Verdict: holds, with two exceptions to confirm.** Of 294 uncovered cuts that are not frame
-holds, 292 are on a camera change or under a still picture. The 2 exceptions are the micro
-cuts on 20261120. The rule as written is too narrow. It also has to allow:
+**Verdict: holds, with three cuts to confirm, all on 20261120.** There are 294 uncovered cuts
+that are not frame holds:
+
+- 291 are on a camera change or under a still picture. 239 of them count by threshold alone.
+- 2 are the micro same-shot cuts.
+- 1 is the punch-in.
+
+The rule as written is too narrow. It also has to allow:
 
 - a camera change inside the studio inset;
 - a cut under a still picture;
@@ -214,23 +226,38 @@ Blur without a clock (timeline seconds):
 
 | episode | s | ranges | what it is |
 |---|---|---|---|
-| 1001, 1002, 1003, 1012, 1020, 1109, 1118, 1120 | 1–93 | over zoomed inserts (e.g. 20261120: 253–291, 645–656) | the logo/credit blur on V9 over the insert's own watermark (user, workflow Step 5) |
-| 20261001 | 86 | 68–125, 276–305 | full-screen flood maps in the TV part, no clock in the source (frame checked). The long blur run simply continues over them. |
-| 20261012 | 13 | 253–266 | social part (no clock); a chat screenshot whose contact name is blurred: a privacy blur |
-| 20261112 | 123 | 562–685 | file (2), which has no clock at all; the export shows the top-left corner blurred anyway (frame checked) |
-| 20261117 | 18 | 323–335, 366–372 | chat screenshots; purpose not checked (see the reader note below) |
+| 1001, 1002, 1003, 1012, 1020, 1109, 1118, 1120 | 1–93 | over zoomed inserts (e.g. 20261120: 253–291, 645–656) | 20261120: the logo/credit blur on V9 over the insert's own watermark (user, workflow Step 5). The other seven: inferred to be the same, not checked. |
+| 20261001 | 57 | 68–125 | full-screen flood maps in the TV part, no clock in the source. At tl 90 the export and the model's source frame match and the export's top-left is blurred. The long blur run continues over them. |
+| 20261001 | 29 | 276–305 | unclear: at tl 290 the export shows a different framing of the map than the model's source frame (reader finding 2) |
+| 20261012 | 13 | 253–266 | a zoomed news-window insert (chat screenshot) that the reader reads as unzoomed (reader finding 2). The zoom pushes the clock off, so this is blur over a zoomed insert. |
+| 20261112 | 123 | 562–685 | file (2), which has no clock at all; at tl 600 the export matches the model and shows the top-left corner blurred anyway |
+| 20261117 | 18 | 323–335, 366–372 | as 20261012: at tl 330 the export shows a zoomed chat that the reader reads as unzoomed |
 
 Frame checks:
 
 - 20261120 at tl 36.3 (clock on, blurred): the export shows a smeared box where the clock is.
-- 20261001 at tl 90 and 290: the source has no clock, and the export's top-left is blurred.
+- 20261001 at tl 90: the source has no clock, and the export's top-left is blurred.
+
+**Model against export.** I compared the export frame with the model's source frame every 10 s
+of all 11 bodies.
+
+- 1,118 samples, median difference 3.3.
+- 26 samples (2.3 %) differ by 30 or more. Their frames show two cases:
+  - a news-window insert zoomed in the export while the reader sees no zoom (20261012, 1020,
+    1109, 1117, 1118 and others);
+  - a different picture or framing than the model's (20261001 tl 248/298, 1109 tl 831/841,
+    1112 tl 66/486, 1118 tl 1120). Not explained.
+- So the model columns above are right to within a few percent. The verdict rests on the export
+  column.
 
 **Verdict: holds.**
 
-- 5,563 clock-on seconds in 11 bodies, 100 % blurred.
-- 0 clock seconds in any of the 11 exports.
-- The blur also covers some clock-free picture: logo boxes, privacy, and the run continuing over
-  clock-free graphics. Blurring exactly where the clock shows would blur less than the user does.
+- 0 clock seconds in any of the 11 exports. This is the end-to-end check.
+- In the model, 5,563 clock-on seconds in 11 bodies are 100 % blurred. A few percent of these
+  are really zoomed inserts (see above).
+- The blur also covers some clock-free picture: logo boxes over inserts, and the run continuing
+  over clock-free graphics (20261001) or a clock-free file (20261112). Blurring exactly where the
+  clock shows would blur less than the user does.
 
 ## Reader findings (hks_gold, hks_clock)
 
@@ -242,12 +269,19 @@ No change was made to these modules.
    - Effect: 20261110 shows 68 uncovered cuts instead of 29, and its `covers` list leaves the
      holds out.
    - Fix when wanted: treat a `CutDeck_Hold_*` still as a covering picture.
-2. **A zoom the reader does not see.**
-   - At 20261117 tl 330 the export shows a zoomed chat screenshot.
-   - The project's topmost footage clip (V4, 322.96–335.28) reads as Motion 150 % centred, with
-     no keyframes and no Transform effect.
-   - The project was saved 7 min before the export. Not investigated further. It affects only
-     the zoomed/clock split of rule 4, and the export check still shows no clock.
+2. **Zooms (and some pictures) the reader does not see.**
+   - In 26 of 1,118 samples the export frame is not the model's picture (rule 4, "Model against
+     export").
+   - Example: at 20261117 tl 330 the export shows a zoomed chat screenshot. The topmost footage
+     clip there (V4, 322.96–335.28, normal speed) reads as Motion 150 % centred, with no
+     keyframes and no Transform effect.
+   - Example: at 20261012 tl 261 the V3 clip has no Motion component in `effects` at all, yet the
+     export shows it zoomed.
+   - Not investigated further: the reader may miss part of a clip's effect data, or the
+     exports may differ from the saved project.
+   - Effect: it only touches the zoomed/clock split of rule 4 and `_framing` in `hks_gold`
+     (a zoomed insert missed this way would make a cut look uncovered). The export check still
+     shows no clock. Rule 1's source/export difference agrees on all 294 cuts.
 3. **`hks_clock`:** nothing wrong found.
    - Positive and negative controls pass on a 1080p re-encode.
    - The clock-free stretches checked by eye (1001 flood maps, the 1112 files (2)–(5), the ad
