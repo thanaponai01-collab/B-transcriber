@@ -232,3 +232,36 @@ def test_load_audio_av_aligns_late_starting_audio_stream(tmp_path):
     # Well past the offset, the actual sine tone must be present.
     body = audio[int(0.7 * sr): int(1.2 * sr)]
     assert np.sqrt(np.mean(body ** 2)) > 0.01
+
+
+import pytest
+
+
+@pytest.mark.parametrize("codec", ["pcm_s16le", "pcm_s24le", "aac"])
+def test_load_audio_av_matches_librosa_for_stereo_camera_audio(tmp_path, codec):
+    """Camera .MOV files carry packed integer PCM (Fujifilm: pcm_s24le stereo).
+    PyAV returns those as raw integers in one interleaved row, so the decode must
+    scale to [-1, 1] and de-interleave, or the engine hears a 32768x-loud signal
+    at the wrong speed and hallucinates."""
+    import shutil
+    import subprocess
+
+    import librosa
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not on PATH")
+    wav = str(tmp_path / "ref.wav")
+    mov = str(tmp_path / f"cam_{codec}.mov")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=2:sample_rate=48000",
+                    "-af", "volume=0.5", "-ac", "2", wav], check=True)
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", wav, "-c:a", codec, mov], check=True)
+
+    audio, sr = ingest._load_audio_av(mov)
+    ref, _ = librosa.load(wav, sr=sr, mono=True)
+
+    assert sr == ingest._TARGET_SR
+    assert abs(len(audio) - len(ref)) < 0.1 * sr
+    assert np.max(np.abs(audio)) < 1.0
+    n = min(len(audio), len(ref)) - sr // 4
+    assert np.sqrt(np.mean((audio[sr // 8:n] - ref[sr // 8:n]) ** 2)) < 0.02

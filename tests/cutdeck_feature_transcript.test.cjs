@@ -87,3 +87,17 @@ test("hasTranscript is used only where Premiere has it (absent at 26.2)", async 
     assert.match(ctl.state.status.text, re);
   }
 });
+
+test("a transcript with no speech is reported, not imported over the clip", async () => {
+  const { ppro, calls } = fakePpro({ selected: [clip("broll")], hasTranscript: true });
+  const rpc = helperRpc([]);
+  const inner = rpc;
+  const noSpeech = async (req) => (req.type === "premiere_transcript"
+    ? { transcript: '{"language":"th-th","segments":[]}', segments: 0, words: 0 } : inner(req));
+  noSpeech.watch = inner.watch;
+  const ctl = createController({ render: () => {} });
+  await createTranscriptFeature({ ppro, ctl, rpc: noSpeech, ensureHelper: async () => {} }).onImportTranscript();
+  assert.equal(ctl.state.status.level, "error");
+  assert.match(ctl.state.status.text, /No speech found in broll/);
+  assert.equal(calls.imported, null);
+});

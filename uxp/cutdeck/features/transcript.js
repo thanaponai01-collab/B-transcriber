@@ -46,6 +46,9 @@ function createTranscriptFeature({ ppro, ctl, rpc, ensureHelper, lastJob }) {
     const job = await rpc.watch(started.job_id);
     if (job.state !== "ready") throw new Error(job.message || "Transcription failed.");
     const reply = await rpc({ type: "premiere_transcript", job_id: job.job_id });
+    if (!reply.segments) {
+      throw new Error(`No speech found in ${clip.name}; nothing was imported. Select the clip with the dialogue.`);
+    }
 
     const before = hadTranscript(clip);
     runTransaction(project, "Import Thai Transcript", (compound) => {

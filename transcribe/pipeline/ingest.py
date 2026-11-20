@@ -118,11 +118,16 @@ def _load_audio_av(path: str) -> tuple[np.ndarray, int]:
         for frame in container.decode(stream):
             if first_pts is None and frame.pts is not None:
                 first_pts = frame.pts
-            # Convert to float32 ndarray, shape (channels, samples)
-            arr = frame.to_ndarray().astype(np.float32)
-            if arr.ndim == 2:
-                arr = arr.mean(axis=0)  # mix to mono
-            chunks.append(arr)
+            # Packed formats (camera PCM: s16/s32) arrive as one interleaved row
+            # of raw integers; reshape to (channels, samples) and scale to [-1, 1].
+            arr = frame.to_ndarray()
+            if not frame.format.is_planar:
+                arr = arr.reshape(-1, len(frame.layout.channels)).T
+            if arr.dtype.kind == "i":
+                arr = arr.astype(np.float32) / float(np.iinfo(arr.dtype).max + 1)
+            elif arr.dtype.kind == "u":
+                arr = (arr.astype(np.float32) - 128.0) / 128.0
+            chunks.append(arr.astype(np.float32).mean(axis=0))  # mix to mono
         if first_pts is not None:
             offset_sec = _stream_start_offset_sec(first_pts, stream.time_base, container_start_us)
     if not chunks:

@@ -420,6 +420,25 @@ def test_gap_between_atom_constituents_does_not_force_a_cue_break(algorithm):
     assert cues[0][0] == "100 บาท"
 
 
+@pytest.mark.parametrize("algorithm", ["greedy", "dp", "clause"])
+def test_atom_glue_never_bridges_a_pause_longer_than_a_cue(algorithm):
+    """Real job 57: "ปะ", 17 s of silence, then "ครับ" glued into one 18 s cue."""
+    words = [("ปะ", 0, 400, 0.9), ("ครับ", 17_400, 17_800, 0.9)]
+    cues = _group_words_into_cues(words, gap_ms=700, target_ms=4000,
+                                   target_chars=42, algorithm=algorithm)
+    assert [c[0] for c in cues] == ["ปะ", "ครับ"]
+
+
+@pytest.mark.parametrize("algorithm", ["greedy", "dp", "clause"])
+def test_word_segmentation_never_joins_text_across_a_pause(algorithm):
+    """Real job 31: "เทส", 45 s of silence, "รอบสุดท้าย" came out as เท | สร | อบสุดท้าย."""
+    words = [("เท", 6440, 7060, 0.9), ("ส", 7060, 7300, 0.9),
+             ("ร", 52600, 52760, 0.9), ("อบ", 52760, 52940, 0.9), ("สุดท้าย", 52940, 53300, 0.9)]
+    cues = _group_words_into_cues(words, gap_ms=700, target_ms=4000,
+                                   target_chars=42, algorithm=algorithm)
+    assert [(c[0], c[1], c[2]) for c in cues] == [("เทส", 6440, 7300), ("รอบสุดท้าย", 52600, 53300)]
+
+
 # ── property test: the inversion made real ──────────────────────────────────
 
 _FIXTURES = [
