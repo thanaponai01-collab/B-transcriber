@@ -10,13 +10,15 @@ from cutdeck.prproj_reader import read_project
 FOOT = "Show Full.mp4"
 
 
-def clip(start, end, src_in, media=FOOT, *, disabled=False, scale=150.0, src_out=None, name=None):
+def clip(start, end, src_in, media=FOOT, *, disabled=False, scale=150.0, width=1280, src_out=None):
+    """A clip; ``scale=None`` leaves Motion out, as Premiere does at its defaults."""
+    motion = [{"name": "Motion", "match_name": "AE.ADBE Motion",
+               "params": {"scale": {"value": scale}, "position": {"value": [0.5, 0.5]}}}]
     return {
-        "name": name or media, "start": start, "end": end, "source_in": src_in,
+        "name": media, "start": start, "end": end, "source_in": src_in,
         "source_out": src_in + (end - start) if src_out is None else src_out,
         "disabled": disabled, "media_path": f"D:\\elsewhere\\{media}",
-        "effects": [{"name": "Motion", "match_name": "AE.ADBE Motion",
-                     "params": {"scale": {"value": scale}, "position": {"value": [0.5, 0.5]}}}],
+        "source_frame": [width, width * 9 // 16], "effects": motion if scale is not None else [],
     }
 
 
@@ -63,6 +65,14 @@ def test_cut_is_uncovered_only_when_the_main_shot_jumps_on_both_sides():
     yt = gold(*outputs(show([v1, v2], a1))).yt
     assert yt.cuts == [Cut(20, 30, True), Cut(40, 30, False), Cut(60, 80, False), Cut(80, 80, True)]
     assert yt.covers == [SourceRange(FOOT, 900, 910, 15, 25)]
+
+
+def test_a_full_hd_file_at_default_scale_frames_like_a_720p_file_at_150():
+    # 20261112: file (1) is 1280x720 at 150 %, the others 1920x1080 with Motion left out.
+    a1 = [clip(0, 20, 100), clip(20, 40, 0, "Show (2).mp4")]
+    v1 = [clip(0, 20, 100), clip(20, 40, 0, "Show (2).mp4", scale=None, width=1920)]
+    yt = gold(*outputs(show([v1], a1)), footage=[FOOT, "Show (2).mp4"]).yt
+    assert yt.cuts == [Cut(20, None, False)]
 
 
 def test_continuous_source_and_a_muted_censor_are_not_cuts():

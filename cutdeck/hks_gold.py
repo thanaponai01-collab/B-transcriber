@@ -142,11 +142,16 @@ def _offset(r: SourceRange) -> float:
 
 
 def _framing(clip: dict) -> tuple:
-    """Motion scale and position; a zoomed insert of the same footage is not the main shot."""
+    """On-screen width and position; a zoomed insert of the same footage is not the main shot.
+    Width is scale x source width, so a 1280-wide file at 150 % matches a 1920-wide one at the
+    default 100 % (20261112 mixes both). Premiere leaves Motion out at its defaults."""
     motion = next((e["params"] for e in clip["effects"] if e.get("match_name") == "AE.ADBE Motion"), {})
     keyed = any(p.get("keyframes") for p in motion.values())
-    scale, position = motion.get("scale", {}).get("value"), motion.get("position", {}).get("value")
-    return scale, tuple(position) if position else None, keyed
+    scale = motion.get("scale", {}).get("value", 100.0)
+    position = motion.get("position", {}).get("value", (0.5, 0.5))
+    width = (clip.get("source_frame") or [None])[0]
+    return (None if width is None else round(scale * width / 100),
+            tuple(round(p, 3) for p in position), keyed)
 
 
 def _synced(picture: SourceRange | None, keep: SourceRange) -> bool:
