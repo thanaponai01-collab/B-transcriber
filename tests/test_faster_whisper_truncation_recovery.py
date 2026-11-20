@@ -211,3 +211,52 @@ def test_no_trailing_gap_recovery_when_window_ends_close_to_last_word():
     merged, bs = eng._recover_truncated_tail(tokens, np.zeros(int(2.5 * _SR)), {}, 8)
     assert merged is tokens
     assert bs == 8
+
+
+# ── issue #94: zero-length pieces trail the stretched one ───────────────────
+
+def _redecode_to(text):
+    def fake_decode(audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
+        return [_FakeSegment([_FakeWord(text, 0.0, 1.0)])], bs
+    return fake_decode
+
+
+def _no_redecode(*a, **k):
+    raise AssertionError("should not redecode")
+
+
+def test_stretched_piece_hidden_behind_a_zero_length_piece_is_recovered():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("เดิม", 0, 400), _tok("ไป", 900, 1100),
+              _tok("เรื่อย", 1100, 2600), _tok("เร", 2600, 2600)]
+    eng._decode = _redecode_to("ไปเรื่อยเรื่อย")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(2.8 * _SR)), {}, 8)
+    assert [t.text for t in merged] == ["เดิม", "ไปเรื่อยเรื่อย"]
+    assert merged[-1].start_ms == 900
+
+
+def test_job_59_shape_is_recovered():
+    # Last window of job 59: a 1300 ms vowel mark, two 0 ms pieces, ~210 ms left.
+    eng = FasterWhisperEngine()
+    tokens = [_tok("เดิม", 18000, 18400), _tok("ม", 18900, 19000), _tok("ไป", 19000, 19160),
+              _tok("เร", 19160, 19360), _tok("ื่", 19360, 20660),
+              _tok("อย", 20660, 20660), _tok("เร", 20660, 20660)]
+    eng._decode = _redecode_to("มันก็จะเฉือนเราไปเรื่อยเรื่อย")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(20.867 * _SR)), {}, 8)
+    assert [t.text for t in merged] == ["เดิม", "มันก็จะเฉือนเราไปเรื่อยเรื่อย"]
+
+
+def test_normal_piece_before_a_zero_length_piece_is_not_redecoded():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2200), _tok("นะ", 2200, 2200)]
+    eng._decode = _no_redecode
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(2.4 * _SR)), {}, 8)
+    assert merged is tokens
+
+
+def test_1300_ms_last_piece_without_zero_length_pieces_is_not_redecoded():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 300), _tok("ไป", 900, 1100), _tok("อะไร", 1100, 2400)]
+    eng._decode = _no_redecode
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(2.6 * _SR)), {}, 8)
+    assert merged is tokens
