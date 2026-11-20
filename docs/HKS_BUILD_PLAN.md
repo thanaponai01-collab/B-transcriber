@@ -65,21 +65,30 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
   - TV clock: present to 2815 s, absent from 2825 s; 0 false positives in 163 clock-free samples.
 
   Runs on all 11 folders with no problems: `python -m cutdeck.hks_gold --all G:\Me\Works`.
-- [ ] **0.3** Rule audit across ≥3 past episodes:
-  - no jump cuts: an uncovered cut is only allowed on a camera change;
-  - YT 15–20 min, FB = 179.96 s, 1-min = 59.96 s;
-  - sponsors and bumpers dropped;
-  - blur present wherever the clock shows.
+- [x] **0.3** Rule audit across all 11 past episodes → [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md)
+  (`python -m cutdeck.hks_audit --all G:\Me\Works`). Verdicts:
+  - no jump cuts: **holds**, but wider than written: cuts on an inset camera change and under a
+    still also occur; 3 cuts on 20261120 to confirm (two micro cuts, one punch-in);
+  - YT 15–20 min: **holds** (16.9–19.8 min). FB = 179.96 s and 1-min = 59.96 s: **fail** as exact
+    lengths (FB ≤ 179.96 on all 11; 1-min 56.92–63.04);
+  - bumpers and ad breaks dropped: **holds** (0 kept seconds in 22 dips). Sponsors: not checkable
+    before 2.7. The FB feeds carry real TV ads that change per episode, so 2.2 fingerprints won't
+    find them;
+  - blur wherever the clock shows: **holds** (no clock visible in any of the 11 exports).
 
-  → verify: a report table. **Any rule that fails elsewhere goes back to the user before it is built on.**
-- [ ] **0.4** Scorer: a proposed keep/drop list vs gold. It reports:
-  - seconds agreement;
+  **Blocked on the user's answers** (questions in the audit report) before Phases 3–6 build on them.
+  Reader gaps found: `hks_gold` does not count `CutDeck_Hold_*.png` stills as covers (20261110),
+  and misses some zooms (20261117 @ 330, 20261012 @ 261).
+- [x] **0.4** Scorer `cutdeck/hks_score.py`: a proposed keep list vs the gold body keeps, in
+  source time per file. It reports:
+  - seconds agreement, keep precision and recall;
   - boundary hits within 0.5 s;
-  - precision per cut class (<0.6 s, 0.6–3 s, 3–15 s, ≥15 s);
+  - precision and recall per cut class (<0.6 s, 0.6–3 s, 3–15 s, ≥15 s);
   - jump-cut count;
   - length in range.
 
-  → verify: gold vs itself = 100 %; "keep everything" gives the expected baseline numbers.
+  → verify: gold vs itself = 100 % on 20261120, 20261117, 20261001. "Keep everything" matched the
+  numbers predicted before the run (agreement 25.7 / 24.9 / 26.4 %, recall 100 %, boundaries 0).
 
 ## Phase 1: Timeline-building spike ⚑ (riskiest; decides what Phases 3–6 can promise)
 On a copied project, one probe per item. Each probe reads its result back, exports one frame,
