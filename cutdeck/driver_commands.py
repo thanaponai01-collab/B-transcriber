@@ -76,7 +76,34 @@ def _run_probe_arguments(args: dict, jobs) -> dict:
     return {"probe": probe}
 
 
-VALID_TRANSFORM_FIELDS = {"position-x", "position-y", "scale", "rotation", "anchor-x", "anchor-y"}
+def _export_sequence_arguments(args: dict, jobs) -> dict:
+    """Export the active sequence with a Media Encoder preset to a new file (never overwrites)."""
+    output, preset = args.get("output_file"), args.get("preset_file")
+    if not isinstance(output, str) or not Path(output).is_absolute():
+        raise ValueError("output_file must be an absolute path")
+    if not isinstance(preset, str) or not preset.lower().endswith(".epr") or not Path(preset).is_file():
+        raise ValueError("preset_file must be an existing .epr file")
+    if not Path(output).parent.is_dir():
+        raise ValueError(f"output folder does not exist: {Path(output).parent}")
+    if Path(output).exists():
+        raise ValueError(f"output_file already exists: {output}")
+    queue = args.get("queue", "premiere")
+    if queue not in ("premiere", "ame"):
+        raise ValueError("queue must be 'premiere' (render now in Premiere) or 'ame' (add to Media Encoder's queue)")
+    start = args.get("start", True)
+    if not isinstance(start, bool):
+        raise ValueError("start must be true or false")
+    # start: with queue "ame", also start Media Encoder's queue (false = only add the job)
+    result = {"output_file": output, "preset_file": preset, "queue": queue, "start": start}
+    name = args.get("sequence_name")
+    if name is not None:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("sequence_name must be a sequence name")
+        result["sequence_name"] = name
+    return result
+
+
+VALID_TRANSFORM_FIELDS ={"position-x", "position-y", "scale", "rotation", "anchor-x", "anchor-y"}
 VALID_ANCHOR_TARGETS = {"top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"}
 VALID_ALIGN_EDGES = {"left", "hcenter", "right", "top", "vcenter", "bottom"}
 VALID_ALIGN_TO = {"frame", "selection"}
@@ -187,4 +214,8 @@ COMMANDS: dict[str, Command] = {
     "distribute_clips": Command(30, _distribute_clips_arguments,
                                 "Distribute 3+ selected clips across frame or within selection.",
                                 ("kind [to]", _parse_distribute_target)),
+    # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
+    "export_sequence": Command(3600, _export_sequence_arguments,
+                               "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
+                               ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
 }

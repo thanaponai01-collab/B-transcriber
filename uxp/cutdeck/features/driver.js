@@ -9,6 +9,12 @@
 //   (reference/adobe/api/premierepro.txt:416,420; Adobe's metadata-handler sample calls
 //   getMarkers the same way). 432 markers in one transaction, one Ctrl+Z: PREMIERE_FACTS
 //   "Markers" (ledger 09-24). The `comments` argument is declared but never run live.
+//   EncoderManager.getManager(), .exportSequence(sequence, exportType, outputFile, presetFile)
+//   and static EncoderManager.getExportFileExtension(sequence, presetFile)
+//   (reference/adobe/api/premierepro.txt:327-329; Constants.ExportType.IMMEDIATELY :203;
+//   docs ppro-reference/classes/encodermanager.md "Since 25.6"; Adobe's premiere-api sample
+//   src/export.ts makes the same IMMEDIATELY call). Live 2026-11-20: resolves after the render,
+//   file complete (PREMIERE_FACTS "EncoderManager.getManager().exportSequence").
 
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
@@ -44,11 +50,12 @@ const COMMANDS = [
   "set_anchor",
   "align_clips",
   "distribute_clips",
+  "export_sequence",
 ];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
 
-function createDriver({ ppro, ctl, align = null, measure = null }) {
+function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 30000 }) {
   async function readSequence() {
     const { project, sequence } = await activeProjectAndSequence(ppro, {
       sequenceErrorMessage: "Open a sequence in Premiere first." });
@@ -241,6 +248,64 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
     return { done: r.done, skipped: r.skipped, notes: r.notes || [], kind, to };
   }
 
+  /* The ACTIVE sequence only: a project can hold several sequences with one name. The helper
+     has already refused an existing output file and a missing preset. */
+  /* queue "ame": Constants.ExportType.QUEUE_TO_AME (premierepro.txt:204, docs constants
+     "QUEUE_TO_AME 25.6") adds the job to Media Encoder's queue; isAMEInstalled (:330); then
+     startBatchEncode() (:334, docs "Since 26.3", NOT IN 26.2.1 so feature-checked; Adobe's
+     premiere-api sample src/encoderManager.ts calls it the same way) starts the queue.
+     Live 2026-11-20: start called 0.18 s after the export resolved returned true but AME did not
+     start, so we first wait for EncoderManager.EVENT_RENDER_QUEUE (:323) via
+     EventManager.addEventListener / removeEventListener (:335, :337). */
+  /* sequence_name: export that sequence instead of the active one. A project can hold several
+     with one name (an episode template's empty copies), so only those with content count
+     (Project.getSequences :503, Sequence.getEndTime :596); anything but exactly one refuses. */
+  async function namedSequence(project, name) {
+    const named = (await project.getSequences()).filter((s) => s.name === name);
+    const withContent = [];
+    for (const s of named) if ((await s.getEndTime()).seconds > 0) withContent.push(s);
+    if (withContent.length !== 1) {
+      throw new Error(`Found ${withContent.length} sequences named "${name}" with content (of ${named.length} with that name); need exactly 1.`);
+    }
+    return withContent[0];
+  }
+
+  async function exportSequence({ output_file, preset_file, queue = "premiere", sequence_name = null, start = true }) {
+    const active = await activeProjectAndSequence(ppro, {
+      requireSequence: !sequence_name, sequenceErrorMessage: "Open the sequence to export in Premiere first." });
+    const sequence = sequence_name ? await namedSequence(active.project, sequence_name) : active.sequence;
+    const extension = String(await ppro.EncoderManager.getExportFileExtension(sequence, preset_file) || "")
+      .replace(/^\./, "").toLowerCase();
+    if (extension && !output_file.toLowerCase().endsWith(`.${extension}`)) {
+      throw new Error(`This preset writes .${extension} files; output_file must end in .${extension}`);
+    }
+    const manager = ppro.EncoderManager.getManager();
+    if (queue === "ame" && !manager.isAMEInstalled) throw new Error("Adobe Media Encoder is not installed.");
+    const type = queue === "ame" ? ppro.Constants.ExportType.QUEUE_TO_AME : ppro.Constants.ExportType.IMMEDIATELY;
+    const canStart = queue === "ame" && start && typeof manager.startBatchEncode === "function";
+    let onQueued = null;
+    const queuedEvent = canStart ? new Promise((resolve) => {
+      onQueued = () => resolve(true);
+      ppro.EventManager.addEventListener(manager, ppro.EncoderManager.EVENT_RENDER_QUEUE, onQueued);
+      setTimeout(() => resolve(false), queueWaitMs);
+    }) : null;
+    const started = Date.now();
+    let resolved, queued_event = null, queue_started = null; // null: not asked or not available
+    try {
+      resolved = await manager.exportSequence(sequence, type, output_file, preset_file);
+      if (canStart && resolved) {
+        queued_event = await queuedEvent;
+        queue_started = await manager.startBatchEncode();
+      }
+    } finally {
+      if (onQueued) ppro.EventManager.removeEventListener(manager, ppro.EncoderManager.EVENT_RENDER_QUEUE, onQueued);
+    }
+    const [inPt, outPt] = [await sequence.getInPoint(), await sequence.getOutPoint()];
+    return { sequence_name: sequence.name, sequence_id: String(sequence.guid), output_file, preset_file,
+      in_seconds: inPt.seconds, out_seconds: outPt.seconds, end_seconds: (await sequence.getEndTime()).seconds,
+      queue, extension, resolved, queued_event, queue_started, promise_s: (Date.now() - started) / 1000 };
+  }
+
   const handlers = {
     read_sequence: readSequence,
     read_audio_range: async () => {
@@ -257,6 +322,7 @@ function createDriver({ ppro, ctl, align = null, measure = null }) {
     set_anchor: setAnchorCmd,
     align_clips: alignClips,
     distribute_clips: distributeClips,
+    export_sequence: exportSequence,
   };
 
   /* One call from the helper. Refused while the panel is busy, never queued behind the user. */

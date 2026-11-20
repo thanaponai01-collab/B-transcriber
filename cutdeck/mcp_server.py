@@ -103,6 +103,20 @@ def create_server(backend: Backend) -> FastMCP:
         keyframe, alcreate, syncmoves, nativecut). Needs the CutDeck panel open."""
         return await backend.premiere("run_probe", {"probe": probe})
 
+    @server.tool(annotations=write)
+    async def premiere_export_sequence(output_file: str, preset_file: str, queue: str = "premiere",
+                                       sequence_name: str | None = None, start: bool = True) -> dict:
+        """Export a Premiere sequence (the ACTIVE one, or the one sequence named sequence_name that
+        has content) with a Media Encoder preset (.epr) to output_file (absolute path, must not
+        exist yet). Its In/Out range is used. queue "premiere" renders now inside Premiere;
+        "ame" queues it in Adobe Media Encoder and, unless start is false, starts the queue
+        (queue several with start=false, then start on the last). Check the file itself before
+        relying on it. Needs the CutDeck panel open."""
+        args = {"output_file": output_file, "preset_file": preset_file, "queue": queue, "start": start}
+        if sequence_name is not None:
+            args["sequence_name"] = sequence_name
+        return await backend.premiere("export_sequence", args)
+
     @server.tool(annotations=read)
     async def premiere_inspect_selection() -> dict:
         """Inspect the selected track item(s) on the active sequence in Premiere:
