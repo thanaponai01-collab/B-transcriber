@@ -46,7 +46,129 @@ test("the driver offers exactly the helper's fixed commands", () => {
     "set_anchor",
     "align_clips",
     "distribute_clips",
+    "export_sequence",
   ]);
+});
+
+test("export_sequence exports the ACTIVE sequence IMMEDIATELY with the given preset", async () => {
+  const h = host();
+  const calls = [];
+  h.ppro.Constants = { ExportType: { IMMEDIATELY: "ExportType.IMMEDIATELY" } };
+  h.ppro.EncoderManager = {
+    getExportFileExtension: async (seq, preset) => { calls.push(["ext", seq.name, preset]); return "mp4"; },
+    getManager: () => ({
+      exportSequence: async (...args) => { calls.push(["export", args[0].name, ...args.slice(1)]); return true; },
+    }),
+  };
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\reel.mp4", preset_file: "C:\\BAS4.epr" } });
+  assert.deepEqual(calls, [
+    ["ext", "Interview", "C:\\BAS4.epr"],
+    ["export", "Interview", "ExportType.IMMEDIATELY", "G:\\out\\reel.mp4", "C:\\BAS4.epr"],
+  ]);
+  assert.equal(out.sequence_name, "Interview");
+  assert.equal(out.resolved, true);
+  assert.equal(out.extension, "mp4");
+});
+
+function ameHost({ fireQueued }) {
+  const h = host();
+  const log = [];
+  const listeners = new Map();
+  h.ppro.Constants = { ExportType: { IMMEDIATELY: "ExportType.IMMEDIATELY", QUEUE_TO_AME: "ExportType.QUEUE_TO_AME" } };
+  const manager = { isAMEInstalled: true,
+    exportSequence: async (seq, type) => {
+      log.push(type);
+      if (fireQueued) setTimeout(() => { log.push("queued"); listeners.get("onRenderQueue")?.(); }, 5);
+      return true;
+    },
+    startBatchEncode: async () => { log.push("start"); return true; } };
+  h.ppro.EncoderManager = { EVENT_RENDER_QUEUE: "onRenderQueue",
+    getExportFileExtension: async () => "mp4", getManager: () => manager };
+  h.ppro.EventManager = {
+    addEventListener: (target, name, fn) => { assert.equal(target, manager); listeners.set(name, fn); },
+    removeEventListener: (target, name, fn) => { if (listeners.get(name) === fn) listeners.delete(name); log.push("unlisten"); },
+  };
+  return { h, log, listeners };
+}
+
+test("export_sequence queue 'ame' starts the queue only after AME reports the job queued", async () => {
+  const { h, log, listeners } = ameHost({ fireQueued: true });
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\yt.mp4", preset_file: "C:\\BAS4.epr", queue: "ame" } });
+  assert.deepEqual(log, ["ExportType.QUEUE_TO_AME", "queued", "start", "unlisten"]);
+  assert.equal(out.queued_event, true);
+  assert.equal(out.queue_started, true);
+  assert.equal(listeners.size, 0);
+});
+
+test("export_sequence with start false only adds the job to AME's queue", async () => {
+  const { h, log, listeners } = ameHost({ fireQueued: true });
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\fb.mp4", preset_file: "C:\\BAS4.epr", queue: "ame", start: false } });
+  assert.deepEqual(log, ["ExportType.QUEUE_TO_AME"]);
+  assert.equal(out.queue_started, null);
+  assert.equal(listeners.size, 0);
+});
+
+test("export_sequence still presses Start when AME never reports the job queued", async () => {
+  const { h, log } = ameHost({ fireQueued: false });
+  const out = await createDriver({ ppro: h.ppro, ctl: controller(), queueWaitMs: 20 }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\yt.mp4", preset_file: "C:\\BAS4.epr", queue: "ame" } });
+  assert.deepEqual(log, ["ExportType.QUEUE_TO_AME", "start", "unlisten"]);
+  assert.equal(out.queued_event, false);
+});
+
+test("export_sequence queues without starting on a Premiere that lacks startBatchEncode", async () => {
+  const h = host();
+  h.ppro.Constants = { ExportType: { IMMEDIATELY: "ExportType.IMMEDIATELY", QUEUE_TO_AME: "ExportType.QUEUE_TO_AME" } };
+  h.ppro.EncoderManager = {
+    getExportFileExtension: async () => "mp4",
+    getManager: () => ({ isAMEInstalled: true, exportSequence: async () => true }),
+  };
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\yt.mp4", preset_file: "C:\\BAS4.epr", queue: "ame" } });
+  assert.equal(out.queue_started, null);
+});
+
+test("export_sequence by name takes the one same-named sequence with content", async () => {
+  const { h, log } = ameHost({ fireQueued: true });
+  const seq = (name, end, id) => ({ name, guid: { toString: () => id },
+    getEndTime: async () => ({ seconds: end }), getInPoint: async () => ({ seconds: 0 }),
+    getOutPoint: async () => ({ seconds: Math.min(end, 1095.8) }) });
+  const sequences = [seq("1 YOUTUBE D1", 0, "empty-template"), seq("1 YOUTUBE D1", 8438.6, "edited"), seq("2 FACEBOOK D1", 179.96, "fb")];
+  h.project.getSequences = async () => sequences;
+  const exported = [];
+  const manager = h.ppro.EncoderManager.getManager();
+  const original = manager.exportSequence;
+  manager.exportSequence = async (s, ...rest) => { exported.push(String(s.guid)); return original(s, ...rest); };
+  const driver = createDriver({ ppro: h.ppro, ctl: controller() });
+  const out = await driver.handle({ command: "export_sequence", args: {
+    output_file: "G:\\out\\yt.mp4", preset_file: "C:\\BAS4.epr", queue: "ame", sequence_name: "1 YOUTUBE D1" } });
+  assert.deepEqual(exported, ["edited"]);
+  assert.equal(out.out_seconds, 1095.8);
+  assert.equal(out.end_seconds, 8438.6);
+  sequences.push(seq("2 FACEBOOK D1", 179.96, "fb-copy"));
+  await assert.rejects(driver.handle({ command: "export_sequence", args: {
+    output_file: "G:\\out\\fb.mp4", preset_file: "C:\\BAS4.epr", queue: "ame", sequence_name: "2 FACEBOOK D1" } }),
+  /Found 2 sequences named "2 FACEBOOK D1" with content/);
+  await assert.rejects(driver.handle({ command: "export_sequence", args: {
+    output_file: "G:\\out\\x.mp4", preset_file: "C:\\BAS4.epr", sequence_name: "missing" } }), /Found 0 sequences/);
+  assert.ok(log.length > 0);
+});
+
+test("export_sequence refuses an output name the preset would not write", async () => {
+  const h = host();
+  let exported = false;
+  h.ppro.Constants = { ExportType: { IMMEDIATELY: "ExportType.IMMEDIATELY" } };
+  h.ppro.EncoderManager = {
+    getExportFileExtension: async () => ".mp4",
+    getManager: () => ({ exportSequence: async () => { exported = true; return true; } }),
+  };
+  await assert.rejects(createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "export_sequence", args: { output_file: "G:\\out\\reel.mov", preset_file: "C:\\BAS4.epr" } }),
+  /must end in \.mp4/);
+  assert.equal(exported, false);
 });
 
 test("transform driver commands reject when no clip is selected", async () => {
