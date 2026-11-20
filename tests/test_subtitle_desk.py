@@ -1,4 +1,4 @@
-"""ClubFriday backend: quote SRT rules and the session flow, with a fake helper and extractor."""
+"""SubtitleDesk backend: quote SRT rules and the session flow, with a fake helper and extractor."""
 import time
 from types import SimpleNamespace
 from urllib.parse import unquote
@@ -6,7 +6,7 @@ from urllib.parse import unquote
 import pytest
 from fastapi.testclient import TestClient
 
-import clubfriday.server as server
+import subtitle_desk.server as server
 from transcribe.timebase import Timebase
 
 PAL = Timebase(25, 1)
@@ -117,7 +117,7 @@ def test_exports_write_bom_crlf_srt_beside_the_project(client, tmp_path):
     client.put(f"/api/sessions/{sid}/quotes", json={"quotes": [{"cue_indices": [0], "lines": ["หนึ่ง"]}]})
     quotes = client.get(f"/api/sessions/{sid}/quotes.srt")
     assert quotes.status_code == 200
-    saved = tmp_path / "proj" / "CutDeck" / "ClubFriday" / f"Ep 1-{sid[:8]}-quotes.srt"
+    saved = tmp_path / "proj" / "CutDeck" / "SubtitleDesk" / f"Ep 1-{sid[:8]}-quotes.srt"
     raw = saved.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf") and b"\r\n" in raw
     assert raw.decode("utf-8-sig") == "1\r\n00:00:10,000 --> 00:00:11,000\r\nหนึ่ง\r\n\r\n"
@@ -131,7 +131,7 @@ def test_exports_snap_to_the_sequence_frame_rate(client, monkeypatch):
     sid = ready_session(client)["id"]
     ntsc = SimpleNamespace(tracks=[object()], timebase=Timebase(30000, 1001))
     monkeypatch.setattr(server, "from_panel_json", lambda _: ntsc)
-    path = unquote(client.get(f"/api/sessions/{sid}/transcript.srt").headers["X-ClubFriday-Export-Path"])
+    path = unquote(client.get(f"/api/sessions/{sid}/transcript.srt").headers["X-SubtitleDesk-Export-Path"])
     text = open(path, encoding="utf-8-sig").read()
     # 10 000 ms is frame 299.7 at 29.97 -> frame 300 = 10 010 ms
     assert "00:00:10,010 --> 00:00:11,011" in text

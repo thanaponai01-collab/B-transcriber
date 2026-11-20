@@ -1,10 +1,10 @@
-# ClubFriday quote workspace
+# SubtitleDesk quote workspace
 
 A separate local window for selecting Thai advice quotes and preparing up to three lines
 for the existing styled Premiere graphic. Uses the running CutDeck helper for transcription.
 
 1. Start the CutDeck helper and open its updated Premiere panel.
-2. Run `Start ClubFriday (Hidden).vbs` (or `python -m clubfriday.server`).
+2. Run `Start SubtitleDesk (Hidden).vbs` (or `python -m subtitle_desk.server`).
 3. Open http://127.0.0.1:8010.
 4. Mark In/Out on the intended Premiere sequence. Click **Read Premiere**, choose the
    dialogue track (or leave the first active track), then **Transcribe In / Out**.
@@ -27,9 +27,9 @@ To cover a whole episode, mark the whole episode
 before transcribing. A saved range can be reopened and exported without another transcription.
 
 From a stopped system: run `Start CutDeck (Hidden).vbs` in the project root, open the CutDeck
-panel in Premiere, run `Start ClubFriday (Hidden).vbs`, then open http://127.0.0.1:8010.
+panel in Premiere, run `Start SubtitleDesk (Hidden).vbs`, then open http://127.0.0.1:8010.
 
-Both SRT exports save beside the owning `.prproj` file, under `CutDeck/ClubFriday/`,
+Both SRT exports save beside the owning `.prproj` file, under `CutDeck/SubtitleDesk/`,
 as `<sequence>-<session id>-transcript.srt` or `-quotes.srt` (UTF-8 with BOM).
 The UI shows the saved path; exports no longer create extra browser-download copies.
 Older saved ranges resolve their project path from the matching open Premiere project.
@@ -37,7 +37,7 @@ New ranges remember the project location, so exports can work while the panel is
 Repeated exports update the same file. Save the Premiere project before first exporting.
 Overlapping quote selections and empty lines must be corrected before export.
 
-Sessions, source-range WAVs, snapshots and quotes live in `output/clubfriday/<id>/`.
+Sessions, source-range WAVs, snapshots and quotes live in `output/subtitle_desk/<id>/`.
 Audio extraction preserves the reference track's clip positions, source In/Out and gaps;
 it does not render Premiere EQ, transitions, speed changes or gain automation. Use normal-speed
 master clips. Transcript timestamps are in the Premiere timeline's absolute seconds.
@@ -50,6 +50,6 @@ through the helper's existing `submit_transcribe` protocol. ASR runs in the help
 Validation:
 
 ```
-python -m pytest tests/test_clubfriday.py tests/test_cutdeck_driver_commands.py -q
-node --test tests/cutdeck_driver.test.cjs tests/clubfriday_quotes.test.cjs
+python -m pytest tests/test_subtitle_desk.py tests/test_cutdeck_driver_commands.py -q
+node --test tests/cutdeck_driver.test.cjs tests/subtitle_desk_quotes.test.cjs
 ```

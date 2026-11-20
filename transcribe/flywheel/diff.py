@@ -110,7 +110,7 @@ def diff_corrections(
 def save_corrections(conn, job_id: int, edits: list[dict]) -> dict:
     """Write human edits of a stored job (`{"idx", "text", "reason"?}`) as correction rows.
 
-    The one write path for every tool that edits a transcript (editor, ClubFriday), so all
+    The one write path for every tool that edits a transcript (editor, SubtitleDesk), so all
     of them feed the same bias index. A re-save replaces the earlier row per token; an edit
     back to the raw text deletes it."""
     from transcribe.db import store

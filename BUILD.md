@@ -1,6 +1,6 @@
 # Current work
 
-History: [ClubFriday history](work/clubfriday-history.md), [CutDeck history](work/cutdeck-history.md).
+History: [SubtitleDesk history](work/subtitle_desk-history.md), [CutDeck history](work/cutdeck-history.md).
 Current execution state owned by [RUN.json](RUN.json) (status: complete at issue #76).
 
 ## Pipeline Evolution & Robustness (Issues #69-#76) - 2026-10-20

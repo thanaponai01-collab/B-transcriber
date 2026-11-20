@@ -95,7 +95,7 @@ then exits, cancelling it ("Helper stopped during processing"). Fix: `_allocate`
 now refuse while `restarting`. Proof:
 `test_helper_refuses_new_job_once_it_agreed_to_restart`.
 
-## 3. ClubFriday session: `session["state"]` (`output/clubfriday/<id>/session.json`)
+## 3. SubtitleDesk session: `session["state"]` (`output/subtitle_desk/<id>/session.json`)
 
 ```mermaid
 stateDiagram-v2
@@ -112,11 +112,11 @@ stateDiagram-v2
 
 | Move | Where |
 |---|---|
-| → `extracting` | `clubfriday/server.py:270` |
+| → `extracting` | `subtitle_desk/server.py:270` |
 | → `transcribing` | `server.py:196` (saved at `:202` with `helper_job_id`) |
 | → `ready` | `server.py:299` |
 | → `failed` | `server.py:200`, `:210` (startup sweep), `:301` |
-| Checks | `server.py:209,286,289,300,320,343,359`; `clubfriday/static/app.js:36,43,51,52,53,55,60,61` |
+| Checks | `server.py:209,286,289,300,320,343,359`; `subtitle_desk/static/app.js:36,43,51,52,53,55,60,61` |
 
 **Bug (fixed):** `get_session` (`server.py:303-305`) treats every `RuntimeError` or `ValueError`
 from the helper as a passing connection problem. A stopped helper (RuntimeError) is, but a
@@ -125,7 +125,7 @@ the session stays `transcribing`, the page polls it every 2 s forever and its St
 disabled. The panel's Resume already treats "Unknown job" as final
 (`uxp/cutdeck/features/roughCut.js:171`). Fix: an "Unknown job" refusal now fails the session;
 other errors still keep it for a reconnect. Proof:
-`test_clubfriday_session_fails_when_helper_forgets_its_job`.
+`test_subtitle_desk_session_fails_when_helper_forgets_its_job`.
 
 ## 4. Panel action lock: `state.busy` + `state.showBusy` (per controller)
 

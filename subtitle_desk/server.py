@@ -1,6 +1,6 @@
-"""Separate ClubFriday window; reuse the running CutDeck helper for Thai ASR.
+"""Separate SubtitleDesk window; reuse the running CutDeck helper for Thai ASR.
 
-Run: python -m clubfriday.server --port 8010
+Run: python -m subtitle_desk.server --port 8010
 Audio comes from Premiere's marked reference track, without rendering its effects.
 """
 from __future__ import annotations
@@ -123,7 +123,7 @@ def split_quote_edit(raw_texts: list[str], lines: list[str]) -> list[str]:
 
 def create_app(directory: Path | None = None, backend=None, extractor=extract_range,
                corrections_db: Path | None = None) -> FastAPI:
-    directory = Path(directory or HERE.parent / "output" / "clubfriday")
+    directory = Path(directory or HERE.parent / "output" / "subtitle_desk")
     directory.mkdir(parents=True, exist_ok=True)
     backend = backend or Backend()
     tasks: set[asyncio.Task] = set()
@@ -131,14 +131,14 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
 
     def folder(session_id: str) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", session_id):
-            raise HTTPException(404, "Unknown ClubFriday session")
+            raise HTTPException(404, "Unknown SubtitleDesk session")
         return directory / session_id
 
     def load(session_id: str) -> dict:
         try:
             return json.loads((folder(session_id) / "session.json").read_text(encoding="utf-8"))
         except FileNotFoundError:
-            raise HTTPException(404, "Unknown ClubFriday session")
+            raise HTTPException(404, "Unknown SubtitleDesk session")
 
     def save(session: dict):
         write_json(folder(session["id"]) / "session.json", session)
@@ -164,7 +164,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             raise HTTPException(400, "Save the Premiere project, then reload the updated CutDeck panel before exporting")
         context["project_path"] = project_path
         name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", session["sequence_name"]).strip(" .")[:80] or "sequence"
-        destination = Path(project_path).parent / "CutDeck" / "ClubFriday"
+        destination = Path(project_path).parent / "CutDeck" / "SubtitleDesk"
         destination.mkdir(parents=True, exist_ok=True)
         return destination / f"{name}-{session['id'][:8]}-{kind}.srt"
 
@@ -207,14 +207,14 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
         for path in directory.glob("*/session.json"):
             session = json.loads(path.read_text(encoding="utf-8"))
             if session["state"] in ("extracting", "transcribing") and not session.get("helper_job_id"):
-                session.update(state="failed", error="ClubFriday stopped before submitting audio; start a new range.")
+                session.update(state="failed", error="SubtitleDesk stopped before submitting audio; start a new range.")
                 save(session)
         yield
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    app = FastAPI(title="ClubFriday", lifespan=lifespan)
+    app = FastAPI(title="SubtitleDesk", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
     @app.middleware("http")
@@ -223,7 +223,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             origin = request.headers.get("origin")
             expected = str(request.base_url).rstrip("/")
             if origin and origin != expected:
-                return JSONResponse({"detail": "Open ClubFriday on its local address"}, status_code=403)
+                return JSONResponse({"detail": "Open SubtitleDesk on its local address"}, status_code=403)
         return await call_next(request)
 
     @app.get("/")
@@ -250,7 +250,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
     async def start(req: StartRequest):
         async with lock:
             if tasks:
-                raise HTTPException(409, "ClubFriday is already preparing audio")
+                raise HTTPException(409, "SubtitleDesk is already preparing audio")
             try:
                 status = await backend.premiere_status()
                 if not status["connected"]:
@@ -355,7 +355,7 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             path.write_text(contents, encoding="utf-8-sig", newline="\r\n")
             save(session)
             return FileResponse(path, media_type="application/x-subrip",
-                                filename=path.name, headers={"X-ClubFriday-Export-Path": quote(str(path))})
+                                filename=path.name, headers={"X-SubtitleDesk-Export-Path": quote(str(path))})
 
     @app.get("/api/sessions/{session_id}/transcript.srt")
     async def export_transcript(session_id: str):
@@ -372,13 +372,13 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             path.write_text(contents, encoding="utf-8-sig", newline="\r\n")
             save(session)
             return FileResponse(path, media_type="application/x-subrip",
-                                filename=path.name, headers={"X-ClubFriday-Export-Path": quote(str(path))})
+                                filename=path.name, headers={"X-SubtitleDesk-Export-Path": quote(str(path))})
 
     return app
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ClubFriday transcript and quote window")
+    parser = argparse.ArgumentParser(description="SubtitleDesk transcript and quote window")
     parser.add_argument("--port", type=int, default=8010)
     args = parser.parse_args()
     import uvicorn

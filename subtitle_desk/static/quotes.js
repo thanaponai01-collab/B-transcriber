@@ -22,5 +22,5 @@
   }
   const api = {breakLines, timestamp};
   if (typeof module !== "undefined") module.exports = api;
-  else root.ClubFridayQuotes = api;
+  else root.SubtitleDeskQuotes = api;
 })(globalThis);

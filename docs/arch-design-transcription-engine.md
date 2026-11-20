@@ -15,7 +15,7 @@ Evidence labels: **proven** = ran it this session · **traced** = read the whole
 | Last gated run (9 clips, 2026-10-07): CER_thai .168, **WER_latin .876**, BER .570, cue_BER .368 | traced | `config.yaml` `recover_short_spans` comment |
 | Every engine swap and second engine tried so far lost to th-medium | traced | `docs/ENGINES.md`, TODO_LEDGER Phase B |
 | Main `transcriber.db` has **0 bias terms, 0 corrections, 0 eval_run rows** (54 jobs) | proven | sqlite query |
-| Helper transcribe jobs (used by ClubFriday) write to a **new empty DB per job** (`<job folder>/transcribe.db`), so they get no bias terms and no cache | traced | `cutdeck/ai_worker.py:15-19`, `run.py` reads bias from that conn |
+| Helper transcribe jobs (used by SubtitleDesk) write to a **new empty DB per job** (`<job folder>/transcribe.db`), so they get no bias terms and no cache | traced | `cutdeck/ai_worker.py:15-19`, `run.py` reads bias from that conn |
 | Rough Cut uses `store._DEFAULT_DB`; the editor uses CWD-relative `transcriber.db` | traced | `cutdeck/rough_cut.py:162`, `editor/server.py:27` |
 | `run_file` doesn't return its `job_id`; Rough Cut looks it up by path afterwards | traced | `rough_cut.py:180-186` |
 | No metric for speech that produced no text (the 4 s silent drop in the 2026-08-10 report) | proven | `grep` of `eval/metrics.py` |
@@ -37,7 +37,7 @@ BEFORE                                             AFTER
 CLI ─────────► run_file(db=transcriber.db)         CLI ──────────┐
 editor ──────► transcriber.db (CWD-relative)       editor ───────┤
 Rough Cut ───► run_file(db=_DEFAULT_DB)            Rough Cut ────┼─► TranscriptionService.transcribe(media, range, glossary)
-helper/ClubF ► run_file(db=<job>/transcribe.db)    ClubFriday ───┤      │  one store, one cache, one glossary + bias index
+helper/ClubF ► run_file(db=<job>/transcribe.db)    SubtitleDesk ───┤      │  one store, one cache, one glossary + bias index
 MCP ─────────► helper                              MCP/helper ───┘      ▼
                                                                 Transcript{job_id, cues, words, confidence,
 returns: list[dict] of cues, no job_id                      coverage_gaps, review_flags, engine/model id}
@@ -69,7 +69,7 @@ config (e.g. `vad_threshold: 0.8`) fails `speech_coverage_miss`.
 ### 2. One engine service every tool calls
 
 *Problem.* Four callers, three database locations, one of them empty per job. A fix or a
-learned term reaches some tools and not others. ClubFriday transcripts can never benefit
+learned term reaches some tools and not others. SubtitleDesk transcripts can never benefit
 from the flywheel today.
 
 *Change.* A thin `transcribe/service.py`:
@@ -84,7 +84,7 @@ transcribe(media_path, *, range_ms=None, glossary=(), config=None) -> Transcript
   `run_file` gains the `job_id` it already knows.
 - One store path from config (`store.path`), used by the CLI, the editor, `ai_worker`,
   Rough Cut and the MCP server. Per-job folders keep their result JSON, not their own DB.
-- The sha256 cache already in Rough Cut moves into the service, so ClubFriday re-opening the
+- The sha256 cache already in Rough Cut moves into the service, so SubtitleDesk re-opening the
   same range costs zero GPU time.
 - The VRAM rule doesn't change: the helper's single GPU lane is still the only caller that
   loads a model.
@@ -106,7 +106,7 @@ produced nothing. The seam fixes and `recover_short_spans` closed most cases, bu
 2. Re-decode each gap alone, with ±1 s of context and no `initial_prompt`. If it yields text,
    insert those tokens (these are Engine A tokens, so select-only still holds).
 3. Anything still empty goes into `Transcript.coverage_gaps`. **No placeholder text is ever
-   generated.** The editor and ClubFriday show the gap so a human hears it.
+   generated.** The editor and SubtitleDesk show the gap so a human hears it.
 
 Cost: GPU time only for gaps, inside Engine A's existing residency.
 
@@ -126,13 +126,13 @@ probe rejected one batch of bias-index terms, so this must stay eval-gated.
 - Use faster-whisper's **`hotwords`** for glossary terms (proven present in 1.2.1), and keep
   `initial_prompt` for style context. Probe both against prompt-only behind the harness,
   since hotwords can also cause insertions.
-- **Corrections from every tool feed one bias index**: editor diffs (already built), ClubFriday
+- **Corrections from every tool feed one bias index**: editor diffs (already built), SubtitleDesk
   text edits, and Premiere recut SRTs (`scripts/learn_from_srt.py` exists). `min_occurrences`
   and `stale_engine_weight` stay as they are.
 - The exception lexicon keeps doing normalization only. Don't merge it with the bias list.
 
 *Done when.* A gold clip with its glossary beats the same clip without one on CER_thai or
-WER_latin, with no gated regression across the set. A ClubFriday edit appears as a
+WER_latin, with no gated regression across the set. A SubtitleDesk edit appears as a
 `correction` row in the shared DB.
 
 ### 5. Say how sure it is, and send humans to the right spot
@@ -177,7 +177,7 @@ fewer gaps give better cue starts.
 | 1 | **Built; baseline still open.** `speech_coverage_miss` (gated) and `orphan_cues` in metrics v4, `store.path` shared DB, harness uses it. **Proven (4-clip GPU probe, scratch DB):** `vad_threshold: 0.8` raises `speech_coverage_miss` 0.0075 → 0.0258 and the run does not pass (UNRESOLVED, since 4 clips are too few for a CI-confirmed fail). Open: only `yt t1 singapore` plus `Short1-3` (restored from git `e9f8ed4`) have audio on this machine; the other 6 gold clips' media sit on the unmounted `F:\Me\Works` drive. Put them back in `transcribe/eval/goldenset/`, then run `python -m transcribe.eval.harness --config transcribe/config.yaml --establish-baseline` for the v4 production baseline. Gold growth to 15+ clips needs the owner's recuts. |
 | 2 | **Built (2026-10-12).** `transcribe/service.py`; Rough Cut, helper `ai_worker`, editor and CLI share the `store.path` DB. The helper's transcribe result now carries `transcript_job_id`. |
 | 3 | **Built, OFF.** **Proven (4-clip probe):** with the guard on, output is identical to off (no uncovered speech of 600 ms or more on these clips), so there is no drop to show yet. Stays OFF until the full gold set shows a drop. |
-| 4 | **Built; probe says do not use a glossary yet.** **Proven (GPU, `yt t1 singapore`, glossary of 10 F1 terms taken from the reference, so an optimistic case):** none CER_thai .043 / WER_latin 1.000 / coverage_miss 0; prompt .357 / .542 / .189; hotwords .322 / .833 / 0; both .664 / .667 / 0, with the glossary echoed as text. A glossary brings English terms back but wrecks Thai text, so `bias_channel: prompt` without a glossary stays the default, and no caller passes `glossary=`. Also seen: without a glossary, English words are **deleted** inside an existing cue (`ใน นะครับ`); `speech_coverage_miss` can't see that, only WER_latin can. **ClubFriday edits → corrections: built.** Saving quotes splits each edited quote back onto its cues (`clubfriday.server.split_quote_edit`) and writes `correction` rows to the shared store through `flywheel.diff.save_corrections`, the same write path the editor now uses (`tests/test_clubfriday.py`). Sessions transcribed before this change are skipped. |
+| 4 | **Built; probe says do not use a glossary yet.** **Proven (GPU, `yt t1 singapore`, glossary of 10 F1 terms taken from the reference, so an optimistic case):** none CER_thai .043 / WER_latin 1.000 / coverage_miss 0; prompt .357 / .542 / .189; hotwords .322 / .833 / 0; both .664 / .667 / 0, with the glossary echoed as text. A glossary brings English terms back but wrecks Thai text, so `bias_channel: prompt` without a glossary stays the default, and no caller passes `glossary=`. Also seen: without a glossary, English words are **deleted** inside an existing cue (`ใน นะครับ`); `speech_coverage_miss` can't see that, only WER_latin can. **SubtitleDesk edits → corrections: built.** Saving quotes splits each edited quote back onto its cues (`subtitle_desk.server.split_quote_edit`) and writes `correction` rows to the shared store through `flywheel.diff.save_corrections`, the same write path the editor now uses (`tests/test_subtitle_desk.py`). Sessions transcribed before this change are skipped. |
 | 5 | **Flags proven useful on 4 clips; second opinion not built.** **Proven:** flagged cues hold 43% of character errors in 30% of the text (error density .210 flagged vs .118 unflagged). Mixed per clip: `repetitive text` flags 15 of 17 cues in Short1 (one high-compression segment flags every cue inside it), and colloquial `เนี้ย` triggers `unfamiliar Thai fragments` on the F1 clip, where flagged cues are *cleaner* than unflagged ones. Open: the targeted second-opinion decode needs a helper job type (GPU stays in the helper lane) plus a picker UI. |
 
 ## Build order and cost

@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const {breakLines, timestamp} = ClubFridayQuotes;
+const {breakLines, timestamp} = SubtitleDeskQuotes;
 let session = null, pollTimer = null, dirty = false;
 
 function message(text, error = false) { $("message").textContent = text; $("message").classList.toggle("error", error); }
@@ -142,7 +142,7 @@ $("export").onclick = async () => {
     dirty = false;
     const response = await fetch(`/api/sessions/${session.id}/quotes.srt`);
     if (!response.ok) { const error = await response.json(); throw Error(error.detail); }
-    message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-ClubFriday-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
+    message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-SubtitleDesk-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
   } catch (error) { message(error.message, true); }
   finally { $("export").disabled = !session.quotes.length; }
 };
@@ -152,7 +152,7 @@ $("export-transcript").onclick = async () => {
   try {
     const response = await fetch(`/api/sessions/${session.id}/transcript.srt`);
     if (!response.ok) { const error = await response.json(); throw Error(error.detail); }
-    message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-ClubFriday-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
+    message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-SubtitleDesk-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
   } catch (error) { message(error.message, true); }
   finally { $("export-transcript").disabled = !session.cues.length; }
 };

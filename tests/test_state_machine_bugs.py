@@ -7,7 +7,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-import clubfriday.server as cf_server
+import subtitle_desk.server as cf_server
 from cutdeck.helper import Jobs
 
 
@@ -57,7 +57,7 @@ class _ForgottenJobBackend:
         raise ValueError("Unknown job; start a new operation")
 
 
-def test_clubfriday_session_fails_when_helper_forgets_its_job(tmp_path, monkeypatch):
+def test_subtitle_desk_session_fails_when_helper_forgets_its_job(tmp_path, monkeypatch):
     """A refused status ("Unknown job") is permanent, unlike a stopped helper (RuntimeError).
     get_session treats both as a connection blip, so the session stays 'transcribing' and the
     page polls it forever. The panel's own Resume already treats "Unknown job" as final."""

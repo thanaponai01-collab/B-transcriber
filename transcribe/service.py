@@ -1,4 +1,4 @@
-"""One transcription entry point for every tool (CLI, editor, Rough Cut, helper/ClubFriday, MCP).
+"""One transcription entry point for every tool (CLI, editor, Rough Cut, helper/SubtitleDesk, MCP).
 
 Wraps `pipeline.run.run_file_job`; it does not replace it (the harness and make_gold keep
 calling `run_file`). What it adds: the shared store (`store.resolve_db_path`), the sha256

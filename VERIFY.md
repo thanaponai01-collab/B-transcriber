@@ -3,14 +3,14 @@ include: .drive/preset-selection/VERIFY.md
 
 include: verification/rough-cut.md
 
-Foundation scope (2026-10-11): selected ClubFriday backend checks run from the Git
+Foundation scope (2026-10-11): selected SubtitleDesk backend checks run from the Git
 root E:/Me/5.Claude/Transcriber_v2 using `python` (observed Python 3.13.4).
 The TestClient recipe owns temporary directories; no live launch/readiness/cleanup
 is required. Helper and extractor are fakes; real extraction/ASR remain blind spots.
 Use installed verify-loop/scripts/verify.py with this repo argument and
-`--only "ClubFriday quote workspace" --strict` for the selected recipe.
+`--only "SubtitleDesk quote workspace" --strict` for the selected recipe.
 A filtered strict pass does not update whole-repository status. Selected proof is
-retained in `.verify-evidence/clubfriday-foundation/.verify-state.json`; see
+retained in `.verify-evidence/subtitle_desk-foundation/.verify-state.json`; see
 [foundation evidence](verification/foundation.md) for its isolation and limits. Historical baseline
 and rejection descriptions below are retained, not current proof.
 
@@ -80,15 +80,15 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: set BLUE_FRAME_MIN to 0.99 and to 0.05 in cutdeck/topic_layout.py, test_top_edge_mostly_blue_is_clip / test_top_edge_mostly_not_blue_is_studio went red (the first version of the tests stayed green under 0.99 because its edges were 100% blue; fixed before use); in cutdeck/topic_speakers.py, made turns merge across a pause and set the smoothing reach to 0, test_a_pause_starts_a_new_turn_even_for_the_same_speaker and test_smoothing_removes_a_single_outlier went red; reverted, files identical to backup
 
-## ClubFriday quote workspace
-- path: clubfriday/
-- oracle: clubfriday/README.md, tests/conftest.py
-- test: `python -m pytest tests/test_clubfriday.py -q -p no:cacheprovider`
+## SubtitleDesk quote workspace
+- path: subtitle_desk/
+- oracle: subtitle_desk/README.md, tests/conftest.py
+- test: `python -m pytest tests/test_subtitle_desk.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
-- fail-proof: dropped the range offset from cue times in clubfriday/server.py, test_session_reaches_ready_with_cues_shifted_by_range_offset went red, reverted
+- fail-proof: dropped the range offset from cue times in subtitle_desk/server.py, test_session_reaches_ready_with_cues_shifted_by_range_offset went red, reverted
 
 ## Blind spots
-- ClubFriday: the browser page (clubfriday/static/app.js) has no automated check, and nothing here transcribes a real range or imports the SRT into live Premiere; the backend runs against a fake helper and extractor.
+- SubtitleDesk: the browser page (subtitle_desk/static/app.js) has no automated check, and nothing here transcribes a real range or imports the SRT into live Premiere; the backend runs against a fake helper and extractor.
 - SRT placement in live Premiere is manual: `python -m tools.srt_roundtrip make DIR --fps N`, drag the file onto a test sequence (Subtitle, Source timecode), then `python -m tools.srt_roundtrip check FILE.srt` reads the captions back through the panel's Caption Timing probe.
 - No real run of the pipeline: nothing here transcribes real audio on GPU. `transcribe.pipeline.run` on a real file and `transcribe.eval.harness` on the gold set are manual.
 - CutDeck panel checks run against `tests/fakes/premiere.cjs`, not live Premiere; real-host behaviour is only in docs/PREMIERE_FACTS.md.

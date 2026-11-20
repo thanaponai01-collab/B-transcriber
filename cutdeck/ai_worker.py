@@ -16,9 +16,9 @@ def run(folder: Path) -> None:
         from transcribe.service import transcribe
         config = yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8"))
         # The shared store (config store.path), not a per-job DB: bias terms, corrections
-        # and the sha256 cache then reach ClubFriday too. The job folder keeps result.json.
+        # and the sha256 cache then reach SubtitleDesk too. The job folder keeps result.json.
         transcript = transcribe(args["media_path"], config=config)
-        # transcript_job_id lets an editing client (ClubFriday) save corrections against it.
+        # transcript_job_id lets an editing client (SubtitleDesk) save corrections against it.
         result = {"kind": "transcribe", "media_path": args["media_path"],
                   "timing_unit": "milliseconds", "granularity": "phrase_cues",
                   "transcript_job_id": transcript.job_id, "cues": transcript.cues}
