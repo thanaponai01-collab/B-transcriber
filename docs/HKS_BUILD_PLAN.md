@@ -24,8 +24,9 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 ## Assumptions (check before relying on them)
 1. The rules hold beyond one episode. All of them come from 20261120 → checked in step 0.3.
 2. Gold set: 10 past day folders (`G:\Me\Works\2026xxxx - โหนกระแส`, 20261001 → 20261118) have a
-   project; 9 still have their footage (20261112 has none). Some sources are `HKS Youtube … Full`
-   rather than `HKS Facebook …`; whether those carry the TV clock is unknown → step 0.2.
+   project and footage (checked in 0.2). 20261112's footage is split into 5 files; 20261003 names
+   its outputs `D2`. Only 20261120 has an `Edit` sequence. Every source, `HKS Youtube … Full`
+   included, carries the TV clock for its first 35–50 min.
 3. Timeline building is mostly proven in `PREMIERE_FACTS.md`:
    - placing clips: `createOverwriteItemAction`
    - moving one item to another track, video only: `createCloneTrackItemAction`
@@ -41,18 +42,29 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
    content about real people. Until decided, Phase 4 ships without content cuts.
 
 ## Phase 0: Measure first
-- [ ] **0.1** Fix `prproj_reader.parse_source_text` crashing on some text layers (16 in 20261120).
+- [x] **0.1** Fix `prproj_reader.parse_source_text` crashing on some text layers (16 in 20261120).
   → verify: a test built from one failing blob passes; `read_project` on the 20261120 snapshot
-  runs unpatched.
-- [ ] **0.2** Gold reader `cutdeck/hks_gold.py`. For one day folder it returns:
-  - the `Edit` drops, the `1 YOUTUBE D1` kept source ranges and cover clips, the FB / 1-min ranges;
+  runs unpatched. **Done:** the layers are a second format (u64 length + UTF-16 JSON); all 288
+  across the 13 snapshots parse.
+- [x] **0.2** Gold reader `cutdeck/hks_gold.py` (+ `cutdeck/hks_clock.py`). For one day folder it returns:
+  - the `Edit` drops, the YT kept source ranges and cover clips, the FB / 1-min ranges;
   - durations, and whether the TV clock is present in the footage.
 
-  → verify on 20261120:
-  - drops 0–22.68, 824.56–877.20, 2004.88–2069.32, 3947.00–4407.48, 4428.24–end (±0.05 s);
-  - YT keeps 1065.2 s of footage in 155 cuts, 133 of them covered.
+  How it reads a finished cut (all measured, see the module docstrings):
+  - kept footage comes from the **audio**, not V1 (the main picture moves between V1 and V2);
+  - show end = the last non-footage clip (the pool of unused footage sits after it);
+  - hook end = the `Transition Complex 14` SFX;
+  - a cut is **uncovered** when the picture on both sides is the main shot in sync with its audio,
+    at the same framing (a zoomed insert of the same footage counts as a cover);
+  - TV clock = four colon dots bright with a dark outline ring (no OCR).
 
-  Then it runs on all 10 other folders, with a table saying which are usable.
+  → verify on 20261120:
+  - drops 0–22.68, 824.56–877.20, 2004.88–2069.32, 3947.00–4407.48, 4428.24–end (±0.05 s): **exact**;
+  - the 18:12 save (`p9`): 159 cuts, 135 covered. The old "155 / 133" skipped four 3-frame
+    jumps (`min_jump_frames=4` reproduces 155) and counted a main shot on V3 as a cover;
+  - TV clock: present to 2815 s, absent from 2825 s; 0 false positives in 163 clock-free samples.
+
+  Runs on all 11 folders with no problems: `python -m cutdeck.hks_gold --all G:\Me\Works`.
 - [ ] **0.3** Rule audit across ≥3 past episodes:
   - no jump cuts: an uncovered cut is only allowed on a camera change;
   - YT 15–20 min, FB = 179.96 s, 1-min = 59.96 s;
