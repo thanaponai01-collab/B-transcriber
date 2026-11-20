@@ -122,6 +122,14 @@ def test_parse_source_text_runs_carry_their_own_font():
         ("\rสวัสดี ", "Sarabun-Regular"), ("Hello", "Arial-ItalicMT")]
 
 
+def test_parse_source_text_reads_the_json_form():
+    # A third-party transition's text layer (HKS 20261120): length-prefixed UTF-16 JSON, not a FlatBuffer.
+    got = parse_source_text(_blob("J1_json_centered_two_lines"))
+    assert got["text"] == "If the transition isn’t working, visit:\rmisterhorse.com/help/pcadj"
+    assert (got["font"], round(got["size"], 2), got["alignment"]) == ("Arial-BoldMT", 56.8, "center")
+    assert [r["text"] for r in got["runs"]] == [got["text"]]
+
+
 SOURCE_TEXT_PROJECT = """<?xml version="1.0" encoding="UTF-8" ?>
 <PremiereData Version="3">
   <VideoFilterComponent ObjectID="5"><Component><DisplayName>Text</DisplayName>

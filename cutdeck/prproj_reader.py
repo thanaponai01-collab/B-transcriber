@@ -127,8 +127,13 @@ def parse_source_text(blob: bytes) -> dict:
     on flag and f6 the stroke width (float, default 4), f15 faux italic, f16 underline. Document
     f4 is the alignment, f6 the leading (float) and f11 the shadow flag.
 
-    ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's."""
-    doc = _fb_table(blob, _fb_target(blob, _fb_table(blob, _fb_target(blob, 12))[0]))
+    ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's.
+
+    Some layers (a third-party transition's, HKS 20261120) are UTF-16 JSON instead; see
+    ``_parse_json_source_text``."""
+    if blob[8:10] == b"{\x00":
+        return _parse_json_source_text(blob)
+    doc =_fb_table(blob, _fb_target(blob, _fb_table(blob, _fb_target(blob, 12))[0]))
     fonts = [_fb_string(blob, slot) for slot in _fb_vector(blob, doc[1])]
     runs = []
     for slot in _fb_vector(blob, doc[0]):
@@ -151,6 +156,32 @@ def parse_source_text(blob: bytes) -> dict:
             "size": runs[0]["size"], "leading": _fb_float(blob, doc, 6, 0.0),
             "alignment": _ALIGNMENT.get(_u32(blob, doc[4]) if 4 in doc else 0),
             "shadow": 11 in doc and blob[doc[11]] == 1, "runs": runs}
+
+
+def _first(style: dict, key: str, default):
+    values = style.get(key, {}).get("mParamValues") or [[0, default]]
+    return values[0][1]
+
+
+def _parse_json_source_text(blob: bytes) -> dict:
+    """The JSON form: a u64 byte length, then ``{"mTextParam": ...}`` in UTF-16-LE. Only
+    the fields seen with their meaning are read; colours are left out because the saved
+    samples (0x606060, 0xFFFFFF) don't show the channel order."""
+    size = struct.unpack_from("<Q", blob, 0)[0]
+    param = json.loads(blob[8:8 + size].decode("utf-16-le"))["mTextParam"]
+    style = param["mStyleSheet"]
+    run = {
+        "text": style["mText"],
+        "font": _first(style, "mFontName", None),
+        "size": float(_first(style, "mFontSize", _DEFAULT_TEXT_SIZE)),
+        "tracking": float(_first(style, "mTracking", 0.0)),
+        "bold": _first(style, "mFauxBold", False),
+        "italic": _first(style, "mFauxItalic", False),
+    }
+    return {"text": run["text"], "font": run["font"], "size": run["size"],
+            "leading": float(param.get("mLeading", 0.0)),
+            "alignment": _ALIGNMENT.get(param.get("mAlignment", 0)),
+            "shadow": bool(param.get("mShadowVisible")), "runs": [run]}
 
 
 def _b64(text: str) -> bytes:
