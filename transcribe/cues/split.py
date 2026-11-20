@@ -274,12 +274,34 @@ def _prepare(words, policy: CuePolicy, *, return_words: bool = False):
     # 1-3. per-character timeline -> real word boundaries -> mapped time spans.
     # Shared with cutdeck/words.py (CutDeck Phase 1) so there is exactly one
     # implementation of Thai word-timeline reconstruction, not two.
-    full_text, raw_timed = timed_tokens(words)
+    # 3.5. glue bound units into atoms before any break decision runs.
+    # Word segmentation runs per stretch without a gap_ms pause (pythainlp read
+    # "เทส" + 45 s of silence + "รอบ" as "เท|สร|อบ"). Atom glue may bridge a
+    # pause (timestamp jitter, §2.3) but not one of target_ms: no cue that long
+    # is legal, and real speech showed "ปะ" + 17 s + "ครับ" glued into one cue.
+    def pause_runs(items, max_gap_ms):
+        runs, prev_end = [], None
+        for item in items:
+            if prev_end is None or item[1] - prev_end >= max_gap_ms:
+                runs.append([])
+            runs[-1].append(item)
+            prev_end = item[2]
+        return runs
+
+    full_text, raw_timed = "", []
+    for run in pause_runs(words, policy.gap_ms):
+        run_text, run_timed = timed_tokens(run)
+        raw_timed += [(t, s, e, c, p + len(full_text)) for t, s, e, c, p in run_timed]
+        full_text += run_text
     if not full_text:
         return (None, None, []) if return_words else (None, None)
 
-    # 3.5. glue bound units into atoms before any break decision runs.
-    timed = glue_atoms(raw_timed, policy.lexicon or default_lexicon({}))
+    lexicon = policy.lexicon or default_lexicon({})
+    timed = []
+    for run in pause_runs(raw_timed, policy.target_ms):
+        offset = run[0][4]
+        local = [(t, s, e, c, p - offset) for t, s, e, c, p in run]
+        timed += [(t, s, e, c, p + offset) for t, s, e, c, p in glue_atoms(local, lexicon)]
 
     # sentence-start offsets in the same char coordinates as `timed`.
     boundary_offsets = snap_boundary_offsets(_sentence_boundary_offsets(full_text), timed)
