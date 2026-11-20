@@ -114,16 +114,30 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 
   → verify: gold vs itself = 100 % on 20261120, 20261117, 20261001. "Keep everything" matched the
   numbers predicted before the run (agreement 25.7 / 24.9 / 26.4 %, recall 100 %, boundaries 0).
-- [ ] **0.5** Close the reader gaps of 0.3:
+- [x] **0.5** Close the reader gaps of 0.3:
   - count a `CutDeck_Hold_*` still as a covering picture → verify: 20261110 shows 29 uncovered
     cuts, not 68;
   - find why some zooms are not read (20261117 @ 330, 20261012 @ 261) and explain the 26 of
     1,118 samples where the export differs from the model → verify: each is fixed or listed with
     its cause.
-- [ ] **0.6** Holdout. Every threshold so far was tuned on 20261120. Keep 20261002, 20261109 and
+
+  **Done:** 20261110 reads 29 uncovered of 82. The "missed zooms" were Premiere **Frame Hold**
+  clips (one frozen frame, here a zoomed chat screenshot): the reader returns `frame_hold`, and
+  `hks_gold` and the audit treat a held clip as a still. Re-run on all 11: 26 → 3 of 1,190
+  samples differ. The 3 are the closing stack (slowed footage under a `LAYER_ZOOM` Transform),
+  listed with their cause in [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md), reader finding 2.
+- [x] **0.6** Holdout. Every threshold so far was tuned on 20261120. Keep 20261002, 20261109 and
   20261118 out of all tuning from here on; a step that says "on the gold set" tunes on the other
   eight and reports the holdout score once, at the end. → verify: `hks_score` and `hks_audit`
-  take the holdout list and report it separately.
+  take the holdout list and report it separately. **Done:** the list is `hks_gold.HOLDOUT`.
+  - `hks_audit --all` and `hks_score --all --baseline …` cover the eight tuning episodes; with
+    `--holdout` the three get their own tables, never mixed in. A single holdout folder is
+    refused without the flag.
+  - Gold against itself is 100 % on all eight and on all three.
+  - `hks_score --all` takes the two built-in baselines only: a proposal file is still one day's.
+  - Not blind before today: step 0.3 looked at all 11 episodes, and the frame-hold fix of 0.5
+    was found on tuning episodes and then counted on all 11. The holdout is clean for tuning
+    from here on. `hks_gold --all` still lists all 11 (it reads, it does not tune).
 
 ## Phase 1: Timeline-building spike ⚑ (riskiest; decides what Phases 3–6 can promise)
 On a copied project, one probe per unknown. Each probe reads its result back, exports one frame,

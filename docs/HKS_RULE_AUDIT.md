@@ -261,7 +261,7 @@ of all 11 bodies.
 
 ## Reader findings (hks_gold, hks_clock)
 
-No change was made to these modules.
+Found in step 0.3; findings 1 and 2 were closed in step 0.5 (2026-11-21), see the end of each.
 
 1. **`hks_gold.output_cut` ignores frame holds.**
    - `pictures` holds footage clips only, so a `CutDeck_Hold_*.png` over a cut is invisible to
@@ -269,6 +269,8 @@ No change was made to these modules.
    - Effect: 20261110 shows 68 uncovered cuts instead of 29, and its `covers` list leaves the
      holds out.
    - Fix when wanted: treat a `CutDeck_Hold_*` still as a covering picture.
+   - **Fixed (0.5):** a `CutDeck_Hold_*` still, or a footage clip with Premiere's Frame Hold, is a
+     covering picture. 20261110 now shows 29 uncovered of 82 (`test_20261110_frame_holds_cover_their_cuts`).
 2. **Zooms (and some pictures) the reader does not see.**
    - In 26 of 1,118 samples the export frame is not the model's picture (rule 4, "Model against
      export").
@@ -277,8 +279,22 @@ No change was made to these modules.
      keyframes and no Transform effect.
    - Example: at 20261012 tl 261 the V3 clip has no Motion component in `effects` at all, yet the
      export shows it zoomed.
-   - Not investigated further: the reader may miss part of a clip's effect data, or the
-     exports may differ from the saved project.
+   - **Cause found (0.5): Premiere's Frame Hold.** Both example clips (20261117 V4, 20261012 V3)
+     are frame-hold clips (`<FrameHold>` on the clip, the held source time in `FrameHoldStart`):
+     they show one frozen frame, here a zoomed chat screenshot from earlier in the broadcast,
+     not the moving footage the model sampled. The reader now returns `frame_hold`, and the
+     audit samples the held frame. Re-run on all 11 (1,190 samples): **26 → 3** differ by 30 or
+     more. The 3 left are all the same ending stack, listed with their cause:
+
+     | episode | tl | cause |
+     |---|---|---|
+     | 20261003 | 1184 | footage slowed to 0.24× (0.68 s of source over 2.84 s) under `LAYER_ZOOM`, an adjustment layer with a Transform effect (`AE.ADBE Geometry2`) |
+     | 20261109 (holdout) | 1091 | the same: 0.40× (1.24 s over 3.08 s) under `LAYER_ZOOM` |
+     | 20261118 (holdout) | 1120 | the same: 0.41× (1.16 s over 2.84 s) under `LAYER_ZOOM` |
+
+     The reader models neither clip speed nor the Transform effect, so a slowed clip anywhere is
+     sampled at the wrong source time. Not checked: whether slowed clips occur elsewhere in the
+     11 episodes without showing up in the 10 s samples.
    - Effect: it only touches the zoomed/clock split of rule 4 and `_framing` in `hks_gold`
      (a zoomed insert missed this way would make a cut look uncovered). The export check still
      shows no clock. Rule 1's source/export difference agrees on all 294 cuts.

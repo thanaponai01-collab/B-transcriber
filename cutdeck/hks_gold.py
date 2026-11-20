@@ -15,7 +15,9 @@ Rules (measured on the 11 day projects, 2026-11-20):
   boundary that keeps the same media at the same sync (a muted censor piece left out of the
   keeps) is not a cut. A cut is uncovered only when the picture on both sides is the footage in
   sync with its audio at the same Motion scale and position, i.e. the viewer sees the main shot
-  jump. A zoomed insert of the same footage (271-405 %) counts as covering.
+  jump. A zoomed insert of the same footage (271-405 %) counts as covering, and so does a
+  still: a ``CutDeck_Hold_*`` PNG (20261110 covers 39 cuts with a slideshow of them) or a footage
+  clip with Premiere's Frame Hold (``frame_hold`` from the reader), which shows one frozen frame.
 
 Every condition that makes a value unusable becomes a string in ``problems``; nothing is guessed.
 
@@ -39,6 +41,8 @@ from cutdeck.prproj_reader import read_project
 FRAME = 0.04  # 25 fps
 HALF = FRAME / 2
 HOOK_SFX = "transition complex 14"
+HOLDOUT = ("20261002", "20261109", "20261118")  # never tuned on; scored once, at the end (step 0.6)
+HOLD = "cutdeck_hold_"  # CutDeck frame-hold stills: a full-frame picture that is not the footage
 OUTPUTS = {"yt": "1 YOUTUBE", "fb": "2 FACEBOOK", "square": "3 SQUARE SELECT"}
 EDIT_SEQUENCE = "Edit"
 
@@ -154,6 +158,10 @@ def _framing(clip: dict) -> tuple:
             tuple(round(p, 3) for p in position), keyed)
 
 
+def _still(clip: dict) -> bool:
+    return "frame_hold" in clip or _media(clip).lower().startswith(HOLD)
+
+
 def _synced(picture: SourceRange | None, keep: SourceRange) -> bool:
     return (picture is not None and picture.media == keep.media
             and abs(_offset(picture) - _offset(keep)) <= HALF)
@@ -192,10 +200,11 @@ def output_cut(seq: dict, footage: set[str], label: str, problems: list[str],
     dialogue = max(by_track.values(), key=lambda rs: sum(r.tl_end - r.tl_start for r in rs))
     keeps = sorted((r for rs in by_track.values() for r in rs), key=lambda r: r.tl_start)
 
-    # Topmost first: the picture at a time is the first footage video clip covering it.
-    pictures = [(_range(c), _framing(c))
+    # Topmost first: the picture at a time is the first footage clip or still covering it.
+    # A still has no framing: it is never the moving main shot.
+    pictures = [(_range(c), None if _still(c) else _framing(c))
                 for t in sorted(seq["video_tracks"], key=lambda t: -t["index"]) if not t["muted"]
-                for c in t["clips"] if not c["disabled"] and is_footage(c)]
+                for c in t["clips"] if not c["disabled"] and (is_footage(c) or _still(c))]
 
     def picture(at: float) -> tuple[SourceRange | None, tuple | None]:
         return next(((r, f) for r, f in pictures if r.tl_start <= at < r.tl_end), (None, None))
@@ -209,12 +218,13 @@ def output_cut(seq: dict, footage: set[str], label: str, problems: list[str],
         before, frame_before = picture(prev.tl_end - HALF)
         after, frame_after = picture(nxt.tl_start + HALF)
         # The main shot jumps only if both sides show their own audio's picture, framed alike.
-        uncovered = _synced(before, prev) and _synced(after, nxt) and frame_before == frame_after
+        uncovered = (frame_before is not None and frame_before == frame_after
+                     and _synced(before, prev) and _synced(after, nxt))
         cuts.append(Cut(nxt.tl_start, jump, not uncovered))
 
-    covers = [r for r, _ in pictures if r.tl_start < show_end
-              and not any(_synced(r, k) for k in keeps
-                          if min(r.tl_end, k.tl_end) - max(r.tl_start, k.tl_start) > HALF)]
+    covers = [r for r, framing in pictures if r.tl_start < show_end
+              and (framing is None or not any(_synced(r, k) for k in keeps
+                                              if min(r.tl_end, k.tl_end) - max(r.tl_start, k.tl_start) > HALF))]
     return OutputCut(
         sequence=seq["name"],
         length=max(c["end"] for c in everything),
@@ -256,6 +266,16 @@ def body(out: OutputCut) -> tuple[list[SourceRange], list[Cut]]:
 
 
 # --- file system shell -------------------------------------------------------------------------
+
+def is_holdout(folder: str | Path) -> bool:
+    return Path(folder).name[:8] in HOLDOUT
+
+
+def day_folders(root: str | Path) -> tuple[list[Path], list[Path]]:
+    """The day folders under ``root`` as (tuning, holdout)."""
+    days = sorted(Path(root).glob("*โหนกระแส"))
+    return [d for d in days if not is_holdout(d)], [d for d in days if is_holdout(d)]
+
 
 def _duration(path: Path) -> float:
     out = subprocess.run(

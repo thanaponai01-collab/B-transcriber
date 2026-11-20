@@ -17,9 +17,16 @@ Measures, never changes a rule. Four rules (docs/HKS_BUILD_PLAN.md, step 0.3):
    zoomed insert) pushes the clock off screen. Blur is on when a Gaussian Blur clip spans the
    time on that track or above (an adjustment layer blurs only what is below it).
 
+Model check: every 10 s of the YT body, the picture the reader says is showing (placed by its
+Motion scale and position) is compared with the frame of the exported file. A sample that
+differs by ``MODEL_DIFF`` or more is listed: the reader's picture there is not what was exported.
+
 The TV clock is read once per file at 1 fps and cached (``--cache``), so a second run is fast.
 
-    python -m cutdeck.hks_audit --all G:\\Me\\Works [--cache DIR]
+The holdout episodes (``hks_gold.HOLDOUT``, step 0.6) are left out unless ``--holdout`` is given;
+then they get their own tables, never mixed with the tuning set.
+
+    python -m cutdeck.hks_audit --all G:\\Me\\Works [--cache DIR] [--holdout]
 """
 
 from __future__ import annotations
@@ -36,16 +43,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 from cutdeck.hks_clock import CROP_H, CROP_W, CROP_X, CROP_Y, clock_in_frame, grab_crop
-from cutdeck.hks_gold import FRAME, HALF, _framing, _non_empty, body, read_day
+from cutdeck.hks_gold import (FRAME, HALF, HOLD, _framing, _non_empty, body, day_folders, is_holdout,
+                              read_day)
 from cutdeck.prproj_reader import read_project
 
 CAMERA_CHANGE = 20.0  # mean |RGB difference| at 1280x720; set in docs/HKS_RULE_AUDIT.md, rule 1
 MIN_DIP_S = 10        # a clock-off run this long inside the TV part is a bumper candidate
 MIN_TV_RUN_S = 30     # the TV part ends with the last clock-on run at least this long
+MODEL_STEP_S = 10     # spacing of the model-against-export samples
+MODEL_DIFF = 30.0     # export frame vs the reader's picture: this far apart is a different picture
 BLUR = "AE.ADBE Gaussian Blur 2"
-HOLD = "cutdeck_hold_"  # CutDeck frame-hold stills: a full frame of the footage
 
 
 # --- pure parts ----------------------------------------------------------------------------------
@@ -101,9 +111,10 @@ class Layer:
     source_in: float
     framing: tuple
     blur: bool
+    hold_at: float | None = None  # Premiere Frame Hold: the one source second this clip shows
 
     def source_at(self, t: float) -> float:
-        return self.source_in + (t - self.start)
+        return self.source_in + (t - self.start) if self.hold_at is None else self.hold_at
 
 
 def layers(seq: dict, footage: set[str]) -> list[Layer]:
@@ -120,7 +131,7 @@ def layers(seq: dict, footage: set[str]) -> list[Layer]:
                     else "hold" if media.lower().startswith(HOLD) else "other")
             blur = any(e.get("match_name") == BLUR and not e.get("bypass") for e in c["effects"])
             out.append(Layer(track["index"], c["start"], c["end"], kind, media, c.get("media_path") or "",
-                             c["source_in"], _framing(c), blur))
+                             c["source_in"], _framing(c), blur, c.get("frame_hold")))
     return out
 
 
@@ -169,6 +180,17 @@ def blur_samples(ls: list[Layer], clock_of, start: float, end: float, step: floa
                      "kind": None if pic is None else pic.kind})
         t += step
     return rows
+
+
+def placed(frame: np.ndarray, framing: tuple, seq_width: int) -> np.ndarray:
+    """A full source frame as the sequence shows it under Motion scale and position (anchor at
+    the centre, no rotation), on black, at the size of ``frame``."""
+    h, w = frame.shape[:2]
+    k = 1.0 if framing[0] is None else framing[0] / seq_width
+    pic = Image.fromarray(frame).resize((max(1, round(w * k)), max(1, round(h * k))))
+    out = Image.new("RGB", (w, h))
+    out.paste(pic, (round(framing[1][0] * w - pic.width / 2), round(framing[1][1] * h - pic.height / 2)))
+    return np.asarray(out)
 
 
 def spans_of(times: list[float], step: float = 1.0) -> list[tuple[float, float]]:
@@ -225,14 +247,20 @@ class DiffCache:
         self.file = cache / "diffs.json"
         self.data = json.loads(self.file.read_text()) if self.file.exists() else {}
 
-    def diff(self, path_a: str, t_a: float, path_b: str, t_b: float) -> float | None:
-        key = f"{_key(path_a)}@{t_a:.3f}|{_key(path_b)}@{t_b:.3f}"
+    def get(self, key: str, compute) -> float | None:
         if key not in self.data:
-            a, b = grab_frame(path_a, t_a), grab_frame(path_b, t_b)
-            self.data[key] = None if a is None or b is None else round(frame_diff(a, b), 2)
+            self.data[key] = compute()
             self.file.parent.mkdir(parents=True, exist_ok=True)
             self.file.write_text(json.dumps(self.data))
         return self.data[key]
+
+    def diff(self, path_a: str, t_a: float, path_b: str, t_b: float, place=lambda frame: frame,
+             tag: str = "") -> float | None:
+        """Frame difference of a@t_a and ``place``(b@t_b); ``tag`` names the placement in the key."""
+        def compute():
+            a, b = grab_frame(path_a, t_a), grab_frame(path_b, t_b)
+            return None if a is None or b is None else round(frame_diff(a, place(b)), 2)
+        return self.get(f"{_key(path_a)}@{t_a:.3f}|{_key(path_b)}@{t_b:.3f}{tag}", compute)
 
 
 def latest_export(folder: Path, kind: str) -> Path | None:
@@ -273,12 +301,10 @@ def audit_day(folder: Path, cache: Path, diffs: DiffCache) -> dict:
     rows = []
     for cut in (c for c in cuts if not c.covered):
         prev, nxt = _neighbours(yt.keeps, cut.tl)
-        sides = [picture_at(ls, cut.tl - HALF), picture_at(ls, cut.tl + HALF)]
         t_before, t_after = prev.source_out - 1.5 * FRAME, nxt.source_in - HALF
         rows.append({
             "tl": round(cut.tl, 2), "jump": None if cut.jump is None else round(cut.jump, 2),
             "src_before": round(prev.source_out, 2), "src_after": round(nxt.source_in, 2),
-            "hold": any(p is not None and p.kind == "hold" for p in sides),
             "diff": diffs.diff(paths[prev.media.lower()], t_before, paths[nxt.media.lower()], t_after),
             "export_diff": None if export is None else
             diffs.diff(str(export), cut.tl - 1.5 * FRAME, str(export), cut.tl - HALF),
@@ -337,6 +363,24 @@ def audit_day(folder: Path, cache: Path, diffs: DiffCache) -> dict:
         r["export_clock"] = None if seen is None or s >= len(seen) else bool(seen[s])
     day["blur"] = {"start": start, "end": yt.show_end, "main_framing": main_framing(ls, start, yt.show_end),
                    "samples": samples}
+
+    # Model check: the reader's picture, placed by its Motion, against the exported frame.
+    model = []
+    t = start + MODEL_STEP_S / 2
+    while export is not None and t < yt.show_end:
+        pic = picture_at(ls, t)
+        if pic is not None and (pic.kind == "footage" or Path(pic.path).exists()):
+            source, at = (pic.path, 0.0) if pic.kind == "hold" else (paths[pic.media.lower()], pic.source_at(t))
+            model.append({
+                "t": t, "track": pic.track, "kind": pic.kind, "held": pic.hold_at is not None,
+                "keyed": pic.framing[2], "source": round(at, 2),
+                "above": sorted({l.media for l in ls if l.kind == "other" and l.track > pic.track
+                                 and l.start <= t < l.end}),
+                "diff": diffs.diff(str(export), t, source, at,
+                                   lambda frame, f=pic.framing: placed(frame, f, seq["frame"][0]), f"|{pic.framing}"),
+            })
+        t += MODEL_STEP_S
+    day["model"] = model
     return day
 
 
@@ -347,16 +391,14 @@ def _f(x, nd=2):
 
 
 def rule1(days: list[dict]) -> list[str]:
-    out = ["| episode | body cuts | uncovered (reader) | under a frame hold | camera change | "
-           f"diff below {CAMERA_CHANGE:g} (eye check) |", "|---|---|---|---|---|---|"]
+    out = ["| episode | body cuts | uncovered (reader) | camera change | "
+           f"diff below {CAMERA_CHANGE:g} (eye check) |", "|---|---|---|---|---|"]
     detail = []
     for d in days:
         rows = d["cuts"]["uncovered"]
-        free = [r for r in rows if not r["hold"]]
-        change = [r for r in free if r["diff"] is not None and is_camera_change(r["diff"])]
-        low = [r for r in free if r not in change]
-        out.append(f"| {d['folder']} | {d['cuts']['body_cuts']} | {len(rows)} | {len(rows) - len(free)} | "
-                   f"{len(change)} | {len(low)} |")
+        change = [r for r in rows if r["diff"] is not None and is_camera_change(r["diff"])]
+        low = [r for r in rows if r not in change]
+        out.append(f"| {d['folder']} | {d['cuts']['body_cuts']} | {len(rows)} | {len(change)} | {len(low)} |")
         for r in low:
             detail.append(f"| {d['folder']} | {r['tl']:.2f} | {_f(r['jump'])} | {r['src_before']:.2f} → "
                           f"{r['src_after']:.2f} | {_f(r['diff'], 1)} | {_f(r['export_diff'], 1)} |")
@@ -424,29 +466,61 @@ def rule4(days: list[dict]) -> list[str]:
                   *detail]
 
 
+def model_check(days: list[dict]) -> list[str]:
+    out = [f"| episode | samples | median diff | diff ≥ {MODEL_DIFF:g} |", "|---|---|---|---|"]
+    detail = []
+    for d in days:
+        rows = [r for r in d["model"] if r["diff"] is not None]
+        off = [r for r in rows if r["diff"] >= MODEL_DIFF]
+        out.append(f"| {d['folder']} | {len(rows)} | {_f(float(np.median([r['diff'] for r in rows])), 1) if rows else '-'} "
+                   f"| {len(off)} |")
+        for r in off:
+            what = r["kind"] + (", held frame" if r["held"] else "") + (", keyframed Motion" if r["keyed"] else "")
+            detail.append(f"| {d['folder']} | {r['t']:.0f} | {r['diff']:.1f} | V{r['track'] + 1} {what} | "
+                          f"{r['source']:.2f} | {', '.join(r['above']) or '-'} |")
+    return out + ["", f"Samples at {MODEL_DIFF:g} or more:", "",
+                  "| episode | tl | diff | reader's picture | source s | layers above it |", "|---|---|---|---|---|---|",
+                  *detail]
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Audit the HKS rules across past day folders.")
     p.add_argument("folder", help="a day folder, or with --all the folder that holds them")
-    p.add_argument("--all", action="store_true", help="every *โหนกระแส folder")
+    p.add_argument("--all", action="store_true", help="every *โหนกระแส folder of the tuning set")
+    p.add_argument("--holdout", action="store_true",
+                   help="also report the holdout episodes, in their own tables (end-of-step scoring only)")
     p.add_argument("--cache", default=str(Path(tempfile.gettempdir()) / "hks_audit"),
                    help="where clock tracks and frame differences are cached")
     p.add_argument("--json", help="also write the raw per-day results here")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     cache = Path(args.cache)
-    folders = sorted(Path(args.folder).glob("*โหนกระแส")) if args.all else [Path(args.folder)]
+    if args.all:
+        tuning, held = day_folders(args.folder)
+        groups = [("Tuning set", tuning)] + ([("Holdout", held)] if args.holdout else [])
+    elif is_holdout(args.folder) and not args.holdout:
+        p.error(f"{Path(args.folder).name[:8]} is a holdout episode; pass --holdout to report it")
+    else:
+        groups = [("Holdout" if is_holdout(args.folder) else "Tuning set", [Path(args.folder)])]
     diffs = DiffCache(cache)
-    days = []
-    for folder in folders:
-        print(f"... {folder.name}", file=sys.stderr, flush=True)
-        days.append(audit_day(folder, cache, diffs))
+    audited = []
+    for group, folders in groups:
+        days = []
+        for folder in folders:
+            print(f"... {folder.name}", file=sys.stderr, flush=True)
+            days.append({**audit_day(folder, cache, diffs), "holdout": group == "Holdout"})
+        audited.append((group, days))
     if args.json:
-        Path(args.json).write_text(json.dumps(days, ensure_ascii=False, indent=1), encoding="utf-8")
-    for title, fn in (("Rule 1: no jump cuts", rule1), ("Rule 2: lengths", rule2),
-                      ("Rule 3: bumpers dropped (clock dips)", rule3), ("Rule 4: blur wherever the clock shows",
-                                                                         rule4)):
-        print(f"\n## {title}\n")
-        print("\n".join(fn(days)))
+        Path(args.json).write_text(json.dumps([d for _, days in audited for d in days], ensure_ascii=False,
+                                              indent=1), encoding="utf-8")
+    for group, days in audited:
+        print(f"\n# {group} ({len(days)} episodes)")
+        for title, fn in (("Rule 1: no jump cuts", rule1), ("Rule 2: lengths", rule2),
+                          ("Rule 3: bumpers dropped (clock dips)", rule3),
+                          ("Rule 4: blur wherever the clock shows", rule4),
+                          ("Model check: the reader's picture against the export", model_check)):
+            print(f"\n## {title}\n")
+            print("\n".join(fn(days)))
 
 
 if __name__ == "__main__":
