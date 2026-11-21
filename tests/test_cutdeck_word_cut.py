@@ -183,3 +183,39 @@ def test_a_piece_takes_along_wordless_sound_that_touches_it():
     far = lambda media, t: 5.0 if 450 * MS <= t < 600 * MS or 1000 * MS <= t < 1800 * MS else -5.0
     (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), far)
     assert int(piece["in_ticks"]) >= 800 * MS          # 400 ms of quiet between: not taken
+
+
+def test_review2_zero_length_neighbour_at_a_join_is_not_pulled_into_the_kept_word():
+    from cutdeck.timeline_transcript import Clip, SourceWord
+    from dataclasses import replace
+    clips = [Clip("A1@0", 0, 1000 * MS, 0, 1000 * MS, "a.mp4"), Clip("A1@1", 1000 * MS, 2000 * MS, 0, 1000 * MS, "b.mp4")]
+    words = [replace(w("one", 500, 1000), src_start_ms=500, src_end_ms=1000),
+             replace(w("x", 1000, 1000), clip="A1@1", media="b.mp4", src_start_ms=0, src_end_ms=0)]
+    src = {"a.mp4": [SourceWord("one", 500, 1000, 0)], "b.mp4": [SourceWord("x", 0, 0, 0)]}
+    r = word_cut.keep_ranges(words, [{"text": "one"}], TPF, clips, src, end_ticks=2000 * MS)
+    assert r["keep_frames"][0][1] * TPF <= 1000 * MS
+
+
+def test_review2_kept_span_rounds_outward_at_double_speed():
+    from cutdeck.timeline_transcript import Clip, SourceWord
+    from dataclasses import replace
+    # Source a 500-1040, b 1040-1600, c 1600-2000 (touching), clip at 200%: b sits at 520-800 ms.
+    clips = [Clip("A1@0", 0, 2000 * MS, 0, 4000 * MS, "a.mp4", 2.0)]
+    tl = [replace(w(t, s // 2, e // 2), src_start_ms=s, src_end_ms=e) for t, s, e in
+          [("a", 500, 1040), ("b", 1040, 1600), ("c", 1600, 2000)]]
+    src = {"a.mp4": [SourceWord(t, s, e, 0) for t, s, e in [("a", 500, 1040), ("b", 1040, 1600), ("c", 1600, 2000)]]}
+    (a, b), = word_cut.keep_ranges(tl, [{"text": "b"}], TPF, clips, src, end_ticks=2000 * MS)["keep_frames"]
+    assert a * TPF <= 520 * MS and b * TPF >= 800 * MS
+
+
+def test_review2_wordless_reach_stops_short_of_the_next_words_onset_and_runs_past_the_last_word():
+    from cutdeck.timeline_transcript import SourceWord
+    words = [w("a", 0, 500), w("b", 610, 1000)]
+    src = {"a.mp4": [SourceWord("a", 0, 500, 0), SourceWord("b", 610, 1000, 0)]}
+    loud = lambda media, t: 5.0 if t < 500 * MS + 20 * MS or t >= 610 * MS - 20 * MS else -5.0  # ±20 ms read window
+    (p,) = word_cut.plan_pieces(words, [{"text": "a"}], TPF, src, loud)
+    assert int(p["out_ticks"]) < 610 * MS - 20 * MS
+    last = [w("a", 0, 500)]
+    laugh = lambda media, t: 5.0 if t < 900 * MS else -5.0                  # a laugh after the file's last word
+    (p,) = word_cut.plan_pieces(last, [{"text": "a"}], TPF, {"a.mp4": [SourceWord("a", 0, 500, 0)]}, laugh)
+    assert int(p["out_ticks"]) >= 890 * MS

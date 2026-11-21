@@ -390,3 +390,12 @@ def test_a_half_written_levels_cache_is_decoded_again(tmp_path, monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: "ffmpeg")
     levels = tt.source_levels("a.mp4", cache)
     assert len(levels) == 10 and np.load(cache).shape == (10,)
+
+
+def test_review2_prproj_zero_source_length_and_ntsc_rates():
+    seq = {"name": "s", "audio_tracks": [{"index": 0, "muted": False, "clips": [
+        {"start": 0, "end": 2, "source_in": 5, "source_out": 5, "disabled": False, "media_path": "x"}]}]}
+    tl = tt.timeline_from_prproj(seq, fps=29.97)
+    assert tl["ticks_per_frame"] == "8475667200" and tl["tracks"][0]["clips"][0]["speed"] == 1.0
+    assert tt.timeline_from_prproj(seq, fps=23.976)["ticks_per_frame"] == "10594584000"
+    assert tt.timeline_from_prproj(seq, fps=25)["ticks_per_frame"] == str(254016000000 // 25)

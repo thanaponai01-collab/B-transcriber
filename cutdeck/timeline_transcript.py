@@ -395,7 +395,8 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
                       "text": join_words(w.text for w in span),
                       "clips": list(dict.fromkeys(w.clip for w in span)),
                       # False: the phrase starts or ends inside a longer word
-                      "whole_words": pos in starts and pos + len(needle) in ends})
+                      "whole_words": pos in starts and pos + len(needle) in ends,
+                      "word_range": [owner[pos], owner[pos + len(needle) - 1]]})
         pos = text.find(needle, pos + len(needle))
     return found
 
@@ -696,7 +697,10 @@ def timeline_from_prproj(sequence: dict, fps: float = 30.0) -> dict:
     is the clip's source length over its timeline length (Premiere's In/Out are then reported
     divided by it, as `read_timeline` does)."""
     from fractions import Fraction
-    rate = Fraction(fps).limit_denominator(1001)
+    nominal = round(fps)
+    # 29.97, 23.976, 59.94: the NTSC rates are nominal x 1000/1001 exactly, as Premiere counts them.
+    rate = (Fraction(nominal * 1000, 1001) if abs(fps - nominal * 1000 / 1001) < 0.005 and fps != nominal
+            else Fraction(fps).limit_denominator(1001))
     tpf = PPRO_TICKS_PER_SECOND * rate.denominator // rate.numerator
     ticks = lambda s: round(s * PPRO_TICKS_PER_SECOND)  # noqa: E731
     tracks, end = [], 0
@@ -704,7 +708,8 @@ def timeline_from_prproj(sequence: dict, fps: float = 30.0) -> dict:
         clips = []
         for c in t.get("clips", []):
             length, source = c["end"] - c["start"], c["source_out"] - c["source_in"]
-            speed = round(source / length, 4) if length > 0 else 1.0
+            speed = round(source / length, 4) if length > 0 and source > 0 else 1.0
+            speed = speed or 1.0  # a ratio that rounds to 0 is not a speed Premiere plays
             start = ticks(c["start"])
             clips.append({"id": f"A{t['index'] + 1}@{start}", "start_ticks": str(start), "end_ticks": str(ticks(c["end"])),
                           "in_ticks": str(ticks(c["source_in"] / speed)), "out_ticks": str(ticks(c["source_out"] / speed)),
