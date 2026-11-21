@@ -64,3 +64,13 @@ def test_a_phrase_inside_a_longer_word_is_not_cut():
         word_cut.plan(WORDS, [{"text": "hre"}], TPF, END)          # inside "three"
     p = word_cut.plan(words + [w("te", 3800, 3900)], [{"text": "te"}], TPF, END)  # "ten" skipped
     assert frames_s(p["cuts_frames"][0])[0] >= 3700
+
+
+def test_cut_moves_to_the_quiet_frame_in_the_pause():
+    # Sound in the pause after "one" until 0.75 s (a breath the engine did not time).
+    level_at = lambda ticks: 10.0 if ticks < 750 * MS or 1000 * MS <= ticks < 1800 * MS else -10.0
+    p = word_cut.plan(WORDS, [{"text": "two three"}], TPF, END, keep_ms=250, level_at=level_at)
+    a, b = frames_s(p["cuts_frames"][0])
+    assert a >= 750 and b >= 1800 and "no_quiet" not in p["removals"][0]
+    loud = word_cut.plan(WORDS, [{"text": "two three"}], TPF, END, level_at=lambda t: 5.0)
+    assert loud["removals"][0]["no_quiet"] == ["start", "end"]

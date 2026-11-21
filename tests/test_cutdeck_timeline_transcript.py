@@ -45,7 +45,7 @@ def test_reorder_maps_each_piece_to_its_place(tmp_path):
     assert int(hello["start_ticks"]) == (1000 + 200) * T  # 1000 - 800 after the clip start
     assert int(hello["end_ticks"]) == (1000 + 1200) * T
     assert hello["src_s"] == [1.0, 2.0]
-    assert r["edges_inside_words"] == []
+    assert r["cuts_in_sound"] == []
     assert r["missing"] == [] and r["sources"] == [{"media": media, "transcript_job_id": 7}]
 
 
@@ -63,14 +63,14 @@ def test_cut_through_a_word_is_flagged_and_reported(tmp_path):
     assert r["lines"][0]["clipped_words"] == ["world"]
     assert int(r["lines"][0]["end_ticks"]) == 800 * T   # the word stops where the clip stops
     assert r["lines"][1]["clipped_words"] == ["สวัสดี"]
-    got = [(e["clip"], e["side"], e["word"], e["cut_ms"]) for e in r["edges_inside_words"]]
+    got = [(e["clip"], e["side"], e["word"], e["cut_ms"]) for e in r["cuts_in_sound"]]
     assert got == [("A1@0", "out", "world", 300), ("A1@1", "in", "สวัสดี", 300)]
 
 
 def test_tolerance_ignores_a_cut_inside_word_timing_noise(tmp_path):
     media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
     r = run(timeline(clip("A1@0", 0, 900, 1980, media)))  # 20 ms short of "world"'s end
-    assert r["edges_inside_words"] == []
+    assert r["cuts_in_sound"] == []
     assert "clipped_words" not in r["lines"][0]
 
 
@@ -181,9 +181,9 @@ def test_edge_in_a_pause_inside_an_engine_word_is_not_a_bad_cut(tmp_path):
     words = [tt.SourceWord("helloworld", 1000, 2000, 0)]  # one engine word across the pause
     lookup = lambda m: (1, words, levels)
     pause = tt.build(timeline(clip("A1@0", 0, 900, 1500, media)), lookup=lookup)
-    assert pause["edges_inside_words"] == []
+    assert pause["cuts_in_sound"] == []
     sound = tt.build(timeline(clip("A1@0", 0, 900, 1300, media)), lookup=lookup)
-    (edge,) = sound["edges_inside_words"]
+    (edge,) = sound["cuts_in_sound"]
     assert edge["side"] == "out" and edge["cut_ms"] == 700
     assert edge["nearest_quiet_ms"] == 105  # the pause starts at 1.40 s; window centre 1.405
 
@@ -214,3 +214,17 @@ def test_speed_changed_clip_maps_through_premieres_scaled_in_out(tmp_path):
     (line,) = r["lines"]
     assert line["text"] == "hello world"
     assert int(line["start_ticks"]) == 50 * T and int(line["end_ticks"]) == 550 * T  # (1000-900)/2, (2000-900)/2
+
+
+def test_cut_into_an_onset_the_engine_timed_late_is_flagged(tmp_path):
+    import numpy as np
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    levels = np.full(800, -70.0, dtype=np.float32)
+    levels[92:140] = -30.0                           # sound from 0.92 s; the engine says 1.00 s
+    words = [tt.SourceWord("รัสเซลล์", 1000, 1400, 0)]
+    r = tt.build(timeline(clip("A1@0", 0, 950, 1500, media)), lookup=lambda m: (1, words, levels))
+    (edge,) = r["cuts_in_sound"]
+    assert edge["side"] == "in" and edge["word"] is None and edge["nearest_quiet_ms"] < 0
+    assert edge["severity"] == "sound"
+    quiet = tt.build(timeline(clip("A1@0", 0, 850, 1500, media)), lookup=lambda m: (1, words, levels))
+    assert quiet["cuts_in_sound"] == []

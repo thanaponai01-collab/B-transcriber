@@ -42,9 +42,24 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
     return inside[0], inside[-1]
 
 
+def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int, bool]:
+    """The frame boundary in ``[lo, hi]`` (ticks) nearest ``frame`` whose audio is quiet
+    (``level_at`` below 0); ``(frame, False)`` when the pause has none."""
+    first, last = -(-lo // tpf), hi // tpf
+    for step in range(max(last - first, 0) + 1):
+        for f in (frame - step, frame + step):
+            if first <= f <= last:
+                level = level_at(f * tpf)
+                if level is not None and level < 0:
+                    return f, True
+    return frame, False
+
+
 def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: int,
-         keep_ms: int = KEEP_MS) -> dict:
-    """Frame cuts for `cut_copy`, plus what each removal takes out and how tight its joins are."""
+         keep_ms: int = KEEP_MS, level_at=None) -> dict:
+    """Frame cuts for `cut_copy`, plus what each removal takes out and how tight its joins are.
+    ``level_at(ticks)``: dB over the sound threshold at a sequence position (negative = quiet);
+    with it each cut moves to the nearest quiet frame in its pause."""
     keep = keep_ms * TICKS_PER_MS
     spans, details = [], []
     for remove in removes:
@@ -63,12 +78,20 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
             fa = first // tpf
         if fb * tpf < last:
             fb = -(-last // tpf)
+        no_quiet = []
+        if level_at is not None:
+            # The quiet frame in the pause nearest the target; the engine's word edges can be
+            # off, the audio is not.
+            fa, ok_a = _quiet_frame(fa, before, first, tpf, level_at)
+            fb, ok_b = _quiet_frame(fb, last, after, tpf, level_at)
+            no_quiet = [side for side, ok in (("start", ok_a), ("end", ok_b)) if not ok]
         spans.append((fa, fb))
         details.append({"text": "".join(w.text for w in words[i:j + 1]) if not remove.get("text") else remove["text"],
                         "removed_s": [round(fa * tpf / 254016000000, 3), round(fb * tpf / 254016000000, 3)],
                         "pause_before_ms": round(gap_before / TICKS_PER_MS),
                         "pause_after_ms": round(gap_after / TICKS_PER_MS),
-                        "tight": gap_before < 2 * tpf or gap_after < 2 * tpf})
+                        "tight": gap_before < 2 * tpf or gap_after < 2 * tpf,
+                        **({"no_quiet": no_quiet} if no_quiet else {})})
     spans.sort()
     merged: list[list[int]] = []
     for a, b in spans:

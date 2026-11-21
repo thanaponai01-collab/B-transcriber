@@ -213,43 +213,77 @@ def _nearest_quiet_ms(levels, threshold: float, edge_ms: float, reach_ms: int = 
     return None
 
 
+def _audible_at(levels, threshold: float, at_ms: float) -> bool:
+    """Is any 10 ms window within 20 ms of ``at_ms`` sound?"""
+    i = int(at_ms // ENVELOPE_MS)
+    near = levels[max(i - 2, 0):i + 2]
+    return bool(len(near)) and float(near.max()) >= threshold
+
+
 def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_per_frame: int,
           tolerance_ms: int = CLIP_TOLERANCE_MS, levels_by_media: dict | None = None) -> list[dict]:
-    """Every clip In and Out that cuts through a word: where it is on the sequence, the word,
-    and how much of it the cut removes. An empty list means every edit sits between words.
+    """Clip Ins and Outs that cut into sound: where each is on the sequence, the word it cuts
+    (None: sound no word covers, e.g. an onset the engine timed late, a laugh, music), how much
+    of the word is lost, and ``nearest_quiet_ms``, the shift to the nearest quiet spot.
 
-    With the source's level envelope, an edge counts only where the audio at the cut (20 ms
-    either side) is audible: an engine word often spans a pause, and a cut in that pause cuts
-    no sound. Each such edge also gets ``nearest_quiet_ms``, the shift to the nearest quiet spot."""
+    With the source's level envelope the audio decides: every edge with sound within 20 ms of
+    the cut is listed, whether or not an engine word covers it (an engine word often spans a
+    pause, and a word the engine starts late leaves its onset uncovered). Without one, an edge
+    is listed when it falls more than ``tolerance_ms`` inside an engine word."""
     out = []
     levels_by_media = levels_by_media or {}
     starts_by_media = {m: [w.start_ms for w in ws] for m, ws in words_by_media.items()}
+    thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
     for clip in clips:
         words = words_by_media.get(clip.media) or []
         starts = starts_by_media.get(clip.media) or []
         levels = levels_by_media.get(clip.media)
-        threshold = noise_floor(levels) + TAIL_DB if levels is not None else None
+        threshold = thresholds.get(clip.media)
         for side, edge_ticks, seq_ticks in (("in", clip.in_, clip.start), ("out", clip.out, clip.end)):
             edge_ms = edge_ticks / TICKS_PER_MS
-            if levels is not None:
-                i = int(edge_ms // ENVELOPE_MS)
-                near = levels[max(i - 2, 0):i + 2]
-                if not len(near) or float(near.max()) < threshold:
-                    continue
+            if levels is not None and not _audible_at(levels, threshold, edge_ms):
+                continue
+            word = None
             # No engine word is 30 s long; start there instead of at the top of the file.
             for w in words[bisect.bisect_left(starts, edge_ms - 30000):]:
                 if w.start_ms > edge_ms:
                     break
                 if w.start_ms + tolerance_ms < edge_ms < w.end_ms - tolerance_ms:
-                    removed = edge_ms - w.start_ms if side == "in" else w.end_ms - edge_ms
-                    edge = {"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
-                            "at_s": seconds(seq_ticks), "word": w.text,
-                            "word_src_s": [w.start_ms / 1000, w.end_ms / 1000],
-                            "edge_src_s": round(edge_ms / 1000, 3), "cut_ms": round(removed)}
-                    if levels is not None:
-                        edge["nearest_quiet_ms"] = _nearest_quiet_ms(levels, threshold, edge_ms)
-                    out.append(edge)
+                    word = w
+            if word is None and levels is None:
+                continue
+            edge = {"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
+                    "at_s": seconds(seq_ticks), "edge_src_s": round(edge_ms / 1000, 3),
+                    "word": word.text if word else None}
+            if word:
+                edge["word_src_s"] = [word.start_ms / 1000, word.end_ms / 1000]
+                edge["cut_ms"] = round(edge_ms - word.start_ms if side == "in" else word.end_ms - edge_ms)
+            if levels is not None:
+                quiet = _nearest_quiet_ms(levels, threshold, edge_ms)
+                edge["nearest_quiet_ms"] = quiet
+                # "tail": quiet within one 10 ms window, the faint end of a fade; "sound": the cut
+                # is in it. Both are listed; only "sound" is clearly audible as a clip.
+                edge["severity"] = "tail" if quiet is not None and abs(quiet) <= TAIL_MS else "sound"
+            out.append(edge)
     return out
+
+
+def level_at(clips: list[Clip], levels_by_media: dict, ticks: int) -> float | None:
+    """The loudest 10 ms source level within 20 ms of a sequence position, and how far above
+    the source's floor it is, as dB over threshold (negative = quiet). None: no levels there;
+    a position no clip covers plays nothing, so it is quiet (-inf)."""
+    for clip in clips:
+        if clip.start <= ticks < clip.end:
+            levels = levels_by_media.get(clip.media)
+            if levels is None:
+                return None
+            src_ms = (clip.in_ + (ticks - clip.start) * clip.speed) / TICKS_PER_MS
+            i = int(src_ms // ENVELOPE_MS)
+            near = levels[max(i - 2, 0):i + 2]
+            if not len(near):
+                return float("-inf")
+            return float(near.max()) - (noise_floor(levels) + TAIL_DB)
+    return float("-inf")
 
 
 def _norm(text: str) -> str:
@@ -293,6 +327,7 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
 ENVELOPE_MS = 10
 _FLOOR_MIN_DB, _FLOOR_MAX_DB = -65.0, -35.0  # as ingest.sound_runs: digital silence is not the floor
 TAIL_DB = 6.0  # a 10 ms window this far above the floor is sound (ingest.sound_runs' tail rule)
+TAIL_MS = 10   # a cut this close to quiet sits on the faint end of a fade
 
 
 def level_db(audio, sample_rate: int):
@@ -439,7 +474,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
               "sources": [{"media": m, "transcript_job_id": j} for m, j in jobs.items()],
-              "words": len(words), "edges_inside_words": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
+              "words": len(words), "cuts_in_sound": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
     if query:
         result["matches"] = find(words, query, tpf)
     if from_ticks is not None or to_ticks is not None:
@@ -459,4 +494,5 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["full_path"] = str(path)
     if keep_words:  # for in-process callers (word_cut); not JSON
         result["word_objects"] = words
+        result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks)
     return result

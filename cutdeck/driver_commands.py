@@ -974,7 +974,8 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
     if before["missing"]:
         raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
     tpf = int(source["ticks_per_frame"])
-    planned = word_cut.plan(before["word_objects"], args["remove"], tpf, int(source["end_ticks"]), args["keep_ms"])
+    planned = word_cut.plan(before["word_objects"], args["remove"], tpf, int(source["end_ticks"]), args["keep_ms"],
+                            level_at=before["level_at"])
     copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
                                        "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": planned["cuts_frames"]}})
     result_tl = await premiere("read_timeline", {"sequence": args["result_name"]})
@@ -987,10 +988,10 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
     checks = [{"text": r["text"], "said_before": word_cut.count(before["word_objects"], r["text"]),
                "said_after": word_cut.count(after["word_objects"], r["text"])}
               for r in {r["text"]: r for r in args["remove"] if "text" in r}.values()]
-    old_edges = {(e["edge_src_s"], e["word"]) for e in before["edges_inside_words"]}
+    old_edges = {(e["edge_src_s"], e["word"]) for e in before["cuts_in_sound"]}
     return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"],
             "removals": planned["removals"], "joins": joins, "checks": checks,
-            "new_cuts_in_speech": [e for e in after["edges_inside_words"]
+            "new_cuts_in_sound": [e for e in after["cuts_in_sound"]
                                    if (e["edge_src_s"], e["word"]) not in old_edges]}
 
 
@@ -1002,7 +1003,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         (made once by transcribe(media_path), reused from the store) mapped through the clips of one
         audio track (track "A1", default the first un-muted one with clips) onto the timeline in exact
         ticks. Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
-        `edges_inside_words`: every clip In/Out that cuts through a word (a bad cut). `query` finds
+        `cuts_in_sound`: every clip In/Out with audible sound at the cut (a bad cut), with the word
+        it cuts when one covers it and the shift to the nearest quiet spot. `query` finds
         a phrase (matches, also across a cut). `missing` lists source files never transcribed: run
         transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
         of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
@@ -1021,8 +1023,9 @@ HELPER_COMMANDS: dict[str, Command] = {
         said; occurrence when it is said more than once) or [{"from_ticks", "to_ticks"}]. A
         join keeps keep_ms of pause (default 250, never more than was there). Makes result_name
         with cut_copy, then reads it back: `checks` (how often each phrase is said before and
-        after), `joins` (the words either side of each join), and `new_cuts_in_speech` (any cut
-        that landed in audible speech; empty is the goal). Needs the CutDeck panel open and the
+        after), `joins` (the words either side of each join), and `new_cuts_in_sound` (any new cut
+        with audible sound at it; empty is the goal). Each cut sits on the quiet frame in the
+        pause nearest its target; `no_quiet` on a removal says a side had none. Needs the CutDeck panel open and the
         sources transcribed.
         """,
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
