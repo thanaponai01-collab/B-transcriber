@@ -18,6 +18,7 @@
 
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
+const { buildSequence } = require("../timeline/buildSequence.js");
 const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
 const { TICKS_PER_SECOND } = require("../host/ticks.js");
 const { PROBES, runProbe } = require("./probes.js");
@@ -52,6 +53,7 @@ const COMMANDS = [
   "distribute_clips",
   "export_sequence",
   "reload_panel",
+  "build_sequence",
 ];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
@@ -325,6 +327,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     distribute_clips: distributeClips,
     export_sequence: exportSequence,
     // The reply goes out first; then the same reload as the panel menu's Reload (core/panel.js).
+    build_sequence: (args) => buildSequence(ppro, args, (line) => console.log(`CutDeck build: ${line}`)),
     reload_panel: async () => {
       setTimeout(() => window.location.reload(), 300);
       return { reloading: true };

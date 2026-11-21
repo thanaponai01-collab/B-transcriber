@@ -77,6 +77,7 @@ function createProject() {
 
 /* TrackItemSelection whose selection is valid only inside createEmptySelection's callback
    (PREMIERE_FACTS "Placing": createEmptySelection). `trackItems` of a used-up selection throws. */
+const selectionItems = new WeakMap(); // selection -> its items, for the fake remove action
 const TrackItemSelection = {
   createEmptySelection(callback) {
     let live = true;
@@ -85,10 +86,156 @@ const TrackItemSelection = {
       addItem(item) { if (!live) throw new Error(SCRIPT_OBJECT_INVALID); items.push(item); return true; },
       getTrackItems() { if (!live) throw new Error(SCRIPT_OBJECT_INVALID); return Promise.resolve([...items]); },
     };
+    selectionItems.set(selection, items);
     try { callback(selection); } finally { live = false; }
     return true;
   },
 };
+
+/* A project whose sequences can be read, copied, renamed, cleared and placed into: enough for
+   timeline/buildSequence.js. `media`: [{ path, video, audio, duration }] (which sides an overwrite
+   places; ticks as BigInt). `sequences`: [{ name, video: [[clip]], audio: [[clip]] }], clip =
+   { media: path, start, end, in } in BigInt ticks. Rules modelled (PREMIERE_FACTS "Placing"):
+   - createOverwriteItemAction takes the plain ProjectItem; the ClipProjectItem.cast of it is
+     refused with "Invalid parameter." ("the item passed");
+   - it places the project item's In/Out span as read when the Action is made, so marks set in the
+     same compound are not seen ("State inside one compound");
+   - a track index equal to the track count creates the track; a larger one is unproven: refused.
+   Overlaps are not modelled: tests place into gaps.
+   `place(n)` runs as the n-th overwrite (from 1) is created: return a tick offset to land it off
+   its time, or throw to refuse it. Hidden state lives in closures and WeakMaps, never on the
+   objects, so FAKE_SHAPE can check every member. */
+function createTimelineHost({ path = "", media = [], sequences = [], place = () => 0n } = {}) {
+  const { project: core, undoSteps } = createProject();
+  const marks = new Map(); // media path -> { in, out }
+  const projectItems = new Map(); // media path -> ProjectItem
+  const mediaOf = new WeakMap(); // ProjectItem -> media
+  const clipOf = new WeakMap(); // ProjectItem -> ClipProjectItem
+  for (const m of media) {
+    marks.set(m.path, { in: 0n, out: m.duration });
+    const item = { name: m.path, getId: () => `item:${m.path}`, createSetNameAction: () => action(() => {}) };
+    const clip = {
+      name: m.path,
+      getMediaFilePath: async () => m.path,
+      getInPoint: async () => tickTime(marks.get(m.path).in),
+      getOutPoint: async () => tickTime(marks.get(m.path).out),
+      createSetInOutPointsAction: (inPoint, outPoint) =>
+        action(() => marks.set(m.path, { in: BigInt(inPoint.ticks), out: BigInt(outPoint.ticks) })),
+    };
+    projectItems.set(m.path, item);
+    mediaOf.set(item, m);
+    clipOf.set(item, clip);
+  }
+
+  const items = new WeakMap(); // raw clip -> track item
+  const rawOf = new WeakMap(); // track item -> raw clip
+  const trackItem = (raw) => {
+    if (!items.has(raw)) {
+      const item = {
+        getStartTime: async () => tickTime(raw.start),
+        getEndTime: async () => tickTime(raw.end),
+        getInPoint: async () => tickTime(raw.in),
+        getOutPoint: async () => tickTime(raw.in + raw.end - raw.start),
+        getProjectItem: async () => projectItems.get(raw.media.path),
+      };
+      items.set(raw, item);
+      rawOf.set(item, raw);
+    }
+    return items.get(raw);
+  };
+  const track = (list) => ({ name: "", getTrackItems: () => list.map(trackItem) });
+
+  let guids = 0;
+  const raws = [];
+  const addSequence = (seq) => { raws.push(seq); return seq; };
+  for (const seq of sequences) {
+    const tracks = (list) => list.map((t) => t.map((c) => ({ ...c, media: media.find((m) => m.path === c.media) })));
+    addSequence({ name: seq.name, guid: `seq${guids++}`, video: tracks(seq.video), audio: tracks(seq.audio) });
+  }
+  const wrappers = new WeakMap(); // raw sequence -> Sequence
+  const rawSeq = new WeakMap(); // Sequence -> raw sequence
+  const wrap = (s) => {
+    if (!wrappers.has(s)) {
+      const item = { name: s.name, getId: () => `item:${s.guid}`, createSetNameAction: (name) => action(() => { s.name = name; }) };
+      const copy = (list) => list.map((t) => t.map((c) => ({ ...c })));
+      const seq = {
+        get name() { return s.name; },
+        guid: { toString: () => s.guid },
+        getVideoTrackCount: async () => s.video.length,
+        getAudioTrackCount: async () => s.audio.length,
+        getVideoTrack: async (i) => track(s.video[i]),
+        getAudioTrack: async (i) => track(s.audio[i]),
+        getProjectItem: async () => item,
+        createCloneAction: () => action(() => addSequence({ name: `${s.name} Copy`, guid: `seq${guids++}`, video: copy(s.video), audio: copy(s.audio) })),
+      };
+      wrappers.set(s, seq);
+      rawSeq.set(seq, s);
+    }
+    return wrappers.get(s);
+  };
+
+  let placed = 0;
+  const editor = (s) => ({
+    createOverwriteItemAction(projectItem, time, videoTrack, audioTrack) {
+      const m = mediaOf.get(projectItem);
+      if (!m) throw new Error("Invalid parameter.");
+      const span = { ...marks.get(m.path) };
+      const at = BigInt(time.ticks) + place(++placed);
+      return action(() => {
+        const land = (tracks, i) => {
+          if (i > tracks.length) throw new Error("fake: a track index past the track count is unproven");
+          if (i === tracks.length) tracks.push([]);
+          tracks[i].push({ media: m, start: at, end: at + span.out - span.in, in: span.in });
+        };
+        if (m.video) land(s.video, videoTrack);
+        if (m.audio) land(s.audio, audioTrack);
+      });
+    },
+    createRemoveItemsAction(selection, ripple, mediaType) {
+      const chosen = [...selectionItems.get(selection)].map((item) => rawOf.get(item));
+      const sides = [[s.video, Constants.MediaType.VIDEO], [s.audio, Constants.MediaType.AUDIO]]
+        .filter(([, type]) => mediaType === Constants.MediaType.ANY || mediaType === type);
+      return action(() => {
+        for (const [tracks] of sides) for (const t of tracks) for (const raw of chosen) if (t.includes(raw)) t.splice(t.indexOf(raw), 1);
+      });
+    },
+  });
+
+  let saves = 0;
+  const project = {
+    ...core,
+    path,
+    getSequences: async () => raws.map(wrap),
+    save: async () => { saves++; return true; },
+  };
+  const ppro = {
+    Project: { getActiveProject: async () => project },
+    ClipProjectItem: { cast: (projectItem) => clipOf.get(projectItem) || null },
+    SequenceEditor: { getEditor: (seq) => editor(rawSeq.get(seq)) },
+    TickTime, TrackItemSelection, Constants, PointF,
+  };
+  const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path })));
+  return {
+    ppro, project, undoSteps,
+    get saves() { return saves; },
+    marks: (mediaPath) => ({ ...marks.get(mediaPath) }),
+    // Every sequence by name, as plain clips per side.
+    sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio") }; },
+    // One of each fake object, for FAKE_SHAPE.
+    samples: () => {
+      const s = raws[0];
+      return { sequence: wrap(s), projectItem: projectItems.get(media[0].path), clip: clipOf.get(projectItems.get(media[0].path)),
+        videoTrack: track(s.video[0]), audioTrack: track(s.audio[0]), videoItem: trackItem(s.video[0][0]),
+        audioItem: trackItem(s.audio[0][0]), editor: editor(s) };
+    },
+  };
+}
+
+const sampleHost = createTimelineHost({
+  media: [{ path: "a.mp4", video: true, audio: true, duration: 10n }],
+  sequences: [{ name: "s", video: [[{ media: "a.mp4", start: 0n, end: 1n, in: 0n }]], audio: [[{ media: "a.mp4", start: 0n, end: 1n, in: 0n }]] }],
+});
+const sample = sampleHost.samples();
 
 // Adobe class each fake member stands for; checked against the typings index by
 // tests/cutdeck_fake_premiere.test.cjs. "static" = the class's static side (FooStatic).
@@ -96,7 +243,19 @@ const FAKE_SHAPE = [
   { adobe: "TickTime", side: "static", fake: TickTime },
   { adobe: "TrackItemSelection", side: "static", fake: TrackItemSelection },
   { adobe: "PointF", side: "instance", fake: new PointF() },
-  { adobe: "Project", side: "instance", fake: createProject().project },
+  { adobe: "Project", side: "instance", fake: sampleHost.project },
+  { adobe: "Project", side: "static", fake: sampleHost.ppro.Project },
+  { adobe: "Sequence", side: "instance", fake: sample.sequence },
+  { adobe: "Guid", side: "instance", fake: sample.sequence.guid },
+  { adobe: "ProjectItem", side: "instance", fake: sample.projectItem },
+  { adobe: "ClipProjectItem", side: "instance", fake: sample.clip },
+  { adobe: "ClipProjectItem", side: "static", fake: sampleHost.ppro.ClipProjectItem },
+  { adobe: "VideoTrack", side: "instance", fake: sample.videoTrack },
+  { adobe: "AudioTrack", side: "instance", fake: sample.audioTrack },
+  { adobe: "VideoClipTrackItem", side: "instance", fake: sample.videoItem },
+  { adobe: "AudioClipTrackItem", side: "instance", fake: sample.audioItem },
+  { adobe: "SequenceEditor", side: "static", fake: sampleHost.ppro.SequenceEditor },
+  { adobe: "SequenceEditor", side: "instance", fake: sample.editor },
   { adobe: "CompoundAction", side: "instance", fake: { addAction() {} } },
   { adobe: "Constants", side: "enums", fake: Constants },
 ];
@@ -112,5 +271,6 @@ module.exports = {
   assertPointValue,
   createProject,
   TrackItemSelection,
+  createTimelineHost,
   FAKE_SHAPE,
 };
