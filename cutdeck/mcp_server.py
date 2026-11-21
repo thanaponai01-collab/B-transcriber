@@ -64,8 +64,9 @@ def create_server(backend: Backend) -> FastMCP:
 
         Uses the existing configured ASR pipeline. Results are timestamped phrase
         cues, not guaranteed individual words. Poll get_job then get_result.
-        language: "th" (default) or "en" for English-language audio; the Thai model translates
-        English into Thai unless told "en". The newest transcript of a file is the one
+        language: "th" (default), "en" for English-language audio, or "auto" (the model scores
+        three samples each way and picks; proven on Thai and English files). The Thai model
+        translates English into Thai unless told "en" or "auto". The newest transcript of a file is the one
         premiere_timeline_transcript uses.
         """
         return await backend.transcribe(media_path, language)

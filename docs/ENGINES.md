@@ -159,3 +159,13 @@ transcribes it correctly ("They're not having a good weekend, generally. Haas lo
 The language is now `config["language"]` (default `th`, so existing caches keep their identity),
 carried on `JobPlan.language`; a per-job override is `transcribe(..., language="en")` (MCP
 `transcribe(media_path, language)`), cached apart from the Thai transcript.
+
+**`language: auto` (2026-11-22).** The Thai checkpoint's own language detector calls everything Thai
+(0.97-0.99 on the English broadcast). Its decode confidence separates the languages instead: on 12
+samples of 4 files (1 English, 3 Thai full of English F1 names), the token-weighted mean
+log-probability of a beam-1 decode was higher for the right language every time.
+`FasterWhisperEngine._pick_language` scores three 30 s samples each way (at 20/50/80% of the file)
+and takes the majority. Live: on the English broadcast it chose English (identical to `en`, job 89 vs
+87); on the Gillette review it chose Thai (identical to `th`, job 88 vs 84). It is opt-in
+(`transcribe(language="auto")`). The default stays `th`, because changing it would change every
+cache identity, and the harness gates on `th`.

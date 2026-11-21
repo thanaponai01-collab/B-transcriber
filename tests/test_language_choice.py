@@ -30,3 +30,24 @@ def test_service_passes_the_language_into_the_config(monkeypatch, tmp_path):
         except RuntimeError:
             pass
         assert seen["language"] == expect
+
+
+def test_auto_language_majority_vote_from_decode_confidence():
+    import numpy as np
+    from transcribe.engines.faster_whisper import FasterWhisperEngine as E
+    eng = E.__new__(E)
+    eng._auto_language = None
+    calls = iter([(-0.3, -0.9), (-0.8, -0.4), (-0.2, -0.6)])  # (th, en) per sample: th wins 2 of 3
+    pairs = []
+    def score(audio, lang):
+        if lang == "th":
+            pairs.append(next(calls))
+            return pairs[-1][0]
+        return pairs[-1][1]
+    eng._language_score = score
+    assert eng._pick_language(np.zeros(16000 * 120, np.float32)) == "th"
+    eng._auto_language = None
+    calls = iter([(-0.9, -0.3), (-0.8, -0.4), (-0.2, -0.6)])   # en wins 2 of 3
+    pairs.clear()
+    assert eng._pick_language(np.zeros(16000 * 120, np.float32)) == "en"
+    assert eng._pick_language(None) == "en"                     # remembered
