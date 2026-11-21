@@ -157,26 +157,30 @@ reports which of the cut's edges sit within a frame of an edge of that project's
 **Most of your edges are the Rough Cut's edges, not edges you placed by ear:** 30 of 34 on the
 Max Short, 97 of 120 on `tt`, 1,858 of 1,888 on `yt`. The aggressive Rough Cut itself pads 60/40 ms
 (docs/rough-cut.md), so agreement on those cuts mostly measures agreement with the Rough Cut.
-**Only the Gillette review (`edioting`) is independent:** there is no rough cut in that project,
-and 0 of its 46 edges sit on one. That you placed these by hand is an assumption.
+**Two cuts are independent:** the Gillette review (`edioting`, 46 edges) and the Gillette Vegas
+lecture's `tt` (20261116, 104 edges). Neither project has a CutDeck rough cut, and 0 of their
+edges sit on one. That you placed these by hand is an assumption.
 
 Final code, all four cuts (within 1 frame / within 100 ms / off by more than 200 ms):
 
 | cut | edges | pad 120 | **pad 60 (default)** | pad 60 + wordless 600 ms |
 |---|---|---|---|---|
 | Gillette review, independent | 46 | 7 / 23 / 6 | **16 / 34 / 6** | 12 / 33 / 6 |
+| Gillette Vegas lecture `tt` (20261116), independent | 104 | 18 / 48 / 25 | **31 / 63 / 25** | 24 / 62 / 26 |
 | Max Short (30 of 34 on rough-cut edges) | 34 | 8 / 23 / 5 | 22 / 23 / 5 | 24 / 25 / 2 |
 | tiw `tt` (97 of 120 on rough-cut edges) | 120 | 14 / 84 / 16 | 70 / 87 / 16 | 66 / 85 / 18 |
 | tiw `yt` (1,858 of 1,888 on rough-cut edges) | 1,888 | 218 / 1,383 / 270 | 1,241 / 1,439 / 271 | 1,195 / 1,420 / 272 |
 
-- **Pad 60 ms** is the default. It is better on the one independent cut, and it agrees with the Rough
+- **Pad 60 ms** is the default. It is better on both independent cuts, and it agrees with the Rough
   Cut's own edges on the others. On the few non-rough-cut edges of `tt` (23) and `yt` (30), 60 and
   120 tie.
 - **Wordless sound** (a laugh or breath touching the phrase) is worse on the independent cut. It is
   **off by default** (`wordless_ms`).
 - **The big misses are not an editing habit.** Most sit on rough-cut edges where the audio is quiet
-  (sound at the edge: 1 of 16 on `tt`, 22 of 271 on `yt`, 4 of 6 on Gillette). There the engine's
-  word spans a pause that the Rough Cut cut into. A reading I gave earlier tonight ("you trim
+  (sound at the edge: 1 of 16 on `tt`, 22 of 271 on `yt`). There the engine's word spans a pause
+  that the Rough Cut cut into. On the two hand cuts the misses do have sound at your edge (4 of 6;
+  21 of 25): there you cut inside a word on purpose, and the planner, which keeps whole words,
+  can't match it. A reading I gave earlier tonight ("you trim
   dragged syllables") did not survive this check and is withdrawn.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
