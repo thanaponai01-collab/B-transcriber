@@ -118,6 +118,35 @@ async function activeProjectAndSequence(ppro, { requireSequence = true, requireP
   return { project, sequence: sequence || null };
 }
 
+// The active project, or "Open a Premiere project first." (Project.getActiveProject, premierepro.txt:496).
+async function activeProject(ppro) {
+  const project = ppro && ppro.Project ? await ppro.Project.getActiveProject() : null;
+  if (!project) throw new Error("Open a Premiere project first.");
+  return project;
+}
+
+// Every sequence whose name is exactly `name` (Project.getSequences :503, Sequence.name :612).
+async function sequencesNamed(project, name) {
+  return (await project.getSequences()).filter((s) => s.name === name);
+}
+
+// The one sequence named `name`; with no name, the active sequence (Project.getActiveSequence :497).
+async function sequenceNamed(project, name) {
+  if (!name) {
+    const active = await project.getActiveSequence();
+    if (!active) throw new Error("Open a sequence in Premiere first, or name one.");
+    return active;
+  }
+  const found = await sequencesNamed(project, name);
+  if (found.length !== 1) throw new Error(found.length ? `${found.length} sequences are named "${name}".` : `No sequence named "${name}".`);
+  return found[0];
+}
+
+async function projectAndSequenceNamed(ppro, name) {
+  const project = await activeProject(ppro);
+  return { project, sequence: await sequenceNamed(project, name) };
+}
+
 module.exports = {
   CUTDECK_BIN_NAME,
   ROUGH_CUTS_BIN_NAME,
@@ -127,4 +156,8 @@ module.exports = {
   runTransaction,
   getOrCreateBin,
   activeProjectAndSequence,
+  activeProject,
+  sequencesNamed,
+  sequenceNamed,
+  projectAndSequenceNamed,
 };

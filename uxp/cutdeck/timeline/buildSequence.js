@@ -56,7 +56,7 @@
    + VideoComponentChain.createAppendComponentAction (re-fetch after commit), ComponentParam
    createKeyframe / createSetValueAction. */
 
-const { runTransaction } = require("../host/project.js");
+const { runTransaction, sequencesNamed } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
 const { applyMotionValues } = require("../transform/apply.js");
@@ -75,8 +75,7 @@ const abs = (x) => (x < 0n ? -x : x);
    create_sequence); items then find their media through media_from. */
 async function namedSequence(ppro, project, name, allowEmpty = false) {
   let empty = null;
-  for (const seq of await project.getSequences()) {
-    if (seq.name !== name) continue;
+  for (const seq of await sequencesNamed(project, name)) {
     const read = await readSequence(ppro, seq, { paths: true });
     if (read.video.length || read.audio.length) return { seq, read };
     empty = empty || { seq, read };
