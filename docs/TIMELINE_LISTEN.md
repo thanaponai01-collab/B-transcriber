@@ -208,3 +208,4 @@ Tests:
 - `listen short (scratch)` (the reordered Short)
 - `listen test A words v2 (scratch)`, `listen test A words v3 (scratch)` and `listen test A no-er v2 (scratch)` (`cut_words` on the final code)
 - `listen two sources (scratch)` (mic file on A1-A4, camera file on V2/A5)
+- `listen rough-first (scratch)` (the never-transcribed source on A5; its rough cut was analysed but not applied)
