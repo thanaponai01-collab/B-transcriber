@@ -274,8 +274,24 @@ def test_source_words_reads_the_store_and_its_corrections(tmp_path):
     store.create_correction(conn, job_id, 1, "ไปละ", "ไปแล้ว", "a")
     conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (job_id,))
     conn.commit(); conn.close()
-    got_job, words, levels = tt.source_words(str(media), db)
-    assert got_job == job_id and levels is None
+    got_job, words, levels, gaps = tt.source_words(str(media), db)
+    assert got_job == job_id and levels is None and gaps == []
     assert [(w.text, w.corrected) for w in words] == [("สวัสดีครับ", False), ("ไป", True), ("แล้ว", True)]
     assert (words[1].start_ms, words[2].end_ms) == (3000, 3500)
     assert tt.source_words(str(media), db)[0] == job_id  # sha256 now comes from the index
+
+
+def test_untranscribed_speech_is_mapped_and_everything_filters_by_range(tmp_path):
+    import numpy as np
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    levels = np.full(800, -70.0, dtype=np.float32)
+    levels[440:460] = -30.0                     # sound at 4.4-4.6 s, where clip A1@1 starts
+    gaps = [(4500, 5200)]                       # the VAD heard speech no cue covers
+    lookup = lambda m: (1, SOURCE, levels, gaps)
+    tl = timeline(clip("A1@0", 0, 900, 2100, media), clip("A1@1", 3000, 4500, 6800, media))
+    r = tt.build(tl, lookup=lookup)
+    (u,) = r["untranscribed"]
+    assert u["clip"] == "A1@1" and (u["start_s"], u["end_s"]) == (3.0, 3.7)
+    assert any(e["clip"] == "A1@1" for e in r["cuts_in_sound"])
+    early = tt.build(tl, lookup=lookup, from_ticks=0, to_ticks=2000 * T)
+    assert early["untranscribed"] == [] and all(e["at_s"] < 2 for e in early["cuts_in_sound"])

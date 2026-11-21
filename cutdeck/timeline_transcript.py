@@ -325,6 +325,24 @@ def level_at(clips: list[Clip], levels_by_media: dict, ticks: int) -> float | No
     return float("-inf")
 
 
+def spans_on_timeline(clips: list[Clip], spans_by_media: dict[str, list[tuple[int, int]]],
+                      ticks_per_frame: int) -> list[dict]:
+    """Source spans (ms) where each clip plays them, cut to the clip, in sequence order."""
+    out = []
+    for clip in clips:
+        for a, b in spans_by_media.get(clip.media) or []:
+            lo, hi = max(a * TICKS_PER_MS, clip.in_), min(b * TICKS_PER_MS, clip.out)
+            if hi <= lo:
+                continue
+            start = clip.start + round((lo - clip.in_) / clip.speed)
+            end = clip.start + round((hi - clip.in_) / clip.speed)
+            out.append({"tc": timecode(start, ticks_per_frame), "start_s": seconds(start), "end_s": seconds(end),
+                        "start_ticks": str(start), "end_ticks": str(end), "clip": clip.id,
+                        "src_s": [a / 1000, b / 1000]})
+    out.sort(key=lambda x: int(x["start_ticks"]))
+    return out
+
+
 def _norm(text: str) -> str:
     return "".join(ch for ch in unicodedata.normalize("NFC", text).lower()
                    if not ch.isspace() and not unicodedata.category(ch).startswith("P"))
@@ -496,7 +514,7 @@ def media_sha256(path: str, db_path: Path) -> str:
     return index[key]
 
 
-def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object] | None:
+def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object, list] | None:
     """(transcript job id, word timeline, level envelope or None) of the newest finished transcript of this file, or
     None when it has never been transcribed. With ``levels_dir``, word times are tightened to
     the audio (`tighten`); the file's level envelope is cached there by sha256."""
@@ -513,13 +531,18 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
         words = source_word_list(words_for_job(conn, job.id), cues)
         words = apply_corrections(words, {c.token_idx: c.corrected_text
                                           for c in store.get_corrections(conn, job.id)})
+        # Speech the VAD heard that no cue covers: the engine dropped it (transcribe.service's
+        # coverage_gaps). On the timeline an agent would otherwise read it as a pause.
+        from transcribe.pipeline import coverage
+        speech = [(sp.start_ms, sp.end_ms) for sp in store.get_speech_spans(conn, job.id) if sp.kind == "speech"]
+        gaps = [(g.start_ms, g.end_ms) for g in coverage.find_gaps(speech, cues)]
     finally:
         conn.close()
     levels = None
     if levels_dir is not None:
         levels = source_levels(media, levels_dir / f"{sha}.npy")
         words = tighten(words, levels)
-    return job.id, words, levels
+    return job.id, words, levels, gaps
 
 
 def _source_entry(media: str, job_id: int, probe_streams: bool) -> dict:
@@ -549,7 +572,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         lookup = lambda media: source_words(media, db, levels_dir)  # noqa: E731
     tpf = int(timeline["ticks_per_frame"])
     track_id, clips, skipped = audio_clips(timeline, track)
-    words_by_media, levels_by_media, jobs, missing = {}, {}, {}, []
+    words_by_media, levels_by_media, gaps_by_media, jobs, missing = {}, {}, {}, {}, []
     for media in dict.fromkeys(c.media for c in clips):
         if not Path(media).is_file():
             missing.append({"media": media, "reason": "file is missing or offline"})
@@ -562,6 +585,8 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         jobs[media], words_by_media[media] = found[0], found[1]
         if len(found) > 2 and found[2] is not None:
             levels_by_media[media] = found[2]
+        if len(found) > 3:
+            gaps_by_media[media] = found[3]
     words = project(clips, words_by_media)
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
@@ -570,10 +595,16 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
               "words": len(words), "cuts_in_sound": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
     if query:
         result["matches"] = find(words, query, tpf)
+    result["untranscribed"] = spans_on_timeline(clips, gaps_by_media, tpf)
     if from_ticks is not None or to_ticks is not None:
         lo = from_ticks if from_ticks is not None else 0
         hi = to_ticks if to_ticks is not None else 1 << 62
-        all_lines = [ln for ln in all_lines if int(ln["end_ticks"]) > lo and int(ln["start_ticks"]) < hi]
+        inside = lambda a, b: b > lo and a < hi  # noqa: E731
+        all_lines = [ln for ln in all_lines if inside(int(ln["start_ticks"]), int(ln["end_ticks"]))]
+        result["untranscribed"] = [u for u in result["untranscribed"]
+                                   if inside(int(u["start_ticks"]), int(u["end_ticks"]))]
+        result["cuts_in_sound"] = [e for e in result["cuts_in_sound"]
+                                   if lo <= round(e["at_s"] * PPRO_TICKS_PER_SECOND) < hi]
     result["line_count"] = len(all_lines)
     result["lines"] = all_lines[offset:offset + limit]
     result["next_offset"] = offset + limit if offset + limit < len(all_lines) else None

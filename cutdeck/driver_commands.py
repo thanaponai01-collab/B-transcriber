@@ -1004,7 +1004,9 @@ HELPER_COMMANDS: dict[str, Command] = {
         audio track (track "A1", default the first un-muted one with clips) onto the timeline in exact
         ticks. Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
         `cuts_in_sound`: every clip In/Out with audible sound at the cut (a bad cut), with the word
-        it cuts when one covers it and the shift to the nearest quiet spot. `query` finds
+        it cuts when one covers it and the shift to the nearest quiet spot. `untranscribed`: speech
+        the engine left without words (read it as talk, not a pause). from_ticks/to_ticks narrow
+        lines, cuts_in_sound and untranscribed alike. `query` finds
         a phrase (matches, also across a cut). `missing` lists source files never transcribed: run
         transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
         of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
