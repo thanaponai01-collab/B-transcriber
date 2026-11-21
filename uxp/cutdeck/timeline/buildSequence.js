@@ -262,6 +262,9 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
   try {
     for (let i = 0; i < plan.length; i++) {
       const it = plan[i];
+      // Premiere froze here once with no error (live 2026-11-21 17:57, after "cleared"): log each
+      // item before its host calls so the next freeze names the item.
+      log(`placing ${i + 1} of ${plan.length} (${it.id})`);
       const clip = ppro.ClipProjectItem.cast(it.projectItem);
       if (!marks.has(it.key)) {
         marks.set(it.key, { clip, in: await clip.getInPoint(ppro.Constants.MediaType.VIDEO), out: await clip.getOutPoint(ppro.Constants.MediaType.VIDEO) });
@@ -278,7 +281,6 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
         const a = it.a === null || it.a === undefined ? scratch.a : it.a;
         if (!c.addAction(editor.createOverwriteItemAction(it.projectItem, tick(it.at), v, a))) throw new Error(`place refused (${it.id})`);
       });
-      if ((i + 1) % 50 === 0) log(`placed ${i + 1} of ${plan.length}`);
     }
   } catch (e) {
     try { restoreMarks(); } catch (r) { log(`restoring source marks failed too: ${r.message}`); }
