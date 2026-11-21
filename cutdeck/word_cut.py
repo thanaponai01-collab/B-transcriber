@@ -42,14 +42,12 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
     return inside[0], inside[-1]
 
 
-DIP_FRAMES = 2  # with no quiet frame, how far either side of the target to look for the quietest
-
-
-def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, dip: str) -> tuple[int, float | None]:
+def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int, float | None]:
     """The frame boundary in ``[lo, hi]`` (ticks: the pause) nearest ``frame`` whose audio is
     quiet (``level_at`` below 0): ``(frame, None)``. When the pause has none (words touching),
-    the quietest boundary up to ``DIP_FRAMES`` toward the words being dropped (``dip`` "later" or
-    "earlier"), never into the kept ones: ``(frame, its dB over the sound threshold)``."""
+    ``frame`` stays, the word boundary, with its dB over the sound threshold. (Moving to a
+    the quietest frame nearby (a dip) was tried live, 2026-11-22: it left part of a removed filler
+    behind and never removed a cut in sound.)"""
     first, last = -(-lo // tpf), hi // tpf
     for step in range(max(last - first, 0) + 1):
         for f in (frame - step, frame + step):
@@ -57,16 +55,8 @@ def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, dip: str) -> 
                 level = level_at(f * tpf)
                 if level is not None and level < 0:
                     return f, None
-    if dip == "later":
-        candidates = range(max(frame, first), frame + DIP_FRAMES + 1)
-    else:
-        candidates = range(frame - DIP_FRAMES, min(frame, last) + 1)
-    best, best_level = frame, None
-    for f in candidates:
-        level = level_at(f * tpf) if f >= 0 else None
-        if level is not None and (best_level is None or level < best_level):
-            best, best_level = f, level
-    return best, (round(best_level, 1) if best_level is not None else float("inf"))
+    level = level_at(frame * tpf)
+    return frame, (round(level, 1) if level is not None else float("inf"))
 
 
 def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: int,
@@ -95,9 +85,9 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
         no_quiet = {}
         if level_at is not None:
             # The quiet frame in the pause nearest the target; the engine's word edges can be
-            # off, the audio is not. No quiet frame: the dip, with its level over threshold.
-            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "later")
-            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "earlier")
+            # off, the audio is not. No quiet frame: the word boundary, with its level over threshold.
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at)
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at)
             no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
         spans.append((fa, fb))
         details.append({"text": "".join(w.text for w in words[i:j + 1]) if not remove.get("text") else remove["text"],
@@ -105,7 +95,7 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
                         "pause_before_ms": round(gap_before / TICKS_PER_MS),
                         "pause_after_ms": round(gap_after / TICKS_PER_MS),
                         "tight": gap_before < 2 * tpf or gap_after < 2 * tpf,
-                        # side -> dB over the sound threshold at the dip it was cut on
+                        # side -> dB over the sound threshold at the word boundary it was cut on
                         **({"no_quiet": no_quiet} if no_quiet else {})})
     spans.sort()
     merged: list[list[int]] = []
@@ -131,8 +121,7 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
 
     The phrase is found on this timeline (a rough cut, a copy), but its edges are placed in the
     SOURCE file: in the pauses around its words there (``pad_ms`` of pause, then the nearest
-    quiet frame; with no pause, the dip toward the dropped neighbour, never into the kept
-    words). A rough cut has already removed most pauses; the source still has them, so the
+    quiet frame; with no pause, the word boundary). A rough cut has already removed most pauses; the source still has them, so the
     piece starts and ends cleanly even where the rough cut's words touch, and never carries a
     sliver of a neighbouring clip.
 
@@ -164,8 +153,8 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
         no_quiet = {}
         if source_level is not None:
             level = lambda t: source_level(media, t)  # noqa: E731
-            fa, loud_a = _quiet_frame(fa, before, first, tpf, level, "earlier")
-            fb, loud_b = _quiet_frame(fb, last, after, tpf, level, "later")
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level)
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level)
             no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
         piece = {"text": keep.get("text") or "".join(w.text for w in kept), "media": media,
                  "in_ticks": str(fa * tpf), "out_ticks": str(fb * tpf),

@@ -1066,7 +1066,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         with cut_copy, then reads it back: `checks` (how often each phrase is said before and
         after), `joins` (the words either side of each join), and `new_cuts_in_sound` (any new cut
         with audible sound at it; empty is the goal). Each cut sits on the quiet frame in the
-        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame, the dB over the sound threshold at the dip it was cut on. Needs the CutDeck panel open and the
+        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame (words touching), the dB over the sound threshold at the word boundary it was cut on. Needs the CutDeck panel open and the
         sources transcribed.
         """,
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
@@ -1079,8 +1079,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
         default the active one, e.g. a rough cut). Each piece's edges are placed in the SOURCE
         file's own pauses around its words, so they are clean even where the rough cut removed the
-        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the dip toward the
-        dropped words, never into the kept ones; `no_quiet` says so). Returns `items` ready for
+        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the word boundary;
+        `no_quiet` says so). Returns `items` ready for
         premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
         nothing. Read the built Short back with premiere_timeline_transcript.

@@ -76,13 +76,11 @@ def test_cut_moves_to_the_quiet_frame_in_the_pause():
     assert loud["removals"][0]["no_quiet"] == {"start": 5.0, "end": 5.0}
 
 
-def test_touching_words_cut_on_the_dip_inside_the_removed_word_never_the_kept_one():
-    # "four" 2.2-2.6 touches "five" 2.6-3.0 (frame 78). The audio dips at frame 77, inside "four",
-    # and dips deeper at frame 79, inside the kept "five": the cut must take 77.
-    level_at = lambda t: {77 * TPF: 3.0, 79 * TPF: 1.0}.get(t, 8.0)
+def test_touching_words_cut_at_the_boundary_and_report_its_level():
+    level_at = lambda t: 3.0
     p = word_cut.plan(WORDS, [{"text": "four"}], TPF, END, level_at=level_at)
     end = p["cuts_frames"][0][1]
-    assert end == 77 and end * TPF <= 2600 * MS and p["removals"][0]["no_quiet"]["end"] == 3.0
+    assert abs(end * TPF - 2600 * MS) <= TPF and p["removals"][0]["no_quiet"]["end"] == 3.0
 
 
 def _src(words):
@@ -104,9 +102,7 @@ def test_plan_pieces_places_edges_in_the_source_pauses_in_the_order_given():
     assert int(one["in_ticks"]) == 0 and 500 <= int(one["out_ticks"]) // MS <= 1000
 
 
-def test_plan_pieces_dips_toward_the_dropped_neighbour():
-    # Keep "four" (ends 2.6 s where "five" begins, frame 78): no quiet; the dip at 80 is in "five"
-    # (dropped), the one at 76 inside "four" (kept): the end may only move later.
-    level = lambda media, t: {76 * TPF: 1.0, 80 * TPF: 2.0}.get(t, 8.0)
+def test_plan_pieces_with_no_pause_ends_at_the_word_boundary():
+    level = lambda media, t: 8.0
     (piece,) = word_cut.plan_pieces(WORDS, [{"text": "four"}], TPF, _src(WORDS), level)
-    assert int(piece["out_ticks"]) == 80 * TPF and piece["no_quiet"]["end"] == 2.0
+    assert abs(int(piece["out_ticks"]) - 2600 * MS) <= TPF and piece["no_quiet"]["end"] == 8.0
