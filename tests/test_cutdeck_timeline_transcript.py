@@ -295,3 +295,13 @@ def test_untranscribed_speech_is_mapped_and_everything_filters_by_range(tmp_path
     assert any(e["clip"] == "A1@1" for e in r["cuts_in_sound"])
     early = tt.build(tl, lookup=lookup, from_ticks=0, to_ticks=2000 * T)
     assert early["untranscribed"] == [] and all(e["at_s"] < 2 for e in early["cuts_in_sound"])
+
+
+def test_a_track_that_repeats_a_lower_tracks_clip_is_warned_as_a_later_stream(tmp_path):
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    c = clip("A1@0", 0, 900, 2100, media)
+    tl = timeline(c)
+    tl["tracks"].append({"id": "A2", "kind": "audio", "muted": False, "clips": [dict(c, id="A2@0")]})
+    assert "warnings" not in run(tl)
+    (warning,) = run(tl, track="A2")["warnings"]
+    assert "A2@0" in warning and "later audio stream" in warning

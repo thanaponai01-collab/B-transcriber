@@ -325,6 +325,21 @@ def level_at(clips: list[Clip], levels_by_media: dict, ticks: int) -> float | No
     return float("-inf")
 
 
+def later_stream_clips(timeline: dict, track_id: str) -> list[str]:
+    """Clips on ``track_id`` that look like a later audio stream of their file: a lower audio
+    track plays the same file over the same source span at the same place. Premiere lays each
+    stream of a multi-stream file on its own track (live 2026-11-22: a 4-stream OBS file landed on
+    A1-A4), while the transcript and levels are of the file's first stream."""
+    tracks = [t for t in timeline.get("tracks", []) if t.get("kind") == "audio"]
+    ids = [t["id"] for t in tracks]
+    if track_id not in ids:
+        return []
+    lower = {(c.get("media"), c["start_ticks"], c["in_ticks"], c["out_ticks"])
+             for t in tracks[:ids.index(track_id)] for c in t.get("clips", [])}
+    return [c["id"] for c in tracks[ids.index(track_id)].get("clips", [])
+            if (c.get("media"), c["start_ticks"], c["in_ticks"], c["out_ticks"]) in lower]
+
+
 def spans_on_timeline(clips: list[Clip], spans_by_media: dict[str, list[tuple[int, int]]],
                       ticks_per_frame: int) -> list[dict]:
     """Source spans (ms) where each clip plays them, cut to the clip, in sequence order."""
@@ -596,6 +611,12 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
     if query:
         result["matches"] = find(words, query, tpf)
     result["untranscribed"] = spans_on_timeline(clips, gaps_by_media, tpf)
+    later = later_stream_clips(timeline, track_id)
+    if later:
+        result["warnings"] = [f"{len(later)} clip(s) on {track_id} look like a later audio stream of their file "
+                              f"(a lower track plays the same file at the same place, e.g. {later[0]}); the "
+                              "transcript is of the first stream, so if the streams differ these words are not "
+                              "what this track plays"]
     if from_ticks is not None or to_ticks is not None:
         lo = from_ticks if from_ticks is not None else 0
         hi = to_ticks if to_ticks is not None else 1 << 62
