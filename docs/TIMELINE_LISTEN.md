@@ -331,10 +331,11 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
   so they cannot catch a stream mismatch.
 - **Long sources are transcribed whole.** A 3-hour stream takes about 7-8 min once, even if only
   10 minutes are used. After that it is free.
-- **Reordering after `keep_words` needs a workaround.** It was proven live, as `build_sequence` with
-  `into` and the steps clone far, lift, clone back, lift (the v3 recipe). But `build_sequence` needs
-  at least one item, so a 1-frame filler had to be placed and removed afterwards (`edit_clips`). A
-  `reorder` step, or allowing zero items, would remove that workaround.
+- **Reordering after `keep_words` is proven live**, as `build_sequence` with `into` and the steps
+  clone far, lift, clone back, lift (the v3 recipe). It first needed a filler item, because
+  `build_sequence` required at least one; it now accepts zero items with `into` and `steps` (also
+  proven live). Steps move whole clips by where they start (no razor), so give block boundaries
+  that sit on clip edges: a wrong boundary left a 1.3 s hole on a scratch.
 - **Everything tonight was 30 fps.** Every source and sequence was 30 fps; mixed frame rates are
   unproven.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources

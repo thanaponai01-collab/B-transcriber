@@ -111,8 +111,11 @@ def _build_arguments(args: dict, jobs) -> dict:
         raise ValueError("save must be true or false")
     if not isinstance(base, str) or not base.strip() or not isinstance(name, str) or not name.strip():
         raise ValueError("base and name must be sequence names")
-    if not isinstance(items, list) or not 0 < len(items) <= MAX_BUILD_ITEMS:
-        raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items")
+    # Steps on a copy (into), e.g. a reorder, may place nothing (live 2026-11-22: a reorder after
+    # keep_words otherwise needed a filler item placed and removed again).
+    only_steps = args.get("into") is True and bool(args.get("steps"))
+    if not isinstance(items, list) or not (0 if only_steps else 1) <= len(items) <= MAX_BUILD_ITEMS:
+        raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items (0 only with into and steps)")
     for it in items:
         if not isinstance(it, dict) or not (isinstance(it.get("media"), str) or isinstance(it.get("like"), dict)):
             raise ValueError("Each item needs media (a file path) or like ({kind, track, start_ticks})")

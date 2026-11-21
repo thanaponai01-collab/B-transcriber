@@ -214,3 +214,14 @@ def test_control_commands_check_ids_ticks_and_ops(tmp_path):
         except ValueError:
             continue
         raise AssertionError(f"{name} accepted {args}")
+
+
+def test_build_sequence_takes_no_items_only_for_steps_on_a_copy():
+    import pytest
+    from cutdeck.driver_commands import COMMANDS
+    prepare = COMMANDS["build_sequence"].prepare
+    base = {"project": "C:/p.prproj", "base": "s", "name": "s", "items": []}
+    with pytest.raises(ValueError, match="0 only with into and steps"):
+        prepare(base, None)
+    steps = [{"op": "lift", "from_ticks": "0", "to_ticks": "10"}]
+    assert prepare({**base, "options": {"into": True, "steps": steps}}, None)["items"] == []
