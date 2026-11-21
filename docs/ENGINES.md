@@ -135,6 +135,18 @@ DBs, with a 21-term name glossary (รัสเซล, นอริส, แม�
 | `bias_channel: prompt` (production) | 1,854 (−28%) | 14 | 13 × แม็คลาเรน, plus lists like "แม็คลาเรน อัลไพน์ เลอแคลร์" in place of real speech |
 | `bias_channel: hotwords` | 1,805 (−30%) | 11 | แฮมิลตัน ×6, "รัสเซล รัสเซล" |
 
+List size does not save it (prompt channel, same window):
+
+| glossary terms | chars vs no glossary | text agreement | invented |
+|---|---|---|---|
+| 3 (รัสเซล, แม็คลาเรน, นอริส) | −14% | 0.77 | แม็คลาเรน ×17 |
+| 5 | −21% | 0.65 | แม็คลาเรน ×25, อัลไพน์ ×12 |
+| 10 | −32% | 0.58 | แฮมิลตัน ×17, เลอแคลร์ ×13 |
+| 21 | −28% | 0.60 | lists in place of speech |
+
+**The flywheel's learned bias terms use the same prompt channel** (`bias_prompt_budget`), so this
+risk grows as corrections accumulate; re-check it on the harness once the bias index has terms.
+
 The real lines lost under the glossary include "แม็กทีหนึ่งครับ ราเซลที่สอง คิมมิ ที่สามนอนดี".
 Don't feed name lists to the decoder. Fix names after decoding, with a reviewed substitution list or
 corrections through the flywheel, and measure on the gold set. Scripts and outputs are in

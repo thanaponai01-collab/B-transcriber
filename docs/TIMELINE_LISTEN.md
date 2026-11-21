@@ -220,7 +220,9 @@ Left as is:
   words on the timeline.
 - **A name glossary is not the fix for names.** Tried tonight on your F1 audio, through both the
   decoder prompt and hotwords. Names came out right ("รัสเซล" 1 → 14), but the model invented
-  name lists in place of real speech and dropped 28-30% of the text (details in docs/ENGINES.md).
+  name lists in place of real speech and dropped 28-30% of the text. Even a 3-name list invented
+  "แม็คลาเรน" 17 times and dropped 14% (details in docs/ENGINES.md). The flywheel's learned bias
+  terms go through the same channel, so the same risk grows as corrections accumulate.
   Fix names after decoding instead (a reviewed substitution list, or SubtitleDesk corrections
   through the flywheel).
 - **Text accuracy is unchanged.** This work fixes *where* words are, not *what* they are.
