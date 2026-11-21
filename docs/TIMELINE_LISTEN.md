@@ -16,7 +16,8 @@ code (master's helper refuses its `place_text` registration).
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
 - **Rough Cut** now reuses the stored source transcripts: no ASR pass, the same cuts frame for
-  frame.
+  frame. In your order (rough cut first), it transcribes the source file once instead of a
+  throwaway WAV, so everything after it is free.
 - Everything ran live in your project on scratch copies. Your `editing` sequence was only read.
   Nothing was saved or exported.
 
@@ -67,8 +68,13 @@ list of pieces of source files, so a word's timeline position is arithmetic:
 - Speed changes are mapped. Premiere reports a sped-up clip's In/Out divided by its speed, a new
   row in PREMIERE_FACTS. Reversed clips, disabled clips and clips with no media (nested
   sequences) are listed in `skipped`.
-- `sources[].note` warns when a file has several audio streams. Everything here, the Rough Cut
-  included, reads the first stream (see Gaps).
+- `untranscribed`: speech the VAD heard but no cue covers (the engine dropped it). It is mapped
+  onto the timeline so an agent does not mistake it for a pause. The 96-min source has 26 such
+  spans, 21.5 s in all.
+- `from_ticks` / `to_ticks` narrow `lines`, `cuts_in_sound` and `untranscribed` alike.
+- `sources[].note` warns when a file has several audio streams. `warnings` flags a track whose
+  clips look like a later stream (Premiere lays each stream on its own track). Everything here,
+  the Rough Cut included, reads the first stream (see Gaps).
 
 ### Word times fitted to the audio (`tighten`)
 Each source's 10 ms level envelope is decoded once, streamed, and cached by sha256 in
@@ -85,7 +91,9 @@ On the 96-min source, late onsets of 100+ ms went from 256 to 6 and early ends f
 - `remove`: `[{"text": "...", "occurrence": n}]` or `[{"from_ticks", "to_ticks"}]`.
 - Each cut runs from the pause before the words to the pause after them, leaving `keep_ms`
   (default 250, never more than was there) of pause at the join. It then moves to the nearest
-  frame where the audio is quiet; `no_quiet` says when a side had none.
+  frame where the audio is quiet. When the words touch and no frame is quiet, it cuts on the
+  quietest frame within 2 frames (the dip between syllables), and `no_quiet` gives that side's dB
+  above the sound threshold.
 - A phrase found only inside a longer word is refused, not cut through.
 - It makes `result_name` with `cut_copy` (the source is never edited), then reads the result back
   and returns:
@@ -95,7 +103,8 @@ On the 96-min source, late onsets of 100+ ms went from 256 to 6 and early ends f
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
-are mapped onto the range instead of transcribing the WAV. Otherwise it falls back to the old
+are mapped onto the range instead of transcribing the WAV. A source with no transcript is
+transcribed whole first when the cut uses at least half of it; otherwise it falls back to the old
 path. See docs/rough-cut.md.
 
 ### Agents are told
@@ -105,7 +114,9 @@ The MCP server's instructions now say: to know what a sequence says and where, c
 
 ## Evidence (live, Premiere 27.0, your project open)
 
-Run folder: `output/verify-cutdeck/runs/20261122-004515-timeline-listen/`, with every request and result.
+Run folders hold every request and result:
+- `output/verify-cutdeck/runs/20261122-004515-timeline-listen/`
+- `output/verify-cutdeck/runs/20261122-013033-timeline-listen-final/` (re-proofs on the final code)
 
 | Check | Result |
 |---|---|
@@ -123,15 +134,25 @@ Run folder: `output/verify-cutdeck/runs/20261122-004515-timeline-listen/`, with 
 | ... fresh transcript of timeline 2,200-2,400 s (source around 80-90 min) | median offset **−13 ms**; 85% text agreement. No drift late in the file; ffprobe shows start_time 0 on every stream |
 | Speed 200% and 50% on a 10 s scratch | every line lands at (source − 112 s) / speed |
 | Reordered Short built with `build_sequence` (3 pieces, new order) | read back in the new order at the exact positions (0.143 / 1.357 / 2.763 s); the 4 cuts into neighbouring words were flagged |
-| `cut_words`: remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" | said 1 → 0 each; joins read naturally; no new cut in sound |
-| `cut_words`: remove all three "เอ่อ" fillers | said 3 → 0; no new cut in sound |
+| Both rough cuts re-analysed offline on the final code (fitted words) | 119/119 and 1,652/1,652 cut spans, identical to the first runs |
+| `cut_words` (final code): remove all three "เอ่อ" fillers | said 3 → 0; joins read naturally; **no new cut in sound** |
+| `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts on the dips, 6-14 dB above threshold, and 4 `new_cuts_in_sound` reported. An earlier, weaker check had passed this case as clean |
+| Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
 - `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py` covers
   the mapping, speed, tightening and growth, audio-gated edges, late onsets, the cut planner,
   quiet snapping, whole-word matches and the rough-cut mapping.
-- Each test was shown to fail on a broken implementation.
-- The full suite has 1,308 passed. The only failures are 8 in `tests/test_text_box.py`, which also
+- Mutation checks, each turning at least one test red, then restored:
+  - the mapping without `- clip.in_`;
+  - edge growth off (`REACH_MS = 0`);
+  - the audible-edge gate off;
+  - unworded sound dropped;
+  - quiet snapping off;
+  - speed ignored, in the mapping and in the scaled In/Out;
+  - corrections off;
+  - the cut planner cutting at word edges.
+- The full suite has 1,315 passed. The only failures are 8 in `tests/test_text_box.py`, which also
   fail on the base branch: the `uharfbuzz` module is not installed here.
 - `node --test tests/*.cjs`: 795 passed. `scripts/check_rough_cut.py` passes.
 
@@ -148,9 +169,16 @@ Tests:
   whatever the engine, settings or age.
 - **One audio track per call.** On a synced multicam with the voice on A3, pass `track: "A3"`.
 - **First audio stream only.** Multi-stream files (OBS) are read from their first stream, and
-  UXP cannot say which stream a Premiere clip plays. Your 10-40-52 file has 4 streams: 1 and 2
-  are identical (the voice), 3 and 4 are silent, so it is fine. A file with mic and desktop on
-  separate streams would need a stream choice. The tool warns about this.
+  UXP cannot say which stream a Premiere clip plays. Placing your 4-stream 10-40-52 file put
+  streams 1-4 on **A1-A4** (live). Streams 1 and 2 are identical (the voice) and 3-4 are silent,
+  so it is fine. In a file with mic and desktop on separate streams, A2's words would be wrong.
+  The tool warns (`warnings`, `sources[].note`). The Rough Cut has the same blind spot: choose
+  A2 as Reference Audio and it still hears stream 1.
+- **Constant background sound hides pauses.** The sound rule is loudness against the file's
+  floor, so under a music bed or game audio there is no quiet frame. `cuts_in_sound` then lists
+  most edges, and `cut_words` reports `no_quiet`.
+- **Cutting inside continuous speech is never clean.** Run `cut_words` on a timeline that still
+  has its pauses (before the rough cut, or the source sequence) when you can.
 - **Reversed clips are skipped**, and so are nested sequences (no media file).
 - **Joins are frame-accurate, not sample-accurate.** A tight join (words touching) can be up to
   one frame (33 ms) off.
@@ -176,3 +204,5 @@ Tests:
 - `listen speed (scratch)` (the speed probe)
 - `listen full (scratch)` and `listen full (scratch) — CutDeck 4002a9e8` (the full-length rough cut)
 - `listen short (scratch)` (the reordered Short)
+- `listen test A words v2 (scratch)`, `listen test A words v3 (scratch)` and `listen test A no-er v2 (scratch)` (`cut_words` on the final code)
+- `listen two sources (scratch)` (mic file on A1-A4, camera file on V2/A5)
