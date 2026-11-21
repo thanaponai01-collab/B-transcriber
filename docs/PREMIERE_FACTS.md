@@ -280,6 +280,25 @@ Every `premiere_*` control tool (`uxp/cutdeck/timeline/control.js`) was run thro
 | `createInsertProjectItemAction(…, limitShift=false)` | WORKS | Ripples **every** track by the inserted length, not only the target tracks. | `place_media mode=insert` |
 | Head trim / move / disable / rename / In-Out / playhead / mute / markers / import / save / openSequence / exportSequenceFrame / bin walk (`FolderItem.cast`) | WORKS | Each read back as asked; `list_project` found bins and media; a PNG imported and placed as a still; save cleared the title's `*`. | scratch pass |
 
+## Menu and keyboard routes (27.0.0, 2026-11-21)
+
+How an agent runs commands the UXP panel cannot (razor, link, ripple delete, undo). Code: `cutdeck/menu.py`, `cutdeck/keys.py`; tools `premiere_menu_command`, `premiere_key_command`. All runs on the scratch sequence "CutDeck nest source (Claude)", each read back with `premiere_read_timeline`.
+
+| Fact | Status | Detail | Proof |
+|---|---|---|---|
+| Premiere's menu bar is a real Win32 menu | WORKS | `GetMenu(main window)` gives 9 menus, 478 items with command IDs, labels and shortcut text (e.g. Edit > Undo = 57643, Sequence > Add Edit to All Tracks = 11613). `PostMessage(WM_COMMAND, id)` runs the item as a click does. | live |
+| Menu: Edit > Undo / Redo | WORKS | Undid and redid a razor exactly, with no focus step. Ctrl+Z sent with SendInput did **nothing** in 4 tries, so undo goes through the menu. | live |
+| Menu: timeline commands follow panel focus | CATCH | Sequence > Add Edit to All Tracks did nothing with the Project panel focused and cut at the playhead with the timeline focused. This is the same rule as the native Control Surface route. | live |
+| Menu: Window > Timelines > *sequence name* | WORKS | Focuses exactly that sequence's timeline with no key press. The next Add Edit cut that sequence. This is how CutDeck focuses the timeline. | live |
+| Menu: enabled flag | CATCH | Read without opening the menu, even after `WM_INITMENUPOPUP`, it can be stale: Redo read disabled and then ran. A hint only. | live |
+| Menu: Clip > Link / Unlink | WORKS | The item is labelled "Unlink" while a linked clip is selected, and "Link" after running it. The label is the read-back: Unlink → Link → Unlink over two runs. | live |
+| Keys: the Timelines shortcut (Shift+3) cycles | CATCH | Pressed while a timeline already has focus, it switches to the **next** open sequence: TT max vs everyone v4 → ALL → CutDeck control test. Never press it blind. | live |
+| Keys: `Project.openSequence` from the panel takes focus away from the timeline | CATCH | After it, the Project panel had focus (screenshot), so a razor key did nothing. | live |
+| Keys: a Ctrl+Alt binding did not fire | CATCH | The user's Ctrl+Alt+Z (Add Edit to All Tracks) did nothing. Ctrl+Shift+K for the same command cut exactly at the playhead (12 s). No other command shares Ctrl+Alt+Z in the .kys, so something outside Premiere may take it. CutDeck picks Ctrl+Alt bindings last. | live |
+| Keys that worked | WORKS | Ctrl+Shift+K (razor all), Shift+Delete with a V+A selection (ripple delete: the later clip moved up by the piece), and End with the Program Monitor focused (playhead to the sequence end). | live |
+| .kys key codes | WORKS | Bit 31 set means a character (`0x8000004B` = K). Smaller values are Premiere's codes: 0x1 Space, 0x2 Backspace, 0x3 Tab, 0x4 Enter, 0x7 F1, 0x23 Delete, 0x24 Home, 0x25 End, 0x26/0x27 PageUp/PageDown, 0x2A-0x2D Left/Right/Up/Down (inferred from default bindings). 0xC00000xx and other codes are not mapped and are refused. The user's set is `Documents\Adobe\Premiere Pro\27.0\Profile-thana\Win\Thanapon Bas shortcuts 9.kys` (459 commands). | defaults + user .kys |
+| Native Control Surface spike against the **27.0** SDK | BUILDS | `tools/native-cutter-spike/verify.ps1` passes all synthetic host checks with `files/Premiere Pro 27.0 C++ SDK`. It is not installed; the install needs admin rights and a Premiere restart. | 2026-11-21 |
+
 ## Not UXP: ExtendScript / QE DOM
 
 Retired. Premiere 26.3 silently ignores QE `razor`/`ripple_delete` on some installs, and the File > Scripts

@@ -1,6 +1,12 @@
 param([string]$SdkRoot = '', [switch]$Test)
 $ErrorActionPreference = 'Stop'
-if (-not $SdkRoot) { $SdkRoot = Join-Path $PSScriptRoot '..\..\files\Premiere Pro 26.0 C++ SDK' }
+if (-not $SdkRoot) {
+  # The newest owner-supplied SDK under files/ (26.0 until 2026-11-21, then 27.0).
+  $SdkRoot = Get-ChildItem -Directory (Join-Path $PSScriptRoot '..\..\files') -Filter 'Premiere Pro * C++ SDK' |
+    Sort-Object { [version]($_.Name -replace '^Premiere Pro ([\d.]+) C\+\+ SDK$', '$1') } |
+    Select-Object -Last 1 -ExpandProperty FullName
+  if (-not $SdkRoot) { throw 'No Premiere Pro C++ SDK folder under files/' }
+}
 $SdkRoot = (Resolve-Path -LiteralPath $SdkRoot).Path
 $header = Join-Path $SdkRoot 'Examples\Headers\adobesdk\controlsurface\host\ControlSurfaceHostCommandSuite.h'
 if (-not (Test-Path -LiteralPath $header)) { throw 'Adobe Control Surface host-command header is missing' }

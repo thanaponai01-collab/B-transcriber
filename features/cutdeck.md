@@ -104,6 +104,14 @@
 - verify: CutDeck panel (UXP); CutDeck helper
 - status: live-proven 2026-11-21 on Premiere 27.0.0: every tool ran through the helper on scratch sequences in a real project (docs/PREMIERE_FACTS.md *General control live pass*). The live pass found and fixed a double-shift on ripple removes and made place_media fail when nothing lands. Not run through an MCP client session itself (the same helper path was used).
 
+## Premiere menu and keyboard commands (MCP)
+- what: Run what the panel API cannot do. `premiere_list_menu` and `premiere_menu_command` run any Premiere menu item by its path, e.g. "Edit > Undo", "Sequence > Add Edit to All Tracks", "Clip > Unlink". `premiere_list_key_commands` and `premiere_key_command` press any bound shortcut from the user's .kys, e.g. cmd.edit.rippledelete. Timeline commands first focus the named timeline (Window > Timelines > name) and check the active sequence. Dialog items and quit/close/open/import/export/save-as items are refused.
+- trace: `premiere_menu_command` @ cutdeck/mcp_server.py > `run_focused` @ cutdeck/keys.py > `invoke` @ cutdeck/menu.py
+- trace: `premiere_key_command` @ cutdeck/mcp_server.py > `run_command` @ cutdeck/keys.py > `press_command` @ cutdeck/keys.py
+- needs: Premiere running on Windows, not minimised. Timeline focus also needs the CutDeck panel and helper (to open and check the sequence).
+- verify: CutDeck helper
+- status: live-proven 2026-11-21 on 27.0.0 through the MCP tools: razor via menu and via keys, Undo/Redo via menu, Link/Unlink, ripple delete via Shift+Delete, End via the Program Monitor, File > Exit refused. Ctrl+Z and a Ctrl+Alt binding did nothing as keys (use the menu).
+
 ## Ask Premiere's AI Assistant (MCP)
 - what: `premiere_assistant_ask(prompt, timeout_s)` types a prompt into Adobe's own AI Assistant (beta) chat panel through Windows UI Automation, waits for the reply and returns `{done, text, credits, buttons}`. Windows only. Each prompt spends the user's Adobe credits.
 - trace: `premiere_assistant_ask` @ cutdeck/mcp_server.py > `ask` @ cutdeck/assistant.py > `_panel` @ cutdeck/assistant.py

@@ -8,7 +8,7 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from cutdeck import assistant, screenshot
+from cutdeck import assistant, keys, menu, screenshot
 from cutdeck.ai_backend import Backend
 from cutdeck.helper import PORT
 
@@ -350,6 +350,52 @@ def create_server(backend: Backend) -> FastMCP:
         Monitor as drawn) to a PNG and return its path; open it to look. Works without the
         CutDeck panel; Premiere must not be minimised."""
         return await asyncio.to_thread(screenshot.capture)
+
+    # Keyboard route (cutdeck/keys.py): any Premiere command bound to a shortcut, for what UXP
+    # cannot do (razor, link, ripple trim, track targeting, undo). docs/PREMIERE_CONTROL_MAP.md.
+    @server.tool(annotations=read)
+    async def premiere_list_key_commands(query: str = "") -> dict:
+        """Premiere commands that have a keyboard shortcut in the user's active shortcut file, filtered
+        by `query` (e.g. "razor", "ripple", "link", "undo", "target"). `pressable` false: blocked
+        (quit, close, open, export, save-as) or bound only to keys CutDeck cannot press."""
+        found = await asyncio.to_thread(keys.list_commands, query)
+        return {"shortcuts_file": str(keys.active_kys()), "count": len(found), "commands": found[:300]}
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True,
+                                             idempotentHint=False, openWorldHint=False))
+    async def premiere_key_command(command: str, focus: str | None = "timeline", sequence: str | None = None) -> dict:
+        """Run a Premiere command by pressing its keyboard shortcut, e.g. cmd.sequence.razorateditline.all
+        (Add Edit to All Tracks at the playhead), cmd.edit.rippledelete, cmd.clip.linkaudioandvideo,
+        cmd.edit.undo / cmd.edit.redo. Names come from premiere_list_key_commands. Premiere comes to
+        the front and `focus` gets keyboard focus (timeline, program, source, project,
+        effect_controls, or null). With focus timeline it opens `sequence` (default: the active one)
+        and checks it is still active before pressing. Commands act on the playhead, selection and
+        targeted tracks as a person's key press would: set them first (premiere_set_playhead,
+        premiere_select_clips). A key press is not proof: read the result back. Takes over the
+        keyboard for about a second."""
+        return await keys.run_command(backend, command, focus, sequence)
+
+    @server.tool(annotations=read)
+    async def premiere_list_menu(query: str = "") -> dict:
+        """Every item of Premiere's menu bar (File, Edit, Clip, Sequence, Markers, Graphics and
+        Titles, View, Window, Help) whose path contains `query`, with its shortcut and an enabled
+        hint (can be stale). `runnable` false: opens a dialog ("...") or is quit/close/open/import/
+        export/save-as/help."""
+        found = await asyncio.to_thread(menu.list_items, query)
+        return {"count": len(found), "items": found[:400]}
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True,
+                                             idempotentHint=False, openWorldHint=False))
+    async def premiere_menu_command(path: str, focus: str | None = "timeline", sequence: str | None = None) -> dict:
+        """Run a Premiere menu item as a click would, by its path from premiere_list_menu, e.g.
+        "Edit > Undo", "Edit > Redo", "Sequence > Add Edit to All Tracks", "Clip > Unlink",
+        "Clip > Link", "Sequence > Lift", "Sequence > Extract", "Clip > Nest". Preferred over
+        premiere_key_command: it presses no shortcut for the command itself. Timeline commands
+        act on the focused panel, so with focus timeline (default) `sequence` (default: the active
+        one) is opened, the timeline focused and checked, then the item runs. Edit > Undo/Redo need
+        no focus (focus null). Commands use the playhead, selection and targeted tracks: set them
+        first. A posted command is not proof: read the result back."""
+        return await keys.run_focused(backend, focus, sequence, lambda: menu.invoke(path))
 
     return server
 

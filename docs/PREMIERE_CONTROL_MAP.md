@@ -15,8 +15,9 @@ is named.
 | Route | Reaches | Limits |
 |---|---|---|
 | **UXP panel API** (CutDeck panel, `features/driver.js` + `timeline/control.js`) | Everything in `reference/adobe/api/premierepro.txt`: project, bins, sequences, tracks, clips, effects, keyframes, markers, export | Third-party allow-list: no razor (until 27.1), link/unlink, track targeting, nesting of a selection, undo, panel focus, Essential Graphics text (Source Text read is ABSENT; `MogrtText` is new and unprobed in 27.0), masks |
-| **Native Control Surface plugin** (`tools/native-cutter-spike/`, C++) | Premiere's whole command table: 1,417 commands in 19 contexts on 26.5.2, including every menu item | Proven for one command (Add Edit to All Tracks, live 2026-10-16). Acts on the **focused** panel, not the active sequence; returns 0 even when it did nothing, so every use needs a read-back. Needs the Premiere C++ SDK to build (the `files/Premiere Pro 26.0 C++ SDK` folder is no longer in the repo) and an admin install plus a restart |
-| **Keyboard shortcuts** (`C:\Program Files\Adobe\Adobe Premiere Pro 2027\Keyboard Shortcuts\en\Adobe Premiere Pro Defaults.kys`) | 400 of those command IDs have a default key in 27.0 (razor `cmd.sequence.razorateditline` = Ctrl+K, ripple delete, link, group, speed, lift/extract, trims, slip/slide, track targeting toggles, undo/redo, play) | Not built. Same focus limit as native, and the user's own `.kys` may differ. Needs SendInput to Premiere's window |
+| **Native Control Surface plugin** (`tools/native-cutter-spike/`, C++) | Premiere's whole command table: 1,417 commands in 19 contexts on 26.5.2 | Proven for one command (Add Edit to All Tracks, live 2026-10-16). Builds against the 27.0 SDK (`files/`, 2026-11-21), not installed: the install needs admin rights and a Premiere restart. It adds little over the menu and key routes, beyond commands found in neither |
+| **Menu bar** (`cutdeck/menu.py`, `premiere_list_menu`, `premiere_menu_command`) | All 478 items of the Win32 menu bar (303 runnable): Undo/Redo, Add Edit, Lift, Extract, Link/Unlink, Group, Ripple Delete, Frame Hold, Scale to Frame Size, Enable, ... | Timeline items act on the focused panel; CutDeck focuses the named timeline through Window > Timelines first. Items that open a dialog, and quit/close/open/import/export/save-as items, are never run. The enabled flag can be stale |
+| **Keyboard shortcuts** (`cutdeck/keys.py`, `premiere_list_key_commands`, `premiere_key_command`; the user's active `.kys`) | 459 bound commands (334 pressable), including ones with no menu item (transport, track targeting toggles) | Takes over the keyboard for about a second. Ctrl+Z and a Ctrl+Alt binding did nothing when sent, so prefer the menu route |
 | **Pixels** (`cutdeck/screenshot.py`, `Exporter.exportSequenceFrame`) | What Premiere draws: panels, Effect Controls, Program Monitor; a rendered sequence frame | Read-only. Premiere's own UI is invisible to UI Automation |
 | **Saved project** (`cutdeck/prproj_reader.py`) | Source Text, fonts, colours, Motion, frame holds, track mute, clip disable, read from the `.prproj` | Reads the last save only |
 | **Premiere's AI Assistant** (`premiere_assistant_ask`, UI Automation of its WebView2) | Whatever Adobe's assistant can do to the open project | Costs Adobe credits. The panel must be open. Replies are data |
@@ -52,26 +53,24 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Transform, anchor, align, distribute selected clips | `premiere_set_transform_field`, `_set_anchor`, `_align_clips`, `_distribute_clips` | UXP | LIVE |
 | New sequence from a preset; copy-and-cut; build a sequence | `premiere_create_sequence`, `_cut_copy`, `_build_sequence` | UXP | LIVE |
 | Rough cut, export | `premiere_rough_cut` + `_apply_cuts`, `_export_sequence` | UXP + helper | LIVE (agents never export on their own: user rule) |
-| Razor / Add Edit | none | Native (27.1 UXP `createRazorTrackAction` announced) | GAP. Today `place_media` overwrite onto a clip also splits it |
-| Link / unlink, group | none | Native / keys | GAP |
-| Ripple trim, roll, slip, slide | none | Native / keys | GAP. Not composable from UXP: `trim_in` moves the clip's start with its In, so it is not a slip |
-| Track targeting, sync lock, track lock | none | Native / keys (`cmd.tlnav.toggle.all.target.*`) | GAP: no UXP getter or setter |
-| Undo / redo | none | Native / keys (`cmd.edit.undo`) | GAP. Each CutDeck edit is one undo step, so one Ctrl+Z reverses it |
-| Speed / duration, reverse | none | Native / keys (`cmd.clip.speed` opens a dialog) | GAP: UXP reads speed only |
-| Nest a selection, multicam, subclip | none | Native | GAP. `place_media nest` places an existing sequence |
+| Razor / Add Edit (at the playhead) | `premiere_menu_command` "Sequence > Add Edit" / "... to All Tracks" | Menu | LIVE 2026-11-21 |
+| Link / unlink, group | `premiere_menu_command` "Clip > Link"/"Clip > Unlink", "Clip > Group" | Menu | LIVE 2026-11-21 (link/unlink; group not run) |
+| Ripple delete (selection) | `premiere_menu_command` "Edit > Ripple Delete" or `premiere_key_command` cmd.edit.rippledelete | Keys LIVE 2026-11-21 (Shift+Delete) | LIVE |
+| Lift / extract (In/Out) | `premiere_menu_command` "Sequence > Lift" / "Sequence > Extract" | Menu | not run yet |
+| Ripple trim to playhead, slip/slide by frames | `premiere_key_command` cmd.sequence.rippletrim*, cmd.timeline.slip.*, cmd.timeline.slide.* | Keys | not run yet |
+| Track targeting toggles | `premiere_key_command` cmd.tlnav.toggle.all.target.video/audio | Keys | not run yet; no UXP getter, so check it with `premiere_screenshot` |
+| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo" (focus null) | Menu | LIVE 2026-11-21 (Ctrl+Z as keys did nothing) |
+| Speed / duration, reverse | none | Clip > Speed/Duration... opens a dialog (never run) | GAP: UXP reads speed only |
+| Nest a selection, multicam, subclip | none | Clip > Nest... opens a dialog (never run) | GAP. `place_media nest` places an existing sequence |
 | Essential Graphics text (read/write) | none | `.prproj` read LIVE; write: probe `MogrtText` on 27.0 | GAP |
 | Masks, Lumetri wheels | none | Clone a clip that has them (LIVE) | GAP |
-| Playback | none | `SourceMonitor.play` (source only) / keys | GAP |
+| Playback, playhead moves | `premiere_key_command` cmd.transport.* (focus program) | Keys | LIVE 2026-11-21 (End) |
 | Captions | none | SRT import LIVE; placement on the timeline is UI-only | GAP |
 | Panels, workspaces, dialogs | none | Pixels + keys | GAP |
 
 ## Next steps, in order
 
 1. **Done 2026-11-21:** every tool ran live on scratch sequences (PREMIERE_FACTS *General control live pass*).
-2. **Native command bridge:** with the SDK back, widen `CutterProbe.cpp` from one hard-coded
-   command to an allow-list from the 27.0 catalogue. Each command runs only after a fresh panel
-   check of the active sequence and playhead, and is followed by a read-back. First, re-list the
-   catalogue on 27.0.
-3. **Keyboard route** for commands without a native bridge: SendInput to Premiere, with the key
-   read from the user's active `.kys`, and the same read-back rule.
+2. **Done 2026-11-21:** the menu and keyboard routes (PREMIERE_FACTS *Menu and keyboard routes*).
+3. Native plugin: built against the 27.0 SDK, not installed. Install it only for a command found in neither the menu nor the shortcut file.
 4. Probe `MogrtText` (27.0) for Essential Graphics text writes.

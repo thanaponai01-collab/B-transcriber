@@ -58,6 +58,9 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: the driver-command tests (test_cutdeck_live_premiere.py, offline mode) went red when the panel stopped offering distribute_clips, when the empty-selection refusal was removed, and when read_sequence returned nothing; cutdeck/live_check.py's tests went red when it stopped at the wrong step, dropped the missing-command stop, lost the panel hint, or always exited 0, or counted the panel's all-clips fallback as a selection (that last one was a real bug found in the live run); reverted
 
+- test (2026-11-21, menu and keyboard routes): `python -m pytest tests/test_cutdeck_keys.py -q -p no:cacheprovider`
+- fail-proof: each went red on its own and was restored: dropped the Ctrl+Alt-last sort in keys.pick (Ctrl+Alt+Z picked); removed the active-sequence check in run_focused (pressed after a switch); took "close" out of menu.BLOCKED (File > Close Project runnable).
+
 ## Premiere project readers
 - test: `python -m pytest tests/test_prproj_anchor_check.py tests/test_prproj_pixels.py tests/test_prproj_reader.py tests/test_scrub_fcpxml.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
