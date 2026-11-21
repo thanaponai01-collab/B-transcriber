@@ -51,3 +51,25 @@ def test_auto_language_majority_vote_from_decode_confidence():
     pairs.clear()
     assert eng._pick_language(np.zeros(16000 * 120, np.float32)) == "en"
     assert eng._pick_language(None) == "en"                     # remembered
+
+
+def test_helper_transcribe_takes_th_en_auto_and_refuses_others(tmp_path, monkeypatch):
+    import asyncio
+    import pytest
+    from cutdeck.helper import Jobs
+    media = tmp_path / "a.wav"; media.write_bytes(b"RIFF")
+
+    async def idle(self, job):
+        await asyncio.sleep(0)
+    monkeypatch.setattr(Jobs, "_run_transcribe", idle)
+
+    async def body():
+        jobs = Jobs(tmp_path / "jobs")
+        for lang in ("th", "en", "auto"):
+            job = await jobs.dispatch({"type": "submit_transcribe", "media_path": str(media), "language": lang})
+            assert jobs._job(job["job_id"])["arguments"]["language"] == lang
+            await asyncio.sleep(0.01)
+            jobs.active = None
+        with pytest.raises(ValueError, match="auto"):
+            await jobs.dispatch({"type": "submit_transcribe", "media_path": str(media), "language": "fr"})
+    asyncio.run(body())

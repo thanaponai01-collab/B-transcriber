@@ -314,8 +314,8 @@ class Jobs:
     async def _on_submit_transcribe(self, req: dict, client: Client | None) -> dict:
         media = _input_file(req.get("media_path"))
         language = req.get("language")
-        if language is not None and (not isinstance(language, str) or not language.isalpha() or len(language) > 3):
-            raise ValueError('language must be a code like "th" or "en"')
+        if language is not None and language not in ("th", "en", "auto"):
+            raise ValueError('language must be "th", "en" or "auto"')
         job_id, folder = self._allocate()
         job = {"job_id": job_id, "job_type": "transcribe", "kind": "transcribe",
                "state": "running", "arguments": {"media_path": media, **({"language": language} if language else {})},
