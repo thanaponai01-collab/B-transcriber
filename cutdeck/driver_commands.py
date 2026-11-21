@@ -1048,13 +1048,14 @@ async def _keep_words(args: dict, premiere: Premiere) -> dict:
     if source["name"] == args["result_name"]:
         raise ValueError("result_name must differ from the source sequence (it is never edited)")
     build = lambda tl, track: timeline_transcript.build(  # noqa: E731
-        tl, track=track, limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
+        tl, track=track, limit=200, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
     before = await asyncio.to_thread(build, source, args.get("track"))
     if before["missing"]:
         raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
     tpf = int(source["ticks_per_frame"])
     planned = word_cut.keep_ranges(before["word_objects"], args["keep"], tpf, before["clip_objects"],
-                                   before["source_words"], before["source_level"], args["pad_ms"])
+                                   before["source_words"], before["source_level"], args["pad_ms"],
+                                   int(source["end_ticks"]))
     if not planned["cuts_frames"]:
         raise ValueError("the phrases cover the whole sequence; nothing to cut")
     copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],

@@ -151,3 +151,10 @@ def test_keep_ranges_never_reaches_past_the_clip_holding_the_edge_word():
              replace(w("one", 400, 800), clip="A1@1", src_start_ms=0, src_end_ms=400)]
     r = word_cut.keep_ranges(words, [{"text": "one"}], TPF, clips, _src(WORDS))
     assert r["keep_frames"][0][0] * TPF >= 400 * MS   # the source pause before "one" is not on this timeline
+
+
+def test_keep_ranges_cuts_to_the_end_of_the_sequence_not_of_the_track():
+    from cutdeck.timeline_transcript import Clip
+    clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
+    r = word_cut.keep_ranges(WORDS, [{"text": "one"}], TPF, clips, _src(WORDS), end_ticks=10 * END)
+    assert r["cuts_frames"][-1][1] == -(-10 * END // TPF)

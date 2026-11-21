@@ -178,7 +178,8 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
 
 
 def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: list,
-                source_words: dict, source_level=None, pad_ms: int = PAD_MS) -> dict:
+                source_words: dict, source_level=None, pad_ms: int = PAD_MS,
+                end_ticks: int | None = None) -> dict:
     """Keep only these phrases on this timeline, in its own order: their spans in sequence
     frames, and the frame cuts (everything else) for `cut_copy`, which keeps every track and
     layer. Each span's edges are placed as `plan_pieces` places them, in the source file's
@@ -208,7 +209,8 @@ def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: l
             merged[-1][1] = max(merged[-1][1], b)
         else:
             merged.append([a, b])
-    end_frame = max(c.end for c in clips) // tpf if clips else 0
+    # The whole sequence, every track: not just where this audio track's clips end.
+    end_frame = -(-(end_ticks if end_ticks is not None else max(c.end for c in clips)) // tpf)
     cuts, cursor = [], 0
     for a, b in merged:
         if a > cursor:
