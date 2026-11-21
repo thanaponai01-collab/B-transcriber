@@ -473,6 +473,20 @@ def find_finished_job(
     return JobRow(**dict(row))
 
 
+def latest_transcript_job(conn: sqlite3.Connection, sha256: str) -> Optional[JobRow]:
+    """The newest finished job, of any engine or fingerprint, that still holds tokens for the
+    media with this sha256. For readers that map an existing transcript onto a timeline: any
+    finished transcript of the file beats listening to it again."""
+    row = conn.execute(
+        "SELECT job.* FROM job JOIN media ON media.id = job.media_id WHERE media.sha256 = ? "
+        "AND job.status = 'done' AND job.job_phase = 'written' "
+        "AND EXISTS (SELECT 1 FROM token WHERE token.job_id = job.id) "
+        "ORDER BY job.id DESC LIMIT 1",
+        (sha256,),
+    ).fetchone()
+    return JobRow(**dict(row)) if row else None
+
+
 # ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(

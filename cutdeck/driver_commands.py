@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot
+from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, timeline_transcript
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -896,7 +896,57 @@ async def _list_menu(args: dict, premiere: Premiere) -> dict:
     return {"count": len(found), "items": found[:400]}
 
 
+def _timeline_transcript_arguments(args: dict, jobs) -> dict:
+    result = _sequence(args)
+    track = args.get("track")
+    if track is not None:
+        if not isinstance(track, str) or not re.fullmatch(r"A\d+", track):
+            raise ValueError('track must be an audio track id like "A1"')
+        result["track"] = track
+    query = args.get("query")
+    if query is not None:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be the words to find")
+        result["query"] = query
+    for key in ("from_ticks", "to_ticks"):
+        if args.get(key) is not None:
+            result[key] = int(_ticks(args[key], key))
+    offset, limit = args.get("offset", 0), args.get("limit", 200)
+    if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
+        raise ValueError("offset must be 0 or more and limit 1 to 1000")
+    return {**result, "offset": offset, "limit": limit}
+
+
+_TRANSCRIPTS_DIR = Path(__file__).resolve().parent.parent / "output" / "timeline_transcripts"
+
+
+async def _timeline_transcript(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    if "track" in args:
+        read["tracks"] = [args["track"]]
+    timeline = await premiere("read_timeline", read)
+    options = {k: args[k] for k in ("track", "query", "from_ticks", "to_ticks", "offset", "limit") if k in args}
+    return await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
+
+
 HELPER_COMMANDS: dict[str, Command] = {
+    "timeline_transcript": Command(
+        300, _timeline_transcript_arguments, "read",
+        """
+        What the sequence says, where, without transcribing it again: each source file's transcript
+        (made once by transcribe(media_path), reused from the store) mapped through the clips of one
+        audio track (track "A1", default the first un-muted one with clips) onto the timeline in exact
+        ticks. Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
+        `edges_inside_words`: every clip In/Out that cuts through a word (a bad cut). `query` finds
+        a phrase (matches, also across a cut). `missing` lists source files never transcribed: run
+        transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
+        of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
+        CutDeck panel open.
+        """,
+        (("sequence", str | None, None), ("track", str | None, None), ("query", str | None, None),
+         ("from_ticks", str | None, None), ("to_ticks", str | None, None), ("offset", int, 0),
+         ("limit", int, 200)),
+        run=_timeline_transcript),
     "screenshot": Command(
         30, _no_arguments, "read",
         """
