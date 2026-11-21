@@ -18,8 +18,12 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
     """(first, last) word index of one removal: ``{"text", "occurrence"}`` or
     ``{"from_ticks", "to_ticks"}`` (the words lying mostly inside that span)."""
     if "text" in remove:
-        matches = find(words, remove["text"], tpf, limit=50)
+        found = find(words, remove["text"], tpf, limit=200)
+        matches = [m for m in found if m["whole_words"]]
         if not matches:
+            if found:
+                raise ValueError(f"{remove['text']!r} is only said inside longer words ({found[0]['text']!r} "
+                                 f"at {found[0]['tc']}); give the whole words or a tick span")
             raise ValueError(f"not said on this timeline: {remove['text']!r}")
         n = remove.get("occurrence")
         if n is None and len(matches) > 1:
@@ -76,5 +80,5 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
 
 
 def count(words: list[TimelineWord], text: str) -> int:
-    hay, needle = "".join(_norm(w.text) for w in words), _norm(text)
-    return hay.count(needle) if needle else 0
+    """How many times the phrase is said as whole words."""
+    return sum(1 for m in find(words, text, 1, limit=10000) if m["whole_words"]) if _norm(text) else 0

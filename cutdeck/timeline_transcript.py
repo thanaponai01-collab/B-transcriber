@@ -263,10 +263,12 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
     needle = _norm(query)
     if not needle:
         raise ValueError("query must have letters")
-    text, owner = "", []
+    text, owner, starts, ends = "", [], set(), set()
     for i, w in enumerate(words):
         piece = _norm(w.text)
+        starts.add(len(text))
         text += piece
+        ends.add(len(text))
         owner += [i] * len(piece)
     found, pos = [], text.find(needle)
     while pos >= 0 and len(found) < limit:
@@ -275,7 +277,9 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
         found.append({"tc": timecode(a.start, ticks_per_frame), "start_s": seconds(a.start),
                       "end_s": seconds(b.end), "start_ticks": str(a.start), "end_ticks": str(b.end),
                       "text": join_words(w.text for w in span),
-                      "clips": list(dict.fromkeys(w.clip for w in span))})
+                      "clips": list(dict.fromkeys(w.clip for w in span)),
+                      # False: the phrase starts or ends inside a longer word
+                      "whole_words": pos in starts and pos + len(needle) in ends})
         pos = text.find(needle, pos + len(needle))
     return found
 

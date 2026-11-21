@@ -56,3 +56,11 @@ def test_tick_span_and_overlapping_removals_merge():
 
 def test_count():
     assert word_cut.count(WORDS, "two three") == 1 and word_cut.count(WORDS, "six") == 0
+
+
+def test_a_phrase_inside_a_longer_word_is_not_cut():
+    words = WORDS + [w("ten", 3500, 3700)]
+    with pytest.raises(ValueError, match="inside longer words"):
+        word_cut.plan(WORDS, [{"text": "hre"}], TPF, END)          # inside "three"
+    p = word_cut.plan(words + [w("te", 3800, 3900)], [{"text": "te"}], TPF, END)  # "ten" skipped
+    assert frames_s(p["cuts_frames"][0])[0] >= 3700
