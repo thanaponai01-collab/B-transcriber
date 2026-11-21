@@ -228,3 +228,19 @@ def test_cut_into_an_onset_the_engine_timed_late_is_flagged(tmp_path):
     assert edge["severity"] == "sound"
     quiet = tt.build(timeline(clip("A1@0", 0, 850, 1500, media)), lookup=lambda m: (1, words, levels))
     assert quiet["cuts_in_sound"] == []
+
+
+def test_tighten_grows_an_edge_into_the_pause_to_meet_sound_the_engine_left_out():
+    import numpy as np
+    levels = np.full(300, -70.0, dtype=np.float32)
+    levels[92:140] = -30.0        # sound 0.92-1.40 s; the engine says 1.00-1.30
+    levels[200:250] = -30.0       # next word's sound 2.00-2.50 s
+    levels[60:62] = -30.0         # a click at 0.60 s, apart from the word: not reached
+    words = [tt.SourceWord("รัส", 1000, 1300, 0), tt.SourceWord("เซลล์", 2000, 2500, 0)]
+    a, b = tt.tighten(words, levels)
+    assert (a.start_ms, a.end_ms) == (920, 1400)
+    assert (b.start_ms, b.end_ms) == (2000, 2500)
+    # Growth stops at the neighbour: sound running between two words is not taken across.
+    levels[140:200] = -30.0
+    a, b = tt.tighten(words, levels)
+    assert a.end_ms <= b.start_ms

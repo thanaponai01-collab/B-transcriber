@@ -344,19 +344,46 @@ def noise_floor(levels) -> float:
     return float(np.clip(np.percentile(levels, 5), _FLOOR_MIN_DB, _FLOOR_MAX_DB)) if len(levels) else _FLOOR_MIN_DB
 
 
+REACH_MS = 400  # how far a word edge may grow into a pause to meet sound the engine left out
+
+
 def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[SourceWord]:
-    """Each word's start and end pulled in to the first and last audible 10 ms window inside it.
-    Never widens a word; a word with no audible window inside keeps the engine's times."""
+    """Fit each word's edges to the sound. First pulled in to the first and last audible 10 ms
+    window inside the engine's span; then an edge that borders a pause is grown out through
+    continuous sound (at most ``REACH_MS``, never into a neighbouring word): on a 96-min
+    source, a quarter of words after a pause started 100+ ms after their sound began, and as
+    many ended early (2026-11-22). A word with no audible window keeps the engine's times."""
     threshold = noise_floor(levels) + tail_db
-    out = []
+    n = len(levels)
+    audible = lambda i: 0 <= i < n and levels[i] >= threshold  # noqa: E731
+    inner = []
     for w in words:
         i0, i1 = w.start_ms // ENVELOPE_MS, -(-w.end_ms // ENVELOPE_MS)
-        loud = [i for i in range(i0, min(i1, len(levels))) if levels[i] >= threshold]
+        loud = [i for i in range(i0, min(i1, n)) if levels[i] >= threshold]
         if w.end_ms <= w.start_ms or not loud:
+            inner.append((w, False))
+            continue
+        inner.append((SourceWord(w.text, max(w.start_ms, loud[0] * ENVELOPE_MS),
+                                 min(w.end_ms, (loud[-1] + 1) * ENVELOPE_MS), w.cue), True))
+    out = []
+    reach = REACH_MS // ENVELOPE_MS
+    for k, (w, fitted) in enumerate(inner):
+        if not fitted:
             out.append(w)
             continue
-        out.append(SourceWord(w.text, max(w.start_ms, loud[0] * ENVELOPE_MS),
-                              min(w.end_ms, (loud[-1] + 1) * ENVELOPE_MS), w.cue))
+        floor_ms = out[-1].end_ms if out else 0
+        ceil_ms = inner[k + 1][0].start_ms if k + 1 < len(inner) else n * ENVELOPE_MS
+        i = w.start_ms // ENVELOPE_MS
+        steps = 0
+        while steps < reach and audible(i - 1) and (i - 1) * ENVELOPE_MS >= floor_ms:
+            i -= 1
+            steps += 1
+        j = w.end_ms // ENVELOPE_MS  # first window after the word
+        steps = 0
+        while steps < reach and audible(j) and (j + 1) * ENVELOPE_MS <= ceil_ms:
+            j += 1
+            steps += 1
+        out.append(SourceWord(w.text, i * ENVELOPE_MS, j * ENVELOPE_MS, w.cue))
     return out
 
 
