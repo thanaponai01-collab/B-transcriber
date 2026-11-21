@@ -104,6 +104,47 @@ def analysis_ingest_kwargs(raw_config: dict) -> dict:
                 sound_guard_min_ms=cfg.sound_guard_min_ms)
 
 
+def _mapped_transcript(seq: sequence_model.Sequence, audio_track: int | None,
+                       window: tuple[int, int] | None, raw_config: dict, db=None):
+    """(transcript job id, words, cue tokens) in the analysed WAV's own milliseconds, from the
+    reference track's source files' stored transcripts mapped through its clips. None when a
+    source has never been transcribed: the caller then transcribes the WAV as before.
+
+    The same source transcript serves every rough cut of the same footage, so a re-cut never
+    re-listens and never hears it differently (docs/TIMELINE_LISTEN.md)."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from cutdeck import timeline_transcript as tt
+    from cutdeck.words import Word
+    from transcribe.db import store
+
+    track = seq.reference_track(audio_track)
+    clips = [tt.Clip(f"A{track.index + 1}@{c.start_ticks}", c.start_ticks, c.end_ticks, c.in_ticks,
+                     c.out_ticks, c.media_path) for c in track.clips if c.enabled]
+    db_path = Path(db) if db else store.resolve_db_path(raw_config)
+    if not db_path.is_file():
+        return None
+    levels_dir = Path(__file__).resolve().parent.parent / "output" / "timeline_transcripts" / "levels"
+    words_by_media, job_ids = {}, []
+    for media in dict.fromkeys(c.media for c in clips):
+        found = tt.source_words(media, db_path, levels_dir) if Path(media).is_file() else None
+        if found is None:
+            return None
+        job_ids.append(found[0])
+        words_by_media[media] = found[1]
+    origin = window[0] * seq.ticks_per_frame if window else 0
+    end = window[1] * seq.ticks_per_frame if window else seq.end_ticks
+    placed = [w for w in tt.project(clips, words_by_media) if w.end > origin and w.start < end]
+    # Clamped to the WAV: a word that straddles the window's edge starts or ends at it.
+    ms = lambda ticks: round((min(max(ticks, origin), end) - origin) / tt.TICKS_PER_MS)  # noqa: E731
+    words = [Word(w.text, ms(w.start), ms(w.end), None) for w in placed]
+    tokens = [SimpleNamespace(idx=i, text=ln["text"], start_ms=ms(int(ln["start_ticks"])),
+                              end_ms=ms(int(ln["end_ticks"])))
+              for i, ln in enumerate(tt.lines(placed, seq.ticks_per_frame))]
+    return job_ids[0], words, tokens
+
+
 def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tuple[int, int] | None = None,
             audio_track: int | None = None, asr: bool = False, db=None, job_id: int = 0,
             mixdown_wav: str | None = None) -> tuple[CutPlan, list[tuple[int, int]]]:
@@ -157,7 +198,14 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
 
         tokens = None
         words = None
-        if asr:
+        # Only for audio we extracted from the clips ourselves: a caller's own mixdown is theirs.
+        mapped = (_mapped_transcript(seq, audio_track, window, raw_config, db)
+                  if asr and extracted_tmp is not None else None)
+        if mapped is not None:
+            job_id, words, tokens = mapped
+            print(f"--asr: mapped the sources' own transcripts onto the range ({len(tokens)} lines, "
+                  "no ASR pass; cutdeck/timeline_transcript.py)")
+        elif asr:
             from types import SimpleNamespace
 
             from transcribe.service import transcribe

@@ -186,3 +186,21 @@ def test_edge_in_a_pause_inside_an_engine_word_is_not_a_bad_cut(tmp_path):
     (edge,) = sound["edges_inside_words"]
     assert edge["side"] == "out" and edge["cut_ms"] == 700
     assert edge["nearest_quiet_ms"] == 105  # the pause starts at 1.40 s; window centre 1.405
+
+
+def test_rough_cut_maps_stored_source_transcripts_into_the_window(tmp_path, monkeypatch):
+    from cutdeck import rough_cut, sequence_model
+    media = tmp_path / "a.mp4"; media.write_bytes(b"")
+    db = tmp_path / "t.db"; db.write_bytes(b"")
+    clip_ = sequence_model.Clip(str(media), 0, 900 * T, 6800 * T, True)  # plays source 0.9-6.8 s at 0
+    seq = sequence_model.Sequence(TPF, 5900 * T, (sequence_model.Track(0, False, (clip_,)),))
+    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: (5, SOURCE, None))
+    window = (30, 120)  # frames: 1.0-4.0 s on the sequence
+    job_id, words, tokens = rough_cut._mapped_transcript(seq, None, window, {}, db)
+    assert job_id == 5
+    # "world" (source 1.5-2.0) is at sequence 0.6-1.1 s: clamped to 0..100 ms in the window's WAV.
+    assert [(w.text, w.start_ms, w.end_ms) for w in words] == [
+        ("world", 0, 100), ("สวัสดี", 1100, 1700), ("ครับ", 1700, 2100)]
+    assert [t.text for t in tokens] == ["world", "สวัสดีครับ"]
+    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: None)
+    assert rough_cut._mapped_transcript(seq, None, window, {}, db) is None
