@@ -397,6 +397,13 @@ note, and all are fixed with tests:
 - **The tools need the panel.** The CutDeck panel must be connected to the helper. After a helper
   restart it reconnects by itself, but only if the panel's code matches (see the PR #115 note above).
 
+## Prepared for you: F1 gold-set drafts
+
+Thai text accuracy can only improve against a gold set, and today's has one 60 s F1 clip.
+`output/gold_drafts/` (not in git) holds three 90 s clips of your own F1 talk, from three
+sessions, with draft transcripts taken from each source's full-context transcript. Its README says
+how to correct and freeze them (about 10 minutes of listening each).
+
 ## Follow-ups
 
 - When PR #116 (projects layout) merges, `projects/1raceclub/shorts-rules.md` step 1 ("Transcribe
