@@ -602,3 +602,8 @@ Parked after the agent's v4 in the same sequence; read with prproj_reader, each 
   **Principles (seen, the watch-time idea):** a boom marks the start of each new incident (a new reason to keep watching), landing a few
   frames ahead of the line; the radio sound announces each radio caption so the eye goes to the box; a meme sound, low, colours Max
   being stubborn; holds everywhere, so motion never pulls attention from the caption.
+- **Radio caption effect (user 19:50 "you see effect i add on radio?"):** a **Glitch transition** (`AE.AE_Impact_Glitch`, Film Impact),
+  9 frames (0.3 s), at the head of each enlarged radio caption box on V5: 20.7 s (NORRIS), 32.0 s (VERSTAPPEN), 34.73 s and 38.43 s (RUSSELL).
+  Starts on the same frame as the F1 Radio Notification SFX, so the box glitches in as the radio sound plays: it reads as a radio
+  "coming in". **Principle (seen):** a caption that's evidence enters with a sound and a visual hit together, so the eye jumps to it.
+  Tool gap: `prproj_reader` doesn't read transitions (found by parsing the XML for `VideoTransitionTrackItem`); the reader should list them.
