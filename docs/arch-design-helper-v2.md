@@ -155,6 +155,10 @@ and 6 also need one live Premiere run, listed under **Live acceptance**.
 - **Risk:** any local process can send these commands. The origin check still blocks web
   pages. The commands are fixed, `apply_cuts` edits only a new copy, and markers are one
   Ctrl+Z.
+  Since 2026-11-21 the helper also runs the menu, keyboard, screenshot and AI Assistant
+  commands (`cutdeck/driver_commands.py` `HELPER_COMMANDS`), so a local process can also post
+  any non-blocked menu item, press any non-blocked shortcut, and send prompts that spend Adobe
+  credits. The menu and key lists still refuse quit, close, open, import, export and save-as.
 
 ### 4. Jobs survive a helper restart
 

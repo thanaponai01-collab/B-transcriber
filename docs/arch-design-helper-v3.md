@@ -18,7 +18,7 @@ the live fixes built into it. Three things cost real time today, and each has a 
    (`xml_recut.py:650-691`). `run_file` resumes only *failed* jobs (`run.py:88-99`), so a
    second run with a different preset or the same range starts over. **This move saves the
    most time for you (move 2).**
-2. **A Premiere command is defined in five files in two languages** (move 1, the cheapest).
+2. **A Premiere command is defined in five files in two languages** (move 1, the cheapest). *Done 2026-11-21: one entry in `cutdeck/driver_commands.py` (MCP tools are built from it) plus the panel handler.*
 3. **FCP7 XML is still passed around inside the helper.** The panel sends JSON, and
    `sequence_json.to_fcp7_xml` turns it back into XML so five XML readers can parse it again
    (moves 3 and 4).
