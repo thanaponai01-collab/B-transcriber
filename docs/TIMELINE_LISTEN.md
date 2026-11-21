@@ -21,7 +21,7 @@ code (master's helper refuses its `place_text` registration).
     0 cuts in sound and no clipped words.
   - On your own route (copy the rough cut, keep every track), `keep_words` kept two phrases with
     every track intact and 0 cuts in sound.
-  - The planner's edges match yours: 23 of 34 within one frame of the edges you cut by ear.
+  - The planner's edges match yours: 24 of 34 within one frame of the edges you cut by ear.
 - **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
@@ -152,7 +152,7 @@ each of its 34 In/Out edges was compared with the one you chose by ear.
   a laugh, a reaction, or a word the engine missed). The planner had dropped it. A piece now takes
   along wordless sound that touches it: at most 100 ms of quiet in between, up to 600 ms, never
   into a neighbouring word.
-- **Result:** 23 of 34 edges within one frame of yours, 25 within 100 ms, and 2 off by more than
+- **Result:** 24 of 34 edges within one frame of yours, 25 within 100 ms, and 2 off by more than
   200 ms. Without the wordless rule it was 22, 23 and 5.
 - **Caveat:** these values were tuned and scored on the same 34 edges of one Short. A second
   hand-cut Short would confirm them.
@@ -243,6 +243,19 @@ Left as is:
   transcript (a cost, not a wrong result).
 - A cut made from several sources records only the first source's transcript job id.
 
+## Second code review (02:45)
+
+A second cold review covered the code written after the first one. It found 6 issues (5
+confirmed by running them), and all 6 are fixed with tests:
+- a zero-length neighbour at a rough-cut join was pulled into a kept word;
+- kept spans rounded inward and clipped a kept word at 200% speed;
+- the wordless reach read the next word's onset as wordless sound;
+- after a file's last word, the reach was capped at the pad;
+- the offline reader crashed on a zero-length source;
+- NTSC frame rates were wrong in the offline CLI (29.97 is 30000/1001).
+
+A live re-run then caught one more of my own (a word said elsewhere confused the keep edges), also fixed.
+
 ## State you are left in
 
 - The checkout is on `feat/timeline-listen`; it was on `docs/projects-layout`. The helper runs
@@ -332,3 +345,4 @@ Left as is:
 - `listen two sources (scratch) — CutDeck 43c26617 (FAILED)` and `listen two sources (scratch) — CutDeck 43c26617` (the razor-bug repro and its retry)
 - `listen two sources rc keep (scratch)` (`keep_words` on that rough cut: two multi-clip spans, every track kept)
 - `listen short placed 60 (scratch)` and `listen short placed final (scratch)` (the Short re-proven on the final planner)
+- `listen two sources rc keep v2 (scratch)` (a failed `keep_words` attempt that made no sequence) and `listen two sources rc keep v3 (scratch)` (final `keep_words` across joins)
