@@ -48,8 +48,9 @@ cdv.py launch --restart-helper    # after changing cutdeck/*.py: helper restarts
 cdv.py launch --reload-panel      # after changing uxp/cutdeck/*: save project, reload panel, wait
 ```
 
-Ready means `launch` printed `PASS panel connected, 32 panel commands` (the count is
-`len(PANEL_COMMANDS)`) and `doctor` exits 0. The panel reconnects on its own within 5 to 30 s
+Ready means `launch` printed `PASS panel connected, 33 panel commands` (the count is what the
+panel registered; it equals `len(PANEL_COMMANDS)` once the panel runs this checkout, which
+doctor checks) and `doctor` exits 0. The panel reconnects on its own within 5 to 30 s
 after a helper restart. If it never connects, the panel is closed: ask the user to open
 Window > UXP Plugins > CutDeck (or load it in UXP Developer Tool).
 

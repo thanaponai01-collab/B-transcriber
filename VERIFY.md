@@ -66,6 +66,17 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: read u32 big-endian in cutdeck/prproj_reader.py, test_prproj_reader went red, reverted
 
+## place_text (text into Premiere via a baked .mogrt)
+- test: `python -m pytest tests/test_cutdeck_mogrt_text.py -q`
+- fail-signal: failed
+- live: `cdv.py call place_text` on the scratch (2026-11-21, runs `20261121-230511-mogrttext`, `20261121-232401-place-text-busy`): Thai rendered from Basic Title and an AE template, AE text read back, occupied track refused, Undo removes it.
+
+## Premiere UI route (set_speed, nest_clips, edit_text)
+- test: `python -m pytest tests/test_cutdeck_premiere_ui.py -q`
+- fail-signal: failed
+- fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
+- live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
+
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
