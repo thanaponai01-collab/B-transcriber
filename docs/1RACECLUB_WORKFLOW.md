@@ -539,3 +539,16 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   empty base; a fresh-clone build no longer clears items on tracks the base lacks (v1 lost all V4/V5 items that way).
 - Checks: Premiere render 59.57 s 1080x1920 30 fps, no black frames, no silence ≥0.6 s, mean −21.3 dB; render transcript has every line whole and in order.
   Not saved (save: false), not exported to `5. EXPORTS`, no SFX. `TT max vs everyone (Claude)` (v1, stills missing) is junk for the user to delete.
+
+#### User feedback on v2 (19:15) and v3 `TT max vs everyone v3 (Claude)`
+- **Feedback (confirmed rules):** (1) storytelling good; (2) **don't repeat the same speech**: v2 said "มีปัญหากับทุกคน" three times
+  (hook, list, end); (3) **use the live F1 footage already synced on the rough cut (V4)**: the real situation, not stills picked by who is named;
+  (4) **copy the rough cut and work from there** (v2 rebuilt from items, so it had 4 audio tracks instead of the rough cut's 6).
+- v3 route: `cut_copy` of the rough cut keeping only the 12 pieces (every layer, all 6 audio tracks, disabled states kept) → `build_sequence`
+  `into` that copy: `settings_from` `TT editing` (9:16), reorder by steps (clone Alpine+McLaren past the end, lift, clone hook+list back
+  to 0, lift, clone Alpine+McLaren into the hole, lift; no backward `move`), restyle per piece (V2 on, rotation 90, y .273 stacked /
+  .5 face-only; V4 synced feed 109% bottom-anchored, off on face-only pieces), title PNG on V5, In/Out whole.
+- Repeats cut: list starts at "กับนอริสก็ทีหนึ่ง…"; end trimmed inside its clip at a measured 50 ms dip to "Session นี้พี่แม็กเอา MVP ไปครับ";
+  Russell's first radio ("ให้มึงเห็นวิดีโอ…") dropped, so "รัสเซลบอก" is said once. Face-only: "ไม่เอาครับ… ใจเย็น", "แตะมือกันข้างนอก", the end line.
+- Checks: Premiere render 50.93 s 1080x1920, no black frames, no silence ≥0.6 s, −20.8 dB; per-piece transcript of the render in order, no repeated line.
+  Not saved, not exported, no SFX. v1/v2 are junk for the user to delete.
