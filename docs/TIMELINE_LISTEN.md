@@ -23,9 +23,14 @@ code (master's helper refuses its `place_text` registration).
     every track intact and 0 cuts in sound.
   - The planner's 60 ms default was checked against your cuts. Most of their edges turned out to
     be the Rough Cut's own; on the one independent cut (Gillette review) it beats the old 120 ms.
-- **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
-  ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
-  (no engine swap without the gold set).
+- **The engine is fixed where it hurt cuts.**
+  - Thai word *times* were off by up to hundreds of ms, both too wide and too narrow. They are
+    now fitted to the audio.
+  - **English audio** used to come out as invented Thai, because Thai was hard-coded. It now
+    transcribes correctly with `language="en"`, or `"auto"` (10 of 10 unseen files right). Your
+    synced F1 feeds are English.
+  - Thai text accuracy is otherwise unchanged (no engine swap without the gold set). A name
+    glossary is not the answer: it makes the model invent speech.
 - **Rough Cut** now reuses the stored source transcripts: no ASR pass, the same cuts frame for
   frame. In your order (rough cut first), it transcribes the source file once instead of a
   throwaway WAV, so everything after it is free.
@@ -282,8 +287,10 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
 - A helper restarted from master or `docs/projects-layout` will refuse the panel's `place_text`
   registration, because that is PR #115 code.
 - Premiere is back on `editing`. Nothing was saved or exported.
-- The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-86. Jobs 84
-  (Gillette review) and 85 (tiw) are from other projects, and job 86 is the English broadcast.
+- The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-89.
+  - Jobs 84 and 88 (Gillette review) and 85 (tiw) are from other projects.
+  - Jobs 86, 87 and 89 are the English broadcast in Thai, `en` and `auto`. The newest (89, English)
+    is the one the timeline tools use.
   Job 80 is a temporary WAV from the first ASR rough cut, the old behaviour.
 - Scripts: `scripts/timeline_listen/calibrate_edges.py` (in the PR). Tonight's one-off experiment
   scripts and outputs are in `output/timeline_listen/`, which git ignores, so they are not in the PR.
@@ -310,8 +317,9 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
   terms go through the same channel, so the same risk grows as corrections accumulate.
   Fix names after decoding instead (a reviewed substitution list, or SubtitleDesk corrections
   through the flywheel).
-- **Text accuracy is unchanged.** This work fixes *where* words are, not *what* they are.
-  `biodatlab whisper-th-medium` still mishears casual speech and English phrases. Any engine
+- **Thai text accuracy is unchanged.** This work fixes *where* words are and which language they
+  are decoded in, not how well Thai is recognized. `biodatlab whisper-th-medium` still mishears
+  casual speech and F1 names. Any engine
   change needs the gold set (still the #1 blocker).
 - **Corrections are applied, but approximately.** A cue corrected in SubtitleDesk or the web
   editor replaces that cue's words, and its lines say `corrected: true`. When the corrected text
