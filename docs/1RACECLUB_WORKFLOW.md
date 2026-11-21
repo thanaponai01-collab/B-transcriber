@@ -589,3 +589,16 @@ Parked after the agent's v4 in the same sequence; read with prproj_reader, each 
   (2) the title PNG ran **one frame past the cut** (frames 0–246, the shot changes at 245 = 00:00:08:05; the user saw it at 08:06).
   Cause: the plan asked one extra frame for every still ("Premiere lays a still one frame short", seen for 26–74-frame stills), but this
   246-frame PNG landed full length. Lesson: don't pad stills blindly; read back each still's end against the cut and fix it.
+- **19:46 save: user refines the Short (In/Out unchanged 92.7–135.1). SFX on A7, levels as dB vs Premiere's 0 dB (0.1778):**
+  | Short s | SFX | level | sits on |
+  |---|---|---|---|
+  | 2.27 | Dramatic-Vine | −12 dB | "แล้วแปะกันไปเลย" (the contact), 3 frames before the piece |
+  | 7.37, 10.87 | auughhh | −27 dB | Max with the Alpine: "…เข้าไปที่อินไซด์", "ไม่ปล่อยแน่นอน ฮ่าฮ่า" |
+  | 17.33 | Dramatic-Vine | −12 dB | start of the McLaren incident, 3 frames before |
+  | 20.5 | F1 Radio Notification | −9 dB | NORRIS RADIO caption appears (6 frames before it) |
+  | 27.0 | Dramatic-Vine | −12 dB | "ถูกันทีเลย" (Russell contact), 3 frames before |
+  | 32.0, 34.73, 38.43 | F1 Radio Notification | −9 dB | each radio caption: VERSTAPPEN "pushed me into the barrier", RUSSELL "did you see the replay", RUSSELL "fun and games" |
+  Also: the last Russell piece's moving feed became a **frame hold** (1558.67); its caption box moved from V6 to V5. Now every feed picture is a hold.
+  **Principles (seen, the watch-time idea):** a boom marks the start of each new incident (a new reason to keep watching), landing a few
+  frames ahead of the line; the radio sound announces each radio caption so the eye goes to the box; a meme sound, low, colours Max
+  being stubborn; holds everywhere, so motion never pulls attention from the caption.
