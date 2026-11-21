@@ -216,8 +216,21 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
 ## Phase 2: Episode analysis (offline, no Premiere) → `episode.json` + markers
 - [ ] **2.1** Word transcript of the footage (existing engine), for **all 11 episodes** (about
   12 min each). With the gold cuts this gives the words under every one of the 1,502 cuts, so
-  Phase 4 is scored per cut class on every episode. → verify: 20261120 matches the saved
-  `full.words.json` (33,708 words, ±1 %); each of the other 10 has words across its whole length.
+  Phase 4 is scored per cut class on every episode. → verify (`python -m cutdeck.hks_words --all
+  G:\Me\Works --check`): on every episode, at least 97 % of the YT body keeps of 2 s or more have
+  a word inside, and no keep of 5 s or more is without one.
+
+  Changed 2026-11-21. The old check ("matches `full.words.json`, 33,708 words ±1 %") compared
+  different units, so it could never pass. That file was an ad-hoc run that stores Whisper's
+  sub-word pieces (`ท`, `ุ`, `ก`); the pipeline gives merged words (`ทุกครั้ง`). The new
+  20261120 run holds more text (50,918 vs 43,551 characters), and the old file has holes.
+  The 5 s rule was added after a synthetic one-minute hole inside kept speech passed the 97 %
+  bar alone; with it, that hole fails.
+
+  **Status: 9 of 11 done.** The 9 transcribed episodes pass with no holes in 872 keeps,
+  holdout 20261002 and 20261109 included. The run stopped on low system memory before
+  **20261117** and **20261118**; rerun the same command without `--check` to finish them (done
+  files are skipped).
 - [ ] **2.2** Break and fixed-graphics finder. Two signals, because neither covers everything:
   - a clock-off run of 10 s or more inside the TV part: bumpers, the real TV ads of the Facebook
     feeds (they change per episode, so reference clips cannot find them) and clock-free graphics.
