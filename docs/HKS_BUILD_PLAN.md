@@ -171,7 +171,7 @@ items, Motion scale and position, an adjustment layer with an appended effect.
   reel) → verify: read-back clip names and durations. **Done (probe `hks1d`):** the FB copy reads
   125 / 65 items and 179.96 s like the original; the square's project item placed into a reel copy
   lands as a nested clip "3 SQUARE SELECT D1", 0–59.96, and renders.
-- [ ] **1e** Replay at scale, after 1a–1c. Rebuild the finished `1 YOUTUBE D1` of 20261120 on a
+- [x] **1e** Replay at scale, after 1a–1c. Rebuild the finished `1 YOUTUBE D1` of 20261120 on a
   copy, with the sequence closed while it is built:
   - the keeps and covers (about 160 cuts) from `hks_gold`;
   - the blur layers, film damage and 22 music pieces from `prproj_reader` (`hks_gold` does not
@@ -179,6 +179,27 @@ items, Motion scale and position, an adjustment layer with an appended effect.
 
   → verify: every item the build placed reads back within one frame of the saved project, and
   the build runs twice without a failed action or a crash.
+
+  **Done (live 2026-11-21, `python -m cutdeck.hks_build … --run --save`, panel `build_sequence`):**
+  - 370 items, twice, on a cleared copy that is never opened. Neither run had a refused action
+    or a crash (17 s and 33 s).
+  - Read-back: 344 video and 238 audio items, 0 off by more than a frame.
+  - The saved project, diffed offline with `--compare`, gives 0 differences in timing, Motion
+    and Level against the original on both runs, and the original reads unchanged.
+  - The whole list comes from `prproj_reader`, keeps and covers included, not from `hks_gold`.
+    The reader gives the placed clips themselves, with the track, the Motion and the source
+    file, which is what a replay needs. `hks_gold` gives source ranges only.
+  - Not replayed (`skipped` in the output):
+    - speed-changed clips (6) and keyframed Motion;
+    - the Opacity blend mode of film damage (83);
+    - the 3 V9 blur boxes, whose box was never measured;
+    - graphics, AE comps, SFX and the end logo.
+
+    Blurriness is a fixed 60, because the reader returns no Gaussian Blur params.
+  - No frame was exported for this run. 1a–1c checked each kind's look.
+
+**Outcome: A**, so drafts are built as real sequences. The pieces not replayed above stay
+manual or get their own probe when a phase needs them.
 
 **Outcome A** (all work, 1e included): drafts are built as real sequences in Premiere.
 **Outcome B** (gaps): drafts are markers + cut lists, plus the user's manual steps for the gaps.
