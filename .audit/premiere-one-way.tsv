@@ -1,0 +1,27 @@
+ts	phase	decision	why	evidence	result
+2026-11-21T15:16:51Z	frame	audited every route into Premiere before changing anything	user asked for one place and one way; needed the map first	chat audit; docs/PREMIERE_CONTROL_MAP.md	4 options; user chose all four
+2026-11-21T15:16:51Z	baseline	recorded test baseline before any edit	every step is checked against it	node 807 pass; pytest -k cutdeck 384 pass 2 skip	green
+2026-11-21T15:16:51Z	step1	deleted native_split.py, the helper request, the two Add Edit probes and cep/textprobe	menu Add Edit does the same cut live; textprobe result already recorded in PREMIERE_FACTS	commit af606b5	node 796, pytest 371 (minus exactly the deleted test files)
+2026-11-21T15:16:51Z	step1	kept the C++ plugin source, README says last resort	it is the only route for a command in neither the menu nor the .kys	tools/native-cutter-spike/README.md	kept
+2026-11-21T15:16:52Z	step1	removed Undo/Redo as a key_command example and added a one-route-per-action table	Ctrl+Z as keys did nothing live; the doc pointed agents at a dead route	commit af606b5	done
+2026-11-21T15:16:52Z	step4	handed the panel toolbox merge to a worker in its own worktree	JS-only; disjoint from the Python steps 2-3	branch refactor/panel-host-toolbox	open
+2026-11-21T15:16:52Z	step2	menu, keys, screenshot and assistant became table commands the helper runs (Command.run)	scripts and the CLI could not reach them; one way in for every client	commit d1d30ae	pytest 372 green
+2026-11-21T15:16:52Z	step2	panel may register only PANEL_COMMANDS	a panel must not claim a helper command	tests/test_cutdeck_helper_v2.py new test	green
+2026-11-21T15:16:53Z	step3	snapshotted the served MCP tool list before generating tools	pin: names, schemas, annotations must not change	scratchpad tools_before.json	44 tools
+2026-11-21T15:16:53Z	step3	moved 38 wrappers' params, docs and hints into the table with a generator, not by hand	hand-copying 38 docstrings invites drift	scratchpad gen_table.py; commit 4th	tool list identical except 2 intended description edits
+2026-11-21T15:16:53Z	step3	tools drop a None only when its default is None	menu/key focus=null must still reach the helper; every check reads .get()	test_a_tool_sends_what_it_was_given_minus_unset_optionals	green
+2026-11-21T15:16:53Z	live	restarted the user helper on 7891 through its own idle restart and relaunched it on this branch	needed to prove the helper-to-panel path live	old pid 47808 exited, new pid 9832, panel reconnected	ok
+2026-11-21T15:16:53Z	live	ran screenshot, list_menu, list_key_commands, menu_command (focus timeline, harmless Window > Timelines item), CLI and generated MCP tools	verify on the real artifact, not tests	screenshot cutdeck-premiere-1795274143732.png; active sequence unchanged	VERIFIED
+2026-11-21T15:16:57Z	step3	evidence fix for the generator row above	that row said 4th instead of the commit id	commit 07f1a82	corrected
+2026-11-21T15:27:32Z	step4	reviewed the worker diff myself, then merged	the worker's report is not proof; checked call order, undo labels and error text	merge b86d79c	faithful; one reachable change: apply.js malformed values no longer become PointF(undefined)
+2026-11-21T15:27:32Z	step4	accepted the worker skipping frame export merge	control, frameBounds and frameHold differ on purpose; waitForFile was already shared	worker report	kept apart
+2026-11-21T15:27:33Z	step4	panel registers Object.keys(handlers); drift test loads driver.js through node	the command list lived in driver.js, a JS test and the table	commit 12bbd8e; injected handler made the test fail	green
+2026-11-21T15:27:33Z	tests	full pytest run has 8 text_box failures	uharfbuzz missing from this Python 3.13; text_box untouched	tests/test_text_box.py ModuleNotFoundError	pre-existing, not this change
+2026-11-21T15:27:33Z	live	saved the project, reloaded the panel on the new code	memory rule: save before reload	save_project True; panel back in 4 s with 32 commands	ok
+2026-11-21T15:27:33Z	live	on scratch CutDeck control test (Claude): open, remove+menu undo, set Position+undo, cut_copy 30 frames	these run through every merged host function	copy end 2727583165440000 = source minus 30 frames exactly	VERIFIED
+2026-11-21T15:27:34Z	live	left the sequence CutDeck one-way check (Claude) in the project, unsaved; reopened the user sequence	no API deletes a sequence; tell the user	list_project	open
+2026-11-21T15:31:23Z	live	ran key_command End (focus program), ripple remove + undo, set_transform_field rotation + undo on scratch	the key route moved into a hidden helper process; foreground rights had to be proven there	playhead 0 -> 2727887984640000 = end; rotation 0 -> 7 -> 0	VERIFIED
+2026-11-21T15:31:23Z	live	ripple remove of one V3 still acted as a lift	same API call as master; audio across the gap likely blocks it	docs/PREMIERE_FACTS.md new CATCH row	inferred, not a regression
+2026-11-21T15:31:24Z	docs	updated feature traces, helper risk note, v3 status, two PREMIERE_FACTS rows	CLAUDE.md: a facts row after every live run; traces still pointed at mcp_server	features/cutdeck.md, docs/arch-design-helper-v2.md	done
+2026-11-21T15:31:24Z	step3	closed the tool pin on outputSchema too	the first dump skipped it	worktree af606b5 vs branch: all 44 output schemas equal	VERIFIED
+2026-11-21T15:35:25Z	verify	ran every VERIFY.md check	CLAUDE.md requires it before done	verify.py run: 15 checks pass, 0 fail	green; 38 frozen-baseline notices, 37 predate this branch, 1 is test_cutdeck_live_premiere (COMMANDS -> PANEL_COMMANDS), needs a person to re-baseline

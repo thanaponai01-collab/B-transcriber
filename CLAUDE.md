@@ -178,6 +178,7 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   when first needed; neither exists yet). See `docs/agents/domain.md`.
 
 ## Project checks
+- `.claude/skills/verify-cutdeck/`: drive CutDeck in live Premiere and keep evidence (`scripts/cdv.py doctor | launch | start | scratch | call | shot | cleanup`). Use it after changing `cutdeck/` or `uxp/cutdeck/`; tests use a fake Premiere.
 - `VERIFY.md`: each feature and the command that proves it. Run every check before saying done;
   `verify-loop` builds and maintains it.
 - `FEATURES.md`: what the system has and how a user reaches each feature. Read it before driving or

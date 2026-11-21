@@ -42,23 +42,10 @@ const {
   FIXED_EFFECT_DISPLAY_NAMES,
   isFixedComponent,
   unwrapKeyframeValue,
+  toParamValue,
 } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { runTransaction } = require("../host/project.js");
-
-/* Captured point params (Anchor Point, Position) read back as plain [x, y] arrays, but
-   createKeyframe only accepts a real PointF for them — an array throws "Illegal Parameter type"
-   (UXPLogs, 2026-09-23: every Anchor Point / Position in every applied preset). Convert here;
-   every other value type passes through unchanged. */
-function toParamValue(ppro, value) {
-  const isPair = Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number");
-  const isXY = value && typeof value === "object" && !Array.isArray(value)
-    && typeof value.x === "number" && typeof value.y === "number";
-  if ((isPair || isXY) && ppro && typeof ppro.PointF === "function") {
-    return isPair ? new ppro.PointF(value[0], value[1]) : new ppro.PointF(value.x, value.y);
-  }
-  return value;
-}
 
 /* Pure: where each captured keyframe lands on a target whose source In point is
    `targetInTicks` (BigInt). Returns tick strings, ready for TickTime.createWithTicks. */
@@ -330,7 +317,6 @@ module.exports = {
   applyCapturedPreset,
   applyCapturedPresetToAll,
   placeKeyframes,
-  toParamValue,
   isFixedComponent,
   FIXED_EFFECT_DISPLAY_NAMES,
 };

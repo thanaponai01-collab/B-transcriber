@@ -98,26 +98,26 @@
 
 ## General Premiere control (MCP)
 - what: Hand-level control of Premiere for agents. `premiere_read_timeline`, `premiere_list_project`, `premiere_open_sequence`, `premiere_set_playhead`, `premiere_set_in_out`, `premiere_select_clips`, `premiere_edit_clips` (move, trim, enable/disable, rename, remove, in one undo step), `premiere_place_media` (overwrite, insert, nest), `premiere_list_effects`, `premiere_add_effect`, `premiere_set_param` (any effect parameter or keyframe), `premiere_add_transition`, `premiere_set_track_mute`, `premiere_remove_markers`, `premiere_import_files`, `premiere_save_project` and `premiere_export_frame` (a PNG of a frame). Plus `premiere_screenshot`, a PNG of the whole Premiere window (no panel needed). Clips are addressed by id `V<n>@<start_ticks>`. Every route, and what UXP cannot reach (razor, link, targeting, undo): docs/PREMIERE_CONTROL_MAP.md.
-- trace: `premiere_edit_clips` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `handle` @ uxp/cutdeck/features/driver.js > `editClips` @ uxp/cutdeck/timeline/control.js
-- trace: `premiere_screenshot` @ cutdeck/mcp_server.py > `capture` @ cutdeck/screenshot.py
-- needs: helper running and the CutDeck panel open (reloaded, so it has timeline/control.js); `premiere_screenshot` needs only Premiere, not minimised
+- trace: `premiere_edit_clips` (built from cutdeck/driver_commands.py) @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `premiere` @ cutdeck/helper.py > `handle` @ uxp/cutdeck/features/driver.js > `editClips` @ uxp/cutdeck/timeline/control.js
+- trace: `premiere_screenshot` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/helper.py > `capture` @ cutdeck/screenshot.py
+- needs: helper running and the CutDeck panel open (reloaded, so it has timeline/control.js); `premiere_screenshot` needs the helper and Premiere not minimised, not the panel
 - verify: CutDeck panel (UXP); CutDeck helper
 - status: live-proven 2026-11-21 on Premiere 27.0.0: every tool ran through the helper on scratch sequences in a real project (docs/PREMIERE_FACTS.md *General control live pass*). The live pass found and fixed a double-shift on ripple removes and made place_media fail when nothing lands. Not run through an MCP client session itself (the same helper path was used).
 
 ## Premiere menu and keyboard commands (MCP)
 - what: Run what the panel API cannot do. `premiere_list_menu` and `premiere_menu_command` run any Premiere menu item by its path, e.g. "Edit > Undo", "Sequence > Add Edit to All Tracks", "Clip > Unlink". `premiere_list_key_commands` and `premiere_key_command` press any bound shortcut from the user's .kys, e.g. cmd.edit.rippledelete. Timeline commands first focus the named timeline (Window > Timelines > name) and check the active sequence. Dialog items and quit/close/open/import/export/save-as items are refused.
-- trace: `premiere_menu_command` @ cutdeck/mcp_server.py > `run_focused` @ cutdeck/keys.py > `invoke` @ cutdeck/menu.py
-- trace: `premiere_key_command` @ cutdeck/mcp_server.py > `run_command` @ cutdeck/keys.py > `press_command` @ cutdeck/keys.py
-- needs: Premiere running on Windows, not minimised. Timeline focus also needs the CutDeck panel and helper (to open and check the sequence).
+- trace: `premiere_menu_command` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/helper.py > `run_focused` @ cutdeck/keys.py > `invoke` @ cutdeck/menu.py
+- trace: `premiere_key_command` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/helper.py > `run_command` @ cutdeck/keys.py > `press_command` @ cutdeck/keys.py
+- needs: Premiere running on Windows, not minimised, and the helper running (it runs these). Timeline focus also needs the CutDeck panel (to open and check the sequence). Also `python -m cutdeck.premiere_cli menu_command "Edit > Undo"`.
 - verify: CutDeck helper
-- status: live-proven 2026-11-21 on 27.0.0 through the MCP tools: razor via menu and via keys, Undo/Redo via menu, Link/Unlink, ripple delete via Shift+Delete, End via the Program Monitor, File > Exit refused. Ctrl+Z and a Ctrl+Alt binding did nothing as keys (use the menu).
+- status: live-proven 2026-11-21 on 27.0.0 through the MCP tools: razor via menu and via keys, Undo/Redo via menu, Link/Unlink, ripple delete via Shift+Delete, End via the Program Monitor, File > Exit refused. Ctrl+Z and a Ctrl+Alt binding did nothing as keys (use the menu). Re-run 2026-11-21 after moving into the helper: menu_command (Window > Timelines, Edit > Undo) and key_command (End via the Program Monitor) worked from the helper process.
 
 ## Ask Premiere's AI Assistant (MCP)
 - what: `premiere_assistant_ask(prompt, timeout_s)` types a prompt into Adobe's own AI Assistant (beta) chat panel through Windows UI Automation, waits for the reply and returns `{done, text, credits, buttons}`. Windows only. Each prompt spends the user's Adobe credits.
-- trace: `premiere_assistant_ask` @ cutdeck/mcp_server.py > `ask` @ cutdeck/assistant.py > `_panel` @ cutdeck/assistant.py
-- needs: Premiere running with the AI Assistant panel already open (its toolbar button can't be reached). Not the helper, not the CutDeck panel.
+- trace: `premiere_assistant_ask` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/helper.py > `ask` @ cutdeck/assistant.py > `_panel` @ cutdeck/assistant.py
+- needs: Premiere running with the AI Assistant panel already open (its toolbar button can't be reached), and the helper running. Not the CutDeck panel.
 - verify: CutDeck helper
-- status: run live 2026-11-17 on Premiere 27.0.0.88 through the MCP tool: two read-only questions answered in 10-18 s. Not tried: a prompt that edits, the Permission mode approval flow, Thai text, Premiere Beta.
+- status: run live 2026-11-17 on Premiere 27.0.0.88 through the MCP tool: two read-only questions answered in 10-18 s. Moved into the helper 2026-11-21 and not re-run there (each prompt costs credits). Not tried: a prompt that edits, the Permission mode approval flow, Thai text, Premiere Beta.
 
 ## Live Premiere CLI
 - what: Send one live command (status, read_sequence, apply_cuts, add_markers, run_probe, inspect_selection, transform/anchor/align/distribute) to the panel through the helper.

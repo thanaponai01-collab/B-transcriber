@@ -24,8 +24,8 @@ import subprocess
 import sys
 import uuid
 
-from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
-from cutdeck import frame_bounds, native_split, sequence_model, text_box
+from cutdeck.driver_commands import COMMANDS, MAX_MARKERS, PANEL_COMMANDS  # noqa: F401 (MAX_MARKERS: tests)
+from cutdeck import frame_bounds, sequence_model, text_box
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
@@ -212,7 +212,6 @@ class Jobs:
         "plan_sync": "_on_plan_sync",
         "frame_bounds": "_on_frame_bounds",
         "text_box": "_on_text_box",
-        "native_split_request": "_on_native_split_request",
     }
 
     async def dispatch(self, req: dict, client: Client | None = None) -> dict:
@@ -262,7 +261,7 @@ class Jobs:
         if client is None:
             raise ValueError("Only a connected panel can be the Premiere driver")
         commands = req.get("commands")
-        if not isinstance(commands, list) or not set(commands) <= set(COMMANDS):
+        if not isinstance(commands, list) or not set(commands) <= set(PANEL_COMMANDS):
             raise ValueError("Unknown driver commands")
         self.driver, self.driver_commands = client, list(commands)
         print(f"driver registered: {', '.join(commands)}", flush=True)
@@ -272,7 +271,7 @@ class Jobs:
         return {"connected": self.driver is not None, "commands": list(self.driver_commands)}
 
     async def _on_premiere(self, req: dict, client: Client | None) -> dict:
-        return {"result": await self._call_driver(req)}
+        return {"result": await self.premiere(req.get("command"), req.get("args") or {})}
 
     async def _on_watch(self, req: dict, client: Client | None) -> dict:
         job = self._job(req.get("job_id"))
@@ -355,10 +354,6 @@ class Jobs:
         # save and the font (text_box.py). On a worker thread: it reads and shapes.
         return await asyncio.to_thread(text_box.request, req)
 
-    async def _on_native_split_request(self, req: dict, client: Client | None) -> dict:
-        # The "Test Native Add Edit" probe: one fixed native command, guarded by the timecode.
-        return await native_split.request_split(req.get("expected_timecode"))
-
     def _start(self, job: dict, sequence: Sequence) -> dict:
         start, end = range_from_ticks(sequence, job["context"])
         job["reference_track"] = reference_audio_track(sequence, job["context"])
@@ -430,11 +425,23 @@ class Jobs:
         for client in watchers:
             client.push({"event": "job", "job": dict(job)})
 
-    async def _call_driver(self, req: dict):
-        """Forward one fixed command to the panel and wait for its answer."""
-        command, args = req.get("command"), req.get("args") or {}
+    async def premiere(self, command, args=None) -> object:
+        """Run one fixed Premiere command: the helper's own (menu, keys, window pixels, Adobe's AI
+        Assistant) here, any other through the panel. The one way in for every client."""
+        args = {} if args is None else args
         if command not in COMMANDS or not isinstance(args, dict):
             raise ValueError(f"Unknown Premiere command; one of: {', '.join(COMMANDS)}")
+        spec = COMMANDS[command]
+        if spec.run is None:
+            return await self._call_driver(command, args)
+        args = spec.prepare(args, self._job)
+        try:
+            return await asyncio.wait_for(spec.run(args, self.premiere), spec.timeout_s)
+        except asyncio.TimeoutError:
+            raise ValueError(f"{command} did not finish in time") from None
+
+    async def _call_driver(self, command: str, args: dict):
+        """Forward one panel command to the panel and wait for its answer."""
         driver = self.driver
         if driver is None:
             raise ValueError("No CutDeck panel is connected: open the CutDeck panel in Premiere")

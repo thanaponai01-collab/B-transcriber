@@ -1,34 +1,51 @@
-"""The one table of commands the CutDeck panel drives in live Premiere.
+"""The one table of Premiere commands. Every way in (MCP tools, `python -m cutdeck.premiere_cli`,
+`Backend().premiere` in a script) runs a command from here through the helper.
 
-The rule every command keeps: it runs as one Premiere transaction, or on a copy of the
+The rule every panel command keeps: it runs as one Premiere transaction, or on a copy of the
 sequence, and returns what it changed. Nothing here edits the user's original in steps.
 
-A new command is: one entry in COMMANDS, its handler in `uxp/cutdeck/features/driver.js`
-(with its name in that file's COMMANDS array) and one `premiere_<name>` MCP tool in
-`cutdeck/mcp_server.py`. The helper's dispatch, `premiere_cli` and `ai_backend.capabilities`
-read this table; `tests/test_cutdeck_driver_commands.py` fails if the pieces drift apart.
+A new command is one entry here: its timeout, argument check, MCP hint, MCP description and
+parameters. A panel command also needs its handler in `uxp/cutdeck/features/driver.js` (the panel
+registers its handler names); a helper command has `run` instead. The helper's dispatch,
+the MCP tools, `premiere_cli` and `ai_backend.capabilities` all read this table;
+`tests/test_cutdeck_driver_commands.py` fails if the panel drifts from it.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Awaitable, Callable
 
+from cutdeck import assistant, keys, menu, screenshot
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
 
 
+# Runs one command through the helper and returns its result: the helper's own dispatch, or
+# `Backend().premiere` in a script.
+Premiere = Callable[[str, dict], Awaitable]
+
+
 @dataclass(frozen=True)
 class Command:
     timeout_s: int
-    # (args the caller sent, job lookup) -> the arguments the panel receives
+    # (args the caller sent, job lookup) -> the arguments the command receives
     prepare: Callable[[dict, Callable[[str], dict]], dict]
-    doc: str
+    # MCP hint: read (changes nothing), write, destructive, or outside (Adobe's own service)
+    hint: str
+    doc: str  # the premiere_<name> MCP tool's description
+    # The MCP tool's parameters: (name, type) or (name, type, default). A None argument whose
+    # default is None is left out, so the command sees it as not given.
+    params: tuple[tuple, ...]
     # None: takes no CLI argument. Else (usage word, text from the CLI -> args for the command)
     cli_target: tuple[str, Callable[[str], dict]] | None = None
+    # None: the CutDeck panel runs it. Else the helper runs it (Win32 routes: menu, keys, window
+    # pixels, Adobe's AI Assistant), with `premiere` for any panel command it needs on the way.
+    run: Callable[[dict, Premiere], Awaitable] | None = None
 
 
 def _seconds_to_ticks(value, name: str) -> str:
@@ -83,7 +100,9 @@ MAX_BUILD_ITEMS = 5000
 
 def _build_arguments(args: dict, jobs) -> dict:
     """Validate `build_sequence`: the open project, a base sequence to copy, a new name, the items
-    to place, and `save` (opt-in: save the project after the build)."""
+    to place, and `save` (opt-in: save the project after the build). The MCP tool sends the
+    optional fields inside `options`."""
+    args = {**{k: v for k, v in args.items() if k != "options"}, **(args.get("options") or {})}
     project, base, name, items = args.get("project"), args.get("base"), args.get("name"), args.get("items")
     if not isinstance(project, str) or not project.lower().endswith(".prproj") or not Path(project).is_absolute():
         raise ValueError("project must be the absolute path of the open .prproj (the panel refuses any other)")
@@ -301,44 +320,143 @@ def _parse_distribute_target(target: str) -> dict:
 
 # apply_cuts edits a copy of a long sequence: 1735 cuts took minutes live (ledger 09-24).
 COMMANDS: dict[str, Command] = {
-    "read_sequence": Command(60, _no_arguments, "Read the active sequence."),
-    "read_audio_range": Command(60, _no_arguments, "Read marked range and source audio clips without editing Premiere."),
-    "apply_cuts": Command(1800, _apply_cuts_arguments,
-                          "Apply a finished rough cut job to a copy of the active sequence.",
-                          ("job_id", lambda target: {"job_id": target})),
-    "add_markers": Command(120, _marker_arguments, "Add markers to the active sequence.",
-                           ("JSON file", lambda target: {
+    "read_sequence": Command(
+        60, _no_arguments, "read",
+        """
+        Read Premiere's active sequence: name, id, In/Out and end (ticks and seconds),
+        ticks_per_frame and track counts. Needs the CutDeck panel open.
+        """,
+        ()),
+    "read_audio_range": Command(
+        60, _no_arguments, "read",
+        """
+        Read the active sequence's marked range and source audio clips, without editing it.
+        """,
+        ()),
+    "apply_cuts": Command(
+        1800, _apply_cuts_arguments, "write",
+        """
+        Apply a finished rough_cut job's cut list in live Premiere, to a COPY of the active
+        sequence (the original is never edited). The active sequence must be the one the job
+        analysed. Takes minutes on long sequences. Needs the CutDeck panel open.
+        """,
+        (("job_id", str),),
+        cli_target=("job_id", lambda target: {"job_id": target})),
+    "add_markers": Command(
+        120, _marker_arguments, "write",
+        """
+        Add markers to the active sequence in one undo step. Each marker:
+        {start_s, duration_s (default 0), name, comment}, times in seconds from the sequence
+        start. Needs the CutDeck panel open.
+        """,
+        (("markers", list[dict]),),
+        cli_target=("JSON file", lambda target: {
                                "markers": json.loads(Path(target).read_text(encoding="utf-8"))})),
-    "run_probe": Command(300, _run_probe_arguments, "Run one diagnostic probe in live Premiere.",
-                         ("probe_name", lambda target: {"probe": target})),
-    "inspect_selection": Command(30, _no_arguments,
-                                 "Inspect the selected track item(s) on the active sequence in live Premiere."),
-    "set_transform_field": Command(30, _set_transform_field_arguments,
-                                   "Set a transform field (position-x, position-y, scale, rotation, anchor-x, anchor-y) on selected clips.",
-                                   ("field=value", _parse_field_target)),
-    "set_anchor": Command(30, _set_anchor_arguments,
-                          "Set 9-point anchor target on selected clips while preserving picture position.",
-                          ("target [layer]", _parse_anchor_target)),
-    "align_clips": Command(30, _align_clips_arguments,
-                           "Align selected clips to sequence frame or selection bounding box.",
-                           ("edge [to] [layer]", _parse_align_target)),
-    "distribute_clips": Command(30, _distribute_clips_arguments,
-                                "Distribute 3+ selected clips across frame or within selection.",
-                                ("kind [to]", _parse_distribute_target)),
+    "run_probe": Command(
+        300, _run_probe_arguments, "read",
+        """
+        Run a diagnostic probe in Premiere (timing, motion, effect, transform,
+        keyframe, alcreate, syncmoves, nativecut). Needs the CutDeck panel open.
+        """,
+        (("probe", str),),
+        cli_target=("probe_name", lambda target: {"probe": target})),
+    "inspect_selection": Command(
+        30, _no_arguments, "read",
+        """
+        Inspect the selected track item(s) on the active sequence in Premiere:
+        name, timing, Motion/Transform parameters, and dimensions. Needs the CutDeck panel open.
+        """,
+        ()),
+    "set_transform_field": Command(
+        30, _set_transform_field_arguments, "write",
+        """
+        Set a transform property (position-x, position-y, scale, scale-width, uniform-scale 1/0,
+        rotation, anchor-x, anchor-y, anti-flicker 0-1, crop-left/top/right/bottom %, opacity %)
+        on selected clips in Premiere. Needs the CutDeck panel open.
+        """,
+        (("field", str), ("value", float)),
+        cli_target=("field=value", _parse_field_target)),
+    "set_anchor": Command(
+        30, _set_anchor_arguments, "write",
+        """
+        Set 9-point anchor target (top-left, top, top-right, left, center, right, bottom-left,
+        bottom, bottom-right) on selected clips while preserving picture position. `layer` (0-based)
+        targets one text layer of a multi-text Graphic by its own measured box. Needs the CutDeck panel open.
+        """,
+        (("target", str), ("layer", int | None, None)),
+        cli_target=("target [layer]", _parse_anchor_target)),
+    "align_clips": Command(
+        30, _align_clips_arguments, "write",
+        """
+        Align selected clips to the sequence frame or selection bounding box (left, hcenter, right,
+        top, vcenter, bottom). 'to' can be 'frame', 'selection' or 'group' (the selection's outer box
+        to the frame, every clip moved together). `layer` (0-based) aligns one text layer of a
+        multi-text Graphic by its own measured box. Needs the CutDeck panel open.
+        """,
+        (("edge", str), ("to", str, "frame"), ("layer", int | None, None)),
+        cli_target=("edge [to] [layer]", _parse_align_target)),
+    "distribute_clips": Command(
+        30, _distribute_clips_arguments, "write",
+        """
+        Distribute 3+ selected clips across frame or within selection (h-centers, v-centers,
+        h-gaps, v-gaps). 'to' can be 'frame' or 'selection'. Needs the CutDeck panel open.
+        """,
+        (("kind", str), ("to", str, "frame")),
+        cli_target=("kind [to]", _parse_distribute_target)),
     # Builds a new sequence on a cleared copy of `base` (never edits it); minutes for hundreds of items.
-    "build_sequence": Command(3600, _build_arguments,
-                              "Build a new sequence from an item list on a cleared copy of a base sequence.",
-                              ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
-    "reload_panel": Command(30, _no_arguments,
-                            "Reload the CutDeck panel so it loads changed code; it reconnects by itself."),
+    "build_sequence": Command(
+        3600, _build_arguments, "write",
+        """
+        Build a new sequence named `name` on a cleared copy of the sequence `base` (never
+        edited), in the open project, which must be the .prproj at the absolute path `project`
+        (else nothing is built). Each item: {id, media (file path) or like {kind, track,
+        start_ticks}, in_ticks, out_ticks, at_ticks (tick strings), v, a (track indexes or
+        null), motion, level, blur}. `save`: save the project after the build. `options`
+        (optional): disable_tracks {video, audio}, mark_whole, media_from [sequence names], and
+        into (edit `base` itself; name == base) with settings_from, moves, restyle; see
+        uxp/cutdeck/timeline/buildSequence.js. Returns placed counts and every item off by more
+        than one frame.
+        """,
+        (("project", str), ("base", str), ("name", str), ("items", list[dict]), ("save", bool, False), ("options", dict | None, None)),
+        cli_target=("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
+    "reload_panel": Command(
+        30, _no_arguments, "write",
+        """
+        Reload the CutDeck panel in Premiere so it loads changed panel code. It reconnects
+        to the helper by itself within a few seconds. Needs the CutDeck panel open.
+        """,
+        ()),
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
-    "cut_copy": Command(1800, _cut_copy_arguments,
-                        "Copy a named sequence and cut frame ranges out of the copy (Rough Cut engine)."),
-    "create_sequence": Command(30, _create_sequence_arguments,
-                               "Create a new empty sequence from a sequence preset (.sqpreset)."),
-    "export_sequence": Command(3600, _export_sequence_arguments,
-                               "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
-                               ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
+    "cut_copy": Command(
+        1800, _cut_copy_arguments, "write",
+        """
+        Copy the sequence `sequence_name` (never edited) as `result_name` and cut frame ranges
+        out of the copy with the Rough Cut engine, keeping every synced layer, effect and disabled
+        state. cuts: {ticks_per_frame (the sequence's), cuts_frames [[start, end], ...] sorted
+        whole frames}. The copy opens when done. Needs the CutDeck panel open.
+        """,
+        (("sequence_name", str), ("result_name", str), ("cuts", dict))),
+    "create_sequence": Command(
+        30, _create_sequence_arguments, "write",
+        """
+        Create a new empty sequence `name` in the open project from the sequence preset file
+        `preset_path` (.sqpreset, e.g. Premiere's Settings/SequencePresets/Social/Social Media
+        Portrait 9x16 30 fps.sqpreset). Refuses a name already in use. Returns the frame size,
+        ticks per frame and track counts. Needs the CutDeck panel open.
+        """,
+        (("name", str), ("preset_path", str))),
+    "export_sequence": Command(
+        3600, _export_sequence_arguments, "write",
+        """
+        Export a Premiere sequence (the ACTIVE one, or the one sequence named sequence_name that
+        has content) with a Media Encoder preset (.epr) to output_file (absolute path, must not
+        exist yet). Its In/Out range is used. queue "premiere" renders now inside Premiere;
+        "ame" queues it in Adobe Media Encoder and, unless start is false, starts the queue
+        (queue several with start=false, then start on the last). Check the file itself before
+        relying on it. Needs the CutDeck panel open.
+        """,
+        (("output_file", str), ("preset_file", str), ("queue", str, "premiere"), ("sequence_name", str | None, None), ("start", bool, True)),
+        cli_target=("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
 }
 
 
@@ -541,24 +659,267 @@ def _export_frame_arguments(args: dict, jobs) -> dict:
 
 
 CONTROL_COMMANDS: dict[str, Command] = {
-    "read_timeline": Command(300, _read_timeline_arguments, "Read every track, clip, mark and marker of a sequence."),
-    "list_project": Command(120, _list_project_arguments, "List the project's sequences and bin tree."),
-    "open_sequence": Command(60, _open_sequence_arguments, "Open a sequence by name and make it active.",
-                             ("sequence name", lambda target: {"sequence": target})),
-    "set_playhead": Command(30, _set_playhead_arguments, "Move a sequence's playhead to a tick time.",
-                            ("ticks", lambda target: {"ticks": target})),
-    "set_in_out": Command(30, _set_in_out_arguments, "Set a sequence's In and/or Out marks."),
-    "select_clips": Command(60, _select_clips_arguments, "Replace the timeline selection with these clips."),
-    "edit_clips": Command(600, _edit_clips_arguments, "Move, trim, enable/disable, rename or remove clips in one undo step."),
-    "place_media": Command(300, _place_media_arguments, "Overwrite or insert a media file, or nest a sequence, at a time."),
-    "list_effects": Command(60, _no_arguments, "List video effect, audio effect and transition names."),
-    "add_effect": Command(120, _add_effect_arguments, "Append an effect to clips."),
-    "set_param": Command(60, _set_param_arguments, "Set an effect parameter, or add a keyframe, on a clip."),
-    "add_transition": Command(120, _add_transition_arguments, "Add a video transition to clips."),
-    "set_track_mute": Command(30, _set_track_mute_arguments, "Mute or unmute a track."),
-    "remove_markers": Command(60, _remove_markers_arguments, "Remove sequence markers by start time."),
-    "import_files": Command(600, _import_files_arguments, "Import files into the project root."),
-    "save_project": Command(120, _no_arguments, "Save the open project."),
-    "export_frame": Command(60, _export_frame_arguments, "Save a PNG of a sequence frame."),
+    "read_timeline": Command(
+        300, _read_timeline_arguments, "read",
+        """
+        Read a sequence the way the timeline shows it: every V/A track (name, muted) and clip
+        (id, name, start/end/in/out ticks, disabled, selected, speed, media file), plus size,
+        In/Out, end, playhead and markers. effects "names" adds each clip's effect chain,
+        "params" every parameter's value too. On long sequences read a piece at a time: tracks
+        (["V1", "A2"]) and from_ticks / to_ticks (clips overlapping that span). Needs the CutDeck
+        panel open.
+        """,
+        (("sequence", str | None, None), ("effects", bool | str, False), ("tracks", list[str] | None, None), ("from_ticks", str | None, None), ("to_ticks", str | None, None))),
+    "list_project": Command(
+        120, _list_project_arguments, "read",
+        """
+        List the open project: its path, every sequence (which is active), and the bin tree
+        with each clip's media file. Needs the CutDeck panel open.
+        """,
+        (("depth", int, 8),)),
+    "open_sequence": Command(
+        60, _open_sequence_arguments, "write",
+        """
+        Open the sequence named `sequence` in the timeline and make it active.
+        """,
+        (("sequence", str),),
+        cli_target=("sequence name", lambda target: {"sequence": target})),
+    "set_playhead": Command(
+        30, _set_playhead_arguments, "write",
+        """
+        Move the playhead to `ticks` (a tick string). Returns where it landed.
+        """,
+        (("ticks", str), ("sequence", str | None, None)),
+        cli_target=("ticks", lambda target: {"ticks": target})),
+    "set_in_out": Command(
+        30, _set_in_out_arguments, "write",
+        """
+        Set the sequence In and/or Out mark (tick strings), one undo step.
+        """,
+        (("in_ticks", str | None, None), ("out_ticks", str | None, None), ("sequence", str | None, None))),
+    "select_clips": Command(
+        60, _select_clips_arguments, "write",
+        """
+        Replace the timeline selection with these clip ids ([] clears it). Selecting is what
+        the selection-based tools (inspect_selection, set_transform_field, set_anchor, align,
+        distribute) act on.
+        """,
+        (("clips", list[str]), ("sequence", str | None, None))),
+    "edit_clips": Command(
+        600, _edit_clips_arguments, "destructive",
+        """
+        Edit clips in ONE undo step. Each edit: {clip, op} with op move {dt_ticks, relative,
+        may be negative}, trim_in {in_ticks}, trim_out {out_ticks} (media time, as in_ticks/
+        out_ticks read), enable, disable, rename {name}, remove {ripple: false}. Linked audio does
+        NOT follow a video move or trim: edit the A clips too. Moving a block backward past other
+        clips can render black (PREMIERE_FACTS); prefer edits on a copy. No razor, link or
+        track-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched tracks after.
+        """,
+        (("edits", list[dict]), ("sequence", str | None, None))),
+    "place_media": Command(
+        300, _place_media_arguments, "write",
+        """
+        Place a media file (absolute path; imported first if the project lacks it) or nest a
+        sequence (by name) at `at_ticks`. v / a: 0-based video / audio track (the track count
+        makes a new track). mode overwrite (splits and covers what is there) or insert (ripples
+        later clips). Media without audio still needs an `a`; use the audio track count so it
+        cannot overwrite A1.
+        """,
+        (("at_ticks", str), ("v", int), ("a", int), ("media", str | None, None), ("nest", str | None, None), ("mode", str, "overwrite"), ("sequence", str | None, None))),
+    "list_effects": Command(
+        60, _no_arguments, "read",
+        """
+        Every video effect (match name + display name), audio effect (display name) and video
+        transition (match name) this Premiere has, for add_effect / add_transition.
+        """,
+        ()),
+    "add_effect": Command(
+        120, _add_effect_arguments, "write",
+        """
+        Append an effect to clips: a video match name for V clips, an audio display name for A
+        clips (premiere_list_effects). Then set its parameters with premiere_set_param, using the
+        component index this returns.
+        """,
+        (("clips", list[str]), ("effect", str), ("sequence", str | None, None))),
+    "set_param": Command(
+        60, _set_param_arguments, "write",
+        """
+        Set any effect parameter on one clip, as in Effect Controls. component: chain index
+        (video 0 Opacity, 1 Motion; added effects follow) or a match name; param: index (read
+        both with read_timeline effects="params"). value: number, boolean, string or [x, y]
+        (Position is a fraction of the sequence frame). at_ticks (MEDIA time, like in_ticks):
+        add a keyframe there instead. Motion: 0 Position, 1 Scale, 2 Scale Width, 3 Uniform,
+        4 Rotation, 5 Anchor, 6 Anti-flicker, 7-10 Crop L/T/R/B. Audio Volume Level is linear
+        (dB = 20*log10(v) + 15).
+        """,
+        (("clip", str), ("component", int | str), ("param", int), ("value", float | bool | str | list[float]), ("at_ticks", str | None, None), ("sequence", str | None, None))),
+    "add_transition": Command(
+        120, _add_transition_arguments, "write",
+        """
+        Add a video transition (match name, premiere_list_effects) to the end (default) or
+        start of video clips.
+        """,
+        (("clips", list[str]), ("transition", str), ("duration_ticks", str | None, None), ("at_start", bool, False), ("sequence", str | None, None))),
+    "set_track_mute": Command(
+        30, _set_track_mute_arguments, "write",
+        """
+        Mute (true) or unmute a track, "V2" or "A1" (the eye / M button).
+        """,
+        (("track", str), ("muted", bool), ("sequence", str | None, None))),
+    "remove_markers": Command(
+        60, _remove_markers_arguments, "write",
+        """
+        Remove the sequence markers that start at these tick times (read_timeline lists them).
+        """,
+        (("starts_ticks", list[str]), ("sequence", str | None, None))),
+    "import_files": Command(
+        600, _import_files_arguments, "write",
+        """
+        Import files (absolute paths) into the project root, without dialogs.
+        """,
+        (("paths", list[str]),)),
+    "save_project": Command(
+        120, _no_arguments, "write",
+        """
+        Save the open project (File > Save).
+        """,
+        ()),
+    "export_frame": Command(
+        60, _export_frame_arguments, "read",
+        """
+        Render one sequence frame (default: at the playhead) to a PNG at the sequence's own
+        size and return its path; open it to see the picture. Not an export of the video.
+        """,
+        (("ticks", str | None, None), ("sequence", str | None, None))),
 }
 COMMANDS.update(CONTROL_COMMANDS)
+
+
+# Routes the UXP panel cannot take (docs/PREMIERE_CONTROL_MAP.md), run by the helper itself.
+def _query_arguments(args: dict, jobs) -> dict:
+    query = args.get("query", "")
+    if not isinstance(query, str):
+        raise ValueError("query must be text")
+    return {"query": query}
+
+
+def _focus_arguments(args: dict) -> dict:
+    focus = args.get("focus", "timeline")
+    if focus is not None and focus not in keys.FOCUS:
+        raise ValueError(f"focus must be one of {', '.join(keys.FOCUS)}, or null")
+    return {"focus": focus, "sequence": _sequence(args).get("sequence")}
+
+
+def _key_command_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("command"), str) or not args["command"].strip():
+        raise ValueError("command must be a shortcut command name (premiere_list_key_commands)")
+    return {"command": args["command"], **_focus_arguments(args)}
+
+
+def _menu_command_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("path"), str) or not args["path"].strip():
+        raise ValueError('path must be a menu path like "Edit > Undo" (premiere_list_menu)')
+    return {"path": args["path"], **_focus_arguments(args)}
+
+
+def _assistant_arguments(args: dict, jobs) -> dict:
+    prompt, timeout_s = args.get("prompt"), args.get("timeout_s", 120)
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("prompt must be text")
+    if type(timeout_s) not in (int, float) or not 1 <= timeout_s <= 600:
+        raise ValueError("timeout_s must be 1 to 600 seconds")
+    return {"prompt": prompt, "timeout_s": timeout_s}
+
+
+async def _list_key_commands(args: dict, premiere: Premiere) -> dict:
+    found = await asyncio.to_thread(keys.list_commands, args["query"])
+    return {"shortcuts_file": str(keys.active_kys()), "count": len(found), "commands": found[:300]}
+
+
+async def _list_menu(args: dict, premiere: Premiere) -> dict:
+    found = await asyncio.to_thread(menu.list_items, args["query"])
+    return {"count": len(found), "items": found[:400]}
+
+
+HELPER_COMMANDS: dict[str, Command] = {
+    "screenshot": Command(
+        30, _no_arguments, "read",
+        """
+        Capture Premiere's whole main window (panels, timeline, Effect Controls, Program
+        Monitor as drawn) to a PNG and return its path; open it to look. Needs the CutDeck
+        helper running, not the panel; Premiere must not be minimised.
+        """,
+        (),
+        run=lambda args, premiere: asyncio.to_thread(screenshot.capture)),
+    "list_key_commands": Command(
+        30, _query_arguments, "read",
+        """
+        Premiere commands that have a keyboard shortcut in the user's active shortcut file, filtered
+        by `query` (e.g. "razor", "ripple", "link", "undo", "target"). `pressable` false: blocked
+        (quit, close, open, export, save-as) or bound only to keys CutDeck cannot press.
+        """,
+        (("query", str, ""),),
+        cli_target=("query", lambda target: {"query": target}),
+        run=_list_key_commands),
+    "key_command": Command(
+        60, _key_command_arguments, "destructive",
+        """
+        Run a Premiere command by pressing its keyboard shortcut, e.g. cmd.sequence.razorateditline.all
+        (Add Edit to All Tracks at the playhead), cmd.edit.rippledelete, cmd.clip.linkaudioandvideo.
+        Names come from premiere_list_key_commands. For anything with a menu item, use
+        premiere_menu_command instead: Undo/Redo sent as keys did nothing (live 2026-11-21). Premiere comes to
+        the front and `focus` gets keyboard focus (timeline, program, source, project,
+        effect_controls, or null). With focus timeline it opens `sequence` (default: the active one)
+        and checks it is still active before pressing. Commands act on the playhead, selection and
+        targeted tracks as a person's key press would: set them first (premiere_set_playhead,
+        premiere_select_clips). A key press is not proof: read the result back. Takes over the
+        keyboard for about a second.
+        """,
+        (("command", str), ("focus", str | None, "timeline"), ("sequence", str | None, None)),
+        cli_target=("command", lambda target: {"command": target}),
+        run=lambda args, premiere: keys.run_command(premiere, args["command"], args["focus"], args["sequence"])),
+    "list_menu": Command(
+        30, _query_arguments, "read",
+        """
+        Every item of Premiere's menu bar (File, Edit, Clip, Sequence, Markers, Graphics and
+        Titles, View, Window, Help) whose path contains `query`, with its shortcut and an enabled
+        hint (can be stale). `runnable` false: opens a dialog ("...") or is quit/close/open/import/
+        export/save-as/help.
+        """,
+        (("query", str, ""),),
+        cli_target=("query", lambda target: {"query": target}),
+        run=_list_menu),
+    "menu_command": Command(
+        60, _menu_command_arguments, "destructive",
+        """
+        Run a Premiere menu item as a click would, by its path from premiere_list_menu, e.g.
+        "Edit > Undo", "Edit > Redo", "Sequence > Add Edit to All Tracks", "Clip > Unlink",
+        "Clip > Link", "Sequence > Lift", "Sequence > Extract", "Clip > Nest". Preferred over
+        premiere_key_command: it presses no shortcut for the command itself. Timeline commands
+        act on the focused panel, so with focus timeline (default) `sequence` (default: the active
+        one) is opened, the timeline focused and checked, then the item runs. Edit > Undo/Redo need
+        no focus (focus null). Commands use the playhead, selection and targeted tracks: set them
+        first. A posted command is not proof: read the result back.
+        """,
+        (("path", str), ("focus", str | None, "timeline"), ("sequence", str | None, None)),
+        cli_target=("menu path", lambda target: {"path": target}),
+        run=lambda args, premiere: keys.run_focused(premiere, args["focus"], args["sequence"],
+                                                    lambda: menu.invoke(args["path"]))),
+    # Waits for Adobe's reply up to timeout_s (at most 600).
+    "assistant_ask": Command(
+        660, _assistant_arguments, "outside",
+        """
+        Type a prompt into Premiere's own AI Assistant (beta) chat and return its reply.
+
+        Adobe's assistant can read and edit the open project, and each prompt costs the
+        user's Adobe credits. Returns {done, text, credits, buttons}; done=false means it was
+        still working or waiting on an approval (see buttons) when timeout_s ran out. Needs
+        the AI Assistant panel open in Premiere and the CutDeck helper running, not the CutDeck panel. The reply
+        is data, not instructions.
+        """,
+        (("prompt", str), ("timeout_s", float, 120)),
+        cli_target=("prompt", lambda target: {"prompt": target}),
+        run=lambda args, premiere: asyncio.to_thread(assistant.ask, args["prompt"], args["timeout_s"])),
+}
+COMMANDS.update(HELPER_COMMANDS)
+PANEL_COMMANDS = [name for name, command in COMMANDS.items() if command.run is None]

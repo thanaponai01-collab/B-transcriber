@@ -217,7 +217,24 @@ async function getSelectedVideoClips(ppro, seq, { includeAdjustmentLayers = fals
   return videoClips;
 }
 
+/* Adds to `compound` ONE action that removes `items` (TrackItemSelection.createEmptySelection +
+   addItem, SequenceEditor.createRemoveItemsAction(selection, ripple, mediaType), premierepro.txt
+   :720, :719, :618). Call it inside a transaction callback, with `editor` from
+   SequenceEditor.getEditor. The selection is only valid while its callback runs (live 2026-09-23:
+   "The script object is no longer valid"; Adobe's eslint-plugin-premierepro rule
+   no-empty-selection-escape), so it is filled and turned into the action in there, synchronously.
+   Returns what addAction returned (false too when the callback never ran). */
+function addRemoveItemsAction(ppro, compound, editor, items, ripple, mediaType) {
+  let added = false;
+  ppro.TrackItemSelection.createEmptySelection((selection) => {
+    for (const it of items) selection.addItem(it, true);
+    added = compound.addAction(editor.createRemoveItemsAction(selection, ripple, mediaType));
+  });
+  return added;
+}
+
 module.exports = {
+  addRemoveItemsAction,
   getTrackClipItemsOrThrow,
   getTrackClipItems,
   isTrackItemSelected,

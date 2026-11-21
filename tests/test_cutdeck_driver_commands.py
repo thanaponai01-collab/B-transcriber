@@ -1,7 +1,8 @@
 """One table owns the Premiere driver commands (docs/arch-design-helper-v3.md move 1)."""
 import asyncio
+import json
+import subprocess
 from pathlib import Path
-import re
 
 from cutdeck import driver_commands
 from cutdeck.ai_backend import Backend
@@ -11,8 +12,11 @@ DRIVER_JS = Path(__file__).resolve().parent.parent / "uxp" / "cutdeck" / "featur
 
 
 def test_panel_driver_offers_exactly_the_tabled_commands():
-    array = re.search(r"const COMMANDS = \[([^\]]*)\]", DRIVER_JS.read_text(encoding="utf-8")).group(1)
-    assert sorted(re.findall(r'"(\w+)"', array)) == sorted(driver_commands.COMMANDS)
+    # The commands the panel registers are its handler names, read from the real module.
+    script = ("const { createDriver } = require(process.argv[1]);"
+              "console.log(JSON.stringify(createDriver({ ppro: {}, ctl: {} }).commands));")
+    out = subprocess.run(["node", "-e", script, str(DRIVER_JS)], capture_output=True, text=True, check=True).stdout
+    assert sorted(json.loads(out)) == sorted(driver_commands.PANEL_COMMANDS)
 
 
 def test_every_command_is_an_agent_tool():
@@ -20,6 +24,39 @@ def test_every_command_is_an_agent_tool():
     assert listed <= set(Backend().capabilities()["tools"])
     tools = asyncio.run(create_server(Backend()).list_tools())
     assert listed <= {tool.name for tool in tools}
+
+
+def test_a_tool_sends_what_it_was_given_minus_unset_optionals():
+    class Recorder(Backend):
+        def __init__(self):
+            super().__init__(1)
+            self.calls = []
+
+        async def premiere(self, command, args=None):
+            self.calls.append((command, args))
+            return {}
+
+    backend = Recorder()
+    server = create_server(backend)
+    calls = [("premiere_set_in_out", {"in_ticks": "0"}),
+             ("premiere_menu_command", {"path": "Edit > Undo", "focus": None}),  # an explicit null focus is kept
+             ("premiere_read_timeline", {}),
+             ("premiere_build_sequence", {"project": "E:/a.prproj", "base": "b", "name": "n", "items": [],
+                                          "options": {"mark_whole": True}})]
+    for tool, args in calls:
+        asyncio.run(server.call_tool(tool, args))
+    assert backend.calls == [
+        ("set_in_out", {"in_ticks": "0"}),
+        ("menu_command", {"path": "Edit > Undo", "focus": None}),
+        ("read_timeline", {"effects": False}),
+        ("build_sequence", {"project": "E:/a.prproj", "base": "b", "name": "n", "items": [], "save": False,
+                            "options": {"mark_whole": True}}),
+    ]
+    merged = driver_commands.COMMANDS["build_sequence"].prepare(
+        {"project": "E:/a.prproj", "base": "b", "name": "n",
+         "items": [{"media": "D:/a.mp4", "in_ticks": "0", "out_ticks": "1", "at_ticks": "0", "v": 0}],
+         "options": {"mark_whole": True}}, None)
+    assert merged["mark_whole"] is True and "options" not in merged
 
 
 def test_export_sequence_checks_paths_and_never_overwrites(tmp_path):

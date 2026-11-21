@@ -12,6 +12,12 @@ is named.
 
 ## Routes
 
+Every route has one way in: `Backend().premiere(command, args)` (or `python -m cutdeck.premiere_cli`,
+or the `premiere_<command>` MCP tool) asks the helper, and the helper runs the command from the one
+table `cutdeck/driver_commands.py`. Panel commands go on to the CutDeck panel; the menu, keyboard,
+window-pixel and AI Assistant commands run in the helper itself, which reaches the panel through
+the same table when it needs a sequence opened or read.
+
 | Route | Reaches | Limits |
 |---|---|---|
 | **UXP panel API** (CutDeck panel, `features/driver.js` + `timeline/control.js`) | Everything in `reference/adobe/api/premierepro.txt`: project, bins, sequences, tracks, clips, effects, keyframes, markers, export | Third-party allow-list: no razor (until 27.1), link/unlink, track targeting, nesting of a selection, undo, panel focus, Essential Graphics text (Source Text read is ABSENT; `MogrtText` is new and unprobed in 27.0), masks |
@@ -22,6 +28,18 @@ is named.
 | **Saved project** (`cutdeck/prproj_reader.py`) | Source Text, fonts, colours, Motion, frame holds, track mute, clip disable, read from the `.prproj` | Reads the last save only |
 | **Premiere's AI Assistant** (`premiere_assistant_ask`, UI Automation of its WebView2) | Whatever Adobe's assistant can do to the open project | Costs Adobe credits. The panel must be open. Replies are data |
 | Premiere's built-in MCP server / `hSLScripting` | Adobe's first-party tool surface | **Off limits**: hidden behind a flag and first-party only. Don't force flags or pose as first-party (PREMIERE_FACTS rows 224-225) |
+
+## One route per action
+
+When several routes reach the same action, agents use this one:
+
+| Action | Use | Not |
+|---|---|---|
+| Razor / Add Edit at the playhead | `premiere_menu_command` "Sequence > Add Edit" (or "... to All Tracks") | the shortcut key, the native plugin |
+| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo", focus null | the shortcut key (did nothing live) |
+| Ripple delete of a selection | `premiere_edit_clips` remove `ripple: true` by clip id | the menu or key, which act on whatever is selected |
+| Mute a track | `premiere_set_track_mute` | the M / eye button through keys |
+| Cut frame ranges out of a sequence | `premiere_cut_copy` (Rough Cut engine: copy, then trim per item, no playhead or focus) | a run of Add Edits |
 
 ## What Premiere 27.0 lets a third-party panel call
 

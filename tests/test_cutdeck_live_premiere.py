@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from cutdeck.ai_backend import Backend
-from cutdeck.driver_commands import COMMANDS
+from cutdeck.driver_commands import PANEL_COMMANDS
 from cutdeck.helper import Jobs, serve
 
 PANEL = Path(__file__).parent / "fixtures" / "offline_panel.cjs"
@@ -89,7 +89,7 @@ def test_live_premiere_connection_and_commands(live_backend_or_offline):
     status = asyncio.run(live_backend_or_offline.premiere_status())
     assert status["connected"] is True
     # Verify all tabled commands are offered by the live panel
-    for cmd in COMMANDS:
+    for cmd in PANEL_COMMANDS:
         assert cmd in status["commands"]
 
 

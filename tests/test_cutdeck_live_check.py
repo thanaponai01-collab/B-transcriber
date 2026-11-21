@@ -2,11 +2,11 @@
 import pytest
 
 from cutdeck import live_check
-from cutdeck.driver_commands import COMMANDS
+from cutdeck.driver_commands import PANEL_COMMANDS
 
 
 class _FakeBackend:
-    status = {"connected": True, "commands": list(COMMANDS)}
+    status = {"connected": True, "commands": list(PANEL_COMMANDS)}
     status_error = None
     sequence_error = None
     selected = 0
@@ -71,7 +71,7 @@ def test_panel_not_connected_stops_there(stack):
 
 
 def test_an_older_panel_missing_a_command_is_named(stack):
-    stack.status = {"connected": True, "commands": [c for c in COMMANDS if c != "align_clips"]}
+    stack.status = {"connected": True, "commands": [c for c in PANEL_COMMANDS if c != "align_clips"]}
     steps, _ = live_check.check()
     assert [s.ok for s in steps] == [True, True, True, False]
     assert "align_clips" in steps[3].detail

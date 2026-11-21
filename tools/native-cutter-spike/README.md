@@ -2,12 +2,16 @@
 
 Experimental Windows Control Surface plugin for investigating a native Rough Cut
 backend. It lists Premiere's commands, and runs one fixed command, Add Edit to All
-Tracks (`global` / `cmd.sequence.razorateditline.all`), once per request file that the
-helper's `native_split_request` writes (`cutdeck/native_split.py`). A request is
-refused unless Premiere's displayed SMPTE timecode equals the one the panel computed,
-playback is stopped, and the request is fresh. The plugin deletes the request before
-running it. The panel's "Test Native Add Edit" / "Check Add Edit" probes drive it on
-a copy of the sequence. Production Rough Cut is unchanged.
+Tracks (`global` / `cmd.sequence.razorateditline.all`), once per request file in
+`%TEMP%\CutDeckCutterSpike`. A request is refused unless Premiere's displayed SMPTE
+timecode equals the expected one, playback is stopped, and the request is fresh. The
+plugin deletes the request before running it.
+
+The Python request side (`cutdeck/native_split.py`) and the panel's "Test Native Add
+Edit" probes were removed on 2026-11-21. The menu route (`premiere_menu_command`
+"Sequence > Add Edit to All Tracks") does the same cut live, so this plugin is the last
+resort, kept for a command that is in neither the menu nor the shortcut file
+(docs/PREMIERE_CONTROL_MAP.md). Git history before that date has the request code.
 
 ## Build and native boundary checks
 

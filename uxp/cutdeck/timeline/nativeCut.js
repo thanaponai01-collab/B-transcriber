@@ -11,9 +11,10 @@
      - items read before a transaction can go stale, so every step re-reads the copy.
    Five undo steps plus one per extra 3,000-action batch, said in the status line. */
 
-const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
@@ -263,12 +264,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       for (const kind of ["video", "audio"]) {
         const these = doomed.filter((c) => c.kind === kind);
         if (!these.length) continue;
-        let added = false;
-        ppro.TrackItemSelection.createEmptySelection((selection) => {
-          for (const c of these) selection.addItem(c.item, true);
-          added = compound.addAction(ed.createRemoveItemsAction(selection, ripple, kind === "video" ? MT.VIDEO : MT.AUDIO));
-        });
-        if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
+        if (!addRemoveItemsAction(ppro, compound, ed, these.map((c) => c.item), ripple, kind === "video" ? MT.VIDEO : MT.AUDIO)) throw new Error(`addAction(remove ${kind}) returned false`);
       }
     }));
     doomed.length = 0;
@@ -355,11 +351,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
   if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
 
-  const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runTransaction(project, "CutDeck: copy sequence", (compound) => {
-    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-  });
-  const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
+  const created = await cloneSequence(project, source, "CutDeck: copy sequence");
   if (!created.length) throw new Error("Copying the sequence gave no new sequence; nothing was cut");
   // From here a copy exists, so every failure goes through the catch below.
   const copy = created[0];
@@ -396,10 +388,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
       }
     } finally {
-      await timed("open copy", async () => {
-        await project.openSequence(copy);
-        await project.setActiveSequence(copy);
-      });
+      await timed("open copy", () => openAndActivate(project, copy));
     }
     const elapsedSeconds = (Date.now() - started) / 1000;
     before.items = null;

@@ -2,7 +2,7 @@
    the helper forwards from MCP agents and scripts, run against the shared Premiere fake. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createDriver, keepRegistered, COMMANDS } = require("../uxp/cutdeck/features/driver.js");
+const { createDriver, keepRegistered } = require("../uxp/cutdeck/features/driver.js");
 const { createController } = require("../uxp/cutdeck/features/controller.js");
 const fake = require("./fakes/premiere.cjs");
 
@@ -33,43 +33,6 @@ function host({ endFrames = 900 } = {}) {
 }
 
 const controller = () => createController({ render: () => {} });
-
-test("the driver offers exactly the helper's fixed commands", () => {
-  assert.deepEqual(COMMANDS, [
-    "read_sequence",
-    "read_audio_range",
-    "apply_cuts",
-    "add_markers",
-    "run_probe",
-    "inspect_selection",
-    "set_transform_field",
-    "set_anchor",
-    "align_clips",
-    "distribute_clips",
-    "export_sequence",
-    "reload_panel",
-    "build_sequence",
-    "cut_copy",
-    "create_sequence",
-    "read_timeline",
-    "list_project",
-    "open_sequence",
-    "set_playhead",
-    "set_in_out",
-    "select_clips",
-    "edit_clips",
-    "place_media",
-    "list_effects",
-    "add_effect",
-    "set_param",
-    "add_transition",
-    "set_track_mute",
-    "remove_markers",
-    "import_files",
-    "save_project",
-    "export_frame",
-  ]);
-});
 
 test("export_sequence exports the ACTIVE sequence IMMEDIATELY with the given preset", async () => {
   const h = host();
@@ -308,7 +271,7 @@ test("keepRegistered registers, and registers again after a drop, backing off wh
     if (!helperUp) throw new Error("Cannot reach CutDeck helper");
     return { ok: true };
   };
-  const reg = keepRegistered({ rpc, version: "v", commands: COMMANDS, setTimer: (fn, ms) => timers.push({ fn, ms }) });
+  const reg = keepRegistered({ rpc, version: "v", commands: ["read_sequence"], setTimer: (fn, ms) => timers.push({ fn, ms }) });
   await reg.start();
   assert.deepEqual(sent, ["hello", "register_driver"]);
   helperUp = false;
@@ -330,7 +293,7 @@ test("keepRegistered stop clears pending timers and halts further registration",
   const reg = keepRegistered({
     rpc,
     version: "v",
-    commands: COMMANDS,
+    commands: ["read_sequence"],
     setTimer: (fn, ms) => {
       const id = timers.length + 1;
       timers.push({ id, fn, ms });

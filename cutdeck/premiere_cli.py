@@ -5,8 +5,10 @@
     python -m cutdeck.premiere_cli apply_cuts <job_id>
     python -m cutdeck.premiere_cli add_markers markers.json   # [{"start_s": 1.5, "name": "..."}]
 
-Prints the result as JSON. The helper (`python -m cutdeck.helper`) must be running and the
-CutDeck panel open in Premiere. Python scripts can call `cutdeck.ai_backend.Backend().premiere`
+    python -m cutdeck.premiere_cli menu_command "Edit > Undo"
+
+Every command in `cutdeck/driver_commands.py` runs here. Prints the result as JSON. The helper
+(`python -m cutdeck.helper`) must be running; panel commands also need the CutDeck panel open. Python scripts can call `cutdeck.ai_backend.Backend().premiere`
 directly instead (docs/arch-design-helper-v2.md move 3).
 """
 from __future__ import annotations
@@ -32,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Live Premiere commands through the CutDeck panel")
     parser.add_argument("command", choices=["status", *COMMANDS])
     parser.add_argument("target", nargs="?",
-                        help="job_id for apply_cuts; JSON file for add_markers; probe_name for run_probe")
+                        help="the command's one argument, if it takes one (job_id, JSON file, probe name, menu path, ...)")
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args(argv)
     cli_target = COMMANDS[args.command].cli_target if args.command != "status" else None

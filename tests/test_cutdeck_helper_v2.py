@@ -295,6 +295,34 @@ def test_only_the_fixed_commands_exist(tmp_path):
     asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
+def test_menu_and_key_routes_run_in_the_helper_and_reach_the_panel_through_it(tmp_path, monkeypatch):
+    # One way in: a script's Backend reaches the Win32 routes too, and they reach the panel
+    # through the helper's own command path (docs/PREMIERE_CONTROL_MAP.md).
+    from cutdeck import keys, menu, screenshot
+    posted = []
+    monkeypatch.setattr(menu, "invoke", lambda path, front=False: posted.append(path) or {"menu": path})
+    monkeypatch.setattr(screenshot, "capture", lambda: {"path": "C:/shot.png"})
+
+    async def body(port):
+        backend = Backend(port)
+        assert await backend.premiere("screenshot") == {"path": "C:/shot.png"}  # no panel needed
+        ws, calls, task = await _driver(port, lambda c: {"ok": True, "result": {"name": "Edit"}},
+                                        commands=["read_sequence", "open_sequence"])
+        out = await backend.premiere("menu_command", {"path": "Clip > Unlink"})
+        assert out["menu"] == "Clip > Unlink" and out["sequence"] == "Edit"
+        assert posted == ["Window > Timelines > Edit", "Clip > Unlink"]
+        assert [c["command"] for c in calls] == ["read_sequence", "read_sequence"]
+        with pytest.raises(ValueError, match="focus must be one of"):
+            await backend.premiere("key_command", {"command": "cmd.edit.rippledelete", "focus": "anywhere"})
+        async with _connect(port) as other:  # a panel cannot claim a helper command
+            await other.send(json.dumps({"id": 1, "type": "register_driver", "commands": ["menu_command"]}))
+            assert "Unknown driver commands" in (await _recv(other))["message"]
+        task.cancel()
+        await ws.close()
+
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
+
+
 # --- the command line for outside scripts -------------------------------------------------------
 
 def test_cli_runs_each_command_through_the_panel(tmp_path):
