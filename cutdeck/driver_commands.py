@@ -123,12 +123,17 @@ def _build_arguments(args: dict, jobs) -> dict:
                 raise ValueError("settings_from must be a sequence name")
             result["settings_from"] = settings_from
         steps = args.get("steps", [])
-        if not isinstance(steps, list) or not all(isinstance(st, dict) and st.get("op") in ("lift", "clone", "move")
+        if not isinstance(steps, list) or not all(isinstance(st, dict) and st.get("op") in ("lift", "clone", "move", "trim")
                 and all(isinstance(st.get(k), str) and st[k].isdigit() for k in ("from_ticks", "to_ticks"))
                 and int(st["to_ticks"]) > int(st["from_ticks"])
-                and (st["op"] == "lift" or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
+                and (st["op"] == "lift"
+                     or (st["op"] == "trim" and isinstance(st.get("end_ticks"), str) and st["end_ticks"].isdigit())
+                     or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
+                and (st.get("tracks") is None or (isinstance(st["tracks"], dict) and not set(st["tracks"]) - {"video", "audio"}
+                     and all(isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in st["tracks"].values())))
                 for st in steps):
-            raise ValueError("steps must be [{op: lift|clone|move, from_ticks, to_ticks, dt_ticks (clone/move)}]")
+            raise ValueError("steps must be [{op: lift|clone|move|trim, from_ticks, to_ticks, dt_ticks (clone/move), end_ticks (trim), "
+                             "tracks? {video: [index], audio: [index]}}]")
         result["steps"] = steps
         restyle = args.get("restyle", [])
         if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")
@@ -169,6 +174,16 @@ def _cut_copy_arguments(args: dict, jobs) -> dict:
         raise ValueError("cuts_frames must be sorted and must not overlap")
     return {"sequence_name": source, "result_name": result_name,
             "cuts": {"ticks_per_frame": str(cuts["ticks_per_frame"]), "cuts_frames": frames}}
+
+
+def _create_sequence_arguments(args: dict, jobs) -> dict:
+    """Validate `create_sequence`: a new sequence name and an existing .sqpreset file."""
+    name, preset = args.get("name"), args.get("preset_path")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name must be a sequence name")
+    if not isinstance(preset, str) or not preset.lower().endswith(".sqpreset") or not Path(preset).is_file():
+        raise ValueError("preset_path must be an existing .sqpreset file")
+    return {"name": name, "preset_path": preset}
 
 
 def _export_sequence_arguments(args: dict, jobs) -> dict:
@@ -318,6 +333,8 @@ COMMANDS: dict[str, Command] = {
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
     "cut_copy": Command(1800, _cut_copy_arguments,
                         "Copy a named sequence and cut frame ranges out of the copy (Rough Cut engine)."),
+    "create_sequence": Command(30, _create_sequence_arguments,
+                               "Create a new empty sequence from a sequence preset (.sqpreset)."),
     "export_sequence": Command(3600, _export_sequence_arguments,
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
                                ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),

@@ -8,6 +8,7 @@ each judgment call. Same method as [HONEKASAE_WORKFLOW.md](HONEKASAE_WORKFLOW.md
 choice, so it can make its own decisions when the footage, story or format changes. Values
 (109%, −12 dB, 0.2) are only today's example of a principle; they are not presets to replay.
 The **Editing principles** section below is the main output; the episode log is the evidence.
+**For Shorts, the consolidated principles and rules (and the open gaps) are in [SHORTS_PRINCIPLES.md](SHORTS_PRINCIPLES.md).**
 
 ## Editing principles (why)
 
@@ -521,3 +522,128 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   cut to header..ANTONELLI row; hook = Kimi on the Sphere filling the panel.
 - Render checks: 1138/1138 frames match the plan, voice −18.7 dB, render transcript = whole sentences in order.
 - v7 and v10 broken (failed builds), v8/v9 older drafts: user deletes them. Panel change committed as d998092.
+
+### FP3 Short: `TT max vs everyone v2 (Claude)` (agent edits, user monitors, 18:30-19:10)
+- User: "finish the short on this timeline, Max vs everyone he has trouble with: Alpine, Mercedes, McLaren".
+  Source: the FP3 stream rough cut `2026-11-21 07-07-37_Synced — CutDeck 17e4f3f9` (silence cut only, no transcript),
+  transcribed whole, then each rough-cut clip in the candidate windows transcribed on its own to place edges.
+- The user's own summary line was the spine: "มีปัญหากับเพื่อนทุกคนแล้วตอนนี้ กับนอริสก็ทีหนึ่ง กับรัสเซลก็ทีหนึ่ง ต้นๆเซสชันก็มีอัลไพน์" (rough cut 24:25).
+- Beats (rough-cut s → Short): hook Mercedes contact "เกือบแปะกันแล้ว… แล้วแปะกันไปเลย / มีปัญหากันทุกคนวันนี้แม็ก"
+  (1396.5–1406.1) → the list (1465.1–1474.1) → Alpine "ปิดประตูใส่… เจอกันในอินไซด์มั้ย… ใจเย็น" (1039.9–1041.9, 1048.8–1059.8)
+  → McLaren "พ่นควันใส่นอริส… เวรกรรมมันตามทัน" (1164.1–1175.2) → Mercedes radios "ผลักกูเข้ากำแพง", "มึงเล่นเกม"
+  (1516.8–1564.7, 4 pieces) → end "Session นี้พี่แม็กเอา MVP ไป มีปัญหากันทุกคน" (1587.5–1590.9). 59.6 s, 27 pieces, every edge on a rough-cut clip edge (a VAD pause).
+- Picture: V2 face (rotation 90; y .273 stacked under a still, .5 face-only), F1 holds on V4 (109%, anchor/position bottom),
+  Max onboard as moving video only on the first 2.8 s; yellow title "แม็กมีเรื่อง / กับทุกคน" (V5 PNG, Prompt Medium 100, stroke) over the hook.
+- **The F1 feed on V4 is not in step with the talk**: at each spoken incident the feed shows other cars, so stills were picked
+  by who is named (Gasly/Colapinto Alpine, Norris box, Russell helmet/car, Max onboard), not as footage of the incident itself. _ask:_ is the feed offset, or did the user watch a different view?
+- Tool changes: new driver command `create_sequence` (made `TT editing` 9:16 from the stock preset); `build_sequence` accepts an
+  empty base; a fresh-clone build no longer clears items on tracks the base lacks (v1 lost all V4/V5 items that way).
+- Checks: Premiere render 59.57 s 1080x1920 30 fps, no black frames, no silence ≥0.6 s, mean −21.3 dB; render transcript has every line whole and in order.
+  Not saved (save: false), not exported to `5. EXPORTS`, no SFX. `TT max vs everyone (Claude)` (v1, stills missing) is junk for the user to delete.
+
+#### User feedback on v2 (19:15) and v3 `TT max vs everyone v3 (Claude)`
+- **Feedback (confirmed rules):** (1) storytelling good; (2) **don't repeat the same speech**: v2 said "มีปัญหากับทุกคน" three times
+  (hook, list, end); (3) **use the live F1 footage already synced on the rough cut (V4)**: the real situation, not stills picked by who is named;
+  (4) **copy the rough cut and work from there** (v2 rebuilt from items, so it had 4 audio tracks instead of the rough cut's 6).
+- v3 route: `cut_copy` of the rough cut keeping only the 12 pieces (every layer, all 6 audio tracks, disabled states kept) → `build_sequence`
+  `into` that copy: `settings_from` `TT editing` (9:16), reorder by steps (clone Alpine+McLaren past the end, lift, clone hook+list back
+  to 0, lift, clone Alpine+McLaren into the hole, lift; no backward `move`), restyle per piece (V2 on, rotation 90, y .273 stacked /
+  .5 face-only; V4 synced feed 109% bottom-anchored, off on face-only pieces), title PNG on V5, In/Out whole.
+- Repeats cut: list starts at "กับนอริสก็ทีหนึ่ง…"; end trimmed inside its clip at a measured 50 ms dip to "Session นี้พี่แม็กเอา MVP ไปครับ";
+  Russell's first radio ("ให้มึงเห็นวิดีโอ…") dropped, so "รัสเซลบอก" is said once. Face-only: "ไม่เอาครับ… ใจเย็น", "แตะมือกันข้างนอก", the end line.
+- Checks: Premiere render 50.93 s 1080x1920, no black frames, no silence ≥0.6 s, −20.8 dB; per-piece transcript of the render in order, no repeated line.
+  Not saved, not exported, no SFX. v1/v2 are junk for the user to delete.
+- **19:20 user: the V4 sync was wrong** ("i give you the wrong live message on sync"); user re-synced the F1 feed and re-ran the
+  rough cut (`CutDeck 94fd4bb9`, same voice mapping and same cut points). Now the feed matches the talk: RACE CONTROL "VERSTAPPEN,
+  RUSSELL INCIDENT" on the hook, Gasly's Alpine beside Max on the Alpine beat, NORRIS RADIO "INSTANT KARMA, AMAZING!" on the McLaren beat.
+- **v4 `TT max vs everyone v4 (Claude)`**: the v3 recipe on the new rough cut (6 audio, 5 video tracks, 50.93 s). Not rendered by the agent
+  (user rule 19:16: the user exports, the agent never runs export_sequence); checked by read-back (0 clip mismatches), feed frames pulled
+  from the source at each piece, and v3's voice transcript (same voice pieces). In reads unset (null), Out 50.93.
+- **19:35 user: "dont forget to check the frame".** Composited each piece offline from the source files (cam rotated 90 and placed,
+  feed with its Motion, title) since the agent no longer renders. Found: the re-synced feed is a new file `2.mp4` at **1280x720**, so
+  the 109% built for 1920x1080 left it small with the seam at 1135 px; and the centred crop cut the evidence at the frame edges
+  (RACE CONTROL "VERSTAPPEN, RUSSELL INCIDENT" banner top right, NORRIS RADIO "INSTANT KARMA, AMAZING!" far right, the Mercedes
+  contact far left). Fix on v4 (restyle into, 19 feed clips): 163.5% (= the user's 109% of a 1080p frame, seam ~740 px), and per-clip
+  framing toward the evidence: banner clip right, overhead clip at 109% so both cars and the banner fit, Norris radio clips right,
+  contact clip left. **Principle (seen): frame each feed clip on what proves the line (caption, banner, the two cars), not the centre;
+  and scale by the source's real size, not a fixed %.**
+- **19:20 v4 lost.** Premiere restarted (RecoveryProjects at 19:17–19:18, panel reconnects) and reopened without v4, which was built after
+  the 19:10 save and never saved. Rebuilt: the first `cut_copy` failed "razor filler on audio track 2 is not one frame long" (left
+  `TT max vs everyone v4 (Claude) (FAILED)`); the identical retry passed, so it's the intermittent native-cut razor. v4 rebuilt in one build
+  with the per-clip framing; the hook banner clip needed source-x centre 740 to show the full RACE CONTROL line. In 0, Out 50.93.
+  Lesson: an unsaved agent build is lost if Premiere restarts. The agent doesn't save (`save: false`); tell the user to save once it looks right.
+
+#### User's own cut of the Max Short (19:33 save, In/Out 92.7–135.1 in `TT max vs everyone v4 (Claude)`, 42.4 s, 17 pieces)
+Parked after the agent's v4 in the same sequence; read with prproj_reader, each piece transcribed from source.
+| user s | words (rough-cut s) | picture | vs agent v4 |
+|---|---|---|---|
+| 0–7.8 | hook "เกือบแปะกันแล้ว… แล้วแปะกันไปเลย / มีปัญหากันทุกคนนะวันนี้แม็ก" (1396.5–1406.1) | holds: Russell onboard with the Red Bull alongside (183.5%, crop top 11, framed on the RB), overhead | same words; holds not video; own Text title 0–4.5 s (not the PNG over 8 s) |
+| — | list "กับนอริสก็ทีหนึ่ง… อัลไพน์" | | **dropped** |
+| 7.8–14.1 | "แล้วพี่แม็กจะ…เข้าไปที่อินไซด์ / อืม ไม่ปล่อยแน่นอน ฮ่าฮ่า / หัวจะปวดเลยวะ" (**rough cut 150–156, session start**) | holds from `1.mp4` (feed of the session start): Max onboard with the Alpine ahead, Max with Colapinto behind | **the agent's Alpine beat (17:20) was the wrong incident**; the real Alpine one is at the start ("ต้นๆเซสชันก็มีอัลไพน์") |
+| 14.1–17.4 | "ยุบหนอพองหนอ พี่แม็กใจเย็นพี่ ใจเย็น เวลามีอีกเยอะ" (1056.4–1059.8) | face only | kept as the reaction |
+| 17.4–27.1 | McLaren from "ไปแล้ว โอ้โห" (1165.5) → "พ่นควันใส่นอริส" → "นอริสบอก… เวรกรรมมันตามทัน" | hold: Norris onboard + NORRIS RADIO "INSTANT KARMA, AMAZING!" box cropped (L83 T43 R5 B36) at 333.5% on V5 | dropped "แม็คลาเรนเล่นซัดกัน" |
+| 27.1–34.7 | "ถูกันทีเลย" → "แตะมือกันข้างนอก" (face only) → "แม็กบอก ผลักกูเข้ากำแพง" | holds: Max onboard, the two cars side by side; VERSTAPPEN RADIO box "HE'S JUST PUSHED ME INTO THE BARRIER" enlarged | same words |
+| 34.7–40.4 | **"รัสเซลบอกให้มึงเห็นวิดีโอ… ตัดหน้ากู"** (1557.7) → "สนุกใช่ปะหล่ะ มึงเล่นเกม" **from 1562.8, inside the clip** | Russell helmet hold + RUSSELL RADIO box "DID YOU SEE THE REPLAY OF VERSTAPPEN?", then moving onboard with the box "AFFIRM… CUT ACROSS THE FRONT OF YOU / HA HA… FUN AND GAMES EH" | agent dropped the first radio to avoid repeating "รัสเซลบอก"; the user kept both radios and cut the **repeated words only** |
+| 40.4–42.4 | "Session นี้พี่แม็กเอา MVP ไปครับ" | face only | same |
+**Principles (seen):** (1) "use the synced footage" = pick **frame holds** from it, one per line, framed on the evidence; the radio caption box cropped and enlarged (the Russell Short recipe), moving video only where the radio plays; (2) a repeat is cut at the repeated words, not by dropping the content; (3) verify which incident a line is about from the footage before cutting (the session-start Alpine moment); (4) **the list line went (confirmed, user 19:40):** naming the rivals in a row ("กับนอริสก็ทีหนึ่ง กับรัสเซลก็ทีหนึ่ง… อัลไพน์") is telling, and it felt too long to hold the viewer; cut straight to the actual problems Max had instead. **The principle underneath (user 19:45: think principle, not rules that change easily): every second must keep the viewer watching longer.** A line that only delays the next real moment (an announcement, a list, a repeat) is where they swipe away, so it goes. "Don't announce" and "cut repeats" are just today's cases of it. _ask:_ what does the Text title say?
+- **User flags on the agent's title (19:50):** (1) the title must be **editable text** (a Premiere Text/Graphic layer), not a PNG;
+  (2) the title PNG ran **one frame past the cut** (frames 0–246, the shot changes at 245 = 00:00:08:05; the user saw it at 08:06).
+  Cause: the plan asked one extra frame for every still ("Premiere lays a still one frame short", seen for 26–74-frame stills), but this
+  246-frame PNG landed full length. Lesson: don't pad stills blindly; read back each still's end against the cut and fix it.
+- **19:46 save: user refines the Short (In/Out unchanged 92.7–135.1). SFX on A7, levels as dB vs Premiere's 0 dB (0.1778):**
+  | Short s | SFX | level | sits on |
+  |---|---|---|---|
+  | 2.27 | Dramatic-Vine | −12 dB | "แล้วแปะกันไปเลย" (the contact), 3 frames before the piece |
+  | 7.37, 10.87 | auughhh | −27 dB | Max with the Alpine: "…เข้าไปที่อินไซด์", "ไม่ปล่อยแน่นอน ฮ่าฮ่า" |
+  | 17.33 | Dramatic-Vine | −12 dB | start of the McLaren incident, 3 frames before |
+  | 20.5 | F1 Radio Notification | −9 dB | NORRIS RADIO caption appears (6 frames before it) |
+  | 27.0 | Dramatic-Vine | −12 dB | "ถูกันทีเลย" (Russell contact), 3 frames before |
+  | 32.0, 34.73, 38.43 | F1 Radio Notification | −9 dB | each radio caption: VERSTAPPEN "pushed me into the barrier", RUSSELL "did you see the replay", RUSSELL "fun and games" |
+  Also: the last Russell piece's moving feed became a **frame hold** (1558.67); its caption box moved from V6 to V5. Now every feed picture is a hold.
+  **Principles (seen, the watch-time idea):** a boom marks the start of each new incident (a new reason to keep watching), landing a few
+  frames ahead of the line; the radio sound announces each radio caption so the eye goes to the box; a meme sound, low, colours Max
+  being stubborn; holds everywhere, so motion never pulls attention from the caption.
+- **Radio caption effect (user 19:50 "you see effect i add on radio?"):** a **Glitch transition** (`AE.AE_Impact_Glitch`, Film Impact),
+  9 frames (0.3 s), at the head of each enlarged radio caption box on V5: 20.7 s (NORRIS), 32.0 s (VERSTAPPEN), 34.73 s and 38.43 s (RUSSELL).
+  Starts on the same frame as the F1 Radio Notification SFX, so the box glitches in as the radio sound plays: it reads as a radio
+  "coming in". **Principle (seen):** a caption that's evidence enters with a sound and a visual hit together, so the eye jumps to it.
+  `prproj_reader` now lists each track's `transitions` (name, match name, start/end, which side of the edit).
+
+### Agent's own Short #2: "Turn 14 lock-ups" (19:55, in `TT max vs everyone v4 (Claude)` at 140.00–160.37, parked after the user's cut)
+User: "copy my text layer for the title and try to create a Short, pick one". Story picked for watch time: one self-contained moment
+with a payoff, from the FP3 rough cut (rough-cut s):
+| Short s | words | picture |
+|---|---|---|
+| 0–4.8 | hook: "ล้อล็อกว่ะ / พยายามจะเลี้ยวรถเข้าไปแต่ / ถ้าเลี้ยวเข้าไปน่าจะกำแพงครับ" (1202.33–1207.17) | holds: Hamilton onboard locking into T14 (HAMILTON 44), turning in, the ZOOX wall |
+| 4.8–6.8 | "ถอยดีกว่า! ไปยูเทิร์นดีกว่า" (1207.17–1209.10) | face only (his joke); auughhh −27 dB |
+| 6.8–9.8 | "แล้วล้อล็อกไปครับ รัสเซล โค้งห้า" (1177.17–1180.20) | hold: Russell onboard |
+| 9.8–15.0 | "โอ้โห แล้วล้อล็อกกันเพียบเลย / แทรกอุณหภูมิมันเย็นขึ้นหรือยังไงวะ" (1186.50–1191.70) | holds: Leclerc's tyre smoke at T14, Leclerc's car at T14; boom −12 dB 3 frames ahead |
+| 15.0–16.7 | "แทรกสิบเจ็ดองศาตอนนี้" | face (nothing on screen shows it) |
+| 16.7–20.4 | "ใครยังไม่ล็อกบ้าง / โค้งนี้มาไม่ถึงเวกัสนะ โค้งสิบสี่" (1193.37–1197.07) | hold: Hamilton at T15, then face for the closing joke |
+- Dropped "โค้งสิบสี่จุดเช็คอินจริงจริง" (1212.3): it repeats "โค้งสิบสี่" right after; the Short ends on the joke instead.
+- Title: the user's own Text layer (V6, 92.7 s) cloned to 140.0 with the new step option `tracks` (clone only V6); its words are still
+  the Max title for the user to retype. Proposed: "โค้ง 14 ล็อกทั้งสนาม".
+- Holds are imported PNG frames of `2.mp4` at 163.5% (not Premiere Frame Holds), framed per frame (offline composite checked).
+- **Premiere fact again:** stills of 40–98 frames landed one frame short (the 246-frame title landed exact; 120 exact in v8): pad a
+  still by one frame only when it's under ~120 frames, then read back. Re-laid, they end on their cuts.
+- In/Out left at the user's 92.7–135.1 (the agent no longer sets marks on a shared Short timeline). Not saved, not exported.
+- **User 20:05 on Short #2:** "better"; (1) the text must finish on a cut (the cloned title ran 140.0–144.5, the cut is 144.83);
+  (2) "I want to see you cropping some part, like the radio and the table on the left". Fix: new build step `trim` (tail trim through
+  `createSetOutPointAction`) ends the title at 144.83, where the last hook hold cuts to the face. Pictures re-picked after a 0.5 s scan:
+  the 1186–1193 stretch is Hamilton locking at T14 again, so "แทรกอุณหภูมิเย็นขึ้น" now holds on his glowing front-right at T14
+  (framed to keep the TURN 14 label) then the tyre smoke; **the timing tower is cropped (L4.5 T16 R81 B4) and enlarged 190% on the left
+  (V5)** over "ใครยังไม่ล็อกบ้าง", with Hamilton's car framed to its right. No radio caption exists in this stretch, so no radio crop.
+  Read-back: all 9 stills end on their cuts. The title trim isn't read back by the build: confirm after a save.
+- **User 20:15:** (1) cropped assets go on **one layer** (V5, where the user also consolidated every radio box); (2) keep them in the
+  **safe zone of every platform**; (3) the timetable on the left but **only the row that matters**, not the whole tower.
+  Safe zone used (1080x1920, union of TikTok / YouTube Shorts / Reels UI: top bar, bottom caption + music bar, right action buttons;
+  Shorts has the widest right column): keep assets within **x 60–890, y 250–1440**. The full tower (y 780–1867) sat under the
+  caption area. Now: only "8 HAM +1.506 M" (crop L4.7 T42.08 R82.19 B54.86 of the 1280x720 feed), 310%, at x 70–591, y 800–868,
+  top-left of the picture, over "ใครยังไม่ล็อกบ้าง" with Hamilton's car beside it. Read back on its cut.
+  Note: the feed's own graphics (lap box, TURN label, F1 TV bug) inside a 163.5% hold can still fall outside the safe zone.
+- **User 20:25: F1 logos are not allowed; sponsors are fine.** Remove the F1 / F1 TV / F1 REPLAY marks wherever they fall inside the
+  visible window of a hold; if they can't be removed, blur them, but smoothly (no hard-edged box). Sponsor marks (TAG Heuer on the
+  name badge, car liveries, track ads) stay. Done on the Turn 14 Short: the F1 TV logo (x 1066–1210, y 36–66 of the 1280x720 feed)
+  sat inside the window of the two Hamilton wide holds (1190.5, 1193.1); filled from its surroundings (diffusion fill, feathered
+  4 px edge) in the hold PNGs (`hold_*_clean.png`) and swapped in, ending on their cuts. The other holds' F1 marks fall outside
+  their windows. Check every hold's visible window for F1 marks before building.

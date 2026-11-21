@@ -15,6 +15,8 @@
 //   docs ppro-reference/classes/encodermanager.md "Since 25.6"; Adobe's premiere-api sample
 //   src/export.ts makes the same IMMEDIATELY call). Live 2026-11-20: resolves after the render,
 //   file complete (PREMIERE_FACTS "EncoderManager.getManager().exportSequence").
+//   Project.createSequenceWithPresetPath(name, presetPath) (reference/adobe/api/premierepro.txt:493,
+//   NOT IN 26.2.1; docs ppro-reference/classes/project.md "createSequenceWithPresetPath").
 
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
@@ -55,6 +57,7 @@ const COMMANDS = [
   "reload_panel",
   "build_sequence",
   "cut_copy",
+  "create_sequence",
 ];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
@@ -132,6 +135,21 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     const r = await applyNativeCut(ppro, project, matches[0], cuts, resultName);
     return { cuts: r.cuts, removed_seconds: seconds(r.removedTicks), splits: r.splits, undo_steps: r.steps,
       name: r.name, elapsed_seconds: r.elapsedSeconds };
+  }
+
+  /* create_sequence: a new empty sequence `name` from the .sqpreset `preset_path` (e.g. a 9:16
+     frame no sequence in the project has yet). Refuses a name already in use: no API deletes a
+     sequence. Reads back the frame size and frame duration it got. */
+  async function createSequence({ name, preset_path: presetPath }) {
+    const project = await ppro.Project.getActiveProject();
+    if (!project) throw new Error("Open a Premiere project first.");
+    if ((await project.getSequences()).some((s) => s.name === name)) throw new Error(`A sequence named "${name}" already exists.`);
+    const sequence = await project.createSequenceWithPresetPath(name, presetPath);
+    if (!sequence) throw new Error(`createSequenceWithPresetPath returned nothing for ${presetPath}`);
+    const size = await sequence.getFrameSize();
+    return { name: sequence.name, sequence_id: String(sequence.guid), width: size.width, height: size.height,
+      ticks_per_frame: String(await sequence.getTimebase()), video_tracks: await sequence.getVideoTrackCount(),
+      audio_tracks: await sequence.getAudioTrackCount() };
   }
 
   async function addMarkers({ markers }) {
@@ -343,6 +361,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     distribute_clips: distributeClips,
     export_sequence: exportSequence,
     cut_copy: cutCopy,
+    create_sequence: createSequence,
     build_sequence: (args) => buildSequence(ppro, args, (line) => console.log(`CutDeck build: ${line}`)),
     // The reply goes out first (300 ms). Then teardown, as the panel menu's Reload does: a reload that left CutDeck's Premiere event listeners
     // registered took Premiere down in the same second (live 2026-11-21 16:03:58, 18:00:02).

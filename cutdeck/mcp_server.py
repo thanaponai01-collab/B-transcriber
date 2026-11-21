@@ -122,6 +122,14 @@ def create_server(backend: Backend) -> FastMCP:
                                                    "cuts": cuts})
 
     @server.tool(annotations=write)
+    async def premiere_create_sequence(name: str, preset_path: str) -> dict:
+        """Create a new empty sequence `name` in the open project from the sequence preset file
+        `preset_path` (.sqpreset, e.g. Premiere's Settings/SequencePresets/Social/Social Media
+        Portrait 9x16 30 fps.sqpreset). Refuses a name already in use. Returns the frame size,
+        ticks per frame and track counts. Needs the CutDeck panel open."""
+        return await backend.premiere("create_sequence", {"name": name, "preset_path": preset_path})
+
+    @server.tool(annotations=write)
     async def premiere_reload_panel() -> dict:
         """Reload the CutDeck panel in Premiere so it loads changed panel code. It reconnects
         to the helper by itself within a few seconds. Needs the CutDeck panel open."""

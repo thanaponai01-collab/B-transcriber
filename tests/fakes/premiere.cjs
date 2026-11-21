@@ -141,6 +141,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         isDisabled: async () => Boolean(raw.disabled),
         createSetDisabledAction: (disabled) => action(() => { raw.disabled = disabled; }),
         createMoveAction: (dt) => action(() => { raw.start += BigInt(dt.ticks); raw.end += BigInt(dt.ticks); }),
+        createSetOutPointAction: (t) => action(() => { raw.end = raw.start + BigInt(t.ticks) - raw.in; }),
       };
       items.set(raw, item);
       rawOf.set(item, raw);

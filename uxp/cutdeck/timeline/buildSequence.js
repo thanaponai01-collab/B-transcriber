@@ -27,11 +27,13 @@
    the user built is kept. Extra steps, in this order, before placing items:
      settings_from: name of a sequence whose settings (frame size) to apply
        (Sequence.getSettings + createSetSettingsAction);
-     steps: [{op, from_ticks, to_ticks, dt_ticks?}], run in order, each on every clip of every
-       track whose start is in [from, to), each its own transaction:
+     steps: [{op, from_ticks, to_ticks, dt_ticks?, tracks?}], run in order, each on every clip of every
+       track (or only `tracks` {video: [i], audio: [i]}) whose start is in [from, to), each its own transaction:
        lift: remove without ripple, leaving a hole (createRemoveItemsAction, ripple false);
        clone: copy each clip by dt onto its own track, overwriting (createCloneTrackItemAction,
          isInsert false; effects kept, pieces unlinked; the disabled state is not relied on);
+       trim: set the end of each clip to end_ticks (VideoClipTrackItem/AudioClipTrackItem
+         .createSetOutPointAction, premierepro.txt:742/48), e.g. a copied title ending on a cut;
        move: shift by dt (createMoveAction, relative), far end first. Live 2026-11-21: a block
          moved backward past other clips rendered black on video (audio fine), so bring a later
          block forward with clone + lift instead.
@@ -69,12 +71,17 @@ const projectFile = (path) => norm(path).replace(/^\\\\\?\\/, ""); // drop the \
 const secs = (ticks) => Number(ticks) / Number(TICKS_PER_SECOND);
 const abs = (x) => (x < 0n ? -x : x);
 
-async function namedSequence(ppro, project, name) {
+/* allowEmpty: the base and the settings donor may be an empty sequence (a fresh 9:16 one made by
+   create_sequence); items then find their media through media_from. */
+async function namedSequence(ppro, project, name, allowEmpty = false) {
+  let empty = null;
   for (const seq of await project.getSequences()) {
     if (seq.name !== name) continue;
     const read = await readSequence(ppro, seq, { paths: true });
     if (read.video.length || read.audio.length) return { seq, read };
+    empty = empty || { seq, read };
   }
+  if (allowEmpty && empty) return empty;
   throw new Error(`No sequence "${name}" with clips.`);
 }
 
@@ -153,7 +160,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
 
   // Resolve every project item before anything is edited.
   if (into && name !== base) throw new Error(`into edits "${base}" itself: name must be "${base}" too.`);
-  const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base);
+  const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base, true);
   const byPath = new Map();
   for (const [key, fileName] of importNames) {
     const item = await holdBinItem(project, fileName);
@@ -176,11 +183,14 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
   lap("resolved");
 
   let seq, editor, scratch;
+  // Scratch past every track an item names, so clearing it never touches a placed side (an item
+  // may name a track the base does not have yet: placing there creates it).
+  const top = (key, n) => plan.reduce((m, it) => (Number.isInteger(it[key]) && it[key] + 1 > m ? it[key] + 1 : m), n);
   if (into) {
     seq = baseSeq;
     editor = ppro.SequenceEditor.getEditor(seq);
     if (settingsFrom) {
-      const { seq: from } = await namedSequence(ppro, project, settingsFrom);
+      const { seq: from } = await namedSequence(ppro, project, settingsFrom, true);
       const settings = await from.getSettings();
       runTransaction(project, `CutDeck build: settings from ${settingsFrom}`, (c) => {
         if (!c.addAction(seq.createSetSettingsAction(settings))) throw new Error("settings refused");
@@ -190,7 +200,9 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     for (const st of steps) {
       const from = BigInt(st.from_ticks), to = BigInt(st.to_ticks), dt = BigInt(st.dt_ticks || "0");
       const now = await readSequence(ppro, seq, { paths: false });
-      const inRange = (c) => c.start >= from && c.start < to;
+      // tracks (optional) {video: [index], audio: [index]}: only clips on those tracks (e.g. one text layer).
+      const onTracks = (c) => !st.tracks || ((c.kind === "video" ? st.tracks.video : st.tracks.audio) || []).includes(c.track);
+      const inRange = (c) => c.start >= from && c.start < to && onTracks(c);
       const span = `${secs(from)}-${secs(to)} s`;
       if (st.op === "lift") {
         removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
@@ -200,6 +212,17 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
         runTransaction(project, `CutDeck build: clone ${span} by ${secs(dt)} s`, (c) => {
           for (const { item } of items) {
             if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), 0, 0, false, false))) throw new Error("clone refused");
+          }
+        });
+      } else if (st.op === "trim") {
+        // Tail trim to end at end_ticks: createSetOutPointAction (PREMIERE_FACTS "createSetOutPointAction(t)":
+        // WORKS; createSetEndAction is BROKEN). Out point is in the item's own time: inPoint + new length.
+        const end = BigInt(st.end_ticks);
+        const items = [...now.video, ...now.audio].filter(inRange);
+        runTransaction(project, `CutDeck build: trim ${span} to end at ${secs(end)} s`, (c) => {
+          for (const it of items) {
+            if (end <= it.start) throw new Error(`trim end ${secs(end)} s is not after the clip start ${secs(it.start)} s`);
+            if (!c.addAction(it.item.createSetOutPointAction(tick(it.inPoint + end - it.start)))) throw new Error("trim refused");
           }
         });
       } else if (st.op === "move") {
@@ -214,9 +237,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
       state.stepsDone += 1;
     }
     lap("steps");
-    // Scratch past every track an item names, so clearing it never touches a placed side.
     const now = await readSequence(ppro, seq, { paths: false });
-    const top = (key, n) => plan.reduce((m, it) => (Number.isInteger(it[key]) && it[key] + 1 > m ? it[key] + 1 : m), n);
     scratch = { v: top("v", now.videoTracks), a: top("a", now.audioTracks) };
   } else {
     // Clone, rename, clear. The clone is not opened.
@@ -234,7 +255,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     editor = ppro.SequenceEditor.getEditor(seq);
     const fresh = await readSequence(ppro, seq, { paths: false });
     removeAll(ppro, project, editor, [...fresh.video, ...fresh.audio].map((c) => c.item), ppro.Constants.MediaType.ANY, "CutDeck build: clear");
-    scratch = { v: fresh.videoTracks, a: fresh.audioTracks };
+    scratch = { v: top("v", fresh.videoTracks), a: top("a", fresh.audioTracks) };
   }
   lap("cleared");
 
