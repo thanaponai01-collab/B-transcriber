@@ -181,6 +181,9 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
   lap("resolved");
 
   let seq, editor, scratch;
+  // Scratch past every track an item names, so clearing it never touches a placed side (an item
+  // may name a track the base does not have yet: placing there creates it).
+  const top = (key, n) => plan.reduce((m, it) => (Number.isInteger(it[key]) && it[key] + 1 > m ? it[key] + 1 : m), n);
   if (into) {
     seq = baseSeq;
     editor = ppro.SequenceEditor.getEditor(seq);
@@ -219,9 +222,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
       state.stepsDone += 1;
     }
     lap("steps");
-    // Scratch past every track an item names, so clearing it never touches a placed side.
     const now = await readSequence(ppro, seq, { paths: false });
-    const top = (key, n) => plan.reduce((m, it) => (Number.isInteger(it[key]) && it[key] + 1 > m ? it[key] + 1 : m), n);
     scratch = { v: top("v", now.videoTracks), a: top("a", now.audioTracks) };
   } else {
     // Clone, rename, clear. The clone is not opened.
@@ -239,7 +240,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     editor = ppro.SequenceEditor.getEditor(seq);
     const fresh = await readSequence(ppro, seq, { paths: false });
     removeAll(ppro, project, editor, [...fresh.video, ...fresh.audio].map((c) => c.item), ppro.Constants.MediaType.ANY, "CutDeck build: clear");
-    scratch = { v: fresh.videoTracks, a: fresh.audioTracks };
+    scratch = { v: top("v", fresh.videoTracks), a: top("a", fresh.audioTracks) };
   }
   lap("cleared");
 
