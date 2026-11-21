@@ -521,3 +521,21 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   cut to header..ANTONELLI row; hook = Kimi on the Sphere filling the panel.
 - Render checks: 1138/1138 frames match the plan, voice −18.7 dB, render transcript = whole sentences in order.
 - v7 and v10 broken (failed builds), v8/v9 older drafts: user deletes them. Panel change committed as d998092.
+
+### FP3 Short: `TT max vs everyone v2 (Claude)` (agent edits, user monitors, 18:30-19:10)
+- User: "finish the short on this timeline, Max vs everyone he has trouble with: Alpine, Mercedes, McLaren".
+  Source: the FP3 stream rough cut `2026-11-21 07-07-37_Synced — CutDeck 17e4f3f9` (silence cut only, no transcript),
+  transcribed whole, then each rough-cut clip in the candidate windows transcribed on its own to place edges.
+- The user's own summary line was the spine: "มีปัญหากับเพื่อนทุกคนแล้วตอนนี้ กับนอริสก็ทีหนึ่ง กับรัสเซลก็ทีหนึ่ง ต้นๆเซสชันก็มีอัลไพน์" (rough cut 24:25).
+- Beats (rough-cut s → Short): hook Mercedes contact "เกือบแปะกันแล้ว… แล้วแปะกันไปเลย / มีปัญหากันทุกคนวันนี้แม็ก"
+  (1396.5–1406.1) → the list (1465.1–1474.1) → Alpine "ปิดประตูใส่… เจอกันในอินไซด์มั้ย… ใจเย็น" (1039.9–1041.9, 1048.8–1059.8)
+  → McLaren "พ่นควันใส่นอริส… เวรกรรมมันตามทัน" (1164.1–1175.2) → Mercedes radios "ผลักกูเข้ากำแพง", "มึงเล่นเกม"
+  (1516.8–1564.7, 4 pieces) → end "Session นี้พี่แม็กเอา MVP ไป มีปัญหากันทุกคน" (1587.5–1590.9). 59.6 s, 27 pieces, every edge on a rough-cut clip edge (a VAD pause).
+- Picture: V2 face (rotation 90; y .273 stacked under a still, .5 face-only), F1 holds on V4 (109%, anchor/position bottom),
+  Max onboard as moving video only on the first 2.8 s; yellow title "แม็กมีเรื่อง / กับทุกคน" (V5 PNG, Prompt Medium 100, stroke) over the hook.
+- **The F1 feed on V4 is not in step with the talk**: at each spoken incident the feed shows other cars, so stills were picked
+  by who is named (Gasly/Colapinto Alpine, Norris box, Russell helmet/car, Max onboard), not as footage of the incident itself. _ask:_ is the feed offset, or did the user watch a different view?
+- Tool changes: new driver command `create_sequence` (made `TT editing` 9:16 from the stock preset); `build_sequence` accepts an
+  empty base; a fresh-clone build no longer clears items on tracks the base lacks (v1 lost all V4/V5 items that way).
+- Checks: Premiere render 59.57 s 1080x1920 30 fps, no black frames, no silence ≥0.6 s, mean −21.3 dB; render transcript has every line whole and in order.
+  Not saved (save: false), not exported to `5. EXPORTS`, no SFX. `TT max vs everyone (Claude)` (v1, stills missing) is junk for the user to delete.
