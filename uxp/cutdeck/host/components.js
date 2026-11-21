@@ -25,8 +25,24 @@ function unwrapKeyframeValue(keyframe) {
   return (raw && typeof raw === "object" && !Array.isArray(raw) && "value" in raw) ? raw.value : raw;
 }
 
+/* Point params (Anchor Point, Position) take only a real PointF in createKeyframe: a plain
+   [x, y] array throws "Illegal Parameter type" (PREMIERE_FACTS "createKeyframe(value) for point
+   params"; UXPLogs, 2026-09-23: every Anchor Point / Position in every applied preset). A
+   two-number array or an {x, y} becomes a PointF (premierepro.txt PointF); every other value
+   passes through unchanged. */
+function toParamValue(ppro, value) {
+  const isPair = Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number");
+  const isXY = value && typeof value === "object" && !Array.isArray(value)
+    && typeof value.x === "number" && typeof value.y === "number";
+  if ((isPair || isXY) && ppro && typeof ppro.PointF === "function") {
+    return isPair ? new ppro.PointF(value[0], value[1]) : new ppro.PointF(value.x, value.y);
+  }
+  return value;
+}
+
 module.exports = {
   FIXED_EFFECT_DISPLAY_NAMES,
   isFixedComponent,
   unwrapKeyframeValue,
+  toParamValue,
 };

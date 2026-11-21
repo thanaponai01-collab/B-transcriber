@@ -7,6 +7,20 @@ const assert = require("node:assert/strict");
 const components = require("../uxp/cutdeck/host/components.js");
 const trackItems = require("../uxp/cutdeck/host/trackItems.js");
 
+// --- toParamValue ----------------------------------------------------------------------------
+
+test("point values ([x, y] as captured) are written as PointF, other values pass through", () => {
+  class PointF { constructor(x, y) { this.x = x; this.y = y; } }
+  const host = { PointF };
+  const p = components.toParamValue(host, [0.5, 0.25]);
+  assert.ok(p instanceof PointF);
+  assert.deepEqual([p.x, p.y], [0.5, 0.25]);
+  assert.ok(components.toParamValue(host, { x: 1, y: 2 }) instanceof PointF);
+  assert.equal(components.toParamValue(host, 100), 100);
+  assert.equal(components.toParamValue(host, true), true);
+  assert.deepEqual(components.toParamValue(host, [1, 2, 3]), [1, 2, 3], "not a 2D point");
+});
+
 // --- isTrackItemSelected --------------------------------------------------------------------
 
 test("isTrackItemSelected uses getIsSelected() when it exists, even if isSelected does not", async () => {

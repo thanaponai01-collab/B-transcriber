@@ -13,6 +13,7 @@
 const { findMotionComponent, findOpacityComponent, PARAM_INDEX, OPACITY_PARAM_INDEX, clearComponentCache } = require("./params.js");
 const { clearSnapshotCache } = require("./snapshot.js");
 const { runTransaction } = require("../host/project.js");
+const { toParamValue } = require("../host/components.js");
 
 // `writes` = [{ item, name, values: { position?: {x,y}, anchorPoint?: {x,y}, scale?, rotation?, ... } }]:
 // any Motion PARAM_INDEX field, or `opacity` (the Opacity component's percent). Booleans
@@ -46,8 +47,7 @@ async function applyMotionValues(ppro, project, label, writes, paramWrites = [],
       else if (act) compound.addAction(act);
     }
     for (const { param, field, value, name } of prepared) {
-      const v = typeof value === "number" || typeof value === "boolean" ? value : new ppro.PointF(value.x, value.y);
-      const setAction = param.createSetValueAction(param.createKeyframe(v), true);
+      const setAction = param.createSetValueAction(param.createKeyframe(toParamValue(ppro, value)), true);
       if (!setAction || !compound.addAction(setAction)) {
         throw new Error(`Premiere refused to set ${field} on "${name}".`);
       }

@@ -35,7 +35,7 @@
 
 const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName } = require("../host/trackItems.js");
-const { unwrapKeyframeValue } = require("../host/components.js");
+const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { waitForFile } = require("../host/files.js");
 const { projectItemMediaPath } = require("../host/sequenceRead.js");
@@ -364,9 +364,6 @@ async function addEffect(ppro, { sequence: name = null, clips, effect }) {
   for (const f of found) result.push({ clip: f.id, effects: await readChain((await findClip(ppro, sequence, f.id)).item, false) });
   return { name: sequence.name, effect, clips: result };
 }
-
-// Point params need a PointF; a plain [x, y] throws (PREMIERE_FACTS "createKeyframe(value) for point params").
-const toParamValue = (ppro, value) => (Array.isArray(value) ? new ppro.PointF(value[0], value[1]) : value);
 
 /* set_param: set one component parameter on a clip. component: chain index (video: 0 Opacity,
    1 Motion) or a match name; param: index. value: number, boolean, string or [x, y] (Position is
