@@ -308,13 +308,32 @@ note, and all are fixed with tests:
 - A helper restarted from master or `docs/projects-layout` will refuse the panel's `place_text`
   registration, because that is PR #115 code.
 - Premiere is back on `editing`. Nothing was saved or exported.
-- The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-89.
+- The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-90 (90 is the Gillette
+  Vegas lecture, 20261116), and one `--experiment` eval row (id 6, not a baseline).
   - Jobs 84 and 88 (Gillette review) and 85 (tiw) are from other projects.
   - Jobs 86, 87 and 89 are the English broadcast in Thai, `en` and `auto`. The newest (89, English)
     is the one the timeline tools use.
   Job 80 is a temporary WAV from the first ASR rough cut, the old behaviour.
 - Scripts: `scripts/timeline_listen/calibrate_edges.py` (in the PR). Tonight's one-off experiment
   scripts and outputs are in `output/timeline_listen/`, which git ignores, so they are not in the PR.
+
+## Final checks (04:00)
+
+- **Default decoding is unchanged, by the harness.** `python -m transcribe.eval.harness --experiment`
+  on the final code passes with CER_thai 0.0530, WER_latin 0.9231, BER 1.0, cue_BER 0.3214 and 0
+  overlapping cues, identical to the last baseline rows. The run is recorded as an experiment, not
+  a baseline.
+- **Real decodes on the final engine code:** a Thai clip with the default and with `auto` gives
+  identical Thai; the English window with `auto` gives English (0 Thai characters).
+- **A fresh agent planned your route from the tool descriptions alone.** It found the right tools
+  (transcribe on `missing`, `keep_words`, build into the copy to reorder, read back). It was unsure
+  about ticks units, `occurrence`, the reorder steps (defined only in JS), and "base never edited"
+  vs `into`. The descriptions now answer all of those, including a swap recipe.
+- **Offline crash sweep:** `timeline_transcript --prproj` ran on 36 `yt`/`tt`/`race` cuts in 20
+  October projects (18 to 2,601 clips). No crash; the sources there are not transcribed, so it
+  lists them as `missing`.
+- **Not run:** the 8 `live` panel tests (`tests/test_cutdeck_live_premiere.py --live`). They need
+  In/Out marks on your `editing` sequence and test the existing panel commands, not tonight's.
 
 ## Gaps and limits (please read)
 
@@ -386,7 +405,8 @@ note, and all are fixed with tests:
   newest transcript of a file is the one the timeline tools use. Default `th`. `language="auto"`
   picks Thai or English per file from the model's own confidence. It was proven both ways live
   (English broadcast → English, Gillette review → Thai, each identical to the explicit choice) and
-  held out on 10 unseen files, 10 of 10 right (docs/ENGINES.md). It also works through the helper
+  held out on 10 unseen files, 10 of 10 right (docs/ENGINES.md). That covers one Thai speaker (you)
+  and one kind of English (F1 broadcast commentary). It also works through the helper
   and MCP route. **Your synced F1 feeds (`1.mp4`, `2.mp4`) are English commentary**: transcribe them
   with `en` or `auto`.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources

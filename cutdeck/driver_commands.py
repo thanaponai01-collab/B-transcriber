@@ -410,15 +410,22 @@ COMMANDS: dict[str, Command] = {
     "build_sequence": Command(
         3600, _build_arguments, "write",
         """
-        Build a new sequence named `name` on a cleared copy of the sequence `base` (never
+        Build a new sequence named `name` on a cleared copy of the sequence `base` (base not
         edited), in the open project, which must be the .prproj at the absolute path `project`
         (else nothing is built). Each item: {id, media (file path) or like {kind, track,
         start_ticks}, in_ticks, out_ticks, at_ticks (tick strings), v, a (track indexes or
         null), motion, level, blur}. `save`: save the project after the build. `options`
         (optional): disable_tracks {video, audio}, mark_whole, media_from [sequence names], and
-        into (edit `base` itself; name == base) with settings_from, moves, restyle; see
-        uxp/cutdeck/timeline/buildSequence.js. Returns placed counts and every item off by more
-        than one frame.
+        into: true, which edits `base` ITSELF instead of a copy (name must equal base; use it on a
+        copy you made, e.g. by premiere_keep_words or premiere_cut_copy), with settings_from and
+        `steps`: [{op, from_ticks, to_ticks, dt_ticks?, end_ticks?, tracks?}], run in order on
+        every clip of every track (or `tracks` {video: [i], audio: [i]}) whose START is in
+        [from, to): clone (copy by dt, overwriting), lift (remove, leaving a hole), move (shift by
+        dt), trim (set end to end_ticks). Steps move whole clips, they do not razor: give block
+        boundaries that sit on clip edges (premiere_read_timeline). To swap block A [0, a) and B
+        [a, e): clone B by X-a, clone A by X+(e-a) (X past the end), lift [0, e), clone [X, X+e)
+        by -X, lift [X, X+e). With into and steps, items may be []. Returns placed counts and
+        every item off by more than one frame.
         """,
         (("project", str), ("base", str), ("name", str), ("items", list[dict]), ("save", bool, False), ("options", dict | None, None)),
         cli_target=("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
@@ -1082,13 +1089,16 @@ HELPER_COMMANDS: dict[str, Command] = {
         """
         What the sequence says, where, without transcribing it again: each source file's transcript
         (made once by transcribe(media_path), reused from the store) mapped through the clips of one
-        audio track (track "A1", default the first un-muted one with clips) onto the timeline in exact
-        ticks. Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
-        `cuts_in_sound`: every clip In/Out with audible sound at the cut (a bad cut), with the word
-        it cuts when one covers it and the shift to the nearest quiet spot. `untranscribed`: speech
+        audio track (track "A1", a string; default the first un-muted one with clips) onto the
+        timeline in exact Premiere ticks (tick strings, 254016000000 per second). Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
+        `cuts_in_sound`: every clip In/Out of that track with audible sound at the cut ({clip, side
+        in|out, tc, at_ticks, word or null, cut_ms, nearest_quiet_ms, severity "sound" (a bad cut)
+        or "tail" (the faint end of a fade, usually fine)}). This transcript plus that sound check is
+        how the system "listens" to a result; nothing plays audio. `untranscribed`: speech
         the engine left without words (read it as talk, not a pause). from_ticks/to_ticks narrow
         lines, cuts_in_sound and untranscribed alike. `query` finds
-        a phrase (matches, also across a cut). `missing` lists source files never transcribed: run
+        a phrase (matches, also across a cut; spaces and punctuation ignored; numbers as the engine
+        wrote them, e.g. "20" not "ยี่สิบ"). `missing` lists source files never transcribed: run
         transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
         of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
         CutDeck panel open.
@@ -1136,10 +1146,15 @@ HELPER_COMMANDS: dict[str, Command] = {
         """
         Keep only these phrases of a sequence, in its own order, on a COPY that keeps every track
         and layer (cut_copy; the source is never edited): the way to cut a Short from a synced rough
-        cut. keep: [{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}]. Each kept span starts
+        cut. keep: [{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] (tick strings).
+        occurrence is 1-based over the whole sequence, needed only when the phrase is said more than
+        once (the error lists where). track "A1" (a string) is the voice track whose words and
+        sound decide the cuts; every other track is cut at the same frames. Each kept span starts
         and ends in the source file's pauses around its words (as premiere_plan_pieces), never past
         the clip that holds the edge word. Reads the copy back: `lines` and `cuts_in_sound` (the goal
-        is no "sound" entry). Reorder afterwards (premiere_build_sequence into the copy).
+        is no "sound" entry). The copy becomes the open sequence. Reorder afterwards with
+        premiere_build_sequence (into: true on the copy, items [], steps; its description has the
+        swap recipe), then read the result back with premiere_timeline_transcript.
         """,
         (("result_name", str), ("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None),
          ("pad_ms", int, 60), ("wordless_ms", int, 0)),
