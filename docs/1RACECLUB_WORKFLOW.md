@@ -606,4 +606,4 @@ Parked after the agent's v4 in the same sequence; read with prproj_reader, each 
   9 frames (0.3 s), at the head of each enlarged radio caption box on V5: 20.7 s (NORRIS), 32.0 s (VERSTAPPEN), 34.73 s and 38.43 s (RUSSELL).
   Starts on the same frame as the F1 Radio Notification SFX, so the box glitches in as the radio sound plays: it reads as a radio
   "coming in". **Principle (seen):** a caption that's evidence enters with a sound and a visual hit together, so the eye jumps to it.
-  Tool gap: `prproj_reader` doesn't read transitions (found by parsing the XML for `VideoTransitionTrackItem`); the reader should list them.
+  `prproj_reader` now lists each track's `transitions` (name, match name, start/end, which side of the edit).

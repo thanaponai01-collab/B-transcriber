@@ -105,6 +105,28 @@ def test_an_audio_clip_level_is_read_by_param_name(tmp_path):
     assert volume["params"] == {"Level": {"value": 0.00398107199}}  # -33 dB as Premiere saves it
 
 
+def test_a_track_lists_its_transitions(tmp_path):
+    # Shape of the Glitch transitions on the 1RaceClub Max Short's radio captions (live 2026-11-21).
+    with_tr = PROJECT.replace(
+        "<ClipItems><TrackItems><TrackItem Index=\"0\" ObjectRef=\"30\"/></TrackItems></ClipItems></ClipTrack></VideoClipTrack>",
+        "<ClipItems><TrackItems><TrackItem Index=\"0\" ObjectRef=\"30\"/></TrackItems></ClipItems>"
+        "<TransitionItems><TrackItems><TrackItem Index=\"0\" ObjectRef=\"60\"/></TrackItems></TransitionItems>"
+        "</ClipTrack></VideoClipTrack>",
+    ).replace("</PremiereData>", f"""<VideoTransitionTrackItem ObjectID="60"><TransitionTrackItem>
+    <TrackItem><Start>{T}</Start><End>{T + T * 3 // 10}</End></TrackItem><Alignment>0</Alignment>
+    <DisplayName>Glitch</DisplayName><MatchName>AE.AE_Impact_Glitch</MatchName>
+    <HasOutgoingClip>false</HasOutgoingClip><HasIncomingClip>true</HasIncomingClip></TransitionTrackItem>
+    </VideoTransitionTrackItem></PremiereData>""")
+    assert with_tr != PROJECT
+    path = tmp_path / "p.prproj"
+    path.write_text(with_tr, encoding="utf-8")
+    seq = read_project(path)["sequences"][0]
+    assert seq["video_tracks"][0]["transitions"] == [{
+        "name": "Glitch", "match_name": "AE.AE_Impact_Glitch", "start": 1.0, "end": 1.3,
+        "alignment": 0, "outgoing": False, "incoming": True}]
+    assert "transitions" not in seq["audio_tracks"][0]  # only listed when a track has some
+
+
 def test_reads_uncompressed_xml(tmp_path):
     path = tmp_path / "p.prproj"
     path.write_text(PROJECT, encoding="utf-8")

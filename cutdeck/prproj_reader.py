@@ -358,15 +358,36 @@ def _fader_muted(objs: _Objects, track: ET.Element) -> bool:
     return False
 
 
+def _transition(item: ET.Element) -> dict:
+    """A transition on a track (e.g. the Film Impact Glitch on a radio caption's head). Start/End are
+    timeline seconds; incoming/outgoing say which side of the edit it touches (head only: incoming)."""
+    tr = item.find("TransitionTrackItem")
+    ti = tr.find("TrackItem")
+    return {
+        "name": _text(tr, "DisplayName"),
+        "match_name": _text(tr, "MatchName"),
+        "start": _seconds(_text(ti, "Start") or 0),
+        "end": _seconds(_text(ti, "End")),
+        "alignment": int(_text(tr, "Alignment") or 0),
+        "outgoing": _bool(_text(tr, "HasOutgoingClip")),
+        "incoming": _bool(_text(tr, "HasIncomingClip")),
+    }
+
+
 def _track(objs: _Objects, track: ET.Element) -> dict:
     t = track.find("ClipTrack/Track")
     items = [objs.ref(r) for r in track.findall("ClipTrack/ClipItems/TrackItems/TrackItem")]
-    return {
+    out = {
         "index": int(_text(t, "Index") or 0),
         "muted": _bool(_text(t, "IsMuted")) or _fader_muted(objs, track),
         "locked": _bool(_text(t, "IsLocked")),
         "clips": [_track_item(objs, i) for i in items if i is not None],
     }
+    transitions = [objs.ref(r) for r in track.findall("ClipTrack/TransitionItems/TrackItems/TrackItem")]
+    transitions = [_transition(i) for i in transitions if i is not None and i.find("TransitionTrackItem") is not None]
+    if transitions:
+        out["transitions"] = transitions
+    return out
 
 
 def _markers(objs: _Objects, owner: ET.Element) -> list[dict]:
