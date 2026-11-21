@@ -97,7 +97,7 @@
 - status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started. `premiere_rough_cut` proven against a real helper with a stubbed panel read (tests/test_cutdeck_mcp_backend.py, 2026-10-07); not run against live Premiere
 
 ## Timeline transcript (MCP)
-- what: What a sequence says and where, without transcribing it again: each source file's transcript (made once by `transcribe`) mapped through one audio track's clips onto the timeline in exact ticks, word times tightened to the audio. Lines, phrase search, and every clip edge that cuts into audible speech. Works the same on a rough cut, a copy or a re-cut.
+- what: What a sequence says and where, without transcribing it again: each source file's transcript (made once by `transcribe`) mapped through one audio track's clips onto the timeline in exact ticks, word times tightened to the audio. Lines, phrase search, and every clip edge with audible sound at the cut (`cuts_in_sound`). Speed-changed clips are mapped. Works the same on a rough cut, a copy or a re-cut.
 - mcp: `premiere_timeline_transcript(sequence?, track?, query?, from_ticks?, to_ticks?, offset, limit)`
 - trace: `premiere_timeline_transcript` @ cutdeck/mcp_server.py > `_timeline_transcript` @ cutdeck/driver_commands.py > `read_timeline` (panel) > `build` @ cutdeck/timeline_transcript.py > `source_words` > `store.latest_transcript_job`
 - needs: helper and panel; each source transcribed once (`missing` lists the rest)

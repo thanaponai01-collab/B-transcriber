@@ -81,7 +81,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test: `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py -q -p no:cacheprovider`
 - fail-signal: failed
 - fail-proof (2026-11-22): dropped `- clip.in_` from the mapping in cutdeck/timeline_transcript.py (3 red); widened the sound threshold in `tighten` (1 red); cut at the word edges instead of in the pauses in cutdeck/word_cut.py (1 red); each restored.
-- live (2026-11-22, run `20261122-004515-timeline-listen`): `timeline_transcript` on a 96-min sequence and on a 119-clip rough cut of a scratch copy (5 of 238 edges in audible speech, a fresh transcript of the cut audio within a median 3 ms); `cut_words` removed two phrases (said 1 -> 0, no cut in speech). Report: docs/TIMELINE_LISTEN.md.
+- live (2026-11-22, run `20261122-004515-timeline-listen`): `timeline_transcript` on a 96-min sequence, a 119-clip and a 1,653-clip rough cut (~2 s), speed 200%/50% clips and a reordered `build_sequence` Short; fresh transcripts of the cut audio sit a median 3 ms / -13 ms from the mapped words; Rough Cut from mapped transcripts gave the same 119 cuts frame for frame; `cut_words` removed phrases and fillers (said n -> 0, no new cut in sound). Report: docs/TIMELINE_LISTEN.md.
 
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
