@@ -7,7 +7,7 @@
 Each version is exported from its sequence by name (the copy with content), with that
 sequence's In/Out, to `<day folder>\\5. EXPORTS\\โหนกระแส <DDMMYY BE> <VERSION> D<n>.mp4`.
 D counts per version: the next number after the highest one already in the folder (the
-user's practice, see docs/HONEKASAE_WORKFLOW.md). Jobs go to Media Encoder's queue, which
+user's practice, see projects/hks/workflow-log.md). Jobs go to Media Encoder's queue, which
 starts by itself. Needs the helper running and the CutDeck panel open in Premiere.
 """
 from __future__ import annotations

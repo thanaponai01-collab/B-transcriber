@@ -1,7 +1,7 @@
 # HKS (โหนกระแส) automation: build plan
 
-Written 2026-11-20 from the workflow recorded in [HONEKASAE_WORKFLOW.md](HONEKASAE_WORKFLOW.md).
-Supersedes the slice list in [DESIGN_TOPIC_CUT.md](DESIGN_TOPIC_CUT.md); its findings stay valid.
+Written 2026-11-20 from the workflow recorded in [workflow-log.md](workflow-log.md).
+Supersedes the slice list in [design-topic-cut.md](design-topic-cut.md); its findings stay valid.
 
 **Goal:** after the footage arrives, the user reviews and approves drafts instead of cutting by
 hand. Today one episode is ~4.5 h of editing after a ~2 h live; the long-form story cut alone is ~2 h.
@@ -43,7 +43,7 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
    an open sequence, a clone returning `undefined`, a Premiere crash). → Phase 1.
 4. Judging by meaning needs a language model. It is needed for more than content cuts:
    - story units (2.9). Three timing rules failed on the 290969 episode; only picking by meaning
-     worked (`DESIGN_TOPIC_CUT.md`);
+     worked (`design-topic-cut.md`);
    - sponsor candidates (2.7), host connectors (4.2), content cuts (4.4), story openings (4.5),
      hook ranking (5.4).
 
@@ -79,7 +79,7 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
   - TV clock: present to 2815 s, absent from 2825 s; 0 false positives in 163 clock-free samples.
 
   Runs on all 11 folders with no problems: `python -m cutdeck.hks_gold --all G:\Me\Works`.
-- [x] **0.3** Rule audit across all 11 past episodes → [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md)
+- [x] **0.3** Rule audit across all 11 past episodes → [rule-audit.md](rule-audit.md)
   (`python -m cutdeck.hks_audit --all G:\Me\Works`). Verdicts:
   - no jump cuts: **holds**, but wider than written: cuts on an inset camera change and under a
     still also occur; 3 cuts on 20261120 to confirm (two micro cuts, one punch-in);
@@ -126,7 +126,7 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
   `hks_gold` and the audit treat a held clip as a still. Re-run on all 11: 37 → 3 of 1,190
   samples differ (the 26 of 1,118 came from a first script that sampled differently).
   The 3 are the closing stack (slowed footage under a `LAYER_ZOOM` Transform),
-  listed with their cause in [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md), reader finding 2.
+  listed with their cause in [rule-audit.md](rule-audit.md), reader finding 2.
   Nine cuts under a held frame moved to covered (20261001 25 → 23, 20261002 25 → 24, 20261003
   30 → 29, 20261112 35 → 32, 20261117 18 → 16): 285 uncovered in all, 270 on a camera change.
   For 4.3: a held frame of the footage is a cover kind the user uses in 9 of 11 episodes.
@@ -380,7 +380,7 @@ checked on the user's hand cut first, before Phase 4 exists.
 ## Decisions needed from the user
 1. Which model route judges by meaning: local, external API, or the agent in a session
    (Assumption 4). It gates 2.7, 2.9, 4.2, 4.4, 4.5 and 5.4.
-2. The seven rule questions in [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md) (4 is likely answered;
+2. The seven rule questions in [rule-audit.md](rule-audit.md) (4 is likely answered;
    confirm).
 3. Where the AE title-card template is, and what changes per episode.
 4. What the live notes contain.

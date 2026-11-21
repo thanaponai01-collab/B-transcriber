@@ -2,7 +2,7 @@
 
 The โหนกระแส footage carries the station clock `HH:MM:SS` top-left: white digits with a dark
 outline and no box. Scaled to 1280x720 it sits at the same pixels on every episode, 1280x720
-and 1920x1080 sources alike (docs/HKS_BUILD_PLAN.md step 0.2). The digits change every second
+and 1920x1080 sources alike (projects/hks/build-plan.md step 0.2). The digits change every second
 but the two colons never move, so the test looks only at the four colon dots: each dot's core
 must be bright AND the 1 px outline ring two pixels out must be dark. A white wall or a bright
 graphic lights the core but not the ring, so it fails.

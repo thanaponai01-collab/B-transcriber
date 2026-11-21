@@ -1,4 +1,4 @@
-"""topic_layout.py — is this frame a news-clip layout or a studio shot? (docs/DESIGN_TOPIC_CUT.md)
+"""topic_layout.py — is this frame a news-clip layout or a studio shot? (projects/hks/design-topic-cut.md)
 
 The Thai live-news feed the live-news cut targets (โหนกระแส) has two picture layouts that
 matter for cutting:

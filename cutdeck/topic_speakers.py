@@ -1,4 +1,4 @@
-"""topic_speakers.py — who is talking: the host, or someone else (docs/DESIGN_TOPIC_CUT.md).
+"""topic_speakers.py — who is talking: the host, or someone else (projects/hks/design-topic-cut.md).
 
 The user marks a stretch where only the host speaks; that stretch becomes the host's voice
 profile (ECAPA speaker embeddings, SpeechBrain ``speechbrain/spkrec-ecapa-voxceleb``). Every
