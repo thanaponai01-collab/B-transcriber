@@ -56,7 +56,9 @@ def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int,
                 if level is not None and level < 0:
                     return f, None
     level = level_at(frame * tpf)
-    return frame, (round(level, 1) if level is not None else float("inf"))
+    if level is None:  # no levels for this source: nothing is known, nothing is claimed
+        return frame, None
+    return frame, round(level, 1)
 
 
 def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: int,
@@ -173,3 +175,45 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
             piece["no_quiet"] = no_quiet
         out.append(piece)
     return out
+
+
+def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: list,
+                source_words: dict, source_level=None, pad_ms: int = PAD_MS) -> dict:
+    """Keep only these phrases on this timeline, in its own order: their spans in sequence
+    frames, and the frame cuts (everything else) for `cut_copy`, which keeps every track and
+    layer. Each span's edges are placed as `plan_pieces` places them, in the source file's
+    pauses, then mapped back onto the timeline, never past the clip that holds the edge word
+    (beyond it the timeline plays other source)."""
+    pieces = plan_pieces(words, keeps, tpf, source_words, source_level, pad_ms)
+    spans, details = [], []
+    for keep, piece in zip(keeps, pieces):
+        i, j = _resolve(words, keep, tpf)
+        first_clip = next(c for c in clips if c.id == words[i].clip)
+        last_clip = next(c for c in clips if c.id == words[j].clip)
+        to_seq = lambda clip, src: clip.start + round((src - clip.in_) / clip.speed)  # noqa: E731
+        a = max(to_seq(first_clip, int(piece["in_ticks"])), first_clip.start)
+        b = min(to_seq(last_clip, int(piece["out_ticks"])), last_clip.end)
+        fa, fb = -(-a // tpf), b // tpf  # inward: a clamped edge is a clip edge, already on a frame
+        if fb <= fa:
+            raise ValueError(f"{piece['text']!r} is shorter than a frame on this timeline")
+        spans.append([fa, fb])
+        details.append({"text": piece["text"], "timeline_s": [round(fa * tpf / 254016000000, 3),
+                                                              round(fb * tpf / 254016000000, 3)],
+                        **({"no_quiet": piece["no_quiet"]} if piece.get("no_quiet") else {})})
+    order = sorted(range(len(spans)), key=lambda k: spans[k][0])
+    merged: list[list[int]] = []
+    for k in order:
+        a, b = spans[k]
+        if merged and a <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    end_frame = max(c.end for c in clips) // tpf if clips else 0
+    cuts, cursor = [], 0
+    for a, b in merged:
+        if a > cursor:
+            cuts.append([cursor, a])
+        cursor = max(cursor, b)
+    if cursor < end_frame:
+        cuts.append([cursor, end_frame])
+    return {"keep_frames": merged, "cuts_frames": cuts, "kept": details}

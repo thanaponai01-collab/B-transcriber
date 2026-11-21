@@ -129,3 +129,25 @@ def test_a_pause_shorter_than_a_frame_takes_the_boundary_that_intrudes_least():
     words = [w("x", 500, 1010), w("y", 1020, 1500), w("z", 1600, 2000)]
     p = word_cut.plan(words, [{"text": "y"}], TPF, END, keep_ms=0)
     assert p["cuts_frames"][0][0] == 30
+
+
+def test_keep_ranges_keeps_the_phrases_in_place_and_cuts_the_rest():
+    from cutdeck.timeline_transcript import Clip
+    clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
+    r = word_cut.keep_ranges(WORDS, [{"text": "four"}, {"text": "one"}], TPF, clips, _src(WORDS))
+    (one_a, one_b), (four_a, four_b) = r["keep_frames"]
+    assert one_a == 0 and 400 <= one_b * TPF // MS <= 1000
+    assert 1800 <= four_a * TPF // MS <= 2200 and four_b * TPF // MS <= 2600 + 34
+    assert r["cuts_frames"] == [[one_b, four_a], [four_b, END // TPF]]
+
+
+def test_keep_ranges_never_reaches_past_the_clip_holding_the_edge_word():
+    from cutdeck.timeline_transcript import Clip
+    from dataclasses import replace
+    # A rough cut: clip 1 plays source 2.2-2.6 ("four") at 0; clip 2 plays source 0-0.4 ("one") at 0.4 s.
+    clips = [Clip("A1@0", 0, 400 * MS, 2200 * MS, 2600 * MS, "a.mp4"),
+             Clip("A1@1", 400 * MS, 800 * MS, 0, 400 * MS, "a.mp4")]
+    words = [replace(w("four", 0, 400), clip="A1@0", src_start_ms=2200, src_end_ms=2600),
+             replace(w("one", 400, 800), clip="A1@1", src_start_ms=0, src_end_ms=400)]
+    r = word_cut.keep_ranges(words, [{"text": "one"}], TPF, clips, _src(WORDS))
+    assert r["keep_frames"][0][0] * TPF >= 400 * MS   # the source pause before "one" is not on this timeline

@@ -675,6 +675,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
         result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, thresholds)
         result["source_words"] = words_by_media
+        result["clip_objects"] = clips
 
         def source_level(media, ticks):
             levels = levels_by_media.get(media)
