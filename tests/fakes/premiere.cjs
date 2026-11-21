@@ -113,7 +113,8 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   const clipOf = new WeakMap(); // ProjectItem -> ClipProjectItem
   for (const m of media) {
     marks.set(m.path, { in: 0n, out: m.duration });
-    const item = { name: m.path, getId: () => `item:${m.path}`, createSetNameAction: () => action(() => {}) };
+    // `name`: what Premiere calls an imported file's item (its file name); default the path.
+    const item = { name: m.name || m.path, getId: () => `item:${m.path}`, createSetNameAction: () => action(() => {}) };
     const clip = {
       name: m.path,
       getMediaFilePath: async () => m.path,
@@ -137,6 +138,9 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getInPoint: async () => tickTime(raw.in),
         getOutPoint: async () => tickTime(raw.in + raw.end - raw.start),
         getProjectItem: async () => projectItems.get(raw.media.path),
+        isDisabled: async () => Boolean(raw.disabled),
+        createSetDisabledAction: (disabled) => action(() => { raw.disabled = disabled; }),
+        createMoveAction: (dt) => action(() => { raw.start += BigInt(dt.ticks); raw.end += BigInt(dt.ticks); }),
       };
       items.set(raw, item);
       rawOf.set(item, raw);
@@ -150,7 +154,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   const addSequence = (seq) => { raws.push(seq); return seq; };
   for (const seq of sequences) {
     const tracks = (list) => list.map((t) => t.map((c) => ({ ...c, media: media.find((m) => m.path === c.media) })));
-    addSequence({ name: seq.name, guid: `seq${guids++}`, video: tracks(seq.video), audio: tracks(seq.audio) });
+    addSequence({ name: seq.name, guid: `seq${guids++}`, video: tracks(seq.video), audio: tracks(seq.audio), frame: seq.frame || null });
   }
   const wrappers = new WeakMap(); // raw sequence -> Sequence
   const rawSeq = new WeakMap(); // Sequence -> raw sequence
@@ -166,7 +170,13 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getVideoTrack: async (i) => track(s.video[i]),
         getAudioTrack: async (i) => track(s.audio[i]),
         getProjectItem: async () => item,
-        createCloneAction: () => action(() => addSequence({ name: `${s.name} Copy`, guid: `seq${guids++}`, video: copy(s.video), audio: copy(s.audio) })),
+        createCloneAction: () => action(() => addSequence({ name: `${s.name} Copy`, guid: `seq${guids++}`, video: copy(s.video), audio: copy(s.audio), marks: { ...(s.marks || {}) } })),
+        getSettings: async () => ({ frame: s.frame || null }),
+        createSetSettingsAction: (settings) => action(() => { s.frame = settings.frame; }),
+        getInPoint: async () => tickTime((s.marks || {}).in || 0n),
+        getOutPoint: async () => tickTime((s.marks || {}).out || 0n),
+        createSetInPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), in: BigInt(t.ticks) }; }),
+        createSetOutPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), out: BigInt(t.ticks) }; }),
       };
       wrappers.set(s, seq);
       rawSeq.set(seq, s);
@@ -191,6 +201,20 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         if (m.audio) land(s.audio, audioTrack);
       });
     },
+    // Same-track clone by an offset (PREMIERE_FACTS: overwrites what is there; unlinked; effects kept).
+    createCloneTrackItemAction(item, timeOffset, videoOffset, audioOffset, alignToVideo, isInsert) {
+      const raw = rawOf.get(item);
+      const dt = BigInt(timeOffset.ticks);
+      return action(() => {
+        for (const tracks of [s.video, s.audio]) {
+          const t = tracks.find((list) => list.includes(raw));
+          if (!t) continue;
+          const copy = { ...raw, start: raw.start + dt, end: raw.end + dt };
+          for (let i = t.length - 1; i >= 0; i--) if (t[i].start < copy.end && t[i].end > copy.start) t.splice(i, 1);
+          t.push(copy);
+        }
+      });
+    },
     createRemoveItemsAction(selection, ripple, mediaType) {
       const chosen = [...selectionItems.get(selection)].map((item) => rawOf.get(item));
       const sides = [[s.video, Constants.MediaType.VIDEO], [s.audio, Constants.MediaType.AUDIO]]
@@ -201,12 +225,37 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     },
   });
 
+  // Bins and import, enough for timeline/buildSequence.js `import: true` items: a bin lists its
+  // children and can create a child bin; importFiles([path], suppressUI, bin) puts that media's
+  // ProjectItem (the media must be in `media`) into the bin. `imports` counts importFiles calls.
+  const children = new WeakMap(); // bin -> its items
+  const makeBin = (binName) => {
+    const bin = {
+      name: binName, type: 2,
+      getItems: async () => [...children.get(bin)],
+      createBinAction: (child) => action(() => children.get(bin).push(makeBin(child))),
+    };
+    children.set(bin, []);
+    return bin;
+  };
+  const root = makeBin("root");
+  const imports = [];
+
   let saves = 0;
   const project = {
     ...core,
     path,
     getSequences: async () => raws.map(wrap),
     save: async () => { saves++; return true; },
+    getRootItem: async () => root,
+    importFiles: async (paths, suppressUI, bin) => {
+      for (const p of paths) {
+        if (!projectItems.has(p)) return false;
+        imports.push(p);
+        children.get(bin || root).push(projectItems.get(p));
+      }
+      return true;
+    },
   };
   const ppro = {
     Project: { getActiveProject: async () => project },
@@ -214,13 +263,14 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     SequenceEditor: { getEditor: (seq) => editor(rawSeq.get(seq)) },
     TickTime, TrackItemSelection, Constants, PointF,
   };
-  const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path })));
+  const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path, ...(c.disabled ? { disabled: true } : {}) })));
   return {
     ppro, project, undoSteps,
     get saves() { return saves; },
+    imports,
     marks: (mediaPath) => ({ ...marks.get(mediaPath) }),
     // Every sequence by name, as plain clips per side.
-    sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio") }; },
+    sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio"), frame: s.frame || null, marks: s.marks || null }; },
     // One of each fake object, for FAKE_SHAPE.
     samples: () => {
       const s = raws[0];
