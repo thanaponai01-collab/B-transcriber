@@ -96,6 +96,38 @@
 - verify: CutDeck helper
 - status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started. `premiere_rough_cut` proven against a real helper with a stubbed panel read (tests/test_cutdeck_mcp_backend.py, 2026-10-07); not run against live Premiere
 
+## Timeline transcript (MCP)
+- what: What a sequence says and where, without transcribing it again: each source file's transcript (made once by `transcribe`) mapped through one audio track's clips onto the timeline in exact ticks, word times tightened to the audio. Lines, phrase search, and every clip edge with audible sound at the cut (`cuts_in_sound`). Speed-changed clips are mapped. Works the same on a rough cut, a copy or a re-cut.
+- mcp: `premiere_timeline_transcript(sequence?, track?, query?, from_ticks?, to_ticks?, offset, limit)`
+- cli: `python -m cutdeck.timeline_transcript --prproj <file> --sequence <name>` @ cutdeck/timeline_transcript.py :: main (a saved project, no Premiere)
+- trace: `premiere_timeline_transcript` @ cutdeck/mcp_server.py > `_timeline_transcript` @ cutdeck/driver_commands.py > `read_timeline` (panel) > `build` @ cutdeck/timeline_transcript.py > `source_words` > `store.latest_transcript_job`
+- needs: helper and panel; each source transcribed once (`missing` lists the rest)
+- effect: `output/timeline_transcripts/<sequence>-<track>.json` (every line and word), level envelopes in `output/timeline_transcripts/levels/`
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22 on Premiere 27.0 (docs/TIMELINE_LISTEN.md)
+
+## Cut by words (MCP)
+- what: Remove phrases (by their words, or a tick span) from a COPY of a sequence, each cut in the pauses around them, then read the copy back to prove the words are gone and no cut landed in speech.
+- mcp: `premiere_cut_words(result_name, remove, sequence?, track?, keep_ms=250)`
+- trace: `_cut_words` @ cutdeck/driver_commands.py > `plan` @ cutdeck/word_cut.py > `cut_copy` (panel) > `build` @ cutdeck/timeline_transcript.py
+- effect: a new sequence `result_name`; the source is never edited
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22 on a scratch rough cut: 3 fillers removed, 0 new cuts in sound; phrases inside continuous speech are removed but their cuts are reported in sound (no pause to cut in)
+
+## Keep words on a copy (MCP)
+- what: Keep only these phrases of a sequence, in its order, on a copy made by cut_copy (every track and layer kept); spans placed in the source's pauses; read back.
+- mcp: `premiere_keep_words(result_name, keep, sequence?, track?, pad_ms=60, wordless_ms=0)`
+- trace: `_keep_words` @ cutdeck/driver_commands.py > `keep_ranges` @ cutdeck/word_cut.py > `cut_copy` (panel)
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22 on a 7-track scratch: every track kept, 0 cuts in sound
+
+## Plan a Short by its words (MCP)
+- what: Give the phrases to keep, in order; each piece's In/Out is placed in the source file's own pauses around its words; returns items for premiere_build_sequence. Edits nothing.
+- mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=60, wordless_ms=0)`
+- trace: `_plan_pieces` @ cutdeck/driver_commands.py > `plan_pieces` @ cutdeck/word_cut.py > `build` @ cutdeck/timeline_transcript.py
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22: a reordered 3-piece Short built from its items read back with 0 cuts in sound
+
 ## General Premiere control (MCP)
 - what: Hand-level control of Premiere for agents. `premiere_read_timeline`, `premiere_list_project`, `premiere_open_sequence`, `premiere_set_playhead`, `premiere_set_in_out`, `premiere_select_clips`, `premiere_edit_clips` (move, trim, enable/disable, rename, remove, in one undo step), `premiere_place_media` (overwrite, insert, nest), `premiere_list_effects`, `premiere_add_effect`, `premiere_set_param` (any effect parameter or keyframe), `premiere_add_transition`, `premiere_set_track_mute`, `premiere_remove_markers`, `premiere_import_files`, `premiere_save_project` and `premiere_export_frame` (a PNG of a frame). Plus `premiere_screenshot`, a PNG of the whole Premiere window (no panel needed). Clips are addressed by id `V<n>@<start_ticks>`. Every route, and what UXP cannot reach (razor, link, targeting, undo): docs/PREMIERE_CONTROL_MAP.md.
 - trace: `premiere_edit_clips` (built from cutdeck/driver_commands.py) @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `premiere` @ cutdeck/helper.py > `handle` @ uxp/cutdeck/features/driver.js > `editClips` @ uxp/cutdeck/timeline/control.js

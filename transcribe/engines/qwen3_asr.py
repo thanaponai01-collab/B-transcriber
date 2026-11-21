@@ -139,8 +139,8 @@ class Qwen3ASREngine(Engine):
         return (inp.audio, _SAMPLE_RATE)
 
     def _language_arg(self, language_hint: str | None):
-        if not language_hint:
-            return None
+        if not language_hint or language_hint == "auto":
+            return None  # the model's own language detection
         return _LANGUAGE_NAMES.get(language_hint, language_hint)
 
     def _context_arg(self, bias_terms: list[str]) -> str:

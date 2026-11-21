@@ -138,7 +138,7 @@ def plan_windows(cues: list[dict], duration_ms: int, *, requested=(),
 
 
 def recheck_windows(audio, windows: list[ReviewWindow], *, engine_factory,
-                    engines=('faster_whisper', 'qwen3_asr')) -> list[dict]:
+                    engines=('faster_whisper', 'qwen3_asr'), language: str = 'th') -> list[dict]:
     """Decode the exact same 16kHz samples sequentially through each engine.
 
     Caller owns factory configuration and artifact storage. No DB writes,
@@ -158,7 +158,7 @@ def recheck_windows(audio, windows: list[ReviewWindow], *, engine_factory,
                 excerpt = audio[window.start_ms * 16:window.end_ms * 16].copy()
                 if not len(excerpt):
                     raise ValueError('Empty review audio window')
-                result = engine.transcribe(EngineInput(audio=excerpt, language_hint='th'))
+                result = engine.transcribe(EngineInput(audio=excerpt, language_hint=language))
                 # These adapters return phrase cues. Separate them for display
                 # so adjacent English words cannot silently fuse at cue edges.
                 proposal['alternatives'][name] = ' '.join(t.text.strip() for t in result.tokens if t.text.strip())

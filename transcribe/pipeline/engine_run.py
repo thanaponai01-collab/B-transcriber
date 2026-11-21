@@ -96,7 +96,7 @@ def gap_redecoder(plan: JobPlan, device: str, config: dict, audio, sample_rate: 
             excerpt = audio[lo_ms * sample_rate // 1000:hi_ms * sample_rate // 1000].copy()
             if not len(excerpt):
                 return []
-            res = eng.transcribe(EngineInput(audio=excerpt, language_hint="th"))
+            res = eng.transcribe(EngineInput(audio=excerpt, language_hint=plan.language))
             return [{"text": t.text, "start_ms": t.start_ms + lo_ms, "end_ms": t.end_ms + lo_ms,
                      "script": t.script, "confidence": t.confidence}
                     for t in res.tokens]
@@ -188,7 +188,7 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config,
             _log_vram("engine-a-loaded")
             tokens_a, final_a, raw_words_a = _transcribe_with(
                 engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
-                "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
+                plan.language, plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
                 temperature=plan.temperature_a, beam_size=plan.beam_size_a,
                 speech_spans=inputs.speech_spans,
             )
@@ -217,7 +217,7 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config,
                 _log_vram("engine-a-loaded")
             tokens_a, final_a, raw_words_a = _transcribe_with(
                 engine, inputs.chunks, inputs.full_audio, inputs.bias_terms, inputs.bias_weights,
-                "th", plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
+                plan.language, plan.engine_batch_size, chunk_overlap_ms=plan.chunk_overlap_ms,
                 temperature=plan.temperature_a, beam_size=plan.beam_size_a,
                 speech_spans=inputs.speech_spans,
             )
@@ -295,7 +295,7 @@ def _decode_self_ensemble_b(engine, plan: JobPlan, inputs: DecodeInputs):
     """
     res = engine.transcribe(
         EngineInput(audio=inputs.full_audio, bias_terms=inputs.bias_terms,
-                    bias_weights=inputs.bias_weights, language_hint="th",
+                    bias_weights=inputs.bias_weights, language_hint=plan.language,
                     speech_spans=inputs.speech_spans),
         temperature=plan.temperature_b,
         beam_size=plan.beam_size_b,

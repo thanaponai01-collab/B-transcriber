@@ -17,7 +17,7 @@ def run(folder: Path) -> None:
         config = yaml.safe_load((ROOT / "transcribe/config.yaml").read_text(encoding="utf-8"))
         # The shared store (config store.path), not a per-job DB: bias terms, corrections
         # and the sha256 cache then reach SubtitleDesk too. The job folder keeps result.json.
-        transcript = transcribe(args["media_path"], config=config)
+        transcript = transcribe(args["media_path"], config=config, language=args.get("language"))
         # transcript_job_id lets an editing client (SubtitleDesk) save corrections against it.
         result = {"kind": "transcribe", "media_path": args["media_path"],
                   "timing_unit": "milliseconds", "granularity": "phrase_cues",

@@ -266,6 +266,7 @@ class FasterWhisperEngine(Engine):
         # Restored in unload() — see _register_cuda_dll_dirs's docstring for
         # why this PATH mutation must not outlive this engine's residency.
         self._pre_load_path = _register_cuda_dll_dirs()
+        self._auto_language = None  # `language: auto` is decided once per loaded file
         from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
@@ -600,6 +601,54 @@ class FasterWhisperEngine(Engine):
                     (last.end_ms / 1000) if last else 0.0)
         return merged, bs
 
+    _AUTO_LANGUAGES = ("th", "en")
+    _AUTO_SAMPLE_S = 30
+
+    def _language_score(self, audio, language: str) -> float | None:
+        """Token-weighted mean log-probability of a quick decode (beam 1) in `language`, or None
+        when the sample holds no speech."""
+        segments, _ = self._model.transcribe(audio, language=language, beam_size=1, vad_filter=True,
+                                             condition_on_previous_text=False)
+        segments = list(segments)
+        tokens = sum(len(seg.tokens) for seg in segments)
+        if not tokens:
+            return None
+        return sum(seg.avg_logprob * len(seg.tokens) for seg in segments) / tokens
+
+    def _resolve_language(self, hint: str | None, audio) -> str | None:
+        """The decode language for this audio. "auto" on a whole file (a minute or more) decides
+        afresh: an engine kept resident across files, as the eval harness does, must not carry one
+        file's language into the next. A short excerpt (a gap re-decode) is too little to decide on:
+        it gets the file's choice, else Thai."""
+        if hint != "auto":
+            return hint
+        if len(audio) >= 60 * 16000:
+            self._auto_language = None
+            return self._pick_language(audio)
+        return getattr(self, "_auto_language", None) or "th"
+
+    def _pick_language(self, audio) -> str:
+        """`language: auto`: Thai or English for this file. The Thai checkpoint's own language
+        detector calls everything Thai (0.97+ on an English broadcast, 2026-11-22), but its
+        confidence decoding a sample each way separates them: on 12 samples of 4 files the right
+        language scored higher every time. Three 30 s samples (at 20/50/80% of the file), majority
+        wins; Thai on a tie or with no speech. Remembered for this loaded engine (gap re-decodes
+        reuse it)."""
+        if getattr(self, "_auto_language", None):
+            return self._auto_language
+        n, w = len(audio), self._AUTO_SAMPLE_S * 16000
+        votes = {lang: 0 for lang in self._AUTO_LANGUAGES}
+        for frac in (0.2, 0.5, 0.8):
+            lo = max(0, min(int(n * frac) - w // 2, n - w))
+            sample = audio[lo:lo + w]
+            scores = {lang: self._language_score(sample, lang) for lang in self._AUTO_LANGUAGES}
+            if any(v is None for v in scores.values()):
+                continue
+            votes[max(scores, key=scores.get)] += 1
+        self._auto_language = "en" if votes["en"] > votes["th"] else "th"
+        logger.info("language auto: %s (votes %s)", self._auto_language, votes)
+        return self._auto_language
+
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
                              temperature=None, beam_size=None,
                              speech_spans=()) -> list[tuple[str, int, int, float | None]]:
@@ -786,7 +835,8 @@ class FasterWhisperEngine(Engine):
         kwargs = {}
         if inp.speech_spans:
             kwargs["speech_spans"] = inp.speech_spans
-        words = self._transcribe_batched(audio, inp.language_hint, initial_prompt,
+        language = self._resolve_language(inp.language_hint, audio)
+        words = self._transcribe_batched(audio, language, initial_prompt,
                                           temperature=temperature, beam_size=beam_size,
                                           **kwargs)
 

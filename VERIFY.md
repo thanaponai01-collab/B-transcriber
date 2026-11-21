@@ -77,6 +77,17 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
 - live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
 
+## Decode language (th / en / auto)
+- test: `python -m pytest tests/test_language_choice.py -q -p no:cacheprovider`
+- fail-signal: failed
+- live (2026-11-22): an English F1 broadcast transcribed with `en` and `auto` (identical, English) vs the default (invented Thai); a Thai source with `auto` identical to `th`; through the helper, `auto` and `en` return their own cached jobs; `auto` held out on 10 unseen files, 10 right (docs/ENGINES.md).
+
+## Timeline transcript and cut by words
+- test: `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py -q -p no:cacheprovider`
+- fail-signal: failed
+- fail-proof (2026-11-22): dropped `- clip.in_` from the mapping in cutdeck/timeline_transcript.py (3 red); widened the sound threshold in `tighten` (1 red); cut at the word edges instead of in the pauses in cutdeck/word_cut.py (1 red); each restored.
+- live (2026-11-22, runs `20261122-004515-timeline-listen`, `20261122-013033-timeline-listen-final`, `20261122-015758-short-placed`, `20261122-020524-real-sequences`): `timeline_transcript` on a 96-min sequence, 119- and 1,653-clip rough cuts (~2 s), speed 200%/50%, two sources on two tracks; fresh transcripts of the cut audio sit a median 3 ms / -13 ms from the mapped words; Rough Cut from mapped transcripts gave identical cut lists, and on a never-transcribed source it transcribed the source once; `plan_pieces` + `build_sequence` made a reordered Short with 0 cuts in sound; `keep_words` kept 2 phrases on a 7-track copy (every track kept, 0 cuts in sound); the planner's 60 ms pad beats 120 ms on the owner's two independent cuts (16 vs 7 of 46 and 31 vs 18 of 104 edges within a frame; scripts/timeline_listen/calibrate_edges.py); `keep_words` across rough-cut joins kept every track; `cut_words` removed 3 fillers (said 3 -> 0, no new cut in sound). Phrases in continuous speech (no pause) are cut at the word boundary and reported as cuts in sound. Report: docs/TIMELINE_LISTEN.md.
+
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`

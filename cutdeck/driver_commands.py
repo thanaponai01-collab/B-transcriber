@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot
+from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, timeline_transcript, word_cut
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -111,8 +111,11 @@ def _build_arguments(args: dict, jobs) -> dict:
         raise ValueError("save must be true or false")
     if not isinstance(base, str) or not base.strip() or not isinstance(name, str) or not name.strip():
         raise ValueError("base and name must be sequence names")
-    if not isinstance(items, list) or not 0 < len(items) <= MAX_BUILD_ITEMS:
-        raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items")
+    # Steps on a copy (into), e.g. a reorder, may place nothing (live 2026-11-22: a reorder after
+    # keep_words otherwise needed a filler item placed and removed again).
+    only_steps = args.get("into") is True and bool(args.get("steps"))
+    if not isinstance(items, list) or not (0 if only_steps else 1) <= len(items) <= MAX_BUILD_ITEMS:
+        raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items (0 only with into and steps)")
     for it in items:
         if not isinstance(it, dict) or not (isinstance(it.get("media"), str) or isinstance(it.get("like"), dict)):
             raise ValueError("Each item needs media (a file path) or like ({kind, track, start_ticks})")
@@ -407,15 +410,22 @@ COMMANDS: dict[str, Command] = {
     "build_sequence": Command(
         3600, _build_arguments, "write",
         """
-        Build a new sequence named `name` on a cleared copy of the sequence `base` (never
+        Build a new sequence named `name` on a cleared copy of the sequence `base` (base not
         edited), in the open project, which must be the .prproj at the absolute path `project`
         (else nothing is built). Each item: {id, media (file path) or like {kind, track,
         start_ticks}, in_ticks, out_ticks, at_ticks (tick strings), v, a (track indexes or
         null), motion, level, blur}. `save`: save the project after the build. `options`
         (optional): disable_tracks {video, audio}, mark_whole, media_from [sequence names], and
-        into (edit `base` itself; name == base) with settings_from, moves, restyle; see
-        uxp/cutdeck/timeline/buildSequence.js. Returns placed counts and every item off by more
-        than one frame.
+        into: true, which edits `base` ITSELF instead of a copy (name must equal base; use it on a
+        copy you made, e.g. by premiere_keep_words or premiere_cut_copy), with settings_from and
+        `steps`: [{op, from_ticks, to_ticks, dt_ticks?, end_ticks?, tracks?}], run in order on
+        every clip of every track (or `tracks` {video: [i], audio: [i]}) whose START is in
+        [from, to): clone (copy by dt, overwriting), lift (remove, leaving a hole), move (shift by
+        dt), trim (set end to end_ticks). Steps move whole clips, they do not razor: give block
+        boundaries that sit on clip edges (premiere_read_timeline). To swap block A [0, a) and B
+        [a, e): clone B by X-a, clone A by X+(e-a) (X past the end), lift [0, e), clone [X, X+e)
+        by -X, lift [X, X+e). With into and steps, items may be []. Returns placed counts and
+        every item off by more than one frame.
         """,
         (("project", str), ("base", str), ("name", str), ("items", list[dict]), ("save", bool, False), ("options", dict | None, None)),
         cli_target=("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
@@ -896,7 +906,259 @@ async def _list_menu(args: dict, premiere: Premiere) -> dict:
     return {"count": len(found), "items": found[:400]}
 
 
+def _timeline_transcript_arguments(args: dict, jobs) -> dict:
+    result = _sequence(args)
+    track = args.get("track")
+    if track is not None:
+        if not isinstance(track, str) or not re.fullmatch(r"A\d+", track):
+            raise ValueError('track must be an audio track id like "A1"')
+        result["track"] = track
+    query = args.get("query")
+    if query is not None:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be the words to find")
+        result["query"] = query
+    for key in ("from_ticks", "to_ticks"):
+        if args.get(key) is not None:
+            result[key] = int(_ticks(args[key], key))
+    offset, limit = args.get("offset", 0), args.get("limit", 200)
+    if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
+        raise ValueError("offset must be 0 or more and limit 1 to 1000")
+    return {**result, "offset": offset, "limit": limit}
+
+
+_TRANSCRIPTS_DIR = Path(__file__).resolve().parent.parent / "output" / "timeline_transcripts"
+
+
+async def _timeline_transcript(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    if "track" in args:
+        # The lower audio tracks too: a later stream of a file is told by its copy below.
+        read["tracks"] = [f"A{i}" for i in range(1, int(args["track"][1:]) + 1)]
+    timeline = await premiere("read_timeline", read)
+    options = {k: args[k] for k in ("track", "query", "from_ticks", "to_ticks", "offset", "limit") if k in args}
+    result = await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
+    # A long rough cut has hundreds; the reply carries counts and the first ones (full_path has all).
+    cuts = result["cuts_in_sound"]
+    result["cuts_in_sound_count"] = {"sound": sum(e.get("severity") != "tail" for e in cuts),
+                                     "tail": sum(e.get("severity") == "tail" for e in cuts)}
+    if len(cuts) > _MAX_CUTS_LISTED:
+        result["cuts_in_sound"] = sorted(cuts, key=lambda e: e.get("severity") == "tail")[:_MAX_CUTS_LISTED]
+    return result
+
+
+_MAX_CUTS_LISTED = 100
+
+
+def _cut_words_arguments(args: dict, jobs) -> dict:
+    result = _timeline_transcript_arguments({k: args[k] for k in ("sequence", "track") if k in args}, jobs)
+    name = args.get("result_name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("result_name must name the new sequence")
+    removes = args.get("remove")
+    if not isinstance(removes, list) or not 0 < len(removes) <= 200:
+        raise ValueError("remove must be a list of 1 to 200 removals")
+    checked = []
+    for r in removes:
+        if isinstance(r, dict) and isinstance(r.get("text"), str) and r["text"].strip():
+            n = r.get("occurrence")
+            if n is not None and (type(n) is not int or n < 1):
+                raise ValueError("occurrence must be 1 or more")
+            checked.append({"text": r["text"], **({"occurrence": n} if n else {})})
+        elif isinstance(r, dict) and r.get("from_ticks") is not None and r.get("to_ticks") is not None:
+            lo, hi = int(_ticks(r["from_ticks"], "from_ticks")), int(_ticks(r["to_ticks"], "to_ticks"))
+            if hi <= lo:
+                raise ValueError("to_ticks must be after from_ticks")
+            checked.append({"from_ticks": lo, "to_ticks": hi})
+        else:
+            raise ValueError('each removal is {"text", "occurrence"?} or {"from_ticks", "to_ticks"}')
+    keep_ms = args.get("keep_ms", word_cut.KEEP_MS)
+    if type(keep_ms) is not int or not 0 <= keep_ms <= 2000:
+        raise ValueError("keep_ms must be 0 to 2000")
+    return {**result, "result_name": name, "remove": checked, "keep_ms": keep_ms}
+
+
+def _join_text(words, at: int, n: int = 6) -> str:
+    before = [w.text for w in words if w.end <= at][-n:]
+    after = [w.text for w in words if w.start >= at][:n]
+    return f"{timeline_transcript.join_words(before)} | {timeline_transcript.join_words(after)}"
+
+
+async def _cut_words(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    if source["name"] == args["result_name"]:
+        raise ValueError("result_name must differ from the source sequence (it is never edited)")
+    build = lambda tl, track: timeline_transcript.build(  # noqa: E731
+        tl, track=track, limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
+    before = await asyncio.to_thread(build, source, args.get("track"))
+    if before["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
+    tpf = int(source["ticks_per_frame"])
+    planned = word_cut.plan(before["word_objects"], args["remove"], tpf, int(source["end_ticks"]), args["keep_ms"],
+                            level_at=before["level_at"])
+    copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
+                                       "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": planned["cuts_frames"]}})
+    result_tl = await premiere("read_timeline", {"sequence": args["result_name"]})
+    after = await asyncio.to_thread(build, result_tl, before["track"])
+    removed, joins = 0, []
+    for a, b in planned["cuts_frames"]:
+        joins.append({"tc": timeline_transcript.timecode((a - removed) * tpf, tpf),
+                      "reads": _join_text(after["word_objects"], (a - removed) * tpf)})
+        removed += b - a
+    checks = [{"text": r["text"], "said_before": word_cut.count(before["word_objects"], r["text"]),
+               "said_after": word_cut.count(after["word_objects"], r["text"])}
+              for r in {r["text"]: r for r in args["remove"] if "text" in r}.values()]
+    old_edges = {(e["edge_src_s"], e["word"]) for e in before["cuts_in_sound"]}
+    return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"],
+            "removals": planned["removals"], "joins": joins, "checks": checks,
+            "new_cuts_in_sound": [e for e in after["cuts_in_sound"]
+                                   if (e["edge_src_s"], e["word"]) not in old_edges]}
+
+
+def _plan_pieces_arguments(args: dict, jobs) -> dict:
+    checked = _cut_words_arguments({**{k: args[k] for k in ("sequence", "track") if k in args},
+                                    "result_name": "-", "remove": args.get("keep"), "keep_ms": 0}, jobs)
+    pad_ms, wordless_ms = args.get("pad_ms", word_cut.PAD_MS), args.get("wordless_ms", word_cut.WORDLESS_MS)
+    if type(pad_ms) is not int or not 0 <= pad_ms <= 2000:
+        raise ValueError("pad_ms must be 0 to 2000")
+    if type(wordless_ms) is not int or not 0 <= wordless_ms <= 2000:
+        raise ValueError("wordless_ms must be 0 to 2000")
+    return {**{k: checked[k] for k in ("sequence", "track") if k in checked}, "keep": checked["remove"],
+            "pad_ms": pad_ms, "wordless_ms": wordless_ms}
+
+
+async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    built = await asyncio.to_thread(lambda: timeline_transcript.build(
+        source, track=args.get("track"), limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True))
+    if built["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in built['missing']]}")
+    tpf = int(source["ticks_per_frame"])
+    pieces = word_cut.plan_pieces(built["word_objects"], args["keep"], tpf, built["source_words"],
+                                  built["source_level"], args["pad_ms"], args["wordless_ms"])
+    at, items = 0, []
+    for n, p in enumerate(pieces):
+        items.append({"id": f"piece{n + 1}", "media": p["media"], "in_ticks": p["in_ticks"],
+                      "out_ticks": p["out_ticks"], "at_ticks": str(at), "v": 0, "a": 0})
+        at += int(p["out_ticks"]) - int(p["in_ticks"])
+    return {"sequence": source["name"], "pieces": pieces, "items": items,
+            "duration_s": round(at / PPRO_TICKS_PER_SECOND, 3)}
+
+
+def _keep_words_arguments(args: dict, jobs) -> dict:
+    checked = _plan_pieces_arguments(args, jobs)
+    name = args.get("result_name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("result_name must name the new sequence")
+    return {**checked, "result_name": name}
+
+
+async def _keep_words(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    if source["name"] == args["result_name"]:
+        raise ValueError("result_name must differ from the source sequence (it is never edited)")
+    build = lambda tl, track: timeline_transcript.build(  # noqa: E731
+        tl, track=track, limit=200, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
+    before = await asyncio.to_thread(build, source, args.get("track"))
+    if before["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
+    tpf = int(source["ticks_per_frame"])
+    planned = word_cut.keep_ranges(before["word_objects"], args["keep"], tpf, before["clip_objects"],
+                                   before["source_words"], before["source_level"], args["pad_ms"],
+                                   int(source["end_ticks"]), args["wordless_ms"])
+    if not planned["cuts_frames"]:
+        raise ValueError("the phrases cover the whole sequence; nothing to cut")
+    copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
+                                       "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": planned["cuts_frames"]}})
+    after = await asyncio.to_thread(build, await premiere("read_timeline", {"sequence": args["result_name"]}),
+                                    before["track"])
+    cuts = after["cuts_in_sound"]
+    return {"sequence": args["result_name"], "cut_copy": copy, "kept": planned["kept"],
+            "lines": [ln["text"] for ln in after["lines"]][:200],
+            "cuts_in_sound": cuts[:_MAX_CUTS_LISTED],
+            "cuts_in_sound_count": {"sound": sum(e.get("severity") != "tail" for e in cuts),
+                                    "tail": sum(e.get("severity") == "tail" for e in cuts)}}
+
+
 HELPER_COMMANDS: dict[str, Command] = {
+    "timeline_transcript": Command(
+        300, _timeline_transcript_arguments, "read",
+        """
+        What the sequence says, where, without transcribing it again: each source file's transcript
+        (made once by transcribe(media_path), reused from the store) mapped through the clips of one
+        audio track (track "A1", a string; default the first un-muted one with clips) onto the
+        timeline in exact Premiere ticks (tick strings, 254016000000 per second). Returns lines (tc, start_s/end_s, start_ticks/end_ticks, text, clip id, src_s), and
+        `cuts_in_sound`: every clip In/Out of that track with audible sound at the cut ({clip, side
+        in|out, tc, at_ticks, word or null, cut_ms, nearest_quiet_ms, severity "sound" (a bad cut)
+        or "tail" (the faint end of a fade, usually fine)}). This transcript plus that sound check is
+        how the system "listens" to a result; nothing plays audio. `untranscribed`: speech
+        the engine left without words (read it as talk, not a pause). from_ticks/to_ticks narrow
+        lines, cuts_in_sound and untranscribed alike. `query` finds
+        a phrase (matches, also across a cut; spaces and punctuation ignored; numbers as the engine
+        wrote them, e.g. "20" not "ยี่สิบ"). `missing` lists source files never transcribed: run
+        transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
+        of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
+        CutDeck panel open.
+        """,
+        (("sequence", str | None, None), ("track", str | None, None), ("query", str | None, None),
+         ("from_ticks", str | None, None), ("to_ticks", str | None, None), ("offset", int, 0),
+         ("limit", int, 200)),
+        run=_timeline_transcript),
+    "cut_words": Command(
+        1800, _cut_words_arguments, "write",
+        """
+        Remove words from a COPY of a sequence (default the active one; never edited), each cut
+        placed in the pauses around the words, from the timeline transcript
+        (premiere_timeline_transcript). remove: [{"text": "...", "occurrence": n}] (a phrase as
+        said; occurrence when it is said more than once) or [{"from_ticks", "to_ticks"}]. A
+        join keeps keep_ms of pause (default 250, never more than was there). Makes result_name
+        with cut_copy, then reads it back: `checks` (how often each phrase is said before and
+        after), `joins` (the words either side of each join), and `new_cuts_in_sound` (any new cut
+        with audible sound at it; empty is the goal). Each cut sits on the quiet frame in the
+        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame (words touching), the dB over the sound threshold at the word boundary it was cut on. Needs the CutDeck panel open and the
+        sources transcribed.
+        """,
+        (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
+         ("track", str | None, None), ("keep_ms", int, 250)),
+        run=_cut_words),
+    "plan_pieces": Command(
+        300, _plan_pieces_arguments, "read",
+        """
+        Plan a Short (or any re-ordered cut) by its words: `keep` lists phrases in the order they
+        should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
+        default the active one, e.g. a rough cut). Each piece's edges are placed in the SOURCE
+        file's own pauses around its words, so they are clean even where the rough cut removed the
+        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the word boundary;
+        wordless_ms > 0 also takes along wordless sound touching the words, e.g. a laugh;
+        `no_quiet` says so). Returns `items` ready for
+        premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
+        v/a and add layers as needed) and `pieces` with each one's text and source. Edits
+        nothing. Read the built Short back with premiere_timeline_transcript.
+        """,
+        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60),
+         ("wordless_ms", int, 0)),
+        run=_plan_pieces),
+    "keep_words": Command(
+        1800, _keep_words_arguments, "write",
+        """
+        Keep only these phrases of a sequence, in its own order, on a COPY that keeps every track
+        and layer (cut_copy; the source is never edited): the way to cut a Short from a synced rough
+        cut. keep: [{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] (tick strings).
+        occurrence is 1-based over the whole sequence, needed only when the phrase is said more than
+        once (the error lists where). track "A1" (a string) is the voice track whose words and
+        sound decide the cuts; every other track is cut at the same frames. Each kept span starts
+        and ends in the source file's pauses around its words (as premiere_plan_pieces), never past
+        the clip that holds the edge word. Reads the copy back: `lines` and `cuts_in_sound` (the goal
+        is no "sound" entry). The copy becomes the open sequence. Reorder afterwards with
+        premiere_build_sequence (into: true on the copy, items [], steps; its description has the
+        swap recipe), then read the result back with premiere_timeline_transcript.
+        """,
+        (("result_name", str), ("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None),
+         ("pad_ms", int, 60), ("wordless_ms", int, 0)),
+        run=_keep_words),
     "screenshot": Command(
         30, _no_arguments, "read",
         """
