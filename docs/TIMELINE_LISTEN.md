@@ -15,8 +15,13 @@ code (master's helper refuses its `place_text` registration).
     the *source* file's own pauses, and the result is ready for `build_sequence`.
   - `premiere_cut_words`: remove phrases with each cut in the pause, then read the result back to
     check it.
-- **Your failing case now passes.** A reordered 3-piece Short planned by words from a rough cut
-  was built and read back with 0 cuts in sound and no clipped words.
+  - `premiere_keep_words`: keep only these phrases on a copy of the rough cut, every track kept.
+- **Your failing case now passes.**
+  - A reordered 3-piece Short planned by words from a rough cut was built and read back with
+    0 cuts in sound and no clipped words.
+  - On your own route (copy the rough cut, keep every track), `keep_words` kept two phrases with
+    every track intact and 0 cuts in sound.
+  - The planner's edges match yours: 21 of 25 within one frame of the edges you cut by ear.
 - **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
@@ -94,8 +99,17 @@ the file's floor (the 5th-percentile level, clamped to −65..−35 dB). Each wo
 2. where an edge borders a pause, grown out through continuous sound, at most 400 ms and never
    into a neighbouring word.
 
-On the 96-min source, late onsets of 100+ ms went from 256 to 6 and early ends from 275 to 5
-(the rest are beyond the 400 ms reach).
+Measured on four sources (words after a pause of 150+ ms; "late" means the sound began 100+ ms
+before the engine's start, "early" means it went on 100+ ms past the engine's end):
+
+| source (store job) | late starts, before → after | early ends, before → after |
+|---|---|---|
+| `10-40-52.mp4` mic (79) | 256/1,017 → 6/1,058 | 277 → 5 |
+| `10-40-53-cam.mp4` camera (81) | 275/1,034 → 9/1,045 | 298 → 2 |
+| `10-40-51.mp4` (82) | 247/991 → 4/1,042 | 264 → 3 |
+| `07-07-37.mp4` mic, 1RaceClub FP3 (83) | 214/948 → 6/975 | 212 → 5 |
+
+What remains is sound beyond the 400 ms reach.
 
 ### `premiere_cut_words` (helper command `cut_words`, `cutdeck/word_cut.py`)
 - `remove`: `[{"text": "...", "occurrence": n}]` or `[{"from_ticks", "to_ticks"}]`.
@@ -119,6 +133,21 @@ On the 96-min source, late onsets of 100+ ms went from 256 to 6 and early ends f
 - Returns `items` for `premiere_build_sequence` (back to back on V1/A1) and `pieces`, with
   `no_quiet` when a phrase has no pause in the source (it is mid-sentence: keep whole sentences).
 - Edits nothing. Read the built Short back with `premiere_timeline_transcript`.
+
+### `premiere_keep_words` (helper command `keep_words`): cut a Short from a synced rough cut, every track kept
+- Your route: copy the rough cut and work from there, because a Short rebuilt from items lost audio
+  tracks.
+- `keep` lists the phrases. Their spans are placed as in `plan_pieces` (in the source's pauses,
+  never past their own clip on this timeline), and everything else is cut with `cut_copy`, so
+  every video and audio track and layer stays.
+- The copy is read back (`lines`, `cuts_in_sound`). Reorder afterwards.
+
+### Piece padding is calibrated on your own cut
+The planner was run offline on each of the 17 pieces of your cut of the Max Short (saved v4) and
+compared with the In/Out you chose by ear. At 60 ms of pad, 21 of the 25 edges that sit in a pause
+land within one frame of yours (median 33 ms). At 120 ms only 7 do. `pad_ms` now defaults to 60.
+The other 9 edges are where you cut mid-flow on purpose (no pause), and the planner reports those
+as `no_quiet`.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
@@ -162,6 +191,7 @@ Run folders hold every request and result:
 | Your order, rough cut first: a never-transcribed 96-min source (`10-40-51.mp4` on A5), Rough Cut with speech protection | the job transcribed the source once (store job 82) instead of a WAV, then mapped it: 1,644 cuts, 8 min 40 s in all. `timeline_transcript` on that track straight after: nothing missing, 0 s of new listening |
 | Your real work, read offline from `20260130 RENAME template - 2.prproj` after one transcription of `07-07-37.mp4` (196 s, job 83) | `2026-11-21 07-07-37_Synced — CutDeck 94fd4bb9`: 1,091 clips, 1,336 lines; 27 of 2,182 edges in sound (95 tails). `TT max vs everyone v4 (Claude)`: every line of the agent's v4 and of your own cut, in order |
 | Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
+| `keep_words` on `listen two sources (scratch)` (mic on A1-A4, camera on V2/A5), keeping 2 phrases | a copy with **every track kept** (V1, V2, A1-A5, 2 clips each, ending at 2.27 s); reads back exactly the 2 phrases; **0 cuts in sound** |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
