@@ -85,23 +85,28 @@ def test_touching_words_cut_on_the_dip_inside_the_removed_word_never_the_kept_on
     assert end == 77 and end * TPF <= 2600 * MS and p["removals"][0]["no_quiet"]["end"] == 3.0
 
 
-def test_plan_pieces_puts_each_kept_phrase_between_its_pauses_in_the_order_given():
-    from cutdeck.timeline_transcript import Clip
-    clips = [Clip("A1@0", 0, END, 10_000 * MS, 10_000 * MS + END, "a.mp4")]  # plays source from 10 s
-    pieces = word_cut.plan_pieces(WORDS, [{"text": "four"}, {"text": "one"}], clips, TPF, END)
-    four, one = pieces
-    a, b = (int(four["in_ticks"]) - 10_000 * MS) // MS, (int(four["out_ticks"]) - 10_000 * MS) // MS
-    assert 1800 <= a <= 2200 and b <= 2600            # never into "three" or the touching "five"
-    a, b = (int(one["in_ticks"]) - 10_000 * MS) // MS, (int(one["out_ticks"]) - 10_000 * MS) // MS
-    assert a == 0 and 400 <= b <= 1000 and b >= 500   # 120 ms of pause kept after "one"
-    assert four["media"] == "a.mp4" and one["text"] == "one"
+def _src(words):
+    from cutdeck.timeline_transcript import SourceWord
+    return {"a.mp4": [SourceWord(w.text, w.src_start_ms, w.src_end_ms, 0) for w in words]}
+
+
+def test_plan_pieces_places_edges_in_the_source_pauses_in_the_order_given():
+    # On a rough cut "four" sits right after "two three" (pause removed); in the source the
+    # pause 1.8-2.2 s is still there. The piece must use the source's pause.
+    from dataclasses import replace
+    rough = [replace(w(t, a, b), src_start_ms=s, src_end_ms=e) for t, a, b, s, e in
+             [("two", 0, 400, 1000, 1400), ("three", 400, 800, 1400, 1800), ("four", 800, 1200, 2200, 2600)]]
+    four, = word_cut.plan_pieces(rough, [{"text": "four"}], TPF, _src(WORDS))
+    a, b = int(four["in_ticks"]) // MS, int(four["out_ticks"]) // MS
+    assert 1800 <= a <= 2200 and 2200 - a >= 100          # starts in the source pause, ~120 ms before
+    assert 2600 <= b <= 2600 + 34                          # "five" touches: ends at the boundary
+    one, four2 = word_cut.plan_pieces(WORDS, [{"text": "one"}, {"text": "four"}], TPF, _src(WORDS))
+    assert int(one["in_ticks"]) == 0 and 500 <= int(one["out_ticks"]) // MS <= 1000
 
 
 def test_plan_pieces_dips_toward_the_dropped_neighbour():
-    from cutdeck.timeline_transcript import Clip
-    clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
     # Keep "four" (ends 2.6 s where "five" begins, frame 78): no quiet; the dip at 80 is in "five"
-    # (dropped), the one at 76 is inside "four" (kept): the end may only move later.
-    level_at = lambda t: {76 * TPF: 1.0, 80 * TPF: 2.0}.get(t, 8.0)
-    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "four"}], clips, TPF, END, level_at)
+    # (dropped), the one at 76 inside "four" (kept): the end may only move later.
+    level = lambda media, t: {76 * TPF: 1.0, 80 * TPF: 2.0}.get(t, 8.0)
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "four"}], TPF, _src(WORDS), level)
     assert int(piece["out_ticks"]) == 80 * TPF and piece["no_quiet"]["end"] == 2.0

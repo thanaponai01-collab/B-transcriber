@@ -1023,8 +1023,8 @@ async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
     if built["missing"]:
         raise ValueError(f"transcribe these sources first: {[m['media'] for m in built['missing']]}")
     tpf = int(source["ticks_per_frame"])
-    pieces = word_cut.plan_pieces(built["word_objects"], args["keep"], built["clip_objects"], tpf,
-                                  int(source["end_ticks"]), built["level_at"], args["pad_ms"])
+    pieces = word_cut.plan_pieces(built["word_objects"], args["keep"], tpf, built["source_words"],
+                                  built["source_level"], args["pad_ms"])
     at, items = 0, []
     for n, p in enumerate(pieces):
         items.append({"id": f"piece{n + 1}", "media": p["media"], "in_ticks": p["in_ticks"],
@@ -1077,9 +1077,10 @@ HELPER_COMMANDS: dict[str, Command] = {
         """
         Plan a Short (or any re-ordered cut) by its words: `keep` lists phrases in the order they
         should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
-        default the active one). Each piece starts and ends in the pauses around its words (pad_ms
-        of pause, then the nearest quiet frame; with no pause, the dip toward the dropped words,
-        never into the kept ones; `no_quiet` says so). Returns `items` ready for
+        default the active one, e.g. a rough cut). Each piece's edges are placed in the SOURCE
+        file's own pauses around its words, so they are clean even where the rough cut removed the
+        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the dip toward the
+        dropped words, never into the kept ones; `no_quiet` says so). Returns `items` ready for
         premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
         nothing. Read the built Short back with premiere_timeline_transcript.

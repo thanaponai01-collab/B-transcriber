@@ -125,21 +125,32 @@ def count(words: list[TimelineWord], text: str) -> int:
 PAD_MS = 120  # pause kept before and after a piece, when there is that much
 
 
-def plan_pieces(words: list[TimelineWord], keeps: list[dict], clips: list, tpf: int, end_ticks: int,
-                level_at=None, pad_ms: int = PAD_MS) -> list[dict]:
-    """The pieces of source media that play each kept phrase, in the order given: each piece
-    starts in the pause before its first word and ends in the pause after its last (``pad_ms``
-    of it, then the nearest quiet frame; with no pause, the dip toward the dropped neighbour,
-    never into the kept words). A phrase that runs across a cut on this timeline gives one piece
-    per clip. Returns ``[{text, media, in_ticks, out_ticks, timeline_s, no_quiet?}]`` with
-    source In/Out in ticks, frame-aligned on this timeline."""
+def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
+                source_words: dict, source_level=None, pad_ms: int = PAD_MS) -> list[dict]:
+    """The pieces of source media that play each kept phrase, in the order given.
+
+    The phrase is found on this timeline (a rough cut, a copy), but its edges are placed in the
+    SOURCE file: in the pauses around its words there (``pad_ms`` of pause, then the nearest
+    quiet frame; with no pause, the dip toward the dropped neighbour, never into the kept
+    words). A rough cut has already removed most pauses; the source still has them, so the
+    piece starts and ends cleanly even where the rough cut's words touch, and never carries a
+    sliver of a neighbouring clip.
+
+    ``source_words``: {media: [SourceWord]} sorted by start; ``source_level(media, ticks)``: dB
+    over the sound threshold at a source position (negative = quiet). Source In/Out are whole
+    frames of ``tpf``. Returns ``[{text, media, in_ticks, out_ticks, src_s, no_quiet?}]``."""
     pad = pad_ms * TICKS_PER_MS
     out = []
     for keep in keeps:
         i, j = _resolve(words, keep, tpf)
-        before = words[i - 1].end if i > 0 else 0
-        after = words[j + 1].start if j + 1 < len(words) else end_ticks
-        first, last = words[i].start, words[j].end
+        kept = words[i:j + 1]
+        media = kept[0].media
+        if any(w.media != media for w in kept):
+            raise ValueError(f"{keep.get('text', 'that span')!r} runs across two source files; keep each part")
+        first, last = kept[0].src_start_ms * TICKS_PER_MS, kept[-1].src_end_ms * TICKS_PER_MS
+        src = source_words.get(media) or []
+        before = max((w.end_ms * TICKS_PER_MS for w in src if w.end_ms * TICKS_PER_MS <= first), default=0)
+        after = min((w.start_ms * TICKS_PER_MS for w in src if w.start_ms * TICKS_PER_MS >= last), default=last + pad)
         fa = max(first - pad, before) // tpf
         if fa * tpf < before:
             fa += 1
@@ -151,21 +162,15 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], clips: list, tpf: 
         if fb * tpf < last:
             fb = -(-last // tpf)
         no_quiet = {}
-        if level_at is not None:
-            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "earlier")
-            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "later")
+        if source_level is not None:
+            level = lambda t: source_level(media, t)  # noqa: E731
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level, "earlier")
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level, "later")
             no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
-        text = keep.get("text") or "".join(w.text for w in words[i:j + 1])
-        lo, hi = fa * tpf, fb * tpf
-        for clip in clips:  # one piece per clip the span runs through
-            a, b = max(lo, clip.start), min(hi, clip.end)
-            if b <= a:
-                continue
-            piece = {"text": text, "media": clip.media,
-                     "in_ticks": str(clip.in_ + round((a - clip.start) * clip.speed)),
-                     "out_ticks": str(clip.in_ + round((b - clip.start) * clip.speed)),
-                     "timeline_s": [round(a / 254016000000, 3), round(b / 254016000000, 3)]}
-            if no_quiet:
-                piece["no_quiet"] = no_quiet
-            out.append(piece)
+        piece = {"text": keep.get("text") or "".join(w.text for w in kept), "media": media,
+                 "in_ticks": str(fa * tpf), "out_ticks": str(fb * tpf),
+                 "src_s": [round(fa * tpf / 254016000000, 3), round(fb * tpf / 254016000000, 3)]}
+        if no_quiet:
+            piece["no_quiet"] = no_quiet
+        out.append(piece)
     return out

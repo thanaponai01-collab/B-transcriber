@@ -643,5 +643,14 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["word_objects"] = words
         thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
         result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, thresholds)
-        result["clip_objects"] = clips
+        result["source_words"] = words_by_media
+
+        def source_level(media, ticks):
+            levels = levels_by_media.get(media)
+            if levels is None:
+                return None
+            i = int(ticks / TICKS_PER_MS // ENVELOPE_MS)
+            near = levels[max(i - 2, 0):i + 2]
+            return float(near.max()) - thresholds[media] if len(near) else float("-inf")
+        result["source_level"] = source_level
     return result
