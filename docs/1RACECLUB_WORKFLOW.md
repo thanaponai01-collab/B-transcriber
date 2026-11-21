@@ -640,3 +640,9 @@ with a payoff, from the FP3 rough cut (rough-cut s):
   caption area. Now: only "8 HAM +1.506 M" (crop L4.7 T42.08 R82.19 B54.86 of the 1280x720 feed), 310%, at x 70–591, y 800–868,
   top-left of the picture, over "ใครยังไม่ล็อกบ้าง" with Hamilton's car beside it. Read back on its cut.
   Note: the feed's own graphics (lap box, TURN label, F1 TV bug) inside a 163.5% hold can still fall outside the safe zone.
+- **User 20:25: F1 logos are not allowed; sponsors are fine.** Remove the F1 / F1 TV / F1 REPLAY marks wherever they fall inside the
+  visible window of a hold; if they can't be removed, blur them, but smoothly (no hard-edged box). Sponsor marks (TAG Heuer on the
+  name badge, car liveries, track ads) stay. Done on the Turn 14 Short: the F1 TV logo (x 1066–1210, y 36–66 of the 1280x720 feed)
+  sat inside the window of the two Hamilton wide holds (1190.5, 1193.1); filled from its surroundings (diffusion fill, feathered
+  4 px edge) in the hold PNGs (`hold_*_clean.png`) and swapped in, ending on their cuts. The other holds' F1 marks fall outside
+  their windows. Check every hold's visible window for F1 marks before building.
