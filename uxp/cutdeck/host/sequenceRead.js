@@ -32,10 +32,17 @@ async function listClips(ppro, seq, kind, { end = true, inPoint = true } = {}) {
   return { count, clips };
 }
 
-async function mediaPath(ppro, item) {
-  const projectItem = typeof item.getProjectItem === "function" ? await item.getProjectItem() : null;
+// The media file behind a project item, or null (bins, sequences and graphics have none):
+// ClipProjectItem.cast (premierepro.txt:106) + getMediaFilePath (:130). Throws what the host throws.
+async function projectItemMediaPath(ppro, projectItem) {
   const clip = ppro && ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
   return clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
+}
+
+// The media file behind a track item.
+async function mediaPath(ppro, item) {
+  const projectItem = typeof item.getProjectItem === "function" ? await item.getProjectItem() : null;
+  return projectItemMediaPath(ppro, projectItem);
 }
 
 async function mediaInfo(ppro, item) {
@@ -89,4 +96,4 @@ async function readSequence(ppro, seq, { paths = true, end = true, inPoint = tru
   return { videoTracks: video.count, audioTracks: audio.count, video: video.clips, audio: audio.clips };
 }
 
-module.exports = { readSequence, mediaPath };
+module.exports = { readSequence, mediaPath, projectItemMediaPath };

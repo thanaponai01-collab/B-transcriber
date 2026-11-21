@@ -56,8 +56,9 @@
    + VideoComponentChain.createAppendComponentAction (re-fetch after commit), ComponentParam
    createKeyframe / createSetValueAction. */
 
-const { runTransaction } = require("../host/project.js");
+const { runTransaction, sequencesNamed, cloneSequence } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
 const { applyMotionValues } = require("../transform/apply.js");
 const { asBinLike } = require("../host/project.js");
@@ -75,8 +76,7 @@ const abs = (x) => (x < 0n ? -x : x);
    create_sequence); items then find their media through media_from. */
 async function namedSequence(ppro, project, name, allowEmpty = false) {
   let empty = null;
-  for (const seq of await project.getSequences()) {
-    if (seq.name !== name) continue;
+  for (const seq of await sequencesNamed(project, name)) {
     const read = await readSequence(ppro, seq, { paths: true });
     if (read.video.length || read.audio.length) return { seq, read };
     empty = empty || { seq, read };
@@ -98,12 +98,7 @@ async function holdBinItem(project, fileName) {
 function removeAll(ppro, project, editor, items, mediaType, label) {
   if (!items.length) return;
   runTransaction(project, label, (compound) => {
-    let added = false;
-    ppro.TrackItemSelection.createEmptySelection((selection) => {
-      for (const it of items) selection.addItem(it, true);
-      added = compound.addAction(editor.createRemoveItemsAction(selection, false, mediaType));
-    });
-    if (!added) throw new Error(`addAction(${label}) returned false`);
+    if (!addRemoveItemsAction(ppro, compound, editor, items, false, mediaType)) throw new Error(`addAction(${label}) returned false`);
   });
 }
 
@@ -241,11 +236,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     scratch = { v: top("v", now.videoTracks), a: top("a", now.audioTracks) };
   } else {
     // Clone, rename, clear. The clone is not opened.
-    const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-    runTransaction(project, `CutDeck build: copy ${base}`, (c) => {
-      if (!c.addAction(baseSeq.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-    });
-    const created = (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
+    const created = await cloneSequence(project, baseSeq, `CutDeck build: copy ${base}`);
     if (created.length !== 1) throw new Error(`Copying gave ${created.length} new sequences.`);
     seq = created[0];
     const seqItem = await seq.getProjectItem();

@@ -21,7 +21,7 @@
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
 const { buildSequence } = require("../timeline/buildSequence.js");
-const { activeProjectAndSequence, runTransaction } = require("../host/project.js");
+const { activeProjectAndSequence, activeProject, sequencesNamed, runTransaction } = require("../host/project.js");
 const { TICKS_PER_SECOND } = require("../host/ticks.js");
 const { PROBES, runProbe } = require("./probes.js");
 const { controlHandlers } = require("../timeline/control.js");
@@ -145,9 +145,8 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
      razor/remove/close-gap, read-back). Every synced layer, effect and disabled state of the source
      is kept; the source is not edited. The copy opens when done. */
   async function cutCopy({ sequence_name: sequenceName, cuts, result_name: resultName }) {
-    const project = await ppro.Project.getActiveProject();
-    if (!project) throw new Error("Open a Premiere project first.");
-    const matches = (await project.getSequences()).filter((s) => s.name === sequenceName);
+    const project = await activeProject(ppro);
+    const matches = await sequencesNamed(project, sequenceName);
     if (matches.length !== 1) throw new Error(`Found ${matches.length} sequences named "${sequenceName}"; need exactly one.`);
     ctl.setStatus(`Cutting a copy of "${sequenceName}" for an outside request…`, "busy");
     const r = await applyNativeCut(ppro, project, matches[0], cuts, resultName);
@@ -159,9 +158,8 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
      frame no sequence in the project has yet). Refuses a name already in use: no API deletes a
      sequence. Reads back the frame size and frame duration it got. */
   async function createSequence({ name, preset_path: presetPath }) {
-    const project = await ppro.Project.getActiveProject();
-    if (!project) throw new Error("Open a Premiere project first.");
-    if ((await project.getSequences()).some((s) => s.name === name)) throw new Error(`A sequence named "${name}" already exists.`);
+    const project = await activeProject(ppro);
+    if ((await sequencesNamed(project, name)).length) throw new Error(`A sequence named "${name}" already exists.`);
     const sequence = await project.createSequenceWithPresetPath(name, presetPath);
     if (!sequence) throw new Error(`createSequenceWithPresetPath returned nothing for ${presetPath}`);
     const size = await sequence.getFrameSize();
@@ -316,7 +314,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
      with one name (an episode template's empty copies), so only those with content count
      (Project.getSequences :503, Sequence.getEndTime :596); anything but exactly one refuses. */
   async function namedSequence(project, name) {
-    const named = (await project.getSequences()).filter((s) => s.name === name);
+    const named = await sequencesNamed(project, name);
     const withContent = [];
     for (const s of named) if ((await s.getEndTime()).seconds > 0) withContent.push(s);
     if (withContent.length !== 1) {

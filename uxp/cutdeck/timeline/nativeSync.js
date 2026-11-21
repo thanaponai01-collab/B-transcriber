@@ -16,9 +16,10 @@
    onto not-yet-existing tracks in one transaction, overwrite at a between-frames time, and -1 as
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
-const { runTransaction, activeProjectAndSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
+const { runTransaction, activeProjectAndSequence, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 
 const SYNCED_SUFFIX = "_Synced";
 
@@ -110,11 +111,7 @@ async function waitForPlan(rpc, clips, deps) {
 }
 
 async function copySequence(project, source, name, targets = []) {
-  const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runTransaction(project, "CutDeck Sync: copy sequence", (compound) => {
-    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-  });
-  const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
+  const created = await cloneSequence(project, source, "CutDeck Sync: copy sequence");
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; stopped before placing anything.`);
   const copy = created[0];
   const item = await copy.getProjectItem();
@@ -166,15 +163,8 @@ async function placeAll(ppro, project, copy, targets) {
   const editor = ppro.SequenceEditor.getEditor(copy);
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   runTransaction(project, "CutDeck Sync", (compound) => {
-    // The selection is only valid while its callback runs (live 2026-09-23: "The script object
-    // is no longer valid"; Adobe's eslint-plugin-premierepro rule no-empty-selection-escape),
-    // so it is filled and turned into the remove action in there, synchronously.
-    let cleared = false;
-    ppro.TrackItemSelection.createEmptySelection((selection) => {
-      for (const c of [...now.video, ...now.audio]) selection.addItem(c.item, true);
-      cleared = compound.addAction(editor.createRemoveItemsAction(selection, false, ppro.Constants.MediaType.ANY));
-    });
-    if (!cleared) throw new Error("addAction(clear copy) returned false");
+    const all = [...now.video, ...now.audio].map((c) => c.item);
+    if (!addRemoveItemsAction(ppro, compound, editor, all, false, ppro.Constants.MediaType.ANY)) throw new Error("addAction(clear copy) returned false");
     for (const m of targets) {
       if (m.clip && m.clip.colorLabel !== null && m.clip.colorLabel !== undefined && m.projectItem) {
         if (typeof m.projectItem.createSetColorLabelAction === "function") {
@@ -311,8 +301,7 @@ async function syncSequence(ppro, deps) {
       });
     }
 
-    await project.openSequence(copy);
-    await project.setActiveSequence(copy);
+    await openAndActivate(project, copy);
     const report = formatReport(name, plan, clips, skipped, problems);
     targets.length = 0;
     clips.length = 0;

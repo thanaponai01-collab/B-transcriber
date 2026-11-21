@@ -10,8 +10,7 @@
    ONE transaction (one Ctrl+Z) and re-read what they changed.
 
    APIs, each a line of reference/adobe/api/premierepro.txt (status rows in docs/PREMIERE_FACTS.md):
-   Project.getSequences/getActiveSequence/openSequence/setActiveSequence/getRootItem/importFiles/
-   save/name/path; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
+   Project.getSequences/getActiveSequence/getRootItem/importFiles/save/name/path; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
    createSetOutPointAction/clearSelection/setSelection/getFrameSize/getTimebase/getInPoint/
    getOutPoint/getEndTime/getProjectItem/get{Video,Audio}Track(Count); {Video,Audio}Track.name/
    isMuted/setMute/getTrackItems; {Video,Audio}ClipTrackItem.getName/getStartTime/getEndTime/
@@ -27,17 +26,21 @@
    ComponentParam.displayName/getStartValue/isTimeVarying/getKeyframeListAsTickTimes/
    createKeyframe/createSetValueAction/createSetTimeVaryingAction/createAddKeyframeAction;
    Keyframe.position; SequenceEditor.getEditor/createOverwriteItemAction/
-   createInsertProjectItemAction/createRemoveItemsAction; TrackItemSelection.createEmptySelection/
+   createInsertProjectItemAction; TrackItemSelection.createEmptySelection/
    addItem (setSelection pattern: samples premiere-api/src/sequence.ts); Markers.getMarkers (static
    and instance)/createRemoveMarkerAction; Marker.getName/getStart/getDuration/getComments/getType/
-   getColorIndex; ClipProjectItem.cast/getMediaFilePath; Exporter.exportSequenceFrame;
-   uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt). */
+   getColorIndex; Exporter.exportSequenceFrame;
+   uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt).
+   Shared with other panel modules and cited there: sequence lookup and open (host/project.js),
+   removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
+   values (host/components.js). */
 
-const { runTransaction, asBinLike } = require("../host/project.js");
-const { getTrackClipItems, isTrackItemSelected, trackItemName } = require("../host/trackItems.js");
-const { unwrapKeyframeValue } = require("../host/components.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
+const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
+const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { waitForFile } = require("../host/files.js");
+const { projectItemMediaPath } = require("../host/sequenceRead.js");
 
 const CLIP_ID = /^([VA])(\d+)@(\d+)$/;
 
@@ -51,23 +54,6 @@ function parseClipId(id) {
 
 const tick = (ppro, ticks) => ppro.TickTime.createWithTicks(String(ticks));
 const ticksOf = (t) => toTicks(t).toString();
-
-async function sequenceNamed(project, name) {
-  if (!name) {
-    const active = await project.getActiveSequence();
-    if (!active) throw new Error("Open a sequence in Premiere first, or name one.");
-    return active;
-  }
-  const found = (await project.getSequences()).filter((s) => s.name === name);
-  if (found.length !== 1) throw new Error(found.length ? `${found.length} sequences are named "${name}".` : `No sequence named "${name}".`);
-  return found[0];
-}
-
-async function projectAndSequence(ppro, name) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
-  return { project, sequence: await sequenceNamed(project, name) };
-}
 
 const track = (seq, kind, index) => (kind === "video" ? seq.getVideoTrack(index) : seq.getAudioTrack(index));
 const trackCount = (seq, kind) => (kind === "video" ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
@@ -107,11 +93,9 @@ async function readChain(item, withParams) {
   return out;
 }
 
+// Null, never a throw: list_project and projectItemForMedia walk bins and sequences too.
 async function mediaOf(ppro, projectItem) {
-  try {
-    const cp = projectItem && ppro.ClipProjectItem.cast(projectItem);
-    return (cp && (await cp.getMediaFilePath())) || null;
-  } catch (_) { return null; }
+  try { return projectItem ? await projectItemMediaPath(ppro, projectItem) : null; } catch (_) { return null; }
 }
 
 async function readClip(ppro, kind, t, item, effects) {
@@ -143,7 +127,7 @@ async function readMarkers(ppro, seq) {
    4,700-clip sequence can be read a piece at a time. */
 async function readTimeline(ppro, { sequence: name = null, effects = false, tracks: only = null,
   from_ticks: from = null, to_ticks: to = null } = {}) {
-  const { project, sequence: seq } = await projectAndSequence(ppro, name);
+  const { project, sequence: seq } = await projectAndSequenceNamed(ppro, name);
   const active = await project.getActiveSequence();
   const size = await seq.getFrameSize();
   const out = {
@@ -182,8 +166,7 @@ async function binItems(item) {
 
 /* list_project: the project, its sequences, and its bin tree (clips with their media file). */
 async function listProject(ppro, { depth = 8 } = {}) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
+  const project = await activeProject(ppro);
   const active = await project.getActiveSequence();
   const sequences = (await project.getSequences()).map((s) => ({ name: s.name, sequence_id: String(s.guid),
     active: !!active && String(active.guid) === String(s.guid) }));
@@ -205,21 +188,20 @@ async function listProject(ppro, { depth = 8 } = {}) {
 }
 
 async function openSequence(ppro, { sequence: name }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
-  const opened = await project.openSequence(sequence);
-  const activated = await project.setActiveSequence(sequence);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  const { opened, activated } = await openAndActivate(project, sequence);
   const now = await project.getActiveSequence();
   return { name: sequence.name, opened, activated, active: !!now && String(now.guid) === String(sequence.guid) };
 }
 
 async function setPlayhead(ppro, { sequence: name = null, ticks }) {
-  const { sequence } = await projectAndSequence(ppro, name);
+  const { sequence } = await projectAndSequenceNamed(ppro, name);
   const set = await sequence.setPlayerPosition(tick(ppro, ticks));
   return { name: sequence.name, set, playhead_ticks: ticksOf(await sequence.getPlayerPosition()) };
 }
 
 async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null, out_ticks: outTicks = null }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   runTransaction(project, "CutDeck: set In/Out", (compound) => {
     if (inTicks !== null && !compound.addAction(sequence.createSetInPointAction(tick(ppro, inTicks)))) throw new Error("addAction(In) returned false");
     if (outTicks !== null && !compound.addAction(sequence.createSetOutPointAction(tick(ppro, outTicks)))) throw new Error("addAction(Out) returned false");
@@ -229,7 +211,7 @@ async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null,
 
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */
 async function selectClips(ppro, { sequence: name = null, clips }) {
-  const { sequence } = await projectAndSequence(ppro, name);
+  const { sequence } = await projectAndSequenceNamed(ppro, name);
   const found = [];
   for (const id of clips) found.push(await findClip(ppro, sequence, id));
   await sequence.clearSelection();
@@ -250,7 +232,7 @@ async function selectClips(ppro, { sequence: name = null, clips }) {
    time: head trim moves start and In together), enable, disable, rename {name}, remove {ripple}.
    Returns the touched tracks as they read after the edit. */
 async function editClips(ppro, { sequence: name = null, edits }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   const targets = [];
   for (const e of edits) targets.push({ ...e, ...(await findClip(ppro, sequence, e.clip)) });
   const editor = ppro.SequenceEditor.getEditor(sequence);
@@ -275,12 +257,7 @@ async function editClips(ppro, { sequence: name = null, edits }) {
     for (const [kind, ripple, mediaType] of removeGroups) {
       const group = targets.filter((t) => t.op === "remove" && !!t.ripple === ripple && (kind === null || t.kind === kind));
       if (!group.length) continue;
-      let added = false;
-      ppro.TrackItemSelection.createEmptySelection((selection) => {
-        for (const t of group) selection.addItem(t.item, true);
-        added = compound.addAction(editor.createRemoveItemsAction(selection, ripple, mediaType));
-      });
-      if (!added) throw new Error(`addAction(remove${ripple ? " ripple" : ` ${kind}`}) returned false`);
+      if (!addRemoveItemsAction(ppro, compound, editor, group.map((t) => t.item), ripple, mediaType)) throw new Error(`addAction(remove${ripple ? " ripple" : ` ${kind}`}) returned false`);
     }
   });
   const tracksAfter = [];
@@ -319,7 +296,7 @@ async function projectItemForMedia(ppro, project, path) {
    splits what is there) or insert (ripples later clips). CATCH: audio -1 is not "no audio", it
    lands on A1 (PREMIERE_FACTS "audio track index -1"). */
 async function placeMedia(ppro, { sequence: name = null, media = null, nest = null, at_ticks: at, v, a, mode = "overwrite" }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   let item;
   if (nest) {
     item = await (await sequenceNamed(project, nest)).getProjectItem();
@@ -367,7 +344,7 @@ async function listEffects(ppro) {
    Set its parameters afterwards with set_param (PREMIERE_FACTS "VideoFilterFactory.createComponent
    result": insert, commit, re-fetch). Returns each clip's component chain after. */
 async function addEffect(ppro, { sequence: name = null, clips, effect }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   const found = [];
   for (const id of clips) found.push(await findClip(ppro, sequence, id));
   const staged = [];
@@ -385,15 +362,12 @@ async function addEffect(ppro, { sequence: name = null, clips, effect }) {
   return { name: sequence.name, effect, clips: result };
 }
 
-// Point params need a PointF; a plain [x, y] throws (PREMIERE_FACTS "createKeyframe(value) for point params").
-const toParamValue = (ppro, value) => (Array.isArray(value) ? new ppro.PointF(value[0], value[1]) : value);
-
 /* set_param: set one component parameter on a clip. component: chain index (video: 0 Opacity,
    1 Motion) or a match name; param: index. value: number, boolean, string or [x, y] (Position is
    normalised to the sequence frame). at_ticks (MEDIA time, as keyframes are): add a keyframe there
    instead, turning keyframing on first in its own transaction. Reads the value back. */
 async function setParam(ppro, { sequence: name = null, clip, component, param: paramIndex, value, at_ticks: at = null }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   const resolve = async () => {
     const { item } = await findClip(ppro, sequence, clip);
     const chain = await item.getComponentChain();
@@ -435,7 +409,7 @@ async function setParam(ppro, { sequence: name = null, clip, component, param: p
 
 /* add_transition: a video transition (match name from list_effects) on each clip's start or end. */
 async function addTransition(ppro, { sequence: name = null, clips, transition, duration_ticks: duration = null, at_start: atStart = false }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   const staged = [];
   for (const id of clips) {
     const f = await findClip(ppro, sequence, id);
@@ -456,7 +430,7 @@ async function addTransition(ppro, { sequence: name = null, clips, transition, d
 /* set_track_mute: mute or unmute track V<n>/A<n>. Each call is its own History entry
    ("Disable/Enable Track Output", PREMIERE_FACTS "Measuring a Graphic's text box ... setMute"). */
 async function setTrackMute(ppro, { sequence: name = null, track: id, muted }) {
-  const { sequence } = await projectAndSequence(ppro, name);
+  const { sequence } = await projectAndSequenceNamed(ppro, name);
   const m = /^([VA])(\d+)$/.exec(String(id));
   if (!m) throw new Error(`"${id}" is not a track like V1 or A2.`);
   const kind = m[1] === "V" ? "video" : "audio";
@@ -469,7 +443,7 @@ async function setTrackMute(ppro, { sequence: name = null, track: id, muted }) {
 
 /* remove_markers: remove every sequence marker that starts at one of `starts_ticks`. */
 async function removeMarkers(ppro, { sequence: name = null, starts_ticks: starts }) {
-  const { project, sequence } = await projectAndSequence(ppro, name);
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   const markers = await ppro.Markers.getMarkers(sequence);
   const want = new Set(starts.map(String));
   const hit = (markers.getMarkers() || []).filter((m) => want.has(ticksOf(m.getStart())));
@@ -482,8 +456,7 @@ async function removeMarkers(ppro, { sequence: name = null, starts_ticks: starts
 }
 
 async function importFiles(ppro, { paths }) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
+  const project = await activeProject(ppro);
   const imported = await project.importFiles(paths, true, await project.getRootItem(), false);
   const items = [];
   for (const p of paths) items.push({ path: p, in_project: !!(await projectItemForMedia(ppro, project, p)) });
@@ -491,8 +464,7 @@ async function importFiles(ppro, { paths }) {
 }
 
 async function saveProject(ppro) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error("Open a Premiere project first.");
+  const project = await activeProject(ppro);
   return { saved: await project.save(), path: project.path };
 }
 
@@ -500,7 +472,7 @@ async function saveProject(ppro) {
    (PREMIERE_FACTS: a 1080x1920 frame at 1920x1080 comes out pillarboxed), in the panel's temp
    folder. Waits for the file: exportSequenceFrame resolves before it exists (PREMIERE_FACTS). */
 async function exportFrame(ppro, { sequence: name = null, ticks = null }) {
-  const { sequence } = await projectAndSequence(ppro, name);
+  const { sequence } = await projectAndSequenceNamed(ppro, name);
   const folder = await require("uxp").storage.localFileSystem.getTemporaryFolder();
   const at = ticks === null ? await sequence.getPlayerPosition() : tick(ppro, ticks);
   const size = await sequence.getFrameSize();
