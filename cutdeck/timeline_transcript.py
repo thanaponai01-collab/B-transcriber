@@ -5,8 +5,8 @@ A cut timeline is a list of pieces of source files. Each source file is transcri
 mapped through the clip list onto the sequence, in exact Premiere ticks. A copy, a re-cut or a
 reorder of the same footage needs no new transcription: only this mapping runs again.
 
-Mapping, for a clip at sequence ``start`` playing source ``[in, out)`` at 100% speed:
-``sequence_ticks = start + (source_ticks - in)``. A word the clip's In or Out cuts through is
+Mapping, for a clip at sequence ``start`` playing source ``[in, out)`` at ``speed``:
+``sequence_ticks = start + (source_ticks - in) / speed``. A word the clip's In or Out cuts through is
 kept with ``clipped`` set, and the edge is reported in ``edges``: that is a cut inside speech.
 
 Pure apart from `source_words` (reads the store) and `build` (the helper entry point).
@@ -37,6 +37,7 @@ class Clip:
     in_: int    # source ticks
     out: int
     media: str
+    speed: float = 1.0  # forward playback rate; the clip plays (out - in) / speed of sequence time
 
 
 @dataclass(frozen=True)
@@ -86,13 +87,17 @@ def audio_clips(timeline: dict, track: str | None = None) -> tuple[str, list[Cli
             reason = "disabled"
         elif not c.get("media"):
             reason = "no media file (nested sequence?)"
-        elif c.get("speed", 1) != 1 or c.get("reversed"):
-            reason = f"speed {c.get('speed')}{' reversed' if c.get('reversed') else ''}: only 100% forward is mapped"
+        elif c.get("reversed") or not c.get("speed", 1) > 0:
+            reason = f"reversed or speed {c.get('speed')}: only forward playback is mapped"
         if reason:
             skipped.append({"clip": c["id"], "reason": reason})
             continue
+        # Premiere reports a speed-changed clip's In/Out divided by its speed (live 2026-11-22:
+        # 200% over source 112-122 s reads in 56 s, out 61 s), so the source span is In/Out x speed.
+        speed = float(c.get("speed", 1))
         clips.append(Clip(c["id"], _ticks(c["start_ticks"]), _ticks(c["end_ticks"]),
-                          _ticks(c["in_ticks"]), _ticks(c["out_ticks"]), c["media"]))
+                          round(_ticks(c["in_ticks"]) * speed), round(_ticks(c["out_ticks"]) * speed),
+                          c["media"], speed))
     clips.sort(key=lambda c: c.start)
     return chosen["id"], clips, skipped
 
@@ -134,7 +139,8 @@ def project(clips: list[Clip], words_by_media: dict[str, list[SourceWord]],
             head = w.start_ms < in_ms - tolerance_ms
             tail = w.end_ms > out_ms + tolerance_ms
             out.append(TimelineWord(
-                w.text, clip.start + lo - clip.in_, clip.start + hi - clip.in_, clip.id,
+                w.text, clip.start + round((lo - clip.in_) / clip.speed),
+                clip.start + round((hi - clip.in_) / clip.speed), clip.id,
                 clip.media, w.start_ms, w.end_ms, w.cue,
                 "both" if head and tail else "head" if head else "tail" if tail else None))
     out.sort(key=lambda w: (w.start, w.end))

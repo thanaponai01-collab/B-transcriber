@@ -94,7 +94,7 @@ def test_find_spans_a_cut_and_ignores_spaces(tmp_path):
 def test_gap_track_choice_and_skips(tmp_path):
     media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
     other = {"id": "A2", "kind": "audio", "muted": False, "clips": []}
-    tl = timeline(clip("A1@0", 0, 900, 2100, media), clip("A1@9", 9000, 900, 2100, media, speed=2),
+    tl = timeline(clip("A1@0", 0, 900, 2100, media), clip("A1@9", 9000, 900, 2100, media, reversed=True),
                   clip("A1@20", 20000, 900, 2100, media, disabled=True))
     tl["tracks"].append(other)
     r = run(tl)
@@ -204,3 +204,13 @@ def test_rough_cut_maps_stored_source_transcripts_into_the_window(tmp_path, monk
     assert [t.text for t in tokens] == ["world", "สวัสดีครับ"]
     monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: None)
     assert rough_cut._mapped_transcript(seq, None, window, {}, db) is None
+
+
+def test_speed_changed_clip_maps_through_premieres_scaled_in_out(tmp_path):
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    # 200% over source 0.9-2.1 s: Premiere reads In 0.45 s, Out 1.05 s, 0.6 s long on the sequence.
+    c = clip("A1@0", 0, 450, 1050, media, speed=2)
+    r = run(timeline(c))
+    (line,) = r["lines"]
+    assert line["text"] == "hello world"
+    assert int(line["start_ticks"]) == 50 * T and int(line["end_ticks"]) == 550 * T  # (1000-900)/2, (2000-900)/2
