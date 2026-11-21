@@ -146,6 +146,9 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
           }
           completed++;
         }
+        // Premiere has quit mid-step with no dump (live 2026-11-02, 11-10, 11-21): this line says
+        // whether it died while we built the actions or while Premiere committed them.
+        console.log(`CutDeck ${label}: built ${completed} of ${len} actions, committing`);
       }));
     } catch (error) {
       if (!(allowPartial && completed === 0 && error.staleHandle)) throw error;
