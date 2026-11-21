@@ -201,6 +201,8 @@ Run folders hold every request and result:
 | Your real work, read offline from `20260130 RENAME template - 2.prproj` after one transcription of `07-07-37.mp4` (196 s, job 83) | `2026-11-21 07-07-37_Synced — CutDeck 94fd4bb9`: 1,091 clips, 1,336 lines; 27 of 2,182 edges in sound (95 tails). `TT max vs everyone v4 (Claude)`: every line of the agent's v4 and of your own cut, in order |
 | Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
 | `keep_words` on `listen two sources (scratch)` (mic on A1-A4, camera on V2/A5), keeping 2 phrases | a copy with **every track kept** (V1, V2, A1-A5, 2 clips each, ending at 2.27 s); reads back exactly the 2 phrases; **0 cuts in sound** |
+| `keep_words` on a rough cut of that multi-track scratch: two spans of 3-4 lines, each crossing rough-cut joins | every track kept (V1, V2, A1-A5, ending at 8.03 s); both spans read back whole. 2 cuts in sound, both expected: one is an inner rough-cut join (the Rough Cut's own edge), one is a span end where the speech runs straight into a laugh (`no_quiet` warned) |
+| Final planner (60 ms pad and wordless sound), the Short rebuilt | 0 cuts in sound; the three lines in the new order |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
@@ -294,6 +296,15 @@ Left as is:
   so they cannot catch a stream mismatch.
 - **Long sources are transcribed whole.** A 3-hour stream takes about 7-8 min once, even if only
   10 minutes are used. After that it is free.
+- **Reordering after `keep_words` was not run tonight.** The copy keeps the phrases in the rough
+  cut's order. Reorder with `build_sequence` into the copy (the v3 recipe in the 1RaceClub log).
+- **Everything tonight was 30 fps.** Every source and sequence was 30 fps; mixed frame rates are
+  unproven.
+- **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources
+  (scratch)` failed its own read-back once: a 1-frame razor clone was left on A3 past the sequence
+  end (5733.267-5733.3 s). The identical retry passed. This is the intermittent native-razor failure
+  already in the 1RaceClub log ("razor filler ... not one frame long"). The read-back caught it,
+  and the original was untouched. Not fixed (it is UXP cut code, which needs a live probe).
 - **The tools need the panel.** The CutDeck panel must be connected to the helper. After a helper
   restart it reconnects by itself, but only if the panel's code matches (see the PR #115 note above).
 
@@ -316,3 +327,8 @@ Left as is:
 - `listen short placed (scratch)` (the Short built from `plan_pieces`)
 - `listen two sources (scratch)` (mic file on A1-A4, camera file on V2/A5)
 - `listen rough-first (scratch)` (the never-transcribed source on A5; its rough cut was analysed but not applied)
+- `listen two sources kept (scratch)`, `listen two sources kept v2 (scratch)`, `listen two sources kept 60 (scratch)` (`keep_words`)
+- `listen keep span (scratch)` (`keep_words` with a 10 s span across rough-cut joins)
+- `listen two sources (scratch) — CutDeck 43c26617 (FAILED)` and `listen two sources (scratch) — CutDeck 43c26617` (the razor-bug repro and its retry)
+- `listen two sources rc keep (scratch)` (`keep_words` on that rough cut: two multi-clip spans, every track kept)
+- `listen short placed 60 (scratch)` and `listen short placed final (scratch)` (the Short re-proven on the final planner)
