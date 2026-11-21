@@ -197,27 +197,52 @@ def lines(words: list[TimelineWord], ticks_per_frame: int) -> list[dict]:
     return out
 
 
+def _nearest_quiet_ms(levels, threshold: float, edge_ms: float, reach_ms: int = 400) -> int | None:
+    """Signed offset (ms, negative = earlier in the source) to the nearest quiet 10 ms window."""
+    i = int(edge_ms // ENVELOPE_MS)
+    for step in range(reach_ms // ENVELOPE_MS + 1):
+        for j in (i - step, i + step):
+            if 0 <= j < len(levels) and levels[j] < threshold:
+                return round((j + 0.5) * ENVELOPE_MS - edge_ms)
+    return None
+
+
 def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_per_frame: int,
-          tolerance_ms: int = CLIP_TOLERANCE_MS) -> list[dict]:
+          tolerance_ms: int = CLIP_TOLERANCE_MS, levels_by_media: dict | None = None) -> list[dict]:
     """Every clip In and Out that cuts through a word: where it is on the sequence, the word,
-    and how much of it the cut removes. An empty list means every edit sits between words."""
+    and how much of it the cut removes. An empty list means every edit sits between words.
+
+    With the source's level envelope, an edge counts only where the audio at the cut (20 ms
+    either side) is audible: an engine word often spans a pause, and a cut in that pause cuts
+    no sound. Each such edge also gets ``nearest_quiet_ms``, the shift to the nearest quiet spot."""
     out = []
+    levels_by_media = levels_by_media or {}
     starts_by_media = {m: [w.start_ms for w in ws] for m, ws in words_by_media.items()}
     for clip in clips:
         words = words_by_media.get(clip.media) or []
         starts = starts_by_media.get(clip.media) or []
+        levels = levels_by_media.get(clip.media)
+        threshold = noise_floor(levels) + TAIL_DB if levels is not None else None
         for side, edge_ticks, seq_ticks in (("in", clip.in_, clip.start), ("out", clip.out, clip.end)):
             edge_ms = edge_ticks / TICKS_PER_MS
+            if levels is not None:
+                i = int(edge_ms // ENVELOPE_MS)
+                near = levels[max(i - 2, 0):i + 2]
+                if not len(near) or float(near.max()) < threshold:
+                    continue
             # No engine word is 30 s long; start there instead of at the top of the file.
             for w in words[bisect.bisect_left(starts, edge_ms - 30000):]:
                 if w.start_ms > edge_ms:
                     break
                 if w.start_ms + tolerance_ms < edge_ms < w.end_ms - tolerance_ms:
                     removed = edge_ms - w.start_ms if side == "in" else w.end_ms - edge_ms
-                    out.append({"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
-                                "at_s": seconds(seq_ticks), "word": w.text,
-                                "word_src_s": [w.start_ms / 1000, w.end_ms / 1000],
-                                "cut_ms": round(removed)})
+                    edge = {"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
+                            "at_s": seconds(seq_ticks), "word": w.text,
+                            "word_src_s": [w.start_ms / 1000, w.end_ms / 1000],
+                            "edge_src_s": round(edge_ms / 1000, 3), "cut_ms": round(removed)}
+                    if levels is not None:
+                        edge["nearest_quiet_ms"] = _nearest_quiet_ms(levels, threshold, edge_ms)
+                    out.append(edge)
     return out
 
 
@@ -249,6 +274,78 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
     return found
 
 
+# ── word times, checked against the audio ───────────────────────────────────
+# The engine's Thai word times are loose: a word's span often runs hundreds of ms into the
+# pause around it (measured on a rough cut, 2026-11-22: 105 of 238 silence-cut edges fell
+# "inside" a word, and in 74 of them the part cut off was below -45 dB). Each word is tightened
+# to the audible sound inside it, judged as the Rough Cut's sound guard judges sound.
+
+ENVELOPE_MS = 10
+_FLOOR_MIN_DB, _FLOOR_MAX_DB = -65.0, -35.0  # as ingest.sound_runs: digital silence is not the floor
+TAIL_DB = 6.0  # a 10 ms window this far above the floor is sound (ingest.sound_runs' tail rule)
+
+
+def level_db(audio, sample_rate: int):
+    """Level of each 10 ms window in dB (float32 array)."""
+    import numpy as np
+    window = sample_rate * ENVELOPE_MS // 1000
+    n = len(audio) // window
+    frames = audio[:n * window].reshape(n, window).astype(np.float64)
+    return (20.0 * np.log10(np.sqrt(np.mean(frames ** 2, axis=1)) + 1e-9)).astype(np.float32)
+
+
+def noise_floor(levels) -> float:
+    import numpy as np
+    return float(np.clip(np.percentile(levels, 5), _FLOOR_MIN_DB, _FLOOR_MAX_DB)) if len(levels) else _FLOOR_MIN_DB
+
+
+def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[SourceWord]:
+    """Each word's start and end pulled in to the first and last audible 10 ms window inside it.
+    Never widens a word; a word with no audible window inside keeps the engine's times."""
+    threshold = noise_floor(levels) + tail_db
+    out = []
+    for w in words:
+        i0, i1 = w.start_ms // ENVELOPE_MS, -(-w.end_ms // ENVELOPE_MS)
+        loud = [i for i in range(i0, min(i1, len(levels))) if levels[i] >= threshold]
+        if w.end_ms <= w.start_ms or not loud:
+            out.append(w)
+            continue
+        out.append(SourceWord(w.text, max(w.start_ms, loud[0] * ENVELOPE_MS),
+                              min(w.end_ms, (loud[-1] + 1) * ENVELOPE_MS), w.cue))
+    return out
+
+
+def source_levels(media: str, cache: Path, sample_rate: int = 16000):
+    """The 10 ms level envelope of a source file's audio, decoded once (streamed, so a long
+    file never sits in memory) and kept as ``cache`` (.npy)."""
+    import shutil
+    import subprocess
+
+    import numpy as np
+    if cache.is_file():
+        return np.load(cache)
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH")
+    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-i", media, "-vn",
+           "-af", "aresample=ochl=mono:rematrix_maxval=1.0", "-ar", str(sample_rate), "-f", "f32le", "pipe:1"]
+    window_bytes = sample_rate * ENVELOPE_MS // 1000 * 4
+    chunks = []
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {})) as proc:
+        while True:
+            block = proc.stdout.read(window_bytes * 6000)  # one minute
+            if not block:
+                break
+            usable = len(block) - len(block) % window_bytes
+            chunks.append(level_db(np.frombuffer(block[:usable], dtype=np.float32), sample_rate))
+    if proc.returncode:
+        raise RuntimeError(f"ffmpeg could not decode the audio of {media}")
+    levels = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.float32)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.save(cache, levels)
+    return levels
+
+
 # ── sources: the store ───────────────────────────────────────────────────────
 
 def _sha_index_path(db_path: Path) -> Path:
@@ -274,27 +371,35 @@ def media_sha256(path: str, db_path: Path) -> str:
     return index[key]
 
 
-def source_words(media: str, db_path: Path) -> tuple[int, list[SourceWord]] | None:
-    """(transcript job id, word timeline) of the newest finished transcript of this file, or
-    None when it has never been transcribed."""
+def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object] | None:
+    """(transcript job id, word timeline, level envelope or None) of the newest finished transcript of this file, or
+    None when it has never been transcribed. With ``levels_dir``, word times are tightened to
+    the audio (`tighten`); the file's level envelope is cached there by sha256."""
     from cutdeck.words import words_for_job
     from transcribe.db import store
+    sha = media_sha256(media, db_path)
     conn = store.connect(db_path)
     try:
-        job = store.latest_transcript_job(conn, media_sha256(media, db_path))
+        job = store.latest_transcript_job(conn, sha)
         if job is None:
             return None
         cues = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms}
                 for t in store.get_tokens(conn, job.id)]
-        return job.id, source_word_list(words_for_job(conn, job.id), cues)
+        words = source_word_list(words_for_job(conn, job.id), cues)
     finally:
         conn.close()
+    levels = None
+    if levels_dir is not None:
+        levels = source_levels(media, levels_dir / f"{sha}.npy")
+        words = tighten(words, levels)
+    return job.id, words, levels
 
 
 def build(timeline: dict, *, track: str | None = None, query: str | None = None,
           from_ticks: int | None = None, to_ticks: int | None = None, offset: int = 0,
           limit: int = 200, db_path: Path | None = None, out_dir: Path | None = None,
-          lookup: Callable[[str], tuple[int, list[SourceWord]] | None] | None = None) -> dict:
+          tighten_words: bool = True,
+          lookup: Callable[[str], tuple | None] | None = None) -> dict:
     """The timeline transcript of one audio track of a `read_timeline` result."""
     if lookup is None:
         import yaml
@@ -302,10 +407,11 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         root = Path(__file__).resolve().parent.parent
         config = yaml.safe_load((root / "transcribe/config.yaml").read_text(encoding="utf-8"))
         db = Path(db_path) if db_path else store.resolve_db_path(config)
-        lookup = lambda media: source_words(media, db)  # noqa: E731
+        levels_dir = (out_dir / "levels") if out_dir is not None and tighten_words else None
+        lookup = lambda media: source_words(media, db, levels_dir)  # noqa: E731
     tpf = int(timeline["ticks_per_frame"])
     track_id, clips, skipped = audio_clips(timeline, track)
-    words_by_media, jobs, missing = {}, {}, []
+    words_by_media, levels_by_media, jobs, missing = {}, {}, {}, []
     for media in dict.fromkeys(c.media for c in clips):
         if not Path(media).is_file():
             missing.append({"media": media, "reason": "file is missing or offline"})
@@ -315,13 +421,15 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
             missing.append({"media": media, "reason": "not transcribed yet: run transcribe(media_path), "
                                                       "then call this again (no re-listening after that)"})
             continue
-        jobs[media], words_by_media[media] = found
+        jobs[media], words_by_media[media] = found[0], found[1]
+        if len(found) > 2 and found[2] is not None:
+            levels_by_media[media] = found[2]
     words = project(clips, words_by_media)
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
               "sources": [{"media": m, "transcript_job_id": j} for m, j in jobs.items()],
-              "words": len(words), "edges_inside_words": edges(clips, words_by_media, tpf)}
+              "words": len(words), "edges_inside_words": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
     if query:
         result["matches"] = find(words, query, tpf)
     if from_ticks is not None or to_ticks is not None:

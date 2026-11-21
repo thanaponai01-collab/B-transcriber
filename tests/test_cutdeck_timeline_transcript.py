@@ -150,3 +150,39 @@ def test_zero_length_engine_word_is_kept_inside_and_dropped_outside(tmp_path):
     assert keep["lines"][0]["text"] == "hello นะ"
     gone = tt.build(timeline(clip("A1@0", 0, 1600, 2100, media)), lookup=lambda m: (1, words))
     assert gone["lines"] == []
+
+
+def test_tighten_pulls_word_edges_in_to_the_sound():
+    import numpy as np
+    levels = np.full(100, -70.0, dtype=np.float32)  # 1 s of room tone at -70 dB (floor clamps to -65)
+    levels[30:52] = -30.0                            # sound 300-520 ms
+    words = [tt.SourceWord("ครับ", 100, 900, 0),     # engine span runs far into the pause
+             tt.SourceWord("เงียบ", 600, 800, 0),    # nothing audible inside: left alone
+             tt.SourceWord("นะ", 400, 400, 0)]       # zero length: left alone
+    a, b, c = tt.tighten(words, levels)
+    assert (a.start_ms, a.end_ms) == (300, 520)
+    assert (b.start_ms, b.end_ms) == (600, 800)
+    assert (c.start_ms, c.end_ms) == (400, 400)
+
+
+def test_level_db_windows():
+    import numpy as np
+    audio = np.concatenate([np.zeros(160, np.float32), np.full(160, 0.5, np.float32)])
+    levels = tt.level_db(audio, 16000)
+    assert len(levels) == 2 and levels[0] < -150 and abs(levels[1] - (-6.02)) < 0.01
+
+
+def test_edge_in_a_pause_inside_an_engine_word_is_not_a_bad_cut(tmp_path):
+    import numpy as np
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    levels = np.full(800, -70.0, dtype=np.float32)
+    levels[100:140] = -30.0   # 1.00-1.40 s sound
+    levels[160:200] = -30.0   # 1.60-2.00 s sound; 1.40-1.60 is a pause
+    words = [tt.SourceWord("helloworld", 1000, 2000, 0)]  # one engine word across the pause
+    lookup = lambda m: (1, words, levels)
+    pause = tt.build(timeline(clip("A1@0", 0, 900, 1500, media)), lookup=lookup)
+    assert pause["edges_inside_words"] == []
+    sound = tt.build(timeline(clip("A1@0", 0, 900, 1300, media)), lookup=lookup)
+    (edge,) = sound["edges_inside_words"]
+    assert edge["side"] == "out" and edge["cut_ms"] == 700
+    assert edge["nearest_quiet_ms"] == 105  # the pause starts at 1.40 s; window centre 1.405
