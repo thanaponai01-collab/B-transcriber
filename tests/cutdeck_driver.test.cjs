@@ -51,6 +51,23 @@ test("the driver offers exactly the helper's fixed commands", () => {
     "build_sequence",
     "cut_copy",
     "create_sequence",
+    "read_timeline",
+    "list_project",
+    "open_sequence",
+    "set_playhead",
+    "set_in_out",
+    "select_clips",
+    "edit_clips",
+    "place_media",
+    "list_effects",
+    "add_effect",
+    "set_param",
+    "add_transition",
+    "set_track_mute",
+    "remove_markers",
+    "import_files",
+    "save_project",
+    "export_frame",
   ]);
 });
 

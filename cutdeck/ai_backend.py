@@ -39,7 +39,9 @@ class Backend:
     def capabilities(self) -> dict:
         return {
             "version": "4", "tools": ["transcribe", "premiere_status", "premiere_rough_cut",
-                                      "premiere_assistant_ask",
+                                      "premiere_assistant_ask", "premiere_screenshot",
+                                      "premiere_list_key_commands", "premiere_key_command",
+                                      "premiere_list_menu", "premiere_menu_command",
                                       *(f"premiere_{name}" for name in COMMANDS)],
             "live_premiere_control": True,
             "live_premiere_requires": "The CutDeck panel open in Premiere (premiere_status says)",

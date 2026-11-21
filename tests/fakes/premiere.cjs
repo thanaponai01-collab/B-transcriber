@@ -129,6 +129,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   }
 
   const items = new WeakMap(); // raw clip -> track item
+  const selected = new Set(); // raw clips selected on the timeline
   const rawOf = new WeakMap(); // track item -> raw clip
   const trackItem = (raw) => {
     if (!items.has(raw)) {
@@ -142,6 +143,12 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         createSetDisabledAction: (disabled) => action(() => { raw.disabled = disabled; }),
         createMoveAction: (dt) => action(() => { raw.start += BigInt(dt.ticks); raw.end += BigInt(dt.ticks); }),
         createSetOutPointAction: (t) => action(() => { raw.end = raw.start + BigInt(t.ticks) - raw.in; }),
+        getName: async () => raw.name || raw.media.path,
+        getSpeed: async () => 1,
+        getIsSelected: async () => selected.has(raw),
+        createSetNameAction: (name) => action(() => { raw.name = name; }),
+        // Head trim: start and media In move together, end stays (PREMIERE_FACTS "createSetInPointAction(t)").
+        createSetInPointAction: (t) => action(() => { raw.start += BigInt(t.ticks) - raw.in; raw.in = BigInt(t.ticks); }),
       };
       items.set(raw, item);
       rawOf.set(item, raw);
@@ -178,6 +185,14 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getOutPoint: async () => tickTime((s.marks || {}).out || 0n),
         createSetInPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), in: BigInt(t.ticks) }; }),
         createSetOutPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), out: BigInt(t.ticks) }; }),
+        getFrameSize: async () => ({ width: 1920, height: 1080 }),
+        getTimebase: async () => "8475667200",
+        getEndTime: async () => tickTime([...s.video, ...s.audio].flat().reduce((m, c) => (c.end > m ? c.end : m), 0n)),
+        getPlayerPosition: async () => tickTime(s.playhead || 0n),
+        setPlayerPosition: async (t) => { s.playhead = BigInt(t.ticks); return true; },
+        clearSelection: async () => { selected.clear(); return true; },
+        // Called inside createEmptySelection's callback: the selection dies after it.
+        setSelection: (selection) => { for (const item of selectionItems.get(selection)) selected.add(rawOf.get(item)); return true; },
       };
       wrappers.set(s, seq);
       rawSeq.set(seq, s);
@@ -247,6 +262,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     ...core,
     path,
     getSequences: async () => raws.map(wrap),
+    getActiveSequence: async () => (raws.length ? wrap(raws[0]) : null),
     save: async () => { saves++; return true; },
     getRootItem: async () => root,
     importFiles: async (paths, suppressUI, bin) => {
@@ -263,6 +279,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     ClipProjectItem: { cast: (projectItem) => clipOf.get(projectItem) || null },
     SequenceEditor: { getEditor: (seq) => editor(rawSeq.get(seq)) },
     TickTime, TrackItemSelection, Constants, PointF,
+    Markers: { getMarkers: async () => ({ getMarkers: () => [], createRemoveMarkerAction: () => action(() => {}) }) },
   };
   const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path, ...(c.disabled ? { disabled: true } : {}) })));
   return {
@@ -308,6 +325,7 @@ const FAKE_SHAPE = [
   { adobe: "SequenceEditor", side: "static", fake: sampleHost.ppro.SequenceEditor },
   { adobe: "SequenceEditor", side: "instance", fake: sample.editor },
   { adobe: "CompoundAction", side: "instance", fake: { addAction() {} } },
+  { adobe: "Markers", side: "static", fake: sampleHost.ppro.Markers },
   { adobe: "Constants", side: "enums", fake: Constants },
 ];
 

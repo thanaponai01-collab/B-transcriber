@@ -58,6 +58,9 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: the driver-command tests (test_cutdeck_live_premiere.py, offline mode) went red when the panel stopped offering distribute_clips, when the empty-selection refusal was removed, and when read_sequence returned nothing; cutdeck/live_check.py's tests went red when it stopped at the wrong step, dropped the missing-command stop, lost the panel hint, or always exited 0, or counted the panel's all-clips fallback as a selection (that last one was a real bug found in the live run); reverted
 
+- test (2026-11-21, menu and keyboard routes): `python -m pytest tests/test_cutdeck_keys.py -q -p no:cacheprovider`
+- fail-proof: each went red on its own and was restored: dropped the Ctrl+Alt-last sort in keys.pick (Ctrl+Alt+Z picked); removed the active-sequence check in run_focused (pressed after a switch); took "close" out of menu.BLOCKED (File > Close Project runnable).
+
 ## Premiere project readers
 - test: `python -m pytest tests/test_prproj_anchor_check.py tests/test_prproj_pixels.py tests/test_prproj_reader.py tests/test_scrub_fcpxml.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
@@ -67,6 +70,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
 - fail-signal: # fail 1
+- fail-proof (2026-11-21, general control; tests/cutdeck_control.test.cjs): each went red on its own and was restored, 8/8 green: findClip matched any clip on the track instead of the one starting at the id's ticks (2 red); remove used VIDEO for audio clips (1 red); select_clips skipped setSelection (1 red). Validators: tests/test_cutdeck_driver_commands.py `test_control_commands_check_ids_ticks_and_ops`. Not yet run in Premiere (docs/PREMIERE_CONTROL_MAP.md).
 - fail-proof: changed the track-index guard in uxp/cutdeck/transform/frameBounds.js, cutdeck_frame_bounds.test.cjs went red; also made clip-underneath start exclusive and end inclusive, the frame-finished check accept a first non-zero size or a repeated null, and the playhead start check exclusive, cutdeck_frame_bounds_edges.test.cjs went red on each (the underneath start boundary and the size-stability check had stayed green before), reverted
 - fail-proof (2026-10-19, per-text-layer bounds): removed the hide-other-text write in `measureTextLayer` (uxp/cutdeck/transform/frameBounds.js); 5 tests in cutdeck_transform_edit.test.cjs went red; restored, 696/696 green. Live 2026-10-19: both text layers of a 2-text Graphic aligned left alone, each measured with the other hidden (PREMIERE_FACTS row "Measuring ONE text layer").
 - fail-proof: stashed the alignPanel.js/panel.js fixes, cutdeck_input_commit.test.cjs went red on both tests (bad frame count stayed in the box; Enter committed twice), restored
