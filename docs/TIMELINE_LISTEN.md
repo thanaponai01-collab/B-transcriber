@@ -9,9 +9,14 @@ code (master's helper refuses its `place_text` registration).
 - **The fix:** the agent no longer transcribes a cut timeline. Each source file is transcribed
   once, and its words are mapped through the timeline's clips in exact ticks. A rough cut, a
   copy or a reordered Short is read in about 2 s, and its words never change between reads.
-- **New tools:** `premiere_timeline_transcript` (what is said where, plus every cut that lands
-  in sound) and `premiere_cut_words` (remove phrases; each cut goes in the quiet pause, then the
-  result is read back to check it).
+- **New tools:**
+  - `premiere_timeline_transcript`: what is said where, plus every cut that lands in sound.
+  - `premiere_plan_pieces`: pick the lines for a Short by their words. Each piece's edges go in
+    the *source* file's own pauses, and the result is ready for `build_sequence`.
+  - `premiere_cut_words`: remove phrases with each cut in the pause, then read the result back to
+    check it.
+- **Your failing case now passes.** A reordered 3-piece Short planned by words from a rough cut
+  was built and read back with 0 cuts in sound and no clipped words.
 - **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
@@ -91,15 +96,24 @@ On the 96-min source, late onsets of 100+ ms went from 256 to 6 and early ends f
 - `remove`: `[{"text": "...", "occurrence": n}]` or `[{"from_ticks", "to_ticks"}]`.
 - Each cut runs from the pause before the words to the pause after them, leaving `keep_ms`
   (default 250, never more than was there) of pause at the join. It then moves to the nearest
-  frame where the audio is quiet. When the words touch and no frame is quiet, it cuts on the
-  quietest frame within 2 frames (the dip between syllables), and `no_quiet` gives that side's dB
-  above the sound threshold.
+  frame where the audio is quiet. When the words touch, there is no quiet frame: the cut stays on
+  the word boundary and `no_quiet` gives that side's dB above the sound threshold. (Moving to the
+  quietest nearby frame was tried live: it left part of a removed filler behind.)
 - A phrase found only inside a longer word is refused, not cut through.
 - It makes `result_name` with `cut_copy` (the source is never edited), then reads the result back
   and returns:
   - `checks`: how many times each phrase is said, before and after;
   - `joins`: the words either side of each join;
   - `new_cuts_in_sound`: any new cut that has sound at it.
+
+### `premiere_plan_pieces` (helper command `plan_pieces`, `word_cut.plan_pieces`): placing a Short's edges
+- `keep`: the phrases to play, in order, found on any timeline (usually the rough cut).
+- Each piece's In/Out is placed in the **source file's** pauses around its words, using the
+  source's full word list and levels: 120 ms of pause (`pad_ms`), then the nearest quiet frame. A
+  rough cut has removed most pauses; the source still has them.
+- Returns `items` for `premiere_build_sequence` (back to back on V1/A1) and `pieces`, with
+  `no_quiet` when a phrase has no pause in the source (it is mid-sentence: keep whole sentences).
+- Edits nothing. Read the built Short back with `premiere_timeline_transcript`.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
@@ -116,7 +130,8 @@ The MCP server's instructions now say: to know what a sequence says and where, c
 
 Run folders hold every request and result:
 - `output/verify-cutdeck/runs/20261122-004515-timeline-listen/`
-- `output/verify-cutdeck/runs/20261122-013033-timeline-listen-final/` (re-proofs on the final code)
+- `output/verify-cutdeck/runs/20261122-013033-timeline-listen-final/` (re-proofs, two sources, rough cut first)
+- `output/verify-cutdeck/runs/20261122-015758-short-placed/` (`plan_pieces` Short and final `cut_words`)
 
 | Check | Result |
 |---|---|
@@ -136,7 +151,8 @@ Run folders hold every request and result:
 | Reordered Short built with `build_sequence` (3 pieces, new order) | read back in the new order at the exact positions (0.143 / 1.357 / 2.763 s); the 4 cuts into neighbouring words were flagged |
 | Both rough cuts re-analysed offline on the final code (fitted words) | 119/119 and 1,652/1,652 cut spans, identical to the first runs |
 | `cut_words` (final code): remove all three "เอ่อ" fillers | said 3 → 0; joins read naturally; **no new cut in sound** |
-| `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts on the dips, 6-14 dB above threshold, and 4 `new_cuts_in_sound` reported. An earlier, weaker check had passed this case as clean |
+| `plan_pieces` from the rough cut, 3 whole utterances in a new order, then `build_sequence` and `timeline_transcript` | **0 cuts in sound (0 tails), no clipped words**, the three lines in the new order. Planning on the rough cut's own pauses had given a one-frame sliver of a neighbouring clip, which is why edges are placed in the source |
+| `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts at the word boundaries, and the cuts in sound are reported (`no_quiet`, `new_cuts_in_sound`). An earlier, weaker check had passed this case as clean |
 | Two sources: the mic file (4 streams, which landed on A1-A4) and the 7 GB camera file placed on V2/A5 | first read of A5: `missing` named the camera file, 9 s (hashing 7 GB included). The helper's own `transcribe` job took 410 s. Re-read: A5 came from the camera transcript (job 81) and A1/A2 from the mic transcript (job 79); A2 warns that it looks like stream 2 |
 | Your order, rough cut first: a never-transcribed 96-min source (`10-40-51.mp4` on A5), Rough Cut with speech protection | the job transcribed the source once (store job 82) instead of a WAV, then mapped it: 1,644 cuts, 8 min 40 s in all. `timeline_transcript` on that track straight after: nothing missing, 0 s of new listening |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
@@ -157,6 +173,14 @@ Tests:
 - The full suite has 1,315 passed. The only failures are 8 in `tests/test_text_box.py`, which also
   fail on the base branch: the `uharfbuzz` module is not installed here.
 - `node --test tests/*.cjs`: 795 passed. `scripts/check_rough_cut.py` passes.
+
+## State you are left in
+
+- The checkout is on `feat/timeline-listen`; it was on `docs/projects-layout`. The helper runs
+  this branch's code (a superset of PR #115, which the panel needs).
+- A helper restarted from master or `docs/projects-layout` will refuse the panel's `place_text`
+  registration, because that is PR #115 code.
+- Premiere is back on `editing`. Nothing was saved or exported.
 
 ## Gaps and limits (please read)
 
@@ -179,6 +203,8 @@ Tests:
 - **Constant background sound hides pauses.** The sound rule is loudness against the file's
   floor, so under a music bed or game audio there is no quiet frame. `cuts_in_sound` then lists
   most edges, and `cut_words` reports `no_quiet`.
+- **Short edges are placed only for whole utterances.** A phrase that sits mid-sentence has no
+  pause even in the source, so its piece edge is in speech (reported as `no_quiet`).
 - **Cutting inside continuous speech is never clean.** Run `cut_words` on a timeline that still
   has its pauses (before the rough cut, or the source sequence) when you can.
 - **Reversed clips are skipped**, and so are nested sequences (no media file).
@@ -206,6 +232,7 @@ Tests:
 - `listen speed (scratch)` (the speed probe)
 - `listen full (scratch)` and `listen full (scratch) — CutDeck 4002a9e8` (the full-length rough cut)
 - `listen short (scratch)` (the reordered Short)
-- `listen test A words v2 (scratch)`, `listen test A words v3 (scratch)` and `listen test A no-er v2 (scratch)` (`cut_words` on the final code)
+- `listen test A words v2 (scratch)`, `listen test A words v3 (scratch)`, `listen test A no-er v2 (scratch)`, `listen test A no-er v3 (scratch)` and `listen test A no-er v4 (scratch)` (`cut_words` reruns; v4 is the final code)
+- `listen short placed (scratch)` (the Short built from `plan_pieces`)
 - `listen two sources (scratch)` (mic file on A1-A4, camera file on V2/A5)
 - `listen rough-first (scratch)` (the never-transcribed source on A5; its rough cut was analysed but not applied)

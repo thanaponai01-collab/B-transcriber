@@ -111,7 +111,14 @@
 - trace: `_cut_words` @ cutdeck/driver_commands.py > `plan` @ cutdeck/word_cut.py > `cut_copy` (panel) > `build` @ cutdeck/timeline_transcript.py
 - effect: a new sequence `result_name`; the source is never edited
 - verify: Timeline transcript and cut by words
-- status: live-proven 2026-11-22 on a scratch rough cut (two phrases removed, 0 cuts in speech)
+- status: live-proven 2026-11-22 on a scratch rough cut: 3 fillers removed, 0 new cuts in sound; phrases inside continuous speech are removed but their cuts are reported in sound (no pause to cut in)
+
+## Plan a Short by its words (MCP)
+- what: Give the phrases to keep, in order; each piece's In/Out is placed in the source file's own pauses around its words; returns items for premiere_build_sequence. Edits nothing.
+- mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=120)`
+- trace: `_plan_pieces` @ cutdeck/driver_commands.py > `plan_pieces` @ cutdeck/word_cut.py > `build` @ cutdeck/timeline_transcript.py
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22: a reordered 3-piece Short built from its items read back with 0 cuts in sound
 
 ## General Premiere control (MCP)
 - what: Hand-level control of Premiere for agents. `premiere_read_timeline`, `premiere_list_project`, `premiere_open_sequence`, `premiere_set_playhead`, `premiere_set_in_out`, `premiere_select_clips`, `premiere_edit_clips` (move, trim, enable/disable, rename, remove, in one undo step), `premiere_place_media` (overwrite, insert, nest), `premiere_list_effects`, `premiere_add_effect`, `premiere_set_param` (any effect parameter or keyframe), `premiere_add_transition`, `premiere_set_track_mute`, `premiere_remove_markers`, `premiere_import_files`, `premiere_save_project` and `premiere_export_frame` (a PNG of a frame). Plus `premiere_screenshot`, a PNG of the whole Premiere window (no panel needed). Clips are addressed by id `V<n>@<start_ticks>`. Every route, and what UXP cannot reach (razor, link, targeting, undo): docs/PREMIERE_CONTROL_MAP.md.
