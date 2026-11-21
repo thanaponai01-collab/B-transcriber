@@ -138,6 +138,7 @@ Run folders hold every request and result:
 | `cut_words` (final code): remove all three "เอ่อ" fillers | said 3 → 0; joins read naturally; **no new cut in sound** |
 | `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts on the dips, 6-14 dB above threshold, and 4 `new_cuts_in_sound` reported. An earlier, weaker check had passed this case as clean |
 | Two sources: the mic file (4 streams, which landed on A1-A4) and the 7 GB camera file placed on V2/A5 | first read of A5: `missing` named the camera file, 9 s (hashing 7 GB included). The helper's own `transcribe` job took 410 s. Re-read: A5 came from the camera transcript (job 81) and A1/A2 from the mic transcript (job 79); A2 warns that it looks like stream 2 |
+| Your order, rough cut first: a never-transcribed 96-min source (`10-40-51.mp4` on A5), Rough Cut with speech protection | the job transcribed the source once (store job 82) instead of a WAV, then mapped it: 1,644 cuts, 8 min 40 s in all. `timeline_transcript` on that track straight after: nothing missing, 0 s of new listening |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
