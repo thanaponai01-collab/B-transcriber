@@ -137,6 +137,9 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getInPoint: async () => tickTime(raw.in),
         getOutPoint: async () => tickTime(raw.in + raw.end - raw.start),
         getProjectItem: async () => projectItems.get(raw.media.path),
+        isDisabled: async () => Boolean(raw.disabled),
+        createSetDisabledAction: (disabled) => action(() => { raw.disabled = disabled; }),
+        createMoveAction: (dt) => action(() => { raw.start += BigInt(dt.ticks); raw.end += BigInt(dt.ticks); }),
       };
       items.set(raw, item);
       rawOf.set(item, raw);
@@ -150,7 +153,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   const addSequence = (seq) => { raws.push(seq); return seq; };
   for (const seq of sequences) {
     const tracks = (list) => list.map((t) => t.map((c) => ({ ...c, media: media.find((m) => m.path === c.media) })));
-    addSequence({ name: seq.name, guid: `seq${guids++}`, video: tracks(seq.video), audio: tracks(seq.audio) });
+    addSequence({ name: seq.name, guid: `seq${guids++}`, video: tracks(seq.video), audio: tracks(seq.audio), frame: seq.frame || null });
   }
   const wrappers = new WeakMap(); // raw sequence -> Sequence
   const rawSeq = new WeakMap(); // Sequence -> raw sequence
@@ -166,7 +169,13 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getVideoTrack: async (i) => track(s.video[i]),
         getAudioTrack: async (i) => track(s.audio[i]),
         getProjectItem: async () => item,
-        createCloneAction: () => action(() => addSequence({ name: `${s.name} Copy`, guid: `seq${guids++}`, video: copy(s.video), audio: copy(s.audio) })),
+        createCloneAction: () => action(() => addSequence({ name: `${s.name} Copy`, guid: `seq${guids++}`, video: copy(s.video), audio: copy(s.audio), marks: { ...(s.marks || {}) } })),
+        getSettings: async () => ({ frame: s.frame || null }),
+        createSetSettingsAction: (settings) => action(() => { s.frame = settings.frame; }),
+        getInPoint: async () => tickTime((s.marks || {}).in || 0n),
+        getOutPoint: async () => tickTime((s.marks || {}).out || 0n),
+        createSetInPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), in: BigInt(t.ticks) }; }),
+        createSetOutPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), out: BigInt(t.ticks) }; }),
       };
       wrappers.set(s, seq);
       rawSeq.set(seq, s);
@@ -189,6 +198,20 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         };
         if (m.video) land(s.video, videoTrack);
         if (m.audio) land(s.audio, audioTrack);
+      });
+    },
+    // Same-track clone by an offset (PREMIERE_FACTS: overwrites what is there; unlinked; effects kept).
+    createCloneTrackItemAction(item, timeOffset, videoOffset, audioOffset, alignToVideo, isInsert) {
+      const raw = rawOf.get(item);
+      const dt = BigInt(timeOffset.ticks);
+      return action(() => {
+        for (const tracks of [s.video, s.audio]) {
+          const t = tracks.find((list) => list.includes(raw));
+          if (!t) continue;
+          const copy = { ...raw, start: raw.start + dt, end: raw.end + dt };
+          for (let i = t.length - 1; i >= 0; i--) if (t[i].start < copy.end && t[i].end > copy.start) t.splice(i, 1);
+          t.push(copy);
+        }
       });
     },
     createRemoveItemsAction(selection, ripple, mediaType) {
@@ -214,13 +237,13 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     SequenceEditor: { getEditor: (seq) => editor(rawSeq.get(seq)) },
     TickTime, TrackItemSelection, Constants, PointF,
   };
-  const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path })));
+  const clipsOf = (s, kind) => s[kind].flatMap((t, i) => t.map((c) => ({ track: i, start: c.start, end: c.end, in: c.in, media: c.media.path, ...(c.disabled ? { disabled: true } : {}) })));
   return {
     ppro, project, undoSteps,
     get saves() { return saves; },
     marks: (mediaPath) => ({ ...marks.get(mediaPath) }),
     // Every sequence by name, as plain clips per side.
-    sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio") }; },
+    sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio"), frame: s.frame || null, marks: s.marks || null }; },
     // One of each fake object, for FAKE_SHAPE.
     samples: () => {
       const s = raws[0];

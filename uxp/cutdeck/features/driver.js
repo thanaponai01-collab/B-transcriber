@@ -54,6 +54,7 @@ const COMMANDS = [
   "export_sequence",
   "reload_panel",
   "build_sequence",
+  "cut_copy",
 ];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
@@ -114,6 +115,21 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     if (sequence.guid.toString() !== sequenceId) throw new Error(`Open "${sequenceName}" to cut it, then try again.`);
     ctl.setStatus("Cutting a copy of your sequence for an outside request…", "busy");
     const r = await applyNativeCut(ppro, project, sequence, cuts, resultName);
+    return { cuts: r.cuts, removed_seconds: seconds(r.removedTicks), splits: r.splits, undo_steps: r.steps,
+      name: r.name, elapsed_seconds: r.elapsedSeconds };
+  }
+
+  /* cut_copy: copy the sequence named `sequence_name` and cut `cuts` ({ticks_per_frame,
+     cuts_frames}) out of the copy with the Rough Cut engine (applyNativeCut: clone, per-item
+     razor/remove/close-gap, read-back). Every synced layer, effect and disabled state of the source
+     is kept; the source is not edited. The copy opens when done. */
+  async function cutCopy({ sequence_name: sequenceName, cuts, result_name: resultName }) {
+    const project = await ppro.Project.getActiveProject();
+    if (!project) throw new Error("Open a Premiere project first.");
+    const matches = (await project.getSequences()).filter((s) => s.name === sequenceName);
+    if (matches.length !== 1) throw new Error(`Found ${matches.length} sequences named "${sequenceName}"; need exactly one.`);
+    ctl.setStatus(`Cutting a copy of "${sequenceName}" for an outside request…`, "busy");
+    const r = await applyNativeCut(ppro, project, matches[0], cuts, resultName);
     return { cuts: r.cuts, removed_seconds: seconds(r.removedTicks), splits: r.splits, undo_steps: r.steps,
       name: r.name, elapsed_seconds: r.elapsedSeconds };
   }
@@ -326,6 +342,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     align_clips: alignClips,
     distribute_clips: distributeClips,
     export_sequence: exportSequence,
+    cut_copy: cutCopy,
     // The reply goes out first; then the same reload as the panel menu's Reload (core/panel.js).
     build_sequence: (args) => buildSequence(ppro, args, (line) => console.log(`CutDeck build: ${line}`)),
     reload_panel: async () => {

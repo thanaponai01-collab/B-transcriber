@@ -103,7 +103,72 @@ def _build_arguments(args: dict, jobs) -> dict:
             raise ValueError("out_ticks must be after in_ticks")
         if it.get("v") is None and it.get("a") is None:
             raise ValueError("Each item needs a video track v or an audio track a")
-    return {"project": project, "base": base, "name": name, "items": items, "save": save}
+    result = {"project": project, "base": base, "name": name, "items": items, "save": save}
+    off = args.get("disable_tracks")
+    if off is not None:
+        if not isinstance(off, dict) or set(off) - {"video", "audio"} or not all(
+                isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in off.values()):
+            raise ValueError("disable_tracks must be {video: [track index], audio: [track index]}")
+        result["disable_tracks"] = off
+    into = args.get("into", False)
+    if not isinstance(into, bool):
+        raise ValueError("into must be true or false")
+    if into:
+        if name != base:
+            raise ValueError("into edits the base sequence itself: name must equal base")
+        result["into"] = True
+        settings_from = args.get("settings_from")
+        if settings_from is not None:
+            if not isinstance(settings_from, str) or not settings_from.strip():
+                raise ValueError("settings_from must be a sequence name")
+            result["settings_from"] = settings_from
+        steps = args.get("steps", [])
+        if not isinstance(steps, list) or not all(isinstance(st, dict) and st.get("op") in ("lift", "clone", "move")
+                and all(isinstance(st.get(k), str) and st[k].isdigit() for k in ("from_ticks", "to_ticks"))
+                and int(st["to_ticks"]) > int(st["from_ticks"])
+                and (st["op"] == "lift" or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
+                for st in steps):
+            raise ValueError("steps must be [{op: lift|clone|move, from_ticks, to_ticks, dt_ticks (clone/move)}]")
+        result["steps"] = steps
+        restyle = args.get("restyle", [])
+        if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")
+                and isinstance(r.get("track"), int) and r["track"] >= 0
+                and all(isinstance(r.get(k), str) and r[k].isdigit() for k in ("from_ticks", "to_ticks"))
+                and isinstance(r.get("enabled", True), bool) and isinstance(r.get("motion", {}), dict) for r in restyle):
+            raise ValueError("restyle must be [{kind, track, from_ticks, to_ticks, enabled?, motion?}]")
+        result["restyle"] = restyle
+    elif any(k in args for k in ("settings_from", "steps", "restyle")):
+        raise ValueError("settings_from, steps and restyle need into: true")
+    media_from = args.get("media_from", [])
+    if not isinstance(media_from, list) or not all(isinstance(n, str) and n.strip() for n in media_from):
+        raise ValueError("media_from must be a list of sequence names")
+    if media_from:
+        result["media_from"] = media_from
+    mark_whole = args.get("mark_whole", False)
+    if not isinstance(mark_whole, bool):
+        raise ValueError("mark_whole must be true or false")
+    if mark_whole:
+        result["mark_whole"] = True
+    return result
+
+
+def _cut_copy_arguments(args: dict, jobs) -> dict:
+    """Validate `cut_copy`: a source sequence name, a new name, and frame cuts at the source's rate."""
+    source, result_name, cuts = args.get("sequence_name"), args.get("result_name"), args.get("cuts")
+    if not isinstance(source, str) or not source.strip() or not isinstance(result_name, str) or not result_name.strip():
+        raise ValueError("sequence_name and result_name must be sequence names")
+    if source == result_name:
+        raise ValueError("result_name must differ from sequence_name (the source is never edited)")
+    if not isinstance(cuts, dict) or not str(cuts.get("ticks_per_frame", "")).isdigit():
+        raise ValueError("cuts must be {ticks_per_frame, cuts_frames}")
+    frames = cuts.get("cuts_frames")
+    if not isinstance(frames, list) or not frames or not all(
+            isinstance(c, list) and len(c) == 2 and all(isinstance(x, int) for x in c) and 0 <= c[0] < c[1] for c in frames):
+        raise ValueError("cuts_frames must be [[start, end], ...] whole frames, end after start")
+    if any(b[0] < a[1] for a, b in zip(frames, frames[1:])):
+        raise ValueError("cuts_frames must be sorted and must not overlap")
+    return {"sequence_name": source, "result_name": result_name,
+            "cuts": {"ticks_per_frame": str(cuts["ticks_per_frame"]), "cuts_frames": frames}}
 
 
 def _export_sequence_arguments(args: dict, jobs) -> dict:
@@ -251,6 +316,8 @@ COMMANDS: dict[str, Command] = {
     "reload_panel": Command(30, _no_arguments,
                             "Reload the CutDeck panel so it loads changed code; it reconnects by itself."),
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
+    "cut_copy": Command(1800, _cut_copy_arguments,
+                        "Copy a named sequence and cut frame ranges out of the copy (Rough Cut engine)."),
     "export_sequence": Command(3600, _export_sequence_arguments,
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
                                ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),

@@ -75,3 +75,63 @@ def test_build_sequence_needs_the_open_project_and_saves_only_when_asked():
         except ValueError:
             continue
         raise AssertionError(f"accepted {bad}")
+
+
+def test_build_sequence_disable_tracks_is_optional_and_checked():
+    prepare = driver_commands.COMMANDS["build_sequence"].prepare
+    item = {"id": "V1@0", "media": "D:\a.mp4", "in_ticks": "0", "out_ticks": "254016000000", "at_ticks": "0", "v": 0, "a": 0}
+    args = {"project": "E:\Shows\hks.prproj", "base": "b", "name": "n", "items": [item]}
+    assert "disable_tracks" not in prepare(args, None)
+    off = {"video": [2], "audio": [1, 2]}
+    assert prepare({**args, "disable_tracks": off}, None)["disable_tracks"] == off
+    for bad in ([2], {"video": [-1]}, {"video": ["2"]}, {"titles": [0]}):
+        try:
+            prepare({**args, "disable_tracks": bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")
+
+
+def test_build_sequence_mark_whole_is_opt_in():
+    prepare = driver_commands.COMMANDS["build_sequence"].prepare
+    item = {"id": "V1@0", "media": "D:\a.mp4", "in_ticks": "0", "out_ticks": "254016000000", "at_ticks": "0", "v": 0, "a": 0}
+    args = {"project": "E:\Shows\hks.prproj", "base": "b", "name": "n", "items": [item]}
+    assert "mark_whole" not in prepare(args, None)
+    assert prepare({**args, "mark_whole": True}, None)["mark_whole"] is True
+    try:
+        prepare({**args, "mark_whole": "yes"}, None)
+    except ValueError:
+        return
+    raise AssertionError("accepted mark_whole='yes'")
+
+
+def test_cut_copy_checks_names_and_frames():
+    prepare = driver_commands.COMMANDS["cut_copy"].prepare
+    ok = {"sequence_name": "YT editing", "result_name": "short", "cuts": {"ticks_per_frame": 8467200000, "cuts_frames": [[0, 10], [20, 30]]}}
+    assert prepare(ok, None)["cuts"] == {"ticks_per_frame": "8467200000", "cuts_frames": [[0, 10], [20, 30]]}
+    for bad in ({"result_name": "YT editing"}, {"cuts": {"ticks_per_frame": 1, "cuts_frames": [[10, 5]]}},
+                {"cuts": {"ticks_per_frame": 1, "cuts_frames": [[0, 10], [5, 20]]}}, {"cuts": {"cuts_frames": [[0, 1]]}}):
+        try:
+            prepare({**ok, **bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")
+
+
+def test_build_sequence_into_mode_checks():
+    prepare = driver_commands.COMMANDS["build_sequence"].prepare
+    item = {"id": "p", "media": "D:\a.mp4", "in_ticks": "0", "out_ticks": "1", "at_ticks": "0", "v": 0, "a": None}
+    args = {"project": "E:\Shows\hks.prproj", "base": "cut", "name": "cut", "items": [item], "into": True,
+            "steps": [{"op": "move", "from_ticks": "0", "to_ticks": "10", "dt_ticks": "-5"}, {"op": "lift", "from_ticks": "0", "to_ticks": "1"}],
+            "restyle": [{"kind": "video", "track": 1, "from_ticks": "0", "to_ticks": "9", "enabled": True}]}
+    out = prepare(args, None)
+    assert out["into"] is True and out["steps"] == args["steps"] and out["restyle"] == args["restyle"]
+    for bad in ({"name": "other"}, {"steps": [{"op": "move", "from_ticks": "5", "to_ticks": "1", "dt_ticks": "1"}]},
+                {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1"}]}, {"steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1"}]},
+                {"restyle": [{"kind": "title", "track": 0, "from_ticks": "0", "to_ticks": "1"}]},
+                {"into": False}):
+        try:
+            prepare({**args, **bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")

@@ -99,15 +99,27 @@ def create_server(backend: Backend) -> FastMCP:
 
     @server.tool(annotations=write)
     async def premiere_build_sequence(project: str, base: str, name: str, items: list[dict],
-                                      save: bool = False) -> dict:
+                                      save: bool = False, options: dict | None = None) -> dict:
         """Build a new sequence named `name` on a cleared copy of the sequence `base` (never
         edited), in the open project, which must be the .prproj at the absolute path `project`
         (else nothing is built). Each item: {id, media (file path) or like {kind, track,
         start_ticks}, in_ticks, out_ticks, at_ticks (tick strings), v, a (track indexes or
-        null), motion, level, blur}. `save`: save the project after the build. Returns placed
-        counts and every item off by more than one frame."""
+        null), motion, level, blur}. `save`: save the project after the build. `options`
+        (optional): disable_tracks {video, audio}, mark_whole, media_from [sequence names], and
+        into (edit `base` itself; name == base) with settings_from, moves, restyle; see
+        uxp/cutdeck/timeline/buildSequence.js. Returns placed counts and every item off by more
+        than one frame."""
         return await backend.premiere("build_sequence", {"project": project, "base": base, "name": name,
-                                                         "items": items, "save": save})
+                                                         "items": items, "save": save, **(options or {})})
+
+    @server.tool(annotations=write)
+    async def premiere_cut_copy(sequence_name: str, result_name: str, cuts: dict) -> dict:
+        """Copy the sequence `sequence_name` (never edited) as `result_name` and cut frame ranges
+        out of the copy with the Rough Cut engine, keeping every synced layer, effect and disabled
+        state. cuts: {ticks_per_frame (the sequence's), cuts_frames [[start, end], ...] sorted
+        whole frames}. The copy opens when done. Needs the CutDeck panel open."""
+        return await backend.premiere("cut_copy", {"sequence_name": sequence_name, "result_name": result_name,
+                                                   "cuts": cuts})
 
     @server.tool(annotations=write)
     async def premiere_reload_panel() -> dict:

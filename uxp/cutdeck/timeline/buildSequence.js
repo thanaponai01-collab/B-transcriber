@@ -10,6 +10,30 @@
    project item to use: adjustment layers have no file), in_ticks, out_ticks, at_ticks,
    v (video track index | null), a (audio track index | null), motion {PARAM_INDEX field: value},
    level (linear Volume Level), blur {blurriness} }.
+   disable_tracks (optional) {video: [index], audio: [index]}: every clip on those tracks of the
+   built sequence is disabled at the end, like the layers a user keeps but switches off
+   (VideoClipTrackItem / AudioClipTrackItem.createSetDisabledAction, one transaction).
+   mark_whole (optional, default false): set the built sequence's In/Out to 0 .. its last item's
+   end, so an In/Out export covers the whole build; the clone otherwise keeps the base's marks
+   (Sequence.createSetInPointAction / createSetOutPointAction, read back with getIn/OutPoint).
+
+   into (optional, default false): edit `base` itself instead of a cleared clone (`name` must equal
+   `base`). Used on a fresh cut copy (cut_copy) so every synced layer, effect and disabled state
+   the user built is kept. Extra steps, in this order, before placing items:
+     settings_from: name of a sequence whose settings (frame size) to apply
+       (Sequence.getSettings + createSetSettingsAction);
+     steps: [{op, from_ticks, to_ticks, dt_ticks?}], run in order, each on every clip of every
+       track whose start is in [from, to), each its own transaction:
+       lift: remove without ripple, leaving a hole (createRemoveItemsAction, ripple false);
+       clone: copy each clip by dt onto its own track, overwriting (createCloneTrackItemAction,
+         isInsert false; effects kept, pieces unlinked; the disabled state is not relied on);
+       move: shift by dt (createMoveAction, relative), far end first. Live 2026-11-21: a block
+         moved backward past other clips rendered black on video (audio fine), so bring a later
+         block forward with clone + lift instead.
+   and after placing:
+     restyle: [{kind, track, from_ticks, to_ticks, enabled?, motion?}]: clips on that track whose
+       start is in [from, to) are enabled/disabled and get the Motion values.
+   media_from (optional): more sequence names whose clips' project items items may use.
    A side that is null still lands (Premiere places what the media has) on a scratch track past
    the base's last track; scratch tracks are cleared at the end.
 
@@ -59,7 +83,8 @@ function removeAll(ppro, project, editor, items, mediaType, label) {
   });
 }
 
-async function buildSequence(ppro, { project: projectPath, base, name, items, save = false }, log = () => {}) {
+async function buildSequence(ppro, { project: projectPath, base, name, items, save = false, disable_tracks: disableTracks = null, mark_whole: markWhole = false,
+  into = false, settings_from: settingsFrom = null, steps = [], restyle = [], media_from: mediaFrom = [] }, log = () => {}) {
   const t0 = Date.now();
   const timings = {};
   const lap = (phase) => { timings[phase] = Date.now() - t0; log(`${phase} at ${timings[phase]} ms`); };
@@ -70,9 +95,14 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
   const tick = (t) => ppro.TickTime.createWithTicks(BigInt(t).toString());
 
   // Resolve every project item before anything is edited.
+  if (into && name !== base) throw new Error(`into edits "${base}" itself: name must be "${base}" too.`);
   const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base);
   const byPath = new Map();
   for (const c of [...baseRead.video, ...baseRead.audio]) if (c.path && c.projectItem) byPath.set(norm(c.path), c.projectItem);
+  for (const other of mediaFrom) {
+    const { read } = await namedSequence(ppro, project, other);
+    for (const c of [...read.video, ...read.audio]) if (c.path && c.projectItem && !byPath.has(norm(c.path))) byPath.set(norm(c.path), c.projectItem);
+  }
   const like = (ref) => [...baseRead.video, ...baseRead.audio].find((c) => c.kind === ref.kind && c.track === ref.track
     && abs(c.start - BigInt(ref.start_ticks)) <= FRAME_TICKS / 2n);
   const plan = items.map((it) => {
@@ -83,22 +113,66 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
   });
   lap("resolved");
 
-  // Clone, rename, clear. The clone is not opened.
-  const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runTransaction(project, `CutDeck build: copy ${base}`, (c) => {
-    if (!c.addAction(baseSeq.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-  });
-  const created = (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
-  if (created.length !== 1) throw new Error(`Copying gave ${created.length} new sequences.`);
-  const seq = created[0];
-  const seqItem = await seq.getProjectItem();
-  runTransaction(project, "CutDeck build: name", (c) => {
-    if (!c.addAction(seqItem.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
-  });
-  const editor = ppro.SequenceEditor.getEditor(seq);
-  const fresh = await readSequence(ppro, seq, { paths: false });
-  removeAll(ppro, project, editor, [...fresh.video, ...fresh.audio].map((c) => c.item), ppro.Constants.MediaType.ANY, "CutDeck build: clear");
-  const scratch = { v: fresh.videoTracks, a: fresh.audioTracks };
+  let seq, editor, scratch;
+  if (into) {
+    seq = baseSeq;
+    editor = ppro.SequenceEditor.getEditor(seq);
+    if (settingsFrom) {
+      const { seq: from } = await namedSequence(ppro, project, settingsFrom);
+      const settings = await from.getSettings();
+      runTransaction(project, `CutDeck build: settings from ${settingsFrom}`, (c) => {
+        if (!c.addAction(seq.createSetSettingsAction(settings))) throw new Error("settings refused");
+      });
+    }
+    lap("settings");
+    for (const st of steps) {
+      const from = BigInt(st.from_ticks), to = BigInt(st.to_ticks), dt = BigInt(st.dt_ticks || "0");
+      const now = await readSequence(ppro, seq, { paths: false });
+      const inRange = (c) => c.start >= from && c.start < to;
+      const span = `${secs(from)}-${secs(to)} s`;
+      if (st.op === "lift") {
+        removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
+        removeAll(ppro, project, editor, now.audio.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.AUDIO, `CutDeck build: lift audio ${span}`);
+      } else if (st.op === "clone") {
+        const items = [...now.video, ...now.audio].filter(inRange);
+        runTransaction(project, `CutDeck build: clone ${span} by ${secs(dt)} s`, (c) => {
+          for (const { item } of items) {
+            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), 0, 0, false, false))) throw new Error("clone refused");
+          }
+        });
+      } else if (st.op === "move") {
+        const moving = [...now.video, ...now.audio].filter(inRange)
+          .sort((a, b) => (dt > 0n ? (b.start > a.start ? 1 : -1) : (a.start > b.start ? 1 : -1)));
+        runTransaction(project, `CutDeck build: move ${span} by ${secs(dt)} s`, (c) => {
+          for (const { item } of moving) if (!c.addAction(item.createMoveAction(tick(dt)))) throw new Error("move refused");
+        });
+      } else {
+        throw new Error(`Unknown step ${st.op}`);
+      }
+    }
+    lap("steps");
+    // Scratch past every track an item names, so clearing it never touches a placed side.
+    const now = await readSequence(ppro, seq, { paths: false });
+    const top = (key, n) => plan.reduce((m, it) => (Number.isInteger(it[key]) && it[key] + 1 > m ? it[key] + 1 : m), n);
+    scratch = { v: top("v", now.videoTracks), a: top("a", now.audioTracks) };
+  } else {
+    // Clone, rename, clear. The clone is not opened.
+    const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
+    runTransaction(project, `CutDeck build: copy ${base}`, (c) => {
+      if (!c.addAction(baseSeq.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
+    });
+    const created = (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
+    if (created.length !== 1) throw new Error(`Copying gave ${created.length} new sequences.`);
+    seq = created[0];
+    const seqItem = await seq.getProjectItem();
+    runTransaction(project, "CutDeck build: name", (c) => {
+      if (!c.addAction(seqItem.createSetNameAction(name))) throw new Error("addAction(rename) returned false");
+    });
+    editor = ppro.SequenceEditor.getEditor(seq);
+    const fresh = await readSequence(ppro, seq, { paths: false });
+    removeAll(ppro, project, editor, [...fresh.video, ...fresh.audio].map((c) => c.item), ppro.Constants.MediaType.ANY, "CutDeck build: clear");
+    scratch = { v: fresh.videoTracks, a: fresh.audioTracks };
+  }
   lap("cleared");
 
   // Place: In/Out (only when it changes) in one transaction, the overwrite in the next.
@@ -220,6 +294,55 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
   }
   lap("blur");
 
+  // Restyle clips already on the sequence (into mode): enable/disable, Motion.
+  let restyled = 0;
+  if (restyle.length) {
+    const now = await readSequence(ppro, seq, { paths: false });
+    const enables = [];
+    const motions = [];
+    for (const r of restyle) {
+      const from = BigInt(r.from_ticks), to = BigInt(r.to_ticks);
+      const hit = (r.kind === "video" ? now.video : now.audio).filter((c) => c.track === r.track && c.start >= from && c.start < to);
+      for (const c of hit) {
+        if (typeof r.enabled === "boolean") enables.push({ item: c.item, disabled: !r.enabled });
+        if (r.motion && r.kind === "video") motions.push({ item: c.item, name: `restyle V${r.track + 1}@${secs(c.start)}`, values: r.motion });
+      }
+      restyled += hit.length;
+    }
+    if (enables.length) {
+      runTransaction(project, "CutDeck build: restyle enable", (c) => {
+        for (const e of enables) if (!c.addAction(e.item.createSetDisabledAction(e.disabled))) throw new Error("enable refused");
+      });
+    }
+    if (motions.length) await applyMotionValues(ppro, project, "CutDeck build: restyle motion", motions);
+    after = await readSequence(ppro, seq, { paths: false });
+  }
+  lap("restyled");
+
+  // Disable whole tracks (layers kept but switched off), one transaction.
+  const off = disableTracks ? [
+    ...after.video.filter((c) => (disableTracks.video || []).includes(c.track)),
+    ...after.audio.filter((c) => (disableTracks.audio || []).includes(c.track)),
+  ] : [];
+  if (off.length) {
+    runTransaction(project, "CutDeck build: disable tracks", (c) => {
+      for (const { item } of off) if (!c.addAction(item.createSetDisabledAction(true))) throw new Error("disable refused");
+    });
+  }
+  lap("disabled");
+
+  let marked = null;
+  if (markWhole) {
+    const end = [...after.video, ...after.audio].reduce((m, c) => (c.end > m ? c.end : m), 0n);
+    runTransaction(project, "CutDeck build: In/Out", (c) => {
+      if (!c.addAction(seq.createSetInPointAction(tick(0n))) || !c.addAction(seq.createSetOutPointAction(tick(end)))) {
+        throw new Error("setting In/Out refused");
+      }
+    });
+    marked = { in_s: secs(BigInt((await seq.getInPoint()).ticks)), out_s: secs(BigInt((await seq.getOutPoint()).ticks)) };
+  }
+  lap("marked");
+
   const saved = save ? await project.save() : false;
 
   return {
@@ -229,6 +352,9 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
     motion: motion.length,
     levels: levelParams.length,
     blur: blurred.length,
+    disabled: off.length,
+    restyled,
+    marked,
     mismatches: mismatches.length,
     first_mismatches: mismatches.slice(0, 40),
     saved,

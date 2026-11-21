@@ -85,3 +85,93 @@ test("a throw while placing still restores the source marks", async () => {
   assert.deepEqual(h.marks(DAMAGE), { in: 0n, out: 30n * S });
   assert.equal(h.undoSteps.at(-1), "CutDeck build: restore source marks");
 });
+
+test("disable_tracks switches off every clip on the named tracks and nothing else", async () => {
+  const h = host();
+  const report = await buildSequence(h.ppro, args({ disable_tracks: { video: [1], audio: [] } }));
+  assert.equal(report.disabled, 1);
+  const built = h.sequence("HKS build");
+  assert.deepEqual(built.video.filter((c) => c.disabled).map((c) => c.track), [1]);
+  assert.equal(built.audio.some((c) => c.disabled), false);
+  assert.ok(h.undoSteps.includes("CutDeck build: disable tracks"));
+});
+
+test("mark_whole sets the built sequence's In/Out to 0 .. the last item's end", async () => {
+  const h = host();
+  const report = await buildSequence(h.ppro, args({ mark_whole: true }));
+  assert.deepEqual(report.marked, { in_s: 0, out_s: 6 }); // V1@4 runs 4-6 s
+  assert.equal((await buildSequence(h.ppro, args({ name: "plain" }))).marked, null);
+});
+
+test("into edits the base itself: settings, far-end-first moves, restyle, and scratch past named tracks", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }, { path: DAMAGE, video: true, audio: false, duration: 30n * S }],
+    sequences: [
+      { name: "cut", video: [[{ media: SHOW, start: 0n, end: 2n * S, in: 10n * S }, { media: SHOW, start: 2n * S, end: 4n * S, in: 20n * S },
+        { media: SHOW, start: 4n * S, end: 5n * S, in: 30n * S }], [{ media: DAMAGE, start: 0n, end: 5n * S, in: 0n, disabled: true }]],
+        audio: [[{ media: SHOW, start: 0n, end: 2n * S, in: 10n * S }, { media: SHOW, start: 2n * S, end: 4n * S, in: 20n * S },
+          { media: SHOW, start: 4n * S, end: 5n * S, in: 30n * S }]] },
+      { name: "vertical", frame: "1080x1920", video: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }]], audio: [[]] },
+    ],
+  });
+  // Hook (4-5 s) to the front: park it at 10 s, shift 0-4 s right by 1 s, bring the hook to 0.
+  const report = await buildSequence(h.ppro, {
+    project: PROJECT, base: "cut", name: "cut", into: true, settings_from: "vertical",
+    steps: [{ op: "move", from_ticks: t(4), to_ticks: t(5), dt_ticks: t(6) }, { op: "move", from_ticks: t(0), to_ticks: t(4), dt_ticks: t(1) },
+      { op: "move", from_ticks: t(10), to_ticks: t(11), dt_ticks: String(-10n * S) }],
+    restyle: [{ kind: "video", track: 1, from_ticks: t(0), to_ticks: t(99), enabled: true }],
+    items: [{ id: "proof", media: DAMAGE, in_ticks: t(0), out_ticks: t(1), at_ticks: t(1), v: 2, a: null }],
+  });
+  const built = h.sequence("cut");
+  assert.equal(built.frame, "1080x1920");
+  assert.deepEqual(built.video.filter((c) => c.track === 0).map((c) => [c.start / S, c.in / S]), [[1n, 10n], [3n, 20n], [0n, 30n]]);
+  assert.deepEqual(built.audio.filter((c) => c.track === 0).map((c) => [c.start / S, c.in / S]), [[1n, 10n], [3n, 20n], [0n, 30n]]);
+  assert.equal(built.video.find((c) => c.track === 1).disabled, undefined);
+  assert.deepEqual(built.video.filter((c) => c.track === 2).map((c) => c.start / S), [1n]);
+  assert.equal(report.restyled, 1);
+  assert.equal(report.mismatches, 0);
+  assert.equal(h.sequence("cut Copy"), undefined); // no clone in into mode
+});
+
+test("into refuses a name other than the base", async () => {
+  await assert.rejects(buildSequence(host().ppro, args({ into: true })), /name must be "1 YOUTUBE D1" too/);
+});
+
+test("into lift removes the clips starting in a range without ripple, before the moves", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 1n * S, end: 3n * S, in: 10n * S }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 1n * S, end: 3n * S, in: 10n * S }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]] }],
+  });
+  // Head block 0-1 s lifted, the hook (3-4 s) moved into the hole: no clip ever passes the end.
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "lift", from_ticks: t(0), to_ticks: t(1) }, { op: "move", from_ticks: t(3), to_ticks: t(4), dt_ticks: String(-3n * S) }],
+    items: [{ id: "x", media: SHOW, in_ticks: t(100), out_ticks: t(101), at_ticks: t(5), v: 0, a: 0 }] });
+  const built = h.sequence("cut");
+  assert.deepEqual(built.video.filter((c) => c.in !== 100n * S).map((c) => [c.start / S, c.in / S]).sort((a, b) => Number(a[0] - b[0])), [[0n, 50n], [1n, 10n]]);
+  assert.deepEqual(built.audio.filter((c) => c.in !== 100n * S).map((c) => [c.start / S, c.in / S]).sort((a, b) => Number(a[0] - b[0])), [[0n, 50n], [1n, 10n]]);
+  assert.ok(h.undoSteps.some((s) => s.startsWith("CutDeck build: lift video")));
+});
+
+test("into clone + lift brings a later block forward without moving it past other clips", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 1n * S, end: 3n * S, in: 10n * S }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 1n * S, end: 3n * S, in: 10n * S }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]] }],
+  });
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "lift", from_ticks: t(0), to_ticks: t(1) },
+      { op: "clone", from_ticks: t(3), to_ticks: t(4), dt_ticks: String(-3n * S) },
+      { op: "lift", from_ticks: t(3), to_ticks: t(4) }],
+    items: [{ id: "x", media: SHOW, in_ticks: t(100), out_ticks: t(101), at_ticks: t(5), v: 0, a: 0 }] });
+  const built = h.sequence("cut");
+  const keep = (list) => list.filter((c) => c.in !== 100n * S).map((c) => [c.start / S, c.in / S]).sort((a, b) => Number(a[0] - b[0]));
+  assert.deepEqual(keep(built.video), [[0n, 50n], [1n, 10n]]);
+  assert.deepEqual(keep(built.audio), [[0n, 50n], [1n, 10n]]);
+  assert.ok(h.undoSteps.some((s) => s.startsWith("CutDeck build: clone")));
+});
