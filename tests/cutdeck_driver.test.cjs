@@ -345,3 +345,21 @@ test("the driver measures Graphics with the Transform panel's measure", async ()
   const withHelper = createAlignFeature({ ppro: {}, ctl: { state: {}, render() {} }, uxp: {}, rpc: () => {} });
   assert.equal(typeof withHelper.measure, "function");
 });
+
+test("reload_panel tears the panel down (Premiere listeners off) before it reloads", async () => {
+  const h = host();
+  const order = [];
+  const realTimeout = global.setTimeout;
+  const hadWindow = "window" in global;
+  global.window = { location: { reload: () => order.push("reload") } };
+  global.setTimeout = (fn) => { fn(); return 0; };
+  try {
+    const out = await createDriver({ ppro: h.ppro, ctl: controller(), teardown: () => order.push("teardown") })
+      .handle({ command: "reload_panel", args: {} });
+    assert.deepEqual(out, { reloading: true });
+  } finally {
+    global.setTimeout = realTimeout;
+    if (!hadWindow) delete global.window;
+  }
+  assert.deepEqual(order, ["teardown", "reload"]);
+});
