@@ -1006,6 +1006,34 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
                                    if (e["edge_src_s"], e["word"]) not in old_edges]}
 
 
+def _plan_pieces_arguments(args: dict, jobs) -> dict:
+    checked = _cut_words_arguments({**{k: args[k] for k in ("sequence", "track") if k in args},
+                                    "result_name": "-", "remove": args.get("keep"), "keep_ms": 0}, jobs)
+    pad_ms = args.get("pad_ms", word_cut.PAD_MS)
+    if type(pad_ms) is not int or not 0 <= pad_ms <= 2000:
+        raise ValueError("pad_ms must be 0 to 2000")
+    return {**{k: checked[k] for k in ("sequence", "track") if k in checked}, "keep": checked["remove"], "pad_ms": pad_ms}
+
+
+async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    built = await asyncio.to_thread(lambda: timeline_transcript.build(
+        source, track=args.get("track"), limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True))
+    if built["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in built['missing']]}")
+    tpf = int(source["ticks_per_frame"])
+    pieces = word_cut.plan_pieces(built["word_objects"], args["keep"], built["clip_objects"], tpf,
+                                  int(source["end_ticks"]), built["level_at"], args["pad_ms"])
+    at, items = 0, []
+    for n, p in enumerate(pieces):
+        items.append({"id": f"piece{n + 1}", "media": p["media"], "in_ticks": p["in_ticks"],
+                      "out_ticks": p["out_ticks"], "at_ticks": str(at), "v": 0, "a": 0})
+        at += int(p["out_ticks"]) - int(p["in_ticks"])
+    return {"sequence": source["name"], "pieces": pieces, "items": items,
+            "duration_s": round(at / PPRO_TICKS_PER_SECOND, 3)}
+
+
 HELPER_COMMANDS: dict[str, Command] = {
     "timeline_transcript": Command(
         300, _timeline_transcript_arguments, "read",
@@ -1044,6 +1072,20 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
          ("track", str | None, None), ("keep_ms", int, 250)),
         run=_cut_words),
+    "plan_pieces": Command(
+        300, _plan_pieces_arguments, "read",
+        """
+        Plan a Short (or any re-ordered cut) by its words: `keep` lists phrases in the order they
+        should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
+        default the active one). Each piece starts and ends in the pauses around its words (pad_ms
+        of pause, then the nearest quiet frame; with no pause, the dip toward the dropped words,
+        never into the kept ones; `no_quiet` says so). Returns `items` ready for
+        premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
+        v/a and add layers as needed) and `pieces` with each one's text and source. Edits
+        nothing. Read the built Short back with premiere_timeline_transcript.
+        """,
+        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 120)),
+        run=_plan_pieces),
     "screenshot": Command(
         30, _no_arguments, "read",
         """

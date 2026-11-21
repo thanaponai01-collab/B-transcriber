@@ -83,3 +83,25 @@ def test_touching_words_cut_on_the_dip_inside_the_removed_word_never_the_kept_on
     p = word_cut.plan(WORDS, [{"text": "four"}], TPF, END, level_at=level_at)
     end = p["cuts_frames"][0][1]
     assert end == 77 and end * TPF <= 2600 * MS and p["removals"][0]["no_quiet"]["end"] == 3.0
+
+
+def test_plan_pieces_puts_each_kept_phrase_between_its_pauses_in_the_order_given():
+    from cutdeck.timeline_transcript import Clip
+    clips = [Clip("A1@0", 0, END, 10_000 * MS, 10_000 * MS + END, "a.mp4")]  # plays source from 10 s
+    pieces = word_cut.plan_pieces(WORDS, [{"text": "four"}, {"text": "one"}], clips, TPF, END)
+    four, one = pieces
+    a, b = (int(four["in_ticks"]) - 10_000 * MS) // MS, (int(four["out_ticks"]) - 10_000 * MS) // MS
+    assert 1800 <= a <= 2200 and b <= 2600            # never into "three" or the touching "five"
+    a, b = (int(one["in_ticks"]) - 10_000 * MS) // MS, (int(one["out_ticks"]) - 10_000 * MS) // MS
+    assert a == 0 and 400 <= b <= 1000 and b >= 500   # 120 ms of pause kept after "one"
+    assert four["media"] == "a.mp4" and one["text"] == "one"
+
+
+def test_plan_pieces_dips_toward_the_dropped_neighbour():
+    from cutdeck.timeline_transcript import Clip
+    clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
+    # Keep "four" (ends 2.6 s where "five" begins, frame 78): no quiet; the dip at 80 is in "five"
+    # (dropped), the one at 76 is inside "four" (kept): the end may only move later.
+    level_at = lambda t: {76 * TPF: 1.0, 80 * TPF: 2.0}.get(t, 8.0)
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "four"}], clips, TPF, END, level_at)
+    assert int(piece["out_ticks"]) == 80 * TPF and piece["no_quiet"]["end"] == 2.0

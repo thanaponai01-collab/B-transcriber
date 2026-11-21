@@ -45,11 +45,11 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
 DIP_FRAMES = 2  # with no quiet frame, how far either side of the target to look for the quietest
 
 
-def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, side: str) -> tuple[int, float | None]:
+def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, dip: str) -> tuple[int, float | None]:
     """The frame boundary in ``[lo, hi]`` (ticks: the pause) nearest ``frame`` whose audio is
     quiet (``level_at`` below 0): ``(frame, None)``. When the pause has none (words touching),
-    the quietest boundary up to ``DIP_FRAMES`` into the REMOVED words (``side`` "start": later,
-    "end": earlier), never into the kept ones: ``(frame, its dB over the sound threshold)``."""
+    the quietest boundary up to ``DIP_FRAMES`` toward the words being dropped (``dip`` "later" or
+    "earlier"), never into the kept ones: ``(frame, its dB over the sound threshold)``."""
     first, last = -(-lo // tpf), hi // tpf
     for step in range(max(last - first, 0) + 1):
         for f in (frame - step, frame + step):
@@ -57,7 +57,7 @@ def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, side: str) ->
                 level = level_at(f * tpf)
                 if level is not None and level < 0:
                     return f, None
-    if side == "start":
+    if dip == "later":
         candidates = range(max(frame, first), frame + DIP_FRAMES + 1)
     else:
         candidates = range(frame - DIP_FRAMES, min(frame, last) + 1)
@@ -96,8 +96,8 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
         if level_at is not None:
             # The quiet frame in the pause nearest the target; the engine's word edges can be
             # off, the audio is not. No quiet frame: the dip, with its level over threshold.
-            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "start")
-            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "end")
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "later")
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "earlier")
             no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
         spans.append((fa, fb))
         details.append({"text": "".join(w.text for w in words[i:j + 1]) if not remove.get("text") else remove["text"],
@@ -120,3 +120,52 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
 def count(words: list[TimelineWord], text: str) -> int:
     """How many times the phrase is said as whole words."""
     return sum(1 for m in find(words, text, 1, limit=10000) if m["whole_words"]) if _norm(text) else 0
+
+
+PAD_MS = 120  # pause kept before and after a piece, when there is that much
+
+
+def plan_pieces(words: list[TimelineWord], keeps: list[dict], clips: list, tpf: int, end_ticks: int,
+                level_at=None, pad_ms: int = PAD_MS) -> list[dict]:
+    """The pieces of source media that play each kept phrase, in the order given: each piece
+    starts in the pause before its first word and ends in the pause after its last (``pad_ms``
+    of it, then the nearest quiet frame; with no pause, the dip toward the dropped neighbour,
+    never into the kept words). A phrase that runs across a cut on this timeline gives one piece
+    per clip. Returns ``[{text, media, in_ticks, out_ticks, timeline_s, no_quiet?}]`` with
+    source In/Out in ticks, frame-aligned on this timeline."""
+    pad = pad_ms * TICKS_PER_MS
+    out = []
+    for keep in keeps:
+        i, j = _resolve(words, keep, tpf)
+        before = words[i - 1].end if i > 0 else 0
+        after = words[j + 1].start if j + 1 < len(words) else end_ticks
+        first, last = words[i].start, words[j].end
+        fa = max(first - pad, before) // tpf
+        if fa * tpf < before:
+            fa += 1
+        if fa * tpf > first:
+            fa = first // tpf
+        fb = -(-min(last + pad, after) // tpf)
+        if fb * tpf > after:
+            fb -= 1
+        if fb * tpf < last:
+            fb = -(-last // tpf)
+        no_quiet = {}
+        if level_at is not None:
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "earlier")
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "later")
+            no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
+        text = keep.get("text") or "".join(w.text for w in words[i:j + 1])
+        lo, hi = fa * tpf, fb * tpf
+        for clip in clips:  # one piece per clip the span runs through
+            a, b = max(lo, clip.start), min(hi, clip.end)
+            if b <= a:
+                continue
+            piece = {"text": text, "media": clip.media,
+                     "in_ticks": str(clip.in_ + round((a - clip.start) * clip.speed)),
+                     "out_ticks": str(clip.in_ + round((b - clip.start) * clip.speed)),
+                     "timeline_s": [round(a / 254016000000, 3), round(b / 254016000000, 3)]}
+            if no_quiet:
+                piece["no_quiet"] = no_quiet
+            out.append(piece)
+    return out

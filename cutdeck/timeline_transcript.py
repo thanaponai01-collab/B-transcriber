@@ -643,4 +643,5 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["word_objects"] = words
         thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
         result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, thresholds)
+        result["clip_objects"] = clips
     return result
