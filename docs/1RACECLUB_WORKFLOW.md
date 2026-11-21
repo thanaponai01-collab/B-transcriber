@@ -633,3 +633,10 @@ with a payoff, from the FP3 rough cut (rough-cut s):
   (framed to keep the TURN 14 label) then the tyre smoke; **the timing tower is cropped (L4.5 T16 R81 B4) and enlarged 190% on the left
   (V5)** over "ใครยังไม่ล็อกบ้าง", with Hamilton's car framed to its right. No radio caption exists in this stretch, so no radio crop.
   Read-back: all 9 stills end on their cuts. The title trim isn't read back by the build: confirm after a save.
+- **User 20:15:** (1) cropped assets go on **one layer** (V5, where the user also consolidated every radio box); (2) keep them in the
+  **safe zone of every platform**; (3) the timetable on the left but **only the row that matters**, not the whole tower.
+  Safe zone used (1080x1920, union of TikTok / YouTube Shorts / Reels UI: top bar, bottom caption + music bar, right action buttons;
+  Shorts has the widest right column): keep assets within **x 60–890, y 250–1440**. The full tower (y 780–1867) sat under the
+  caption area. Now: only "8 HAM +1.506 M" (crop L4.7 T42.08 R82.19 B54.86 of the 1280x720 feed), 310%, at x 70–591, y 800–868,
+  top-left of the picture, over "ใครยังไม่ล็อกบ้าง" with Hamilton's car beside it. Read back on its cut.
+  Note: the feed's own graphics (lap box, TURN label, F1 TV bug) inside a 163.5% hold can still fall outside the safe zone.
