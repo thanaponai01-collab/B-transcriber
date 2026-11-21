@@ -193,6 +193,11 @@ Tests:
 
 - **Your OBS files' extra streams are harmless today.** In every footage file of 20261121, stream 2
   duplicates stream 1 and streams 3-4 are silent. Per-stream transcription was not built.
+- **A name glossary is not the fix for names.** Tried tonight on your F1 audio, through both the
+  decoder prompt and hotwords. Names came out right ("รัสเซล" 1 → 14), but the model invented
+  name lists in place of real speech and dropped 28-30% of the text (details in docs/ENGINES.md).
+  Fix names after decoding instead (a reviewed substitution list, or SubtitleDesk corrections
+  through the flywheel).
 - **Text accuracy is unchanged.** This work fixes *where* words are, not *what* they are.
   `biodatlab whisper-th-medium` still mishears casual speech and English phrases. Any engine
   change needs the gold set (still the #1 blocker).

@@ -123,3 +123,19 @@ raw per-word list in `EngineResult.raw["words"]` for CutDeck Phase 5 filler exci
 **Per-engine config (2.3):** construction knobs live under `config["engines"][<name>]`
 (model_id, compute_type, beam_size, batch_size, cue thresholds, bias budget). `run.py`
 forwards the matching block as kwargs — an engine/model/compute swap is a YAML edit.
+
+**Name glossaries make the model invent speech (2026-11-22).** A 15-min window of a 1RaceClub
+F1 watch-along (`2026-11-21 07-07-37.mp4`, 4790-5690 s) was transcribed three times into scratch
+DBs, with a 21-term name glossary (รัสเซล, นอริส, แม็คลาเรน, อัลไพน์, แฮมิลตัน, ...) through
+`transcribe(glossary=...)`:
+
+| run | chars | "รัสเซล" | invented names |
+|---|---|---|---|
+| no glossary | 2,579 | 1 (plus "ราเซล", "รัสเซีย") | 0 |
+| `bias_channel: prompt` (production) | 1,854 (−28%) | 14 | 13 × แม็คลาเรน, plus lists like "แม็คลาเรน อัลไพน์ เลอแคลร์" in place of real speech |
+| `bias_channel: hotwords` | 1,805 (−30%) | 11 | แฮมิลตัน ×6, "รัสเซล รัสเซล" |
+
+The real lines lost under the glossary include "แม็กทีหนึ่งครับ ราเซลที่สอง คิมมิ ที่สามนอนดี".
+Don't feed name lists to the decoder. Fix names after decoding, with a reviewed substitution list or
+corrections through the flywheel, and measure on the gold set. Scripts and outputs are in
+`output/timeline_listen/glossary/`.
