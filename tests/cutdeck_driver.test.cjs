@@ -50,6 +50,7 @@ test("the driver offers exactly the helper's fixed commands", () => {
     "reload_panel",
     "build_sequence",
     "cut_copy",
+    "create_sequence",
   ]);
 });
 

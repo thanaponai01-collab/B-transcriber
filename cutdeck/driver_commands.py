@@ -171,6 +171,16 @@ def _cut_copy_arguments(args: dict, jobs) -> dict:
             "cuts": {"ticks_per_frame": str(cuts["ticks_per_frame"]), "cuts_frames": frames}}
 
 
+def _create_sequence_arguments(args: dict, jobs) -> dict:
+    """Validate `create_sequence`: a new sequence name and an existing .sqpreset file."""
+    name, preset = args.get("name"), args.get("preset_path")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name must be a sequence name")
+    if not isinstance(preset, str) or not preset.lower().endswith(".sqpreset") or not Path(preset).is_file():
+        raise ValueError("preset_path must be an existing .sqpreset file")
+    return {"name": name, "preset_path": preset}
+
+
 def _export_sequence_arguments(args: dict, jobs) -> dict:
     """Export the active sequence with a Media Encoder preset to a new file (never overwrites)."""
     output, preset = args.get("output_file"), args.get("preset_file")
@@ -318,6 +328,8 @@ COMMANDS: dict[str, Command] = {
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
     "cut_copy": Command(1800, _cut_copy_arguments,
                         "Copy a named sequence and cut frame ranges out of the copy (Rough Cut engine)."),
+    "create_sequence": Command(30, _create_sequence_arguments,
+                               "Create a new empty sequence from a sequence preset (.sqpreset)."),
     "export_sequence": Command(3600, _export_sequence_arguments,
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
                                ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
