@@ -148,7 +148,8 @@ What remains is sound beyond the 400 ms reach.
 The planner was run offline on pieces you cut by hand, and each In/Out edge was compared with the
 one you chose by ear:
 - the Max Short (saved v4): 17 pieces, 34 edges, used to tune;
-- the Gillette review (`edioting`, 20261117): 48 pieces, 84 edges, **held out**.
+- the Gillette review (`edioting`, 20261117): 48 pieces, 84 edges, **held out**;
+- the tiw project's `tt` and `yt` (20261119): 101 and 1,072 pieces, **held out**.
 
 | setting | Max Short: within 1 frame / within 100 ms / off >200 ms | Gillette (held out) |
 |---|---|---|
@@ -156,10 +157,21 @@ one you chose by ear:
 | **pad 60 ms (the default now)** | 22 / 23 / 5 | **28 / 61 / 11** |
 | pad 60 + wordless sound 600 ms | 24 / 25 / 2 | 21 / 59 / 11 |
 
-- **Pad 60 ms** generalizes: it is clearly better on both cuts. It is the default now.
+Two more held-out cuts from the tiw project (20261119, source transcribed once, store job 85):
+
+| setting | `tt`: 101 pieces, 190 edges | `yt`: 1,072 pieces, 1,888 edges |
+|---|---|---|
+| pad 120 ms | 23 within a frame / 131 within 100 ms | 218 / 1,383 |
+| **pad 60 ms** | **104 / 136** | **1,241 / 1,439** |
+| pad 60 + wordless | 104 / 136 | 1,195 / 1,420 |
+
+(`yt` may have started from a CutDeck rough cut, whose own pads are 40-60 ms, so part of its match
+may be the Rough Cut's rather than your ear. `tt` and the Gillette review are the cleaner evidence.)
+
+- **Pad 60 ms** generalizes: it is clearly better on all four cuts. It is the default now.
 - **Wordless sound** (taking along a laugh or breath that touches the phrase) fitted the Max Short,
   where you kept 200-530 ms of wordless sound on 4 pieces, but did worse on the held-out Gillette
-  review. It is **off by default**, available as `wordless_ms` for an edit where reactions matter.
+  review and on `yt`. It is **off by default**, available as `wordless_ms` for an edit where reactions matter.
 - The remaining large misses are mostly where you cut mid-flow on purpose (no pause; `no_quiet`)
   or kept part of a word.
 
