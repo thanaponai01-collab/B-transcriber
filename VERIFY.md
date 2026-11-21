@@ -77,6 +77,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
 - live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
 
+## Timeline transcript and cut by words
+- test: `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py -q -p no:cacheprovider`
+- fail-signal: failed
+- fail-proof (2026-11-22): dropped `- clip.in_` from the mapping in cutdeck/timeline_transcript.py (3 red); widened the sound threshold in `tighten` (1 red); cut at the word edges instead of in the pauses in cutdeck/word_cut.py (1 red); each restored.
+- live (2026-11-22, run `20261122-004515-timeline-listen`): `timeline_transcript` on a 96-min sequence and on a 119-clip rough cut of a scratch copy (5 of 238 edges in audible speech, a fresh transcript of the cut audio within a median 3 ms); `cut_words` removed two phrases (said 1 -> 0, no cut in speech). Report: docs/TIMELINE_LISTEN.md.
+
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
