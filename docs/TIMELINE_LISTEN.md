@@ -172,8 +172,12 @@ may be the Rough Cut's rather than your ear. `tt` and the Gillette review are th
 - **Wordless sound** (taking along a laugh or breath that touches the phrase) fitted the Max Short,
   where you kept 200-530 ms of wordless sound on 4 pieces, but did worse on the held-out Gillette
   review and on `yt`. It is **off by default**, available as `wordless_ms` for an edit where reactions matter.
-- The remaining large misses are mostly where you cut mid-flow on purpose (no pause; `no_quiet`)
-  or kept part of a word.
+- **Every remaining miss of more than 200 ms is one kind: you cut inside a word**, almost always at
+  a piece's end (`tt`: 25 out-edges and 3 in-edges; Gillette: 11 out-edges). The words are mostly
+  long, drawn-out ones ("มัน" of 940-1,260 ms, "คือ" 900 ms, "เนี่ย", "เพราะว่า"), and you keep only
+  the first 200-600 ms. That looks like trimming the dragged hesitation syllable ("มันนน…",
+  "คือออ…"). It is an editing habit, not a timing error. An optional "trim a dragged last syllable"
+  rule could learn it, but more evidence is needed first.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
