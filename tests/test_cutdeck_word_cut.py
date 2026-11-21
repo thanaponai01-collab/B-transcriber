@@ -252,5 +252,18 @@ def test_a_zero_length_word_left_behind_by_fitting_does_not_break_the_stretch():
     words = [replace(w("a", 0, 500), src_start_ms=1430, src_end_ms=1480),   # pulled in to its sound
              replace(w("b", 500, 500), src_start_ms=1160, src_end_ms=1160),  # zero-length, was inside a
              replace(w("c", 600, 900), src_start_ms=1500, src_end_ms=1800)]
-    (p,) = word_cut.plan_pieces(words, [{"text": "abc"}], TPF, _src(words))
-    assert int(p["in_ticks"]) <= 1160 * MS and int(p["out_ticks"]) >= 1800 * MS
+    (p,) = word_cut.plan_pieces(words, [{"text": "abc"}], TPF, _src(words))   # no "not one stretch"
+    assert int(p["in_ticks"]) <= 1430 * MS and int(p["out_ticks"]) >= 1800 * MS
+
+
+def test_review3_zero_length_reordered_word_and_a_touching_jump_back_are_refused_or_ignored():
+    from dataclasses import replace
+    words = [replace(w("aa", 0, 400), src_start_ms=10000, src_end_ms=10400),
+             replace(w("zz", 400, 400), src_start_ms=2000, src_end_ms=2000),
+             replace(w("cc", 400, 800), src_start_ms=10400, src_end_ms=10800)]
+    (p,) = word_cut.plan_pieces(words, [{"text": "aazzcc"}], TPF, _src(words))
+    assert int(p["in_ticks"]) >= 9800 * MS                       # not back to the zero-length word
+    back = [replace(w("aa", 0, 400), src_start_ms=10000, src_end_ms=10400),
+            replace(w("bb", 400, 1300), src_start_ms=9100, src_end_ms=10001)]
+    with pytest.raises(ValueError, match="not one stretch"):
+        word_cut.plan_pieces(back, [{"text": "aabb"}], TPF, _src(back))

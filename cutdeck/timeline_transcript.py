@@ -188,6 +188,9 @@ def _thai(ch: str) -> bool:
     return "฀" <= ch <= "๿"
 
 
+_CLITICS = {"'s", "'ve", "'re", "'ll", "'d", "'m", "'t", "n't", "’s", "’ve", "’re", "’ll", "’d", "’m", "n’t"}
+
+
 def join_words(texts: Iterable[str]) -> str:
     """Thai joins without spaces; every other join gets one, as the pipeline's script-boundary
     spacing writes cues (transcribe/pipeline/normalize.py)."""
@@ -196,7 +199,7 @@ def join_words(texts: Iterable[str]) -> str:
         t = t.strip()
         # No space between two Thai runs, before punctuation or a clitic ("'ve", "n't"), or after
         # an opening bracket.
-        if out and t and not (_thai(out[-1]) and _thai(t[0])) and t[0] not in ".,!?;:%)]}'’"                 and not t.lower().startswith("n't") and out[-1] not in "([{":
+        if out and t and not (_thai(out[-1]) and _thai(t[0])) and t[0] not in ".,!?;:%)]}"                 and t.lower() not in _CLITICS and out[-1] not in "([{":
             out += " "
         out += t
     return out

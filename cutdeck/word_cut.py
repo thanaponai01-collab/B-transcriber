@@ -182,11 +182,13 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
         for a, b in zip(timed, timed[1:]):
             # The engine's words overlap now and then; only a jump back past the previous word, or
             # more than a second forward, is a cut.
-            if b.src_end_ms <= a.src_start_ms or b.src_start_ms - a.src_end_ms > 1000:
+            if b.src_start_ms < a.src_start_ms - 50 or b.src_start_ms - a.src_end_ms > 1000:
                 raise ValueError(f"{keep.get('text', 'that span')!r} is not one stretch of its source (it crosses a "
                                  f"cut at {a.text}|{b.text}); keep each part as its own phrase")
-        first = min(w.src_start_ms for w in kept) * TICKS_PER_MS
-        last = max(w.src_end_ms for w in kept) * TICKS_PER_MS
+        # The span of the words that have extent; a zero-length word reordered in is not a reason to
+        # play everything between it and them.
+        first = min(w.src_start_ms for w in timed) * TICKS_PER_MS
+        last = max(w.src_end_ms for w in timed) * TICKS_PER_MS
         src = source_words.get(media) or []
         before = max((w.end_ms * TICKS_PER_MS for w in src if w.end_ms * TICKS_PER_MS <= first), default=0)
         next_word = min((w.start_ms * TICKS_PER_MS for w in src if w.start_ms * TICKS_PER_MS >= last), default=None)

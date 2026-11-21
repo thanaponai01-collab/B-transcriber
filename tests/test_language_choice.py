@@ -73,3 +73,35 @@ def test_helper_transcribe_takes_th_en_auto_and_refuses_others(tmp_path, monkeyp
         with pytest.raises(ValueError, match="auto"):
             await jobs.dispatch({"type": "submit_transcribe", "media_path": str(media), "language": "fr"})
     asyncio.run(body())
+
+
+def test_auto_decides_per_whole_file_and_short_excerpts_reuse_the_choice():
+    import numpy as np
+    from transcribe.engines.faster_whisper import FasterWhisperEngine as E
+    eng = E.__new__(E)
+    eng._auto_language = "en"                          # left over from a previous file
+    picked = []
+    eng._pick_language = lambda audio: picked.append(len(audio)) or "th"
+    seen = {}
+    def batched(audio, language, *a, **k):
+        seen["language"] = language
+        return []
+    eng._transcribe_batched = batched
+    lang_for = lambda n: (E._resolve_language(eng, "auto", np.zeros(n, np.float32)))
+    assert lang_for(16000 * 120) == "th" and picked == [16000 * 120]     # a whole file: decided afresh
+    eng._auto_language = "en"
+    assert lang_for(16000 * 2) == "en" and len(picked) == 1               # an excerpt: the file's choice
+    eng._auto_language = None
+    assert lang_for(16000 * 2) == "th"                                    # no choice yet: Thai
+
+
+def test_qwen_auto_is_its_own_detection_and_thai_pinned_engines_refuse_english():
+    import pytest
+    from transcribe.engines.qwen3_asr import Qwen3ASREngine
+    assert Qwen3ASREngine._language_arg(Qwen3ASREngine.__new__(Qwen3ASREngine), "auto") is None
+    from transcribe.contracts import EngineInput
+    from transcribe.engines.whisper_thai import WhisperThaiEngine
+    eng = WhisperThaiEngine.__new__(WhisperThaiEngine)
+    eng._pipe = object()
+    with pytest.raises(ValueError, match="decodes only 'th'"):
+        eng.transcribe(EngineInput(audio=None, language_hint="en"))

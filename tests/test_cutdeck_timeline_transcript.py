@@ -405,3 +405,9 @@ def test_review2_prproj_zero_source_length_and_ntsc_rates():
 def test_join_words_writes_english_as_english():
     assert tt.join_words(["you", "'ve", "got", "downforce", ",", "it", "does", "n't", "(", "really", ")", "."]) ==         "you've got downforce, it doesn't (really)."
     assert tt.join_words(["Max", "ชนะ", "F1", "ครับ"]) == "Max ชนะ F1 ครับ"
+
+
+def test_join_words_keeps_the_space_before_a_quote():
+    assert tt.join_words(["he", "said", "'hello'"]) == "he said 'hello'"
+    assert tt.join_words(["the", "'90s"]) == "the '90s"
+    assert tt.join_words(["it", "'s", "fine"]) == "it's fine"

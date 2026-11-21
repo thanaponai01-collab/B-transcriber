@@ -615,6 +615,18 @@ class FasterWhisperEngine(Engine):
             return None
         return sum(seg.avg_logprob * len(seg.tokens) for seg in segments) / tokens
 
+    def _resolve_language(self, hint: str | None, audio) -> str | None:
+        """The decode language for this audio. "auto" on a whole file (a minute or more) decides
+        afresh: an engine kept resident across files, as the eval harness does, must not carry one
+        file's language into the next. A short excerpt (a gap re-decode) is too little to decide on:
+        it gets the file's choice, else Thai."""
+        if hint != "auto":
+            return hint
+        if len(audio) >= 60 * 16000:
+            self._auto_language = None
+            return self._pick_language(audio)
+        return getattr(self, "_auto_language", None) or "th"
+
     def _pick_language(self, audio) -> str:
         """`language: auto`: Thai or English for this file. The Thai checkpoint's own language
         detector calls everything Thai (0.97+ on an English broadcast, 2026-11-22), but its
@@ -823,9 +835,7 @@ class FasterWhisperEngine(Engine):
         kwargs = {}
         if inp.speech_spans:
             kwargs["speech_spans"] = inp.speech_spans
-        language = inp.language_hint
-        if language == "auto":
-            language = self._pick_language(audio)
+        language = self._resolve_language(inp.language_hint, audio)
         words = self._transcribe_batched(audio, language, initial_prompt,
                                           temperature=temperature, beam_size=beam_size,
                                           **kwargs)
