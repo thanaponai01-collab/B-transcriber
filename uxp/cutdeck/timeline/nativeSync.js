@@ -19,6 +19,7 @@
 const { runTransaction, activeProjectAndSequence, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 
 const SYNCED_SUFFIX = "_Synced";
 
@@ -162,15 +163,8 @@ async function placeAll(ppro, project, copy, targets) {
   const editor = ppro.SequenceEditor.getEditor(copy);
   const tick = (n) => ppro.TickTime.createWithTicks(n.toString());
   runTransaction(project, "CutDeck Sync", (compound) => {
-    // The selection is only valid while its callback runs (live 2026-09-23: "The script object
-    // is no longer valid"; Adobe's eslint-plugin-premierepro rule no-empty-selection-escape),
-    // so it is filled and turned into the remove action in there, synchronously.
-    let cleared = false;
-    ppro.TrackItemSelection.createEmptySelection((selection) => {
-      for (const c of [...now.video, ...now.audio]) selection.addItem(c.item, true);
-      cleared = compound.addAction(editor.createRemoveItemsAction(selection, false, ppro.Constants.MediaType.ANY));
-    });
-    if (!cleared) throw new Error("addAction(clear copy) returned false");
+    const all = [...now.video, ...now.audio].map((c) => c.item);
+    if (!addRemoveItemsAction(ppro, compound, editor, all, false, ppro.Constants.MediaType.ANY)) throw new Error("addAction(clear copy) returned false");
     for (const m of targets) {
       if (m.clip && m.clip.colorLabel !== null && m.clip.colorLabel !== undefined && m.projectItem) {
         if (typeof m.projectItem.createSetColorLabelAction === "function") {

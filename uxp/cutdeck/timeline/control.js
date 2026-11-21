@@ -34,7 +34,7 @@
    uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt). */
 
 const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
-const { getTrackClipItems, isTrackItemSelected, trackItemName } = require("../host/trackItems.js");
+const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { waitForFile } = require("../host/files.js");
@@ -255,12 +255,7 @@ async function editClips(ppro, { sequence: name = null, edits }) {
     for (const [kind, ripple, mediaType] of removeGroups) {
       const group = targets.filter((t) => t.op === "remove" && !!t.ripple === ripple && (kind === null || t.kind === kind));
       if (!group.length) continue;
-      let added = false;
-      ppro.TrackItemSelection.createEmptySelection((selection) => {
-        for (const t of group) selection.addItem(t.item, true);
-        added = compound.addAction(editor.createRemoveItemsAction(selection, ripple, mediaType));
-      });
-      if (!added) throw new Error(`addAction(remove${ripple ? " ripple" : ` ${kind}`}) returned false`);
+      if (!addRemoveItemsAction(ppro, compound, editor, group.map((t) => t.item), ripple, mediaType)) throw new Error(`addAction(remove${ripple ? " ripple" : ` ${kind}`}) returned false`);
     }
   });
   const tracksAfter = [];

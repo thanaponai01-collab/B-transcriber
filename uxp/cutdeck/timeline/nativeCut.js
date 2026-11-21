@@ -14,6 +14,7 @@
 const { runTransaction, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
@@ -263,12 +264,7 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
       for (const kind of ["video", "audio"]) {
         const these = doomed.filter((c) => c.kind === kind);
         if (!these.length) continue;
-        let added = false;
-        ppro.TrackItemSelection.createEmptySelection((selection) => {
-          for (const c of these) selection.addItem(c.item, true);
-          added = compound.addAction(ed.createRemoveItemsAction(selection, ripple, kind === "video" ? MT.VIDEO : MT.AUDIO));
-        });
-        if (!added) throw new Error(`addAction(remove ${kind}) returned false`);
+        if (!addRemoveItemsAction(ppro, compound, ed, these.map((c) => c.item), ripple, kind === "video" ? MT.VIDEO : MT.AUDIO)) throw new Error(`addAction(remove ${kind}) returned false`);
       }
     }));
     doomed.length = 0;

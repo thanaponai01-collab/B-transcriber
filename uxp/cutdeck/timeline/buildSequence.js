@@ -58,6 +58,7 @@
 
 const { runTransaction, sequencesNamed, cloneSequence } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
+const { addRemoveItemsAction } = require("../host/trackItems.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
 const { applyMotionValues } = require("../transform/apply.js");
 const { asBinLike } = require("../host/project.js");
@@ -97,12 +98,7 @@ async function holdBinItem(project, fileName) {
 function removeAll(ppro, project, editor, items, mediaType, label) {
   if (!items.length) return;
   runTransaction(project, label, (compound) => {
-    let added = false;
-    ppro.TrackItemSelection.createEmptySelection((selection) => {
-      for (const it of items) selection.addItem(it, true);
-      added = compound.addAction(editor.createRemoveItemsAction(selection, false, mediaType));
-    });
-    if (!added) throw new Error(`addAction(${label}) returned false`);
+    if (!addRemoveItemsAction(ppro, compound, editor, items, false, mediaType)) throw new Error(`addAction(${label}) returned false`);
   });
 }
 
