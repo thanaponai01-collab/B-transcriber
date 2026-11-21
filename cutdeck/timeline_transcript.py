@@ -605,11 +605,20 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         if len(found) > 3:
             gaps_by_media[media] = found[3]
     words = project(clips, words_by_media)
+    cuts = edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)
+    if levels_by_media:
+        # A word "clipped" by an edge that is quiet in the audio spans a pause; only an edge with
+        # sound at it really cuts the word (on a real Short, 27 flags vs 4 cuts in sound).
+        loud = {(e["clip"], e["side"]) for e in cuts}
+        side = {"head": ("in",), "tail": ("out",), "both": ("in", "out")}
+        words = [w if not w.clipped or w.media not in levels_by_media
+                 or any((w.clip, sd) in loud for sd in side[w.clipped]) else replace(w, clipped=None)
+                 for w in words]
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
               "sources": [_source_entry(m, j, probe_streams) for m, j in jobs.items()],
-              "words": len(words), "cuts_in_sound": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
+              "words": len(words), "cuts_in_sound": cuts}
     if query:
         result["matches"] = find(words, query, tpf)
     result["untranscribed"] = spans_on_timeline(clips, gaps_by_media, tpf)

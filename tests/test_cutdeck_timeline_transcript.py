@@ -337,3 +337,15 @@ def test_timeline_from_a_saved_project_maps_like_the_live_read(tmp_path):
     assert [ln["text"] for ln in r["lines"]] == ["hello world", "สวัสดีครับ"]
     assert int(r["lines"][1]["start_ticks"]) == 1200 * T + 50 * T   # (3000 - 2900) / 2 after the clip start
     assert [s["reason"] for s in r["skipped"]] == ["disabled"]
+
+
+def test_clipped_flag_needs_sound_at_the_edge_when_levels_are_known(tmp_path):
+    import numpy as np
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    levels = np.full(800, -70.0, dtype=np.float32)
+    levels[100:140] = -30.0; levels[160:200] = -30.0       # a pause 1.40-1.60 inside one engine word
+    words = [tt.SourceWord("helloworld", 1000, 2000, 0)]
+    quiet = tt.build(timeline(clip("A1@0", 0, 900, 1500, media)), lookup=lambda m: (1, words, levels))
+    assert "clipped_words" not in quiet["lines"][0]
+    loud = tt.build(timeline(clip("A1@0", 0, 900, 1300, media)), lookup=lambda m: (1, words, levels))
+    assert loud["lines"][0]["clipped_words"] == ["helloworld"]
