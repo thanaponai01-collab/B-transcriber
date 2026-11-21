@@ -607,3 +607,22 @@ Parked after the agent's v4 in the same sequence; read with prproj_reader, each 
   Starts on the same frame as the F1 Radio Notification SFX, so the box glitches in as the radio sound plays: it reads as a radio
   "coming in". **Principle (seen):** a caption that's evidence enters with a sound and a visual hit together, so the eye jumps to it.
   `prproj_reader` now lists each track's `transitions` (name, match name, start/end, which side of the edit).
+
+### Agent's own Short #2: "Turn 14 lock-ups" (19:55, in `TT max vs everyone v4 (Claude)` at 140.00–160.37, parked after the user's cut)
+User: "copy my text layer for the title and try to create a Short, pick one". Story picked for watch time: one self-contained moment
+with a payoff, from the FP3 rough cut (rough-cut s):
+| Short s | words | picture |
+|---|---|---|
+| 0–4.8 | hook: "ล้อล็อกว่ะ / พยายามจะเลี้ยวรถเข้าไปแต่ / ถ้าเลี้ยวเข้าไปน่าจะกำแพงครับ" (1202.33–1207.17) | holds: Hamilton onboard locking into T14 (HAMILTON 44), turning in, the ZOOX wall |
+| 4.8–6.8 | "ถอยดีกว่า! ไปยูเทิร์นดีกว่า" (1207.17–1209.10) | face only (his joke); auughhh −27 dB |
+| 6.8–9.8 | "แล้วล้อล็อกไปครับ รัสเซล โค้งห้า" (1177.17–1180.20) | hold: Russell onboard |
+| 9.8–15.0 | "โอ้โห แล้วล้อล็อกกันเพียบเลย / แทรกอุณหภูมิมันเย็นขึ้นหรือยังไงวะ" (1186.50–1191.70) | holds: Leclerc's tyre smoke at T14, Leclerc's car at T14; boom −12 dB 3 frames ahead |
+| 15.0–16.7 | "แทรกสิบเจ็ดองศาตอนนี้" | face (nothing on screen shows it) |
+| 16.7–20.4 | "ใครยังไม่ล็อกบ้าง / โค้งนี้มาไม่ถึงเวกัสนะ โค้งสิบสี่" (1193.37–1197.07) | hold: Hamilton at T15, then face for the closing joke |
+- Dropped "โค้งสิบสี่จุดเช็คอินจริงจริง" (1212.3): it repeats "โค้งสิบสี่" right after; the Short ends on the joke instead.
+- Title: the user's own Text layer (V6, 92.7 s) cloned to 140.0 with the new step option `tracks` (clone only V6); its words are still
+  the Max title for the user to retype. Proposed: "โค้ง 14 ล็อกทั้งสนาม".
+- Holds are imported PNG frames of `2.mp4` at 163.5% (not Premiere Frame Holds), framed per frame (offline composite checked).
+- **Premiere fact again:** stills of 40–98 frames landed one frame short (the 246-frame title landed exact; 120 exact in v8): pad a
+  still by one frame only when it's under ~120 frames, then read back. Re-laid, they end on their cuts.
+- In/Out left at the user's 92.7–135.1 (the agent no longer sets marks on a shared Short timeline). Not saved, not exported.
