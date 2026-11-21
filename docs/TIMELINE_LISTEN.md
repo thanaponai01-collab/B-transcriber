@@ -81,6 +81,11 @@ list of pieces of source files, so a word's timeline position is arithmetic:
   clips look like a later stream (Premiere lays each stream on its own track). Everything here,
   the Rough Cut included, reads the first stream (see Gaps).
 
+### Offline: a saved project, no Premiere
+`python -m cutdeck.timeline_transcript --prproj <file> --sequence <name> [--track A1] [--query ...] [--json]`
+reads a saved sequence through `prproj_reader` (speed is taken from source over timeline length,
+fps defaults to 30) and prints the same timeline transcript.
+
 ### Word times fitted to the audio (`tighten`)
 Each source's 10 ms level envelope is decoded once, streamed, and cached by sha256 in
 `output/timeline_transcripts/levels/`. Sound means the Rough Cut sound guard's rule: 6 dB above
@@ -155,6 +160,8 @@ Run folders hold every request and result:
 | `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts at the word boundaries, and the cuts in sound are reported (`no_quiet`, `new_cuts_in_sound`). An earlier, weaker check had passed this case as clean |
 | Two sources: the mic file (4 streams, which landed on A1-A4) and the 7 GB camera file placed on V2/A5 | first read of A5: `missing` named the camera file, 9 s (hashing 7 GB included). The helper's own `transcribe` job took 410 s. Re-read: A5 came from the camera transcript (job 81) and A1/A2 from the mic transcript (job 79); A2 warns that it looks like stream 2 |
 | Your order, rough cut first: a never-transcribed 96-min source (`10-40-51.mp4` on A5), Rough Cut with speech protection | the job transcribed the source once (store job 82) instead of a WAV, then mapped it: 1,644 cuts, 8 min 40 s in all. `timeline_transcript` on that track straight after: nothing missing, 0 s of new listening |
+| Your real work, read offline from `20260130 RENAME template - 2.prproj` after one transcription of `07-07-37.mp4` (196 s, job 83) | `2026-11-21 07-07-37_Synced — CutDeck 94fd4bb9`: 1,091 clips, 1,336 lines; 27 of 2,182 edges in sound (95 tails). `TT max vs everyone v4 (Claude)`: every line of the agent's v4 and of your own cut, in order |
+| Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
@@ -184,6 +191,8 @@ Tests:
 
 ## Gaps and limits (please read)
 
+- **Your OBS files' extra streams are harmless today.** In every footage file of 20261121, stream 2
+  duplicates stream 1 and streams 3-4 are silent. Per-stream transcription was not built.
 - **Text accuracy is unchanged.** This work fixes *where* words are, not *what* they are.
   `biodatlab whisper-th-medium` still mishears casual speech and English phrases. Any engine
   change needs the gold set (still the #1 blocker).
