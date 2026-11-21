@@ -32,6 +32,8 @@
        lift: remove without ripple, leaving a hole (createRemoveItemsAction, ripple false);
        clone: copy each clip by dt onto its own track, overwriting (createCloneTrackItemAction,
          isInsert false; effects kept, pieces unlinked; the disabled state is not relied on);
+       trim: set the end of each clip to end_ticks (VideoClipTrackItem/AudioClipTrackItem
+         .createSetOutPointAction, premierepro.txt:742/48), e.g. a copied title ending on a cut;
        move: shift by dt (createMoveAction, relative), far end first. Live 2026-11-21: a block
          moved backward past other clips rendered black on video (audio fine), so bring a later
          block forward with clone + lift instead.
@@ -210,6 +212,17 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
         runTransaction(project, `CutDeck build: clone ${span} by ${secs(dt)} s`, (c) => {
           for (const { item } of items) {
             if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), 0, 0, false, false))) throw new Error("clone refused");
+          }
+        });
+      } else if (st.op === "trim") {
+        // Tail trim to end at end_ticks: createSetOutPointAction (PREMIERE_FACTS "createSetOutPointAction(t)":
+        // WORKS; createSetEndAction is BROKEN). Out point is in the item's own time: inPoint + new length.
+        const end = BigInt(st.end_ticks);
+        const items = [...now.video, ...now.audio].filter(inRange);
+        runTransaction(project, `CutDeck build: trim ${span} to end at ${secs(end)} s`, (c) => {
+          for (const it of items) {
+            if (end <= it.start) throw new Error(`trim end ${secs(end)} s is not after the clip start ${secs(it.start)} s`);
+            if (!c.addAction(it.item.createSetOutPointAction(tick(it.inPoint + end - it.start)))) throw new Error("trim refused");
           }
         });
       } else if (st.op === "move") {

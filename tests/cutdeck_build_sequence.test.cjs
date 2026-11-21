@@ -192,6 +192,23 @@ test("into clone with tracks copies only those tracks (one text layer onto a lat
   assert.deepEqual(at10.map((c) => [c.track, c.in / S]), [[1, 7n]]);
 });
 
+test("into trim ends a clip on a cut (a copied title) through its out point", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 6n * S, in: 0n }], [{ media: SHOW, start: 1n * S, end: 5n * S, in: 30n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 6n * S, in: 0n }]] }],
+  });
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "trim", from_ticks: t(1), to_ticks: t(2), end_ticks: t(4), tracks: { video: [1] } }],
+    items: [{ id: "x", media: SHOW, in_ticks: t(100), out_ticks: t(101), at_ticks: t(10), v: 0, a: 0 }] });
+  const built = h.sequence("cut");
+  const v1 = built.video.filter((c) => c.track === 1).map((c) => [c.start / S, c.end / S, c.in / S]);
+  assert.deepEqual(v1, [[1n, 4n, 30n]]);
+  assert.deepEqual(built.video.filter((c) => c.track === 0 && c.in === 0n).map((c) => c.end / S), [6n], "other tracks untouched");
+});
+
 const STILL = "E:\\assets\\proof.png";
 
 test("import: true brings a still into CutDeck > Frame Holds once, places it, and reuses it next build", async () => {

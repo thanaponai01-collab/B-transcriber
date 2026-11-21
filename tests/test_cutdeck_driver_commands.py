@@ -127,12 +127,14 @@ def test_build_sequence_into_mode_checks():
     out = prepare(args, None)
     assert prepare({**args, "steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "5",
                                        "tracks": {"video": [5]}}]}, None)["steps"][0]["tracks"] == {"video": [5]}
+    assert prepare({**args, "steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1", "end_ticks": "9"}]}, None)["steps"][0]["end_ticks"] == "9"
     assert out["into"] is True and out["steps"] == args["steps"] and out["restyle"] == args["restyle"]
     for bad in ({"name": "other"}, {"steps": [{"op": "move", "from_ticks": "5", "to_ticks": "1", "dt_ticks": "1"}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1"}]}, {"steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1"}]},
                 {"restyle": [{"kind": "title", "track": 0, "from_ticks": "0", "to_ticks": "1"}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "tracks": {"title": [0]}}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "tracks": {"video": [-1]}}]},
+                {"steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1"}]},
                 {"into": False}):
         try:
             prepare({**args, **bad}, None)
