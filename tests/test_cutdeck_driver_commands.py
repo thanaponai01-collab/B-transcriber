@@ -22,6 +22,39 @@ def test_every_command_is_an_agent_tool():
     assert listed <= {tool.name for tool in tools}
 
 
+def test_a_tool_sends_what_it_was_given_minus_unset_optionals():
+    class Recorder(Backend):
+        def __init__(self):
+            super().__init__(1)
+            self.calls = []
+
+        async def premiere(self, command, args=None):
+            self.calls.append((command, args))
+            return {}
+
+    backend = Recorder()
+    server = create_server(backend)
+    calls = [("premiere_set_in_out", {"in_ticks": "0"}),
+             ("premiere_menu_command", {"path": "Edit > Undo", "focus": None}),  # an explicit null focus is kept
+             ("premiere_read_timeline", {}),
+             ("premiere_build_sequence", {"project": "E:/a.prproj", "base": "b", "name": "n", "items": [],
+                                          "options": {"mark_whole": True}})]
+    for tool, args in calls:
+        asyncio.run(server.call_tool(tool, args))
+    assert backend.calls == [
+        ("set_in_out", {"in_ticks": "0"}),
+        ("menu_command", {"path": "Edit > Undo", "focus": None}),
+        ("read_timeline", {"effects": False}),
+        ("build_sequence", {"project": "E:/a.prproj", "base": "b", "name": "n", "items": [], "save": False,
+                            "options": {"mark_whole": True}}),
+    ]
+    merged = driver_commands.COMMANDS["build_sequence"].prepare(
+        {"project": "E:/a.prproj", "base": "b", "name": "n",
+         "items": [{"media": "D:/a.mp4", "in_ticks": "0", "out_ticks": "1", "at_ticks": "0", "v": 0}],
+         "options": {"mark_whole": True}}, None)
+    assert merged["mark_whole"] is True and "options" not in merged
+
+
 def test_export_sequence_checks_paths_and_never_overwrites(tmp_path):
     prepare = driver_commands.COMMANDS["export_sequence"].prepare
     preset = tmp_path / "BAS4.epr"
