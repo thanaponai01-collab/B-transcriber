@@ -69,12 +69,17 @@ const projectFile = (path) => norm(path).replace(/^\\\\\?\\/, ""); // drop the \
 const secs = (ticks) => Number(ticks) / Number(TICKS_PER_SECOND);
 const abs = (x) => (x < 0n ? -x : x);
 
-async function namedSequence(ppro, project, name) {
+/* allowEmpty: the base and the settings donor may be an empty sequence (a fresh 9:16 one made by
+   create_sequence); items then find their media through media_from. */
+async function namedSequence(ppro, project, name, allowEmpty = false) {
+  let empty = null;
   for (const seq of await project.getSequences()) {
     if (seq.name !== name) continue;
     const read = await readSequence(ppro, seq, { paths: true });
     if (read.video.length || read.audio.length) return { seq, read };
+    empty = empty || { seq, read };
   }
+  if (allowEmpty && empty) return empty;
   throw new Error(`No sequence "${name}" with clips.`);
 }
 
@@ -153,7 +158,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
 
   // Resolve every project item before anything is edited.
   if (into && name !== base) throw new Error(`into edits "${base}" itself: name must be "${base}" too.`);
-  const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base);
+  const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base, true);
   const byPath = new Map();
   for (const [key, fileName] of importNames) {
     const item = await holdBinItem(project, fileName);
@@ -180,7 +185,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     seq = baseSeq;
     editor = ppro.SequenceEditor.getEditor(seq);
     if (settingsFrom) {
-      const { seq: from } = await namedSequence(ppro, project, settingsFrom);
+      const { seq: from } = await namedSequence(ppro, project, settingsFrom, true);
       const settings = await from.getSettings();
       runTransaction(project, `CutDeck build: settings from ${settingsFrom}`, (c) => {
         if (!c.addAction(seq.createSetSettingsAction(settings))) throw new Error("settings refused");
