@@ -626,3 +626,10 @@ with a payoff, from the FP3 rough cut (rough-cut s):
 - **Premiere fact again:** stills of 40–98 frames landed one frame short (the 246-frame title landed exact; 120 exact in v8): pad a
   still by one frame only when it's under ~120 frames, then read back. Re-laid, they end on their cuts.
 - In/Out left at the user's 92.7–135.1 (the agent no longer sets marks on a shared Short timeline). Not saved, not exported.
+- **User 20:05 on Short #2:** "better"; (1) the text must finish on a cut (the cloned title ran 140.0–144.5, the cut is 144.83);
+  (2) "I want to see you cropping some part, like the radio and the table on the left". Fix: new build step `trim` (tail trim through
+  `createSetOutPointAction`) ends the title at 144.83, where the last hook hold cuts to the face. Pictures re-picked after a 0.5 s scan:
+  the 1186–1193 stretch is Hamilton locking at T14 again, so "แทรกอุณหภูมิเย็นขึ้น" now holds on his glowing front-right at T14
+  (framed to keep the TURN 14 label) then the tyre smoke; **the timing tower is cropped (L4.5 T16 R81 B4) and enlarged 190% on the left
+  (V5)** over "ใครยังไม่ล็อกบ้าง", with Hamilton's car framed to its right. No radio caption exists in this stretch, so no radio crop.
+  Read-back: all 9 stills end on their cuts. The title trim isn't read back by the build: confirm after a save.
