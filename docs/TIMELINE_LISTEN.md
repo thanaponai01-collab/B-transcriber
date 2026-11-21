@@ -22,7 +22,8 @@ code (master's helper refuses its `place_text` registration).
   - On your own route (copy the rough cut, keep every track), `keep_words` kept two phrases with
     every track intact and 0 cuts in sound.
   - The planner's 60 ms default was checked against your cuts. Most of their edges turned out to
-    be the Rough Cut's own; on the one independent cut (Gillette review) it beats the old 120 ms.
+    be the Rough Cut's own; on the two cuts with no rough cut (both Gillette videos) it beats the old
+    120 ms.
 - **The engine is fixed where it hurt cuts.**
   - Thai word *times* were off by up to hundreds of ms, both too wide and too narrow. They are
     now fitted to the audio.
@@ -55,7 +56,7 @@ Root causes, each measured:
 3. **Engine word times are loose, in both directions.** faster-whisper's Thai word spans run
    into pauses (a 1.0 s "ครับ"), and they also start late and end early. On the 96-min source, a
    quarter of the words after a pause started 100+ ms after their sound began (256 of 1,017;
-   p90 200 ms), and 275 of 1,058 ended 100+ ms early. A cut placed at an engine word edge clips
+   p90 200 ms), and 277 of 1,017 ended 100+ ms early. A cut placed at an engine word edge clips
    the first syllable. That is the 1RaceClub "รัส" case (log: "ASR word times ran ~0.1 s off").
 
 ## The solution
@@ -174,13 +175,13 @@ Final code, all four cuts (within 1 frame / within 100 ms / off by more than 200
 - **Pad 60 ms** is the default. It is better on both independent cuts, and it agrees with the Rough
   Cut's own edges on the others. On the few non-rough-cut edges of `tt` (23) and `yt` (30), 60 and
   120 tie.
-- **Wordless sound** (a laugh or breath touching the phrase) is worse on the independent cut. It is
+- **Wordless sound** (a laugh or breath touching the phrase) is worse on both independent cuts. It is
   **off by default** (`wordless_ms`).
 - **The big misses are not an editing habit.** Most sit on rough-cut edges where the audio is quiet
   (sound at the edge: 1 of 16 on `tt`, 22 of 271 on `yt`). There the engine's word spans a pause
-  that the Rough Cut cut into. On the two hand cuts the misses do have sound at your edge (4 of 6;
-  21 of 25): there you cut inside a word on purpose, and the planner, which keeps whole words,
-  can't match it. A reading I gave earlier tonight ("you trim
+  that the Rough Cut cut into. On the two cuts with no rough cut, the misses do have sound at your
+  edge (4 of 6; 21 of 25): there the cut is inside a word, presumably on purpose, and the planner,
+  which keeps whole words, can't match it. A reading I gave earlier tonight ("you trim
   dragged syllables") did not survive this check and is withdrawn.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
@@ -223,14 +224,14 @@ Run folders hold every request and result:
 | `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts at the word boundaries, and the cuts in sound are reported (`no_quiet`, `new_cuts_in_sound`). An earlier, weaker check had passed this case as clean |
 | Two sources: the mic file (4 streams, which landed on A1-A4) and the 7 GB camera file placed on V2/A5 | first read of A5: `missing` named the camera file, 9 s (hashing 7 GB included). The helper's own `transcribe` job took 410 s. Re-read: A5 came from the camera transcript (job 81) and A1/A2 from the mic transcript (job 79); A2 warns that it looks like stream 2 |
 | Your order, rough cut first: a never-transcribed 96-min source (`10-40-51.mp4` on A5), Rough Cut with speech protection | the job transcribed the source once (store job 82) instead of a WAV, then mapped it: 1,644 cuts, 8 min 40 s in all. `timeline_transcript` on that track straight after: nothing missing, 0 s of new listening |
-| Your real work, read offline from `20260130 RENAME template - 2.prproj` after one transcription of `07-07-37.mp4` (196 s, job 83) | `2026-11-21 07-07-37_Synced — CutDeck 94fd4bb9`: 1,091 clips, 1,336 lines; 27 of 2,182 edges in sound (95 tails). `TT max vs everyone v4 (Claude)`: every line of the agent's v4 and of your own cut, in order |
-| Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
+| Your real work, read offline from `20260130 RENAME template - 2.prproj` after one transcription of `07-07-37.mp4` (196 s, job 83) | `2026-11-21 07-07-37_Synced — CutDeck 94fd4bb9`: 1,091 clips, 1,336 lines; 122 of 2,182 edges with sound at the cut (27 `sound`, 95 tails). `TT max vs everyone v4 (Claude)`: every line of the agent's v4 and of your own cut, in order |
+| Your own cut of the Max Short (92.7-135.1 s); most of its edges turned out to be the Rough Cut's (see the calibration section) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
 | `keep_words` on `listen two sources (scratch)` (mic on A1-A4, camera on V2/A5), keeping 2 phrases | a copy with **every track kept** (V1, V2, A1-A5, 2 clips each, ending at 2.27 s); reads back exactly the 2 phrases; **0 cuts in sound** |
 | `keep_words` on a rough cut of that multi-track scratch: two spans of 3-4 lines, each crossing rough-cut joins | every track kept (V1, V2, A1-A5, ending at 8.03 s); both spans read back whole. 2 cuts in sound, both expected: one is an inner rough-cut join (the Rough Cut's own edge), one is a span end where the speech runs straight into a laugh (`no_quiet` warned) |
 | **Your whole route, end to end:** rough cut (from cached transcripts) → `keep_words` (two spans, every track) → reorder (`build_sequence` into: clone far, lift, clone back, lift) → `timeline_transcript` | the spans play swapped on all 7 tracks (8.03 s); the read-back shows the new order; the new join added no cut in sound (the same 2 source edges as before, moved) |
 | Final planner, the Short rebuilt | 0 cuts in sound; the three lines in the new order |
 | Through a real MCP client (stdio, `mcp` ClientSession → `python -m cutdeck.mcp_server`) | the four tools are listed; `premiere_timeline_transcript` (125 lines, phrase found at 00:00:04:06) and `premiere_plan_pieces` (same piece as the direct call) answer |
-| English source, re-transcribed with `language="en"` (154 s, store job 87), then `timeline_transcript` on the 50 fps scratch | the newest transcript is used; the lines read as the broadcast ("So you want to take the gear early because you've got downforce on the car and it helps you slow down."), where before they were invented Thai |
+| English source, re-transcribed with `language="en"` (154 s, store job 87), then `timeline_transcript` on the 50 fps scratch | the newest transcript is used (job 87 then; job 89, the `auto` run with identical text, since); the lines read as the broadcast ("So you want to take the gear early because you've got downforce on the car and it helps you slow down."), where before they were invented Thai |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
@@ -239,6 +240,7 @@ Tests:
   quiet snapping, whole-word matches and the rough-cut mapping.
 - Mutation checks, each turning at least one test red, then restored:
   - the mapping without `- clip.in_`;
+  - the sound threshold in `tighten` widened;
   - edge growth off (`REACH_MS = 0`);
   - the audible-edge gate off;
   - unworded sound dropped;
@@ -375,7 +377,7 @@ note, and all are fixed with tests:
 - **Frame rates:** every sequence was 30 fps. A 50 fps source (`10-55-45.mp4`) in a 30 fps sequence
   was mapped and kept correctly (`keep_words`: frame-aligned In/Out, video and audio together).
   NTSC rates (29.97 and so on) are handled in code but were not run live.
-- **English audio is translated, not transcribed.** `10-55-45.mp4` is an English F1 broadcast. The
+- **English audio was translated, not transcribed (fixed, see below).** `10-55-45.mp4` is an English F1 broadcast. The
   Thai engine wrote much of it in Thai ("ดังนั้นคุณต้องขับรถเร็ว ๆ"), looped ("รถหัวแข็งของรถหัวแข็ง…"),
   and only switched to English later ("Generally, Haas looks very tricky."). For English-language
   sources, the words on the timeline can be wrong even where the timing is right. **Fixed at
