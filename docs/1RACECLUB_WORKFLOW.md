@@ -8,6 +8,7 @@ each judgment call. Same method as [HONEKASAE_WORKFLOW.md](HONEKASAE_WORKFLOW.md
 choice, so it can make its own decisions when the footage, story or format changes. Values
 (109%, −12 dB, 0.2) are only today's example of a principle; they are not presets to replay.
 The **Editing principles** section below is the main output; the episode log is the evidence.
+**For Shorts, the consolidated principles and rules (and the open gaps) are in [SHORTS_PRINCIPLES.md](SHORTS_PRINCIPLES.md).**
 
 ## Editing principles (why)
 
