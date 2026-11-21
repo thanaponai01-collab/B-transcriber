@@ -391,6 +391,20 @@ def source_levels(media: str, cache: Path, sample_rate: int = 16000):
     return levels
 
 
+def audio_stream_count(media: str) -> int | None:
+    """How many audio streams the file has (ffprobe), or None when ffprobe can't say. The
+    transcript and levels read the first one, as the Rough Cut does; UXP does not say which
+    stream a Premiere clip plays."""
+    import shutil
+    import subprocess
+    if shutil.which("ffprobe") is None:
+        return None
+    result = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                             "stream=index", "-of", "csv=p=0", media], capture_output=True, text=True,
+                            **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
+    return len(result.stdout.split()) if result.returncode == 0 else None
+
+
 # ── sources: the store ───────────────────────────────────────────────────────
 
 def _sha_index_path(db_path: Path) -> Path:
@@ -440,12 +454,23 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
     return job.id, words, levels
 
 
+def _source_entry(media: str, job_id: int, probe_streams: bool) -> dict:
+    entry = {"media": media, "transcript_job_id": job_id}
+    streams = audio_stream_count(media) if probe_streams else None
+    if streams and streams > 1:
+        entry["audio_streams"] = streams
+        entry["note"] = ("several audio streams: the transcript is of the first; if this track "
+                         "plays another stream, its words may not be what is heard")
+    return entry
+
+
 def build(timeline: dict, *, track: str | None = None, query: str | None = None,
           from_ticks: int | None = None, to_ticks: int | None = None, offset: int = 0,
           limit: int = 200, db_path: Path | None = None, out_dir: Path | None = None,
           tighten_words: bool = True, keep_words: bool = False,
           lookup: Callable[[str], tuple | None] | None = None) -> dict:
     """The timeline transcript of one audio track of a `read_timeline` result."""
+    probe_streams = lookup is None
     if lookup is None:
         import yaml
         from transcribe.db import store
@@ -473,7 +498,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
-              "sources": [{"media": m, "transcript_job_id": j} for m, j in jobs.items()],
+              "sources": [_source_entry(m, j, probe_streams) for m, j in jobs.items()],
               "words": len(words), "cuts_in_sound": edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)}
     if query:
         result["matches"] = find(words, query, tpf)
