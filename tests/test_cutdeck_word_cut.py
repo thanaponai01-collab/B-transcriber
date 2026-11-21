@@ -235,3 +235,22 @@ def test_wordless_sound_is_left_out_by_default():
     level = lambda media, t: 5.0 if 700 * MS <= t < 950 * MS or 1000 * MS <= t < 1800 * MS else -5.0
     (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), level)
     assert int(piece["in_ticks"]) >= 900 * MS
+
+
+
+def test_overlapping_engine_words_are_still_one_stretch():
+    from dataclasses import replace
+    words = [replace(w("a", 0, 500), src_start_ms=1000, src_end_ms=1500),
+             replace(w("b", 500, 900), src_start_ms=990, src_end_ms=1900)]   # b starts 10 ms before a
+    (p,) = word_cut.plan_pieces(words, [{"text": "ab"}], TPF, _src(words))
+    assert int(p["in_ticks"]) <= 990 * MS and int(p["out_ticks"]) >= 1900 * MS
+
+
+
+def test_a_zero_length_word_left_behind_by_fitting_does_not_break_the_stretch():
+    from dataclasses import replace
+    words = [replace(w("a", 0, 500), src_start_ms=1430, src_end_ms=1480),   # pulled in to its sound
+             replace(w("b", 500, 500), src_start_ms=1160, src_end_ms=1160),  # zero-length, was inside a
+             replace(w("c", 600, 900), src_start_ms=1500, src_end_ms=1800)]
+    (p,) = word_cut.plan_pieces(words, [{"text": "abc"}], TPF, _src(words))
+    assert int(p["in_ticks"]) <= 1160 * MS and int(p["out_ticks"]) >= 1800 * MS
