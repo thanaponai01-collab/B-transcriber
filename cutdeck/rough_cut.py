@@ -244,7 +244,7 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
         words = None
         # Only for audio we extracted from the clips ourselves: a caller's own mixdown is theirs.
         if asr and extracted_tmp is not None:
-            _progress(35, "Reading the sources' transcripts")
+            _progress(35, "Reading (or once transcribing) the sources")
         mapped = (_mapped_transcript(seq, audio_track, window, raw_config, db, transcribe_sources=True)
                   if asr and extracted_tmp is not None else None)
         if mapped is not None:

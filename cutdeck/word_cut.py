@@ -45,11 +45,11 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
 DIP_FRAMES = 2  # with no quiet frame, how far either side of the target to look for the quietest
 
 
-def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int, float | None]:
-    """The frame boundary in ``[lo, hi]`` (ticks) nearest ``frame`` whose audio is quiet
-    (``level_at`` below 0): ``(frame, None)``. When the pause has none (words touching), the
-    quietest boundary within ``DIP_FRAMES`` of ``frame``, the dip between syllables a person
-    would cut on: ``(frame, its dB over the sound threshold)``."""
+def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at, side: str) -> tuple[int, float | None]:
+    """The frame boundary in ``[lo, hi]`` (ticks: the pause) nearest ``frame`` whose audio is
+    quiet (``level_at`` below 0): ``(frame, None)``. When the pause has none (words touching),
+    the quietest boundary up to ``DIP_FRAMES`` into the REMOVED words (``side`` "start": later,
+    "end": earlier), never into the kept ones: ``(frame, its dB over the sound threshold)``."""
     first, last = -(-lo // tpf), hi // tpf
     for step in range(max(last - first, 0) + 1):
         for f in (frame - step, frame + step):
@@ -57,12 +57,16 @@ def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int,
                 level = level_at(f * tpf)
                 if level is not None and level < 0:
                     return f, None
-    best, best_level = frame, level_at(frame * tpf)
-    for f in range(frame - DIP_FRAMES, frame + DIP_FRAMES + 1):
+    if side == "start":
+        candidates = range(max(frame, first), frame + DIP_FRAMES + 1)
+    else:
+        candidates = range(frame - DIP_FRAMES, min(frame, last) + 1)
+    best, best_level = frame, None
+    for f in candidates:
         level = level_at(f * tpf) if f >= 0 else None
         if level is not None and (best_level is None or level < best_level):
             best, best_level = f, level
-    return best, (round(best_level, 1) if best_level is not None else None)
+    return best, (round(best_level, 1) if best_level is not None else float("inf"))
 
 
 def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: int,
@@ -92,8 +96,8 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
         if level_at is not None:
             # The quiet frame in the pause nearest the target; the engine's word edges can be
             # off, the audio is not. No quiet frame: the dip, with its level over threshold.
-            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at)
-            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at)
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at, "start")
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at, "end")
             no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
         spans.append((fa, fb))
         details.append({"text": "".join(w.text for w in words[i:j + 1]) if not remove.get("text") else remove["text"],

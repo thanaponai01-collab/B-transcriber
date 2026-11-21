@@ -927,7 +927,17 @@ async def _timeline_transcript(args: dict, premiere: Premiere) -> dict:
         read["tracks"] = [f"A{i}" for i in range(1, int(args["track"][1:]) + 1)]
     timeline = await premiere("read_timeline", read)
     options = {k: args[k] for k in ("track", "query", "from_ticks", "to_ticks", "offset", "limit") if k in args}
-    return await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
+    result = await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
+    # A long rough cut has hundreds; the reply carries counts and the first ones (full_path has all).
+    cuts = result["cuts_in_sound"]
+    result["cuts_in_sound_count"] = {"sound": sum(e.get("severity") != "tail" for e in cuts),
+                                     "tail": sum(e.get("severity") == "tail" for e in cuts)}
+    if len(cuts) > _MAX_CUTS_LISTED:
+        result["cuts_in_sound"] = sorted(cuts, key=lambda e: e.get("severity") == "tail")[:_MAX_CUTS_LISTED]
+    return result
+
+
+_MAX_CUTS_LISTED = 100
 
 
 def _cut_words_arguments(args: dict, jobs) -> dict:

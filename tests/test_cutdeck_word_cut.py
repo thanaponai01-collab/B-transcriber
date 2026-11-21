@@ -76,9 +76,10 @@ def test_cut_moves_to_the_quiet_frame_in_the_pause():
     assert loud["removals"][0]["no_quiet"] == {"start": 5.0, "end": 5.0}
 
 
-def test_touching_words_cut_on_the_dip_between_them():
-    # "four" 2.2-2.6 touches "five" 2.6-3.0; the audio dips at 2.633 s (frame 79).
-    dip = 79 * TPF
-    level_at = lambda t: 1.0 if t == dip else 8.0
+def test_touching_words_cut_on_the_dip_inside_the_removed_word_never_the_kept_one():
+    # "four" 2.2-2.6 touches "five" 2.6-3.0 (frame 78). The audio dips at frame 77, inside "four",
+    # and dips deeper at frame 79, inside the kept "five": the cut must take 77.
+    level_at = lambda t: {77 * TPF: 3.0, 79 * TPF: 1.0}.get(t, 8.0)
     p = word_cut.plan(WORDS, [{"text": "four"}], TPF, END, level_at=level_at)
-    assert p["cuts_frames"][0][1] == 79 and p["removals"][0]["no_quiet"]["end"] == 1.0
+    end = p["cuts_frames"][0][1]
+    assert end == 77 and end * TPF <= 2600 * MS and p["removals"][0]["no_quiet"]["end"] == 3.0
