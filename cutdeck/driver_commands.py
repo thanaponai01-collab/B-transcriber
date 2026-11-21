@@ -923,7 +923,8 @@ _TRANSCRIPTS_DIR = Path(__file__).resolve().parent.parent / "output" / "timeline
 async def _timeline_transcript(args: dict, premiere: Premiere) -> dict:
     read = {"sequence": args["sequence"]} if "sequence" in args else {}
     if "track" in args:
-        read["tracks"] = [args["track"]]
+        # The lower audio tracks too: a later stream of a file is told by its copy below.
+        read["tracks"] = [f"A{i}" for i in range(1, int(args["track"][1:]) + 1)]
     timeline = await premiere("read_timeline", read)
     options = {k: args[k] for k in ("track", "query", "from_ticks", "to_ticks", "offset", "limit") if k in args}
     return await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
