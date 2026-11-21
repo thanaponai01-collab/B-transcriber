@@ -246,7 +246,7 @@ Tests:
   - speed ignored, in the mapping and in the scaled In/Out;
   - corrections off;
   - the cut planner cutting at word edges.
-- The full suite has 1,344 passed. The only failures are 8 in `tests/test_text_box.py`, which also
+- The full suite has 1,349 passed. The only failures are 8 in `tests/test_text_box.py`, which also
   fail on the base branch: the `uharfbuzz` module is not installed here.
 - `node --test tests/*.cjs`: 795 passed. `scripts/check_rough_cut.py` passes.
 
@@ -283,6 +283,21 @@ confirmed by running them), and all 6 are fixed with tests:
 - NTSC frame rates were wrong in the offline CLI (29.97 is 30000/1001).
 
 A live re-run then caught one more of my own (a word said elsewhere confused the keep edges), also fixed.
+
+## Third code review (03:40)
+
+A third cold review covered the language work and the later fixes. It found 7 issues plus one
+note, and all are fixed with tests:
+- `language: auto` leaked from one file to the next in a resident engine (the eval harness keeps
+  one), and a resumed job could decide its language from a 1-2 s gap excerpt. Now a whole file
+  decides afresh, and an excerpt reuses the file's choice or falls back to Thai.
+- `qwen3_asr` crashed on `auto`.
+- The Thai-pinned HF engines silently decoded `en` as Thai and cached it under the English
+  identity. They now refuse.
+- The review recheck was Thai-only (now `--language`).
+- A reordered zero-length word could widen a planned piece.
+- The stretch check accepted a jump back when words touched.
+- `join_words` dropped the space before a quote.
 
 ## State you are left in
 
