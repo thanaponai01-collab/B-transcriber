@@ -21,8 +21,8 @@ code (master's helper refuses its `place_text` registration).
     0 cuts in sound and no clipped words.
   - On your own route (copy the rough cut, keep every track), `keep_words` kept two phrases with
     every track intact and 0 cuts in sound.
-  - The planner's edges are calibrated on your own cuts and checked on a held-out one: at the 60 ms
-    default, a third of your edges match within a frame and about three quarters within 100 ms.
+  - The planner's 60 ms default was checked against your cuts. Most of their edges turned out to
+    be the Rough Cut's own; on the one independent cut (Gillette review) it beats the old 120 ms.
 - **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
@@ -144,40 +144,35 @@ What remains is sound beyond the 400 ms reach.
   every video and audio track and layer stays.
 - The copy is read back (`lines`, `cuts_in_sound`). Reorder afterwards.
 
-### Piece edges are calibrated on your own cuts (and held out on another)
-The planner was run offline on pieces you cut by hand, and each In/Out edge was compared with the
-one you chose by ear:
-- the Max Short (saved v4): 17 pieces, 34 edges, used to tune;
-- the Gillette review (`edioting`, 20261117): 48 pieces, 84 edges, **held out**;
-- the tiw project's `tt` and `yt` (20261119): 101 and 1,072 pieces, **held out**.
+### Piece edges, checked against your own cuts
+`scripts/timeline_listen/calibrate_edges.py` runs the planner offline on each piece of a saved cut
+and compares its In/Out with the cut's own. Pieces are deduplicated by source span. It also
+reports which of the cut's edges sit within a frame of an edge of that project's CutDeck rough cut.
 
-| setting | Max Short: within 1 frame / within 100 ms / off >200 ms | Gillette (held out) |
-|---|---|---|
-| old default, pad 120 ms | 7 / - / - | 12 / 40 / 11 |
-| **pad 60 ms (the default now)** | 22 / 23 / 5 | **28 / 61 / 11** |
-| pad 60 + wordless sound 600 ms | 24 / 25 / 2 | 21 / 59 / 11 |
+**Most of your edges are the Rough Cut's edges, not edges you placed by ear:** 30 of 34 on the
+Max Short, 97 of 120 on `tt`, 1,858 of 1,888 on `yt`. The aggressive Rough Cut itself pads 60/40 ms
+(docs/rough-cut.md), so agreement on those cuts mostly measures agreement with the Rough Cut.
+**Only the Gillette review (`edioting`) is independent:** there is no rough cut in that project,
+and 0 of its 46 edges sit on one. That you placed these by hand is an assumption.
 
-Two more held-out cuts from the tiw project (20261119, source transcribed once, store job 85):
+Final code, all four cuts (within 1 frame / within 100 ms / off by more than 200 ms):
 
-| setting | `tt`: 101 pieces, 190 edges | `yt`: 1,072 pieces, 1,888 edges |
-|---|---|---|
-| pad 120 ms | 23 within a frame / 131 within 100 ms | 218 / 1,383 |
-| **pad 60 ms** | **104 / 136** | **1,241 / 1,439** |
-| pad 60 + wordless | 104 / 136 | 1,195 / 1,420 |
+| cut | edges | pad 120 | **pad 60 (default)** | pad 60 + wordless 600 ms |
+|---|---|---|---|---|
+| Gillette review, independent | 46 | 7 / 23 / 6 | **16 / 34 / 6** | 12 / 33 / 6 |
+| Max Short (30 of 34 on rough-cut edges) | 34 | 8 / 23 / 5 | 22 / 23 / 5 | 24 / 25 / 2 |
+| tiw `tt` (97 of 120 on rough-cut edges) | 120 | 14 / 84 / 16 | 70 / 87 / 16 | 66 / 85 / 18 |
+| tiw `yt` (1,858 of 1,888 on rough-cut edges) | 1,888 | 218 / 1,383 / 270 | 1,241 / 1,439 / 271 | 1,195 / 1,420 / 272 |
 
-(`yt` may have started from a CutDeck rough cut, whose own pads are 40-60 ms, so part of its match
-may be the Rough Cut's rather than your ear. `tt` and the Gillette review are the cleaner evidence.)
-
-- **Pad 60 ms** generalizes: it is clearly better on all four cuts. It is the default now.
-- **Wordless sound** (taking along a laugh or breath that touches the phrase) fitted the Max Short,
-  where you kept 200-530 ms of wordless sound on 4 pieces, but did worse on the held-out Gillette
-  review and on `yt`. It is **off by default**, available as `wordless_ms` for an edit where reactions matter.
-- **Every remaining miss of more than 200 ms is one kind: you cut inside a word**, almost always at
-  a piece's end (`tt`: 25 out-edges and 3 in-edges; Gillette: 11 out-edges). The words are mostly
-  long, drawn-out ones ("มัน" of 940-1,260 ms, "คือ" 900 ms, "เนี่ย", "เพราะว่า"), and you keep only
-  the first 200-600 ms. That looks like trimming the dragged hesitation syllable ("มันนน…",
-  "คือออ…"). It is an editing habit, not a timing error. An optional "trim a dragged last syllable"
-  rule could learn it, but more evidence is needed first.
+- **Pad 60 ms** is the default. It is better on the one independent cut, and it agrees with the Rough
+  Cut's own edges on the others. On the few non-rough-cut edges of `tt` (23) and `yt` (30), 60 and
+  120 tie.
+- **Wordless sound** (a laugh or breath touching the phrase) is worse on the independent cut. It is
+  **off by default** (`wordless_ms`).
+- **The big misses are not an editing habit.** Most sit on rough-cut edges where the audio is quiet
+  (sound at the edge: 1 of 16 on `tt`, 22 of 271 on `yt`, 4 of 6 on Gillette). There the engine's
+  word spans a pause that the Rough Cut cut into. A reading I gave earlier tonight ("you trim
+  dragged syllables") did not survive this check and is withdrawn.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
