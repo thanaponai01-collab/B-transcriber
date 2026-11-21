@@ -104,11 +104,46 @@ def analysis_ingest_kwargs(raw_config: dict) -> dict:
                 sound_guard_min_ms=cfg.sound_guard_min_ms)
 
 
+# A source never transcribed is transcribed whole (once, for every later tool) when the cut uses
+# at least this share of it; below it, transcribing the whole file for a short range costs too much
+# and the analysed WAV is transcribed instead.
+SOURCE_SHARE = 0.5
+
+
+def _media_seconds(path: str) -> float | None:
+    import shutil
+    import subprocess
+    if shutil.which("ffprobe") is None:
+        return None
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                         capture_output=True, text=True)
+    try:
+        return float(out.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _transcribe_source(media: str, db_path) -> None:
+    """Whole-file ASR of a source into the shared store, with the base config (no cut overlay:
+    its VAD settings are for cutting, not for listening), as the transcribe tool runs it."""
+    from pathlib import Path
+
+    import yaml
+
+    from transcribe.service import transcribe
+    config = yaml.safe_load((Path(__file__).resolve().parent.parent / "transcribe" / "config.yaml")
+                            .read_text(encoding="utf-8"))
+    transcribe(media, config=config, db_path=db_path)
+
+
 def _mapped_transcript(seq: sequence_model.Sequence, audio_track: int | None,
-                       window: tuple[int, int] | None, raw_config: dict, db=None):
+                       window: tuple[int, int] | None, raw_config: dict, db=None,
+                       transcribe_sources: bool = False):
     """(transcript job id, words, cue tokens) in the analysed WAV's own milliseconds, from the
     reference track's source files' stored transcripts mapped through its clips. None when a
-    source has never been transcribed: the caller then transcribes the WAV as before.
+    source has no transcript: the caller then transcribes the WAV as before. With
+    ``transcribe_sources``, a source the cut uses at least ``SOURCE_SHARE`` of is transcribed
+    whole first (the usual rough cut of a whole recording), so later tools need no new listening.
 
     The same source transcript serves every rough cut of the same footage, so a re-cut never
     re-listens and never hears it differently (docs/TIMELINE_LISTEN.md)."""
@@ -123,18 +158,27 @@ def _mapped_transcript(seq: sequence_model.Sequence, audio_track: int | None,
     clips = [tt.Clip(f"A{track.index + 1}@{c.start_ticks}", c.start_ticks, c.end_ticks, c.in_ticks,
                      c.out_ticks, c.media_path) for c in track.clips if c.enabled]
     db_path = Path(db) if db else store.resolve_db_path(raw_config)
-    if not db_path.is_file():
+    if not db_path.is_file() and not transcribe_sources:
         return None
+    origin = window[0] * seq.ticks_per_frame if window else 0
+    end = window[1] * seq.ticks_per_frame if window else seq.end_ticks
     levels_dir = Path(__file__).resolve().parent.parent / "output" / "timeline_transcripts" / "levels"
     words_by_media, job_ids = {}, []
     for media in dict.fromkeys(c.media for c in clips):
-        found = tt.source_words(media, db_path, levels_dir) if Path(media).is_file() else None
+        if not Path(media).is_file():
+            return None
+        found = tt.source_words(media, db_path, levels_dir) if db_path.is_file() else None
+        if found is None and transcribe_sources:
+            used = sum(max(0, min(c.end, end) - max(c.start, origin)) for c in clips if c.media == media)
+            total = _media_seconds(media)
+            if total and used / tt.PPRO_TICKS_PER_SECOND >= SOURCE_SHARE * total:
+                print(f"--asr: transcribing the source once, for this and every later cut: {media}")
+                _transcribe_source(media, db_path)
+                found = tt.source_words(media, db_path, levels_dir)
         if found is None:
             return None
         job_ids.append(found[0])
         words_by_media[media] = found[1]
-    origin = window[0] * seq.ticks_per_frame if window else 0
-    end = window[1] * seq.ticks_per_frame if window else seq.end_ticks
     placed = [w for w in tt.project(clips, words_by_media) if w.end > origin and w.start < end]
     # Clamped to the WAV: a word that straddles the window's edge starts or ends at it.
     ms = lambda ticks: round((min(max(ticks, origin), end) - origin) / tt.TICKS_PER_MS)  # noqa: E731
@@ -199,7 +243,9 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
         tokens = None
         words = None
         # Only for audio we extracted from the clips ourselves: a caller's own mixdown is theirs.
-        mapped = (_mapped_transcript(seq, audio_track, window, raw_config, db)
+        if asr and extracted_tmp is not None:
+            _progress(35, "Reading the sources' transcripts")
+        mapped = (_mapped_transcript(seq, audio_track, window, raw_config, db, transcribe_sources=True)
                   if asr and extracted_tmp is not None else None)
         if mapped is not None:
             job_id, words, tokens = mapped

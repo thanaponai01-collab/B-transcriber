@@ -305,3 +305,20 @@ def test_a_track_that_repeats_a_lower_tracks_clip_is_warned_as_a_later_stream(tm
     assert "warnings" not in run(tl)
     (warning,) = run(tl, track="A2")["warnings"]
     assert "A2@0" in warning and "later audio stream" in warning
+
+
+def test_rough_cut_transcribes_a_mostly_used_source_once_instead_of_its_wav(tmp_path, monkeypatch):
+    from cutdeck import rough_cut, sequence_model
+    media = tmp_path / "a.mp4"; media.write_bytes(b"")
+    db = tmp_path / "t.db"; db.write_bytes(b"")
+    clip_ = sequence_model.Clip(str(media), 0, 900 * T, 6800 * T, True)  # 5.9 s of the file
+    seq = sequence_model.Sequence(TPF, 5900 * T, (sequence_model.Track(0, False, (clip_,)),))
+    stored = []
+    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: (5, SOURCE, None) if stored else None)
+    monkeypatch.setattr(rough_cut, "_transcribe_source", lambda m, d: stored.append(m))
+    monkeypatch.setattr(rough_cut, "_media_seconds", lambda m: 60.0)      # 5.9 of 60 s: too little
+    assert rough_cut._mapped_transcript(seq, None, None, {}, db, transcribe_sources=True) is None
+    assert stored == []
+    monkeypatch.setattr(rough_cut, "_media_seconds", lambda m: 8.0)       # 5.9 of 8 s: transcribe it
+    job_id, words, tokens = rough_cut._mapped_transcript(seq, None, None, {}, db, transcribe_sources=True)
+    assert stored == [str(media)] and job_id == 5 and tokens
