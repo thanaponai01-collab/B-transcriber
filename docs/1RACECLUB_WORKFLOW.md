@@ -566,3 +566,8 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   framing toward the evidence: banner clip right, overhead clip at 109% so both cars and the banner fit, Norris radio clips right,
   contact clip left. **Principle (seen): frame each feed clip on what proves the line (caption, banner, the two cars), not the centre;
   and scale by the source's real size, not a fixed %.**
+- **19:20 v4 lost.** Premiere restarted (RecoveryProjects at 19:17–19:18, panel reconnects) and reopened without v4, which was built after
+  the 19:10 save and never saved. Rebuilt: the first `cut_copy` failed "razor filler on audio track 2 is not one frame long" (left
+  `TT max vs everyone v4 (Claude) (FAILED)`); the identical retry passed, so it's the intermittent native-cut razor. v4 rebuilt in one build
+  with the per-clip framing; the hook banner clip needed source-x centre 740 to show the full RACE CONTROL line. In 0, Out 50.93.
+  Lesson: an unsaved agent build is lost if Premiere restarts. The agent doesn't save (`save: false`); tell the user to save once it looks right.
