@@ -118,7 +118,7 @@ def count(words: list[TimelineWord], text: str) -> int:
     return sum(1 for m in find(words, text, 1, limit=10000) if m["whole_words"]) if _norm(text) else 0
 
 
-PAD_MS = 120  # pause kept before and after a piece, when there is that much
+PAD_MS = 60  # pause kept before and after a piece: the owner's own edges sit here (21 of 25 within a frame, 2026-11-22)
 
 
 def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,

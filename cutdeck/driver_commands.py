@@ -1121,7 +1121,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
         nothing. Read the built Short back with premiere_timeline_transcript.
         """,
-        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 120)),
+        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60)),
         run=_plan_pieces),
     "keep_words": Command(
         1800, _keep_words_arguments, "write",
@@ -1134,7 +1134,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         is no "sound" entry). Reorder afterwards (premiere_build_sequence into the copy).
         """,
         (("result_name", str), ("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None),
-         ("pad_ms", int, 120)),
+         ("pad_ms", int, 60)),
         run=_keep_words),
     "screenshot": Command(
         30, _no_arguments, "read",
