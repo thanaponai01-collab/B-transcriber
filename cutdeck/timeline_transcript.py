@@ -654,3 +654,69 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
             return float(near.max()) - thresholds[media] if len(near) else float("-inf")
         result["source_level"] = source_level
     return result
+
+
+# ── a saved project, offline ────────────────────────────────────────────────
+
+def timeline_from_prproj(sequence: dict, fps: float = 30.0) -> dict:
+    """A `read_timeline`-shaped dict from one sequence of `cutdeck.prproj_reader`'s summary, so a
+    saved project can be heard without Premiere. The reader gives seconds and no speed: speed
+    is the clip's source length over its timeline length (Premiere's In/Out are then reported
+    divided by it, as `read_timeline` does)."""
+    from fractions import Fraction
+    rate = Fraction(fps).limit_denominator(1001)
+    tpf = PPRO_TICKS_PER_SECOND * rate.denominator // rate.numerator
+    ticks = lambda s: round(s * PPRO_TICKS_PER_SECOND)  # noqa: E731
+    tracks, end = [], 0
+    for t in sequence.get("audio_tracks", []):
+        clips = []
+        for c in t.get("clips", []):
+            length, source = c["end"] - c["start"], c["source_out"] - c["source_in"]
+            speed = round(source / length, 4) if length > 0 else 1.0
+            start = ticks(c["start"])
+            clips.append({"id": f"A{t['index'] + 1}@{start}", "start_ticks": str(start), "end_ticks": str(ticks(c["end"])),
+                          "in_ticks": str(ticks(c["source_in"] / speed)), "out_ticks": str(ticks(c["source_out"] / speed)),
+                          "media": c.get("media_path"), "disabled": bool(c.get("disabled")), "speed": speed,
+                          "reversed": False})
+            end = max(end, ticks(c["end"]))
+        tracks.append({"id": f"A{t['index'] + 1}", "kind": "audio", "muted": bool(t.get("muted")), "clips": clips})
+    return {"name": sequence.get("name"), "sequence_id": None, "ticks_per_frame": str(tpf),
+            "end_ticks": str(end), "tracks": tracks}
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(description="What a saved Premiere sequence says and where, from its sources' "
+                                             "stored transcripts (no Premiere, no new listening).")
+    ap.add_argument("--prproj", required=True, help="the saved .prproj")
+    ap.add_argument("--sequence", required=True, help="the sequence's name")
+    ap.add_argument("--track", help='audio track, e.g. "A1" (default: first un-muted with clips)')
+    ap.add_argument("--fps", type=float, default=30.0, help="the sequence's frame rate (the reader does not give it)")
+    ap.add_argument("--query", help="find a phrase")
+    ap.add_argument("--json", action="store_true", help="print the whole result as JSON")
+    args = ap.parse_args(argv)
+    from cutdeck.prproj_reader import read_project
+    summary = read_project(args.prproj)
+    found = [s for s in summary["sequences"] if s["name"] == args.sequence]
+    if not found:
+        ap.error(f"no sequence named {args.sequence!r}")
+    out_dir = Path(__file__).resolve().parent.parent / "output" / "timeline_transcripts"
+    result = build(timeline_from_prproj(found[0], args.fps), track=args.track, query=args.query,
+                   limit=100000, out_dir=out_dir)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=1))
+        return 0
+    print(f"{result['sequence']} {result['track']}: {result['clips']} clips, {result['line_count']} lines; "
+          f"missing {[m['media'] for m in result['missing']]}; cuts in sound {len(result['cuts_in_sound'])} "
+          f"({sum(e.get('severity') != 'tail' for e in result['cuts_in_sound'])} in sound); full: {result.get('full_path')}")
+    for ln in result["lines"]:
+        print(f"{ln['tc']}  {ln['clip']:<22} {ln['text']}" + ("  [clipped: " + ", ".join(ln["clipped_words"]) + "]" if ln.get("clipped_words") else ""))
+    for m in result.get("matches", []):
+        print("match", m["tc"], m["text"])
+    sys.stdout.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

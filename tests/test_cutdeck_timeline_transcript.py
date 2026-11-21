@@ -322,3 +322,18 @@ def test_rough_cut_transcribes_a_mostly_used_source_once_instead_of_its_wav(tmp_
     monkeypatch.setattr(rough_cut, "_media_seconds", lambda m: 8.0)       # 5.9 of 8 s: transcribe it
     job_id, words, tokens = rough_cut._mapped_transcript(seq, None, None, {}, db, transcribe_sources=True)
     assert stored == [str(media)] and job_id == 5 and tokens
+
+
+def test_timeline_from_a_saved_project_maps_like_the_live_read(tmp_path):
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    seq = {"name": "saved", "audio_tracks": [
+        {"index": 0, "muted": False, "clips": [
+            {"start": 0.0, "end": 1.2, "source_in": 0.9, "source_out": 2.1, "disabled": False, "media_path": media},
+            {"start": 1.2, "end": 1.8, "source_in": 2.9, "source_out": 4.1, "disabled": False, "media_path": media},  # 200%
+            {"start": 5.0, "end": 6.0, "source_in": 0.0, "source_out": 1.0, "disabled": True, "media_path": media}]}]}
+    tl = tt.timeline_from_prproj(seq, fps=30)
+    assert tl["ticks_per_frame"] == str(TPF)
+    r = run(tl)
+    assert [ln["text"] for ln in r["lines"]] == ["hello world", "สวัสดีครับ"]
+    assert int(r["lines"][1]["start_ticks"]) == 1200 * T + 50 * T   # (3000 - 2900) / 2 after the clip start
+    assert [s["reason"] for s in r["skipped"]] == ["disabled"]
