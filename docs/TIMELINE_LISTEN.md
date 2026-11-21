@@ -225,6 +225,7 @@ Run folders hold every request and result:
 | `keep_words` on a rough cut of that multi-track scratch: two spans of 3-4 lines, each crossing rough-cut joins | every track kept (V1, V2, A1-A5, ending at 8.03 s); both spans read back whole. 2 cuts in sound, both expected: one is an inner rough-cut join (the Rough Cut's own edge), one is a span end where the speech runs straight into a laugh (`no_quiet` warned) |
 | **Your whole route, end to end:** rough cut (from cached transcripts) → `keep_words` (two spans, every track) → reorder (`build_sequence` into: clone far, lift, clone back, lift) → `timeline_transcript` | the spans play swapped on all 7 tracks (8.03 s); the read-back shows the new order; the new join added no cut in sound (the same 2 source edges as before, moved) |
 | Final planner, the Short rebuilt | 0 cuts in sound; the three lines in the new order |
+| Through a real MCP client (stdio, `mcp` ClientSession → `python -m cutdeck.mcp_server`) | the four tools are listed; `premiere_timeline_transcript` (125 lines, phrase found at 00:00:04:06) and `premiere_plan_pieces` (same piece as the direct call) answer |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
