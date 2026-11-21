@@ -158,3 +158,18 @@ def test_keep_ranges_cuts_to_the_end_of_the_sequence_not_of_the_track():
     clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
     r = word_cut.keep_ranges(WORDS, [{"text": "one"}], TPF, clips, _src(WORDS), end_ticks=10 * END)
     assert r["cuts_frames"][-1][1] == -(-10 * END // TPF)
+
+
+def test_keep_ranges_takes_a_span_across_rough_cut_joins_and_places_only_its_outer_edges():
+    from cutdeck.timeline_transcript import Clip
+    from dataclasses import replace
+    # Rough cut: "one" (source 0-0.4) then "four five" (source 2.2-3.0) back to back.
+    clips = [Clip("A1@0", 0, 400 * MS, 0, 400 * MS, "a.mp4"),
+             Clip("A1@1", 400 * MS, 1200 * MS, 2200 * MS, 3000 * MS, "a.mp4")]
+    words = [replace(w("one", 0, 400), clip="A1@0", src_start_ms=0, src_end_ms=400),
+             replace(w("four", 400, 800), clip="A1@1", src_start_ms=2200, src_end_ms=2600),
+             replace(w("five", 800, 1200), clip="A1@1", src_start_ms=2600, src_end_ms=3000)]
+    r = word_cut.keep_ranges(words, [{"text": "one four five"}], TPF, clips, _src(WORDS), end_ticks=2000 * MS)
+    (a, b), = r["keep_frames"]
+    assert a == 0 and b * TPF == 1200 * MS          # whole span, the join inside untouched
+    assert r["cuts_frames"] == [[b, -(-2000 * MS // TPF)]]

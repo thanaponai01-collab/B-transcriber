@@ -8,7 +8,7 @@ as `cut_copy` takes them.
 """
 from __future__ import annotations
 
-from cutdeck.timeline_transcript import TimelineWord, _norm, find
+from cutdeck.timeline_transcript import TimelineWord, _norm, find, join_words
 
 KEEP_MS = 250  # pause left at a join, when the original pauses were at least this long
 TICKS_PER_MS = 254016000
@@ -185,15 +185,23 @@ def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: l
     layer. Each span's edges are placed as `plan_pieces` places them, in the source file's
     pauses, then mapped back onto the timeline, never past the clip that holds the edge word
     (beyond it the timeline plays other source)."""
-    pieces = plan_pieces(words, keeps, tpf, source_words, source_level, pad_ms)
     spans, details = [], []
-    for keep, piece in zip(keeps, pieces):
+    for keep in keeps:
         i, j = _resolve(words, keep, tpf)
+        # Only the outer edges are placed: a span on a rough cut crosses its joins, which stay
+        # where they are. Each edge is a one-word plan in that word's own source.
+        head = plan_pieces(words, [{"from_ticks": words[i].start, "to_ticks": words[i].end or words[i].start + 1}],
+                           tpf, source_words, source_level, pad_ms)[0]
+        tail = plan_pieces(words, [{"from_ticks": words[j].start, "to_ticks": words[j].end or words[j].start + 1}],
+                           tpf, source_words, source_level, pad_ms)[0]
+        piece = {"text": keep.get("text") or join_words(w.text for w in words[i:j + 1]),
+                 "no_quiet": {**({"start": head["no_quiet"]["start"]} if "start" in head.get("no_quiet", {}) else {}),
+                              **({"end": tail["no_quiet"]["end"]} if "end" in tail.get("no_quiet", {}) else {})}}
         first_clip = next(c for c in clips if c.id == words[i].clip)
         last_clip = next(c for c in clips if c.id == words[j].clip)
         to_seq = lambda clip, src: clip.start + round((src - clip.in_) / clip.speed)  # noqa: E731
-        a = max(to_seq(first_clip, int(piece["in_ticks"])), first_clip.start)
-        b = min(to_seq(last_clip, int(piece["out_ticks"])), last_clip.end)
+        a = max(to_seq(first_clip, int(head["in_ticks"])), first_clip.start)
+        b = min(to_seq(last_clip, int(tail["out_ticks"])), last_clip.end)
         fa, fb = -(-a // tpf), b // tpf  # inward: a clamped edge is a clip edge, already on a frame
         if fb <= fa:
             raise ValueError(f"{piece['text']!r} is shorter than a frame on this timeline")
