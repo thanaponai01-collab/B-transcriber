@@ -552,3 +552,9 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   Russell's first radio ("ให้มึงเห็นวิดีโอ…") dropped, so "รัสเซลบอก" is said once. Face-only: "ไม่เอาครับ… ใจเย็น", "แตะมือกันข้างนอก", the end line.
 - Checks: Premiere render 50.93 s 1080x1920, no black frames, no silence ≥0.6 s, −20.8 dB; per-piece transcript of the render in order, no repeated line.
   Not saved, not exported, no SFX. v1/v2 are junk for the user to delete.
+- **19:20 user: the V4 sync was wrong** ("i give you the wrong live message on sync"); user re-synced the F1 feed and re-ran the
+  rough cut (`CutDeck 94fd4bb9`, same voice mapping and same cut points). Now the feed matches the talk: RACE CONTROL "VERSTAPPEN,
+  RUSSELL INCIDENT" on the hook, Gasly's Alpine beside Max on the Alpine beat, NORRIS RADIO "INSTANT KARMA, AMAZING!" on the McLaren beat.
+- **v4 `TT max vs everyone v4 (Claude)`**: the v3 recipe on the new rough cut (6 audio, 5 video tracks, 50.93 s). Not rendered by the agent
+  (user rule 19:16: the user exports, the agent never runs export_sequence); checked by read-back (0 clip mismatches), feed frames pulled
+  from the source at each piece, and v3's voice transcript (same voice pieces). In reads unset (null), Out 50.93.
