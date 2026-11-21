@@ -11,6 +11,7 @@ read this table; `tests/test_cutdeck_driver_commands.py` fails if the pieces dri
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -339,3 +340,225 @@ COMMANDS: dict[str, Command] = {
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
                                ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
 }
+
+
+# General control (uxp/cutdeck/timeline/control.js; route map docs/PREMIERE_CONTROL_MAP.md).
+# Times are tick strings; a clip is "V<n>@<start_ticks>" / "A<n>@<start_ticks>" as read_timeline
+# prints it; a track is "V<n>" / "A<n>" (1-based, as Premiere shows them).
+_CLIP_ID = re.compile(r"[VA][1-9]\d*@\d+")
+_TRACK_ID = re.compile(r"[VA][1-9]\d*")
+EDIT_OPS = {"move": "dt_ticks", "trim_in": "in_ticks", "trim_out": "out_ticks", "rename": "name",
+            "enable": None, "disable": None, "remove": None}
+MAX_CONTROL_ITEMS = 5000
+
+
+def _ticks(value, name: str, signed: bool = False) -> str:
+    if not (isinstance(value, str) and re.fullmatch(r"-?\d+" if signed else r"\d+", value)):
+        raise ValueError(f"{name} must be a tick string{' (may be negative)' if signed else ''}")
+    return value
+
+
+def _sequence(args: dict) -> dict:
+    name = args.get("sequence")
+    if name is None:
+        return {}
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("sequence must be a sequence name (omit it for the active sequence)")
+    return {"sequence": name}
+
+
+def _clip_ids(value, name: str = "clips", allow_empty: bool = False) -> list:
+    if not isinstance(value, list) or not (allow_empty or value) or len(value) > MAX_CONTROL_ITEMS \
+            or not all(isinstance(c, str) and _CLIP_ID.fullmatch(c) for c in value):
+        raise ValueError(f"{name} must be a list of clip ids like V1@0 (from premiere_read_timeline)")
+    return value
+
+
+def _read_timeline_arguments(args: dict, jobs) -> dict:
+    effects = args.get("effects", False)
+    if effects not in (False, "names", "params"):
+        raise ValueError('effects must be false, "names" or "params"')
+    result = {**_sequence(args), "effects": effects}
+    tracks = args.get("tracks")
+    if tracks is not None:
+        if not isinstance(tracks, list) or not tracks or not all(isinstance(t, str) and _TRACK_ID.fullmatch(t) for t in tracks):
+            raise ValueError('tracks must be a list like ["V1", "A2"]')
+        result["tracks"] = tracks
+    for key in ("from_ticks", "to_ticks"):
+        if args.get(key) is not None:
+            result[key] = _ticks(args[key], key)
+    if "from_ticks" in result and "to_ticks" in result and int(result["to_ticks"]) <= int(result["from_ticks"]):
+        raise ValueError("to_ticks must be after from_ticks")
+    return result
+
+
+def _list_project_arguments(args: dict, jobs) -> dict:
+    depth = args.get("depth", 8)
+    if type(depth) is not int or not 1 <= depth <= 32:
+        raise ValueError("depth must be 1 to 32")
+    return {"depth": depth}
+
+
+def _open_sequence_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("sequence"), str) or not args["sequence"].strip():
+        raise ValueError("sequence must be a sequence name")
+    return {"sequence": args["sequence"]}
+
+
+def _set_playhead_arguments(args: dict, jobs) -> dict:
+    return {**_sequence(args), "ticks": _ticks(args.get("ticks"), "ticks")}
+
+
+def _set_in_out_arguments(args: dict, jobs) -> dict:
+    result = _sequence(args)
+    for key in ("in_ticks", "out_ticks"):
+        if args.get(key) is not None:
+            result[key] = _ticks(args[key], key)
+    if "in_ticks" not in result and "out_ticks" not in result:
+        raise ValueError("give in_ticks, out_ticks or both")
+    if "in_ticks" in result and "out_ticks" in result and int(result["out_ticks"]) <= int(result["in_ticks"]):
+        raise ValueError("out_ticks must be after in_ticks")
+    return result
+
+
+def _select_clips_arguments(args: dict, jobs) -> dict:
+    return {**_sequence(args), "clips": _clip_ids(args.get("clips"), allow_empty=True)}
+
+
+def _edit_clips_arguments(args: dict, jobs) -> dict:
+    edits = args.get("edits")
+    if not isinstance(edits, list) or not 0 < len(edits) <= MAX_CONTROL_ITEMS:
+        raise ValueError(f"edits must be a list of 1 to {MAX_CONTROL_ITEMS} edits")
+    out = []
+    for e in edits:
+        if not isinstance(e, dict) or e.get("op") not in EDIT_OPS:
+            raise ValueError(f"each edit is {{clip, op}} with op one of: {', '.join(EDIT_OPS)}")
+        _clip_ids([e.get("clip")], "clip")
+        edit = {"clip": e["clip"], "op": e["op"]}
+        field = EDIT_OPS[e["op"]]
+        if field == "name":
+            if not isinstance(e.get("name"), str) or not e["name"]:
+                raise ValueError("rename needs a name")
+            edit["name"] = e["name"]
+        elif field:
+            edit[field] = _ticks(e.get(field), field, signed=field == "dt_ticks")
+        if e["op"] == "remove":
+            if not isinstance(e.get("ripple", False), bool):
+                raise ValueError("ripple must be true or false")
+            edit["ripple"] = e.get("ripple", False)
+        out.append(edit)
+    if len({e["clip"] for e in out}) != len(out):
+        raise ValueError("each clip may appear once per edit_clips call")
+    return {**_sequence(args), "edits": out}
+
+
+def _place_media_arguments(args: dict, jobs) -> dict:
+    media, nest = args.get("media"), args.get("nest")
+    if (media is None) == (nest is None):
+        raise ValueError("give exactly one of media (a file path) or nest (a sequence name)")
+    if media is not None and (not isinstance(media, str) or not Path(media).is_absolute() or not Path(media).is_file()):
+        raise ValueError("media must be an existing file, absolute path")
+    if nest is not None and (not isinstance(nest, str) or not nest.strip()):
+        raise ValueError("nest must be a sequence name")
+    for key in ("v", "a"):
+        if type(args.get(key)) is not int or args[key] < 0:
+            raise ValueError(f"{key} must be a 0-based track index (the track count creates a new track)")
+    mode = args.get("mode", "overwrite")
+    if mode not in ("overwrite", "insert"):
+        raise ValueError("mode must be overwrite or insert")
+    return {**_sequence(args), **({"media": media} if media is not None else {"nest": nest}),
+            "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"), "v": args["v"], "a": args["a"], "mode": mode}
+
+
+def _add_effect_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("effect"), str) or not args["effect"].strip():
+        raise ValueError("effect must be a video match name or audio display name (premiere_list_effects)")
+    return {**_sequence(args), "clips": _clip_ids(args.get("clips")), "effect": args["effect"]}
+
+
+def _param_value(value):
+    if type(value) in (int, float, bool, str):
+        return value
+    if isinstance(value, list) and len(value) == 2 and all(type(v) in (int, float) for v in value):
+        return value
+    raise ValueError("value must be a number, boolean, string or [x, y]")
+
+
+def _set_param_arguments(args: dict, jobs) -> dict:
+    component = args.get("component")
+    if not ((type(component) is int and component >= 0) or (isinstance(component, str) and component.strip())):
+        raise ValueError("component must be a chain index (0 Opacity, 1 Motion) or a match name")
+    if type(args.get("param")) is not int or args["param"] < 0:
+        raise ValueError("param must be a 0-based parameter index")
+    _clip_ids([args.get("clip")], "clip")
+    result = {**_sequence(args), "clip": args["clip"], "component": component, "param": args["param"],
+              "value": _param_value(args.get("value"))}
+    if args.get("at_ticks") is not None:
+        result["at_ticks"] = _ticks(args["at_ticks"], "at_ticks")
+    return result
+
+
+def _add_transition_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("transition"), str) or not args["transition"].strip():
+        raise ValueError("transition must be a video transition match name (premiere_list_effects)")
+    if not isinstance(args.get("at_start", False), bool):
+        raise ValueError("at_start must be true or false")
+    result = {**_sequence(args), "clips": _clip_ids(args.get("clips")), "transition": args["transition"],
+              "at_start": args.get("at_start", False)}
+    if args.get("duration_ticks") is not None:
+        result["duration_ticks"] = _ticks(args["duration_ticks"], "duration_ticks")
+    return result
+
+
+def _set_track_mute_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("track"), str) or not _TRACK_ID.fullmatch(args["track"]):
+        raise ValueError("track must be like V1 or A2")
+    if not isinstance(args.get("muted"), bool):
+        raise ValueError("muted must be true or false")
+    return {**_sequence(args), "track": args["track"], "muted": args["muted"]}
+
+
+def _remove_markers_arguments(args: dict, jobs) -> dict:
+    starts = args.get("starts_ticks")
+    if not isinstance(starts, list) or not 0 < len(starts) <= MAX_MARKERS:
+        raise ValueError("starts_ticks must be a list of marker start tick strings")
+    return {**_sequence(args), "starts_ticks": [_ticks(t, "starts_ticks") for t in starts]}
+
+
+def _import_files_arguments(args: dict, jobs) -> dict:
+    paths = args.get("paths")
+    if not isinstance(paths, list) or not 0 < len(paths) <= 500 or not all(
+            isinstance(p, str) and Path(p).is_absolute() and Path(p).is_file() for p in paths):
+        raise ValueError("paths must be 1 to 500 existing files, absolute paths")
+    return {"paths": paths}
+
+
+def _export_frame_arguments(args: dict, jobs) -> dict:
+    result = _sequence(args)
+    if args.get("ticks") is not None:
+        result["ticks"] = _ticks(args["ticks"], "ticks")
+    return result
+
+
+CONTROL_COMMANDS: dict[str, Command] = {
+    "read_timeline": Command(300, _read_timeline_arguments, "Read every track, clip, mark and marker of a sequence."),
+    "list_project": Command(120, _list_project_arguments, "List the project's sequences and bin tree."),
+    "open_sequence": Command(60, _open_sequence_arguments, "Open a sequence by name and make it active.",
+                             ("sequence name", lambda target: {"sequence": target})),
+    "set_playhead": Command(30, _set_playhead_arguments, "Move a sequence's playhead to a tick time.",
+                            ("ticks", lambda target: {"ticks": target})),
+    "set_in_out": Command(30, _set_in_out_arguments, "Set a sequence's In and/or Out marks."),
+    "select_clips": Command(60, _select_clips_arguments, "Replace the timeline selection with these clips."),
+    "edit_clips": Command(600, _edit_clips_arguments, "Move, trim, enable/disable, rename or remove clips in one undo step."),
+    "place_media": Command(300, _place_media_arguments, "Overwrite or insert a media file, or nest a sequence, at a time."),
+    "list_effects": Command(60, _no_arguments, "List video effect, audio effect and transition names."),
+    "add_effect": Command(120, _add_effect_arguments, "Append an effect to clips."),
+    "set_param": Command(60, _set_param_arguments, "Set an effect parameter, or add a keyframe, on a clip."),
+    "add_transition": Command(120, _add_transition_arguments, "Add a video transition to clips."),
+    "set_track_mute": Command(30, _set_track_mute_arguments, "Mute or unmute a track."),
+    "remove_markers": Command(60, _remove_markers_arguments, "Remove sequence markers by start time."),
+    "import_files": Command(600, _import_files_arguments, "Import files into the project root."),
+    "save_project": Command(120, _no_arguments, "Save the open project."),
+    "export_frame": Command(60, _export_frame_arguments, "Save a PNG of a sequence frame."),
+}
+COMMANDS.update(CONTROL_COMMANDS)

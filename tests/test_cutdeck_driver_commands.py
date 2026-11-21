@@ -141,3 +141,39 @@ def test_build_sequence_into_mode_checks():
         except ValueError:
             continue
         raise AssertionError(f"accepted {bad}")
+
+
+def test_control_commands_check_ids_ticks_and_ops(tmp_path):
+    c = driver_commands.COMMANDS
+    edits = [{"clip": "V1@0", "op": "move", "dt_ticks": "-254016000000"}, {"clip": "A2@5", "op": "remove"}]
+    assert c["edit_clips"].prepare({"edits": edits}, None) == {"edits": [
+        {"clip": "V1@0", "op": "move", "dt_ticks": "-254016000000"}, {"clip": "A2@5", "op": "remove", "ripple": False}]}
+    assert c["read_timeline"].prepare({"tracks": ["V1", "A2"], "from_ticks": "0", "to_ticks": "5"}, None) == {
+        "effects": False, "tracks": ["V1", "A2"], "from_ticks": "0", "to_ticks": "5"}
+    assert c["select_clips"].prepare({"clips": [], "sequence": "Edit"}, None) == {"sequence": "Edit", "clips": []}
+    assert c["set_param"].prepare({"clip": "V1@0", "component": 1, "param": 0, "value": [0.5, 0.5]}, None)["value"] == [0.5, 0.5]
+    media = tmp_path / "b.mp4"
+    media.write_bytes(b"x")
+    assert c["place_media"].prepare({"media": str(media), "at_ticks": "0", "v": 0, "a": 2}, None)["mode"] == "overwrite"
+    bad = [
+        ("edit_clips", {"edits": [{"clip": "V0@0", "op": "move", "dt_ticks": "1"}]}),       # track 0
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "razor"}]}),                       # not an op
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "trim_in", "in_ticks": 5}]}),      # ticks not a string
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "disable"}, {"clip": "V1@0", "op": "enable"}]}),  # twice
+        ("set_in_out", {"in_ticks": "9", "out_ticks": "3"}),
+        ("set_in_out", {}),
+        ("set_param", {"clip": "V1@0", "component": 1, "param": 0, "value": {"x": 1}}),
+        ("place_media", {"media": str(media), "nest": "Edit", "at_ticks": "0", "v": 0, "a": 0}),
+        ("place_media", {"media": str(tmp_path / "none.mp4"), "at_ticks": "0", "v": 0, "a": 0}),
+        ("place_media", {"media": str(media), "at_ticks": "0", "v": 0, "a": -1}),       # -1 lands on A1
+        ("set_track_mute", {"track": "V0", "muted": True}),
+        ("read_timeline", {"effects": "all"}),
+        ("read_timeline", {"tracks": ["V0"]}),
+        ("read_timeline", {"from_ticks": "9", "to_ticks": "3"}),
+    ]
+    for name, args in bad:
+        try:
+            c[name].prepare(args, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"{name} accepted {args}")

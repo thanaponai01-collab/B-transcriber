@@ -96,6 +96,14 @@
 - verify: CutDeck helper
 - status: traced: read all tool definitions in mcp_server.py and the helper's dispatch; server not started. `premiere_rough_cut` proven against a real helper with a stubbed panel read (tests/test_cutdeck_mcp_backend.py, 2026-10-07); not run against live Premiere
 
+## General Premiere control (MCP)
+- what: Hand-level control of Premiere for agents. `premiere_read_timeline`, `premiere_list_project`, `premiere_open_sequence`, `premiere_set_playhead`, `premiere_set_in_out`, `premiere_select_clips`, `premiere_edit_clips` (move, trim, enable/disable, rename, remove, in one undo step), `premiere_place_media` (overwrite, insert, nest), `premiere_list_effects`, `premiere_add_effect`, `premiere_set_param` (any effect parameter or keyframe), `premiere_add_transition`, `premiere_set_track_mute`, `premiere_remove_markers`, `premiere_import_files`, `premiere_save_project` and `premiere_export_frame` (a PNG of a frame). Plus `premiere_screenshot`, a PNG of the whole Premiere window (no panel needed). Clips are addressed by id `V<n>@<start_ticks>`. Every route, and what UXP cannot reach (razor, link, targeting, undo): docs/PREMIERE_CONTROL_MAP.md.
+- trace: `premiere_edit_clips` @ cutdeck/mcp_server.py > `premiere` @ cutdeck/ai_backend.py > `handle` @ uxp/cutdeck/features/driver.js > `editClips` @ uxp/cutdeck/timeline/control.js
+- trace: `premiere_screenshot` @ cutdeck/mcp_server.py > `capture` @ cutdeck/screenshot.py
+- needs: helper running and the CutDeck panel open (reloaded, so it has timeline/control.js); `premiere_screenshot` needs only Premiere, not minimised
+- verify: CutDeck panel (UXP); CutDeck helper
+- status: live-proven 2026-11-21 on Premiere 27.0.0: every tool ran through the helper on scratch sequences in a real project (docs/PREMIERE_FACTS.md *General control live pass*). The live pass found and fixed a double-shift on ripple removes and made place_media fail when nothing lands. Not run through an MCP client session itself (the same helper path was used).
+
 ## Ask Premiere's AI Assistant (MCP)
 - what: `premiere_assistant_ask(prompt, timeout_s)` types a prompt into Adobe's own AI Assistant (beta) chat panel through Windows UI Automation, waits for the reply and returns `{done, text, credits, buttons}`. Windows only. Each prompt spends the user's Adobe credits.
 - trace: `premiere_assistant_ask` @ cutdeck/mcp_server.py > `ask` @ cutdeck/assistant.py > `_panel` @ cutdeck/assistant.py

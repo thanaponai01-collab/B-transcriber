@@ -1,0 +1,225 @@
+/* General Premiere control (uxp/cutdeck/timeline/control.js) on the shared Premiere fake, whose
+   rules follow docs/PREMIERE_FACTS.md. Fake-tested only: live status is in
+   docs/PREMIERE_CONTROL_MAP.md. */
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { controlHandlers, parseClipId, clipId } = require("../uxp/cutdeck/timeline/control.js");
+const fake = require("./fakes/premiere.cjs");
+
+const S = 254016000000n; // ticks per second
+
+function setup() {
+  const h = fake.createTimelineHost({
+    media: [{ path: "D:\\a.mp4", video: true, audio: true, duration: 60n * S }, { path: "D:\\b.mp4", video: true, audio: true, duration: 60n * S }],
+    sequences: [{
+      name: "Edit",
+      video: [[{ media: "D:\\a.mp4", start: 0n, end: 10n * S, in: 0n }, { media: "D:\\a.mp4", start: 10n * S, end: 20n * S, in: 30n * S }]],
+      audio: [[{ media: "D:\\a.mp4", start: 0n, end: 10n * S, in: 0n }, { media: "D:\\a.mp4", start: 10n * S, end: 20n * S, in: 30n * S }]],
+    }],
+  });
+  return { h, run: controlHandlers(h.ppro) };
+}
+
+test("clip ids are V/A, 1-based track, @ start ticks", () => {
+  assert.deepEqual(parseClipId("V2@254016000000"), { kind: "video", track: 1, start: "254016000000" });
+  assert.equal(clipId("audio", 0, "5"), "A1@5");
+  for (const bad of ["V0@1", "X1@0", "V1@-5", "V1", ""]) assert.throws(() => parseClipId(bad));
+});
+
+test("read_timeline lists every track and clip with ids the edits accept", async () => {
+  const { run } = setup();
+  const t = await run.read_timeline({});
+  assert.equal(t.name, "Edit");
+  assert.equal(t.active, true);
+  assert.deepEqual(t.tracks.map((x) => x.id), ["V1", "A1"]);
+  assert.deepEqual(t.tracks[0].clips.map((c) => c.id), ["V1@0", `V1@${10n * S}`]);
+  assert.equal(t.tracks[0].clips[1].in_ticks, String(30n * S));
+  assert.equal(t.tracks[0].clips[0].disabled, false);
+});
+
+test("edit_clips moves, trims, disables and removes in ONE undo step", async () => {
+  const { h, run } = setup();
+  const before = h.undoSteps.length;
+  await run.edit_clips({ edits: [
+    { clip: `V1@${10n * S}`, op: "move", dt_ticks: String(5n * S) },
+    { clip: `A1@${10n * S}`, op: "move", dt_ticks: String(5n * S) },
+    { clip: "V1@0", op: "trim_in", in_ticks: String(2n * S) },
+    { clip: "A1@0", op: "remove", ripple: false },
+  ] });
+  assert.equal(h.undoSteps.length, before + 1);
+  const seq = h.sequence("Edit");
+  assert.deepEqual(seq.video.map((c) => [c.start, c.end, c.in]), [[2n * S, 10n * S, 2n * S], [15n * S, 25n * S, 30n * S]]);
+  assert.deepEqual(seq.audio.map((c) => c.start), [15n * S]);
+});
+
+test("edit_clips refuses a clip id that names nothing, before editing", async () => {
+  const { h, run } = setup();
+  const before = h.undoSteps.length;
+  await assert.rejects(run.edit_clips({ edits: [{ clip: "V1@0", op: "disable" }, { clip: "V1@7", op: "disable" }] }), /no clip starts at 7/);
+  assert.equal(h.undoSteps.length, before);
+  assert.equal(h.sequence("Edit").video[0].disabled, undefined);
+});
+
+test("select_clips replaces the selection and read_timeline shows it", async () => {
+  const { run } = setup();
+  const out = await run.select_clips({ clips: ["V1@0", "A1@0"] });
+  assert.deepEqual(out.selected, ["V1@0", "A1@0"]);
+  const t = await run.read_timeline({});
+  assert.deepEqual(t.tracks.flatMap((x) => x.clips.filter((c) => c.selected).map((c) => c.id)), ["V1@0", "A1@0"]);
+  assert.deepEqual((await run.select_clips({ clips: [] })).selected, []);
+});
+
+test("set_playhead and set_in_out read back what they set", async () => {
+  const { h, run } = setup();
+  assert.equal((await run.set_playhead({ ticks: String(3n * S) })).playhead_ticks, String(3n * S));
+  const marks = await run.set_in_out({ in_ticks: String(S), out_ticks: String(9n * S) });
+  assert.deepEqual([marks.in_ticks, marks.out_ticks], [String(S), String(9n * S)]);
+  assert.deepEqual(h.sequence("Edit").marks, { in: S, out: 9n * S });
+});
+
+test("place_media overwrites a project item at a time and reports what landed", async () => {
+  const { h, run } = setup();
+  const out = await run.place_media({ media: "D:\\b.mp4", at_ticks: String(30n * S), v: 1, a: 1 });
+  assert.deepEqual(out.placed.map((c) => c.id), [`V2@${30n * S}`, `A2@${30n * S}`]);
+  assert.equal(h.sequence("Edit").video.find((c) => c.track === 1).media, "D:\\b.mp4");
+});
+
+test("a named sequence that does not exist is refused", async () => {
+  const { run } = setup();
+  await assert.rejects(run.read_timeline({ sequence: "Nope" }), /No sequence named "Nope"/);
+});
+
+test("read_timeline can read one track and one span at a time", async () => {
+  const { run } = setup();
+  const t = await run.read_timeline({ tracks: ["V1"], from_ticks: String(12n * S), to_ticks: String(15n * S) });
+  assert.deepEqual(t.tracks.map((x) => x.id), ["V1"]);
+  assert.deepEqual(t.tracks[0].clips.map((c) => c.id), [`V1@${10n * S}`]);
+});
+
+/* Component chains in Premiere's shape (PREMIERE_FACTS "Effects, components, keyframes"):
+   index 0 Opacity, 1 Motion; a point value must be a PointF; keyframes need time-varying on first;
+   a new effect is appended. Attached to the fake's cached track items. */
+function chainFor(h) {
+  const param = (displayName, value) => {
+    const p = { displayName, value, varying: false, keys: [] };
+    return Object.assign(p, {
+      getStartValue: async () => ({ value: { value: p.value } }),
+      isTimeVarying: () => p.varying,
+      getKeyframeListAsTickTimes: () => p.keys.map((k) => fake.tickTime(k)),
+      createKeyframe: (v) => ({ value: { value: v }, position: null }),
+      createSetValueAction: (k) => fake.action(() => { p.value = k.value.value; }),
+      createSetTimeVaryingAction: (on) => fake.action(() => { p.varying = on; }),
+      createAddKeyframeAction: (k) => {
+        if (!p.varying) throw new Error("fake: keyframe on a param that is not time-varying");
+        return fake.action(() => { p.keys.push(k.position.ticks); p.value = k.value.value; });
+      },
+    });
+  };
+  const component = (matchName, params) => ({
+    getMatchName: async () => matchName, getDisplayName: async () => matchName,
+    getParamCount: () => params.length, getParam: (i) => params[i],
+  });
+  const chains = new Map();
+  return (item) => {
+    if (!chains.has(item)) {
+      const comps = [component("AE.ADBE Opacity", [param("Opacity", 100)]),
+        component("AE.ADBE Motion", [param("Position", new fake.PointF(0.5, 0.5)), param("Scale", 100)])];
+      chains.set(item, {
+        comps,
+        getComponentCount: () => comps.length,
+        getComponentAtIndex: (i) => comps[i],
+        createAppendComponentAction: (c) => fake.action(() => comps.push(c)),
+      });
+    }
+    return chains.get(item);
+  };
+}
+
+async function withChains(h) {
+  const chainOf = chainFor(h);
+  const seq = (await h.project.getSequences())[0];
+  for (const tr of [await seq.getVideoTrack(0), await seq.getAudioTrack(0)]) {
+    for (const item of tr.getTrackItems()) item.getComponentChain = async () => chainOf(item);
+  }
+  return chainOf;
+}
+
+test("set_param writes a value, and a point as a PointF, in one undo step each", async () => {
+  const { h, run } = setup();
+  await withChains(h);
+  const before = h.undoSteps.length;
+  const out = await run.set_param({ clip: "V1@0", component: "AE.ADBE Motion", param: 0, value: [0.25, 0.75] });
+  assert.ok(out.value instanceof fake.PointF);
+  assert.deepEqual([out.value.x, out.value.y], [0.25, 0.75]);
+  assert.equal((await run.set_param({ clip: "V1@0", component: 1, param: 1, value: 150 })).value, 150);
+  assert.equal(h.undoSteps.length, before + 2);
+  await assert.rejects(run.set_param({ clip: "V1@0", component: 1, param: 9, value: 1 }), /has 2 params/);
+});
+
+test("set_param at_ticks turns keyframing on first, then adds the keyframe", async () => {
+  const { h, run } = setup();
+  await withChains(h);
+  const out = await run.set_param({ clip: "V1@0", component: 0, param: 0, value: 40, at_ticks: String(S) });
+  assert.deepEqual(out.keyframes_ticks, [String(S)]);
+  assert.deepEqual(h.undoSteps.slice(-2), ["CutDeck: keyframe Opacity on", "CutDeck: keyframe Opacity"]);
+});
+
+test("add_effect appends a video effect by match name and refuses an unknown one", async () => {
+  const { h, run } = setup();
+  await withChains(h);
+  h.ppro.VideoFilterFactory = { createComponent: async (m) => (m === "AE.ADBE Gaussian Blur 2"
+    ? { getMatchName: async () => m, getDisplayName: async () => "Gaussian Blur", getParamCount: () => 0, getParam: () => null } : null) };
+  const out = await run.add_effect({ clips: ["V1@0"], effect: "AE.ADBE Gaussian Blur 2" });
+  assert.deepEqual(out.clips[0].effects.map((e) => e.match_name), ["AE.ADBE Opacity", "AE.ADBE Motion", "AE.ADBE Gaussian Blur 2"]);
+  const before = h.undoSteps.length;
+  await assert.rejects(run.add_effect({ clips: ["V1@0"], effect: "Nope" }), /no video effect "Nope"/);
+  assert.equal(h.undoSteps.length, before);
+});
+
+test("add_transition builds the options inside the transaction and refuses audio clips", async () => {
+  const { h, run } = setup();
+  const added = [];
+  class AddTransitionOptions {
+    setApplyToStart(v) { this.start = v; return this; }
+    setDuration(t) { this.duration = t.ticks; return this; }
+  }
+  h.ppro.AddTransitionOptions = AddTransitionOptions;
+  h.ppro.TransitionFactory = { createVideoTransition: async (m) => ({ m }) };
+  const seq = (await h.project.getSequences())[0];
+  for (const item of (await seq.getVideoTrack(0)).getTrackItems()) {
+    item.createAddVideoTransitionAction = (tr, opts) => fake.action(() => added.push({ m: tr.m, start: opts.start, duration: opts.duration }));
+  }
+  await run.add_transition({ clips: ["V1@0"], transition: "AE.ADBE Cross Dissolve New", duration_ticks: String(S), at_start: true });
+  assert.deepEqual(added, [{ m: "AE.ADBE Cross Dissolve New", start: true, duration: String(S) }]);
+  await assert.rejects(run.add_transition({ clips: ["A1@0"], transition: "x" }), /video clips only/);
+});
+
+test("list_project lists sequences and the media in bins", async () => {
+  const { run } = setup();
+  await run.import_files({ paths: ["D:\\b.mp4"] });
+  const out = await run.list_project({});
+  assert.deepEqual(out.sequences, [{ name: "Edit", sequence_id: "seq0", active: true }]);
+  assert.deepEqual(out.items, [{ name: "D:\\b.mp4", media: "D:\\b.mp4" }]);
+});
+
+test("a ripple remove is ONE action over video and audio (per-type ripples shifted twice live)", async () => {
+  const { h, run } = setup();
+  const calls = [];
+  const getEditor = h.ppro.SequenceEditor.getEditor;
+  h.ppro.SequenceEditor = { getEditor: (seq) => {
+    const ed = getEditor(seq);
+    return { ...ed, createRemoveItemsAction: (sel, ripple, type) => { calls.push([ripple, type]); return ed.createRemoveItemsAction(sel, ripple, type); } };
+  } };
+  await run.edit_clips({ edits: [{ clip: "V1@0", op: "remove", ripple: true }, { clip: "A1@0", op: "remove", ripple: true },
+    { clip: `V1@${10n * S}`, op: "remove" }] });
+  assert.deepEqual(calls, [[false, fake.Constants.MediaType.VIDEO], [true, fake.Constants.MediaType.ANY]]);
+});
+
+test("place_media fails when Premiere commits but nothing lands", async () => {
+  const h = fake.createTimelineHost({
+    media: [{ path: "D:\\a.mp4", video: true, audio: true, duration: 10n * S }],
+    sequences: [{ name: "Edit", video: [[]], audio: [[]] }],
+    place: () => 1n, // lands one tick off the asked time
+  });
+  await assert.rejects(controlHandlers(h.ppro).place_media({ media: "D:\\a.mp4", at_ticks: "0", v: 0, a: 0 }), /nothing landed/);
+});
