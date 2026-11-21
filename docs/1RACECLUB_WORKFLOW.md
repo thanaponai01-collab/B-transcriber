@@ -350,3 +350,103 @@ Project: `E:\Me\2.Tasks\20261121 - 2\4. PROJECTS\1. PREMIERE PRO\20260130 RENAME
   silence, −18.9 dB; identical to v3 for 0–3.75 s (PSNR 99.7), near-identical after the proof;
   `YT editing` unchanged (4,700 clips). Proof window 4.33–7.30 s (one frame cut in a pause at
   export 678.40 to give it a clip edge).
+
+#### User's own Russell Short (17:02, after deleting the agent's v1–v6)
+- In `TT editing` the user pasted one contiguous stretch of `YT editing` (all 4 layers +
+  6 audio, as copied: V2/V3 disabled, V4 posterized F1 on): tl 1:22.53–2:00.10 (37.6 s),
+  = export 672.5–710.1 (src 77:34–78:50), words: "รัสเซลล์เลยเดี๋ยวนี่ครับ … ให้กูออกหลังคีมี
+  ได้ไหม … มาดูว่าทีมจะเอายังไง … ออกมาสี่นาที … คิมมี่ต้องแซง … ขอไม้เรียว".
+- Versus the agent's pick: starts 1.3 s earlier (keeps "Russell, right now"), keeps the full
+  stretch through to "ขอไม้เรียว" (export 710) instead of jumping to the payoff at 757 and the
+  question at 900. _ask:_ why this range (is the payoff/question not needed, or coming next?).
+- **17:05–17:07 (user):** V2 face on for the whole chunk with the Short framing (rotation 90,
+  y 0.273); V4 Posterize/Screen removed, first piece at 109% bottom-anchored; **V5 = the RUSSELL
+  RADIO caption cropped to the box only** (F1 62:19.9, crop L83 T44 R4 B28) moved to the very
+  start (1:22.53, 0.67 s); **A8 = the real team-radio audio from the F1 feed**, two pieces
+  (feed 62:12.8–62:14.5 and 62:17.0–62:18.4, 3.1 s total) at 1:23.30–1:26.37, right after the
+  caption.
+  - **Principle (to confirm):** a radio controversy is proven with the driver's own voice:
+    play the real radio audio (a few seconds, jump-cut to the key line, inside the ≤3 s-ish
+    limit) under the cropped caption, then the user's reaction.
+- Note: sequences `TT russell kimi v7/v8 (Claude)` appeared at 17:05 and v8 is being edited
+  with imported PNG stills (`russell_kimi_s1_sphere.png`, `_s2_radio`, `_s3_tail`, `_s4_pole`,
+  `_title`): made by **another agent session**, not this one.
+
+#### v8 `TT russell kimi v8 (Claude)` (~16:55–17:15, user: "do short for me, about russell ask to be behind kimi")
+- v1–v6 were deleted from the project between 16:45 and 16:52, with no reason on record. v6 was almost all face (one 3 s F1 shot),
+  unlike the user's own Short (F1 stills under the face for most of it, title on the hook). So v8 was rebuilt by the principles.
+- **Story found in the transcript (missed by v1–v6):** George asks to go out behind Kimi; Kimi ends up last in the queue,
+  gets the tow and **takes P1, 1:33.893** (George P3). That's the peak, so it's the hook.
+- **Beats (export s), 27.8 s, zero gaps:** hook "แต่ทันเฉยเลยครับ คิมมี่เอาที่หนึ่งไป" (879.97) → request "ให้กูออกหลังคีมีได้ไหม…ให้คีมีมาชกลมให้หน่อย"
+  (673.75–677.98, 683.25–684.95) → "มาดูว่าทีมจะเอายังไง" (690.00) → "คีมิเป็นหางแถว…กูงานเข้าเลย" (757.10, 762.43)
+  → "คิมมี่เข้าเส้นคนสุดท้าย…คนสุดท้ายมันได้เปรียบ" (874.17, 884.30) → "ทำไมไม่เป็นพี่จอร์จ…ต้องสลับกันหรือเปล่าวะ" (899.02–904.45).
+- **Picture:** stacked (V2 face y .257 + still on V5) for hook / request / twist / payoff; face only for the suspense and the closing question.
+  Stills = PNGs made from the F1 feed (`6. ASSETS\russell_kimi\`): Sphere "#12 KIMI ANTONELLI" (hook), RUSSELL RADIO
+  "Otherwise, can I go behind Kimi?" enlarged (request), Kimi onboard + tower ANT 6 + "tight with the flag, Kimi" (twist),
+  tower ANT P1 1:33.893 + lower third (payoff). F1 / F1 TV bugs cropped out; no moving F1 video at all.
+- **Title** "จอร์จขอออก / หลังคิมิ" (the channel's own spelling in past titles: จอร์จ, คิมิ) as a PNG `russell_kimi_title2.png` (Prompt Medium 100, white, black stroke 8, rendered by Edge for correct Thai), V6, hook only.
+- **SFX:** Dramatic-Vine hook + payoff (−12 dB), Clock-Ticking under the suspense (−18), auughhh on "กูงานเข้า" (−24).
+- **Tool change:** `build_sequence` items take `import: true` (file imported into CutDeck › Frame Holds before any read; an import made
+  after reading invalidated the read objects: "The script object is no longer valid"). **Premiere fact:** a placed still read back **one frame short** of the requested out
+  for lengths 26–74 frames and 60/61 (the 120-frame pieces landed exact), which left a 1-frame gap at the end of each still window;
+  fixed by laying a 61-frame tail that ends on the window edge.
+- **Leftover:** `TT russell kimi v7 (Claude)` is broken (a failed build had already run the hook-move steps; the retry ran them twice);
+  no API deletes a sequence, so the user deletes it.
+- **Checks:** Premiere render 27.8 s 1080×1920 30 fps; all 834 frames' lower band match the planned still (0 off), no black frames;
+  voice −18.4 dB, no dropouts. Not exported to `5. EXPORTS`, not saved (save: false).
+- **17:11 save: user tightens the chunk** (37.6 → 29.6 s, tl 1:22.53–1:52.17, 16 pieces):
+  - First piece extended back 3 s (src 77:34.8–77:37.8) and now **wordless for 3.7 s: it carries
+    the real Russell radio (A8) under the caption**; the user's voice starts after it
+    ("นี่ครับรัสเซลล์บอกเฮ้ยให้กูออกหลังคีมีได้ไหม…").
+  - Cut 10.8 s in 3 ranges: the **second, repeated explanation** ("เพราะว่าพรุ่งนี้คีมีโดนอยู่แล้วน่ะ
+    ให้คีมีมาชกลมให้หน่อย… อย่างน้อยคีมีก็ได้ทำเวลา… ผลประโยชน์"), "รับนักต่อรองเอ้ย", and a filler.
+  - Kept the live play-by-play after it: "ออกมาสี่นาที… คิมมี่อยู่ข้างหน้าหรือเปล่าวะ… คิมมี่อยู่ข้างหลัง…
+    คิมมี่ต้องแซง… ขอไม้เรียว".
+  - **Principles (seen, to confirm):** (a) let the real radio play alone first, then react;
+    (b) say the point once: cut the repeat of an explanation; (c) a Short can be one
+    continuous live moment (no jump to a later payoff) when the moment itself has the
+    tension and the ending ("ขอไม้เรียว").
+- **17:13 autosave:** 3 frames trimmed near tl 1:46.9; the V2 piece at 1:46.13 set back to **full-frame face** (y 0.273 → 0.5): a face-only beat (the pause before "คิมมี่ต้องแซง"), like the full-screen beat in the Ferrari Short. _ask:_ what triggers face-only (nothing to prove on screen at that moment / the reaction is the point)?
+- **Joins:** a Premiere-render transcript reads every beat in order. Two joins sit in running speech and may carry a sliver of the next word: 0:15.9 ("ทีนี้" after "งานเข้าเลย", <1 frame) and 0:18.4 (tail of "ครับ" before "คนสุดท้าย"). Not re-cut; left for the user's ear.
+- **17:13–17:17 (user): F1 pictures follow each spoken line, almost all frame holds**
+  (the reader's `frame_hold` shows them):
+  | tl | F1 hold (feed) | framing | says |
+  |---|---|---|---|
+  | 1:22.53–1:31.83 | 62:12.2 (V4) + RUSSELL RADIO caption 62:19.9 (V5, crop to box, 191%) | 109% bottom + caption over it | radio plays, then "ให้กูออกหลังคีมีได้ไหม…" |
+  | 1:35.13–1:43.83 | 62:56.8, 63:00.2 | 109% bottom | "ออกมาสี่นาที… พี่จอร์จออกมามีใครอยู่ข้างหน้าไหม" |
+  | 1:43.83–1:44.90 | 65:03.2 (V5): two Mercedes together on track | 109% bottom | "คิมมี่อยู่ข้างหน้าหรือเปล่าวะ" |
+  | 1:44.90–1:46.13 | 63:22.2 (V6): RUS alone, 234% zoom | punch-in | "คิมมี่อยู่ข้างหลัง" |
+  | 1:46.13–1:48.3 | none | full-frame face | (pause) "คิมมี่ต้องแซง" |
+  | 1:48.33–1:52.07 | 63:26.4 hold, 150%, crop top 11 | zoom on RUS on the straight + mini-map | "ขอไม้เรียว" |
+  - **Principle (seen, to confirm):** each line gets the still that shows what is being said
+    (who's ahead/behind, the radio, the mini-map), zoomed to that element; a new picture per
+    line, held, never running broadcast video. Face-only when the line is pure reaction.
+- **17:19 autosave: radio treatment + SFX.**
+  - **F1 Radio Notification Sound** (A9, −3 dB) at the very start 1:22.53, then the real radio
+    (A8) **boosted +9 dB** from 1:23.17 (broadcast radio is quiet under the commentary).
+  - V6 text layers (placeholders "New Text Layer") at 1:23.17–1:28.17, timed to the radio
+    pieces: likely the **Thai subtitle of the English radio line**. _ask._
+  - Dramatic-Vine (−12 dB) on "คิมมี่อยู่ข้างหน้าหรือเปล่าวะ" (1:43.83) and on "ขอไม้เรียว" (1:48.33);
+    "fahhhhhhhh" meme at −51 dB under "คิมมี่อยู่ข้างหลัง" (1:44.77), barely audible: being auditioned?
+  - **Principles (seen):** announce a radio with the radio-notification sound, then play the
+    radio loud and clear (+9 dB); subtitle it; booms on the two reveal lines.
+- **17:22 save: radio subtitle (confirmed by the file).** Thai translation of "Otherwise, can I go
+  behind Kimi? Given the situation for tomorrow", **cut into short phrases timed to the words**:
+  "ไม่งั้น" (1:23.17–1:23.77) → "ขออยู่หลังคิมิได้ไหม" (→1:24.87) → "จากสถานการณ์" (→1:25.67) →
+  "พรุ่งนี้" (→1:26.23). Style = the Short title style: **Prompt-Medium 100, white, black stroke 8**,
+  centred, y 0.447 (just above the 740 px seam, over the face/F1 join).
+  - **Principle:** translate the radio into natural Thai, 1 short phrase at a time, each on
+    screen exactly while it is spoken; same type style as titles.
+- **17:23 save: driver labels on the still.** "RUS" (V6) and "ANT" (V7) text over the two-Mercedes hold (1:43.83–1:44.90), on "คิมมี่อยู่ข้างหน้าหรือเปล่าวะ". **Principle (seen):** when a still shows several cars, label who is who with the 3-letter code so the viewer can follow the line.
+- **17:24 save: hook title** "จอร์จขออยู่หลังคิมิ" (V7, 1:22.53–1:26.23 = the whole radio opening). Like "Ferrari ออก Q2 ทั้งคู่": the story in a few Thai words over the hook. Here the hook is the radio itself (not a later peak moved to the front).
+- **Export 17:25:** `5. EXPORTS\20261121 - TT rus ant.mp4`, 29.5 s, 1080×1920, 30 fps.
+
+### Agent's Russell Short vs the user's: what to change next time
+| | agent (v6) | user |
+|---|---|---|
+| Source | 5 beats from across the video (hook from 15:00, payoff from 12:37) | one continuous live stretch (10:12–11:50), tightened |
+| Opening | the user's later question moved to the front | the real radio itself: notification sound → Russell's voice (+9 dB) → Thai subtitle, title "จอร์จขออยู่หลังคิมิ" |
+| Repeats | kept the explanation said twice | said once |
+| F1 pictures | one 3 s video proof (caption in the corner) | a held still per spoken line, zoomed to what is said (caption box 191%, RUS alone 234%, mini-map 150%), driver labels |
+| Face | stacked only during the proof | stacked under every still, full frame on pure-reaction beats |
+| SFX | boom on hook/payoff, clock under suspense | radio notification, booms on the two reveal lines |
