@@ -3,7 +3,7 @@
 Reads the finished day project (via ``prproj_reader.read_project``) and returns, per output
 (YouTube long form, Facebook, 1-minute), the footage the user kept, the cuts between kept
 pieces, and which cuts are covered by other picture. Later HKS steps are scored against it
-(docs/HKS_BUILD_PLAN.md, step 0.2).
+(projects/hks/build-plan.md, step 0.2).
 
 Rules (measured on the 11 day projects, 2026-11-20):
 - Kept footage comes from the footage AUDIO clips; the main picture alternates between V1 and

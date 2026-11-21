@@ -1,6 +1,6 @@
 """hks_audit.py — do the HKS rules learned on 20261120 hold on the other episodes? (step 0.3)
 
-Measures, never changes a rule. Four rules (docs/HKS_BUILD_PLAN.md, step 0.3):
+Measures, never changes a rule. Four rules (projects/hks/build-plan.md, step 0.3):
 
 1. No jump cuts: an uncovered cut in the YT body is allowed only on a camera change. The test
    compares the source frame just before the cut with the one just after, both scaled to
@@ -50,7 +50,7 @@ from cutdeck.hks_gold import (FRAME, HALF, HOLD, _framing, _non_empty, body, day
                               read_day)
 from cutdeck.prproj_reader import read_project
 
-CAMERA_CHANGE = 20.0  # mean |RGB difference| at 1280x720; set in docs/HKS_RULE_AUDIT.md, rule 1
+CAMERA_CHANGE = 20.0  # mean |RGB difference| at 1280x720; set in projects/hks/rule-audit.md, rule 1
 MIN_DIP_S = 10        # a clock-off run this long inside the TV part is a bumper candidate
 MIN_TV_RUN_S = 30     # the TV part ends with the last clock-on run at least this long
 MODEL_STEP_S = 10     # spacing of the model-against-export samples

@@ -1,4 +1,4 @@
-"""cutdeck/topic_speakers.py — host vs other speaker (docs/DESIGN_TOPIC_CUT.md).
+"""cutdeck/topic_speakers.py — host vs other speaker (projects/hks/design-topic-cut.md).
 
 The pure parts run always. The real-episode check is opt-in (TOPIC_CUT_REAL=1, about 25 s) and needs
 the 4.5 GB recording, speechbrain and a GPU. It enrols the host on 30-90 s of the HKS Facebook 290969 episode,

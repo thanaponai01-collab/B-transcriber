@@ -1,7 +1,7 @@
 """hks_score.py — score a proposed โหนกระแส (HKS) cut against what the user kept (the gold).
 
 Later steps (3.1 rough cut, 4.x story cut) propose which footage to keep; this measures a
-proposal against the YouTube body keeps of ``hks_gold`` (docs/HKS_BUILD_PLAN.md, step 0.4).
+proposal against the YouTube body keeps of ``hks_gold`` (projects/hks/build-plan.md, step 0.4).
 
 Everything is in SOURCE time, per media file, as sets of seconds: the body may repeat a source
 range and its order is not always source order. The hook re-uses lines out of order, so only the

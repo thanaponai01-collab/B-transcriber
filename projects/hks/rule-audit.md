@@ -1,6 +1,6 @@
 # HKS rule audit (build plan step 0.3)
 
-Written 2026-11-20. Every rule in [HKS_BUILD_PLAN.md](HKS_BUILD_PLAN.md) came from one episode
+Written 2026-11-20. Every rule in [build-plan.md](build-plan.md) came from one episode
 (20261120). This audit checks each rule on all 11 day folders in `G:\Me\Works`. It measures and
 reports. It changes no rule. **A rule that fails or is unclear goes back to the user before
 anything is built on it** (questions at the end).

@@ -2,7 +2,7 @@
 
 The working memory for editing the user's F1 Shorts (TikTok, YouTube Shorts, Reels), learned from the user on
 2026-11-21 (the Ferrari, Russell/Antonelli, Max-vs-everyone and Turn 14 Shorts). The evidence, step by step, is in
-[1RACECLUB_WORKFLOW.md](1RACECLUB_WORKFLOW.md). Read this file before editing a Short.
+[workflow-log.md](workflow-log.md). Read this file before editing a Short.
 
 **How to read it.** A **principle** is the reason, and it carries over to any footage. A **rule** is how the
 principle is applied today, and it can change. Values (109%, −12 dB, 740 px) are examples, not presets
@@ -35,7 +35,7 @@ Most rules below are this principle applied to one case.
 | Principle | Rules today | Status |
 |---|---|---|
 | Every beat is a whole sentence; never cut mid-word | edges in real pauses, set from the audio envelope (10 ms), not from ASR word times (~0.1 s off) | confirmed |
-| Say each point once | cut a repeated explanation; **cut a repeat at the repeated words** (start the next piece after "รัสเซลบอก"), don't drop the content | confirmed |
+| Say each point once (M-4) | cut a repeated explanation; **cut a repeat at the repeated words** (start the next piece after "รัสเซลบอก"), don't drop the content | confirmed |
 | Don't announce or list what's coming: show it | the "with Norris once, with Russell once, Alpine early on" line felt too long to hold, so cut straight to each actual problem | confirmed |
 | End where the context of the story closes in the user's own telling | not at a later payoff; a closing joke is a good last line | confirmed |
 
@@ -94,8 +94,8 @@ Most rules below are this principle applied to one case.
 | **Copy the rough cut and work from there** (all layers and 6 audio tracks come along), don't rebuild from items | confirmed |
 | All Shorts of an episode live in one 9:16 timeline, each parked after the last, exported by In/Out over that Short only | confirmed |
 | Zero gaps | confirmed |
-| The user exports and saves; the agent never runs an export, not even to check | confirmed |
-| Check every frame before handing over (composited offline from the source files when not rendering) | confirmed |
+| The user exports and saves; the agent never runs an export, not even to check (M-2) | confirmed |
+| Check every frame before handing over (composited offline from the source files when not rendering) (M-5) | confirmed |
 | Export name `YYYYMMDD - TT <topic>.mp4`, 1080x1920 30 fps | seen |
 
 ## 10. Agent checklist for a Short
