@@ -571,3 +571,17 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
   `TT max vs everyone v4 (Claude) (FAILED)`); the identical retry passed, so it's the intermittent native-cut razor. v4 rebuilt in one build
   with the per-clip framing; the hook banner clip needed source-x centre 740 to show the full RACE CONTROL line. In 0, Out 50.93.
   Lesson: an unsaved agent build is lost if Premiere restarts. The agent doesn't save (`save: false`); tell the user to save once it looks right.
+
+#### User's own cut of the Max Short (19:33 save, In/Out 92.7–135.1 in `TT max vs everyone v4 (Claude)`, 42.4 s, 17 pieces)
+Parked after the agent's v4 in the same sequence; read with prproj_reader, each piece transcribed from source.
+| user s | words (rough-cut s) | picture | vs agent v4 |
+|---|---|---|---|
+| 0–7.8 | hook "เกือบแปะกันแล้ว… แล้วแปะกันไปเลย / มีปัญหากันทุกคนนะวันนี้แม็ก" (1396.5–1406.1) | holds: Russell onboard with the Red Bull alongside (183.5%, crop top 11, framed on the RB), overhead | same words; holds not video; own Text title 0–4.5 s (not the PNG over 8 s) |
+| — | list "กับนอริสก็ทีหนึ่ง… อัลไพน์" | | **dropped** |
+| 7.8–14.1 | "แล้วพี่แม็กจะ…เข้าไปที่อินไซด์ / อืม ไม่ปล่อยแน่นอน ฮ่าฮ่า / หัวจะปวดเลยวะ" (**rough cut 150–156, session start**) | holds from `1.mp4` (feed of the session start): Max onboard with the Alpine ahead, Max with Colapinto behind | **the agent's Alpine beat (17:20) was the wrong incident**; the real Alpine one is at the start ("ต้นๆเซสชันก็มีอัลไพน์") |
+| 14.1–17.4 | "ยุบหนอพองหนอ พี่แม็กใจเย็นพี่ ใจเย็น เวลามีอีกเยอะ" (1056.4–1059.8) | face only | kept as the reaction |
+| 17.4–27.1 | McLaren from "ไปแล้ว โอ้โห" (1165.5) → "พ่นควันใส่นอริส" → "นอริสบอก… เวรกรรมมันตามทัน" | hold: Norris onboard + NORRIS RADIO "INSTANT KARMA, AMAZING!" box cropped (L83 T43 R5 B36) at 333.5% on V5 | dropped "แม็คลาเรนเล่นซัดกัน" |
+| 27.1–34.7 | "ถูกันทีเลย" → "แตะมือกันข้างนอก" (face only) → "แม็กบอก ผลักกูเข้ากำแพง" | holds: Max onboard, the two cars side by side; VERSTAPPEN RADIO box "HE'S JUST PUSHED ME INTO THE BARRIER" enlarged | same words |
+| 34.7–40.4 | **"รัสเซลบอกให้มึงเห็นวิดีโอ… ตัดหน้ากู"** (1557.7) → "สนุกใช่ปะหล่ะ มึงเล่นเกม" **from 1562.8, inside the clip** | Russell helmet hold + RUSSELL RADIO box "DID YOU SEE THE REPLAY OF VERSTAPPEN?", then moving onboard with the box "AFFIRM… CUT ACROSS THE FRONT OF YOU / HA HA… FUN AND GAMES EH" | agent dropped the first radio to avoid repeating "รัสเซลบอก"; the user kept both radios and cut the **repeated words only** |
+| 40.4–42.4 | "Session นี้พี่แม็กเอา MVP ไปครับ" | face only | same |
+**Principles (seen):** (1) "use the synced footage" = pick **frame holds** from it, one per line, framed on the evidence; the radio caption box cropped and enlarged (the Russell Short recipe), moving video only where the radio plays; (2) a repeat is cut at the repeated words, not by dropping the content; (3) verify which incident a line is about from the footage before cutting (the session-start Alpine moment); (4) the list line went: the hook already says "มีปัญหากันทุกคน", so the beats themselves are the list. _ask:_ is (4) the reason? What does the Text title say?
