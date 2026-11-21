@@ -151,3 +151,11 @@ The real lines lost under the glossary include "แม็กทีหนึ่�
 Don't feed name lists to the decoder. Fix names after decoding, with a reviewed substitution list or
 corrections through the flywheel, and measure on the gold set. Scripts and outputs are in
 `output/timeline_listen/glossary/`.
+
+**English audio needs `language: en` (2026-11-22).** The pipeline hard-coded Thai as the decode
+language. On an English F1 broadcast (`2026-11-21 10-55-45.mp4`) the Thai checkpoint then translated
+much of the speech into Thai and looped ("รถหัวแข็งของรถหัวแข็ง…"). The same checkpoint told "en"
+transcribes it correctly ("They're not having a good weekend, generally. Haas looks very tricky.").
+The language is now `config["language"]` (default `th`, so existing caches keep their identity),
+carried on `JobPlan.language`; a per-job override is `transcribe(..., language="en")` (MCP
+`transcribe(media_path, language)`), cached apart from the Thai transcript.

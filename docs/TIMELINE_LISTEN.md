@@ -343,8 +343,10 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
 - **English audio is translated, not transcribed.** `10-55-45.mp4` is an English F1 broadcast. The
   Thai engine wrote much of it in Thai ("ดังนั้นคุณต้องขับรถเร็ว ๆ"), looped ("รถหัวแข็งของรถหัวแข็ง…"),
   and only switched to English later ("Generally, Haas looks very tricky."). For English-language
-  sources, the words on the timeline can be wrong even where the timing is right. A per-source
-  language choice (an English model or `language: en`) would be the fix; untested.
+  sources, the words on the timeline can be wrong even where the timing is right. **Fixed at
+  03:30:** the decode language is now a choice. `transcribe(media_path, language="en")` (MCP and
+  helper too) transcribes English correctly with the same model. It is cached apart, and the
+  newest transcript of a file is the one the timeline tools use. Default `th`.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources
   (scratch)` failed its own read-back once: a 1-frame razor clone was left on A3 past the sequence
   end (5733.267-5733.3 s). The identical retry passed. This is the intermittent native-razor failure

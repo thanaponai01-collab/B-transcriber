@@ -59,13 +59,16 @@ def create_server(backend: Backend) -> FastMCP:
         return backend.capabilities()
 
     @server.tool(annotations=write)
-    async def transcribe(media_path: str) -> dict:
+    async def transcribe(media_path: str, language: str | None = None) -> dict:
         """Start transcription of local audio/video. Returns job_id immediately.
 
         Uses the existing configured ASR pipeline. Results are timestamped phrase
         cues, not guaranteed individual words. Poll get_job then get_result.
+        language: "th" (default) or "en" for English-language audio; the Thai model translates
+        English into Thai unless told "en". The newest transcript of a file is the one
+        premiere_timeline_transcript uses.
         """
-        return await backend.transcribe(media_path)
+        return await backend.transcribe(media_path, language)
 
     @server.tool(annotations=read)
     async def get_job(job_id: str) -> dict:
