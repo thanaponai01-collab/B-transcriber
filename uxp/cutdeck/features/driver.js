@@ -51,6 +51,7 @@ const COMMANDS = [
   "align_clips",
   "distribute_clips",
   "export_sequence",
+  "reload_panel",
 ];
 
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
@@ -323,6 +324,11 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     align_clips: alignClips,
     distribute_clips: distributeClips,
     export_sequence: exportSequence,
+    // The reply goes out first; then the same reload as the panel menu's Reload (core/panel.js).
+    reload_panel: async () => {
+      setTimeout(() => window.location.reload(), 300);
+      return { reloading: true };
+    },
   };
 
   /* One call from the helper. Refused while the panel is busy, never queued behind the user. */

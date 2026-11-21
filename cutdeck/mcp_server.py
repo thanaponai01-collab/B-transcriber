@@ -97,6 +97,12 @@ def create_server(backend: Backend) -> FastMCP:
         start. Needs the CutDeck panel open."""
         return await backend.premiere("add_markers", {"markers": markers})
 
+    @server.tool(annotations=write)
+    async def premiere_reload_panel() -> dict:
+        """Reload the CutDeck panel in Premiere so it loads changed panel code. It reconnects
+        to the helper by itself within a few seconds. Needs the CutDeck panel open."""
+        return await backend.premiere("reload_panel")
+
     @server.tool(annotations=read)
     async def premiere_run_probe(probe: str) -> dict:
         """Run a diagnostic probe in Premiere (timing, motion, effect, transform,

@@ -147,19 +147,30 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 On a copied project, one probe per unknown. Each probe reads its result back, exports one frame,
 and adds a `PREMIERE_FACTS.md` row. Already proven and not probed again: removing one track's
 items, Motion scale and position, an adjustment layer with an appended effect.
-- [ ] **1a** A source range, video only, on V2 at a given time (as a cover), then Motion scale
+- [x] **1a** A source range, video only, on V2 at a given time (as a cover), then Motion scale
   and position on that fresh clip (insert zoom 271–405 %) → verify: read-back start/end/In within
-  one frame, V1 audio unchanged, and an exported frame shows the zoom.
-- [ ] **1b** A blur limited to an area (top-left clock box; a logo box). Try two ways:
+  one frame, V1 audio unchanged, and an exported frame shows the zoom. **Done (live 2026-11-21,
+  probe `hks1a`):** source 600–604 landed at 100.00–104.00, In 600.00, 300 % at 0.45/0.40 read
+  back; the exported frame matches that zoom (diff 1.2 vs 47.6 unzoomed). Catch: audio index -1
+  puts the audio on A1 over the dialogue, so the audio goes to a new track and is removed there
+  (A1–A6 unchanged).
+- [x] **1b** A blur limited to an area (top-left clock box; a logo box). Try two ways:
   - an adjustment layer with Gaussian Blur and a Crop write (Crop writes are OPEN in
     `PREMIERE_FACTS.md`), as the template's `Blur` items are built;
   - cloning the template's `BLUR TIME YT` / `Blur LOGO` items.
 
-  → verify: an exported frame is blurred only inside the box.
-- [ ] **1c** Audio clip level (Volume) at -33 / -24 / -12 dB → verify: read-back value, and
-  measured loudness changes by the expected amount.
-- [ ] **1d** Nest a sequence into another, and duplicate a sequence (the reel and the 3-min
-  reel) → verify: read-back clip names and durations.
+  → verify: an exported frame is blurred only inside the box. **Done, both routes work (probe
+  `hks1b`):** the clone keeps the template's effect mask (only the clock box changed); a fresh
+  adjustment layer + Gaussian Blur + Motion crop blurs only the crop box. The YT clock blur is an
+  effect mask, which no API can draw, so a new box shape means cloning a template item; a
+  rectangle can use the crop route.
+- [x] **1c** Audio clip level (Volume) at -33 / -24 / -12 dB → verify: read-back value, and
+  measured loudness changes by the expected amount. **Done (probe `hks1c`):** Level is linear,
+  dB = 20·log10(v) + 15; renders measure -12.00 / -24.00 / -33.00 dB exactly.
+- [x] **1d** Nest a sequence into another, and duplicate a sequence (the reel and the 3-min
+  reel) → verify: read-back clip names and durations. **Done (probe `hks1d`):** the FB copy reads
+  125 / 65 items and 179.96 s like the original; the square's project item placed into a reel copy
+  lands as a nested clip "3 SQUARE SELECT D1", 0–59.96, and renders.
 - [ ] **1e** Replay at scale, after 1a–1c. Rebuild the finished `1 YOUTUBE D1` of 20261120 on a
   copy, with the sequence closed while it is built:
   - the keeps and covers (about 160 cuts) from `hks_gold`;

@@ -47,6 +47,7 @@ test("the driver offers exactly the helper's fixed commands", () => {
     "align_clips",
     "distribute_clips",
     "export_sequence",
+    "reload_panel",
   ]);
 });
 

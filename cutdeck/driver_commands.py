@@ -70,7 +70,8 @@ def _marker_arguments(args: dict, jobs) -> dict:
 
 def _run_probe_arguments(args: dict, jobs) -> dict:
     probe = args.get("probe")
-    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming"}
+    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming",
+             "hks1a", "hks1b", "hks1c", "hks1d"}  # HKS build plan Phase 1 spike (hksSpikeProbe.js)
     if not isinstance(probe, str) or probe not in valid:
         raise ValueError(f"probe must be one of: {', '.join(sorted(valid))}")
     return {"probe": probe}
@@ -214,6 +215,8 @@ COMMANDS: dict[str, Command] = {
     "distribute_clips": Command(30, _distribute_clips_arguments,
                                 "Distribute 3+ selected clips across frame or within selection.",
                                 ("kind [to]", _parse_distribute_target)),
+    "reload_panel": Command(30, _no_arguments,
+                            "Reload the CutDeck panel so it loads changed code; it reconnects by itself."),
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
     "export_sequence": Command(3600, _export_sequence_arguments,
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",
