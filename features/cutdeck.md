@@ -123,7 +123,7 @@
 
 ## Plan a Short by its words (MCP)
 - what: Give the phrases to keep, in order; each piece's In/Out is placed in the source file's own pauses around its words; returns items for premiere_build_sequence. Edits nothing.
-- mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=120)`
+- mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=60)`
 - trace: `_plan_pieces` @ cutdeck/driver_commands.py > `plan_pieces` @ cutdeck/word_cut.py > `build` @ cutdeck/timeline_transcript.py
 - verify: Timeline transcript and cut by words
 - status: live-proven 2026-11-22: a reordered 3-piece Short built from its items read back with 0 cuts in sound

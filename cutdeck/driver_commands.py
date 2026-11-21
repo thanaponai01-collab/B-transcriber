@@ -1115,7 +1115,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
         default the active one, e.g. a rough cut). Each piece's edges are placed in the SOURCE
         file's own pauses around its words, so they are clean even where the rough cut removed the
-        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the word boundary;
+        pause (pad_ms of pause and any wordless sound touching the words, then the nearest quiet
+        frame; with no pause, the word boundary;
         `no_quiet` says so). Returns `items` ready for
         premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
