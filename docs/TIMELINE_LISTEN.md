@@ -348,8 +348,11 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
   03:30:** the decode language is now a choice. `transcribe(media_path, language="en")` (MCP and
   helper too) transcribes English correctly with the same model. It is cached apart, and the
   newest transcript of a file is the one the timeline tools use. Default `th`. `language="auto"`
-  picks Thai or English per file from the model's own confidence: proven both ways live (English
-  broadcast → English, Gillette review → Thai, each identical to the explicit choice).
+  picks Thai or English per file from the model's own confidence. It was proven both ways live
+  (English broadcast → English, Gillette review → Thai, each identical to the explicit choice) and
+  held out on 10 unseen files, 10 of 10 right (docs/ENGINES.md). It also works through the helper
+  and MCP route. **Your synced F1 feeds (`1.mp4`, `2.mp4`) are English commentary**: transcribe them
+  with `en` or `auto`.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources
   (scratch)` failed its own read-back once: a 1-frame razor clone was left on A3 past the sequence
   end (5733.267-5733.3 s). The identical retry passed. This is the intermittent native-razor failure

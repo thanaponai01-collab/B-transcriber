@@ -169,3 +169,16 @@ and takes the majority. Live: on the English broadcast it chose English (identic
 87); on the Gillette review it chose Thai (identical to `th`, job 88 vs 84). It is opt-in
 (`transcribe(language="auto")`). The default stays `th`, because changing it would change every
 cache identity, and the harness gates on `th`.
+
+Held out on 10 files it never saw (2026-11-22; 30 s samples at 20/50/80%, the per-sample vote the
+method uses):
+
+| file | language (checked by ear-decode) | votes | per-sample th−en margin |
+|---|---|---|---|
+| `1.mp4`, `2.mp4` (the synced F1 feeds, 20261121) | English | en 3/3, en 3/3 | −0.48..−1.24, −0.23..−1.24 |
+| `2026-11-20 10-55-50.mp4` | English | en 3/3 | −0.16..−1.24 |
+| `07-07-36`, `07-07-37-cam`, `10-40-51` (20261121), `20-56-30` (tss), `LAP1 REAR LOCK`, tss news, `21-54-25` (20261108) | Thai | th, every one | +0.05 .. +1.67 |
+
+10 of 10 right. The closest single samples were +0.05 (Thai) and −0.16 (English), and no majority
+was close. Note: the 1RaceClub synced F1 feeds are English commentary, so a Thai transcript of them is
+invented text.
