@@ -239,7 +239,7 @@ Tests:
   - speed ignored, in the mapping and in the scaled In/Out;
   - corrections off;
   - the cut planner cutting at word edges.
-- The full suite has 1,325 passed. The only failures are 8 in `tests/test_text_box.py`, which also
+- The full suite has 1,338 passed. The only failures are 8 in `tests/test_text_box.py`, which also
   fail on the base branch: the `uharfbuzz` module is not installed here.
 - `node --test tests/*.cjs`: 795 passed. `scripts/check_rough_cut.py` passes.
 
