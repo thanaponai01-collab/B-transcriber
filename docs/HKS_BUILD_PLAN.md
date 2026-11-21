@@ -181,25 +181,33 @@ items, Motion scale and position, an adjustment layer with an appended effect.
   the build runs twice without a failed action or a crash.
 
   **Done (live 2026-11-21, `python -m cutdeck.hks_build … --run --save`, panel `build_sequence`):**
-  - 370 items, twice, on a cleared copy that is never opened. Neither run had a refused action
-    or a crash (17 s and 33 s).
+  - 370 items on a cleared copy, three runs. No run had a refused action or a crash (17, 33 and
+    22 s). Run 1 ran on panel code loaded before the project guard existed, so runs 2 and 3 are
+    the two runs that count.
+  - The copy is never opened: after a build, the active sequence is still the one that was
+    active before.
   - Read-back: 344 video and 238 audio items, 0 off by more than a frame.
   - The saved project, diffed offline with `--compare`, gives 0 differences in timing, Motion
-    and Level against the original on both runs, and the original reads unchanged.
+    and Level against the original on all three runs, and the original reads unchanged. A
+    smoke build compared as the full list gives 364, so the diff does catch differences.
+  - Exported frame at 50 s (`run_probe hks1e`): it matches the original outside the clock box
+    (mean difference 0.11 of 255). Inside, both are blurred, but the crop route is a
+    hard-edged rectangle that reaches a little lower than the template's feathered mask.
+    For 5.1, clone a template blur item (route 1) where the look must match.
   - The whole list comes from `prproj_reader`, keeps and covers included, not from `hks_gold`.
     The reader gives the placed clips themselves, with the track, the Motion and the source
     file, which is what a replay needs. `hks_gold` gives source ranges only.
-  - Not replayed (`skipped` in the output):
-    - speed-changed clips (6) and keyframed Motion;
-    - the Opacity blend mode of film damage (83);
-    - the 3 V9 blur boxes, whose box was never measured;
-    - graphics, AE comps, SFX and the end logo.
+  - Not replayed (`skipped` in the output), with the step each one touches:
+    - speed-changed clips (6) and keyframed Motion: 5.4, the hook and closing stack;
+    - film damage's Opacity component (83). It reads as a plain 100 %; the reader does not
+      decode a blend mode, so whether the look matches is unknown: 4.3 and 5.4;
+    - the 3 V9 blur boxes, whose box was never measured: 5.1;
+    - graphics, AE comps, SFX and the end logo: 5.4, 5.5 and Phase 7.
 
     Blurriness is a fixed 60, because the reader returns no Gaussian Blur params.
-  - No frame was exported for this run. 1a–1c checked each kind's look.
 
-**Outcome: A**, so drafts are built as real sequences. The pieces not replayed above stay
-manual or get their own probe when a phase needs them.
+**Outcome: A**, so drafts are built as real sequences. Each piece not replayed above gets its
+own probe in the step named next to it.
 
 **Outcome A** (all work, 1e included): drafts are built as real sequences in Premiere.
 **Outcome B** (gaps): drafts are markers + cut lists, plus the user's manual steps for the gaps.

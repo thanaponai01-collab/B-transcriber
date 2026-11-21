@@ -17,6 +17,7 @@ const HKS_SPIKE = [
   ["hks1b", "probeBlur", "1b: two box-blur routes on a copy…"],
   ["hks1c", "probeVolume", "1c: BGM sequences at -12 / -24 / -33 dB…"],
   ["hks1d", "probeNest", "1d: duplicating FB and nesting the square into a reel copy…"],
+  ["hks1e", "probeReplay", "1e: frames of the original and of the build…"],
 ].map(([id, fn, startText]) => ({
   id,
   startText,

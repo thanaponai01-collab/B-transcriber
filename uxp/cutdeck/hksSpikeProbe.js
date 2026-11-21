@@ -325,7 +325,21 @@ async function probeNest(ppro) {
   return report;
 }
 
+/* 1e: after a build_sequence run (cutdeck/hks_build.py), which sequence is active (the build must
+   not have opened its clone), and the same frame of the original and of the build, at 50 s: under
+   a V8 clock blur with no film damage. The two PNGs are diffed offline. */
+const BUILD = { name: "HKS build 1e run3", at: 50 };
+
+async function probeReplay(ppro) {
+  const project = await spikeProject(ppro);
+  const active = await project.getActiveSequence();
+  const built = await sequenceNamed(ppro, project, BUILD.name);
+  return { step: "1e", active: active ? active.name : null, built: built.name, at: BUILD.at,
+    original: await exportFrame(ppro, project, await sequenceNamed(ppro, project, YT), BUILD.at, "hks1e_original.png"),
+    build: await exportFrame(ppro, project, built, BUILD.at, "hks1e_build.png") };
+}
+
 const formatReport = (report) => JSON.stringify(report, (k, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 
 module.exports = { probeCover: guarded(probeCover), probeBlur: guarded(probeBlur),
-  probeVolume: guarded(probeVolume), probeNest: guarded(probeNest), formatReport, levelValue, SPIKE_PROJECT };
+  probeVolume: guarded(probeVolume), probeNest: guarded(probeNest), probeReplay: guarded(probeReplay), formatReport, levelValue, SPIKE_PROJECT };
