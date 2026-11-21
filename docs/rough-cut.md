@@ -122,3 +122,16 @@ dropped by the min-clip merge.
   plan. The probe aims a cut there. Production stays on moves until the probe reads `exact` live
   on a synced multicam sequence. Check: `node --test tests/cutdeck_ripple_probe.test.cjs`.
 - Native razor (27.1) remains the route that removes the clones; installed Premiere is 26.5.2.
+
+## Speech protection from the sources' own transcripts (2026-11-22)
+- With speech protection on (`--asr`), `analyze` first tries `_mapped_transcript` (cutdeck/rough_cut.py):
+  when every enabled clip on the reference track plays a source file with a finished transcript in the
+  shared store, those words are mapped through the clips onto the analysed range
+  (cutdeck/timeline_transcript.py) and no ASR pass runs. Otherwise it transcribes the extracted WAV as before.
+- Why: the WAV is a new file for every range, so its sha256 cache never hit, and transcribing cut audio
+  gives different words from run to run (docs/TIMELINE_LISTEN.md).
+- It takes the newest finished transcript of the file by sha256, **whatever engine, settings or age**
+  (`store.latest_transcript_job`); word times are tightened to the source audio first.
+- Not used when the caller passes its own mixdown (`mixdown_wav`): that audio is theirs.
+- Live 2026-11-22, a 6-min scratch range: the same 119 cut spans, frame for frame, as the ASR run, in 15 s
+  with no GPU. Test: `tests/test_cutdeck_timeline_transcript.py::test_rough_cut_maps_stored_source_transcripts_into_the_window`.
