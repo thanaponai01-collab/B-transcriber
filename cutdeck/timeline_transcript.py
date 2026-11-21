@@ -307,7 +307,8 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
     return out
 
 
-def level_at(clips: list[Clip], levels_by_media: dict, ticks: int) -> float | None:
+def level_at(clips: list[Clip], levels_by_media: dict, ticks: int,
+             thresholds: dict | None = None) -> float | None:
     """The loudest 10 ms source level within 20 ms of a sequence position, and how far above
     the source's floor it is, as dB over threshold (negative = quiet). None: no levels there;
     a position no clip covers plays nothing, so it is quiet (-inf)."""
@@ -321,7 +322,8 @@ def level_at(clips: list[Clip], levels_by_media: dict, ticks: int) -> float | No
             near = levels[max(i - 2, 0):i + 2]
             if not len(near):
                 return float("-inf")
-            return float(near.max()) - (noise_floor(levels) + TAIL_DB)
+            threshold = (thresholds or {}).get(clip.media)
+            return float(near.max()) - (threshold if threshold is not None else noise_floor(levels) + TAIL_DB)
     return float("-inf")
 
 
@@ -639,5 +641,6 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["full_path"] = str(path)
     if keep_words:  # for in-process callers (word_cut); not JSON
         result["word_objects"] = words
-        result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks)
+        thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
+        result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, thresholds)
     return result
