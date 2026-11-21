@@ -43,9 +43,12 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
    readable against the source while reviewing. *(guess)*
 
 ### Short
-5. **First 1–2 s = the outcome/peak (here the "oh no" reaction to both Ferraris out), then
-   how it happened.** A short has to stop the scroll before it explains; the long video
-   can wait for the story. *(guess; the move is confirmed by the timeline)*
+5. **The first 1–2 s must stop the scroll before anything is explained.** Two ways seen:
+   (a) move the peak to the front, then play the build-up (Ferrari: the "oh no" reaction);
+   (b) open on the strongest *source* moment itself when the story starts with it (Russell:
+   the real team radio plays first, nothing moved). Not a rule that the peak always goes
+   first. **The opener can be anything; the principle is watch time: choose whatever will
+   make people keep watching. (a) and (b) are examples, not a menu.** *(confirmed)*
 6. **Prove the claim on screen, readable on a phone:** zoom into the timing tower so the
    viewer sees LEC/HAM in the drop zone in under 2 s. *(guess)*
 7. **Title text on the hook = the story in a few words, for viewers with sound off.**
@@ -59,6 +62,11 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
      face beat at ~0:12.5 today).
    - Why (guess): face is the reaction, F1 is the cause; the face stays big and readable, and
      the chin above the seam keeps the face from being cut by the image.
+   - The face-cam position is re-set per Short to put *this* chin above the line (y 0.257 in
+     Ferrari, 0.273 in Russell): the rule is the chin line, not a number. *(seen in both)*
+   - The "picture changes at most every ~5 s" limit (principle 3) is a **long-video** rule.
+     In a Short the still changes with each spoken line, every 1–2 s at the fast part.
+     *(seen in both)*
 9. **Shorts copyright limits:** F1 video **at most 3 s**; normally a **frame hold / captured
    still** stretched across the whole part where the user commentates on it. **Cut out every
    F1 logo** (F1 / F1 TV bugs in the corners: the 109% framing crops ~500 px off each side).
@@ -434,11 +442,11 @@ Project: `E:\Me\2.Tasks\20261121 - 2\4. PROJECTS\1. PREMIERE PRO\20260130 RENAME
   behind Kimi? Given the situation for tomorrow", **cut into short phrases timed to the words**:
   "ไม่งั้น" (1:23.17–1:23.77) → "ขออยู่หลังคิมิได้ไหม" (→1:24.87) → "จากสถานการณ์" (→1:25.67) →
   "พรุ่งนี้" (→1:26.23). Style = the Short title style: **Prompt-Medium 100, white, black stroke 8**,
-  centred, y 0.447 (just above the 740 px seam, over the face/F1 join).
+  centred, y 0.447 (≈858 px, i.e. **just below** the 740 px seam, top of the F1 picture; corrected 17:55 from the export, it was logged as "above").
   - **Principle:** translate the radio into natural Thai, 1 short phrase at a time, each on
     screen exactly while it is spoken; same type style as titles.
 - **17:23 save: driver labels on the still.** "RUS" (V6) and "ANT" (V7) text over the two-Mercedes hold (1:43.83–1:44.90), on "คิมมี่อยู่ข้างหน้าหรือเปล่าวะ". **Principle (seen):** when a still shows several cars, label who is who with the 3-letter code so the viewer can follow the line.
-- **17:24 save: hook title** "จอร์จขออยู่หลังคิมิ" (V7, 1:22.53–1:26.23 = the whole radio opening). Like "Ferrari ออก Q2 ทั้งคู่": the story in a few Thai words over the hook. Here the hook is the radio itself (not a later peak moved to the front).
+- **17:24 save: hook title** "จอร์จขออยู่หลังคิมิ" (V7, 1:22.53–1:26.23 = the whole radio opening), **yellow** fill (255, 234, 0; Ferrari's was white), left-aligned, sitting just above the seam while the white radio subtitle sits just below it. Like "Ferrari ออก Q2 ทั้งคู่": the story in a few Thai words over the hook. Here the hook is the radio itself (not a later peak moved to the front).
 - **Export 17:25:** `5. EXPORTS\20261121 - TT rus ant.mp4`, 29.5 s, 1080×1920, 30 fps.
 
 ### Agent's Russell Short vs the user's: what to change next time
@@ -450,3 +458,66 @@ Project: `E:\Me\2.Tasks\20261121 - 2\4. PROJECTS\1. PREMIERE PRO\20260130 RENAME
 | F1 pictures | one 3 s video proof (caption in the corner) | a held still per spoken line, zoomed to what is said (caption box 191%, RUS alone 234%, mini-map 150%), driver labels |
 | Face | stacked only during the proof | stacked under every still, full frame on pure-reaction beats |
 | SFX | boom on hook/payoff, clock under suspense | radio notification, booms on the two reveal lines |
+
+### Full read of `TT editing` (17:24 save, read 17:50) and how to edit a Short
+Read with `prproj_reader` (every clip, Motion, frame hold, text, audio level) plus 1-fps contact
+sheets of both exports. `TT editing` is the user's only Short timeline (others: `YT editing`,
+the agent's v7/v8, the `ALL` SFX library). It holds **both Shorts**: Ferrari at 0:00–0:20.93,
+Russell parked further down at 1:22.53–1:52.07. Both export with In/Out, so a new Short is
+built after the last one on the same timeline, not by deleting the old one.
+
+**Track roles (same in both Shorts):** V1 YT stream layout (on, hidden under V2), V2 face cam
+(rotation 90°), V3 me-with-data (off), V4 F1 still under the face, V5 a second still or a
+cropped broadcast graphic over V4, V6–V7 text (and a third still when needed), A1 voice,
+A2–A6 off, A7–A9 SFX and the real radio audio.
+
+**How to edit a Short (the procedure, statuses per line):**
+| Step | What | Status |
+|---|---|---|
+| Pick | one self-contained moment, often a controversy; can be one continuous live stretch | confirmed (controversy) / seen |
+| Open | **anything** that makes people keep watching longer (the peak moved forward, the real radio, or something else); never a fixed opener, judge each Short by what will hold *this* viewer | confirmed (user: the principle is watch time) |
+| Tighten | cut a repeated explanation, fillers; say each point once | seen once |
+| Picture per line | for each spoken line, a held F1 still of exactly what is said, zoomed to that element (tower, caption box, the two cars, the mini-map); the hold frame is chosen inside the piece, not its first frame | seen in both |
+| Face-only | full-frame face when the line is pure reaction / nothing to show: Ferrari 0:11.3–0:14.8; Russell 1:31.8–1:35.1 (after the radio, explaining) and 1:46.1–1:48.3 (pause before "คิมมี่ต้องแซง") | confirmed: face = my opinion/taste, or nothing on screen is about the story |
+| Moving F1 | ≤3 s and only where motion is the point (Ferrari hook 1.7 s) | confirmed |
+| Text tiers | **yellow** hook title = the story in a few Thai words, above the seam; **white** subtitles in short phrases just below it; 3-letter driver labels on a still with several cars | confirmed (colours) |
+| Radio | notification SFX → real radio boosted (+9) → Thai subtitle phrase by phrase | seen once |
+| SFX | boom on reveal lines, tick under suspense, meme on a reaction; all under the voice | seen in both |
+| End | where the context of that story closes in the user's own telling, not at a later payoff | confirmed |
+| Export | In/Out on the Short, 1080×1920 30 fps, `YYYYMMDD - TT <topic>.mp4` | seen in both |
+
+**New from this read:**
+- Ferrari hook frame = the biggest **physical** reaction (both hands on head), not only the
+  words: the hook beat is chosen by the face too. *(guess)*
+- Russell's hook title is **yellow**, subtitles white: two text roles on screen at once
+  need two colours. Ferrari had only the title, in white. *(guess; ask)*
+- The two V4 pieces at 1:43.83–1:46.13 are moving video but fully covered by the V5/V6
+  holds (RUS/ANT still, mini-map 234%), so the viewer sees stills only (checked on the export).
+- `fahhhhhhhh-earrape.mp3` at −51 dB: an "earrape" file is mastered extremely loud, so a big
+  cut may just bring it to a normal level. Not checked by ear.
+
+**Not read (gaps):** transitions and audio fades, speed changes, the text layers' own
+position/scale (only seen on the export), whether −12/−18/+9 dB match the Premiere UI.
+
+**User's answers (17:58, confirmed):**
+1. In/Out on the timeline covers **only the Short being exported** (now Russell). Opening on the
+   **real radio** is a retention choice: the radio makes people stop and listen, so they watch
+   longer. → Principle: open on the source moment that makes the viewer *want to hear what
+   comes next*.
+2. **Face-only = my opinion / my taste**, or when **nothing on screen is about the story**.
+   The stills are for facts; the face carries the take.
+3. **Yellow = hook title, white = subtitles.** A colour per text role (Ferrari's white title
+   predates or breaks this; follow yellow for hook titles from now on).
+4. The Short ends on "ขอไม้เรียว" because **that is where the context of that story ends**:
+   end where the user's own telling of the moment closes, not at a later payoff.
+5. The "fahhh" file is too loud, so it is turned down to −51 dB **on purpose; it is still
+   audible**. → set SFX level by ear against the voice, not by a fixed dB.
+
+#### v11 `TT russell kimi v11 (Claude)` (user feedback ~17:30: "crop good but needs improvement, audio gets cut mid-sentence")
+- **Audio rule (confirmed by the feedback): every beat is a whole sentence, and each cut sits in a real pause.** Edges are
+  placed from the audio envelope (10 ms), not from ASR word times, which ran ~0.1 s off (v8/v9 clipped "รัส" of รัสเซลล์).
+  Beats touching in the source get a one-frame cut in the pause between them. 37.9 s (was 27.8).
+- **Crop v2:** background dimmed (72%) under the enlarged proof graphic; radio caption 2.3x + George's P3 lower third; tower
+  cut to header..ANTONELLI row; hook = Kimi on the Sphere filling the panel.
+- Render checks: 1138/1138 frames match the plan, voice −18.7 dB, render transcript = whole sentences in order.
+- v7 and v10 broken (failed builds), v8/v9 older drafts: user deletes them. Panel change committed as d998092.
