@@ -178,10 +178,10 @@ def test_keep_ranges_takes_a_span_across_rough_cut_joins_and_places_only_its_out
 def test_a_piece_takes_along_wordless_sound_that_touches_it():
     # A laugh at 0.70-0.95 s, no word on it, 50 ms before "two" (1.0 s); "one" ends at 0.4 s.
     level = lambda media, t: 5.0 if 700 * MS <= t < 950 * MS or 1000 * MS <= t < 1800 * MS else -5.0
-    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), level)
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), level, wordless_ms=600)
     assert int(piece["in_ticks"]) <= 700 * MS and int(piece["in_ticks"]) >= 400 * MS   # the laugh is kept, "one" is not
     far = lambda media, t: 5.0 if 450 * MS <= t < 600 * MS or 1000 * MS <= t < 1800 * MS else -5.0
-    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), far)
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), far, wordless_ms=600)
     assert int(piece["in_ticks"]) >= 800 * MS          # 400 ms of quiet between: not taken
 
 
@@ -213,11 +213,11 @@ def test_review2_wordless_reach_stops_short_of_the_next_words_onset_and_runs_pas
     words = [w("a", 0, 500), w("b", 610, 1000)]
     src = {"a.mp4": [SourceWord("a", 0, 500, 0), SourceWord("b", 610, 1000, 0)]}
     loud = lambda media, t: 5.0 if t < 500 * MS + 20 * MS or t >= 610 * MS - 20 * MS else -5.0  # ±20 ms read window
-    (p,) = word_cut.plan_pieces(words, [{"text": "a"}], TPF, src, loud)
+    (p,) = word_cut.plan_pieces(words, [{"text": "a"}], TPF, src, loud, wordless_ms=600)
     assert int(p["out_ticks"]) < 610 * MS - 20 * MS
     last = [w("a", 0, 500)]
     laugh = lambda media, t: 5.0 if t < 900 * MS else -5.0                  # a laugh after the file's last word
-    (p,) = word_cut.plan_pieces(last, [{"text": "a"}], TPF, {"a.mp4": [SourceWord("a", 0, 500, 0)]}, laugh)
+    (p,) = word_cut.plan_pieces(last, [{"text": "a"}], TPF, {"a.mp4": [SourceWord("a", 0, 500, 0)]}, laugh, wordless_ms=600)
     assert int(p["out_ticks"]) >= 890 * MS
 
 
@@ -228,3 +228,10 @@ def test_keep_ranges_edge_word_said_elsewhere_too():
     r = word_cut.keep_ranges(words, [{"from_ticks": 950 * MS, "to_ticks": 1850 * MS}], TPF, clips, _src(words), end_ticks=END)
     (a, b), = r["keep_frames"]
     assert 400 <= a * TPF // MS <= 1000 and 1800 <= b * TPF // MS <= 2200
+
+
+
+def test_wordless_sound_is_left_out_by_default():
+    level = lambda media, t: 5.0 if 700 * MS <= t < 950 * MS or 1000 * MS <= t < 1800 * MS else -5.0
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), level)
+    assert int(piece["in_ticks"]) >= 900 * MS

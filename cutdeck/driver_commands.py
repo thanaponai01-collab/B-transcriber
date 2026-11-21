@@ -1009,10 +1009,13 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
 def _plan_pieces_arguments(args: dict, jobs) -> dict:
     checked = _cut_words_arguments({**{k: args[k] for k in ("sequence", "track") if k in args},
                                     "result_name": "-", "remove": args.get("keep"), "keep_ms": 0}, jobs)
-    pad_ms = args.get("pad_ms", word_cut.PAD_MS)
+    pad_ms, wordless_ms = args.get("pad_ms", word_cut.PAD_MS), args.get("wordless_ms", word_cut.WORDLESS_MS)
     if type(pad_ms) is not int or not 0 <= pad_ms <= 2000:
         raise ValueError("pad_ms must be 0 to 2000")
-    return {**{k: checked[k] for k in ("sequence", "track") if k in checked}, "keep": checked["remove"], "pad_ms": pad_ms}
+    if type(wordless_ms) is not int or not 0 <= wordless_ms <= 2000:
+        raise ValueError("wordless_ms must be 0 to 2000")
+    return {**{k: checked[k] for k in ("sequence", "track") if k in checked}, "keep": checked["remove"],
+            "pad_ms": pad_ms, "wordless_ms": wordless_ms}
 
 
 async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
@@ -1024,7 +1027,7 @@ async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
         raise ValueError(f"transcribe these sources first: {[m['media'] for m in built['missing']]}")
     tpf = int(source["ticks_per_frame"])
     pieces = word_cut.plan_pieces(built["word_objects"], args["keep"], tpf, built["source_words"],
-                                  built["source_level"], args["pad_ms"])
+                                  built["source_level"], args["pad_ms"], args["wordless_ms"])
     at, items = 0, []
     for n, p in enumerate(pieces):
         items.append({"id": f"piece{n + 1}", "media": p["media"], "in_ticks": p["in_ticks"],
@@ -1055,7 +1058,7 @@ async def _keep_words(args: dict, premiere: Premiere) -> dict:
     tpf = int(source["ticks_per_frame"])
     planned = word_cut.keep_ranges(before["word_objects"], args["keep"], tpf, before["clip_objects"],
                                    before["source_words"], before["source_level"], args["pad_ms"],
-                                   int(source["end_ticks"]))
+                                   int(source["end_ticks"]), args["wordless_ms"])
     if not planned["cuts_frames"]:
         raise ValueError("the phrases cover the whole sequence; nothing to cut")
     copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
@@ -1115,14 +1118,15 @@ HELPER_COMMANDS: dict[str, Command] = {
         should play ([{"text", "occurrence"?}] or [{"from_ticks", "to_ticks"}] on this sequence,
         default the active one, e.g. a rough cut). Each piece's edges are placed in the SOURCE
         file's own pauses around its words, so they are clean even where the rough cut removed the
-        pause (pad_ms of pause and any wordless sound touching the words, then the nearest quiet
-        frame; with no pause, the word boundary;
+        pause (pad_ms of pause, then the nearest quiet frame; with no pause, the word boundary;
+        wordless_ms > 0 also takes along wordless sound touching the words, e.g. a laugh;
         `no_quiet` says so). Returns `items` ready for
         premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
         nothing. Read the built Short back with premiere_timeline_transcript.
         """,
-        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60)),
+        (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60),
+         ("wordless_ms", int, 0)),
         run=_plan_pieces),
     "keep_words": Command(
         1800, _keep_words_arguments, "write",
@@ -1135,7 +1139,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         is no "sound" entry). Reorder afterwards (premiere_build_sequence into the copy).
         """,
         (("result_name", str), ("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None),
-         ("pad_ms", int, 60)),
+         ("pad_ms", int, 60), ("wordless_ms", int, 0)),
         run=_keep_words),
     "screenshot": Command(
         30, _no_arguments, "read",

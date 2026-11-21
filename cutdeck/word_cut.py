@@ -119,19 +119,23 @@ def count(words: list[TimelineWord], text: str) -> int:
     return sum(1 for m in find(words, text, 1, limit=10000) if m["whole_words"]) if _norm(text) else 0
 
 
-WORDLESS_GAP_MS, WORDLESS_REACH_MS = 100, 600  # best fit to the owner's 34 edges (2026-11-22)
+# Wordless sound touching a phrase (a laugh, a breath, a word the engine missed) can go with it:
+# ``wordless_ms`` is how far. Off by default: on the owner's Max Short it matched their edges better
+# (24 vs 22 of 34 within a frame) but on their Gillette review it did worse (21 vs 28 of 84), so it
+# does not generalize (2026-11-22). Turn it on for an edit where reactions matter.
+WORDLESS_GAP_MS, WORDLESS_MS = 100, 0
 
 
-def _wordless_reach(media: str, edge: int, bound: int, step: int, source_level) -> int:
+def _wordless_reach(media: str, edge: int, bound: int, step: int, source_level, reach_ms: int) -> int:
     """Move a phrase edge (ticks) out over sound no word covers that touches it: at most
-    ``WORDLESS_GAP_MS`` of quiet between, ``WORDLESS_REACH_MS`` in all, never past ``bound`` (the
+    ``WORDLESS_GAP_MS`` of quiet between, ``reach_ms`` in all, never past ``bound`` (the
     neighbouring word). ``step`` -1 walks back from a start, +1 forward from an end."""
     unit = 10 * TICKS_PER_MS
     # The level is read over 20 ms either side: stop that far from the neighbour, or its own
     # onset reads as wordless sound.
     margin = 30 * TICKS_PER_MS
     t, quiet, reached = edge, 0, edge
-    while abs(t - edge) < WORDLESS_REACH_MS * TICKS_PER_MS:
+    while abs(t - edge) < reach_ms * TICKS_PER_MS:
         t += step * unit
         if (step < 0 and t <= bound + margin) or (step > 0 and t >= bound - margin):
             break
@@ -151,7 +155,8 @@ PAD_MS = 60  # pause kept before and after a piece: the owner's own edges sit he
 
 
 def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
-                source_words: dict, source_level=None, pad_ms: int = PAD_MS) -> list[dict]:
+                source_words: dict, source_level=None, pad_ms: int = PAD_MS,
+                wordless_ms: int = WORDLESS_MS) -> list[dict]:
     """The pieces of source media that play each kept phrase, in the order given.
 
     The phrase is found on this timeline (a rough cut, a copy), but its edges are placed in the
@@ -181,11 +186,10 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
         src = source_words.get(media) or []
         before = max((w.end_ms * TICKS_PER_MS for w in src if w.end_ms * TICKS_PER_MS <= first), default=0)
         next_word = min((w.start_ms * TICKS_PER_MS for w in src if w.start_ms * TICKS_PER_MS >= last), default=None)
-        if source_level is not None:
-            # Wordless sound touching the phrase (a breath, a laugh, a word the engine missed)
-            # goes with it: the owner kept it on 4 of 17 hand-cut pieces (2026-11-22).
-            first = _wordless_reach(media, first, before, -1, source_level)
-            last = _wordless_reach(media, last, next_word if next_word is not None else 1 << 62, 1, source_level)
+        if source_level is not None and wordless_ms > 0:
+            first = _wordless_reach(media, first, before, -1, source_level, wordless_ms)
+            last = _wordless_reach(media, last, next_word if next_word is not None else 1 << 62, 1,
+                                   source_level, wordless_ms)
         after = next_word if next_word is not None else last + pad
         fa = max(first - pad, before) // tpf
         if fa * tpf < before:
@@ -214,7 +218,7 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
 
 def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: list,
                 source_words: dict, source_level=None, pad_ms: int = PAD_MS,
-                end_ticks: int | None = None) -> dict:
+                end_ticks: int | None = None, wordless_ms: int = WORDLESS_MS) -> dict:
     """Keep only these phrases on this timeline, in its own order: their spans in sequence
     frames, and the frame cuts (everything else) for `cut_copy`, which keeps every track and
     layer. Each span's edges are placed as `plan_pieces` places them, in the source file's
@@ -226,9 +230,9 @@ def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: l
         # Only the outer edges are placed: a span on a rough cut crosses its joins, which stay
         # where they are. Each edge is a one-word plan in that word's own source.
         head = plan_pieces(words, [{"word_range": [i, i], "text": words[i].text}],
-                           tpf, source_words, source_level, pad_ms)[0]
+                           tpf, source_words, source_level, pad_ms, wordless_ms)[0]
         tail = plan_pieces(words, [{"word_range": [j, j], "text": words[j].text}],
-                           tpf, source_words, source_level, pad_ms)[0]
+                           tpf, source_words, source_level, pad_ms, wordless_ms)[0]
         piece = {"text": keep.get("text") or join_words(w.text for w in words[i:j + 1]),
                  "no_quiet": {**({"start": head["no_quiet"]["start"]} if "start" in head.get("no_quiet", {}) else {}),
                               **({"end": tail["no_quiet"]["end"]} if "end" in tail.get("no_quiet", {}) else {})}}
