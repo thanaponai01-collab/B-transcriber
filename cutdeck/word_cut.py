@@ -42,17 +42,27 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
     return inside[0], inside[-1]
 
 
-def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int, bool]:
+DIP_FRAMES = 2  # with no quiet frame, how far either side of the target to look for the quietest
+
+
+def _quiet_frame(frame: int, lo: int, hi: int, tpf: int, level_at) -> tuple[int, float | None]:
     """The frame boundary in ``[lo, hi]`` (ticks) nearest ``frame`` whose audio is quiet
-    (``level_at`` below 0); ``(frame, False)`` when the pause has none."""
+    (``level_at`` below 0): ``(frame, None)``. When the pause has none (words touching), the
+    quietest boundary within ``DIP_FRAMES`` of ``frame``, the dip between syllables a person
+    would cut on: ``(frame, its dB over the sound threshold)``."""
     first, last = -(-lo // tpf), hi // tpf
     for step in range(max(last - first, 0) + 1):
         for f in (frame - step, frame + step):
             if first <= f <= last:
                 level = level_at(f * tpf)
                 if level is not None and level < 0:
-                    return f, True
-    return frame, False
+                    return f, None
+    best, best_level = frame, level_at(frame * tpf)
+    for f in range(frame - DIP_FRAMES, frame + DIP_FRAMES + 1):
+        level = level_at(f * tpf) if f >= 0 else None
+        if level is not None and (best_level is None or level < best_level):
+            best, best_level = f, level
+    return best, (round(best_level, 1) if best_level is not None else None)
 
 
 def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: int,
@@ -78,19 +88,20 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
             fa = first // tpf
         if fb * tpf < last:
             fb = -(-last // tpf)
-        no_quiet = []
+        no_quiet = {}
         if level_at is not None:
             # The quiet frame in the pause nearest the target; the engine's word edges can be
-            # off, the audio is not.
-            fa, ok_a = _quiet_frame(fa, before, first, tpf, level_at)
-            fb, ok_b = _quiet_frame(fb, last, after, tpf, level_at)
-            no_quiet = [side for side, ok in (("start", ok_a), ("end", ok_b)) if not ok]
+            # off, the audio is not. No quiet frame: the dip, with its level over threshold.
+            fa, loud_a = _quiet_frame(fa, before, first, tpf, level_at)
+            fb, loud_b = _quiet_frame(fb, last, after, tpf, level_at)
+            no_quiet = {side: db for side, db in (("start", loud_a), ("end", loud_b)) if db is not None}
         spans.append((fa, fb))
         details.append({"text": "".join(w.text for w in words[i:j + 1]) if not remove.get("text") else remove["text"],
                         "removed_s": [round(fa * tpf / 254016000000, 3), round(fb * tpf / 254016000000, 3)],
                         "pause_before_ms": round(gap_before / TICKS_PER_MS),
                         "pause_after_ms": round(gap_after / TICKS_PER_MS),
                         "tight": gap_before < 2 * tpf or gap_after < 2 * tpf,
+                        # side -> dB over the sound threshold at the dip it was cut on
                         **({"no_quiet": no_quiet} if no_quiet else {})})
     spans.sort()
     merged: list[list[int]] = []

@@ -1025,7 +1025,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         with cut_copy, then reads it back: `checks` (how often each phrase is said before and
         after), `joins` (the words either side of each join), and `new_cuts_in_sound` (any new cut
         with audible sound at it; empty is the goal). Each cut sits on the quiet frame in the
-        pause nearest its target; `no_quiet` on a removal says a side had none. Needs the CutDeck panel open and the
+        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame, the dB over the sound threshold at the dip it was cut on. Needs the CutDeck panel open and the
         sources transcribed.
         """,
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
