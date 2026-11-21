@@ -7,7 +7,6 @@ const syncProbe = () => require("../syncProbe.js");
 const roughCutProbe = () => require("../roughCutProbe.js");
 const layoutProbe = () => require("../layoutProbe.js");
 const rippleProbe = () => require("../rippleProbe.js");
-const addEditProbe = () => require("../addEditProbe.js");
 const mcpToolsProbe = () => require("../mcpToolsProbe.js");
 const hksSpike = () => require("../hksSpikeProbe.js");
 
@@ -96,20 +95,6 @@ const PROBES = [
     run: (ppro) => rippleProbe().probeRippleDelete(ppro),
     format: (report) => rippleProbe().formatRippleReport(report),
     logLabel: "CutDeck ripple delete probe",
-  },
-  {
-    id: "addedit",
-    startText: "Copying this sequence, then asking the Cutter Probe plugin for one native Add Edit on the copy…",
-    run: (ppro, deps) => addEditProbe().probeAddEdit(ppro, deps),
-    format: (report) => addEditProbe().formatAddEditReport(report),
-    logLabel: "CutDeck native Add Edit probe",
-  },
-  {
-    id: "addeditcheck",
-    startText: "Reading the Add Edit test copy: selection, and before/after state…",
-    run: (ppro) => addEditProbe().checkAddEdit(ppro),
-    format: (report) => addEditProbe().formatCheckReport(report),
-    logLabel: "CutDeck native Add Edit check",
   },
   {
     id: "mutestate",

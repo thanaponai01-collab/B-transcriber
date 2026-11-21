@@ -25,7 +25,7 @@ import sys
 import uuid
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS  # noqa: F401 (MAX_MARKERS: tests)
-from cutdeck import frame_bounds, native_split, sequence_model, text_box
+from cutdeck import frame_bounds, sequence_model, text_box
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
@@ -212,7 +212,6 @@ class Jobs:
         "plan_sync": "_on_plan_sync",
         "frame_bounds": "_on_frame_bounds",
         "text_box": "_on_text_box",
-        "native_split_request": "_on_native_split_request",
     }
 
     async def dispatch(self, req: dict, client: Client | None = None) -> dict:
@@ -354,10 +353,6 @@ class Jobs:
         # Transform panel: Premiere's blue box for each text layer of a Graphic, from the newest
         # save and the font (text_box.py). On a worker thread: it reads and shapes.
         return await asyncio.to_thread(text_box.request, req)
-
-    async def _on_native_split_request(self, req: dict, client: Client | None) -> dict:
-        # The "Test Native Add Edit" probe: one fixed native command, guarded by the timecode.
-        return await native_split.request_split(req.get("expected_timecode"))
 
     def _start(self, job: dict, sequence: Sequence) -> dict:
         start, end = range_from_ticks(sequence, job["context"])

@@ -365,8 +365,9 @@ def create_server(backend: Backend) -> FastMCP:
                                              idempotentHint=False, openWorldHint=False))
     async def premiere_key_command(command: str, focus: str | None = "timeline", sequence: str | None = None) -> dict:
         """Run a Premiere command by pressing its keyboard shortcut, e.g. cmd.sequence.razorateditline.all
-        (Add Edit to All Tracks at the playhead), cmd.edit.rippledelete, cmd.clip.linkaudioandvideo,
-        cmd.edit.undo / cmd.edit.redo. Names come from premiere_list_key_commands. Premiere comes to
+        (Add Edit to All Tracks at the playhead), cmd.edit.rippledelete, cmd.clip.linkaudioandvideo.
+        Names come from premiere_list_key_commands. For anything with a menu item, use
+        premiere_menu_command instead: Undo/Redo sent as keys did nothing (live 2026-11-21). Premiere comes to
         the front and `focus` gets keyboard focus (timeline, program, source, project,
         effect_controls, or null). With focus timeline it opens `sequence` (default: the active one)
         and checks it is still active before pressing. Commands act on the playhead, selection and

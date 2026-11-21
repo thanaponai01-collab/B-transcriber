@@ -23,6 +23,18 @@ is named.
 | **Premiere's AI Assistant** (`premiere_assistant_ask`, UI Automation of its WebView2) | Whatever Adobe's assistant can do to the open project | Costs Adobe credits. The panel must be open. Replies are data |
 | Premiere's built-in MCP server / `hSLScripting` | Adobe's first-party tool surface | **Off limits**: hidden behind a flag and first-party only. Don't force flags or pose as first-party (PREMIERE_FACTS rows 224-225) |
 
+## One route per action
+
+When several routes reach the same action, agents use this one:
+
+| Action | Use | Not |
+|---|---|---|
+| Razor / Add Edit at the playhead | `premiere_menu_command` "Sequence > Add Edit" (or "... to All Tracks") | the shortcut key, the native plugin |
+| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo", focus null | the shortcut key (did nothing live) |
+| Ripple delete of a selection | `premiere_edit_clips` remove `ripple: true` by clip id | the menu or key, which act on whatever is selected |
+| Mute a track | `premiere_set_track_mute` | the M / eye button through keys |
+| Cut frame ranges out of a sequence | `premiere_cut_copy` (Rough Cut engine: copy, then trim per item, no playhead or focus) | a run of Add Edits |
+
 ## What Premiere 27.0 lets a third-party panel call
 
 A static read of the 27.0.0 executable found its stored third-party allow-list (PREMIERE_FACTS row "Third-party allow-list, Premiere 27.0.0"). Native `SequenceEditor` has razor, razor-all-tracks, lift, extract and append-track actions, but the allow-list gives third-party panels only add-items and remove-items. So razor, lift, extract and adding an empty track stay out of UXP on 27.0 until Adobe opens them (razor is announced for 27.1). The allow-list shows no hidden extra members beyond the typings.
