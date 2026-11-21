@@ -244,3 +244,38 @@ def test_tighten_grows_an_edge_into_the_pause_to_meet_sound_the_engine_left_out(
     levels[140:200] = -30.0
     a, b = tt.tighten(words, levels)
     assert a.end_ms <= b.start_ms
+
+
+def test_corrections_replace_a_cues_words_and_mark_the_line(tmp_path):
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    same = tt.apply_corrections(SOURCE, {0: "hello there"})        # 2 words for 2: times kept
+    assert [(w.text, w.start_ms, w.end_ms, w.corrected) for w in same[:2]] == [
+        ("hello", 1000, 1400, True), ("there", 1500, 2000, True)]
+    spread = tt.apply_corrections(SOURCE, {2: "ลาก่อนนะ"})           # "bye" -> 2+ Thai words over 6.0-6.5 s
+    thai = [w for w in spread if w.cue == 2]
+    assert thai[0].start_ms == 6000 and thai[-1].end_ms == 6500 and all(w.corrected for w in thai)
+    gone = tt.apply_corrections(SOURCE, {2: "  "})
+    assert all(w.cue != 2 for w in gone)
+    r = tt.build(timeline(clip("A1@0", 0, 0, 7000, media)), lookup=lambda m: (1, same))
+    assert r["lines"][0]["text"] == "hello there" and r["lines"][0]["corrected"] is True
+    assert "corrected" not in r["lines"][1]
+
+
+def test_source_words_reads_the_store_and_its_corrections(tmp_path):
+    from transcribe.db import store
+    media = tmp_path / "a.wav"; media.write_bytes(b"not really audio")
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    conn = store.connect(db)
+    media_id = store.create_media(conn, str(media))
+    job_id = store.create_job(conn, media_id, "faster_whisper", "passthrough", "v1")
+    store.create_token(conn, job_id, 0, "สวัสดีครับ", 1000, 2000, "thai", None, "a")
+    store.create_token(conn, job_id, 1, "ไปละ", 3000, 3500, "thai", None, "a")
+    store.create_correction(conn, job_id, 1, "ไปละ", "ไปแล้ว", "a")
+    conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (job_id,))
+    conn.commit(); conn.close()
+    got_job, words, levels = tt.source_words(str(media), db)
+    assert got_job == job_id and levels is None
+    assert [(w.text, w.corrected) for w in words] == [("สวัสดีครับ", False), ("ไป", True), ("แล้ว", True)]
+    assert (words[1].start_ms, words[2].end_ms) == (3000, 3500)
+    assert tt.source_words(str(media), db)[0] == job_id  # sha256 now comes from the index

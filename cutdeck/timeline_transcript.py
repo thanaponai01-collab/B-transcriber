@@ -18,7 +18,7 @@ import json
 import os
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -46,6 +46,7 @@ class SourceWord:
     start_ms: int
     end_ms: int
     cue: int  # index of the engine's phrase cue that holds it
+    corrected: bool = False  # text from a person's correction of the cue, not the engine
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ class TimelineWord:
     src_end_ms: int
     cue: int
     clipped: str | None  # "head" / "tail" / "both": the clip edge cuts this word
+    corrected: bool = False
 
 
 def _ticks(value) -> int:
@@ -107,14 +109,49 @@ def source_word_list(words: Iterable, cues: Iterable) -> list[SourceWord]:
     midpoint; with no word timeline, each cue is one word."""
     cues = sorted(cues, key=lambda c: (c["start_ms"], c["end_ms"]))
     starts = [c["start_ms"] for c in cues]
+    ids = [c.get("idx", i) for i, c in enumerate(cues)]  # the store's token idx when given
     out = []
     words = list(words)
     if not words:
-        return [SourceWord(c["text"], c["start_ms"], c["end_ms"], i) for i, c in enumerate(cues)]
+        return [SourceWord(c["text"], c["start_ms"], c["end_ms"], ids[i]) for i, c in enumerate(cues)]
     for w in sorted(words, key=lambda w: (w.start_ms, w.end_ms)):
         mid = (w.start_ms + w.end_ms) / 2
         i = max(bisect.bisect_right(starts, mid) - 1, 0) if cues else 0
-        out.append(SourceWord(w.text, w.start_ms, w.end_ms, i))
+        out.append(SourceWord(w.text, w.start_ms, w.end_ms, ids[i] if cues else 0))
+    return out
+
+
+def apply_corrections(words: list[SourceWord], corrected: dict[int, str]) -> list[SourceWord]:
+    """A person's corrected text for a cue (``{cue idx: text}``, SubtitleDesk / web editor)
+    replaces the engine's words of that cue. The corrected text is split into words
+    (pythainlp); with as many words as the engine had, each keeps its engine times, else they
+    share the cue's span by character count. A cue the engine gave no words is left alone."""
+    if not corrected:
+        return words
+    from pythainlp.tokenize import word_tokenize
+    out, k = [], 0
+    while k < len(words):
+        w = words[k]
+        if w.cue not in corrected:
+            out.append(w)
+            k += 1
+            continue
+        group = [w]
+        while k + len(group) < len(words) and words[k + len(group)].cue == w.cue:
+            group.append(words[k + len(group)])
+        k += len(group)
+        tokens = [t for t in word_tokenize(corrected[w.cue], keep_whitespace=False) if t.strip()]
+        if not tokens:
+            continue  # corrected to nothing: the cue was a hallucination
+        if len(tokens) == len(group):
+            out += [replace(g, text=t, corrected=True) for g, t in zip(group, tokens)]
+            continue
+        lo, hi = group[0].start_ms, max(g.end_ms for g in group)
+        total, pos = sum(len(t) for t in tokens), 0
+        for t in tokens:
+            a = lo + (hi - lo) * pos // total
+            pos += len(t)
+            out.append(SourceWord(t, a, lo + (hi - lo) * pos // total, w.cue, True))
     return out
 
 
@@ -142,7 +179,7 @@ def project(clips: list[Clip], words_by_media: dict[str, list[SourceWord]],
                 w.text, clip.start + round((lo - clip.in_) / clip.speed),
                 clip.start + round((hi - clip.in_) / clip.speed), clip.id,
                 clip.media, w.start_ms, w.end_ms, w.cue,
-                "both" if head and tail else "head" if head else "tail" if tail else None))
+                "both" if head and tail else "head" if head else "tail" if tail else None, w.corrected))
     out.sort(key=lambda w: (w.start, w.end))
     return out
 
@@ -192,6 +229,8 @@ def lines(words: list[TimelineWord], ticks_per_frame: int) -> list[dict]:
         cut = [w.text for w in group if w.clipped]
         if cut:
             line["clipped_words"] = cut
+        if any(w.corrected for w in group):
+            line["corrected"] = True
         out.append(line)
         group.clear()
 
@@ -363,8 +402,8 @@ def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[S
         if w.end_ms <= w.start_ms or not loud:
             inner.append((w, False))
             continue
-        inner.append((SourceWord(w.text, max(w.start_ms, loud[0] * ENVELOPE_MS),
-                                 min(w.end_ms, (loud[-1] + 1) * ENVELOPE_MS), w.cue), True))
+        inner.append((replace(w, start_ms=max(w.start_ms, loud[0] * ENVELOPE_MS),
+                              end_ms=min(w.end_ms, (loud[-1] + 1) * ENVELOPE_MS)), True))
     out = []
     reach = REACH_MS // ENVELOPE_MS
     for k, (w, fitted) in enumerate(inner):
@@ -383,7 +422,7 @@ def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[S
         while steps < reach and audible(j) and (j + 1) * ENVELOPE_MS <= ceil_ms:
             j += 1
             steps += 1
-        out.append(SourceWord(w.text, i * ENVELOPE_MS, j * ENVELOPE_MS, w.cue))
+        out.append(replace(w, start_ms=i * ENVELOPE_MS, end_ms=j * ENVELOPE_MS))
     return out
 
 
@@ -469,9 +508,11 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
         job = store.latest_transcript_job(conn, sha)
         if job is None:
             return None
-        cues = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms}
+        cues = [{"idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms}
                 for t in store.get_tokens(conn, job.id)]
         words = source_word_list(words_for_job(conn, job.id), cues)
+        words = apply_corrections(words, {c.token_idx: c.corrected_text
+                                          for c in store.get_corrections(conn, job.id)})
     finally:
         conn.close()
     levels = None
