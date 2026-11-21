@@ -558,3 +558,11 @@ position/scale (only seen on the export), whether −12/−18/+9 dB match the Pr
 - **v4 `TT max vs everyone v4 (Claude)`**: the v3 recipe on the new rough cut (6 audio, 5 video tracks, 50.93 s). Not rendered by the agent
   (user rule 19:16: the user exports, the agent never runs export_sequence); checked by read-back (0 clip mismatches), feed frames pulled
   from the source at each piece, and v3's voice transcript (same voice pieces). In reads unset (null), Out 50.93.
+- **19:35 user: "dont forget to check the frame".** Composited each piece offline from the source files (cam rotated 90 and placed,
+  feed with its Motion, title) since the agent no longer renders. Found: the re-synced feed is a new file `2.mp4` at **1280x720**, so
+  the 109% built for 1920x1080 left it small with the seam at 1135 px; and the centred crop cut the evidence at the frame edges
+  (RACE CONTROL "VERSTAPPEN, RUSSELL INCIDENT" banner top right, NORRIS RADIO "INSTANT KARMA, AMAZING!" far right, the Mercedes
+  contact far left). Fix on v4 (restyle into, 19 feed clips): 163.5% (= the user's 109% of a 1080p frame, seam ~740 px), and per-clip
+  framing toward the evidence: banner clip right, overhead clip at 109% so both cars and the banner fit, Norris radio clips right,
+  contact clip left. **Principle (seen): frame each feed clip on what proves the line (caption, banner, the two cars), not the centre;
+  and scale by the source's real size, not a fixed %.**
