@@ -1,7 +1,8 @@
 """One table owns the Premiere driver commands (docs/arch-design-helper-v3.md move 1)."""
 import asyncio
+import json
+import subprocess
 from pathlib import Path
-import re
 
 from cutdeck import driver_commands
 from cutdeck.ai_backend import Backend
@@ -11,8 +12,11 @@ DRIVER_JS = Path(__file__).resolve().parent.parent / "uxp" / "cutdeck" / "featur
 
 
 def test_panel_driver_offers_exactly_the_tabled_commands():
-    array = re.search(r"const COMMANDS = \[([^\]]*)\]", DRIVER_JS.read_text(encoding="utf-8")).group(1)
-    assert sorted(re.findall(r'"(\w+)"', array)) == sorted(driver_commands.PANEL_COMMANDS)
+    # The commands the panel registers are its handler names, read from the real module.
+    script = ("const { createDriver } = require(process.argv[1]);"
+              "console.log(JSON.stringify(createDriver({ ppro: {}, ctl: {} }).commands));")
+    out = subprocess.run(["node", "-e", script, str(DRIVER_JS)], capture_output=True, text=True, check=True).stdout
+    assert sorted(json.loads(out)) == sorted(driver_commands.PANEL_COMMANDS)
 
 
 def test_every_command_is_an_agent_tool():

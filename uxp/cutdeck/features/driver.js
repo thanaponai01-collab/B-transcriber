@@ -43,41 +43,6 @@ const {
   distribute,
 } = require("../transform/edit.js");
 
-const COMMANDS = [
-  "read_sequence",
-  "read_audio_range",
-  "apply_cuts",
-  "add_markers",
-  "run_probe",
-  "inspect_selection",
-  "set_transform_field",
-  "set_anchor",
-  "align_clips",
-  "distribute_clips",
-  "export_sequence",
-  "reload_panel",
-  "build_sequence",
-  "cut_copy",
-  "create_sequence",
-  "read_timeline",
-  "list_project",
-  "open_sequence",
-  "set_playhead",
-  "set_in_out",
-  "select_clips",
-  "edit_clips",
-  "place_media",
-  "list_effects",
-  "add_effect",
-  "set_param",
-  "add_transition",
-  "set_track_mute",
-  "remove_markers",
-  "import_files",
-  "save_project",
-  "export_frame",
-];
-
 const seconds = (ticks) => Number(BigInt(ticks) * 1000n / TICKS_PER_SECOND) / 1000;
 
 function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 30000, teardown = null }) {
@@ -412,7 +377,8 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     }
   }
 
-  return { commands: COMMANDS, handle };
+  // The command names the panel registers with the helper (cutdeck/driver_commands.py checks them).
+  return { commands: Object.keys(handlers), handle };
 }
 
 /* Keeps the panel registered as the driver: registers on the driver's own connection, and
@@ -447,4 +413,4 @@ function keepRegistered({ rpc, version, commands, setTimer = setTimeout, clearTi
   return { start: attempt, onClose: later, stop };
 }
 
-module.exports = { createDriver, keepRegistered, COMMANDS };
+module.exports = { createDriver, keepRegistered };

@@ -5,8 +5,8 @@ The rule every panel command keeps: it runs as one Premiere transaction, or on a
 sequence, and returns what it changed. Nothing here edits the user's original in steps.
 
 A new command is one entry here: its timeout, argument check, MCP hint, MCP description and
-parameters. A panel command also needs its handler in `uxp/cutdeck/features/driver.js` (with its
-name in that file's COMMANDS array); a helper command has `run` instead. The helper's dispatch,
+parameters. A panel command also needs its handler in `uxp/cutdeck/features/driver.js` (the panel
+registers its handler names); a helper command has `run` instead. The helper's dispatch,
 the MCP tools, `premiere_cli` and `ai_backend.capabilities` all read this table;
 `tests/test_cutdeck_driver_commands.py` fails if the panel drifts from it.
 """
