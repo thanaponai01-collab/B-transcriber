@@ -140,3 +140,13 @@ def test_latest_transcript_job_any_engine(tmp_path):
     conn.commit()
     assert store.latest_transcript_job(conn, "abc").id == job_id
     assert store.latest_transcript_job(conn, "other") is None
+
+
+def test_zero_length_engine_word_is_kept_inside_and_dropped_outside(tmp_path):
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    words = tt.source_word_list([SimpleNamespace(text="นะ", start_ms=1500, end_ms=1500),
+                                 SimpleNamespace(text="hello", start_ms=1000, end_ms=1500)], CUES[:1])
+    keep = tt.build(timeline(clip("A1@0", 0, 900, 2100, media)), lookup=lambda m: (1, words))
+    assert keep["lines"][0]["text"] == "hello นะ"
+    gone = tt.build(timeline(clip("A1@0", 0, 1600, 2100, media)), lookup=lambda m: (1, words))
+    assert gone["lines"] == []

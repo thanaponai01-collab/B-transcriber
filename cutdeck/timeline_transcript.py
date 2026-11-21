@@ -128,7 +128,8 @@ def project(clips: list[Clip], words_by_media: dict[str, list[SourceWord]],
             if w.start_ms >= out_ms:
                 break
             lo, hi = max(w.start_ms * TICKS_PER_MS, clip.in_), min(w.end_ms * TICKS_PER_MS, clip.out)
-            if hi <= lo:
+            # The engine reports some short words with start == end: keep one that falls inside.
+            if hi < lo or (hi == lo and (w.end_ms > w.start_ms or not clip.in_ <= lo < clip.out)):
                 continue
             head = w.start_ms < in_ms - tolerance_ms
             tail = w.end_ms > out_ms + tolerance_ms
