@@ -147,6 +147,17 @@ async function projectAndSequenceNamed(ppro, name) {
   return { project, sequence: await sequenceNamed(project, name) };
 }
 
+// Copies `source` in its own transaction `label` (Sequence.createCloneAction :586) and returns
+// every sequence that was not there before, found by guid (Sequence.guid :610): the clone action
+// hands back no handle to the copy. The caller decides how many copies it accepts.
+async function cloneSequence(project, source, label) {
+  const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
+  runTransaction(project, label, (compound) => {
+    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
+  });
+  return (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
+}
+
 module.exports = {
   CUTDECK_BIN_NAME,
   ROUGH_CUTS_BIN_NAME,
@@ -160,4 +171,5 @@ module.exports = {
   sequencesNamed,
   sequenceNamed,
   projectAndSequenceNamed,
+  cloneSequence,
 };

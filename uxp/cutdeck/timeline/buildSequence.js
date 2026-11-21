@@ -56,7 +56,7 @@
    + VideoComponentChain.createAppendComponentAction (re-fetch after commit), ComponentParam
    createKeyframe / createSetValueAction. */
 
-const { runTransaction, sequencesNamed } = require("../host/project.js");
+const { runTransaction, sequencesNamed, cloneSequence } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
 const { applyMotionValues } = require("../transform/apply.js");
@@ -240,11 +240,7 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     scratch = { v: top("v", now.videoTracks), a: top("a", now.audioTracks) };
   } else {
     // Clone, rename, clear. The clone is not opened.
-    const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-    runTransaction(project, `CutDeck build: copy ${base}`, (c) => {
-      if (!c.addAction(baseSeq.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-    });
-    const created = (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
+    const created = await cloneSequence(project, baseSeq, `CutDeck build: copy ${base}`);
     if (created.length !== 1) throw new Error(`Copying gave ${created.length} new sequences.`);
     seq = created[0];
     const seqItem = await seq.getProjectItem();

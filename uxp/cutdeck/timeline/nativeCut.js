@@ -11,7 +11,7 @@
      - items read before a transaction can go stale, so every step re-reads the copy.
    Five undo steps plus one per extra 3,000-action batch, said in the status line. */
 
-const { runTransaction, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, cloneSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
@@ -355,11 +355,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
   if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
 
-  const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runTransaction(project, "CutDeck: copy sequence", (compound) => {
-    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-  });
-  const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
+  const created = await cloneSequence(project, source, "CutDeck: copy sequence");
   if (!created.length) throw new Error("Copying the sequence gave no new sequence; nothing was cut");
   // From here a copy exists, so every failure goes through the catch below.
   const copy = created[0];

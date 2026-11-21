@@ -16,7 +16,7 @@
    onto not-yet-existing tracks in one transaction, overwrite at a between-frames time, and -1 as
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
-const { runTransaction, activeProjectAndSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
+const { runTransaction, activeProjectAndSequence, cloneSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
 
@@ -110,11 +110,7 @@ async function waitForPlan(rpc, clips, deps) {
 }
 
 async function copySequence(project, source, name, targets = []) {
-  const beforeIds = new Set((await project.getSequences()).map((s) => s.guid.toString()));
-  runTransaction(project, "CutDeck Sync: copy sequence", (compound) => {
-    if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
-  });
-  const created = (await project.getSequences()).filter((s) => !beforeIds.has(s.guid.toString()));
+  const created = await cloneSequence(project, source, "CutDeck Sync: copy sequence");
   if (created.length !== 1) throw new Error(`Copying the sequence gave ${created.length} new sequences; stopped before placing anything.`);
   const copy = created[0];
   const item = await copy.getProjectItem();
