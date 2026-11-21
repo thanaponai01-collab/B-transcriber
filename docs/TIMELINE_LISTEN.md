@@ -177,9 +177,30 @@ Tests:
   - speed ignored, in the mapping and in the scaled In/Out;
   - corrections off;
   - the cut planner cutting at word edges.
-- The full suite has 1,315 passed. The only failures are 8 in `tests/test_text_box.py`, which also
+- The full suite has 1,325 passed. The only failures are 8 in `tests/test_text_box.py`, which also
   fail on the base branch: the `uharfbuzz` module is not installed here.
 - `node --test tests/*.cjs`: 795 passed. `scripts/check_rough_cut.py` passes.
+
+## Independent code review (02:15)
+
+A reviewer subagent read the diff cold. It found 10 issues (4 confirmed by running them) and
+I fixed 8, each with a test:
+- `tighten` rounded every edge to the 10 ms grid (it now keeps exact times where an edge does
+  not move);
+- `plan_pieces` gave Out before In for a phrase that crosses a cut (now refused);
+- a zero-length last word was left out of a removal;
+- the range filter lost an edge sitting exactly on `from_ticks`;
+- a through-edit counted as two cuts;
+- concurrent cache writes could crash, and a half-written cache was never rebuilt;
+- one undecodable source failed the whole command;
+- a pause shorter than a frame always cut into the kept word.
+
+After the fixes, the rough cut's cut list is still identical, and the Short still has 0 cuts in sound.
+
+Left as is:
+- A Rough Cut with speech protection hashes each source once even when it won't use its
+  transcript (a cost, not a wrong result).
+- A cut made from several sources records only the first source's transcript job id.
 
 ## State you are left in
 
