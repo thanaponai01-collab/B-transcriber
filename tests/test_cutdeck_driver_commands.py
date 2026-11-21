@@ -12,7 +12,7 @@ DRIVER_JS = Path(__file__).resolve().parent.parent / "uxp" / "cutdeck" / "featur
 
 def test_panel_driver_offers_exactly_the_tabled_commands():
     array = re.search(r"const COMMANDS = \[([^\]]*)\]", DRIVER_JS.read_text(encoding="utf-8")).group(1)
-    assert sorted(re.findall(r'"(\w+)"', array)) == sorted(driver_commands.COMMANDS)
+    assert sorted(re.findall(r'"(\w+)"', array)) == sorted(driver_commands.PANEL_COMMANDS)
 
 
 def test_every_command_is_an_agent_tool():

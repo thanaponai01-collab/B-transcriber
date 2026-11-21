@@ -10,25 +10,35 @@ read this table; `tests/test_cutdeck_driver_commands.py` fails if the pieces dri
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Awaitable, Callable
 
+from cutdeck import assistant, keys, menu, screenshot
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
 
 
+# Runs one command through the helper and returns its result: the helper's own dispatch, or
+# `Backend().premiere` in a script.
+Premiere = Callable[[str, dict], Awaitable]
+
+
 @dataclass(frozen=True)
 class Command:
     timeout_s: int
-    # (args the caller sent, job lookup) -> the arguments the panel receives
+    # (args the caller sent, job lookup) -> the arguments the command receives
     prepare: Callable[[dict, Callable[[str], dict]], dict]
     doc: str
     # None: takes no CLI argument. Else (usage word, text from the CLI -> args for the command)
     cli_target: tuple[str, Callable[[str], dict]] | None = None
+    # None: the CutDeck panel runs it. Else the helper runs it (Win32 routes: menu, keys, window
+    # pixels, Adobe's AI Assistant), with `premiere` for any panel command it needs on the way.
+    run: Callable[[dict, Premiere], Awaitable] | None = None
 
 
 def _seconds_to_ticks(value, name: str) -> str:
@@ -562,3 +572,72 @@ CONTROL_COMMANDS: dict[str, Command] = {
     "export_frame": Command(60, _export_frame_arguments, "Save a PNG of a sequence frame."),
 }
 COMMANDS.update(CONTROL_COMMANDS)
+
+
+# Routes the UXP panel cannot take (docs/PREMIERE_CONTROL_MAP.md), run by the helper itself.
+def _query_arguments(args: dict, jobs) -> dict:
+    query = args.get("query", "")
+    if not isinstance(query, str):
+        raise ValueError("query must be text")
+    return {"query": query}
+
+
+def _focus_arguments(args: dict) -> dict:
+    focus = args.get("focus", "timeline")
+    if focus is not None and focus not in keys.FOCUS:
+        raise ValueError(f"focus must be one of {', '.join(keys.FOCUS)}, or null")
+    return {"focus": focus, "sequence": _sequence(args).get("sequence")}
+
+
+def _key_command_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("command"), str) or not args["command"].strip():
+        raise ValueError("command must be a shortcut command name (premiere_list_key_commands)")
+    return {"command": args["command"], **_focus_arguments(args)}
+
+
+def _menu_command_arguments(args: dict, jobs) -> dict:
+    if not isinstance(args.get("path"), str) or not args["path"].strip():
+        raise ValueError('path must be a menu path like "Edit > Undo" (premiere_list_menu)')
+    return {"path": args["path"], **_focus_arguments(args)}
+
+
+def _assistant_arguments(args: dict, jobs) -> dict:
+    prompt, timeout_s = args.get("prompt"), args.get("timeout_s", 120)
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("prompt must be text")
+    if type(timeout_s) not in (int, float) or not 1 <= timeout_s <= 600:
+        raise ValueError("timeout_s must be 1 to 600 seconds")
+    return {"prompt": prompt, "timeout_s": timeout_s}
+
+
+async def _list_key_commands(args: dict, premiere: Premiere) -> dict:
+    found = await asyncio.to_thread(keys.list_commands, args["query"])
+    return {"shortcuts_file": str(keys.active_kys()), "count": len(found), "commands": found[:300]}
+
+
+async def _list_menu(args: dict, premiere: Premiere) -> dict:
+    found = await asyncio.to_thread(menu.list_items, args["query"])
+    return {"count": len(found), "items": found[:400]}
+
+
+HELPER_COMMANDS: dict[str, Command] = {
+    "screenshot": Command(30, _no_arguments, "Capture Premiere's main window to a PNG.",
+                          run=lambda args, premiere: asyncio.to_thread(screenshot.capture)),
+    "list_key_commands": Command(30, _query_arguments, "List Premiere commands that have a keyboard shortcut.",
+                                 ("query", lambda target: {"query": target}), run=_list_key_commands),
+    "key_command": Command(60, _key_command_arguments, "Run a Premiere command by pressing its shortcut.",
+                           ("command", lambda target: {"command": target}),
+                           run=lambda args, premiere: keys.run_command(premiere, args["command"], args["focus"], args["sequence"])),
+    "list_menu": Command(30, _query_arguments, "List Premiere's menu bar items.",
+                         ("query", lambda target: {"query": target}), run=_list_menu),
+    "menu_command": Command(60, _menu_command_arguments, "Run a Premiere menu item as a click would.",
+                            ("menu path", lambda target: {"path": target}),
+                            run=lambda args, premiere: keys.run_focused(premiere, args["focus"], args["sequence"],
+                                                                        lambda: menu.invoke(args["path"]))),
+    # Waits for Adobe's reply up to timeout_s (at most 600).
+    "assistant_ask": Command(660, _assistant_arguments, "Ask Premiere's own AI Assistant and return its reply.",
+                             ("prompt", lambda target: {"prompt": target}),
+                             run=lambda args, premiere: asyncio.to_thread(assistant.ask, args["prompt"], args["timeout_s"])),
+}
+COMMANDS.update(HELPER_COMMANDS)
+PANEL_COMMANDS = [name for name, command in COMMANDS.items() if command.run is None]

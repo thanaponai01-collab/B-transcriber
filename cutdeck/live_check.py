@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 
 from cutdeck.ai_backend import Backend
-from cutdeck.driver_commands import COMMANDS
+from cutdeck.driver_commands import PANEL_COMMANDS
 from cutdeck.helper import PORT
 
 
@@ -60,9 +60,9 @@ def check(port: int = PORT) -> tuple[list[Step], dict | None]:
         return steps, None
 
     offered = set(status.get("commands", []))
-    missing = [c for c in COMMANDS if c not in offered]
+    missing = [c for c in PANEL_COMMANDS if c not in offered]
     steps.append(Step("panel offers every command the helper knows", not missing,
-                      f"all {len(COMMANDS)} offered" if not missing else
+                      f"all {len(PANEL_COMMANDS)} offered" if not missing else
                       f"panel is missing {missing}: it is an older build, reload the panel"))
     if missing:
         return steps, None

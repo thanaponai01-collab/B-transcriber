@@ -12,6 +12,12 @@ is named.
 
 ## Routes
 
+Every route has one way in: `Backend().premiere(command, args)` (or `python -m cutdeck.premiere_cli`,
+or the `premiere_<command>` MCP tool) asks the helper, and the helper runs the command from the one
+table `cutdeck/driver_commands.py`. Panel commands go on to the CutDeck panel; the menu, keyboard,
+window-pixel and AI Assistant commands run in the helper itself, which reaches the panel through
+the same table when it needs a sequence opened or read.
+
 | Route | Reaches | Limits |
 |---|---|---|
 | **UXP panel API** (CutDeck panel, `features/driver.js` + `timeline/control.js`) | Everything in `reference/adobe/api/premierepro.txt`: project, bins, sequences, tracks, clips, effects, keyframes, markers, export | Third-party allow-list: no razor (until 27.1), link/unlink, track targeting, nesting of a selection, undo, panel focus, Essential Graphics text (Source Text read is ABSENT; `MogrtText` is new and unprobed in 27.0), masks |

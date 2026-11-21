@@ -234,16 +234,17 @@ def press_command(command: str, settle_s: float = 0.5) -> dict:
             "note": "A pressed key is not proof: read the result back (premiere_read_timeline)."}
 
 
-async def run_focused(backend, focus: str | None, sequence: str | None, action) -> dict:
+async def run_focused(premiere, focus: str | None, sequence: str | None, action) -> dict:
     """Run `action()` (a blocking call that presses or posts the command) on the right sequence:
     open `sequence` (or keep the active one), focus the panel, check the active sequence did not
-    move, and only then act. Shared by the key route and the menu route (cutdeck/menu.py)."""
+    move, and only then act. Shared by the key route and the menu route (cutdeck/menu.py).
+    `premiere(command, args)` runs a panel command (cutdeck/driver_commands.py `Premiere`)."""
     import asyncio
     expected = None
     if focus == "timeline":
         if sequence is not None:
-            await backend.premiere("open_sequence", {"sequence": sequence})
-        expected = (await backend.premiere("read_sequence"))["name"]
+            await premiere("open_sequence", {"sequence": sequence})
+        expected = (await premiere("read_sequence"))["name"]
     if expected is not None:
         # Window > Timelines > <name> focuses exactly that timeline, no key press (live 2026-11-21).
         from cutdeck import menu
@@ -253,15 +254,15 @@ async def run_focused(backend, focus: str | None, sequence: str | None, action) 
     else:
         focused = await asyncio.to_thread(focus_panel, focus) if focus else None
     if expected is not None:
-        now = (await backend.premiere("read_sequence"))["name"]
+        now = (await premiere("read_sequence"))["name"]
         if now != expected:
-            await backend.premiere("open_sequence", {"sequence": expected})
+            await premiere("open_sequence", {"sequence": expected})
             raise RuntimeError(f"Focusing the timeline switched to '{now}'; '{expected}' was reopened and nothing was run. Try again.")
     result = await asyncio.to_thread(action)
     return {**result, "sequence": expected, "focus": focused}
 
 
-async def run_command(backend, command: str, focus: str | None = "timeline", sequence: str | None = None) -> dict:
+async def run_command(premiere, command: str, focus: str | None = "timeline", sequence: str | None = None) -> dict:
     """Press `command`'s shortcut on the right sequence (see run_focused)."""
     pick(load(), command)  # refuse a blocked or unbound command before touching anything
-    return await run_focused(backend, focus, sequence, lambda: press_command(command))
+    return await run_focused(premiere, focus, sequence, lambda: press_command(command))

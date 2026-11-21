@@ -75,14 +75,14 @@ def test_presses_only_when_the_timeline_kept_the_sequence(table, monkeypatch):
     monkeypatch.setattr(menu, "invoke", lambda path, front=False: posted.append(path) or {})
     monkeypatch.setattr(keys, "press_command", lambda command: pressed.append(command) or {"command": command})
     ok = FakeBackend(["Edit", "Edit"])
-    out = asyncio.run(keys.run_command(ok, "cmd.edit.rippledelete", "timeline", "Edit"))
+    out = asyncio.run(keys.run_command(ok.premiere, "cmd.edit.rippledelete", "timeline", "Edit"))
     assert pressed == ["cmd.edit.rippledelete"] and out["sequence"] == "Edit"
     assert ok.calls[0] == ("open_sequence", {"sequence": "Edit"})
     assert posted == ["Window > Timelines > Edit"]  # the named timeline, never a cycling key
 
     moved = FakeBackend(["Edit", "ALL"])
     with pytest.raises(RuntimeError, match="switched to 'ALL'"):
-        asyncio.run(keys.run_command(moved, "cmd.edit.rippledelete", "timeline"))
+        asyncio.run(keys.run_command(moved.premiere, "cmd.edit.rippledelete", "timeline"))
     assert pressed == ["cmd.edit.rippledelete"]  # nothing more pressed
     assert moved.calls[-1] == ("open_sequence", {"sequence": "Edit"})  # the right sequence is reopened
 
@@ -91,7 +91,7 @@ def test_a_blocked_command_touches_nothing(table, monkeypatch):
     monkeypatch.setattr(keys, "focus_panel", lambda panel: pytest.fail("focused"))
     backend = FakeBackend([])
     with pytest.raises(ValueError):
-        asyncio.run(keys.run_command(backend, "cmd.file.exit"))
+        asyncio.run(keys.run_command(backend.premiere, "cmd.file.exit"))
     assert backend.calls == []
 
 
