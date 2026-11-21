@@ -21,7 +21,8 @@ code (master's helper refuses its `place_text` registration).
     0 cuts in sound and no clipped words.
   - On your own route (copy the rough cut, keep every track), `keep_words` kept two phrases with
     every track intact and 0 cuts in sound.
-  - The planner's edges match yours: 24 of 34 within one frame of the edges you cut by ear.
+  - The planner's edges are calibrated on your own cuts and checked on a held-out one: at the 60 ms
+    default, a third of your edges match within a frame and about three quarters within 100 ms.
 - **The engine is fixed where it hurt cuts.** Thai word *times* were off by up to hundreds of
   ms, both too wide and too narrow. They are now fitted to the audio. Words *text* is unchanged
   (no engine swap without the gold set).
@@ -128,8 +129,8 @@ What remains is sound beyond the 400 ms reach.
 ### `premiere_plan_pieces` (helper command `plan_pieces`, `word_cut.plan_pieces`): placing a Short's edges
 - `keep`: the phrases to play, in order, found on any timeline (usually the rough cut).
 - Each piece's In/Out is placed in the **source file's** pauses around its words, using the
-  source's full word list and levels: 60 ms of pause (`pad_ms`) and any wordless sound touching the
-  phrase, then the nearest quiet frame. A
+  source's full word list and levels: 60 ms of pause (`pad_ms`), then the nearest quiet frame.
+  `wordless_ms` (off by default) also takes along a laugh or breath that touches the phrase. A
   rough cut has removed most pauses; the source still has them.
 - Returns `items` for `premiere_build_sequence` (back to back on V1/A1) and `pieces`, with
   `no_quiet` when a phrase has no pause in the source (it is mid-sentence: keep whole sentences).
@@ -143,20 +144,24 @@ What remains is sound beyond the 400 ms reach.
   every video and audio track and layer stays.
 - The copy is read back (`lines`, `cuts_in_sound`). Reorder afterwards.
 
-### Piece edges are calibrated on your own cut
-The planner was run offline on each of the 17 pieces of your cut of the Max Short (saved v4), and
-each of its 34 In/Out edges was compared with the one you chose by ear.
-- **Pad:** 30, 60 and 90 ms of pause score about the same (21, 22 and 19 of 34 edges within a
-  frame). 120 ms and more is clearly worse (7 within a frame). The default is now 60 ms.
-- **Wordless sound:** in 4 pieces you kept 200-530 ms of audible sound that has no word (a breath,
-  a laugh, a reaction, or a word the engine missed). The planner had dropped it. A piece now takes
-  along wordless sound that touches it: at most 100 ms of quiet in between, up to 600 ms, never
-  into a neighbouring word.
-- **Result:** 24 of 34 edges within one frame of yours, 25 within 100 ms, and 2 off by more than
-  200 ms. Without the wordless rule it was 22, 23 and 5.
-- **Caveat:** these values were tuned and scored on the same 34 edges of one Short. A second
-  hand-cut Short would confirm them.
-- Where you cut mid-flow on purpose (no pause), the planner reports `no_quiet`.
+### Piece edges are calibrated on your own cuts (and held out on another)
+The planner was run offline on pieces you cut by hand, and each In/Out edge was compared with the
+one you chose by ear:
+- the Max Short (saved v4): 17 pieces, 34 edges, used to tune;
+- the Gillette review (`edioting`, 20261117): 48 pieces, 84 edges, **held out**.
+
+| setting | Max Short: within 1 frame / within 100 ms / off >200 ms | Gillette (held out) |
+|---|---|---|
+| old default, pad 120 ms | 7 / - / - | 12 / 40 / 11 |
+| **pad 60 ms (the default now)** | 22 / 23 / 5 | **28 / 61 / 11** |
+| pad 60 + wordless sound 600 ms | 24 / 25 / 2 | 21 / 59 / 11 |
+
+- **Pad 60 ms** generalizes: it is clearly better on both cuts. It is the default now.
+- **Wordless sound** (taking along a laugh or breath that touches the phrase) fitted the Max Short,
+  where you kept 200-530 ms of wordless sound on 4 pieces, but did worse on the held-out Gillette
+  review. It is **off by default**, available as `wordless_ms` for an edit where reactions matter.
+- The remaining large misses are mostly where you cut mid-flow on purpose (no pause; `no_quiet`)
+  or kept part of a word.
 
 ### Rough Cut speech protection reuses the source transcripts (`rough_cut._mapped_transcript`)
 With speech protection on, if every reference-track source has a stored transcript, its words
@@ -202,7 +207,7 @@ Run folders hold every request and result:
 | Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
 | `keep_words` on `listen two sources (scratch)` (mic on A1-A4, camera on V2/A5), keeping 2 phrases | a copy with **every track kept** (V1, V2, A1-A5, 2 clips each, ending at 2.27 s); reads back exactly the 2 phrases; **0 cuts in sound** |
 | `keep_words` on a rough cut of that multi-track scratch: two spans of 3-4 lines, each crossing rough-cut joins | every track kept (V1, V2, A1-A5, ending at 8.03 s); both spans read back whole. 2 cuts in sound, both expected: one is an inner rough-cut join (the Rough Cut's own edge), one is a span end where the speech runs straight into a laugh (`no_quiet` warned) |
-| Final planner (60 ms pad and wordless sound), the Short rebuilt | 0 cuts in sound; the three lines in the new order |
+| Final planner, the Short rebuilt | 0 cuts in sound; the three lines in the new order |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
