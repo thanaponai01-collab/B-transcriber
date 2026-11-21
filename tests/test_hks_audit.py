@@ -1,5 +1,5 @@
 """HKS rule audit (cutdeck/hks_audit.py): the pure parts on synthetic data, then the camera-change
-test and the frame-hold blind spot on the real day folders when the G: drive is mounted."""
+test on the real day folders when the G: drive is mounted."""
 
 from pathlib import Path
 
@@ -8,7 +8,7 @@ import pytest
 
 from cutdeck.hks_audit import (CAMERA_CHANGE, FRAME, HALF, Layer, blur_samples, blurred_at, dips,
                                frame_diff, is_camera_change, latest_export, layers, main_framing,
-                               picture_at, runs, spans_of, tv_part)
+                               picture_at, placed, runs, spans_of, tv_part)
 
 MAIN = (1920, (0.5, 0.5), False)
 ZOOM = (5550, (0.78, 0.682), False)
@@ -49,6 +49,7 @@ def test_picture_is_the_topmost_footage_or_hold_and_overlays_are_skipped():
     ls.sort(key=lambda l: -l.track)
     assert picture_at(ls, 5).track == 0
     assert picture_at(ls, 15).track == 1 and picture_at(ls, 15).source_at(15) == 505
+    assert Layer(1, 10, 50, "footage", "show.mp4", "show.mp4", 500, MAIN, False, 498.0).source_at(15) == 498
     assert picture_at(ls, 25).kind == "hold"
     assert picture_at(ls, 45).track == 1
     assert picture_at(ls, 100) is None
@@ -76,6 +77,16 @@ def test_blur_samples_classify_clock_zoom_and_blur():
     assert spans_of([r["t"] for r in rows if r["state"] == "clock" and not r["blurred"]]) == [(10, 20)]
 
 
+def test_placed_applies_motion_scale_and_position():
+    frame = np.zeros((72, 128, 3), np.uint8)
+    frame[18:54, 32:96] = 255                                  # the central quarter is white
+    assert (placed(frame, (1920, (0.5, 0.5), False), 1920) == frame).all()
+    zoomed = placed(frame, (3840, (0.5, 0.5), False), 1920)    # 200 % centred: white but the smoothed rim
+    assert zoomed[2:-2, 2:-2].min() == 255
+    moved = placed(frame, (1920, (1.0, 0.5), False), 1920)     # centre on the right edge
+    assert moved[36, 98:].min() == 255 and moved[:, :64].max() == 0
+
+
 def test_latest_export_takes_the_highest_take(tmp_path):
     exports = tmp_path / "5. EXPORTS"
     exports.mkdir()
@@ -91,7 +102,6 @@ def test_latest_export_takes_the_highest_take(tmp_path):
 
 WORKS = Path("G:/Me/Works")
 DAY_1120 = WORKS / "20261120 - โหนกระแส"
-DAY_1110 = WORKS / "20261110 - โหนกระแส"
 
 
 @pytest.mark.skipif(not DAY_1120.exists(), reason="G: drive with the HKS day folders not mounted")
@@ -106,16 +116,3 @@ def test_camera_change_on_20261120(before, after, change):
     diff = frame_diff(grab_frame(footage, before - 1.5 * FRAME), grab_frame(footage, after - HALF))
     assert is_camera_change(diff) is change
 
-
-@pytest.mark.skipif(not DAY_1110.exists(), reason="G: drive with the HKS day folders not mounted")
-def test_20261110_uncovered_cuts_sit_under_frame_holds():
-    from cutdeck.hks_gold import body, read_day
-    from cutdeck.prproj_reader import read_project
-    gold = read_day(DAY_1110)
-    seq = next(s for s in read_project(gold.project)["sequences"]
-               if s["name"] == gold.yt.sequence and s["video_tracks"][0]["clips"])
-    ls = layers(seq, {f.lower() for f in gold.footage})
-    uncovered = [c for c in body(gold.yt)[1] if not c.covered]
-    held = [c for c in uncovered
-            if any(p is not None and p.kind == "hold" for p in (picture_at(ls, c.tl - HALF), picture_at(ls, c.tl + HALF)))]
-    assert (len(uncovered), len(held)) == (68, 39)

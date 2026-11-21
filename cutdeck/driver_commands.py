@@ -70,10 +70,40 @@ def _marker_arguments(args: dict, jobs) -> dict:
 
 def _run_probe_arguments(args: dict, jobs) -> dict:
     probe = args.get("probe")
-    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming"}
+    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming",
+             "hks1a", "hks1b", "hks1c", "hks1d", "hks1e"}  # HKS build plan Phase 1 spike (hksSpikeProbe.js)
     if not isinstance(probe, str) or probe not in valid:
         raise ValueError(f"probe must be one of: {', '.join(sorted(valid))}")
     return {"probe": probe}
+
+
+MAX_BUILD_ITEMS = 5000
+
+
+def _build_arguments(args: dict, jobs) -> dict:
+    """Validate `build_sequence`: the open project, a base sequence to copy, a new name, the items
+    to place, and `save` (opt-in: save the project after the build)."""
+    project, base, name, items = args.get("project"), args.get("base"), args.get("name"), args.get("items")
+    if not isinstance(project, str) or not project.lower().endswith(".prproj") or not Path(project).is_absolute():
+        raise ValueError("project must be the absolute path of the open .prproj (the panel refuses any other)")
+    save = args.get("save", False)
+    if not isinstance(save, bool):
+        raise ValueError("save must be true or false")
+    if not isinstance(base, str) or not base.strip() or not isinstance(name, str) or not name.strip():
+        raise ValueError("base and name must be sequence names")
+    if not isinstance(items, list) or not 0 < len(items) <= MAX_BUILD_ITEMS:
+        raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items")
+    for it in items:
+        if not isinstance(it, dict) or not (isinstance(it.get("media"), str) or isinstance(it.get("like"), dict)):
+            raise ValueError("Each item needs media (a file path) or like ({kind, track, start_ticks})")
+        for key in ("in_ticks", "out_ticks", "at_ticks"):
+            if not isinstance(it.get(key), str) or not it[key].isdigit():
+                raise ValueError(f"{key} must be a tick count as a string")
+        if int(it["out_ticks"]) <= int(it["in_ticks"]):
+            raise ValueError("out_ticks must be after in_ticks")
+        if it.get("v") is None and it.get("a") is None:
+            raise ValueError("Each item needs a video track v or an audio track a")
+    return {"project": project, "base": base, "name": name, "items": items, "save": save}
 
 
 def _export_sequence_arguments(args: dict, jobs) -> dict:
@@ -214,6 +244,12 @@ COMMANDS: dict[str, Command] = {
     "distribute_clips": Command(30, _distribute_clips_arguments,
                                 "Distribute 3+ selected clips across frame or within selection.",
                                 ("kind [to]", _parse_distribute_target)),
+    # Builds a new sequence on a cleared copy of `base` (never edits it); minutes for hundreds of items.
+    "build_sequence": Command(3600, _build_arguments,
+                              "Build a new sequence from an item list on a cleared copy of a base sequence.",
+                              ("JSON file", lambda target: json.loads(Path(target).read_text(encoding="utf-8")))),
+    "reload_panel": Command(30, _no_arguments,
+                            "Reload the CutDeck panel so it loads changed code; it reconnects by itself."),
     # Renders inside Premiere (ExportType.IMMEDIATELY); a long form can take many minutes.
     "export_sequence": Command(3600, _export_sequence_arguments,
                                "Export the active sequence with a Media Encoder preset (.epr) to a new file.",

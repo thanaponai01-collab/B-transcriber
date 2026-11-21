@@ -246,6 +246,21 @@ def _transform_params(objs: _Objects, comp: ET.Element, names: dict[int, str]) -
     return out
 
 
+def _named_params(objs: _Objects, body: ET.Element) -> dict:
+    """Params of an audio component, keyed by their saved ``Name``; only those with a value."""
+    out = {}
+    for p in body.findall("Params/Param"):
+        param = objs.ref(p)
+        name, start = _text(param, "Name"), _text(param, "StartKeyframe")
+        if name and start:
+            entry = {"value": _key(start)["value"]}
+            keys = (_text(param, "Keyframes") or "").split(";")
+            if any(keys):
+                entry["keyframes"] = [_key(k) for k in keys if k]
+            out[name] = entry
+    return out
+
+
 def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
     chain = objs.ref(track_item.find("ClipTrackItem/ComponentOwner/Components"))
     out = []
@@ -266,6 +281,10 @@ def _effects(objs: _Objects, track_item: ET.Element) -> list[dict]:
             effect["text"] = _text_of(objs, comp)
         if effect["match_name"] in _TRANSFORM_PARAMS:
             effect["params"] = _transform_params(objs, comp, _TRANSFORM_PARAMS[effect["match_name"]])
+        elif body is not None and comp.find("AudioComponent") is not None and _named_params(objs, body):
+            # Audio params carry their own <Name> (Volume: Mute, Level). Level is a linear gain:
+            # dB = 20·log10(value) + 15 (the 22 BGM pieces of 20261120 read -33 / -24 / -12).
+            effect["params"] = _named_params(objs, body)
         out.append(effect)
     return out
 
@@ -309,6 +328,10 @@ def _track_item(objs: _Objects, item: ET.Element) -> dict:
     }
     if clip is not None:
         out.update(_source(objs, clip))
+    # Premiere's Frame Hold: the clip shows the one source frame at FrameHoldStart, which is not
+    # always the in point. Only the value 4 occurs in the 11 HKS day projects (329 clips).
+    if _text(clip, "FrameHold") not in (None, "0"):
+        out["frame_hold"] = _seconds(_text(clip, "FrameHoldStart") or 0)
     out["effects"] = _effects(objs, item)
     for effect in out["effects"]:
         # Source Text keyframe times are source time: seconds into an untrimmed clip = time - source_in.

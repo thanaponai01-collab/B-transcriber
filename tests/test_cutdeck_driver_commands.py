@@ -61,3 +61,17 @@ def test_anchor_and_align_take_an_optional_text_layer():
         raise AssertionError(f"layer {bad!r} accepted")
     assert anchor.cli_target[1]("top-left 1") == {"target": "top-left", "layer": 1}
     assert align.cli_target[1]("left frame 1") == {"edge": "left", "to": "frame", "layer": 1}
+
+
+def test_build_sequence_needs_the_open_project_and_saves_only_when_asked():
+    prepare = driver_commands.COMMANDS["build_sequence"].prepare
+    item = {"id": "V1@0", "media": "D:\a.mp4", "in_ticks": "0", "out_ticks": "254016000000", "at_ticks": "0", "v": 0, "a": 0}
+    args = {"project": "E:\Shows\hks.prproj", "base": "1 YOUTUBE D1", "name": "HKS build", "items": [item]}
+    assert prepare(args, None) == {**args, "save": False}
+    assert prepare({**args, "save": True}, None)["save"] is True
+    for bad in ({"project": None}, {"project": "hks.prproj"}, {"project": "E:\Shows\hks.mp4"}, {"save": "yes"}):
+        try:
+            prepare({**args, **bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")

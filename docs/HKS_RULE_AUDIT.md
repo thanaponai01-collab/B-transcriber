@@ -7,9 +7,37 @@ anything is built on it** (questions at the end).
 
 Regenerate every number below (about 25 min cold, 12 s with a warm cache):
 
-    python -m cutdeck.hks_audit --all G:\Me\Works [--cache DIR] [--json out.json]
+    python -m cutdeck.hks_audit --all G:\Me\Works --holdout [--cache DIR] [--json out.json]
+
+`--holdout` adds the three holdout episodes as their own tables; without it only the eight tuning
+episodes are audited.
 
 The frame checks named below were done by eye on frames that `cutdeck.hks_audit.grab_frame` pulled.
+
+## Update 2026-11-21 (build plan step 0.5): two reader gaps closed
+
+The tables below are current. What changed since 2026-11-20:
+
+- **`CutDeck_Hold_*` stills now count as covers.** 20261110 reads 29 uncovered cuts, not 68.
+- **The "zooms the reader does not see" were Premiere frame holds** (reader finding 2). A held
+  clip shows one frozen source frame; the reader had played it as moving footage.
+  - Proof on the two named cases: the export frame against the held frame differs by 2.6
+    (20261117 tl 330) and 0.7 (20261012 tl 261); against the played frame, by 53.1 and 63.4.
+  - 329 video clips in 9 of the 11 day projects carry a frame hold (none in 20261110 and
+    20261120).
+- **Rule 1:** 9 cuts under a held frame moved from uncovered to covered (20261001: 2,
+  20261002: 1, 20261003: 1, 20261112: 3, 20261117: 2). Seven had counted as camera changes and
+  two as stills. Totals: 285 uncovered, 270 camera changes, 15 below the threshold.
+- **Rule 3:** the 21.28 s of "cover picture" in a 20261001 dip was a held map frame. A held
+  cover now reports the one source frame it shows, so the column reads 0.
+- **Rule 4:** only 20261001 moved (clock on screen 315 → 337 s, blur without a clock 116 → 94 s).
+  All clock seconds are still blurred, and no export shows a clock.
+- **Model against export** is now part of the audit ("Model check" table): 3 of 1,190 samples
+  differ. Run without frame-hold reading, the same check gives 37, so 34 were frame holds. The
+  26 of 1,118 below came from a first script that was not kept and sampled differently.
+- The three holdout episodes (20261002, 20261109, 20261118; plan step 0.6) are in the tables
+  because this audit predates the holdout. `hks_audit --all` now leaves them out unless
+  `--holdout` is given.
 
 ## How it measures
 
@@ -25,27 +53,27 @@ The frame checks named below were done by eye on frames that `cutdeck.hks_audit.
 - **Frame difference:** mean absolute RGB difference of two frames scaled to 1280x720 (0–255).
   - Rule 1 measures it twice per cut: on the source footage either side of the cut, and on the
     export one frame either side of the cut.
-  - On all 294 cuts the two agree within 2.6. The reader's model of which footage shows at a
+  - On all 294 cuts measured on 2026-11-20 the two agree within 2.6. The reader's model of which footage shows at a
     cut matches the finished video.
 
 ## Rule 1: no jump cuts
 
 Rule: an uncovered cut in the YT body is allowed only on a camera change.
 
-| episode | body cuts | uncovered (reader) | under a frame hold | camera change (diff ≥ 20) | diff below 20 |
-|---|---|---|---|---|---|
-| 20261001 | 160 | 25 | 0 | 23 | 2 |
-| 20261002 | 135 | 25 | 0 | 23 | 2 |
-| 20261003 | 183 | 30 | 0 | 30 | 0 |
-| 20261012 | 70 | 30 | 0 | 27 | 3 |
-| 20261020 | 119 | 38 | 0 | 34 | 4 |
-| 20261109 | 112 | 15 | 0 | 15 | 0 |
-| 20261110 | 82 | 68 | 39 | 29 | 0 |
-| 20261112 | 105 | 35 | 0 | 34 | 1 |
-| 20261117 | 255 | 18 | 0 | 17 | 1 |
-| 20261118 | 122 | 25 | 0 | 23 | 2 |
-| 20261120 | 159 | 24 | 0 | 22 | 2 |
-| **total** | **1502** | **333** | **39** | **277** | **17** |
+| episode | body cuts | uncovered (reader) | camera change (diff ≥ 20) | diff below 20 |
+|---|---|---|---|---|
+| 20261001 | 160 | 23 | 21 | 2 |
+| 20261002 | 135 | 24 | 22 | 2 |
+| 20261003 | 183 | 29 | 29 | 0 |
+| 20261012 | 70 | 30 | 27 | 3 |
+| 20261020 | 119 | 38 | 34 | 4 |
+| 20261109 | 112 | 15 | 15 | 0 |
+| 20261110 | 82 | 29 | 29 | 0 |
+| 20261112 | 105 | 32 | 32 | 0 |
+| 20261117 | 255 | 16 | 16 | 0 |
+| 20261118 | 122 | 25 | 23 | 2 |
+| 20261120 | 159 | 24 | 22 | 2 |
+| **total** | **1502** | **285** | **270** | **15** |
 
 **Threshold.** Calibrated on 20261120. Its 24 uncovered cuts are:
 
@@ -57,14 +85,17 @@ above it left out is not identified. On the 18:12 save (`p9`) the reader gives 2
 cuts with `min_jump_frames` 1 and 4 alike, so the difference is not the 3-frame jumps.
 The hand check's low end of "27" is most likely the punch-in at tl 681.92, diff 27.7 (inferred).
 
-The threshold sits at 20, in the gap between 12.7 and 27.7. I looked at the frames of 38 cuts
-above it:
+The threshold sits at 20, in the gap between 12.7 and 27.7. On 2026-11-20 I looked at the frames
+of 38 cuts above it (counts from that day, when 277 cuts were above the threshold; 7 of those
+have since moved to covered):
 
 - 13 cuts with diff 20–33: 12 are real picture changes; 1 is the punch-in (below).
 - All 25 cuts with diff 33–60: all are real picture changes (full frame, inset or window).
 - The 239 cuts at 60 or more are counted as camera changes by the threshold alone.
 
-**Below 20 the number alone cannot decide.** I looked at all 17 such cuts:
+**Below 20 the number alone cannot decide.** I looked at all such cuts. There were 17; two of
+them (20261112 tl 481.20 and 20261117 tl 492.72, both photos) sit under a Premiere frame hold and
+are now read as covered, which leaves 15:
 
 | episode | tl | jump s | diff | what the frames show |
 |---|---|---|---|---|
@@ -79,21 +110,20 @@ above it:
 | 20261020 | 157.72 | 5.16 | 0.2 | still picture (same screenshot) |
 | 20261020 | 159.20 | 1.24 | 0.2 | still picture (same screenshot) |
 | 20261020 | 780.08 | 9.00 | 14.4 | news-clip layout, inset changes camera |
-| 20261112 | 481.20 | 0.72 | 0.4 | still picture (photo) |
-| 20261117 | 492.72 | 2.48 | 10.7 | still picture (photo; only the headline banner changes) |
 | 20261118 | 340.68 | 23.52 | 17.1 | news-clip layout, inset changes camera |
 | 20261118 | 347.08 | 4.96 | 14.1 | news-clip layout, inset changes camera |
 | 20261120 | 686.60 | 0.56 | 6.0 | **jump cut**: same shot (field interview) |
 | 20261120 | 687.60 | 1.60 | 12.7 | **jump cut**: same shot |
 
-- 7 cuts sit under a still picture. The picture does not move, so the cut cannot be seen.
+- 5 cuts sit under a still picture in the source. The picture does not move, so the cut cannot
+  be seen.
 - 8 are camera changes inside the small studio inset of the news-clip layout. The big window
   stays and the inset switches angle, so the whole-frame difference stays small.
 - 2 are true jump cuts. Both are on 20261120 and were already known.
 - Above 20, one cut is a **punch-in**: 20261120 tl 681.92, jump 1.48 s, diff 27.7. It is the
   same field camera, zoomed tighter, and the frame difference counts it as a camera change.
 
-**20261110 (68 of 82 cuts uncovered) is a reader blind spot, not a different style.**
+**20261110 read 68 of 82 cuts uncovered: a reader blind spot, fixed on 2026-11-21.**
 
 - 39 of its 68 uncovered cuts sit under `CutDeck_Hold_*.png` frame holds on V2. The holds are
   1920x1080 stills of social-media posts, shown as a slideshow at timeline 717.76–758.00 and
@@ -105,10 +135,9 @@ above it:
 - The other 29 uncovered cuts are all camera changes, inside the 15–38 range of the other
   episodes.
 
-**Verdict: holds, with three cuts to confirm, all on 20261120.** There are 294 uncovered cuts
-that are not frame holds:
+**Verdict: holds, with three cuts to confirm, all on 20261120.** There are 285 uncovered cuts:
 
-- 291 are on a camera change or under a still picture. 239 of them count by threshold alone.
+- 282 are on a camera change or under a still picture. 233 of them count by threshold alone.
 - 2 are the micro same-shot cuts.
 - 1 is the punch-in.
 
@@ -157,7 +186,7 @@ clock-on run of 30 s or more. Kept = YT keeps (audio) and YT covers (picture).
 
 | episode | file | TV part (s) | clock-on after it (s) | dips ≥10 s | dip seconds | kept audio in dips (s) | cover picture in dips (s) | kept before first clock (s) |
 |---|---|---|---|---|---|---|---|---|
-| 20261001 | hks youtube 011069 full | 21–1983 | 0 | 5 | 431 | 80.76 | 21.28 | 0.00 |
+| 20261001 | hks youtube 011069 full | 21–1983 | 0 | 5 | 431 | 80.76 | 0.00 | 0.00 |
 | 20261002 | hks youtube 021069 full | 23–2429 | 0 | 2 | 37 | 0.00 | 0.00 | 0.00 |
 | 20261003 | hks facebook 051069 full | 21–2406 | 0 | 2 | 138 | 0.00 | 0.00 | 0.00 |
 | 20261012 | hks youtube 121069 full | 28–2883 | 0 | 2 | 38 | 0.00 | 0.00 | 0.00 |
@@ -177,7 +206,7 @@ What the dips are (frames at 30 % and 70 % of each dip):
 | 20261003, 1020, 1109, 1110, 1112, 1117, 1118, 1120 | two per episode, 46–72 s each | **TV commercials** (router, food, detergent, snack ads) | 0 |
 | 20261002, 20261012 | two per episode, 18–19 s | the โหนกระแส bumper sting | 0 |
 | 20261001 | 838–855, 1704–1723 | bumper sting | 0 |
-| 20261001 | 257–558, 1320–1378, 1483–1519 | full-screen flood-map graphics; the station hides the clock | 80.76 audio, 21.28 picture |
+| 20261001 | 257–558, 1320–1378, 1483–1519 | full-screen flood-map graphics; the station hides the clock | 80.76 audio; as picture, held map frames (one source frame each) |
 
 - On 20261120 the two dips (819–876, 2006–2069) match the user's drops 824.56–877.20 and
   2004.88–2069.32 within 6 s.
@@ -208,7 +237,7 @@ Each episode's YT body is sampled every second, all 11 episodes.
 
 | episode | body s | clock on screen s | blurred | unblurred | zoomed (clock pushed off) | blur without clock | unknown/none | export: clock seen s |
 |---|---|---|---|---|---|---|---|---|
-| 20261001 | 1060 | 315 | 315 (100 %) | 0 | 30 | 116 | 5 | 0 |
+| 20261001 | 1060 | 337 | 337 (100 %) | 0 | 30 | 94 | 5 | 0 |
 | 20261002 | 1075 | 431 | 431 (100 %) | 0 | 165 | 16 | 5 | 0 |
 | 20261003 | 1171 | 414 | 414 (100 %) | 0 | 61 | 3 | 5 | 0 |
 | 20261012 | 1117 | 488 | 488 (100 %) | 0 | 93 | 106 | 5 | 0 |
@@ -227,19 +256,20 @@ Blur without a clock (timeline seconds):
 | episode | s | ranges | what it is |
 |---|---|---|---|
 | 1001, 1002, 1003, 1012, 1020, 1109, 1118, 1120 | 1–93 | over zoomed inserts (e.g. 20261120: 253–291, 645–656) | 20261120: the logo/credit blur on V9 over the insert's own watermark (user, workflow Step 5). The other seven: inferred to be the same, not checked. |
-| 20261001 | 57 | 68–125 | full-screen flood maps in the TV part, no clock in the source. At tl 90 the export and the model's source frame match and the export's top-left is blurred. The long blur run continues over them. |
-| 20261001 | 29 | 276–305 | unclear: at tl 290 the export shows a different framing of the map than the model's source frame (reader finding 2) |
-| 20261012 | 13 | 253–266 | a zoomed news-window insert (chat screenshot) that the reader reads as unzoomed (reader finding 2). The zoom pushes the clock off, so this is blur over a zoomed insert. |
+| 20261001 | 57 | 68–125 | a held frame of a full-screen flood map, no clock in it. The export's top-left is blurred. The long blur run continues over it. |
+| 20261001 | 7 | 298–305 | a held map frame without a clock (read as 29 s, 276–305, on 2026-11-20, when the reader played the held clip) |
+| 20261012 | 13 | 253–266 | a held frame of a chat screenshot filling the screen, no clock in it (read as an unseen zoom on 2026-11-20) |
 | 20261112 | 123 | 562–685 | file (2), which has no clock at all; at tl 600 the export matches the model and shows the top-left corner blurred anyway |
-| 20261117 | 18 | 323–335, 366–372 | as 20261012: at tl 330 the export shows a zoomed chat that the reader reads as unzoomed |
+| 20261117 | 18 | 323–335, 366–372 | as 20261012: a held frame of a chat screenshot |
 
 Frame checks:
 
 - 20261120 at tl 36.3 (clock on, blurred): the export shows a smeared box where the clock is.
 - 20261001 at tl 90: the source has no clock, and the export's top-left is blurred.
 
-**Model against export.** I compared the export frame with the model's source frame every 10 s
-of all 11 bodies.
+**Model against export, as measured on 2026-11-20** (superseded: see the update at the top and
+reader finding 2). I compared the export frame with the model's source frame every 10 s of all
+11 bodies.
 
 - 1,118 samples, median difference 3.3.
 - 26 samples (2.3 %) differ by 30 or more. Their frames show two cases:
@@ -253,15 +283,14 @@ of all 11 bodies.
 **Verdict: holds.**
 
 - 0 clock seconds in any of the 11 exports. This is the end-to-end check.
-- In the model, 5,563 clock-on seconds in 11 bodies are 100 % blurred. A few percent of these
-  are really zoomed inserts (see above).
+- In the model, 5,585 clock-on seconds in 11 bodies are 100 % blurred.
 - The blur also covers some clock-free picture: logo boxes over inserts, and the run continuing
   over clock-free graphics (20261001) or a clock-free file (20261112). Blurring exactly where the
   clock shows would blur less than the user does.
 
 ## Reader findings (hks_gold, hks_clock)
 
-No change was made to these modules.
+Found in step 0.3; findings 1 and 2 were closed in step 0.5 (2026-11-21), see the end of each.
 
 1. **`hks_gold.output_cut` ignores frame holds.**
    - `pictures` holds footage clips only, so a `CutDeck_Hold_*.png` over a cut is invisible to
@@ -269,6 +298,8 @@ No change was made to these modules.
    - Effect: 20261110 shows 68 uncovered cuts instead of 29, and its `covers` list leaves the
      holds out.
    - Fix when wanted: treat a `CutDeck_Hold_*` still as a covering picture.
+   - **Fixed (0.5):** a `CutDeck_Hold_*` still, or a footage clip with Premiere's Frame Hold, is a
+     covering picture. 20261110 now shows 29 uncovered of 82 (`test_20261110_frame_holds_cover_their_cuts`).
 2. **Zooms (and some pictures) the reader does not see.**
    - In 26 of 1,118 samples the export frame is not the model's picture (rule 4, "Model against
      export").
@@ -277,8 +308,22 @@ No change was made to these modules.
      keyframes and no Transform effect.
    - Example: at 20261012 tl 261 the V3 clip has no Motion component in `effects` at all, yet the
      export shows it zoomed.
-   - Not investigated further: the reader may miss part of a clip's effect data, or the
-     exports may differ from the saved project.
+   - **Cause found (0.5): Premiere's Frame Hold.** Both example clips (20261117 V4, 20261012 V3)
+     are frame-hold clips (`<FrameHold>` on the clip, the held source time in `FrameHoldStart`):
+     they show one frozen frame, here a zoomed chat screenshot from earlier in the broadcast,
+     not the moving footage the model sampled. The reader now returns `frame_hold`, and the
+     audit samples the held frame. Re-run on all 11 (1,190 samples): **37 → 3** differ by 30 or
+     more. The 3 left are all the same ending stack, listed with their cause:
+
+     | episode | tl | cause |
+     |---|---|---|
+     | 20261003 | 1184 | footage slowed to 0.24× (0.68 s of source over 2.84 s) under `LAYER_ZOOM`, an adjustment layer with a Transform effect (`AE.ADBE Geometry2`) |
+     | 20261109 (holdout) | 1091 | the same: 0.40× (1.24 s over 3.08 s) under `LAYER_ZOOM` |
+     | 20261118 (holdout) | 1120 | the same: 0.41× (1.16 s over 2.84 s) under `LAYER_ZOOM` |
+
+     The reader models neither clip speed nor the Transform effect, so a slowed clip anywhere is
+     sampled at the wrong source time. Not checked: whether slowed clips occur elsewhere in the
+     11 episodes without showing up in the 10 s samples.
    - Effect: it only touches the zoomed/clock split of rule 4 and `_framing` in `hks_gold`
      (a zoomed insert missed this way would make a cut look uncovered). The export check still
      shows no clock. Rule 1's source/export difference agrees on all 294 cuts.
@@ -296,11 +341,12 @@ No change was made to these modules.
      change?
 2. **Allowed uncovered cuts (rule 1):** the past episodes also cut, uncovered:
    - when the **studio inset** of the news-clip layout changes camera (8 cuts);
-   - under a **still picture** such as a chat screenshot, a map or a photo (7 cuts).
+   - under a **still picture** in the source, such as a chat screenshot or a map (5 cuts).
 
    Should the rule allow both?
 3. **Frame holds as covers:** 20261110 covers 39 cuts with a slideshow of CutDeck frame holds.
-   Is that a cover kind drafts may use, or a one-off?
+   Is that a cover kind drafts may use, or a one-off? (Premiere's own Frame Hold on a footage
+   clip is not a one-off: 9 of the 11 projects use it.)
 4. **FB length:** is 179.96 s a **ceiling** (3:00 at most) rather than an exact length? Past FB
    cuts run 168.28–179.96, and 20261118 was re-exported from 180.52 to 179.96.
 5. **1-min length:** past cuts run 56.92–63.04 s. Is "about a minute" right, or is 59.96 s a

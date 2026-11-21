@@ -30,6 +30,10 @@ drops within 20 ms on both edges; any drop not listed is uncovered. Camera chang
 
     python -m cutdeck.hks_score "G:\\Me\\Works\\20261120 - โหนกระแส" --proposal proposal.json
     python -m cutdeck.hks_score "G:\\Me\\Works\\20261120 - โหนกระแส" --baseline keep-all
+    python -m cutdeck.hks_score --all G:\\Me\\Works --baseline gold [--holdout]
+
+The holdout episodes (``hks_gold.HOLDOUT``, step 0.6) are refused unless ``--holdout`` is given, and
+``--all`` prints them as their own group. ``--all`` takes a baseline only: a proposal is one day's.
 """
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 
-from cutdeck.hks_gold import DayGold, body, read_day
+from cutdeck.hks_gold import DayGold, body, day_folders, is_holdout, read_day
 
 MS = 1000
 MERGE = 20  # ms; half a 25 fps frame
@@ -95,8 +99,7 @@ class Score:
     length_in_range: bool
 
     def table(self) -> str:
-        def pct(x):
-            return "None" if x is None else f"{100 * x:.2f}%"
+        pct = _pct
         lo, hi = self.length_range
         lines = [
             f"span ({self.span})        {self.span_s:.2f} s",
@@ -114,6 +117,10 @@ class Score:
         lines += [f"jump cuts            {self.jump_cuts}",
                   f"length in {lo:.0f}-{hi:.0f} s  {self.length_in_range} ({self.kept_s:.2f} s)"]
         return "\n".join(lines)
+
+
+def _pct(x: float | None) -> str:
+    return "None" if x is None else f"{100 * x:.2f}%"
 
 
 # --- intervals (integer ms) --------------------------------------------------------------------
@@ -314,9 +321,34 @@ def parse_proposal(data: dict) -> Proposal:
     return Proposal(ranges("keeps"), ranges("covered"))
 
 
+def _baseline(name: str, day: DayGold, gold: Gold) -> Proposal:
+    return keep_all(gold) if name == "keep-all" else gold_proposal(day, gold)
+
+
+def group_table(title: str, folders: list, baseline: str, span: str) -> str:
+    """One row per day folder for a built-in proposal, then the mean of the rows."""
+    cols = ("agreement", "keep_precision", "keep_recall", "boundary_recall")
+    lines = [f"## {title} ({len(folders)} episodes)", "episode  | " + " | ".join(cols) + " | jump cuts"]
+    scores = []
+    for folder in folders:
+        day = read_day(folder)
+        gold = gold_of(day, span)
+        scores.append(score(gold, _baseline(baseline, day, gold), span_name=span))
+        lines.append(f"{folder.name[:8]} | " + " | ".join(_pct(getattr(scores[-1], c)) for c in cols)
+                     + f" | {scores[-1].jump_cuts}")
+    means = []
+    for c in cols:
+        values = [getattr(s, c) for s in scores if getattr(s, c) is not None]
+        means.append(_pct(sum(values) / len(values) if values else None))
+    return "\n".join([*lines, "mean     | " + " | ".join(means) + f" | {sum(s.jump_cuts for s in scores)} (sum)"])
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Score a proposed HKS cut against the user's gold.")
-    p.add_argument("folder", help="a day folder")
+    p.add_argument("folder", help="a day folder, or with --all the folder that holds them")
+    p.add_argument("--all", action="store_true", help="one row per tuning-set day (baselines only)")
+    p.add_argument("--holdout", action="store_true",
+                   help="allow a holdout day; with --all, add the holdout group (end-of-step scoring only)")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--proposal", help="proposal JSON (shape in the module docstring)")
     src.add_argument("--baseline", choices=("keep-all", "gold"))
@@ -327,13 +359,24 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
 
+    if args.all:
+        if not args.baseline:
+            p.error("--all scores a baseline; a proposal belongs to one day folder")
+        tuning, held = day_folders(args.folder)
+        print(group_table("Tuning set", tuning, args.baseline, args.span))
+        if args.holdout:
+            print("\n" + group_table("Holdout", held, args.baseline, args.span))
+        return
+    if is_holdout(args.folder) and not args.holdout:
+        p.error(f"{args.folder} is a holdout episode; pass --holdout to score it")
+
     day = read_day(args.folder)
     gold = gold_of(day, args.span)
     if args.proposal:
         with open(args.proposal, encoding="utf-8") as f:
             proposal = parse_proposal(json.load(f))
     else:
-        proposal = keep_all(gold) if args.baseline == "keep-all" else gold_proposal(day, gold)
+        proposal = _baseline(args.baseline, day, gold)
     cams = None
     if args.camera_changes:
         with open(args.camera_changes, encoding="utf-8") as f:

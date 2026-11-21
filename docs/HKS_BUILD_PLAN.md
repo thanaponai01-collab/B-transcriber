@@ -102,8 +102,8 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 
   Nothing else waits on them: Phase 1, 2.1, 2.3–2.6, 5.2, 5.5 and the reels of 6.2 can start.
   (2.5 can detect inset changes and stills now; whether a cut there is legal waits on question 2.)
-  Reader gaps found (→ 0.5): `hks_gold` does not count `CutDeck_Hold_*.png` stills as covers
-  (20261110), and misses some zooms (20261117 @ 330, 20261012 @ 261).
+  Reader gaps found (→ 0.5, closed): `hks_gold` did not count `CutDeck_Hold_*.png` stills as
+  covers (20261110), and misread some pictures (20261117 @ 330, 20261012 @ 261).
 - [x] **0.4** Scorer `cutdeck/hks_score.py`: a proposed keep list vs the gold body keeps, in
   source time per file. It reports:
   - seconds agreement, keep precision and recall;
@@ -114,35 +114,64 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 
   → verify: gold vs itself = 100 % on 20261120, 20261117, 20261001. "Keep everything" matched the
   numbers predicted before the run (agreement 25.7 / 24.9 / 26.4 %, recall 100 %, boundaries 0).
-- [ ] **0.5** Close the reader gaps of 0.3:
+- [x] **0.5** Close the reader gaps of 0.3:
   - count a `CutDeck_Hold_*` still as a covering picture → verify: 20261110 shows 29 uncovered
     cuts, not 68;
   - find why some zooms are not read (20261117 @ 330, 20261012 @ 261) and explain the 26 of
     1,118 samples where the export differs from the model → verify: each is fixed or listed with
     its cause.
-- [ ] **0.6** Holdout. Every threshold so far was tuned on 20261120. Keep 20261002, 20261109 and
+
+  **Done:** 20261110 reads 29 uncovered of 82. The "missed zooms" were Premiere **Frame Hold**
+  clips (one frozen frame, here a zoomed chat screenshot): the reader returns `frame_hold`, and
+  `hks_gold` and the audit treat a held clip as a still. Re-run on all 11: 37 → 3 of 1,190
+  samples differ (the 26 of 1,118 came from a first script that sampled differently).
+  The 3 are the closing stack (slowed footage under a `LAYER_ZOOM` Transform),
+  listed with their cause in [HKS_RULE_AUDIT.md](HKS_RULE_AUDIT.md), reader finding 2.
+  Nine cuts under a held frame moved to covered (20261001 25 → 23, 20261002 25 → 24, 20261003
+  30 → 29, 20261112 35 → 32, 20261117 18 → 16): 285 uncovered in all, 270 on a camera change.
+  For 4.3: a held frame of the footage is a cover kind the user uses in 9 of 11 episodes.
+- [x] **0.6** Holdout. Every threshold so far was tuned on 20261120. Keep 20261002, 20261109 and
   20261118 out of all tuning from here on; a step that says "on the gold set" tunes on the other
   eight and reports the holdout score once, at the end. → verify: `hks_score` and `hks_audit`
-  take the holdout list and report it separately.
+  take the holdout list and report it separately. **Done:** the list is `hks_gold.HOLDOUT`.
+  - `hks_audit --all` and `hks_score --all --baseline …` cover the eight tuning episodes; with
+    `--holdout` the three get their own tables, never mixed in. A single holdout folder is
+    refused without the flag.
+  - Gold against itself is 100 % on all eight and on all three.
+  - `hks_score --all` takes the two built-in baselines only: a proposal file is still one day's.
+  - Not blind before today: step 0.3 looked at all 11 episodes, and the frame-hold fix of 0.5
+    was found on tuning episodes and then counted on all 11. The holdout is clean for tuning
+    from here on. `hks_gold --all` still lists all 11 (it reads, it does not tune).
 
 ## Phase 1: Timeline-building spike ⚑ (riskiest; decides what Phases 3–6 can promise)
 On a copied project, one probe per unknown. Each probe reads its result back, exports one frame,
 and adds a `PREMIERE_FACTS.md` row. Already proven and not probed again: removing one track's
 items, Motion scale and position, an adjustment layer with an appended effect.
-- [ ] **1a** A source range, video only, on V2 at a given time (as a cover), then Motion scale
+- [x] **1a** A source range, video only, on V2 at a given time (as a cover), then Motion scale
   and position on that fresh clip (insert zoom 271–405 %) → verify: read-back start/end/In within
-  one frame, V1 audio unchanged, and an exported frame shows the zoom.
-- [ ] **1b** A blur limited to an area (top-left clock box; a logo box). Try two ways:
+  one frame, V1 audio unchanged, and an exported frame shows the zoom. **Done (live 2026-11-21,
+  probe `hks1a`):** source 600–604 landed at 100.00–104.00, In 600.00, 300 % at 0.45/0.40 read
+  back; the exported frame matches that zoom (diff 1.2 vs 47.6 unzoomed). Catch: audio index -1
+  puts the audio on A1 over the dialogue, so the audio goes to a new track and is removed there
+  (A1–A6 unchanged).
+- [x] **1b** A blur limited to an area (top-left clock box; a logo box). Try two ways:
   - an adjustment layer with Gaussian Blur and a Crop write (Crop writes are OPEN in
     `PREMIERE_FACTS.md`), as the template's `Blur` items are built;
   - cloning the template's `BLUR TIME YT` / `Blur LOGO` items.
 
-  → verify: an exported frame is blurred only inside the box.
-- [ ] **1c** Audio clip level (Volume) at -33 / -24 / -12 dB → verify: read-back value, and
-  measured loudness changes by the expected amount.
-- [ ] **1d** Nest a sequence into another, and duplicate a sequence (the reel and the 3-min
-  reel) → verify: read-back clip names and durations.
-- [ ] **1e** Replay at scale, after 1a–1c. Rebuild the finished `1 YOUTUBE D1` of 20261120 on a
+  → verify: an exported frame is blurred only inside the box. **Done, both routes work (probe
+  `hks1b`):** the clone keeps the template's effect mask (only the clock box changed); a fresh
+  adjustment layer + Gaussian Blur + Motion crop blurs only the crop box. The YT clock blur is an
+  effect mask, which no API can draw, so a new box shape means cloning a template item; a
+  rectangle can use the crop route.
+- [x] **1c** Audio clip level (Volume) at -33 / -24 / -12 dB → verify: read-back value, and
+  measured loudness changes by the expected amount. **Done (probe `hks1c`):** Level is linear,
+  dB = 20·log10(v) + 15; renders measure -12.00 / -24.00 / -33.00 dB exactly.
+- [x] **1d** Nest a sequence into another, and duplicate a sequence (the reel and the 3-min
+  reel) → verify: read-back clip names and durations. **Done (probe `hks1d`):** the FB copy reads
+  125 / 65 items and 179.96 s like the original; the square's project item placed into a reel copy
+  lands as a nested clip "3 SQUARE SELECT D1", 0–59.96, and renders.
+- [x] **1e** Replay at scale, after 1a–1c. Rebuild the finished `1 YOUTUBE D1` of 20261120 on a
   copy, with the sequence closed while it is built:
   - the keeps and covers (about 160 cuts) from `hks_gold`;
   - the blur layers, film damage and 22 music pieces from `prproj_reader` (`hks_gold` does not
@@ -151,6 +180,35 @@ items, Motion scale and position, an adjustment layer with an appended effect.
   → verify: every item the build placed reads back within one frame of the saved project, and
   the build runs twice without a failed action or a crash.
 
+  **Done (live 2026-11-21, `python -m cutdeck.hks_build … --run --save`, panel `build_sequence`):**
+  - 370 items on a cleared copy, three runs. No run had a refused action or a crash (17, 33 and
+    22 s). Run 1 ran on panel code loaded before the project guard existed, so runs 2 and 3 are
+    the two runs that count.
+  - The copy is never opened: after a build, the active sequence is still the one that was
+    active before.
+  - Read-back: 344 video and 238 audio items, 0 off by more than a frame.
+  - The saved project, diffed offline with `--compare`, gives 0 differences in timing, Motion
+    and Level against the original on all three runs, and the original reads unchanged. A
+    smoke build compared as the full list gives 364, so the diff does catch differences.
+  - Exported frame at 50 s (`run_probe hks1e`): it matches the original outside the clock box
+    (mean difference 0.11 of 255). Inside, both are blurred, but the crop route is a
+    hard-edged rectangle that reaches a little lower than the template's feathered mask.
+    For 5.1, clone a template blur item (route 1) where the look must match.
+  - The whole list comes from `prproj_reader`, keeps and covers included, not from `hks_gold`.
+    The reader gives the placed clips themselves, with the track, the Motion and the source
+    file, which is what a replay needs. `hks_gold` gives source ranges only.
+  - Not replayed (`skipped` in the output), with the step each one touches:
+    - speed-changed clips (6) and keyframed Motion: 5.4, the hook and closing stack;
+    - film damage's Opacity component (83). It reads as a plain 100 %; the reader does not
+      decode a blend mode, so whether the look matches is unknown: 4.3 and 5.4;
+    - the 3 V9 blur boxes, whose box was never measured: 5.1;
+    - graphics, AE comps, SFX and the end logo: 5.4, 5.5 and Phase 7.
+
+    Blurriness is a fixed 60, because the reader returns no Gaussian Blur params.
+
+**Outcome: A**, so drafts are built as real sequences. Each piece not replayed above gets its
+own probe in the step named next to it.
+
 **Outcome A** (all work, 1e included): drafts are built as real sequences in Premiere.
 **Outcome B** (gaps): drafts are markers + cut lists, plus the user's manual steps for the gaps.
 The FCP7 XML route is the fallback only after its own Premiere-import check, which is still unproven.
@@ -158,8 +216,21 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
 ## Phase 2: Episode analysis (offline, no Premiere) → `episode.json` + markers
 - [ ] **2.1** Word transcript of the footage (existing engine), for **all 11 episodes** (about
   12 min each). With the gold cuts this gives the words under every one of the 1,502 cuts, so
-  Phase 4 is scored per cut class on every episode. → verify: 20261120 matches the saved
-  `full.words.json` (33,708 words, ±1 %); each of the other 10 has words across its whole length.
+  Phase 4 is scored per cut class on every episode. → verify (`python -m cutdeck.hks_words --all
+  G:\Me\Works --check`): on every episode, at least 97 % of the YT body keeps of 2 s or more have
+  a word inside, and no keep of 5 s or more is without one.
+
+  Changed 2026-11-21. The old check ("matches `full.words.json`, 33,708 words ±1 %") compared
+  different units, so it could never pass. That file was an ad-hoc run that stores Whisper's
+  sub-word pieces (`ท`, `ุ`, `ก`); the pipeline gives merged words (`ทุกครั้ง`). The new
+  20261120 run holds more text (50,918 vs 43,551 characters), and the old file has holes.
+  The 5 s rule was added after a synthetic one-minute hole inside kept speech passed the 97 %
+  bar alone; with it, that hole fails.
+
+  **Status: 9 of 11 done.** The 9 transcribed episodes pass with no holes in 872 keeps,
+  holdout 20261002 and 20261109 included. The run stopped on low system memory before
+  **20261117** and **20261118**; rerun the same command without `--check` to finish them (done
+  files are skipped).
 - [ ] **2.2** Break and fixed-graphics finder. Two signals, because neither covers everything:
   - a clock-off run of 10 s or more inside the TV part: bumpers, the real TV ads of the Facebook
     feeds (they change per episode, so reference clips cannot find them) and clock-free graphics.
@@ -190,7 +261,7 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   the studio inset of the news-clip layout, and still pictures (the last two pending audit
   question 2). Whole-frame difference misses the inset changes (11–17, below the threshold of
   20), so the inset is measured on its own box. → verify:
-  - recall: of the 277 camera-change cuts and the 15 inset and still cuts of the audit, the
+  - recall: of the 270 camera-change cuts and the 13 inset and still cuts of the audit, the
     share detected;
   - precision: on a hand-labelled 10 min of 20261120, the share of detections that are real.
 - [ ] **2.6** Host vs guest turns (`topic_speakers`) → verify: the host prompt cuts of story 1
@@ -296,7 +367,7 @@ checked on the user's hand cut first, before Phase 4 exists.
 - The Essential Sound **Dialogue** preset on the footage audio (no proven API for it).
 
 ## Order and why
-1. 0.1 → 0.4 (done), then 0.5 and 0.6: everything after is measured against the gold set.
+1. 0.1 → 0.6 (done): everything after is measured against the gold set.
 2. Phase 1 next to Phase 2 (2.1–2.6 on all 11 episodes): the spike decides the output form; the
    analysis is useful either way (markers).
 3. Phase 3, then the mechanical finishing on the user's hand cut: 5.1 / 5.2 / 5.5 and the reels

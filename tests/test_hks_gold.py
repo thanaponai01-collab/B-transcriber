@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cutdeck.hks_gold import Cut, SourceRange, body, gold_from_project, read_day
+from cutdeck.hks_gold import HOLDOUT, Cut, SourceRange, body, day_folders, gold_from_project, read_day
 from cutdeck.prproj_reader import read_project
 
 FOOT = "Show Full.mp4"
@@ -65,6 +65,24 @@ def test_cut_is_uncovered_only_when_the_main_shot_jumps_on_both_sides():
     yt = gold(*outputs(show([v1, v2], a1))).yt
     assert yt.cuts == [Cut(20, 30, True), Cut(40, 30, False), Cut(60, 80, False), Cut(80, 80, True)]
     assert yt.covers == [SourceRange(FOOT, 900, 910, 15, 25)]
+
+
+def test_a_frame_hold_still_over_a_cut_covers_it():
+    # 20261110: a slideshow of CutDeck_Hold_*.png stills on V2 while the audio is cut underneath.
+    a1 = [clip(0, 20, 100), clip(20, 40, 150), clip(40, 60, 200)]
+    v2 = [clip(15, 25, 0, "CutDeck_Hold_3.png", scale=None, width=1920)]
+    yt = gold(*outputs(show([list(a1), v2], a1))).yt
+    assert yt.cuts == [Cut(20, 30, True), Cut(40, 30, False)]
+    assert yt.covers == [SourceRange("CutDeck_Hold_3.png", 0, 10, 15, 25)]
+
+
+def test_a_held_frame_of_the_footage_is_a_still_and_covers_its_cut():
+    # Premiere's Frame Hold on a footage clip: one frozen frame, even at the audio's own sync.
+    a1 = [clip(0, 20, 100), clip(20, 40, 150), clip(40, 60, 200)]
+    v2 = [{**clip(15, 40, 145), "frame_hold": 145.0}]
+    yt = gold(*outputs(show([list(a1), v2], a1))).yt
+    assert yt.cuts == [Cut(20, 30, True), Cut(40, 30, True)]
+    assert yt.covers == [SourceRange(FOOT, 145, 145, 15, 40)]
 
 
 def test_a_full_hd_file_at_default_scale_frames_like_a_720p_file_at_150():
@@ -145,9 +163,30 @@ def test_read_day_reports_a_folder_without_project_or_footage(tmp_path):
     assert len(day.problems) == 2
 
 
+def test_day_folders_split_tuning_from_holdout(tmp_path):
+    for day in ("20261001", *HOLDOUT, "20261120"):
+        (tmp_path / f"{day} - โหนกระแส").mkdir()
+    (tmp_path / "20261002 - other show").mkdir()
+    tuning, held = day_folders(tmp_path)
+    assert [d.name[:8] for d in tuning] == ["20261001", "20261120"]
+    assert [d.name[:8] for d in held] == sorted(HOLDOUT)
+
+
+@pytest.mark.parametrize("module", ["hks_score", "hks_audit"])
+def test_a_holdout_day_is_refused_without_the_flag(module, tmp_path, capsys):
+    import importlib
+    day = tmp_path / f"{HOLDOUT[0]} - โหนกระแส"
+    day.mkdir()
+    args = [str(day)] + (["--baseline", "gold"] if module == "hks_score" else [])
+    with pytest.raises(SystemExit):
+        importlib.import_module(f"cutdeck.{module}").main(args)
+    assert "holdout" in capsys.readouterr().err
+
+
 # --- real projects (gitignored / local drive) ---------------------------------------------------
 
 P9 = Path("test_projects/hks_20261120/p9.prproj")
+DAY_1110 = Path("G:/Me/Works/20261110 - โหนกระแส")
 FINAL = Path("G:/Me/Works/20261120 - โหนกระแส/4. PROJECTS/1. PREMIERE PRO/20261120 - โหนกระแส.prproj")
 FOOTAGE_1120 = ["HKS Facebook 201169 Full.mp4"]
 
@@ -177,3 +216,11 @@ def test_final_20261120_project():
     keeps, cuts = body(yt)
     assert (len(cuts), sum(c.covered for c in cuts)) == (159, 135)
     assert (day.fb.show_end, day.square.show_end) == pytest.approx((179.96, 59.96))
+
+
+@pytest.mark.skipif(not DAY_1110.exists(), reason="G: drive with the HKS day folders not mounted")
+def test_20261110_frame_holds_cover_their_cuts():
+    yt = read_day(DAY_1110).yt
+    cuts = body(yt)[1]
+    assert (len(cuts), sum(not c.covered for c in cuts)) == (82, 29)  # 68 before holds counted
+    assert sum(c.media.lower().startswith("cutdeck_hold_") for c in yt.covers) > 0

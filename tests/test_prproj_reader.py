@@ -78,6 +78,33 @@ def test_reads_tracks_clips_effects_and_markers(tmp_path):
     assert clip["effects"] == [{"name": "Hard Limiter", "match_name": None, "bypass": False}]
 
 
+def test_a_frame_hold_reports_the_held_source_time(tmp_path):
+    held = PROJECT.replace(f"<OutPoint>{4 * T}</OutPoint></Clip></VideoClip>",
+                           f"<OutPoint>{4 * T}</OutPoint></Clip><FrameHold>4</FrameHold>"
+                           f"<FrameHoldStart>{2 * T}</FrameHoldStart></VideoClip>")
+    assert held != PROJECT
+    path = tmp_path / "p.prproj"
+    path.write_text(held, encoding="utf-8")
+    (clip,) = read_project(path)["sequences"][0]["video_tracks"][0]["clips"]
+    assert (clip["source_in"], clip["frame_hold"]) == (1.0, 2.0)
+
+
+def test_an_audio_clip_level_is_read_by_param_name(tmp_path):
+    level = PROJECT.replace(
+        "<DisplayName>Hard Limiter</DisplayName><Bypass>false</Bypass></Component>",
+        "<DisplayName>Volume</DisplayName><Params><Param Index=\"1\" ObjectRef=\"90\"/></Params></Component>",
+    ).replace("</PremiereData>", "<AudioComponentParam ObjectID=\"90\"><StartKeyframe>"
+              "-91445760000000000,0.00398107199,0,0</StartKeyframe><Name>Level</Name>"
+              "</AudioComponentParam></PremiereData>")
+    assert level != PROJECT
+    path = tmp_path / "p.prproj"
+    path.write_text(level, encoding="utf-8")
+    seq = read_project(path)["sequences"][0]
+    (clip,) = [c for t in seq["audio_tracks"] for c in t["clips"]]
+    (volume,) = clip["effects"]
+    assert volume["params"] == {"Level": {"value": 0.00398107199}}  # -33 dB as Premiere saves it
+
+
 def test_reads_uncompressed_xml(tmp_path):
     path = tmp_path / "p.prproj"
     path.write_text(PROJECT, encoding="utf-8")

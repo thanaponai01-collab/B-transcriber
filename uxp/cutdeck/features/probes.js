@@ -9,6 +9,23 @@ const layoutProbe = () => require("../layoutProbe.js");
 const rippleProbe = () => require("../rippleProbe.js");
 const addEditProbe = () => require("../addEditProbe.js");
 const mcpToolsProbe = () => require("../mcpToolsProbe.js");
+const hksSpike = () => require("../hksSpikeProbe.js");
+
+// HKS build plan Phase 1 (hksSpikeProbe.js): run only through the driver, on the spike copy.
+const HKS_SPIKE = [
+  ["hks1a", "probeCover", "1a: placing a cover range with an insert zoom on a copy…"],
+  ["hks1b", "probeBlur", "1b: two box-blur routes on a copy…"],
+  ["hks1c", "probeVolume", "1c: BGM sequences at -12 / -24 / -33 dB…"],
+  ["hks1d", "probeNest", "1d: duplicating FB and nesting the square into a reel copy…"],
+  ["hks1e", "probeReplay", "1e: frames of the original and of the build…"],
+].map(([id, fn, startText]) => ({
+  id,
+  startText,
+  run: (ppro) => hksSpike()[fn](ppro),
+  format: (report) => hksSpike().formatReport(report),
+  logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
+  logLabel: `CutDeck HKS spike ${id}`,
+}));
 
 const PROBES = [
   {
@@ -122,6 +139,7 @@ const PROBES = [
     format: (report) => mcpToolsProbe().formatMcpToolsReport(report),
     logLabel: "CutDeck MCP tools probe",
   },
+  ...HKS_SPIKE,
 ];
 
 async function runProbe(probeEntry, ppro, ctl, deps = {}) {

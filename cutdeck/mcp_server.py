@@ -97,6 +97,24 @@ def create_server(backend: Backend) -> FastMCP:
         start. Needs the CutDeck panel open."""
         return await backend.premiere("add_markers", {"markers": markers})
 
+    @server.tool(annotations=write)
+    async def premiere_build_sequence(project: str, base: str, name: str, items: list[dict],
+                                      save: bool = False) -> dict:
+        """Build a new sequence named `name` on a cleared copy of the sequence `base` (never
+        edited), in the open project, which must be the .prproj at the absolute path `project`
+        (else nothing is built). Each item: {id, media (file path) or like {kind, track,
+        start_ticks}, in_ticks, out_ticks, at_ticks (tick strings), v, a (track indexes or
+        null), motion, level, blur}. `save`: save the project after the build. Returns placed
+        counts and every item off by more than one frame."""
+        return await backend.premiere("build_sequence", {"project": project, "base": base, "name": name,
+                                                         "items": items, "save": save})
+
+    @server.tool(annotations=write)
+    async def premiere_reload_panel() -> dict:
+        """Reload the CutDeck panel in Premiere so it loads changed panel code. It reconnects
+        to the helper by itself within a few seconds. Needs the CutDeck panel open."""
+        return await backend.premiere("reload_panel")
+
     @server.tool(annotations=read)
     async def premiere_run_probe(probe: str) -> dict:
         """Run a diagnostic probe in Premiere (timing, motion, effect, transform,
