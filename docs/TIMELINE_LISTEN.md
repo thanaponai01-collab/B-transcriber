@@ -140,8 +140,10 @@ Tests:
 - **Text accuracy is unchanged.** This work fixes *where* words are, not *what* they are.
   `biodatlab whisper-th-medium` still mishears casual speech and English phrases. Any engine
   change needs the gold set (still the #1 blocker).
-- **Editor corrections are not applied.** Lines come from the engine's raw word list, not from
-  corrections saved in the web editor or SubtitleDesk.
+- **Corrections are applied, but approximately.** A cue corrected in SubtitleDesk or the web
+  editor replaces that cue's words, and its lines say `corrected: true`. When the corrected text
+  has a different word count, its word times are shared by characters, so word positions inside
+  that cue are estimates. No corrections exist in the store yet, so this is unit-tested only.
 - **"Any finished transcript" is accepted.** The newest one for the file's sha256 is used,
   whatever the engine, settings or age.
 - **One audio track per call.** On a synced multicam with the voice on A3, pass `track: "A3"`.
@@ -158,6 +160,14 @@ Tests:
   10 minutes are used. After that it is free.
 - **The tools need the panel.** The CutDeck panel must be connected to the helper. After a helper
   restart it reconnects by itself, but only if the panel's code matches (see the PR #115 note above).
+
+## Follow-ups
+
+- When PR #116 (projects layout) merges, `projects/1raceclub/shorts-rules.md` step 1 ("Transcribe
+  the rough cut") should read "Read the rough cut with `premiere_timeline_transcript`".
+- A stream choice for multi-stream sources: the transcript, the levels and the Rough Cut all
+  read the first audio stream.
+- Text accuracy: build the gold set, then try an engine change through the harness.
 
 ## Scratch sequences made tonight (yours to delete; the project was not saved)
 
