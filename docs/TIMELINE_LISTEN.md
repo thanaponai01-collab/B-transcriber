@@ -209,7 +209,7 @@ Run folders hold every request and result:
 | Speed 200% and 50% on a 10 s scratch | every line lands at (source − 112 s) / speed |
 | Reordered Short built with `build_sequence` (3 pieces, new order) | read back in the new order at the exact positions (0.143 / 1.357 / 2.763 s); the 4 cuts into neighbouring words were flagged |
 | Both rough cuts re-analysed offline on the final code (fitted words) | 119/119 and 1,652/1,652 cut spans, identical to the first runs |
-| `cut_words` (final code): remove all three "เอ่อ" fillers | said 3 → 0; joins read naturally; **no new cut in sound** |
+| `cut_words` (final code, after both reviews): remove all three "เอ่อ" fillers | said 3 → 0; joins read naturally; **no new cut in sound** |
 | `plan_pieces` from the rough cut, 3 whole utterances in a new order, then `build_sequence` and `timeline_transcript` | **0 cuts in sound (0 tails), no clipped words**, the three lines in the new order. Planning on the rough cut's own pauses had given a one-frame sliver of a neighbouring clip, which is why edges are placed in the source |
 | `cut_words` (final code): remove "เดี๋ยวตื่นแล้วหรอ" and "คอลลีฟายกัน" from the rough cut | said 1 → 0 each and the joins read naturally, but the rough cut had already removed every pause around them (words touching, 0 ms). So there is no clean place: cuts at the word boundaries, and the cuts in sound are reported (`no_quiet`, `new_cuts_in_sound`). An earlier, weaker check had passed this case as clean |
 | Two sources: the mic file (4 streams, which landed on A1-A4) and the 7 GB camera file placed on V2/A5 | first read of A5: `missing` named the camera file, 9 s (hashing 7 GB included). The helper's own `transcribe` job took 410 s. Re-read: A5 came from the camera transcript (job 81) and A1/A2 from the mic transcript (job 79); A2 warns that it looks like stream 2 |
@@ -281,6 +281,11 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
 - A helper restarted from master or `docs/projects-layout` will refuse the panel's `place_text`
   registration, because that is PR #115 code.
 - Premiere is back on `editing`. Nothing was saved or exported.
+- The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-86. Jobs 84
+  (Gillette review) and 85 (tiw) are from other projects, and job 86 is the English broadcast.
+  Job 80 is a temporary WAV from the first ASR rough cut, the old behaviour.
+- Scripts: `scripts/timeline_listen/calibrate_edges.py` (in the PR). Tonight's one-off experiment
+  scripts and outputs are in `output/timeline_listen/`, which git ignores, so they are not in the PR.
 
 ## Gaps and limits (please read)
 
@@ -332,8 +337,14 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
   `build_sequence` required at least one; it now accepts zero items with `into` and `steps` (also
   proven live). Steps move whole clips by where they start (no razor), so give block boundaries
   that sit on clip edges: a wrong boundary left a 1.3 s hole on a scratch.
-- **Everything tonight was 30 fps.** Every source and sequence was 30 fps; mixed frame rates are
-  unproven.
+- **Frame rates:** every sequence was 30 fps. A 50 fps source (`10-55-45.mp4`) in a 30 fps sequence
+  was mapped and kept correctly (`keep_words`: frame-aligned In/Out, video and audio together).
+  NTSC rates (29.97 and so on) are handled in code but were not run live.
+- **English audio is translated, not transcribed.** `10-55-45.mp4` is an English F1 broadcast. The
+  Thai engine wrote much of it in Thai ("ดังนั้นคุณต้องขับรถเร็ว ๆ"), looped ("รถหัวแข็งของรถหัวแข็ง…"),
+  and only switched to English later ("Generally, Haas looks very tricky."). For English-language
+  sources, the words on the timeline can be wrong even where the timing is right. A per-source
+  language choice (an English model or `language: en`) would be the fix; untested.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources
   (scratch)` failed its own read-back once: a 1-frame razor clone was left on A3 past the sequence
   end (5733.267-5733.3 s). The identical retry passed. This is the intermittent native-razor failure
@@ -366,4 +377,5 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
 - `listen two sources (scratch) — CutDeck 43c26617 (FAILED)` and `listen two sources (scratch) — CutDeck 43c26617` (the razor-bug repro and its retry)
 - `listen two sources rc keep (scratch)` (`keep_words` on that rough cut: two multi-clip spans, every track kept)
 - `listen short placed 60 (scratch)` and `listen short placed final (scratch)` (the Short re-proven on the final planner)
-- `listen two sources rc keep v2 (scratch)` (a failed `keep_words` attempt that made no sequence) and `listen two sources rc keep v3 (scratch)` (final `keep_words` across joins)
+- `listen test A no-er final (scratch)` (`cut_words` on the final code), `listen 50fps (scratch)` and `listen 50fps kept (scratch)` (the 50 fps check)
+- `listen two sources rc keep v3 (scratch)` (`keep_words` across joins, then reordered twice: the second reorder used a wrong boundary and left a 1.3 s hole and empty extra tracks; it is scratch)
