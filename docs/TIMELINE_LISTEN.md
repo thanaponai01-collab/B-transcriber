@@ -292,6 +292,13 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
 
 - **Your OBS files' extra streams are harmless today.** In every footage file of 20261121, stream 2
   duplicates stream 1 and streams 3-4 are silent. Per-stream transcription was not built.
+- **A wrong-language transcript can still win silently.**
+  - A Rough Cut run first on an English source transcribes it in Thai (`_transcribe_source` uses
+    the default language).
+  - The timeline tools take a file's *newest* transcript of any language: a later default
+    `transcribe` of a file that has an English transcript replaces its words there.
+  - For English sources, transcribe with `en` or `auto` before the Rough Cut, and don't re-run a
+    default transcribe afterwards.
 - **Untranscribed speech is listed, not filled in.** Re-decoding 12 of the 26 gaps on their own
   gave text for all 12: some plausible ("เตรียม", "ฮ่าๆ", "บ๊ายบาย"), some invented ("สล็อตออนไลน์",
   a classic Whisper hallucination on short clips). Filling them in automatically would put invented
