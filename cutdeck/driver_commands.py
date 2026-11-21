@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, timeline_transcript
+from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, timeline_transcript, word_cut
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -929,6 +929,71 @@ async def _timeline_transcript(args: dict, premiere: Premiere) -> dict:
     return await asyncio.to_thread(timeline_transcript.build, timeline, out_dir=_TRANSCRIPTS_DIR, **options)
 
 
+def _cut_words_arguments(args: dict, jobs) -> dict:
+    result = _timeline_transcript_arguments({k: args[k] for k in ("sequence", "track") if k in args}, jobs)
+    name = args.get("result_name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("result_name must name the new sequence")
+    removes = args.get("remove")
+    if not isinstance(removes, list) or not 0 < len(removes) <= 200:
+        raise ValueError("remove must be a list of 1 to 200 removals")
+    checked = []
+    for r in removes:
+        if isinstance(r, dict) and isinstance(r.get("text"), str) and r["text"].strip():
+            n = r.get("occurrence")
+            if n is not None and (type(n) is not int or n < 1):
+                raise ValueError("occurrence must be 1 or more")
+            checked.append({"text": r["text"], **({"occurrence": n} if n else {})})
+        elif isinstance(r, dict) and r.get("from_ticks") is not None and r.get("to_ticks") is not None:
+            lo, hi = int(_ticks(r["from_ticks"], "from_ticks")), int(_ticks(r["to_ticks"], "to_ticks"))
+            if hi <= lo:
+                raise ValueError("to_ticks must be after from_ticks")
+            checked.append({"from_ticks": lo, "to_ticks": hi})
+        else:
+            raise ValueError('each removal is {"text", "occurrence"?} or {"from_ticks", "to_ticks"}')
+    keep_ms = args.get("keep_ms", word_cut.KEEP_MS)
+    if type(keep_ms) is not int or not 0 <= keep_ms <= 2000:
+        raise ValueError("keep_ms must be 0 to 2000")
+    return {**result, "result_name": name, "remove": checked, "keep_ms": keep_ms}
+
+
+def _join_text(words, at: int, n: int = 6) -> str:
+    before = [w.text for w in words if w.end <= at][-n:]
+    after = [w.text for w in words if w.start >= at][:n]
+    return f"{timeline_transcript.join_words(before)} | {timeline_transcript.join_words(after)}"
+
+
+async def _cut_words(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    if source["name"] == args["result_name"]:
+        raise ValueError("result_name must differ from the source sequence (it is never edited)")
+    build = lambda tl, track: timeline_transcript.build(  # noqa: E731
+        tl, track=track, limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
+    before = await asyncio.to_thread(build, source, args.get("track"))
+    if before["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
+    tpf = int(source["ticks_per_frame"])
+    planned = word_cut.plan(before["word_objects"], args["remove"], tpf, int(source["end_ticks"]), args["keep_ms"])
+    copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
+                                       "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": planned["cuts_frames"]}})
+    result_tl = await premiere("read_timeline", {"sequence": args["result_name"]})
+    after = await asyncio.to_thread(build, result_tl, before["track"])
+    removed, joins = 0, []
+    for a, b in planned["cuts_frames"]:
+        joins.append({"tc": timeline_transcript.timecode((a - removed) * tpf, tpf),
+                      "reads": _join_text(after["word_objects"], (a - removed) * tpf)})
+        removed += b - a
+    checks = [{"text": r["text"], "said_before": word_cut.count(before["word_objects"], r["text"]),
+               "said_after": word_cut.count(after["word_objects"], r["text"])}
+              for r in args["remove"] if "text" in r]
+    old_edges = {(e["edge_src_s"], e["word"]) for e in before["edges_inside_words"]}
+    return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"],
+            "removals": planned["removals"], "joins": joins, "checks": checks,
+            "new_cuts_in_speech": [e for e in after["edges_inside_words"]
+                                   if (e["edge_src_s"], e["word"]) not in old_edges]}
+
+
 HELPER_COMMANDS: dict[str, Command] = {
     "timeline_transcript": Command(
         300, _timeline_transcript_arguments, "read",
@@ -947,6 +1012,22 @@ HELPER_COMMANDS: dict[str, Command] = {
          ("from_ticks", str | None, None), ("to_ticks", str | None, None), ("offset", int, 0),
          ("limit", int, 200)),
         run=_timeline_transcript),
+    "cut_words": Command(
+        1800, _cut_words_arguments, "write",
+        """
+        Remove words from a COPY of a sequence (default the active one; never edited), each cut
+        placed in the pauses around the words, from the timeline transcript
+        (premiere_timeline_transcript). remove: [{"text": "...", "occurrence": n}] (a phrase as
+        said; occurrence when it is said more than once) or [{"from_ticks", "to_ticks"}]. A
+        join keeps keep_ms of pause (default 250, never more than was there). Makes result_name
+        with cut_copy, then reads it back: `checks` (how often each phrase is said before and
+        after), `joins` (the words either side of each join), and `new_cuts_in_speech` (any cut
+        that landed in audible speech; empty is the goal). Needs the CutDeck panel open and the
+        sources transcribed.
+        """,
+        (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
+         ("track", str | None, None), ("keep_ms", int, 250)),
+        run=_cut_words),
     "screenshot": Command(
         30, _no_arguments, "read",
         """

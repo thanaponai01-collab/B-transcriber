@@ -398,7 +398,7 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
 def build(timeline: dict, *, track: str | None = None, query: str | None = None,
           from_ticks: int | None = None, to_ticks: int | None = None, offset: int = 0,
           limit: int = 200, db_path: Path | None = None, out_dir: Path | None = None,
-          tighten_words: bool = True,
+          tighten_words: bool = True, keep_words: bool = False,
           lookup: Callable[[str], tuple | None] | None = None) -> dict:
     """The timeline transcript of one audio track of a `read_timeline` result."""
     if lookup is None:
@@ -447,4 +447,6 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
                                     "word_list": [w.__dict__ for w in words]}, ensure_ascii=False),
                         encoding="utf-8")
         result["full_path"] = str(path)
+    if keep_words:  # for in-process callers (word_cut); not JSON
+        result["word_objects"] = words
     return result
