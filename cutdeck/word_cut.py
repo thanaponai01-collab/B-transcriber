@@ -17,6 +17,8 @@ TICKS_PER_MS = 254016000
 def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, int]:
     """(first, last) word index of one removal: ``{"text", "occurrence"}`` or
     ``{"from_ticks", "to_ticks"}`` (the words lying mostly inside that span)."""
+    if "word_range" in remove:  # in-process callers that already know the words
+        return remove["word_range"][0], remove["word_range"][1]
     if "text" in remove:
         found = find(words, remove["text"], tpf, limit=200)
         matches = [m for m in found if m["whole_words"]]
@@ -33,8 +35,6 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
         if m is None:
             raise ValueError(f"{remove['text']!r} has only {len(matches)} occurrence(s)")
         return m["word_range"][0], m["word_range"][1]
-    if "word_range" in remove:  # in-process callers that already know the words
-        return remove["word_range"][0], remove["word_range"][1]
     lo, hi = int(remove["from_ticks"]), int(remove["to_ticks"])
     inside = [i for i, w in enumerate(words) if (min(w.end, hi) - max(w.start, lo)) * 2 > (w.end - w.start) or
               (w.start == w.end and lo <= w.start < hi)]

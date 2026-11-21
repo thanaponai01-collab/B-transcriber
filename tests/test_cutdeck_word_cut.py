@@ -219,3 +219,12 @@ def test_review2_wordless_reach_stops_short_of_the_next_words_onset_and_runs_pas
     laugh = lambda media, t: 5.0 if t < 900 * MS else -5.0                  # a laugh after the file's last word
     (p,) = word_cut.plan_pieces(last, [{"text": "a"}], TPF, {"a.mp4": [SourceWord("a", 0, 500, 0)]}, laugh)
     assert int(p["out_ticks"]) >= 890 * MS
+
+
+def test_keep_ranges_edge_word_said_elsewhere_too():
+    from cutdeck.timeline_transcript import Clip
+    words = WORDS + [w("two", 3500, 3700)]            # "two" is said twice
+    clips = [Clip("A1@0", 0, END, 0, END, "a.mp4")]
+    r = word_cut.keep_ranges(words, [{"from_ticks": 950 * MS, "to_ticks": 1850 * MS}], TPF, clips, _src(words), end_ticks=END)
+    (a, b), = r["keep_frames"]
+    assert 400 <= a * TPF // MS <= 1000 and 1800 <= b * TPF // MS <= 2200
