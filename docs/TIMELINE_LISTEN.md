@@ -438,6 +438,8 @@ how to correct and freeze them (about 10 minutes of listening each).
 
 ## Scratch sequences made tonight (yours to delete; the project was not saved)
 
+All 30 of them start with `listen`; the only other sequence in the project is your `editing`.
+
 - `listen test A (scratch)` and `listen test A (scratch) — CutDeck 86551c23` (a 6-min copy and its rough cut)
 - `listen test A words (scratch)` and `listen test A no-er (scratch)` (`cut_words` results)
 - `listen speed (scratch)` (the speed probe)
