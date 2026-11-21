@@ -173,3 +173,13 @@ def test_keep_ranges_takes_a_span_across_rough_cut_joins_and_places_only_its_out
     (a, b), = r["keep_frames"]
     assert a == 0 and b * TPF == 1200 * MS          # whole span, the join inside untouched
     assert r["cuts_frames"] == [[b, -(-2000 * MS // TPF)]]
+
+
+def test_a_piece_takes_along_wordless_sound_that_touches_it():
+    # A laugh at 0.70-0.95 s, no word on it, 50 ms before "two" (1.0 s); "one" ends at 0.4 s.
+    level = lambda media, t: 5.0 if 700 * MS <= t < 950 * MS or 1000 * MS <= t < 1800 * MS else -5.0
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), level)
+    assert int(piece["in_ticks"]) <= 700 * MS and int(piece["in_ticks"]) >= 400 * MS   # the laugh is kept, "one" is not
+    far = lambda media, t: 5.0 if 450 * MS <= t < 600 * MS or 1000 * MS <= t < 1800 * MS else -5.0
+    (piece,) = word_cut.plan_pieces(WORDS, [{"text": "two three"}], TPF, _src(WORDS), far)
+    assert int(piece["in_ticks"]) >= 800 * MS          # 400 ms of quiet between: not taken

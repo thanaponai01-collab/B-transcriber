@@ -118,6 +118,31 @@ def count(words: list[TimelineWord], text: str) -> int:
     return sum(1 for m in find(words, text, 1, limit=10000) if m["whole_words"]) if _norm(text) else 0
 
 
+WORDLESS_GAP_MS, WORDLESS_REACH_MS = 100, 600  # best fit to the owner's 34 edges (2026-11-22)
+
+
+def _wordless_reach(media: str, edge: int, bound: int, step: int, source_level) -> int:
+    """Move a phrase edge (ticks) out over sound no word covers that touches it: at most
+    ``WORDLESS_GAP_MS`` of quiet between, ``WORDLESS_REACH_MS`` in all, never past ``bound`` (the
+    neighbouring word). ``step`` -1 walks back from a start, +1 forward from an end."""
+    unit = 10 * TICKS_PER_MS
+    t, quiet, reached = edge, 0, edge
+    while abs(t - edge) < WORDLESS_REACH_MS * TICKS_PER_MS:
+        t += step * unit
+        if (step < 0 and t <= bound) or (step > 0 and t >= bound):
+            break
+        level = source_level(media, t)
+        if level is None:
+            break
+        if level >= 0:
+            reached, quiet = t, 0
+        else:
+            quiet += 10
+            if quiet > WORDLESS_GAP_MS:
+                break
+    return reached
+
+
 PAD_MS = 60  # pause kept before and after a piece: the owner's own edges sit here (21 of 25 within a frame, 2026-11-22)
 
 
@@ -152,6 +177,11 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
         src = source_words.get(media) or []
         before = max((w.end_ms * TICKS_PER_MS for w in src if w.end_ms * TICKS_PER_MS <= first), default=0)
         after = min((w.start_ms * TICKS_PER_MS for w in src if w.start_ms * TICKS_PER_MS >= last), default=last + pad)
+        if source_level is not None:
+            # Wordless sound touching the phrase (a breath, a laugh, a word the engine missed)
+            # goes with it: the owner kept it on 4 of 17 hand-cut pieces (2026-11-22).
+            first = _wordless_reach(media, first, before, -1, source_level)
+            last = _wordless_reach(media, last, after, 1, source_level)
         fa = max(first - pad, before) // tpf
         if fa * tpf < before:
             fa += 1
