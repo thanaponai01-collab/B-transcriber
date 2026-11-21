@@ -114,6 +114,13 @@
 - verify: Timeline transcript and cut by words
 - status: live-proven 2026-11-22 on a scratch rough cut: 3 fillers removed, 0 new cuts in sound; phrases inside continuous speech are removed but their cuts are reported in sound (no pause to cut in)
 
+## Keep words on a copy (MCP)
+- what: Keep only these phrases of a sequence, in its order, on a copy made by cut_copy (every track and layer kept); spans placed in the source's pauses; read back.
+- mcp: `premiere_keep_words(result_name, keep, sequence?, track?, pad_ms=60)`
+- trace: `_keep_words` @ cutdeck/driver_commands.py > `keep_ranges` @ cutdeck/word_cut.py > `cut_copy` (panel)
+- verify: Timeline transcript and cut by words
+- status: live-proven 2026-11-22 on a 7-track scratch: every track kept, 0 cuts in sound
+
 ## Plan a Short by its words (MCP)
 - what: Give the phrases to keep, in order; each piece's In/Out is placed in the source file's own pauses around its words; returns items for premiere_build_sequence. Edits nothing.
 - mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=120)`
