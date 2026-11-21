@@ -38,6 +38,7 @@ const { getTrackClipItems, isTrackItemSelected, trackItemName } = require("../ho
 const { unwrapKeyframeValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { waitForFile } = require("../host/files.js");
+const { projectItemMediaPath } = require("../host/sequenceRead.js");
 
 const CLIP_ID = /^([VA])(\d+)@(\d+)$/;
 
@@ -90,11 +91,9 @@ async function readChain(item, withParams) {
   return out;
 }
 
+// Null, never a throw: list_project and projectItemForMedia walk bins and sequences too.
 async function mediaOf(ppro, projectItem) {
-  try {
-    const cp = projectItem && ppro.ClipProjectItem.cast(projectItem);
-    return (cp && (await cp.getMediaFilePath())) || null;
-  } catch (_) { return null; }
+  try { return await projectItemMediaPath(ppro, projectItem); } catch (_) { return null; }
 }
 
 async function readClip(ppro, kind, t, item, effects) {
