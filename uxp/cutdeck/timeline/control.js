@@ -10,8 +10,7 @@
    ONE transaction (one Ctrl+Z) and re-read what they changed.
 
    APIs, each a line of reference/adobe/api/premierepro.txt (status rows in docs/PREMIERE_FACTS.md):
-   Project.getSequences/getActiveSequence/openSequence/setActiveSequence/getRootItem/importFiles/
-   save/name/path; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
+   Project.getSequences/getActiveSequence/getRootItem/importFiles/save/name/path; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
    createSetOutPointAction/clearSelection/setSelection/getFrameSize/getTimebase/getInPoint/
    getOutPoint/getEndTime/getProjectItem/get{Video,Audio}Track(Count); {Video,Audio}Track.name/
    isMuted/setMute/getTrackItems; {Video,Audio}ClipTrackItem.getName/getStartTime/getEndTime/
@@ -27,11 +26,14 @@
    ComponentParam.displayName/getStartValue/isTimeVarying/getKeyframeListAsTickTimes/
    createKeyframe/createSetValueAction/createSetTimeVaryingAction/createAddKeyframeAction;
    Keyframe.position; SequenceEditor.getEditor/createOverwriteItemAction/
-   createInsertProjectItemAction/createRemoveItemsAction; TrackItemSelection.createEmptySelection/
+   createInsertProjectItemAction; TrackItemSelection.createEmptySelection/
    addItem (setSelection pattern: samples premiere-api/src/sequence.ts); Markers.getMarkers (static
    and instance)/createRemoveMarkerAction; Marker.getName/getStart/getDuration/getComments/getType/
-   getColorIndex; ClipProjectItem.cast/getMediaFilePath; Exporter.exportSequenceFrame;
-   uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt). */
+   getColorIndex; Exporter.exportSequenceFrame;
+   uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt).
+   Shared with other panel modules and cited there: sequence lookup and open (host/project.js),
+   removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
+   values (host/components.js). */
 
 const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
@@ -93,7 +95,7 @@ async function readChain(item, withParams) {
 
 // Null, never a throw: list_project and projectItemForMedia walk bins and sequences too.
 async function mediaOf(ppro, projectItem) {
-  try { return await projectItemMediaPath(ppro, projectItem); } catch (_) { return null; }
+  try { return projectItem ? await projectItemMediaPath(ppro, projectItem) : null; } catch (_) { return null; }
 }
 
 async function readClip(ppro, kind, t, item, effects) {

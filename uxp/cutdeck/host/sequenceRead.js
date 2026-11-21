@@ -35,7 +35,6 @@ async function listClips(ppro, seq, kind, { end = true, inPoint = true } = {}) {
 // The media file behind a project item, or null (bins, sequences and graphics have none):
 // ClipProjectItem.cast (premierepro.txt:106) + getMediaFilePath (:130). Throws what the host throws.
 async function projectItemMediaPath(ppro, projectItem) {
-  if (!projectItem) return null;
   const clip = ppro && ppro.ClipProjectItem && ppro.ClipProjectItem.cast ? ppro.ClipProjectItem.cast(projectItem) : projectItem;
   return clip && typeof clip.getMediaFilePath === "function" ? (await clip.getMediaFilePath()) || null : null;
 }
