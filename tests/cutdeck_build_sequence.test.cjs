@@ -176,6 +176,22 @@ test("into clone + lift brings a later block forward without moving it past othe
   assert.ok(h.undoSteps.some((s) => s.startsWith("CutDeck build: clone")));
 });
 
+test("into clone with tracks copies only those tracks (one text layer onto a later Short)", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 2n * S, in: 0n }], [{ media: SHOW, start: 0n, end: 1n * S, in: 7n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 2n * S, in: 0n }]] }],
+  });
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "clone", from_ticks: t(0), to_ticks: t(1), dt_ticks: t(10), tracks: { video: [1] } }],
+    items: [{ id: "x", media: SHOW, in_ticks: t(100), out_ticks: t(101), at_ticks: t(20), v: 0, a: 0 }] });
+  const built = h.sequence("cut");
+  const at10 = [...built.video, ...built.audio].filter((c) => c.start === 10n * S);
+  assert.deepEqual(at10.map((c) => [c.track, c.in / S]), [[1, 7n]]);
+});
+
 const STILL = "E:\\assets\\proof.png";
 
 test("import: true brings a still into CutDeck > Frame Holds once, places it, and reuses it next build", async () => {

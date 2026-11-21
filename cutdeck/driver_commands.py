@@ -127,8 +127,11 @@ def _build_arguments(args: dict, jobs) -> dict:
                 and all(isinstance(st.get(k), str) and st[k].isdigit() for k in ("from_ticks", "to_ticks"))
                 and int(st["to_ticks"]) > int(st["from_ticks"])
                 and (st["op"] == "lift" or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
+                and (st.get("tracks") is None or (isinstance(st["tracks"], dict) and not set(st["tracks"]) - {"video", "audio"}
+                     and all(isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in st["tracks"].values())))
                 for st in steps):
-            raise ValueError("steps must be [{op: lift|clone|move, from_ticks, to_ticks, dt_ticks (clone/move)}]")
+            raise ValueError("steps must be [{op: lift|clone|move, from_ticks, to_ticks, dt_ticks (clone/move), "
+                             "tracks? {video: [index], audio: [index]}}]")
         result["steps"] = steps
         restyle = args.get("restyle", [])
         if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")

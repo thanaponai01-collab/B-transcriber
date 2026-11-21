@@ -27,8 +27,8 @@
    the user built is kept. Extra steps, in this order, before placing items:
      settings_from: name of a sequence whose settings (frame size) to apply
        (Sequence.getSettings + createSetSettingsAction);
-     steps: [{op, from_ticks, to_ticks, dt_ticks?}], run in order, each on every clip of every
-       track whose start is in [from, to), each its own transaction:
+     steps: [{op, from_ticks, to_ticks, dt_ticks?, tracks?}], run in order, each on every clip of every
+       track (or only `tracks` {video: [i], audio: [i]}) whose start is in [from, to), each its own transaction:
        lift: remove without ripple, leaving a hole (createRemoveItemsAction, ripple false);
        clone: copy each clip by dt onto its own track, overwriting (createCloneTrackItemAction,
          isInsert false; effects kept, pieces unlinked; the disabled state is not relied on);
@@ -198,7 +198,9 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
     for (const st of steps) {
       const from = BigInt(st.from_ticks), to = BigInt(st.to_ticks), dt = BigInt(st.dt_ticks || "0");
       const now = await readSequence(ppro, seq, { paths: false });
-      const inRange = (c) => c.start >= from && c.start < to;
+      // tracks (optional) {video: [index], audio: [index]}: only clips on those tracks (e.g. one text layer).
+      const onTracks = (c) => !st.tracks || ((c.kind === "video" ? st.tracks.video : st.tracks.audio) || []).includes(c.track);
+      const inRange = (c) => c.start >= from && c.start < to && onTracks(c);
       const span = `${secs(from)}-${secs(to)} s`;
       if (st.op === "lift") {
         removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
