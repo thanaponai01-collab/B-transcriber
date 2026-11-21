@@ -221,6 +221,7 @@ Run folders hold every request and result:
 | **Your whole route, end to end:** rough cut (from cached transcripts) → `keep_words` (two spans, every track) → reorder (`build_sequence` into: clone far, lift, clone back, lift) → `timeline_transcript` | the spans play swapped on all 7 tracks (8.03 s); the read-back shows the new order; the new join added no cut in sound (the same 2 source edges as before, moved) |
 | Final planner, the Short rebuilt | 0 cuts in sound; the three lines in the new order |
 | Through a real MCP client (stdio, `mcp` ClientSession → `python -m cutdeck.mcp_server`) | the four tools are listed; `premiere_timeline_transcript` (125 lines, phrase found at 00:00:04:06) and `premiere_plan_pieces` (same piece as the direct call) answer |
+| English source, re-transcribed with `language="en"` (154 s, store job 87), then `timeline_transcript` on the 50 fps scratch | the newest transcript is used; the lines read as the broadcast ("So you want to take the gear early because you've got downforce on the car and it helps you slow down."), where before they were invented Thai |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
 Tests:
