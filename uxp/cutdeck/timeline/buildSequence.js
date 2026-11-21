@@ -9,7 +9,12 @@
    Item: { id, media (file path) | like: {kind, track, start_ticks} (an item of the base whose
    project item to use: adjustment layers have no file), in_ticks, out_ticks, at_ticks,
    v (video track index | null), a (audio track index | null), motion {PARAM_INDEX field: value},
-   level (linear Volume Level), blur {blurriness} }.
+   level (linear Volume Level), blur {blurriness}, import (optional, default false) }.
+   import: true = `media` is a file no sequence uses yet (a still PNG for a frame hold, a title
+   PNG); it is imported into CutDeck > Frame Holds before anything is read (see below).
+   Stills: Premiere places a still one frame short of out - in (live 2026-11-21, 26-74 and 60
+   frame stills read back one frame short), so a caller that needs a still to end on an exact
+   frame asks for one frame more, or lays a last piece ending on that frame.
    disable_tracks (optional) {video: [index], audio: [index]}: every clip on those tracks of the
    built sequence is disabled at the end, like the layers a user keeps but switches off
    (VideoClipTrackItem / AudioClipTrackItem.createSetDisabledAction, one transaction).
@@ -53,6 +58,8 @@ const { runTransaction } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
 const { applyMotionValues } = require("../transform/apply.js");
+const { asBinLike } = require("../host/project.js");
+const { getOrCreateFrameHoldBin, locateAndOrganizeImportedHoldItem, FRAME_HOLD_BIN_NAME } = require("./frameHold.js");
 
 const BLUR = "AE.ADBE Gaussian Blur 2";
 const FRAME_TICKS = TICKS_PER_SECOND / 25n; // tolerance unit for the read-back (25 fps sequences)
@@ -71,6 +78,16 @@ async function namedSequence(ppro, project, name) {
   throw new Error(`No sequence "${name}" with clips.`);
 }
 
+/* Read-only lookup of an imported file in CutDeck > Frame Holds by its name (Premiere names the
+   item after the file, with or without the extension). Never edits the project, so it is safe
+   to call after sequences have been read. Null when it is not there. */
+async function holdBinItem(project, fileName) {
+  const bin = asBinLike(await getOrCreateFrameHoldBin(project));
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  const items = (bin && typeof bin.getItems === "function" && (await bin.getItems())) || [];
+  return items.find((it) => it.type !== 2 && (it.name === fileName || it.name === stem)) || null;
+}
+
 function removeAll(ppro, project, editor, items, mediaType, label) {
   if (!items.length) return;
   runTransaction(project, label, (compound) => {
@@ -83,21 +100,66 @@ function removeAll(ppro, project, editor, items, mediaType, label) {
   });
 }
 
-async function buildSequence(ppro, { project: projectPath, base, name, items, save = false, disable_tracks: disableTracks = null, mark_whole: markWhole = false,
-  into = false, settings_from: settingsFrom = null, steps = [], restyle = [], media_from: mediaFrom = [] }, log = () => {}) {
+/* A failed build says where it stopped. `into` steps edit the base itself and are not undone on a
+   throw, so a retry on the same copy runs them twice (live 2026-11-21: the hook was lifted twice and
+   the end moved back twice, 2.47 s lost). When any step already ran, the error says to build again
+   on a fresh copy. */
+async function buildSequence(ppro, args, log = () => {}) {
+  const state = { phase: "start", stepsDone: 0 };
+  try {
+    return await buildSequenceInner(ppro, args, log, state);
+  } catch (e) {
+    const total = (args.steps || []).length;
+    const warn = state.stepsDone
+      ? ` ${state.stepsDone} of ${total} steps were already applied to "${args.base}": build again on a fresh copy, never on this one.`
+      : "";
+    const err = new Error(`${e.message} (build stopped after phase "${state.phase}".${warn})`);
+    err.cause = e;
+    throw err;
+  }
+}
+
+async function buildSequenceInner(ppro, { project: projectPath, base, name, items, save = false, disable_tracks: disableTracks = null, mark_whole: markWhole = false,
+  into = false, settings_from: settingsFrom = null, steps = [], restyle = [], media_from: mediaFrom = [] }, log, state) {
   const t0 = Date.now();
   const timings = {};
-  const lap = (phase) => { timings[phase] = Date.now() - t0; log(`${phase} at ${timings[phase]} ms`); };
+  const lap = (phase) => { timings[phase] = Date.now() - t0; state.phase = phase; log(`${phase} at ${timings[phase]} ms`); };
   const project = await ppro.Project.getActiveProject();
   if (!project || projectFile(project.path) !== projectFile(projectPath)) {
     throw new Error(`The open project is ${project ? project.path : "none"}, not ${projectPath}: nothing was built.`);
   }
   const tick = (t) => ppro.TickTime.createWithTicks(BigInt(t).toString());
 
+  /* `import: true` items are files no sequence uses yet: still PNGs standing in for frame holds
+     (made outside Premiere from a broadcast frame) and burned-in titles. The UXP API cannot
+     freeze a frame or make a Graphic on the timeline, so a build brings the file in itself.
+     Order matters: any project change (importFiles, or the "move into bin" transaction that
+     locateAndOrganizeImportedHoldItem may run) invalidates script objects read before it ("The
+     script object is no longer valid", live 2026-11-21, twice). So every import and bin move
+     happens here, before anything is read; after the reads below, imported items are only
+     looked up read-only (holdBinItem). A file already in the bin is reused, never imported twice. */
+  const importNames = new Map(); // norm(path) -> file name
+  for (const path of new Set(items.filter((it) => it.media && it.import).map((it) => it.media))) {
+    const fileName = path.split(/[\\/]/).pop();
+    if (!(await holdBinItem(project, fileName))) {
+      const rawBin = await getOrCreateFrameHoldBin(project);
+      const ok = await project.importFiles([path], true, rawBin, false);
+      const placed = await locateAndOrganizeImportedHoldItem(project, rawBin, asBinLike(rawBin), fileName, path, ppro);
+      if (!ok || !placed) throw new Error(`Import of ${path} failed (importFiles ${ok}): nothing was built.`);
+    }
+    importNames.set(norm(path), fileName);
+  }
+  if (importNames.size) lap("imported");
+
   // Resolve every project item before anything is edited.
   if (into && name !== base) throw new Error(`into edits "${base}" itself: name must be "${base}" too.`);
   const { seq: baseSeq, read: baseRead } = await namedSequence(ppro, project, base);
   const byPath = new Map();
+  for (const [key, fileName] of importNames) {
+    const item = await holdBinItem(project, fileName);
+    if (!item) throw new Error(`${fileName} is not in CutDeck > ${FRAME_HOLD_BIN_NAME} after import: nothing was built.`);
+    byPath.set(key, item);
+  }
   for (const c of [...baseRead.video, ...baseRead.audio]) if (c.path && c.projectItem) byPath.set(norm(c.path), c.projectItem);
   for (const other of mediaFrom) {
     const { read } = await namedSequence(ppro, project, other);
@@ -149,6 +211,7 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
       } else {
         throw new Error(`Unknown step ${st.op}`);
       }
+      state.stepsDone += 1;
     }
     lap("steps");
     // Scratch past every track an item names, so clearing it never touches a placed side.
@@ -174,6 +237,15 @@ async function buildSequence(ppro, { project: projectPath, base, name, items, sa
     scratch = { v: fresh.videoTracks, a: fresh.audioTracks };
   }
   lap("cleared");
+
+  // The settings and step transactions above changed the project: take fresh handles for the
+  // imported items, read-only, so a placement never uses one that went stale.
+  for (const it of plan) {
+    if (!it.import) continue;
+    const item = await holdBinItem(project, it.media.split(/[\\/]/).pop());
+    if (!item) throw new Error(`Item ${it.id}: ${it.media} left CutDeck > ${FRAME_HOLD_BIN_NAME} during the build.`);
+    it.projectItem = item;
+  }
 
   // Place: In/Out (only when it changes) in one transaction, the overwrite in the next.
   const marks = new Map(); // ProjectItem id -> {clip, in, out} before the first change, to restore

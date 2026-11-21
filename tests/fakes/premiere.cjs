@@ -113,7 +113,8 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   const clipOf = new WeakMap(); // ProjectItem -> ClipProjectItem
   for (const m of media) {
     marks.set(m.path, { in: 0n, out: m.duration });
-    const item = { name: m.path, getId: () => `item:${m.path}`, createSetNameAction: () => action(() => {}) };
+    // `name`: what Premiere calls an imported file's item (its file name); default the path.
+    const item = { name: m.name || m.path, getId: () => `item:${m.path}`, createSetNameAction: () => action(() => {}) };
     const clip = {
       name: m.path,
       getMediaFilePath: async () => m.path,
@@ -224,12 +225,37 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     },
   });
 
+  // Bins and import, enough for timeline/buildSequence.js `import: true` items: a bin lists its
+  // children and can create a child bin; importFiles([path], suppressUI, bin) puts that media's
+  // ProjectItem (the media must be in `media`) into the bin. `imports` counts importFiles calls.
+  const children = new WeakMap(); // bin -> its items
+  const makeBin = (binName) => {
+    const bin = {
+      name: binName, type: 2,
+      getItems: async () => [...children.get(bin)],
+      createBinAction: (child) => action(() => children.get(bin).push(makeBin(child))),
+    };
+    children.set(bin, []);
+    return bin;
+  };
+  const root = makeBin("root");
+  const imports = [];
+
   let saves = 0;
   const project = {
     ...core,
     path,
     getSequences: async () => raws.map(wrap),
     save: async () => { saves++; return true; },
+    getRootItem: async () => root,
+    importFiles: async (paths, suppressUI, bin) => {
+      for (const p of paths) {
+        if (!projectItems.has(p)) return false;
+        imports.push(p);
+        children.get(bin || root).push(projectItems.get(p));
+      }
+      return true;
+    },
   };
   const ppro = {
     Project: { getActiveProject: async () => project },
@@ -241,6 +267,7 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   return {
     ppro, project, undoSteps,
     get saves() { return saves; },
+    imports,
     marks: (mediaPath) => ({ ...marks.get(mediaPath) }),
     // Every sequence by name, as plain clips per side.
     sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio"), frame: s.frame || null, marks: s.marks || null }; },

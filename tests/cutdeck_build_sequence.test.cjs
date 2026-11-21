@@ -175,3 +175,47 @@ test("into clone + lift brings a later block forward without moving it past othe
   assert.deepEqual(keep(built.audio), [[0n, 50n], [1n, 10n]]);
   assert.ok(h.undoSteps.some((s) => s.startsWith("CutDeck build: clone")));
 });
+
+const STILL = "E:\\assets\\proof.png";
+
+test("import: true brings a still into CutDeck > Frame Holds once, places it, and reuses it next build", async () => {
+  const h = host({ media: [
+    { path: SHOW, video: true, audio: true, duration: 600n * S },
+    { path: STILL, name: "proof.png", video: true, audio: false, duration: 3600n * S },
+  ] });
+  const still = { id: "still", media: STILL, import: true, in_ticks: t(0), out_ticks: t(2), at_ticks: t(1), v: 1, a: null };
+  const report = await buildSequence(h.ppro, args({ items: [ITEMS[0], still] }));
+  assert.equal(report.mismatches, 0);
+  assert.deepEqual(h.imports, [STILL]);
+  assert.deepEqual(h.sequence("HKS build").video.filter((c) => c.media === STILL).map((c) => [c.track, c.start / S, c.end / S]), [[1, 1n, 3n]]);
+  const cutdeck = (await (await h.project.getRootItem()).getItems()).find((b) => b.name === "CutDeck");
+  const holds = (await cutdeck.getItems()).find((b) => b.name === "Frame Holds");
+  assert.deepEqual((await holds.getItems()).map((i) => i.name), ["proof.png"]);
+
+  await buildSequence(h.ppro, args({ name: "again", items: [still] }));
+  assert.deepEqual(h.imports, [STILL], "a file already in the bin is not imported twice");
+});
+
+test("an import that fails stops the build before any edit", async () => {
+  const h = host();
+  const missing = { id: "gone", media: "E:\\assets\\gone.png", import: true, in_ticks: t(0), out_ticks: t(1), at_ticks: t(0), v: 1, a: null };
+  await assert.rejects(buildSequence(h.ppro, args({ items: [missing] })), /Import of E:\\assets\\gone\.png failed .*nothing was built/);
+  assert.equal(h.sequence("HKS build"), undefined);
+});
+
+test("a failure after into steps ran names the phase and says not to retry on that copy", async () => {
+  const h = host();
+  await assert.rejects(
+    buildSequence(h.ppro, { project: PROJECT, base: "1 YOUTUBE D1", name: "1 YOUTUBE D1", into: true,
+      steps: [{ op: "lift", from_ticks: t(0), to_ticks: t(1) }, { op: "bogus", from_ticks: t(0), to_ticks: t(1) }],
+      items: [ITEMS[0]] }),
+    /Unknown step bogus \(build stopped after phase "settings"\. 1 of 2 steps were already applied to "1 YOUTUBE D1": build again on a fresh copy, never on this one\.\)/);
+});
+
+test("a failure before any step names the phase without the retry warning", async () => {
+  const h = host();
+  const err = await buildSequence(h.ppro, args({ items: [{ ...ITEMS[0], media: "D:\\nowhere.mp4" }] })).catch((e) => e);
+  assert.match(err.message, /no project item for D:\\nowhere\.mp4/);
+  assert.match(err.message, /build stopped after phase "start"/);
+  assert.doesNotMatch(err.message, /already applied/);
+});
