@@ -158,6 +158,14 @@ async function cloneSequence(project, source, label) {
   return (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
 }
 
+// Opens `sequence` in the Timeline panel and makes it the active one (Project.openSequence :513,
+// Project.setActiveSequence :518), returning what each call reported.
+async function openAndActivate(project, sequence) {
+  const opened = await project.openSequence(sequence);
+  const activated = await project.setActiveSequence(sequence);
+  return { opened, activated };
+}
+
 module.exports = {
   CUTDECK_BIN_NAME,
   ROUGH_CUTS_BIN_NAME,
@@ -172,4 +180,5 @@ module.exports = {
   sequenceNamed,
   projectAndSequenceNamed,
   cloneSequence,
+  openAndActivate,
 };

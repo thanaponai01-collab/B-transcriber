@@ -11,7 +11,7 @@
      - items read before a transaction can go stale, so every step re-reads the copy.
    Five undo steps plus one per extra 3,000-action batch, said in the status line. */
 
-const { runTransaction, cloneSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
@@ -392,10 +392,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
       }
     } finally {
-      await timed("open copy", async () => {
-        await project.openSequence(copy);
-        await project.setActiveSequence(copy);
-      });
+      await timed("open copy", () => openAndActivate(project, copy));
     }
     const elapsedSeconds = (Date.now() - started) / 1000;
     before.items = null;

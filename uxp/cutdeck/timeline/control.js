@@ -33,7 +33,7 @@
    getColorIndex; ClipProjectItem.cast/getMediaFilePath; Exporter.exportSequenceFrame;
    uxp.storage.localFileSystem.getTemporaryFolder (reference/adobe/api/uxp.txt). */
 
-const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed } = require("../host/project.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName } = require("../host/trackItems.js");
 const { unwrapKeyframeValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
@@ -188,8 +188,7 @@ async function listProject(ppro, { depth = 8 } = {}) {
 
 async function openSequence(ppro, { sequence: name }) {
   const { project, sequence } = await projectAndSequenceNamed(ppro, name);
-  const opened = await project.openSequence(sequence);
-  const activated = await project.setActiveSequence(sequence);
+  const { opened, activated } = await openAndActivate(project, sequence);
   const now = await project.getActiveSequence();
   return { name: sequence.name, opened, activated, active: !!now && String(now.guid) === String(sequence.guid) };
 }

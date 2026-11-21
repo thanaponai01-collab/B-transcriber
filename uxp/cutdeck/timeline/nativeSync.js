@@ -16,7 +16,7 @@
    onto not-yet-existing tracks in one transaction, overwrite at a between-frames time, and -1 as
    the unused track index. The read-back is what catches any of those going wrong, on the copy. */
 
-const { runTransaction, activeProjectAndSequence, cloneSequence, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
+const { runTransaction, activeProjectAndSequence, cloneSequence, openAndActivate, getOrCreateBin, asBinLike, CUTDECK_BIN_NAME, SYNCED_BIN_NAME } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
 
@@ -307,8 +307,7 @@ async function syncSequence(ppro, deps) {
       });
     }
 
-    await project.openSequence(copy);
-    await project.setActiveSequence(copy);
+    await openAndActivate(project, copy);
     const report = formatReport(name, plan, clips, skipped, problems);
     targets.length = 0;
     clips.length = 0;
