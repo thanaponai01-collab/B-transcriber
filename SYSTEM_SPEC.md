@@ -277,7 +277,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
 | `preview.py` | ffmpeg concat-demuxer stream-copy render of a plan's KEEP spans — a fast, keyframe-imprecise sanity watch (labelled approximate in filename + CLI output), not a frame-accuracy check; `--reencode` for a slow frame-accurate render; CLI `python -m cutdeck.preview --job-id N [--reencode] --out preview.mp4` |
 | `timeline_transcript.py` | what a sequence says and where without listening again: each source's stored transcript (by sha256, `store.latest_transcript_job`) mapped through one audio track's clips in exact ticks (speed-aware), word edges fitted to the source's 10 ms level envelope, cuts with audible sound, untranscribed speech; MCP `premiere_timeline_transcript`; also feeds `rough_cut._mapped_transcript` (docs/TIMELINE_LISTEN.md) |
-| `word_cut.py` | plan frame cuts that remove phrases, each in the pause (nearest quiet frame, else the energy dip); MCP `premiere_cut_words` makes the copy with `cut_copy` and reads it back |
+| `word_cut.py` | plan frame cuts that remove phrases, each in the pause (nearest quiet frame, else the energy dip); MCP `premiere_cut_words` makes the copy with `cut_copy` and reads it back; `plan_pieces` (MCP `premiere_plan_pieces`) places a Short's piece edges in the source file's pauses |
 | `sequence_mixdown.py` | thin `ingest()` → `build_cut_spans()` wrapper over a live sequence's own audio mixdown; superseded (issue #17/#20) by the since-retired `live_clip.py`; kept in place, currently unused |
 
 The retired ExtendScript/QE-DOM `in_place` mode (`jsx_export.py`, razor + reverse-
