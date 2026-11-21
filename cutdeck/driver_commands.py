@@ -986,7 +986,7 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
         removed += b - a
     checks = [{"text": r["text"], "said_before": word_cut.count(before["word_objects"], r["text"]),
                "said_after": word_cut.count(after["word_objects"], r["text"])}
-              for r in args["remove"] if "text" in r]
+              for r in {r["text"]: r for r in args["remove"] if "text" in r}.values()]
     old_edges = {(e["edge_src_s"], e["word"]) for e in before["edges_inside_words"]}
     return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"],
             "removals": planned["removals"], "joins": joins, "checks": checks,
