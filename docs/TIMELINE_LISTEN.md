@@ -223,6 +223,7 @@ Run folders hold every request and result:
 | Calibration against your ear: your own cut of the Max Short (92.7-135.1 s) | 3 of its edges are "in sound": one inside "เฮ้ย", where your log says you cut the repeated words mid-flow on purpose, and one on the tail of the last "ครับ" (the agent's v4 did the same). So `cuts_in_sound` is a list to review, not a list of errors. The per-word `clipped` flag fired 27 times, mostly at quiet edges, so it is now gated by the audio too (27 → 4) |
 | `keep_words` on `listen two sources (scratch)` (mic on A1-A4, camera on V2/A5), keeping 2 phrases | a copy with **every track kept** (V1, V2, A1-A5, 2 clips each, ending at 2.27 s); reads back exactly the 2 phrases; **0 cuts in sound** |
 | `keep_words` on a rough cut of that multi-track scratch: two spans of 3-4 lines, each crossing rough-cut joins | every track kept (V1, V2, A1-A5, ending at 8.03 s); both spans read back whole. 2 cuts in sound, both expected: one is an inner rough-cut join (the Rough Cut's own edge), one is a span end where the speech runs straight into a laugh (`no_quiet` warned) |
+| **Your whole route, end to end:** rough cut (from cached transcripts) → `keep_words` (two spans, every track) → reorder (`build_sequence` into: clone far, lift, clone back, lift) → `timeline_transcript` | the spans play swapped on all 7 tracks (8.03 s); the read-back shows the new order; the new join added no cut in sound (the same 2 source edges as before, moved) |
 | Final planner, the Short rebuilt | 0 cuts in sound; the three lines in the new order |
 | Coverage of the source transcript | 26 spans (21.5 s) of speech with no cue, now listed as `untranscribed` |
 
@@ -330,8 +331,10 @@ A live re-run then caught one more of my own (a word said elsewhere confused the
   so they cannot catch a stream mismatch.
 - **Long sources are transcribed whole.** A 3-hour stream takes about 7-8 min once, even if only
   10 minutes are used. After that it is free.
-- **Reordering after `keep_words` was not run tonight.** The copy keeps the phrases in the rough
-  cut's order. Reorder with `build_sequence` into the copy (the v3 recipe in the 1RaceClub log).
+- **Reordering after `keep_words` needs a workaround.** It was proven live, as `build_sequence` with
+  `into` and the steps clone far, lift, clone back, lift (the v3 recipe). But `build_sequence` needs
+  at least one item, so a 1-frame filler had to be placed and removed afterwards (`edit_clips`). A
+  `reorder` step, or allowing zero items, would remove that workaround.
 - **Everything tonight was 30 fps.** Every source and sequence was 30 fps; mixed frame rates are
   unproven.
 - **A pre-existing Rough Cut bug was reproduced.** Applying a rough cut to `listen two sources
