@@ -329,6 +329,10 @@ note, and all are fixed with tests:
   (transcribe on `missing`, `keep_words`, build into the copy to reorder, read back). It was unsure
   about ticks units, `occurrence`, the reorder steps (defined only in JS), and "base never edited"
   vs `into`. The descriptions now answer all of those, including a swap recipe.
+  - Re-asked with the new descriptions, a second fresh agent wrote a complete plan. It was run
+    verbatim on scratch (`listen agent plan (scratch)`): keep 2 lines with every track, swap them,
+    read back. It reads exactly "สวัสดีครับยังไม่อัพโน้น", "อีก 20 นาที"; 0 cuts in sound, 0 tails;
+    all 7 tracks (2.63 s). **Your request, end to end, by an agent from the tool descriptions alone.**
 - **Offline crash sweep:** `timeline_transcript --prproj` ran on 36 `yt`/`tt`/`race` cuts in 20
   October projects (18 to 2,601 clips). No crash; the sources there are not transcribed, so it
   lists them as `missing`.
@@ -443,6 +447,7 @@ how to correct and freeze them (about 10 minutes of listening each).
 - `listen short placed (scratch)` (the Short built from `plan_pieces`)
 - `listen two sources (scratch)` (mic file on A1-A4, camera file on V2/A5)
 - `listen rough-first (scratch)` (the never-transcribed source on A5; its rough cut was analysed but not applied)
+- `listen agent plan (scratch)` (the fresh agent's plan, run verbatim)
 - `listen two sources kept (scratch)`, `listen two sources kept v2 (scratch)`, `listen two sources kept 60 (scratch)` (`keep_words`)
 - `listen keep span (scratch)` (`keep_words` with a 10 s span across rough-cut joins)
 - `listen two sources (scratch) — CutDeck 43c26617 (FAILED)` and `listen two sources (scratch) — CutDeck 43c26617` (the razor-bug repro and its retry)
