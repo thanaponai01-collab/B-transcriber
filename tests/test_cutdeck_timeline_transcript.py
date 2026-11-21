@@ -399,3 +399,9 @@ def test_review2_prproj_zero_source_length_and_ntsc_rates():
     assert tl["ticks_per_frame"] == "8475667200" and tl["tracks"][0]["clips"][0]["speed"] == 1.0
     assert tt.timeline_from_prproj(seq, fps=23.976)["ticks_per_frame"] == "10594584000"
     assert tt.timeline_from_prproj(seq, fps=25)["ticks_per_frame"] == str(254016000000 // 25)
+
+
+
+def test_join_words_writes_english_as_english():
+    assert tt.join_words(["you", "'ve", "got", "downforce", ",", "it", "does", "n't", "(", "really", ")", "."]) ==         "you've got downforce, it doesn't (really)."
+    assert tt.join_words(["Max", "ชนะ", "F1", "ครับ"]) == "Max ชนะ F1 ครับ"

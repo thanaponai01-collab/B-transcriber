@@ -194,7 +194,9 @@ def join_words(texts: Iterable[str]) -> str:
     out = ""
     for t in texts:
         t = t.strip()
-        if out and t and not (_thai(out[-1]) and _thai(t[0])):
+        # No space between two Thai runs, before punctuation or a clitic ("'ve", "n't"), or after
+        # an opening bracket.
+        if out and t and not (_thai(out[-1]) and _thai(t[0])) and t[0] not in ".,!?;:%)]}'’"                 and not t.lower().startswith("n't") and out[-1] not in "([{":
             out += " "
         out += t
     return out
