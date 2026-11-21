@@ -273,12 +273,20 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
     levels_by_media = levels_by_media or {}
     starts_by_media = {m: [w.start_ms for w in ws] for m, ws in words_by_media.items()}
     thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
+    # A through-edit (the next clip goes on playing the same source from where this one stops)
+    # cuts nothing: neither side of it is an edge.
+    through = set()
+    for a, b in zip(clips, clips[1:]):
+        if a.end == b.start and a.media == b.media and a.out == b.in_ and a.speed == b.speed:
+            through |= {(a.id, "out"), (b.id, "in")}
     for clip in clips:
         words = words_by_media.get(clip.media) or []
         starts = starts_by_media.get(clip.media) or []
         levels = levels_by_media.get(clip.media)
         threshold = thresholds.get(clip.media)
         for side, edge_ticks, seq_ticks in (("in", clip.in_, clip.start), ("out", clip.out, clip.end)):
+            if (clip.id, side) in through:
+                continue
             edge_ms = edge_ticks / TICKS_PER_MS
             if levels is not None and not _audible_at(levels, threshold, edge_ms):
                 continue
@@ -292,7 +300,7 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
             if word is None and levels is None:
                 continue
             edge = {"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
-                    "at_s": seconds(seq_ticks), "edge_src_s": round(edge_ms / 1000, 3),
+                    "at_s": seconds(seq_ticks), "at_ticks": str(seq_ticks), "edge_src_s": round(edge_ms / 1000, 3),
                     "word": word.text if word else None}
             if word:
                 edge["word_src_s"] = [word.start_ms / 1000, word.end_ms / 1000]
@@ -448,16 +456,18 @@ def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[S
         floor_ms = out[-1].end_ms if out else 0
         ceil_ms = inner[k + 1][0].start_ms if k + 1 < len(inner) else n * ENVELOPE_MS
         i = w.start_ms // ENVELOPE_MS
-        steps = 0
-        while steps < reach and audible(i - 1) and (i - 1) * ENVELOPE_MS >= floor_ms:
+        grew_start = 0
+        while grew_start < reach and audible(i - 1) and (i - 1) * ENVELOPE_MS >= floor_ms:
             i -= 1
-            steps += 1
-        j = w.end_ms // ENVELOPE_MS  # first window after the word
-        steps = 0
-        while steps < reach and audible(j) and (j + 1) * ENVELOPE_MS <= ceil_ms:
+            grew_start += 1
+        j = w.end_ms // ENVELOPE_MS  # the window holding the end
+        grew_end = 0
+        while grew_end < reach and audible(j) and (j + 1) * ENVELOPE_MS <= ceil_ms:
             j += 1
-            steps += 1
-        out.append(replace(w, start_ms=i * ENVELOPE_MS, end_ms=j * ENVELOPE_MS))
+            grew_end += 1
+        # An edge that did not grow keeps its exact time (no rounding to the 10 ms grid).
+        out.append(replace(w, start_ms=i * ENVELOPE_MS if grew_start else w.start_ms,
+                           end_ms=max(j * ENVELOPE_MS, w.end_ms) if grew_end else w.end_ms))
     return out
 
 
@@ -469,7 +479,10 @@ def source_levels(media: str, cache: Path, sample_rate: int = 16000):
 
     import numpy as np
     if cache.is_file():
-        return np.load(cache)
+        try:
+            return np.load(cache)
+        except (OSError, ValueError):
+            pass  # a half-written cache: decode again
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found on PATH")
     cmd = ["ffmpeg", "-nostdin", "-v", "error", "-i", media, "-vn",
@@ -488,7 +501,9 @@ def source_levels(media: str, cache: Path, sample_rate: int = 16000):
         raise RuntimeError(f"ffmpeg could not decode the audio of {media}")
     levels = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.float32)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    np.save(cache, levels)
+    tmp = cache.with_name(f"{cache.stem}.{os.getpid()}.{id(levels)}.tmp.npy")
+    np.save(tmp, levels)
+    os.replace(tmp, cache)
     return levels
 
 
@@ -525,9 +540,12 @@ def media_sha256(path: str, db_path: Path) -> str:
         index = {}
     if key not in index:
         index[key] = store.sha256_of_file(path)
-        tmp = index_path.with_suffix(".tmp")
+        tmp = index_path.with_name(f"{index_path.name}.{os.getpid()}.{id(index)}.tmp")
         tmp.write_text(json.dumps(index, indent=0), encoding="utf-8")
-        os.replace(tmp, index_path)
+        try:
+            os.replace(tmp, index_path)
+        except OSError:  # another writer won the race; this entry is re-hashed next time
+            tmp.unlink(missing_ok=True)
     return index[key]
 
 
@@ -557,8 +575,12 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
         conn.close()
     levels = None
     if levels_dir is not None:
-        levels = source_levels(media, levels_dir / f"{sha}.npy")
-        words = tighten(words, levels)
+        try:
+            levels = source_levels(media, levels_dir / f"{sha}.npy")
+        except (RuntimeError, OSError):
+            levels = None  # undecodable audio: engine times, and no sound checks, for this file
+        if levels is not None:
+            words = tighten(words, levels)
     return job.id, words, levels, gaps
 
 
@@ -636,7 +658,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["untranscribed"] = [u for u in result["untranscribed"]
                                    if inside(int(u["start_ticks"]), int(u["end_ticks"]))]
         result["cuts_in_sound"] = [e for e in result["cuts_in_sound"]
-                                   if lo <= round(e["at_s"] * PPRO_TICKS_PER_SECOND) < hi]
+                                   if lo <= int(e["at_ticks"]) < hi]
     result["line_count"] = len(all_lines)
     result["lines"] = all_lines[offset:offset + limit]
     result["next_offset"] = offset + limit if offset + limit < len(all_lines) else None

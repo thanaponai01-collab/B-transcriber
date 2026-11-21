@@ -36,7 +36,7 @@ def _resolve(words: list[TimelineWord], remove: dict, tpf: int) -> tuple[int, in
     else:
         lo, hi = int(remove["from_ticks"]), int(remove["to_ticks"])
     inside = [i for i, w in enumerate(words) if (min(w.end, hi) - max(w.start, lo)) * 2 > (w.end - w.start) or
-              (w.start == w.end and lo <= w.start < hi)]
+              (w.start == w.end and lo <= w.start <= hi)]
     if not inside:
         raise ValueError("no word lies inside that span")
     return inside[0], inside[-1]
@@ -76,12 +76,16 @@ def plan(words: list[TimelineWord], removes: list[dict], tpf: int, end_ticks: in
         left = min(gap_before, keep // 2 + max(keep // 2 - gap_after, 0))
         right = min(gap_after, keep - left)
         a, b = before + left, after - right
-        # Whole frames, rounded inward into the pause: never into the kept words.
+        # Whole frames, rounded inward into the pause. A pause shorter than a frame holds no
+        # boundary: take the one that intrudes least (into the kept word, or a sliver of the
+        # removed one).
         fa, fb = -(-a // tpf), b // tpf
         if fa * tpf > first:
-            fa = first // tpf
+            lower = first // tpf
+            fa = lower if before - lower * tpf < fa * tpf - first else fa
         if fb * tpf < last:
-            fb = -(-last // tpf)
+            upper = -(-last // tpf)
+            fb = upper if upper * tpf - after < last - fb * tpf else fb
         no_quiet = {}
         if level_at is not None:
             # The quiet frame in the pause nearest the target; the engine's word edges can be
@@ -136,6 +140,12 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
         media = kept[0].media
         if any(w.media != media for w in kept):
             raise ValueError(f"{keep.get('text', 'that span')!r} runs across two source files; keep each part")
+        # The words must run on in the source: a phrase that crosses a cut or a reorder here
+        # would come back as one piece holding what the cut removed, or Out before In.
+        for a, b in zip(kept, kept[1:]):
+            if b.src_start_ms < a.src_start_ms or b.src_start_ms - a.src_end_ms > 1000:
+                raise ValueError(f"{keep.get('text', 'that span')!r} is not one stretch of its source (it crosses a "
+                                 f"cut at {a.text}|{b.text}); keep each part as its own phrase")
         first, last = kept[0].src_start_ms * TICKS_PER_MS, kept[-1].src_end_ms * TICKS_PER_MS
         src = source_words.get(media) or []
         before = max((w.end_ms * TICKS_PER_MS for w in src if w.end_ms * TICKS_PER_MS <= first), default=0)

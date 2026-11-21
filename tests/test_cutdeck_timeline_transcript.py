@@ -349,3 +349,44 @@ def test_clipped_flag_needs_sound_at_the_edge_when_levels_are_known(tmp_path):
     assert "clipped_words" not in quiet["lines"][0]
     loud = tt.build(timeline(clip("A1@0", 0, 900, 1300, media)), lookup=lambda m: (1, words, levels))
     assert loud["lines"][0]["clipped_words"] == ["helloworld"]
+
+
+def test_tighten_keeps_exact_times_where_an_edge_does_not_move():
+    import numpy as np
+    levels = np.full(30, -30.0, dtype=np.float32)   # sound throughout: nothing to pull in, no pause
+    words = [tt.SourceWord("a", 50, 103, 0), tt.SourceWord("b", 105, 108, 0), tt.SourceWord("c", 109, 200, 0)]
+    got = [(w.start_ms, w.end_ms) for w in tt.tighten(words, levels)]
+    assert got[1] == (105, 108) and got[2][1] >= 200
+    assert all(a[1] <= b[0] for a, b in zip(got, got[1:]))
+
+
+def test_a_through_edit_is_not_a_cut_and_range_filters_on_exact_ticks(tmp_path):
+    import numpy as np
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    levels = np.full(800, -70.0, dtype=np.float32)
+    levels[:400] = -30.0                                       # sound through the first 4 s
+    lookup = lambda m: (1, SOURCE, levels)
+    split = timeline(clip("A1@0", 0, 900, 1700, media), clip("A1@1", 800, 1700, 2100, media))  # razor at 0.8 s
+    r = tt.build(split, lookup=lookup)
+    assert {(e["clip"], e["side"]) for e in r["cuts_in_sound"]} == {("A1@0", "in"), ("A1@1", "out")}
+    assert "clipped_words" not in r["lines"][0]
+    edge = TPF  # an edge exactly one frame in
+    tl = timeline(clip("A1@x", edge, 900, 1700, media))
+    tl["tracks"][-1]["clips"][0]["start_ticks"] = str(edge)
+    tl["tracks"][-1]["clips"][0]["end_ticks"] = str(edge + 800 * T)
+    hit = tt.build(tl, lookup=lookup, from_ticks=edge, to_ticks=edge + 1)
+    assert [e["side"] for e in hit["cuts_in_sound"]] == ["in"]
+
+
+def test_a_half_written_levels_cache_is_decoded_again(tmp_path, monkeypatch):
+    import numpy as np
+    cache = tmp_path / "x.npy"; cache.write_bytes(b"\x93NUMPY broken")
+    class P:
+        returncode = 0
+        def __init__(self, *a, **k): self.stdout = __import__("io").BytesIO(np.zeros(1600, np.float32).tobytes())
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr("subprocess.Popen", P)
+    monkeypatch.setattr("shutil.which", lambda name: "ffmpeg")
+    levels = tt.source_levels("a.mp4", cache)
+    assert len(levels) == 10 and np.load(cache).shape == (10,)

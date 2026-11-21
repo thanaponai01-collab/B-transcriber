@@ -245,8 +245,12 @@ def analyze(seq: sequence_model.Sequence, raw_config: dict, *, frame_range: tupl
         # Only for audio we extracted from the clips ourselves: a caller's own mixdown is theirs.
         if asr and extracted_tmp is not None:
             _progress(35, "Reading (or once transcribing) the sources")
-        mapped = (_mapped_transcript(seq, audio_track, window, raw_config, db, transcribe_sources=True)
-                  if asr and extracted_tmp is not None else None)
+        mapped = None
+        if asr and extracted_tmp is not None:
+            try:
+                mapped = _mapped_transcript(seq, audio_track, window, raw_config, db, transcribe_sources=True)
+            except Exception as exc:  # noqa: BLE001 - any failure here falls back to the old path
+                print(f"--asr: could not use the sources' transcripts ({exc}); transcribing the range instead")
         if mapped is not None:
             job_id, words, tokens = mapped
             print(f"--asr: mapped the sources' own transcripts onto the range ({len(tokens)} lines, "

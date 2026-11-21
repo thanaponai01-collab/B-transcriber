@@ -106,3 +106,26 @@ def test_plan_pieces_with_no_pause_ends_at_the_word_boundary():
     level = lambda media, t: 8.0
     (piece,) = word_cut.plan_pieces(WORDS, [{"text": "four"}], TPF, _src(WORDS), level)
     assert abs(int(piece["out_ticks"]) - 2600 * MS) <= TPF and piece["no_quiet"]["end"] == 8.0
+
+
+def test_plan_pieces_refuses_a_phrase_that_crosses_a_cut_in_its_source():
+    from dataclasses import replace
+    # "one" then "five" on this timeline, but 2.6 s apart in the source (the cut removed the middle).
+    joined = [replace(w("one", 0, 400), src_start_ms=0, src_end_ms=400),
+              replace(w("five", 400, 800), src_start_ms=2600, src_end_ms=3000)]
+    with pytest.raises(ValueError, match="not one stretch"):
+        word_cut.plan_pieces(joined, [{"text": "one five"}], TPF, _src(WORDS))
+
+
+def test_a_zero_length_last_word_is_removed_with_its_phrase():
+    words = [w("ab", 200, 400), w("cd", 400, 400), w("ef", 900, 1200)]
+    p = word_cut.plan(words, [{"text": "abcd"}], TPF, END)
+    assert p["removals"][0]["pause_after_ms"] == 500   # measured from "cd" to "ef": cd was included
+
+
+def test_a_pause_shorter_than_a_frame_takes_the_boundary_that_intrudes_least():
+    # "x" ends at 1010 ms, "y" (removed) starts at 1020 ms: no frame boundary in the 10 ms pause.
+    # Frame 30 = 1000 ms cuts 10 ms into the kept "x"; frame 31 = 1033 ms keeps 13 ms of "y".
+    words = [w("x", 500, 1010), w("y", 1020, 1500), w("z", 1600, 2000)]
+    p = word_cut.plan(words, [{"text": "y"}], TPF, END, keep_ms=0)
+    assert p["cuts_frames"][0][0] == 30
