@@ -309,7 +309,7 @@ note, and all are fixed with tests:
 - PR #115 is merged into master, so a helper from master or this branch matches the panel.
 - The shared store has the new `job.chosen_at` column (added on first use by this branch's code).
   A backup from before is `output/store-backups/transcriber-20261122-before-chosen_at.db`. Code
-  without this change (any branch not yet merged with it, e.g. PR #116's) fails to read jobs
+  without this change (any branch not yet merged with it) fails to read jobs
   from the migrated store: merge master into it first.
 - Nothing was exported. The project was saved once since, on 2026-11-22 at 07:22, by the
   `cdv.py launch --reload-panel` of PR #115's live check, so the `listen` scratch sequences below
@@ -442,8 +442,6 @@ how to correct and freeze them (about 10 minutes of listening each).
 
 ## Follow-ups
 
-- When PR #116 (projects layout) merges, `projects/1raceclub/shorts-rules.md` step 1 ("Transcribe
-  the rough cut") should read "Read the rough cut with `premiere_timeline_transcript`".
 - A stream choice for multi-stream sources: the transcript, the levels and the Rough Cut all
   read the first audio stream.
 - Text accuracy: build the gold set, then try an engine change through the harness.

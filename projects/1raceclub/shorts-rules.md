@@ -100,7 +100,7 @@ Most rules below are this principle applied to one case.
 
 ## 10. Agent checklist for a Short
 
-1. Transcribe the rough cut. Pick one story; verify every incident in the synced feed.
+1. Read the rough cut with `premiere_timeline_transcript` ([docs/TIMELINE_LISTEN.md](../../docs/TIMELINE_LISTEN.md)). Pick one story; verify every incident in the synced feed.
 2. Choose pieces: whole sentences, edges in pauses, no repeats, no announcing, an opener for watch time, end where the story closes.
 3. `cut_copy` the rough cut to just those pieces; reorder with clone + lift (never a backward `move`); `settings_from` a 9:16 sequence (`create_sequence` from the 9:16 preset if none exists).
 4. One hold per line from the synced feed (PNG frames today), framed on the evidence, F1 logos removed; face-only on opinion lines.
