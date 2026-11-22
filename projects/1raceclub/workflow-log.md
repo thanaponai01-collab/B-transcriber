@@ -592,3 +592,14 @@ User: "you go cut the video for me". Agent's order (content first, so the silenc
    - Premiere crashed twice on this pass: once right after the F1 params on a 78-range keep_words copy of the 2 h
      sequence, once during the same keep_words. Fix that held: cut in two passes (cut_copy of 24 coarse blocks, then
      keep_words on that 50 min copy), and add_effect in batches of 10 with retries ("no clip starts at" was transient).
+6. **User: "check again what you might miss and also the logo f1".** Second storyline pass added 18 beats (Kimi's
+   passes and last-laps duel with Max, Hadjar's unsafe-release investigation and clearance, Russell going for two cars,
+   the yellow flag before the crash, Max's SC radio, Gasly back to P3, Norris past Kimi and on the Alpine, Russell to
+   P4, "anyone can win now", the podium recap). **Logo rule for the long video too:** the feed's F1 logo +
+   "FIA Formula 1 World Championship" wordmark (top left, down to ~11.5% of the frame) and F1 TV (top right) are cut
+   with Motion **crop top 12%** (the user's 10% left the wordmark's bottom edge; 12% keeps "LAP x/50").
+   Final `YT editing v3 (Claude) — CutDeck 808f672d`: **23:10**, 96 moments, zero gaps, transcript in race order.
+   - **Third Premiere crash, cause found:** hundreds of per-clip `set_param` calls in a row (crashed after ~380).
+     Route that held: copy `Editing` with only the F1-only tail cut (V4 stays ONE clip), set Posterize/Opacity/Screen/
+     crop on that one clip (5 calls), then cut_copy (coarse) → keep_words (fine) → silence cut; the cuts carry the
+     effects onto all 595 pieces.
