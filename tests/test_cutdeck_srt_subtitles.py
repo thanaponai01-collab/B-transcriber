@@ -119,12 +119,14 @@ class FakePremiere:
         if command == "menu_command" and args["path"].startswith("Graphics and Titles > Upgrade"):
             self.video[f"V{self.landing}"] += self.captions
             self.captions = []
-        if command == "build_sequence" and args["steps"]:
-            step = args["steps"][0]
-            src = f"V{step['tracks']['video'][0] + 1}"
-            dst = f"V{step['tracks']['video'][0] + 1 + step['v_offset']}"
-            self.video[dst] += self.video[src]
-            self.video[src] = []
+        if command == "build_sequence":
+            for step in args["steps"]:
+                src = f"V{step['tracks']['video'][0] + 1}"
+                hit = [c for c in self.video[src] if int(step["from_ticks"]) <= c[0] < int(step["to_ticks"])]
+                if step["op"] == "clone":
+                    self.video[f"V{step['tracks']['video'][0] + 1 + step['v_offset']}"] += hit
+                else:
+                    self.video[src] = [c for c in self.video[src] if c not in hit]
         return {}
 
 
@@ -208,11 +210,16 @@ def test_command_without_track_restyles_where_upgrade_put_them(tmp_path, monkeyp
     assert build["steps"] == [] and build["items"] == [] and build["restyle"][0]["track"] == 5
 
 
-def test_command_stops_before_moving_a_clip_already_on_the_landing_track(tmp_path, monkeypatch):
-    """A title in a gap between cues on the track Upgrade used would be cloned and lifted too."""
+def test_command_moves_only_the_graphics_around_a_clip_already_on_the_landing_track(tmp_path, monkeypatch):
+    """Live 2026-11-22: Upgrade filled the gaps around a title on V3; the title must stay put."""
     srt = tmp_path / "max.srt"
     srt.write_text(SRT, encoding="utf-8")
-    fake = FakePremiere(tmp_path, landing=6, v6=[(60 * TPF, 62 * TPF)])  # a title inside the subtitles' span
-    with pytest.raises(RuntimeError, match="already holds"):
-        _run(fake, monkeypatch, srt, track=5)
-    assert not any(c == "build_sequence" for c, _ in fake.calls)
+    title = (60 * TPF, 62 * TPF)  # a 2-frame title among the subtitles (the fake ignores overlap)
+    fake = FakePremiere(tmp_path, landing=6, v6=[title])
+    out = _run(fake, monkeypatch, srt, track=5, position=[0.5, -0.0423])
+    assert out["off_cues"] == [] and fake.video["V6"] == [title]
+    build = next(a for c, a in fake.calls if c == "build_sequence")
+    assert [(s["op"], s["from_ticks"], s["to_ticks"]) for s in build["steps"]] == [
+        ("clone", str(16 * TPF), str(58 * TPF + 1)), ("lift", str(16 * TPF), str(58 * TPF + 1)),
+        ("clone", str(98 * TPF), str(98 * TPF + 1)), ("lift", str(98 * TPF), str(98 * TPF + 1))]
+    assert len(build["restyle"]) == 2

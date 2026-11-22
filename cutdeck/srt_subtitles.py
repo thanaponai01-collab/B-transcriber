@@ -299,22 +299,28 @@ async def run(premiere, args: dict) -> dict:
         raise RuntimeError(f"Upgrade gave {len(graphics)} Graphics on V{landed}, off the cues: {off[:5]}")
     landed = landed[0]
     left_over = [t for t in await _caption_report(premiere, seq) if t]
-    # The build below picks clips by track and start, not by id: a clip that was already on the
-    # landing track inside the span (e.g. a title in a gap between cues) would be moved too.
-    bystanders = [i for i, c in before.items() if c["track"] == landed and first <= int(c["start_ticks"]) < last]
-    if bystanders and (track not in (None, landed) or position is not None or scale is not None):
-        raise RuntimeError(f"Upgrade put the Graphics on V{landed}, which already holds {bystanders[:5]} inside the "
-                           f"subtitles' span; they were not moved or restyled. Graphics: {sorted(upgraded)[:5]}")
+    # The build picks clips by track and start, not by id, and Upgrade fills the gaps around clips
+    # already on its track (live 2026-11-22: a title between two cues stayed in place on V3 with
+    # the Graphics around it). So the span is split at every such clip: only Graphics are moved.
+    others = sorted(int(c["start_ticks"]) for c in before.values() if c["track"] == landed)
+    spans, run = [], [int(graphics[0]["start_ticks"])]
+    for g in graphics[1:]:
+        start = int(g["start_ticks"])
+        if any(run[-1] < o < start for o in others):
+            spans.append(run)
+            run = []
+        run.append(start)
+    spans.append(run)
+    spans = [{"from_ticks": str(r[0]), "to_ticks": str(r[-1] + 1)} for r in spans]
 
     target = track or landed
     steps, restyle = [], []
-    span = {"from_ticks": str(first), "to_ticks": str(int(graphics[-1]["start_ticks"]) + 1)}
     if target != landed:
-        steps = [{"op": "clone", **span, "dt_ticks": "0", "tracks": {"video": [landed - 1]}, "v_offset": target - landed},
-                 {"op": "lift", **span, "tracks": {"video": [landed - 1]}}]
+        steps = [{"op": op, **span, "tracks": {"video": [landed - 1]}, **extra} for span in spans
+                 for op, extra in (("clone", {"dt_ticks": "0", "v_offset": target - landed}), ("lift", {}))]
     motion = {**({"position": list(position)} if position is not None else {}), **({"scale": scale} if scale is not None else {})}
     if motion:
-        restyle = [{"kind": "video", "track": target - 1, **span, "motion": motion}]
+        restyle = [{"kind": "video", "track": target - 1, **span, "motion": motion} for span in spans]
     if steps or restyle:
         await premiere("build_sequence", {"project": project, "base": seq, "name": seq, "into": True, "items": [],
                                           "steps": steps, "restyle": restyle})
