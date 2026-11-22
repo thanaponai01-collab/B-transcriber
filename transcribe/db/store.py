@@ -501,7 +501,8 @@ def mark_transcript_chosen(conn: sqlite3.Connection, job_id: int) -> None:
 
 def transcript_scripts(conn: sqlite3.Connection, sha256: str) -> dict[int, str]:
     """{job id: "thai" or "latin"} for every finished transcript of this file: the script most of
-    its tokens are in ("mixed" counts as Thai: only a Thai decode writes it), "other" ignored."""
+    its tokens are in ("mixed" counts as Thai: only a Thai decode writes it). "other" is ignored,
+    so a job with only "other" tokens (music, numbers) has no language and is left out."""
     rows = conn.execute(
         "SELECT job.id AS id, "
         "SUM(t.script IN ('thai', 'mixed')) AS thai, SUM(t.script = 'latin') AS latin "
@@ -509,7 +510,7 @@ def transcript_scripts(conn: sqlite3.Connection, sha256: str) -> dict[int, str]:
         + "GROUP BY job.id ORDER BY job.id",
         (sha256,),
     ).fetchall()
-    return {r["id"]: "thai" if r["thai"] >= r["latin"] else "latin" for r in rows}
+    return {r["id"]: "thai" if r["thai"] >= r["latin"] else "latin" for r in rows if r["thai"] or r["latin"]}
 
 
 # ── token ─────────────────────────────────────────────────────────────────────

@@ -38,8 +38,8 @@ def main() -> None:
     if args.rough:
         rough_edges = sorted({round(e * 1000) for c in seqs[args.rough]["audio_tracks"][0]["clips"]
                               if args.media in (c.get("media_path") or "") for e in (c["source_in"], c["source_out"])})
-    job, words, levels, _ = tt.source_words(media, store.resolve_db_path({"store": {"path": "transcriber.db"}}),
-                                            Path("output/timeline_transcripts/levels"))
+    job, words, levels = tt.source_words(media, store.resolve_db_path({"store": {"path": "transcriber.db"}}),
+                                            Path("output/timeline_transcripts/levels"))[:3]
     thr = tt.noise_floor(levels) + tt.TAIL_DB
     lvl = lambda m, t: float(levels[max(int(t / T // 10) - 2, 0):int(t / T // 10) + 2].max()) - thr  # noqa: E731
     src = [tt.TimelineWord(w.text, w.start_ms * T, w.end_ms * T, "S", media, w.start_ms, w.end_ms, w.cue, None) for w in words]

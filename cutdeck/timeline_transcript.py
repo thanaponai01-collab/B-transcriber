@@ -555,8 +555,9 @@ def media_sha256(path: str, db_path: Path) -> str:
     return index[key]
 
 
-def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object, list] | None:
-    """(transcript job id, word timeline, level envelope or None) of the newest finished transcript of this file, or
+def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object, list, str | None] | None:
+    """(transcript job id, word timeline, level envelope or None, untranscribed speech gaps, other-language note or
+    None) of the file's finished transcript that transcribe() last returned (`store.latest_transcript_job`), or
     None when it has never been transcribed. With ``levels_dir``, word times are tightened to
     the audio (`tighten`); the file's level envelope is cached there by sha256."""
     from cutdeck.words import words_for_job

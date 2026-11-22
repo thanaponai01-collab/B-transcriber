@@ -174,6 +174,11 @@ def test_the_transcript_last_asked_for_wins_over_a_newer_one(tmp_path):
     store.mark_transcript_chosen(conn, thai)  # transcribe(language="th") again: a cache hit
     assert store.latest_transcript_job(conn, "abc").id == thai
     assert store.transcript_scripts(conn, "abc") == {thai: "thai", english: "latin"}
+    music = store.create_job(conn, conn.execute("SELECT id FROM media WHERE sha256 = 'abc'").fetchone()[0],
+                             "faster_whisper", "passthrough", "v1")
+    store.create_token(conn, music, 0, "♪", 0, 100, "other", None, "a")  # no script at all: no language
+    conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (music,))
+    assert music not in store.transcript_scripts(conn, "abc")
 
 
 def test_source_words_names_a_transcript_in_the_other_language(tmp_path):

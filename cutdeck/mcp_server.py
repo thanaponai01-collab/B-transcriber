@@ -68,9 +68,10 @@ def create_server(backend: Backend) -> FastMCP:
         three samples each way and picks; proven on Thai and English files). The Thai model
         translates English into Thai unless told "en" or "auto". The timeline tools use the
         transcript of a file that transcribe last returned (new or cached), so calling it again
-        with the right language switches them to that one without listening again (when nothing
-        changed since). When a file has transcripts in both languages, the timeline tools say so
-        in `warnings` with the call that switches.
+        with the right language switches them to that one. It listens again only when no stored
+        transcript matches that exact request (a transcript made with "auto" is not reused for
+        "en"; neither is one from before a bias or pipeline change). When a file has transcripts in
+        both languages, the timeline tools say so in `warnings` with the call that switches.
         """
         return await backend.transcribe(media_path, language)
 
