@@ -176,6 +176,9 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   `docs/agents/triage-labels.md`.
 - **Domain docs:** single-context (`CONTEXT.md` + `docs/adr/` at the repo root, created
   when first needed; neither exists yet). See `docs/agents/domain.md`.
+- **Editing projects** (1RaceClub, HKS / โหนกระแส): one folder each under [projects/](projects/README.md)
+  with principles, rules, memory and logs. Read [projects/PRINCIPLES.md](projects/PRINCIPLES.md) first,
+  then the project's README. New project facts go in its `memory/`, not in `docs/`.
 
 ## Project checks
 - `.claude/skills/verify-cutdeck/`: drive CutDeck in live Premiere and keep evidence (`scripts/cdv.py doctor | launch | start | scratch | call | shot | cleanup`). Use it after changing `cutdeck/` or `uxp/cutdeck/`; tests use a fake Premiere.

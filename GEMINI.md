@@ -176,6 +176,9 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   `docs/agents/triage-labels.md`.
 - **Domain docs:** single-context (`CONTEXT.md` + `docs/adr/` at the repo root, created
   when first needed; neither exists yet). See `docs/agents/domain.md`.
+- **Editing projects** (1RaceClub, HKS / โหนกระแส): one folder each under [projects/](projects/README.md)
+  with principles, rules, memory and logs. Read [projects/PRINCIPLES.md](projects/PRINCIPLES.md) first,
+  then the project's README. New project facts go in its `memory/`, not in `docs/`.
 
 ## Project checks
 - `VERIFY.md`: each feature and the command that proves it. Run every check before saying done;

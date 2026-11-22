@@ -1,4 +1,4 @@
-/* HKS build plan Phase 1: timeline-building spike (docs/HKS_BUILD_PLAN.md 1a-1d).
+/* HKS build plan Phase 1: timeline-building spike (projects/hks/build-plan.md 1a-1d).
    One probe per unknown. Every probe refuses to run unless the active project is the spike copy
    (test_projects/hks_spike/hks_spike.prproj), works on clones of the 20261120 sequences, reads
    its result back and, where a picture is the proof, exports a frame next to the project

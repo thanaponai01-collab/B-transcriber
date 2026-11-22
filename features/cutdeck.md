@@ -36,7 +36,7 @@
 - trace: `main` @ cutdeck/premiere_cli.py > `premiere` @ cutdeck/ai_backend.py > `_ask` @ cutdeck/ai_backend.py
 - needs: helper running and the CutDeck panel open on the duplicate sequence; a markers.json of `{start_s, name, comment}` built from the transcript (the topic judgement is done by reading it, not by code)
 - effect: Comment markers on the active sequence, one undo step
-- note: building blocks with no entry point of their own yet: `classify_frame` @ cutdeck/topic_layout.py (clip or studio layout), `host_turns` @ cutdeck/topic_speakers.py (host or guest voice). Design and findings: docs/DESIGN_TOPIC_CUT.md; answer key: tests/data/topic_cut_starts_hks290969.json
+- note: building blocks with no entry point of their own yet: `classify_frame` @ cutdeck/topic_layout.py (clip or studio layout), `host_turns` @ cutdeck/topic_speakers.py (host or guest voice). Design and findings: projects/hks/design-topic-cut.md; answer key: tests/data/topic_cut_starts_hks290969.json
 - verify: Topic Cut
 - status: suspected: current behavior not re-proven after source drift; historical proof at commit c279d6b: ran add_markers live on "Footages Copy 01" (31 markers, 1 undo step) and the Topic Cut tests, both with the real episode; the panel button, razor cuts and the topic judge do not exist
 

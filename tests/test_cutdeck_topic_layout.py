@@ -1,4 +1,4 @@
-"""cutdeck/topic_layout.py — clip vs studio layout of a frame (docs/DESIGN_TOPIC_CUT.md).
+"""cutdeck/topic_layout.py — clip vs studio layout of a frame (projects/hks/design-topic-cut.md).
 
 Synthetic frames always run. The labelled-video check replays the 193 hand labels
 (tests/data/topic_layout_labels.json, one frame per 30 s of the HKS Facebook 290969 episode) and

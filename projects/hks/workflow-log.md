@@ -3,7 +3,7 @@
 Started 2026-11-20. The user does the job by hand and reports each step; we record it here,
 then work out together which steps can become a repeatable workflow and, later, automation.
 
-Related existing work: [DESIGN_TOPIC_CUT.md](DESIGN_TOPIC_CUT.md) (topic cut of the live feed:
+Related existing work: [design-topic-cut.md](design-topic-cut.md) (topic cut of the live feed:
 layout classifier, host-question topics, studio-cut snapping; partly built in
 `cutdeck/topic_layout.py`).
 
@@ -142,7 +142,7 @@ Read from the saved .prproj at 16:01 plus file times. Not yet confirmed by the u
   - Finding drops: **automate.** Opening title, bumpers and end credits are fixed graphics,
     so we can match them against reference clips (audio or picture fingerprint). Sponsor
     segments are a judgment call: suggest them, the user confirms.
-  - Topic splits: **assist**, using the topic-cut design (DESIGN_TOPIC_CUT.md).
+  - Topic splits: **assist**, using the topic-cut design (design-topic-cut.md).
   - Laying out the YouTube sequence: **automate** once the gap rule is known.
   - Thumbnail: **assist** (headline text, face frame), later.
 
@@ -499,19 +499,7 @@ Episode 20261120 recorded end to end (≈15:20 → 19:45 editing, after the ~2 h
 | – | Export BAS4 → `5. EXPORTS` | – | **automate** | naming (deferred) |
 | – | Thumbnails, upload | – | manual (user) | out of scope for now |
 
-**Cut rules for the long form (step 3):**
-1. Get into each story fast: the guest's first story sentence, or the host's summary if the
-   guest is slow.
-2. Each point told once. Drop retellings, off-topic asides, backstory, legal analysis and
-   feelings that don't move events (shorten as much as possible).
-3. Cut host prompts, clarifications and opinions. Keep a host connector only to bridge pieces
-   that don't join. Host reactions may be added for drama.
-4. Viewer comments read on air: always cut. Sponsors: always cut.
-5. No jump cuts: in studio picture cut only at a thought end or a camera change. Cut hard
-   (stumbles, pauses, repeats) only under a cover.
-6. Cover = B-roll from the same story (ideally the same moment, this episode only), else a
-   static listener shot (`Backup`). Film damage on all B-roll.
-7. Swear words bleeped. Same ending every episode.
+**Cut rules for the long form (step 3):** moved to [rules.md](rules.md) on 2026-11-22.
 
 **Gold set for testing:** past episode folders `G:\Me\Works\2026xxxx - โหนกระแส` (7 since
 2026-10-12) with projects + exports.

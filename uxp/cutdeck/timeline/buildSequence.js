@@ -1,5 +1,5 @@
 /* build_sequence: build a new sequence from an item list, on a cleared copy of a base sequence.
-   HKS build plan step 1e (docs/HKS_BUILD_PLAN.md). The base is never edited: it is cloned
+   HKS build plan step 1e (projects/hks/build-plan.md). The base is never edited: it is cloned
    (its own transaction), the clone is cleared and stays closed while it is built (PREMIERE_FACTS
    "compound.addAction while the target sequence is open": BROKEN at scale), and every item is
    read back against the plan at the end.
