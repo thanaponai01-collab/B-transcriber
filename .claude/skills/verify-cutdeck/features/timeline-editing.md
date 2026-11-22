@@ -5,8 +5,11 @@ hand (select, move, trim, enable/disable, rename, remove), each edit one undo st
 
 ## Sub-features
 
-- `read` lists tracks, clips (id, times, media, disabled), marks, playhead and markers.
+- `read` lists tracks, clips (id, name, start/end and in/out ticks, media, disabled, selected,
+  speed, reversed, adjustment layer; effect chains with `effects`), marks, playhead and markers.
 - `select` replaces the timeline selection with clip ids.
+- `move` shifts a clip by `dt_ticks` (negative moves it earlier).
+- `rename` sets a clip's name.
 - `disable` / `enable` toggles a clip's output.
 - `trim` moves a clip's In or Out (media time).
 - `remove` deletes clips, optionally rippling.
@@ -30,9 +33,12 @@ Preconditions:
 - **Frame after.** Run `C shot disabled --frame`. The frame PNG is empty (transparent, shows white).
 - **Undo.** Run `C call menu_command '{"path": "Edit > Undo", "focus": null}' --label undo`, then `C call read_timeline '{"sequence": "CutDeck verify (scratch)", "tracks": ["V1"]}' --label after-undo`. `V1@0` reads `disabled: false`.
 - **Trim.** Run `C call edit_clips '{"sequence": "CutDeck verify (scratch)", "edits": [{"clip": "V1@0", "op": "trim_out", "out_ticks": "762048000000"}]}'`. `V1@0` ends at 762048000000; A1 is unchanged (linked audio does not follow). Undo and read back.
+- **Select.** Run `C call select_clips '{"sequence": "CutDeck verify (scratch)", "clips": ["V1@0"]}'`. The reply's `selected` is `["V1@0"]`. Clear it with `"clips": []` (`selected` is `[]`).
+- **Rename.** Run `C call edit_clips '{"sequence": "CutDeck verify (scratch)", "edits": [{"clip": "V1@0", "op": "rename", "name": "cdv"}]}'`. `tracks_after` shows `V1@0` named `cdv`. Undo and read back the original name.
+- **Move.** Run `C call edit_clips '{"sequence": "CutDeck verify (scratch)", "edits": [{"clip": "V1@0", "op": "move", "dt_ticks": "762048000000"}]}'`. V1's clip is now `V1@762048000000` (ends 2286144000000); `A1@0` does not move. Undo and read back `V1@0`.
 - **Remove.** Run `C call edit_clips '{"sequence": "CutDeck verify (scratch)", "edits": [{"clip": "V1@0", "op": "remove"}, {"clip": "A1@0", "op": "remove"}]}'`. V1 and A1 are empty. Undo and read back both clips.
 
-Proven 2026-11-21 with this skill: read, disable, frame before/after, undo (run `20261121-224619-prove`); trim and undo (run `20261121-224911-timeline-editing`).
+Proven 2026-11-21 with this skill: read, disable, frame before/after, undo (run `20261121-224619-prove`); trim and undo (run `20261121-224911-timeline-editing`). Every step above, each undone to baseline, re-proven 2026-11-22 (run `20261122-000256-maintain-timeline`).
 
 ## Gotchas
 

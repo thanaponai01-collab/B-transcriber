@@ -119,6 +119,11 @@ class HFWhisperEngine(Engine):
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._pipe is not None, "load() must be called first"
+        if self._language is not None and inp.language_hint not in (None, self._language):
+            # A pinned engine would decode the audio as its own language and the job would be
+            # cached under the other one's identity (third review, 2026-11-22).
+            raise ValueError(f"{self._engine_name} decodes only {self._language!r}; "
+                             f"language {inp.language_hint!r} needs faster_whisper")
         audio = self._load_array(inp)
         generate_kwargs = self._generate_kwargs(inp.bias_terms)
 

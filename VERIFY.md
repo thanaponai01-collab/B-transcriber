@@ -66,6 +66,30 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: read u32 big-endian in cutdeck/prproj_reader.py, test_prproj_reader went red, reverted
 
+## place_text (text into Premiere via a baked .mogrt)
+- test: `python -m pytest tests/test_cutdeck_mogrt_text.py -q`
+- fail-signal: failed
+- live: `cdv.py call place_text` on the scratch (2026-11-21, runs `20261121-230511-mogrttext`, `20261121-232401-place-text-busy`): Thai rendered from Basic Title and an AE template, AE text read back, occupied track refused, Undo removes it.
+
+## Premiere UI route (set_speed, nest_clips, edit_text)
+- test: `python -m pytest tests/test_cutdeck_premiere_ui.py -q`
+- fail-signal: failed
+- fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
+- live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
+
+## Decode language (th / en / auto)
+- test: `python -m pytest tests/test_language_choice.py -q -p no:cacheprovider`
+- fail-signal: failed
+- live (2026-11-22): an English F1 broadcast transcribed with `en` and `auto` (identical, English) vs the default (invented Thai); a Thai source with `auto` identical to `th`; through the helper, `auto` and `en` return their own cached jobs; `auto` held out on 10 unseen files, 10 right (docs/ENGINES.md).
+
+## Timeline transcript and cut by words
+- test: `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py -q -p no:cacheprovider`
+- fail-signal: failed
+- fail-proof (2026-11-22): dropped `- clip.in_` from the mapping in cutdeck/timeline_transcript.py (3 red); widened the sound threshold in `tighten` (1 red); cut at the word edges instead of in the pauses in cutdeck/word_cut.py (1 red); each restored.
+- fail-proof (2026-11-22, PR 117 gaps): before the fix, 6 tests went red: a cache hit did not make its transcript the one read (test_service), `mark_transcript_chosen` / `transcript_scripts` missing, no other-language note, a store made before `job.chosen_at` crashed `source_words`, and the word tools dropped the transcript's warnings. Green after; full pytest 1,357 passed (the 8 `test_text_box` failures also fail with the change stashed).
+- real store (a copy of `transcriber.db`, offline from the saved `listen 50fps (scratch)` A5): job 89 (English) read with a note naming Thai job 86; `transcribe(language="th")` hit the cache and the next read was job 86 with a note naming `language="en"`; `transcribe(language="en")` hit the cache and the read was job 87. No ASR ran. Then on the real store through the helper's `transcribe` (a second helper on port 7899, Premiere closed) and the real offline CLI: `th` -> job 86 with the warning, `auto` -> job 89 again; 90 jobs before and after.
+- live (2026-11-22, runs `20261122-004515-timeline-listen`, `20261122-013033-timeline-listen-final`, `20261122-015758-short-placed`, `20261122-020524-real-sequences`): `timeline_transcript` on a 96-min sequence, 119- and 1,653-clip rough cuts (~2 s), speed 200%/50%, two sources on two tracks; fresh transcripts of the cut audio sit a median 3 ms / -13 ms from the mapped words; Rough Cut from mapped transcripts gave identical cut lists, and on a never-transcribed source it transcribed the source once; `plan_pieces` + `build_sequence` made a reordered Short with 0 cuts in sound; `keep_words` kept 2 phrases on a 7-track copy (every track kept, 0 cuts in sound); the planner's 60 ms pad beats 120 ms on the owner's two independent cuts (16 vs 7 of 46 and 31 vs 18 of 104 edges within a frame; scripts/timeline_listen/calibrate_edges.py); `keep_words` across rough-cut joins kept every track; `cut_words` removed 3 fillers (said 3 -> 0, no new cut in sound). Phrases in continuous speech (no pause) are cut at the word boundary and reported as cuts in sound. Report: docs/TIMELINE_LISTEN.md.
+
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
@@ -77,6 +101,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
 - fail-proof (2026-10-26, one panel, four tabs; tests/cutdeck_one_panel.test.cjs): each went red on its own and was restored, 726/726 green: dropped the `isMounted` tab gate in features/align.js (the poll read Premiere on the Cut tab); raised the frame drawing's height cap to 300 (9:16 drawn too tall); let the fx block reset include disabled rows; never cleared the busy-tab dot; gave `#tab-align` a `data-act` (busy would disable it); laid the frame out while its width is 0. Not yet run in Premiere (plan step 8).
 - fail-proof (2026-10-26, poll cost; tests/cutdeck_align_poll_rate.test.cjs): made the idle read keep 1 s instead of doubling to 4 s while unchanged in uxp/cutdeck/features/align.js; both poll-rate tests went red; restored, 729/729 green. The poll and its Premiere listeners now start and stop with the Transform/Align tab (cutdeck_align_panel.test.cjs pins it). Not yet run in Premiere.
+- fail-proof (2026-11-22, PR 115 gaps): before the fix, cutdeck_transform_edit.test.cjs "an edit plans from Premiere's values" went red (Position x 0.1920 vs 0.1667, the stale rotation 7 that moved the picture live in run `20261122-000256-maintain-timeline`) and cutdeck_driver.test.cjs "cut_copy refuses a result_name already in the project" went red; both green with edits reading fresh (`forceRefresh` in uxp/cutdeck/transform/edit.js) and the name check in features/driver.js, 797/797. Live after a Premiere restart (run `20261122-073257-pr115-gaps`): rotate + Edit > Undo + anchor top-left wrote [0, 0] with the frame unchanged, cut_copy refused an existing name, crop/opacity/align group took effect and undid.
 - fail-proof (2026-10-26, playback; tests/cutdeck_align_poll_rate.test.cjs): disabled the playhead-moved skip in `pollAlignTransform` (uxp/cutdeck/features/align.js); the no-reads-during-playback test went red; restored, 730/730 green. Not yet run in Premiere.
 
 ## Topic Cut

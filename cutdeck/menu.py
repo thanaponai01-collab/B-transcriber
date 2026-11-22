@@ -8,8 +8,9 @@ press: `Edit > Undo` / `Redo` worked this way when Ctrl+Z sent as keys did not, 
 Timeline commands act on the FOCUSED panel, as with keys (Add Edit did nothing with the Project
 panel focused), so `cutdeck.keys.run_focused` focuses and checks the sequence first. The enabled
 flag read from the menu without opening it can be stale (Redo read disabled and then ran), so it
-is reported as a hint only. Items ending in "..." open a dialog an agent cannot answer, and
-quit/close/open/export/save-as items are never run.
+is reported as a hint only. Items ending in "..." open a dialog, so menu_command refuses them;
+the two dialogs CutDeck fills (Speed/Duration, Nest) run through cutdeck/premiere_ui.py.
+Quit/close/open/export/save-as items are never run.
 """
 from __future__ import annotations
 

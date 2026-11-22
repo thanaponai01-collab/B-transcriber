@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--window', action='append', default=[], metavar='START:END')
     parser.add_argument('--max-windows', type=int, default=6)
     parser.add_argument('--plan-only', action='store_true')
+    parser.add_argument('--language', default='th', help='decode language of the recheck: th (default) or en')
     args = parser.parse_args()
     from contextlib import closing
     with closing(store.connect(args.db)) as conn:
@@ -62,7 +63,8 @@ def main():
     # Small review batches bound VRAM; adapters are unloaded sequentially.
     config.setdefault('engines', {}).setdefault('qwen3_asr', {})['max_inference_batch_size'] = 2
     report['windows'] = recheck_windows(audio, windows,
-        engine_factory=lambda name: build_engine(name, 'cuda' if torch.cuda.is_available() else 'cpu', config))
+        engine_factory=lambda name: build_engine(name, 'cuda' if torch.cuda.is_available() else 'cpu', config),
+        language=args.language)
     clips = args.output / 'audio'
     clips.mkdir(exist_ok=True)
     for i, w in enumerate(windows, 1):

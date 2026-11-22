@@ -76,8 +76,9 @@ class Backend:
             view["error"] = job.get("message", "Processing failed")
         return view
 
-    async def transcribe(self, media_path: str) -> dict:
-        return self._view(await self._ask({"type": "submit_transcribe", "media_path": media_path}))
+    async def transcribe(self, media_path: str, language: str | None = None) -> dict:
+        return self._view(await self._ask({"type": "submit_transcribe", "media_path": media_path,
+                                           **({"language": language} if language else {})}))
 
     async def premiere_rough_cut(self, speech_protection: bool = True, preset: str = "aggressive",
                                  audio_track: int | None = None) -> dict:

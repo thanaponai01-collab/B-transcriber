@@ -128,7 +128,7 @@ def _model_id(config: dict, engine_name: str) -> str:
 
 
 def transcribe(media_path, *, config: dict, db_path: Path | None = None,
-               ingest_result=None, glossary=()) -> Transcript:
+               ingest_result=None, glossary=(), language: str | None = None) -> Transcript:
     """Transcribe `media_path` against the shared store.
 
     `glossary`: job-specific terms (show title, names, brands) passed to the decoder. A
@@ -139,6 +139,9 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     """
     from cutdeck.words import words_for_job
 
+    if language and language != (config.get("language") or "th"):
+        # Part of the config, so the cache keeps a Thai and an English transcript of a file apart.
+        config = {**config, "language": language}
     media_path = str(media_path)
     db_path = Path(db_path) if db_path else store.resolve_db_path(config)
     engine_a, engine_b = planning.canonical_engine_names(config)
@@ -163,6 +166,7 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
                     for t in store.get_tokens(conn, cached.id)]
             cached_words = words_for_job(conn, cached.id)
             gaps, flags = _finish(conn, cached.id, cues, words=cached_words)
+            store.mark_transcript_chosen(conn, cached.id)
             return Transcript(cached.id, cues, cached_words, engine_a,
                               _model_id(config, engine_a), PIPELINE_VERSION, cached=True,
                               coverage_gaps=gaps, review_flags=flags)
@@ -179,6 +183,7 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     try:
         words = words_for_job(conn, job_id)
         gaps, flags = _finish(conn, job_id, cues, words=words)
+        store.mark_transcript_chosen(conn, job_id)
     finally:
         conn.close()
     return Transcript(job_id, cues, words, engine_a, _model_id(config, engine_a),

@@ -9,7 +9,7 @@
 
 ## Transcribe service orchestrator
 - what: Shared programmatic entry point with DB resolution, sha256 cache, coverage gaps and review flags.
-- python: `transcribe(media_path, config=..., ...)` @ transcribe/service.py :: transcribe
+- python: `transcribe(media_path, config=..., ...)` @ transcribe/service.py :: transcribe (language "th" default, "en" for English-language audio, "auto" picks per file; MCP `transcribe(media_path, language)`)
 - trace: `transcribe` @ transcribe/service.py > `run_file_job` @ transcribe/pipeline/run.py
 - verify: Reconcile and pipeline; proven by tests/test_service.py
 
