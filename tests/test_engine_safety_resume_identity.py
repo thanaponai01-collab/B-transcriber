@@ -180,7 +180,7 @@ class ResumeFingerprintTests(unittest.TestCase):
             db = Path(tmp) / 'legacy.db'
             conn = sqlite3.connect(db)
             schema = store._SCHEMA.read_text(encoding='utf-8')
-            schema = schema.replace('job_phase        TEXT,', 'job_phase        TEXT')
+            schema = schema.replace('chosen_at        TEXT,', 'chosen_at        TEXT')
             schema = schema.replace('    resume_fingerprint TEXT\n', '')
             conn.executescript(schema)
             conn.close()

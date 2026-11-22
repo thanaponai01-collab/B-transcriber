@@ -166,6 +166,7 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
                     for t in store.get_tokens(conn, cached.id)]
             cached_words = words_for_job(conn, cached.id)
             gaps, flags = _finish(conn, cached.id, cues, words=cached_words)
+            store.mark_transcript_chosen(conn, cached.id)
             return Transcript(cached.id, cues, cached_words, engine_a,
                               _model_id(config, engine_a), PIPELINE_VERSION, cached=True,
                               coverage_gaps=gaps, review_flags=flags)
@@ -182,6 +183,7 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     try:
         words = words_for_job(conn, job_id)
         gaps, flags = _finish(conn, job_id, cues, words=words)
+        store.mark_transcript_chosen(conn, job_id)
     finally:
         conn.close()
     return Transcript(job_id, cues, words, engine_a, _model_id(config, engine_a),

@@ -562,6 +562,7 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
     from cutdeck.words import words_for_job
     from transcribe.db import store
     sha = media_sha256(media, db_path)
+    store.init_db(db_path)  # a store made before job.chosen_at gets the column (idempotent)
     conn = store.connect(db_path)
     try:
         job = store.latest_transcript_job(conn, sha)
@@ -577,6 +578,7 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
         from transcribe.pipeline import coverage
         speech = [(sp.start_ms, sp.end_ms) for sp in store.get_speech_spans(conn, job.id) if sp.kind == "speech"]
         gaps = [(g.start_ms, g.end_ms) for g in coverage.find_gaps(speech, cues)]
+        note = _other_language_note(store.transcript_scripts(conn, sha), job.id)
     finally:
         conn.close()
     levels = None
@@ -587,16 +589,32 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
             levels = None  # undecodable audio: engine times, and no sound checks, for this file
         if levels is not None:
             words = tighten(words, levels)
-    return job.id, words, levels, gaps
+    return job.id, words, levels, gaps, note
 
 
-def _source_entry(media: str, job_id: int, probe_streams: bool) -> dict:
-    entry = {"media": media, "transcript_job_id": job_id}
+_LANGUAGES = {"thai": ("Thai", "th"), "latin": ("English", "en")}
+
+
+def _other_language_note(scripts: dict[int, str], used: int) -> str | None:
+    """Says so when the file also has a transcript in the other script: the one used is the
+    last one asked for, which may be the wrong language for this audio."""
+    others = [j for j, s in scripts.items() if s != scripts.get(used)]
+    if used not in scripts or not others:
+        return None
+    (used_name, _), (other_name, other_code) = _LANGUAGES[scripts[used]], _LANGUAGES[scripts[others[-1]]]
+    return (f"these words are the {used_name} transcript (job {used}), the last one asked for; the file also "
+            f"has {'an' if other_name == 'English' else 'a'} {other_name} one (job {others[-1]}). If the audio is {other_name}, run "
+            f'transcribe(media_path, language="{other_code}") and read again')
+
+
+def _source_entry(media: str, job_id: int, probe_streams: bool, note: str | None = None) -> dict:
+    entry = {"media": media, "transcript_job_id": job_id, **({"note": note} if note else {})}
     streams = audio_stream_count(media) if probe_streams else None
     if streams and streams > 1:
         entry["audio_streams"] = streams
-        entry["note"] = ("several audio streams: the transcript is of the first; if this track "
-                         "plays another stream, its words may not be what is heard")
+        entry["note"] = "; ".join(filter(None, [entry.get("note"), (
+            "several audio streams: the transcript is of the first; if this track "
+            "plays another stream, its words may not be what is heard")]))
     return entry
 
 
@@ -617,7 +635,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         lookup = lambda media: source_words(media, db, levels_dir)  # noqa: E731
     tpf = int(timeline["ticks_per_frame"])
     track_id, clips, skipped = audio_clips(timeline, track)
-    words_by_media, levels_by_media, gaps_by_media, jobs, missing = {}, {}, {}, {}, []
+    words_by_media, levels_by_media, gaps_by_media, jobs, missing, notes = {}, {}, {}, {}, [], {}
     for media in dict.fromkeys(c.media for c in clips):
         if not Path(media).is_file():
             missing.append({"media": media, "reason": "file is missing or offline"})
@@ -632,6 +650,8 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
             levels_by_media[media] = found[2]
         if len(found) > 3:
             gaps_by_media[media] = found[3]
+        if len(found) > 4 and found[4]:
+            notes[media] = found[4]
     words = project(clips, words_by_media)
     cuts = edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)
     if levels_by_media:
@@ -645,17 +665,20 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
-              "sources": [_source_entry(m, j, probe_streams) for m, j in jobs.items()],
+              "sources": [_source_entry(m, j, probe_streams, notes.get(m)) for m, j in jobs.items()],
               "words": len(words), "cuts_in_sound": cuts}
     if query:
         result["matches"] = find(words, query, tpf)
     result["untranscribed"] = spans_on_timeline(clips, gaps_by_media, tpf)
     later = later_stream_clips(timeline, track_id)
+    warnings = list(notes.values())
     if later:
-        result["warnings"] = [f"{len(later)} clip(s) on {track_id} look like a later audio stream of their file "
-                              f"(a lower track plays the same file at the same place, e.g. {later[0]}); the "
-                              "transcript is of the first stream, so if the streams differ these words are not "
-                              "what this track plays"]
+        warnings.append(f"{len(later)} clip(s) on {track_id} look like a later audio stream of their file "
+                        f"(a lower track plays the same file at the same place, e.g. {later[0]}); the "
+                        "transcript is of the first stream, so if the streams differ these words are not "
+                        "what this track plays")
+    if warnings:
+        result["warnings"] = warnings
     if from_ticks is not None or to_ticks is not None:
         lo = from_ticks if from_ticks is not None else 0
         hi = to_ticks if to_ticks is not None else 1 << 62

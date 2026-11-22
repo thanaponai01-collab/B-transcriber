@@ -66,10 +66,11 @@ def create_server(backend: Backend) -> FastMCP:
         cues, not guaranteed individual words. Poll get_job then get_result.
         language: "th" (default), "en" for English-language audio, or "auto" (the model scores
         three samples each way and picks; proven on Thai and English files). The Thai model
-        translates English into Thai unless told "en" or "auto". The timeline tools use a file's
-        NEWEST transcript: a later default (Thai) transcribe of an English file replaces its
-        English words there. The newest transcript of a file is the one
-        premiere_timeline_transcript uses.
+        translates English into Thai unless told "en" or "auto". The timeline tools use the
+        transcript of a file that transcribe last returned (new or cached), so calling it again
+        with the right language switches them to that one without listening again (when nothing
+        changed since). When a file has transcripts in both languages, the timeline tools say so
+        in `warnings` with the call that switches.
         """
         return await backend.transcribe(media_path, language)
 

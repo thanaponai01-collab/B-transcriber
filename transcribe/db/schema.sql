@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS job (
     -- minute 45. NULL until the first phase completes.
     -- phase: engine_a_done | engine_b_done | reconciled | written
     job_phase        TEXT,
+    -- When transcribe() last returned this job, new or cached. The timeline tools read a
+    -- file's most recently chosen transcript, so asking again (e.g. language="en") switches
+    -- them back to it. NULL until then (created_at counts instead).
+    chosen_at        TEXT,
     -- NULL on legacy jobs: these cannot resume into a fingerprinted run.
     resume_fingerprint TEXT
 );

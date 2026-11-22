@@ -1016,7 +1016,13 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
     return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"],
             "removals": planned["removals"], "joins": joins, "checks": checks,
             "new_cuts_in_sound": [e for e in after["cuts_in_sound"]
-                                   if (e["edge_src_s"], e["word"]) not in old_edges]}
+                                   if (e["edge_src_s"], e["word"]) not in old_edges], **_warnings(before)}
+
+
+def _warnings(built: dict) -> dict:
+    """The transcript's warnings (a transcript in another language, a later audio stream), for
+    the tools that act on it, so an agent sees them before trusting the words."""
+    return {"warnings": built["warnings"]} if built.get("warnings") else {}
 
 
 def _plan_pieces_arguments(args: dict, jobs) -> dict:
@@ -1047,7 +1053,7 @@ async def _plan_pieces(args: dict, premiere: Premiere) -> dict:
                       "out_ticks": p["out_ticks"], "at_ticks": str(at), "v": 0, "a": 0})
         at += int(p["out_ticks"]) - int(p["in_ticks"])
     return {"sequence": source["name"], "pieces": pieces, "items": items,
-            "duration_s": round(at / PPRO_TICKS_PER_SECOND, 3)}
+            "duration_s": round(at / PPRO_TICKS_PER_SECOND, 3), **_warnings(built)}
 
 
 def _keep_words_arguments(args: dict, jobs) -> dict:
@@ -1083,7 +1089,8 @@ async def _keep_words(args: dict, premiere: Premiere) -> dict:
             "lines": [ln["text"] for ln in after["lines"]][:200],
             "cuts_in_sound": cuts[:_MAX_CUTS_LISTED],
             "cuts_in_sound_count": {"sound": sum(e.get("severity") != "tail" for e in cuts),
-                                    "tail": sum(e.get("severity") == "tail" for e in cuts)}}
+                                    "tail": sum(e.get("severity") == "tail" for e in cuts)},
+            **_warnings(before)}
 
 
 HELPER_COMMANDS: dict[str, Command] = {

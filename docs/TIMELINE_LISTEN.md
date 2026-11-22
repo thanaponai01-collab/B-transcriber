@@ -36,7 +36,8 @@ code (master's helper refuses its `place_text` registration).
   frame. In your order (rough cut first), it transcribes the source file once instead of a
   throwaway WAV, so everything after it is free.
 - Everything ran live in your project on scratch copies. Your `editing` sequence was only read.
-  Nothing was saved or exported.
+  Nothing was exported, and nothing was saved that night (a later check saved the project once:
+  see "State you are left in").
 
 ## The problem
 
@@ -68,8 +69,10 @@ list of pieces of source files, so a word's timeline position is arithmetic:
 ### `premiere_timeline_transcript` (helper command `timeline_transcript`, `cutdeck/timeline_transcript.py`)
 - Reads the sequence (`read_timeline`) and takes the clips of one audio track (default: the
   first un-muted track with clips; `track: "A3"` to choose).
-- For each clip's source file it finds the newest finished transcript in the shared store, by
-  sha256 and from any engine (`store.latest_transcript_job`). Source files never transcribed are
+- For each clip's source file it finds the finished transcript in the shared store that
+  `transcribe` last returned (new or cached; else the newest), by sha256 and from any engine
+  (`store.latest_transcript_job`, `job.chosen_at`). A file with transcripts in both Thai and English
+  gets a `warnings` line naming the other one and the call that switches to it. Source files never transcribed are
   listed in `missing`: run `transcribe(media_path)` once each, then call again.
 - `lines`: the engine's phrase cues as the timeline plays them (`tc`, `start_s/end_s`,
   `start_ticks/end_ticks`, `text`, `clip` id, `src_s`). A cue a cut runs through becomes two
@@ -303,11 +306,10 @@ note, and all are fixed with tests:
 
 ## State you are left in
 
-- The checkout is on `feat/timeline-listen`; it was on `docs/projects-layout`. The helper runs
-  this branch's code (a superset of PR #115, which the panel needs).
-- A helper restarted from master or `docs/projects-layout` will refuse the panel's `place_text`
-  registration, because that is PR #115 code.
-- Premiere is back on `editing`. Nothing was saved or exported.
+- PR #115 is merged into master, so a helper from master or this branch matches the panel.
+- Nothing was exported. The project was saved once since, on 2026-11-22 at 07:22, by the
+  `cdv.py launch --reload-panel` of PR #115's live check, so the `listen` scratch sequences below
+  are now in the saved file (`20260130 RENAME template - Copy_1.prproj`).
 - The shared store (`transcriber.db`) gained source transcripts: jobs 79 and 81-90 (90 is the Gillette
   Vegas lecture, 20261116), and one `--experiment` eval row (id 6, not a baseline).
   - Jobs 84 and 88 (Gillette review) and 85 (tiw) are from other projects.
@@ -343,13 +345,19 @@ note, and all are fixed with tests:
 
 - **Your OBS files' extra streams are harmless today.** In every footage file of 20261121, stream 2
   duplicates stream 1 and streams 3-4 are silent. Per-stream transcription was not built.
-- **A wrong-language transcript can still win silently.**
-  - A Rough Cut run first on an English source transcribes it in Thai (`_transcribe_source` uses
-    the default language).
-  - The timeline tools take a file's *newest* transcript of any language: a later default
-    `transcribe` of a file that has an English transcript replaces its words there.
-  - For English sources, transcribe with `en` or `auto` before the Rough Cut, and don't re-run a
-    default transcribe afterwards.
+- **A wrong-language transcript no longer wins silently (fixed 2026-11-22, after the PR's first review).**
+  - The timeline tools read the transcript `transcribe` last returned, cached or new. Before, they
+    read the newest job, so once a Thai job was newest, asking for `en` again hit the cache and
+    changed nothing. Now that call switches every timeline tool back to English, with no new
+    listening when nothing changed since.
+  - A file with transcripts in both scripts gets a warning in `timeline_transcript`,
+    `plan_pieces`, `cut_words` and `keep_words`, naming the other job and the call to switch.
+    Proven on a copy of the store: the English broadcast flags, and no other file does.
+  - Still true: a Rough Cut run first on an English source transcribes it in Thai, because
+    `_transcribe_source` uses the default language. It was not switched to `auto`: on Thai files
+    `auto`'s margin over English was as small as +0.05 per sample, and a Thai source picked as
+    English would ruin the main route. For an English source, run `transcribe(language="en")`
+    once; with no other transcript of the file there is nothing to warn about.
 - **Untranscribed speech is listed, not filled in.** Re-decoding 12 of the 26 gaps on their own
   gave text for all 12: some plausible ("เตรียม", "ฮ่าๆ", "บ๊ายบาย"), some invented ("สล็อตออนไลน์",
   a classic Whisper hallucination on short clips). Filling them in automatically would put invented
@@ -369,8 +377,8 @@ note, and all are fixed with tests:
   editor replaces that cue's words, and its lines say `corrected: true`. When the corrected text
   has a different word count, its word times are shared by characters, so word positions inside
   that cue are estimates. No corrections exist in the store yet, so this is unit-tested only.
-- **"Any finished transcript" is accepted.** The newest one for the file's sha256 is used,
-  whatever the engine, settings or age.
+- **"Any finished transcript" is accepted.** The one `transcribe` last returned for the file's
+  sha256 is used, whatever the engine, settings or age.
 - **One audio track per call.** On a synced multicam with the voice on A3, pass `track: "A3"`.
 - **First audio stream only.** Multi-stream files (OBS) are read from their first stream, and
   UXP cannot say which stream a Premiere clip plays. Placing your 4-stream 10-40-52 file put
@@ -406,7 +414,7 @@ note, and all are fixed with tests:
   sources, the words on the timeline can be wrong even where the timing is right. **Fixed at
   03:30:** the decode language is now a choice. `transcribe(media_path, language="en")` (MCP and
   helper too) transcribes English correctly with the same model. It is cached apart, and the
-  newest transcript of a file is the one the timeline tools use. Default `th`. `language="auto"`
+  transcript `transcribe` last returned for a file is the one the timeline tools use. Default `th`. `language="auto"`
   picks Thai or English per file from the model's own confidence. It was proven both ways live
   (English broadcast → English, Gillette review → Thai, each identical to the explicit choice) and
   held out on 10 unseen files, 10 of 10 right (docs/ENGINES.md). That covers one Thai speaker (you)
@@ -436,7 +444,7 @@ how to correct and freeze them (about 10 minutes of listening each).
   read the first audio stream.
 - Text accuracy: build the gold set, then try an engine change through the harness.
 
-## Scratch sequences made tonight (yours to delete; the project was not saved)
+## Scratch sequences made tonight (yours to delete; saved in the project since 2026-11-22 07:22)
 
 All 30 of them start with `listen`; the only other sequence in the project is your `editing`.
 
