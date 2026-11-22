@@ -40,8 +40,9 @@ def create_server(backend: Backend) -> FastMCP:
         "Start transcription or rough-cut jobs, retain their job_id, poll get_job, "
         "then read get_result. Do not resubmit a running job. Inputs are absolute local "
         "paths. Rough cutting returns a cut list (frame spans to remove) and writes no XML; "
-        "premiere_rough_cut starts one on the live sequence, and "
-        "premiere_apply_cuts applies it in live Premiere to a copy of the sequence. Every "
+        "premiere_rough_cut starts one on the live sequence; poll get_job, then "
+        "premiere_apply_cuts(job_id) applies it in live Premiere to a copy of the sequence "
+        "(no need to read the cut list first). Every "
         "premiere_* tool goes through the CutDeck helper. Most need the CutDeck panel open "
         "(check premiere_status); the menu, key, screenshot and assistant tools work "
         "without it. "
@@ -84,8 +85,9 @@ def create_server(backend: Backend) -> FastMCP:
     async def get_result(job_id: str, offset: int = 0, limit: int = 100) -> dict:
         """Read completed output or current job state. Transcript pages max 500 cues.
 
-        Follow next_offset until null. Rough cuts return cuts_frames, ticks_per_frame
-        and report.
+        Follow next_offset until null. Rough cuts return total_cuts, removed_seconds, preset,
+        speech_protection, report and one page of cuts_frames (same offset/limit); apply_cuts
+        needs only the job_id.
         """
         return await backend.result(job_id, offset, limit)
 
@@ -99,11 +101,14 @@ def create_server(backend: Backend) -> FastMCP:
     @server.tool(annotations=write)
     async def premiere_rough_cut(speech_protection: bool = True, preset: str = "aggressive",
                                  audio_track: int | None = None) -> dict:
-        """Rough-cut the ACTIVE Premiere sequence's timeline In/Out range: find silence/filler to
-        remove, return a job_id. No XML export is needed; the CutDeck panel reads the audio
-        tracks itself. Poll get_job, then premiere_apply_cuts(job_id) cuts a COPY of the
-        sequence (the original is never edited). preset: aggressive (default) or standard.
-        speech_protection enables ASR to protect short speech. audio_track is a zero-based
+        """Rough-cut the ACTIVE Premiere sequence's timeline In/Out range: find the silences to
+        remove (silence only: no fillers, repeats or content choices; pick moments with
+        premiere_keep_words), return a job_id. No XML export is needed; the CutDeck panel reads
+        the audio tracks itself. Poll get_job, then premiere_apply_cuts(job_id) cuts a COPY of
+        the sequence (the original is never edited). preset: aggressive (default: every pause
+        of 250 ms or more, 40/60 ms kept around speech) or standard (pauses over 200 ms,
+        80/50 ms kept). speech_protection protects speech with the sources'
+        transcripts (a source with none is transcribed once). audio_track is a zero-based
         Premiere audio track (A1 is 0); omit it for the first un-muted track with clips.
         Needs the CutDeck panel open and In/Out marks set."""
         return await backend.premiere_rough_cut(speech_protection, preset, audio_track)

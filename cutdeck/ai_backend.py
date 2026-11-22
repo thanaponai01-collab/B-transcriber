@@ -14,6 +14,7 @@ import re
 
 from cutdeck.driver_commands import COMMANDS
 from cutdeck.helper import PORT, VERSION
+from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -116,9 +117,19 @@ class Backend:
             result.update(cues=cues[offset:offset + limit], total_cues=len(cues), offset=offset,
                           next_offset=offset + limit if offset + limit < len(cues) else None)
         elif job.get("job_type") == "cut":
+            # A long cut list is thousands of pairs; apply_cuts needs only the job_id, so the
+            # frames come in pages like transcript cues, under a summary of what was done.
             cuts = job.get("cuts") or {"cuts_frames": [], "report": job.get("report")}
-            result = {"kind": "rough_cut", "cuts_frames": cuts.get("cuts_frames", []),
-                      "ticks_per_frame": cuts.get("ticks_per_frame"),
+            frames = cuts.get("cuts_frames", [])
+            tpf = cuts.get("ticks_per_frame")
+            removed = sum(b - a for a, b in frames)
+            result = {"kind": "rough_cut", "preset": job.get("preset", "aggressive"),
+                      "speech_protection": bool((job.get("context") or {}).get("asr")),
+                      "total_cuts": len(frames),
+                      "removed_seconds": round(removed * int(tpf) / PPRO_TICKS_PER_SECOND, 1) if tpf else None,
+                      "cuts_frames": frames[offset:offset + limit], "offset": offset,
+                      "next_offset": offset + limit if offset + limit < len(frames) else None,
+                      "ticks_per_frame": tpf,
                       "sequence_duration_frames": cuts.get("sequence_duration_frames"),
                       "report": cuts.get("report")}
         else:

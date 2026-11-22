@@ -403,7 +403,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
         + "It is left open for inspection; your original sequence is untouched.");
     }
     const splits = plan.edits.filter((e) => e.op === "split").length;
-    console.log("CutDeck rough cut timings (s):", timings);
+    console.log(`CutDeck rough cut timings (s): ${JSON.stringify(timings)}`);
     return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
   } catch (error) {
     // A half-cut copy must not pass for the result, nor collide with the next attempt's name.

@@ -10,7 +10,10 @@
 vad_min_silence_ms: 120     # split speech at gaps this short (default 500)
 rms_gate_min_gap_ms: 120    # energy gate splits at quiet gaps this short (default 300)
 cut:
-  min_silence_ms: 119       # cut any silence of 120 ms or more
+  min_silence_ms: 249       # cut any pause of 250 ms or more, so no cut is under 150 ms
+                            # (2026-11-22: was 119, which left 1-4 frame cuts: 33% of the cuts on
+                            # the 32 min "YT editing v4" range for 3% of the time removed, each a
+                            # jump cut and two razor edits per track in Premiere)
   min_clip_ms: 60           # keep short audio islands down to 60 ms
   max_dissolve_ms: 1000
   pad_pre_ms: 40            # 40 ms pre-roll before each sound (attack)

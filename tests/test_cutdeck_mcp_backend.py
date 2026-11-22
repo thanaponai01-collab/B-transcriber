@@ -203,6 +203,10 @@ def test_cut_job_result_is_the_cut_list(tmp_path, monkeypatch):
         assert result["cuts_frames"] == [[10, 20]] and result["ticks_per_frame"] == "8467200000"
         assert result["report"]["cuts_applied"] == 1
         assert "output_path" not in result
+        assert result["total_cuts"] == 1 and result["removed_seconds"] == 0.3
+        assert result["preset"] == "aggressive" and result["speech_protection"] is False
+        assert result["next_offset"] is None
+        assert (await backend.result(job_id, offset=1))["cuts_frames"] == []
 
     asyncio.run(_with_helper(jobs, body))
 
