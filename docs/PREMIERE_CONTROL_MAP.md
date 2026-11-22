@@ -85,7 +85,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo" (focus null) | Menu | LIVE 2026-11-21 (Ctrl+Z as keys did nothing) |
 | Speed / duration, reverse, ripple | `premiere_set_speed` | Premiere UI: fills the Clip > Speed/Duration... dialog | LIVE 2026-11-21 (200%, 50% + reverse, back to 100%; Undo restores) |
 | Nest a selection | `premiere_nest_clips` | Premiere UI: fills the Clip > Nest... dialog | LIVE 2026-11-21 (Thai name; Undo removes clip and sequence) |
-| Copy one clip's effects onto many (Paste Attributes) | `premiere_paste_attributes` | Premiere UI: Edit > Copy, then fills Edit > Paste Attributes... | LIVE 2026-11-22 (744 clips in 24 s; one Undo reverts; a clip that already has the effect gets it twice) |
+| Copy one clip's effects onto many (Paste Attributes) | `premiere_paste_attributes` | Premiere UI: Edit > Copy, then fills Edit > Paste Attributes... | LIVE 2026-11-22, also through MCP (744 clips in 24 s; one Undo reverts; a clip that already has the effect gets it twice) |
 | Multicam, subclip | none | dialogs, same route as Nest | GAP |
 | Place a text Graphic with your own text (Thai too), from any .mogrt | `premiere_place_text` | Helper bakes the text into a copy of the template, UXP `insertMogrtFromPath` | LIVE 2026-11-21 (Thai into Premiere's Basic Title and an AE template; frames + read-back; a wrong key lists the texts) |
 | Read MOGRT text | `premiere_read_timeline` (`params: true`: `{text, font, size}`) | UXP `MogrtText` | After Effects templates; Premiere-made text reads null in UXP, read it from the saved `.prproj` (`prproj_reader`) |

@@ -32,6 +32,6 @@ Proven 2026-11-22 with this skill, every step above (run `20261122-000256-mainta
 
 - A failed fill presses Escape on the dialog and nothing more; doctor afterwards.
 - The checkbox positions were measured on a 488x437 dialog at 96 DPI; another size is refused.
-- **Paste attributes** (not yet run through cdv.py; proven 2026-11-22 via `Backend().premiere`): give the scratch's V1@0 an effect with `add_effect`, split it, then `C call paste_attributes '{"sequence": "CutDeck verify (scratch)", "source": "V1@0", "clips": [...]}'`. Reply `differ` is empty. One Undo removes it.
+- **Paste attributes** (not yet run through cdv.py; proven 2026-11-22 directly and as the MCP tool over stdio): give the scratch's V1@0 an effect with `add_effect`, split it, then `C call paste_attributes '{"sequence": "CutDeck verify (scratch)", "source": "V1@0", "clips": [...]}'`. Reply `differ` is empty. One Undo removes it.
 - Paste Attributes adds a second copy of an effect a target already has; the dialog measurements are for 402x811 at 96 DPI.
 - `premiere_cli` cannot pass these commands' arguments; use `C call` or `Backend().premiere`.

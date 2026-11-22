@@ -76,7 +76,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: failed
 - fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
 - live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
-- live paste_attributes (2026-11-22, `cutdeck.premiere_ui.paste_attributes` on Paste attr test sequences): 58/58 then 744/744 plain V4 pieces read back equal to the source; one Undo reverted the 58; the 10 pre-styled pieces were listed in `differ` (Posterize twice).
+- live paste_attributes (2026-11-22, `cutdeck.premiere_ui.paste_attributes` on Paste attr test sequences): 58/58 then 744/744 plain V4 pieces read back equal to the source; one Undo reverted the 58; the 10 pre-styled pieces were listed in `differ` (Posterize twice). Through MCP (stdio client → `python -m cutdeck.mcp_server` → helper restarted on this code): `premiere_paste_attributes` listed (53 tools), 58/58 matching, `differ` empty, 2.7 s.
 
 ## Decode language (th / en / auto)
 - test: `python -m pytest tests/test_language_choice.py -q -p no:cacheprovider`
