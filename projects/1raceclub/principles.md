@@ -43,6 +43,12 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
    turn, and how it ends. *(confirmed: user, 2026-11-22, on the agent's first race cut: "you miss some story there
    like contact of ferrari, dont miss those along the live")* How to check: list every storyline from the
    transcript (driver/team names), then make sure each one's beats are in the keep list.
+1b. **Every kept moment is a whole sentence: never cut out mid-sentence or inside a word.** A moment starts
+   and ends at a real pause in the voice (on this channel a gap of 0.6 s or more between transcript lines, where the
+   median gap is 0.19 s). The silence cut then runs with speech protection on. *(confirmed: user, 2026-11-22, on the
+   agent's v3 race cut: "dont cut the sentence out like mid way, finish it")* How to check: extend each keep range
+   back and forward to the nearest pause, then read the final with `premiere_timeline_transcript`; its
+   `cuts_in_sound` must show no cut with a word in it.
 4. **Cut method: delete pieces and leave gaps, close them in batches.** Keeps the timeline
    readable against the source while reviewing. *(guess)*
 

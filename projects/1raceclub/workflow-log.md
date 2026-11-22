@@ -603,3 +603,15 @@ User: "you go cut the video for me". Agent's order (content first, so the silenc
      Route that held: copy `Editing` with only the F1-only tail cut (V4 stays ONE clip), set Posterize/Opacity/Screen/
      crop on that one clip (5 calls), then cut_copy (coarse) → keep_words (fine) → silence cut; the cuts carry the
      effects onto all 595 pieces.
+7. **User: "dont cut the sentence out like mid way, finish it"** (v3 had cuts inside words at 05:22, 05:50, 06:44,
+   11:46, 17:16, 17:45, 20:10, 20:12) → principle 1b. Every v3 moment was extended back and forward to the nearest pause
+   (gap >= 0.6 s, cap 25 s), giving 96 moments and 32.1 min of raw keep. `keep_words` on the stage-A copy then reported 0 cuts in
+   sound (`YT editing v4 (Claude)`, 32:24). The silence cut (aggressive, speech protection on) took it to
+   `YT editing v4 (Claude) — CutDeck e705c7bb`: **25:03**, 596 cuts. It has zero gaps, V2/V3/A2–A6 off, Posterize/Opacity/
+   Screen/crop on all 629 V4 pieces, and frames (16:40 on the pre-silence copy, 20:00 on the final) matching the stream's lap with the logo gone.
+   `timeline_transcript` flags 24 "sound" edges, each within 40 ms of quiet (no clipped word on the transcript; the
+   worst one to listen to is 07:57 "ไซน์").
+   - **Fourth Premiere crash:** apply_cuts of the silence cut on v4, in a session that had already built the base and
+     run stage A and keep_words. Premiere just vanished (no Application Error event). Crash recovery kept all v4
+     sequences. After a fresh launch and a user save, the same 596-cut apply ran in 18 s. **Rule:** ask the user to
+     save before the silence cut, and run it in a fresh Premiere session.
