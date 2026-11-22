@@ -250,6 +250,12 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
       name: binName, type: 2,
       getItems: async () => [...children.get(bin)],
       createBinAction: (child) => action(() => children.get(bin).push(makeBin(child))),
+      // Removing a sequence's item deletes the sequence, as in Premiere.
+      createRemoveItemAction: (item) => action(() => {
+        children.get(bin).splice(children.get(bin).indexOf(item), 1);
+        const at = raws.findIndex((r) => r.name === item.name);
+        if (at >= 0 && item.isSequenceItem) raws.splice(at, 1);
+      }),
     };
     children.set(bin, []);
     return bin;
@@ -286,6 +292,16 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
     ppro, project, undoSteps,
     get saves() { return saves; },
     imports,
+    // Files a sequence's project item in bin `path` (names from the root), making the bins.
+    fileSequence: (path, name) => {
+      let bin = root;
+      for (const binName of path) {
+        let next = children.get(bin).find((it) => it.name === binName);
+        if (!next) { next = makeBin(binName); children.get(bin).push(next); }
+        bin = next;
+      }
+      children.get(bin).push({ name, type: 1, isSequenceItem: true });
+    },
     marks: (mediaPath) => ({ ...marks.get(mediaPath) }),
     // Every sequence by name, as plain clips per side.
     sequence: (name) => { const s = raws.find((r) => r.name === name); return s && { video: clipsOf(s, "video"), audio: clipsOf(s, "audio"), frame: s.frame || null, marks: s.marks || null }; },

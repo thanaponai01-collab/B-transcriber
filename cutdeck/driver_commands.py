@@ -345,8 +345,9 @@ COMMANDS: dict[str, Command] = {
         Apply a finished rough_cut job's cut list in live Premiere, to a COPY of the active
         sequence (the original is never edited). The active sequence must be the one the job
         analysed. Takes minutes on long sequences. Premiere keeps the memory a cut uses until it
-        quits (five 2 h cuts in one session: 32 GB, each slower), so ask the user to save and
-        restart Premiere before a long-form cut. Needs the CutDeck panel open.
+        quits (one 2 h cut: +6.6 GB, not freed by deleting the copy; five in one session: each
+        slower), so ask the user to save and restart Premiere before a long-form cut. Delete test
+        copies with remove_rough_cuts. Needs the CutDeck panel open.
         """,
         (("job_id", str),),
         cli_target=("job_id", lambda target: {"job_id": target})),
@@ -540,6 +541,15 @@ def _open_sequence_arguments(args: dict, jobs) -> dict:
     return {"sequence": args["sequence"]}
 
 
+def _remove_rough_cuts_arguments(args: dict, jobs) -> dict:
+    names = args.get("sequences")
+    if not isinstance(names, list) or not names or not all(isinstance(n, str) and n.strip() for n in names):
+        raise ValueError("sequences must be a non-empty list of sequence names")
+    if len(set(names)) != len(names):
+        raise ValueError("sequences lists a name twice")
+    return {"sequences": names}
+
+
 def _set_playhead_arguments(args: dict, jobs) -> dict:
     return {**_sequence(args), "ticks": _ticks(args.get("ticks"), "ticks")}
 
@@ -715,6 +725,15 @@ CONTROL_COMMANDS: dict[str, Command] = {
         """,
         (("sequence", str),),
         cli_target=("sequence name", lambda target: {"sequence": target})),
+    "remove_rough_cuts": Command(
+        120, _remove_rough_cuts_arguments, "destructive",
+        """
+        Delete rough-cut copies from the project: only sequences in the CutDeck > Rough Cuts bin
+        (where apply_cuts, cut_copy and keep_words file their copies), by exact name, never the
+        active one. One undo step. Refuses the whole list if any name is not one such sequence.
+        Ask the user before deleting a copy you did not make for a test.
+        """,
+        (("sequences", list[str]),)),
     "set_playhead": Command(
         30, _set_playhead_arguments, "write",
         """

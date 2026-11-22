@@ -174,3 +174,10 @@ what the agent's call actually does.
   - So: run a long-form rough cut in a freshly started Premiere, saved first, and not after other heavy cuts
     in the same session. `apply_cuts` and `cut_copy` now say so to agents. The clean-session numbers (memory
     before and after one cut) still need a run right after a Premiere restart.
+- **Clean session, run `20261122-165442-rough-cut-clean-memory`** (Premiere restarted, commit sampled):
+  the project alone held 25.0 GB once open. One 2 h cut (1,407 cuts) took 74 s (reads 34 s, razor 26 s)
+  against 120-137 s for the same list in the loaded session, and added 6.6 GB that deleting the copy did
+  not give back. Rule: one long-form cut per Premiere session, saved first.
+- **`remove_rough_cuts`** (new, destructive): deletes copies from CutDeck > Rough Cuts by exact name, never the
+  active sequence, one undo step (`FolderItem.createRemoveItemAction`). Used live to delete the eight test copies.
+  Test: `tests/cutdeck_control.test.cjs` "remove_rough_cuts deletes only copies...".

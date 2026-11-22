@@ -223,3 +223,20 @@ test("place_media fails when Premiere commits but nothing lands", async () => {
   });
   await assert.rejects(controlHandlers(h.ppro).place_media({ media: "D:\\a.mp4", at_ticks: "0", v: 0, a: 0 }), /nothing landed/);
 });
+
+test("remove_rough_cuts deletes only copies in CutDeck > Rough Cuts, never the active one", async () => {
+  const clip = [[{ media: "D:\a.mp4", start: 0n, end: 10n * S, in: 0n }]];
+  const h = fake.createTimelineHost({
+    media: [{ path: "D:\a.mp4", video: true, audio: true, duration: 60n * S }],
+    sequences: ["Edit", "Edit cut", "Mine"].map((name) => ({ name, video: clip, audio: clip })),
+  });
+  const run = controlHandlers(h.ppro);
+  await assert.rejects(run.remove_rough_cuts({ sequences: ["Edit cut"] }), /No bin "CutDeck"/);
+  for (const name of ["Edit", "Edit cut"]) h.fileSequence(["CutDeck", "Rough Cuts"], name);
+  h.fileSequence(["Sequences"], "Mine");
+  await assert.rejects(run.remove_rough_cuts({ sequences: ["Edit cut", "Mine"] }), /"Mine" is not one sequence in CutDeck > Rough Cuts/);
+  await assert.rejects(run.remove_rough_cuts({ sequences: ["Edit"] }), /active sequence/);
+  assert.equal((await h.project.getSequences()).length, 3, "a refusal removes nothing");
+  assert.deepEqual(await run.remove_rough_cuts({ sequences: ["Edit cut"] }), { removed: ["Edit cut"], still_there: [] });
+  assert.deepEqual((await h.project.getSequences()).map((s) => s.name), ["Edit", "Mine"]);
+});
