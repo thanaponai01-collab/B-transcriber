@@ -134,30 +134,23 @@ def test_sound_runs_ignore_clicks_and_keep_fading_tails():
     assert len(runs) == 1 and runs[0][0] <= 1020 and runs[0][1] >= 1700
 
 
-def test_aggressive_cut_handles_40ms_pre_60ms_post_and_120ms_threshold(monkeypatch):
-    """Aggressive cuts leave 40ms pre / 60ms post and cut every silence >= 120ms."""
+def test_aggressive_cut_keeps_40ms_pre_60ms_post_and_never_cuts_under_150ms(monkeypatch):
+    """Aggressive cuts leave 40ms pre / 60ms post and cut every pause of 250ms or more, so no
+    cut is shorter than 150ms: a shorter one saves nothing audible and costs a jump cut and
+    two razor edits on every track."""
     cfg = _raw_config("aggressive")
     assert cfg["cut"]["pad_pre_ms"] == 40
     assert cfg["cut"]["pad_post_ms"] == 60
-    assert cfg["cut"]["min_silence_ms"] == 119
-
-    # Test with synthetic speech segments having silences of 110ms, 120ms, and 300ms
-    # Speech 1: 0 - 1000ms
-    # Silence 1: 1000 - 1110ms (110ms: < 120ms -> kept, NOT cut)
-    # Speech 2: 1110 - 2000ms
-    # Silence 2: 2000 - 2120ms (120ms: >= 120ms -> cut from 2060 to 2080, exactly 20ms)
-    # Speech 3: 2120 - 3000ms
-    # Silence 3: 3000 - 3300ms (300ms: >= 120ms -> cut from 3060 to 3260, exactly 200ms)
-    # Speech 4: 3300 - 4000ms
     from cutdeck.contracts import CutConfig
     from cutdeck.rules import build_cut_spans
     from transcribe.pipeline.ingest import SpeechSpan
+    # Pauses of 240ms (a 140ms cut: kept), 250ms (cut 2060-2210, 150ms) and 300ms (cut 3060-3260).
     spans = [
         SpeechSpan(0, 0, 1000, "speech"),
-        SpeechSpan(1, 1000, 1110, "silence"),
-        SpeechSpan(2, 1110, 2000, "speech"),
-        SpeechSpan(3, 2000, 2120, "silence"),
-        SpeechSpan(4, 2120, 3000, "speech"),
+        SpeechSpan(1, 1000, 1240, "silence"),
+        SpeechSpan(2, 1240, 2000, "speech"),
+        SpeechSpan(3, 2000, 2250, "silence"),
+        SpeechSpan(4, 2250, 3000, "speech"),
         SpeechSpan(5, 3000, 3300, "silence"),
         SpeechSpan(6, 3300, 4000, "speech"),
     ]
@@ -165,12 +158,10 @@ def test_aggressive_cut_handles_40ms_pre_60ms_post_and_120ms_threshold(monkeypat
     plan_spans = build_cut_spans(tokens=[], spans=spans, duration_ms=4000, cfg=cut_cfg)
     cuts = [(s.src_in_ms, s.src_out_ms) for s in plan_spans if s.action == CUT]
 
-    # Silence 1 (110ms) must NOT have any cut inside it
-    assert not any(1000 <= a and b <= 1110 for a, b in cuts)
-    # Silence 2 (120ms) must be cut from 2060 (1000+60 post) to 2080 (2120-40 pre)
-    assert (2060, 2080) in cuts
-    # Silence 3 (300ms) must be cut from 3060 to 3260
+    assert not any(1000 <= a and b <= 1240 for a, b in cuts)
+    assert (2060, 2210) in cuts
     assert (3060, 3260) in cuts
+    assert min(b - a for a, b in cuts) >= 150
 
 
 def test_aggressive_breath_and_sfx_preserved_without_vad(tmp_path, monkeypatch):

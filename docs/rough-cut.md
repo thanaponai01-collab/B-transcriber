@@ -139,3 +139,45 @@ dropped by the min-clip merge.
   Below that share, the analysed WAV is transcribed as before.
 - Live 2026-11-22, a 6-min scratch range: the same 119 cut spans, frame for frame, as the ASR run, in 15 s
   with no GPU. Test: `tests/test_cutdeck_timeline_transcript.py::test_rough_cut_maps_stored_source_transcripts_into_the_window`.
+
+## Leaner rough cut: fewer micro-cuts, a short agent result (2026-11-22)
+Owner request: make Rough Cut faster, more accurate and cheaper for agents; it crashed a lot lately; say
+what the agent's call actually does.
+- **What `premiere_rough_cut` does:** silence removal only, on one preset (all 16 recent jobs ran
+  `aggressive`). Fillers, repeats and retakes are off in `config.yaml`; content choices are
+  `premiere_keep_words`. The tool's description now says so.
+- **No cut under 150 ms in `aggressive`:** `min_silence_ms` 119 → 249. A cut is the pause minus 100 ms of
+  pads, so 119 left cuts of 1-4 frames. Measured on the real 32-min `YT editing v4 (Claude)` range
+  (job e705c7bb; the old setting reproduced the stored 596 cuts exactly): 596 → 401 cuts, 441.6 → 428.5 s
+  removed, analysis 35 s either way. Second check, the 2 h range of job 3826e209 (no speech protection; old
+  setting again exact): 1,731 → 1,407 cuts, 3,886.9 → 3,861.6 s removed. Every dropped cut was a jump cut on every track and two razor
+  clones per track plus a move per piece. Not yet heard or applied in live Premiere.
+- **`get_result` for a rough cut** returns `total_cuts`, `removed_seconds`, `preset`, `speech_protection` and
+  one page of `cuts_frames` (the transcript `offset`/`limit`, default 100). Before, it returned the whole
+  list: 9 KB for 596 cuts, 29 KB for 1,731. `apply_cuts` needs only the `job_id`, and the server
+  instructions now say poll, then apply. Test: `tests/test_cutdeck_mcp_backend.py::test_cut_job_result_is_the_cut_list`.
+- **Timings log:** `applyNativeCut` printed `timings (s): [object Object]`; it now prints the JSON.
+- **Crash (still OPEN, PREMIERE_FACTS.md):** the two crashes of 2026-11-22 died within one second of the
+  first clone commits on a fresh copy: at 15:12:46 on the read right after "make razor fillers" (10
+  actions), at 14:44:55 before the first razor batch finished building, in a Premiere session started 40 s earlier.
+  So neither batch size nor "use a fresh session" explains it. Untested hypothesis: editing the copy before
+  Premiere settles after a commit. Fewer cuts mean fewer edits, not a crash fix.
+- **Live 2026-11-22, run `20261122-162003-rough-cut-crash-hw`** (`Editing`, 2 h, 10 lanes, 27.0.0):
+  - The 150 ms cut list (1,407 cuts) applied twice with a clean clip-by-clip read-back.
+  - Five heavy runs back to back, no crash: the crash is not reproduced, so it stays OPEN.
+  - Where a run's time goes (new timings line): re-reading the copy between batches 50-79 s, the razor 33-43 s,
+    removing pieces 3-5 s, 17,000 moves under 1 s, read-back 4-5 s, opening the copy 7-10 s.
+  - **Hardware.** Premiere does not give back what a cut uses: after the five runs it held 32.1 GB private,
+    more than the 31.7 GB of RAM, and every run was slower than the last (103 → 190 s for the same list).
+    Analysis of the same 2 h range (offline, no speech protection): 70 s on one CPU core of 24, no GPU,
+    4.4 GB peak in Python (freed when it ends; the 16 kHz audio itself is 0.46 GB).
+  - So: run a long-form rough cut in a freshly started Premiere, saved first, and not after other heavy cuts
+    in the same session. `apply_cuts` and `cut_copy` now say so to agents. The clean-session numbers (memory
+    before and after one cut) still need a run right after a Premiere restart.
+- **Clean session, run `20261122-165442-rough-cut-clean-memory`** (Premiere restarted, commit sampled):
+  the project alone held 25.0 GB once open. One 2 h cut (1,407 cuts) took 74 s (reads 34 s, razor 26 s)
+  against 120-137 s for the same list in the loaded session, and added 6.6 GB that deleting the copy did
+  not give back. Rule: one long-form cut per Premiere session, saved first.
+- **`remove_rough_cuts`** (new, destructive): deletes copies from CutDeck > Rough Cuts by exact name, never the
+  active sequence, one undo step (`FolderItem.createRemoveItemAction`). Used live to delete the eight test copies.
+  Test: `tests/cutdeck_control.test.cjs` "remove_rough_cuts deletes only copies...".

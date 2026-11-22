@@ -35,7 +35,7 @@
    removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
    values (host/components.js). */
 
-const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate } = require("../host/project.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
@@ -202,6 +202,36 @@ async function openSequence(ppro, { sequence: name }) {
   const { opened, activated } = await openAndActivate(project, sequence);
   const now = await project.getActiveSequence();
   return { name: sequence.name, opened, activated, active: !!now && String(now.guid) === String(sequence.guid) };
+}
+
+/* Delete copies CutDeck made: only sequences filed in CutDeck > Rough Cuts, each named exactly once
+   there, never the active one; one transaction. FolderItem.createRemoveItemAction / getItems
+   (premierepro.txt:343,349; used the same way in samples premiere-api/src/projectPanel.ts:284). */
+async function removeRoughCuts(ppro, { sequences: names }) {
+  const project = await activeProject(ppro);
+  const childBin = async (parent, name) => {
+    const found = ((await asBinLike(parent).getItems()) || []).filter((it) => it && it.name === name);
+    const bin = found.length === 1 ? asBinLike(found[0]) : null;
+    if (!bin || typeof bin.getItems !== "function") throw new Error(`No bin "${name}"; nothing removed`);
+    return bin;
+  };
+  const bin = await childBin(await childBin(await project.getRootItem(), CUTDECK_BIN_NAME), ROUGH_CUTS_BIN_NAME);
+  const inBin = (await bin.getItems()) || [];
+  const sequenceNames = new Set((await project.getSequences()).map((s) => s.name));
+  const active = await project.getActiveSequence();
+  const items = names.map((name) => {
+    const found = inBin.filter((it) => it && it.name === name);
+    if (found.length !== 1 || !sequenceNames.has(name)) throw new Error(`"${name}" is not one sequence in ${CUTDECK_BIN_NAME} > ${ROUGH_CUTS_BIN_NAME}; nothing removed`);
+    if (active && active.name === name) throw new Error(`"${name}" is the active sequence; open another first. Nothing removed`);
+    return found[0];
+  });
+  runTransaction(project, "CutDeck: remove rough cuts", (compound) => {
+    for (const item of items) {
+      if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error(`addAction(remove ${item.name}) returned false`);
+    }
+  });
+  const left = new Set((await project.getSequences()).map((s) => s.name));
+  return { removed: names.filter((n) => !left.has(n)), still_there: names.filter((n) => left.has(n)) };
 }
 
 async function setPlayhead(ppro, { sequence: name = null, ticks }) {
@@ -532,6 +562,7 @@ function controlHandlers(ppro) {
     read_timeline: (args) => readTimeline(ppro, args),
     list_project: (args) => listProject(ppro, args),
     open_sequence: (args) => openSequence(ppro, args),
+    remove_rough_cuts: (args) => removeRoughCuts(ppro, args),
     set_playhead: (args) => setPlayhead(ppro, args),
     set_in_out: (args) => setInOut(ppro, args),
     select_clips: (args) => selectClips(ppro, args),

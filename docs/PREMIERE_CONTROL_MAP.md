@@ -60,6 +60,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Keep only these phrases on a copy, every track kept (a Short from a synced rough cut) | `premiere_keep_words` | helper + `cut_copy` | LIVE 2026-11-22 |
 | Active sequence summary | `premiere_read_sequence` | UXP | LIVE |
 | Open / switch sequence | `premiere_open_sequence` | UXP | LIVE 2026-11-21 |
+| Delete rough-cut copies (CutDeck > Rough Cuts only, never the active one) | `premiere_remove_rough_cuts` | UXP `FolderItem.createRemoveItemAction` | LIVE 2026-11-22 |
 | Playhead | `premiere_set_playhead` | UXP | LIVE 2026-11-21 |
 | In/Out marks | `premiere_set_in_out` | UXP | LIVE 2026-11-21 |
 | Select clips | `premiere_select_clips` | UXP `setSelection` | LIVE 2026-11-21 |
