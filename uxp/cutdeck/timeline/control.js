@@ -41,6 +41,7 @@ const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
 const { waitForFile } = require("../host/files.js");
 const { projectItemMediaPath } = require("../host/sequenceRead.js");
+const { getHoldExportFolder } = require("./frameHold.js");
 
 const CLIP_ID = /^([VA])(\d+)@(\d+)$/;
 
@@ -541,11 +542,23 @@ async function saveProject(ppro) {
 }
 
 /* export_frame: the sequence at `ticks` (default: the playhead) as a PNG at its own frame size
-   (PREMIERE_FACTS: a 1080x1920 frame at 1920x1080 comes out pillarboxed), in the panel's temp
-   folder. Waits for the file: exportSequenceFrame resolves before it exists (PREMIERE_FACTS). */
+   (PREMIERE_FACTS: a 1080x1920 frame at 1920x1080 comes out pillarboxed), in `CutDeck\Frames`
+   beside the .prproj (next to the frame holds, so check frames stay with the project and the user
+   can clear them); the panel's temp folder only for an unsaved project. Waits for the file:
+   exportSequenceFrame resolves before it exists (PREMIERE_FACTS). */
+async function frameFolder(project) {
+  const { folder, inProjectFolder } = await getHoldExportFolder(project);
+  if (!inProjectFolder) return folder;
+  try {
+    const frames = await folder.getEntry("Frames"); // uxp.txt:3034 Folder.getEntry
+    if (frames && frames.isFolder) return frames;
+  } catch (_) { /* getEntry throws while it does not exist yet */ }
+  return folder.createFolder("Frames"); // uxp.txt:3032 Folder.createFolder
+}
+
 async function exportFrame(ppro, { sequence: name = null, ticks = null }) {
-  const { sequence } = await projectAndSequenceNamed(ppro, name);
-  const folder = await require("uxp").storage.localFileSystem.getTemporaryFolder();
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  const folder = await frameFolder(project);
   const at = ticks === null ? await sequence.getPlayerPosition() : tick(ppro, ticks);
   const size = await sequence.getFrameSize();
   const file = `cutdeck-frame-${Date.now()}.png`;
