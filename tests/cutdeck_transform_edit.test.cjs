@@ -231,6 +231,19 @@ test("setAnchor top-left keeps the picture in place: Anchor → [0,0], Position 
   assert.deepEqual(undoSteps, ["CutDeck: Anchor top-left"]);
 });
 
+test("an edit plans from Premiere's values, not a snapshot cached before Premiere's own undo", async () => {
+  // Live run 20261122-000256: rotation 7, Edit > Undo, then anchor top-left wrote Position
+  // 0.1121, -0.0305 (the corner as if still rotated 7°) and moved the picture.
+  const a = motionClip("A");
+  const { ppro } = host([a]);
+  await setField(ppro, "rotation", "7");
+  await readSnapshot(ppro); // the panel's refresh after a write caches rotation 7
+  a.params[4].value = 0; // Edit > Undo in Premiere: no CutDeck write, so no cache clear
+  await setAnchor(ppro, "top-left");
+  close(a.params[0].value[0], 320 / 1920, "position x");
+  close(a.params[0].value[1], 180 / 1080, "position y");
+});
+
 test("alignToFrame left moves a half-size centred clip to x = its half width", async () => {
   const a = motionClip("A", { scale: 50 });
   const { ppro } = host([a]);
