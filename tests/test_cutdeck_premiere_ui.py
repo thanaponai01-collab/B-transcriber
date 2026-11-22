@@ -49,6 +49,14 @@ def test_text_is_located_in_the_monitor_from_the_frames():
     assert abs(where["scale"] - 0.408) < 0.03
 
 
+def test_text_split_by_a_word_gap_is_located_as_one_line():
+    # "RUS ชนกำแพง" (live 2026-11-22): the gap splits the monitor change into two blobs.
+    where = ui.locate_in_window(_img("split_frame_on"), _img("split_frame_off"), _img("split_monitor_on"), _img("split_monitor_off"))
+    x, y = where["point"]
+    assert abs(x - 211) <= 6 and abs(y - 206) <= 4
+    assert abs(where["scale"] - 0.542) < 0.03
+
+
 def test_frames_without_a_change_are_refused():
     with pytest.raises(RuntimeError, match="draws nothing"):
         ui.locate_in_window(_img("frame_on"), _img("frame_on"), _img("monitor_on"), _img("monitor_off"))

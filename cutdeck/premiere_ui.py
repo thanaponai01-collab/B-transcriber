@@ -361,8 +361,16 @@ def locate_in_window(frame_on: Image.Image, frame_off: Image.Image, win_on: Imag
     labels, count = ndimage.label(mask)
     best = None
     gray_on = np.asarray(win_on.convert("L")).astype(int)
-    for blob in ndimage.find_objects(labels):
-        y0, x0, y1, x1 = blob[0].start + 4, blob[1].start + 4, blob[0].stop - 4, blob[1].stop - 4  # undo dilation
+    boxes = [(b[0].start + 4, b[1].start + 4, b[0].stop - 4, b[1].stop - 4) for b in ndimage.find_objects(labels)]  # undo dilation
+    # A word gap wider than the dilation splits one line of text into blobs ("RUS ชนกำแพง", live
+    # 2026-11-22): also try each group of blobs whose rows overlap, as one box.
+    groups = [[b] for b in boxes]
+    for b in boxes:
+        hit = [g for g in groups if b not in g and any(b[0] < o[2] and o[0] < b[2] for o in g)]
+        for g in hit:
+            g.append(b)
+    unions = {(min(b[0] for b in g), min(b[1] for b in g), max(b[2] for b in g), max(b[3] for b in g)) for g in groups if len(g) > 1}
+    for y0, x0, y1, x1 in boxes + sorted(unions):
         if x1 <= x0 or y1 <= y0:
             continue
         sx, sy = (x1 - x0) / tw, (y1 - y0) / th

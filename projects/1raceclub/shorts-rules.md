@@ -54,6 +54,7 @@ Most rules below are this principle applied to one case.
 | **Always keep the raw footage** | the synced source clip stays on its track (V4) under every part; holds and crops go on the tracks above it, never in its place (the panel's Add Frame Hold works this way: the clip under it stays whole) | confirmed (2026-11-22: "always keep the raw footage") |
 | Holds are CutDeck frame holds, kept with the project | the panel's Add Frame Hold: a sequence-size `CutDeck_Hold_<ms>.png` (transparent above the seam) in `<project folder>\CutDeck\` beside the .prproj, imported to the CutDeck > Frame Holds bin, placed on the track above the clip | confirmed (user: "export to … alongside the Premiere project file"; the user's own holds on Russell wall v5) |
 | Frame each hold on what proves the line, not the centre | shift the window to the evidence (two cars, the glowing wheel, the TURN label); scale by the **source's real size** (109% for 1080p = 163.5% for the 1280x720 feed) | confirmed ("check the frame") |
+| Nothing from a lower layer shows through (user 2026-11-22, Max interview: "the layer behind shouldn't be seen") | an overlay (zoom, crop, hold) must cover its whole panel: let it run past the frame edges and the bottom, and 1–2 px over the seam; a crop at exactly 1080 px wide left a 2 px strip of the raw feed. Check by rendering the frame with the raw layer on and off: they must be identical | confirmed |
 | Label who is who when a still shows several cars | 3-letter codes (RUS / ANT) on the still | seen |
 
 ## 5. Cropped assets (radio boxes, tower rows)
@@ -77,6 +78,7 @@ Most rules below are this principle applied to one case.
 | Text ends on a cut | trim the title to the cut it belongs to; no frames hanging past it | confirmed |
 | Translate English radio into natural Thai, one short phrase at a time, on screen exactly while spoken | Prompt-Medium 100, white, black stroke 8, just below the seam | seen (Russell Short) |
 | Subtitles from an .srt in one call | `premiere_srt_subtitles` with `style` 1 (the project's saved Style **1RC Subtitle**, made once by the user with Create Style from their subtitle; a new project needs it again), `track` (the subtitle layer), `position` [0.5, -0.0423], `scale` 112.5: lands exactly where the user's subtitles sit (y 819-913). Split long lines in the SRT first: a line over ~700 px wraps upward | seen (live 2026-11-22 on scratch) |
+| Translate fully; never shorten or paraphrase to fit (user 2026-11-22, Max interview) | a line too long for the frame is **cut into two subtitles at a natural break, timed to the words** (e.g. "บอกตรงๆ" → "ผมไม่ได้สนใจเลย"), not reworded shorter | confirmed |
 | Channel spellings of names | จอร์จ, คิมิ | seen |
 
 ## 7. Sound
@@ -121,6 +123,7 @@ Most rules below are this principle applied to one case.
 9. Composite every piece's frame offline: framing, safe zone, no F1 logo. Hand over unsaved and unexported.
 
 ## 11. Gaps: what the user hasn't covered yet (notes and questions)
+- **Faster subtitle route (user idea, 2026-11-22):** built as `premiere_srt_subtitles` (.srt → caption track → *Upgrade Caption to Graphic*, PR #122); see the §6 row. It replaces retyping copied Text layers one by one (~10 s of mouse/keyboard per subtitle on the Max interview Short).
 
 - **Length.** Shorts so far run 20–45 s. Is there a target, or a cap per platform (Shorts allows up to 3 min)?
 - **Subtitles for the user's own Thai speech.** None so far, only translated radio. Does a sound-off viewer need them, and in which style?
