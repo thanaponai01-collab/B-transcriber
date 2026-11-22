@@ -570,3 +570,18 @@ with a payoff, from the FP3 rough cut (rough-cut s):
   sat inside the window of the two Hamilton wide holds (1190.5, 1193.1); filled from its surroundings (diffusion fill, feathered
   4 px edge) in the hold PNGs (`hold_*_clean.png`) and swapped in, ending on their cuts. The other holds' F1 marks fall outside
   their windows. Check every hold's visible window for F1 marks before building.
+
+## Episode 20261122: Las Vegas GP Race (agent-cut long video)
+
+Project `E:\Me\2.Tasks\20261122 - 3\…\20260130 RENAME template - Copy_1.prproj`, user's synced sequence `Editing`
+(2:02:55, V1 layout / V2 cam off / V3 off / V4 race feed at 39% in the small screen, A1 voice, A2–A6 off).
+User: "you go cut the video for me". Agent's order (content first, so the silence cut runs on 21 min, not 2 h):
+1. Transcribed the voice file (11,419 words). Feed sync checked from frames: SAFETY CAR banner on "เซฟตี้" (tl 30:45), lap 50/50 at the flag.
+2. `keep_words` on `Editing` → `YT editing (Claude)`: 59 moments, 20.9 min, chronological (start, every lead change and
+   Red Bull battery "same picture" duel, Hadjar's P2 and broken wing, SC and pit stops, penalties, team radios, Russell's
+   debris, Kimi's battery loss on the last lap, the finish, the post-race strategy summary, the closing line). Dropped the
+   SC laps' chatter, the podium/ceremony (90–119 min) and repeats.
+3. F1 layer on all V4 pieces: Posterize Time 0.2, Opacity 80, Blend Mode param [2] = 10 (param [1] stayed 18; a rendered
+   frame shows the screen look, not yet checked in Effect Controls).
+4. CutDeck silence cut (aggressive, no ASR) → `YT editing (Claude) — CutDeck cef3c7f3`: **16:41**, zero gaps on every
+   track, V2/V3/A2–A6 disabled, transcript in source order. Not saved, not exported.
