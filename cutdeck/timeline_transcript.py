@@ -775,6 +775,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{result['sequence']} {result['track']}: {result['clips']} clips, {result['line_count']} lines; "
           f"missing {[m['media'] for m in result['missing']]}; cuts in sound {len(result['cuts_in_sound'])} "
           f"({sum(e.get('severity') != 'tail' for e in result['cuts_in_sound'])} in sound); full: {result.get('full_path')}")
+    for warning in result.get("warnings", []):
+        print("warning:", warning)
     for ln in result["lines"]:
         print(f"{ln['tc']}  {ln['clip']:<22} {ln['text']}" + ("  [clipped: " + ", ".join(ln["clipped_words"]) + "]" if ln.get("clipped_words") else ""))
     for m in result.get("matches", []):

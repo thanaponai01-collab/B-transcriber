@@ -307,6 +307,10 @@ note, and all are fixed with tests:
 ## State you are left in
 
 - PR #115 is merged into master, so a helper from master or this branch matches the panel.
+- The shared store has the new `job.chosen_at` column (added on first use by this branch's code).
+  A backup from before is `output/store-backups/transcriber-20261122-before-chosen_at.db`. Code
+  without this change (any branch not yet merged with it, e.g. PR #116's) fails to read jobs
+  from the migrated store: merge master into it first.
 - Nothing was exported. The project was saved once since, on 2026-11-22 at 07:22, by the
   `cdv.py launch --reload-panel` of PR #115's live check, so the `listen` scratch sequences below
   are now in the saved file (`20260130 RENAME template - Copy_1.prproj`).
@@ -345,7 +349,7 @@ note, and all are fixed with tests:
 
 - **Your OBS files' extra streams are harmless today.** In every footage file of 20261121, stream 2
   duplicates stream 1 and streams 3-4 are silent. Per-stream transcription was not built.
-- **A wrong-language transcript no longer wins silently (fixed 2026-11-22, after the PR's first review).**
+- **A wrong-language transcript: partly fixed (2026-11-22, after the PR's first review).**
   - The timeline tools read the transcript `transcribe` last returned, cached or new. Before, they
     read the newest job, so once a Thai job was newest, asking for `en` again hit the cache and
     changed nothing. Now that call switches every timeline tool back to English, with no new

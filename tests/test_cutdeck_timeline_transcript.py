@@ -469,3 +469,15 @@ def test_join_words_keeps_the_space_before_a_quote():
     assert tt.join_words(["he", "said", "'hello'"]) == "he said 'hello'"
     assert tt.join_words(["the", "'90s"]) == "the '90s"
     assert tt.join_words(["it", "'s", "fine"]) == "it's fine"
+
+
+def test_the_offline_cli_prints_the_warnings(monkeypatch, capsys):
+    import cutdeck.prproj_reader as reader
+    monkeypatch.setattr(reader, "read_project", lambda path: {"sequences": [{"name": "S"}]})
+    monkeypatch.setattr(tt, "timeline_from_prproj", lambda seq, fps: {})
+    note = 'these words are the Thai transcript (job 86) ... language="en"'
+    monkeypatch.setattr(tt, "build", lambda *a, **k: {
+        "sequence": "S", "track": "A5", "clips": 1, "line_count": 0, "missing": [], "cuts_in_sound": [],
+        "lines": [], "warnings": [note]})
+    assert tt.main(["--prproj", "x.prproj", "--sequence", "S"]) == 0
+    assert note in capsys.readouterr().out

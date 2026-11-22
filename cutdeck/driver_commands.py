@@ -1110,8 +1110,9 @@ HELPER_COMMANDS: dict[str, Command] = {
         a phrase (matches, also across a cut; spaces and punctuation ignored; numbers as the engine
         wrote them, e.g. "20" not "ยี่สิบ"). `missing` lists source files never transcribed: run
         transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
-        of the timeline. Page with offset/limit; full_path holds every line and word. Needs the
-        CutDeck panel open.
+        of the timeline. Page with offset/limit; full_path holds every line and word. `warnings`, when present, are the transcript's (the file also has a transcript in the other
+        language, with the transcribe call that switches; a later audio stream): read them first.
+        Needs the CutDeck panel open.
         """,
         (("sequence", str | None, None), ("track", str | None, None), ("query", str | None, None),
          ("from_ticks", str | None, None), ("to_ticks", str | None, None), ("offset", int, 0),
@@ -1128,8 +1129,9 @@ HELPER_COMMANDS: dict[str, Command] = {
         with cut_copy, then reads it back: `checks` (how often each phrase is said before and
         after), `joins` (the words either side of each join), and `new_cuts_in_sound` (any new cut
         with audible sound at it; empty is the goal). Each cut sits on the quiet frame in the
-        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame (words touching), the dB over the sound threshold at the word boundary it was cut on. Needs the CutDeck panel open and the
-        sources transcribed.
+        pause nearest its target; `no_quiet` on a removal gives, per side with no quiet frame (words touching), the dB over the sound threshold at the word boundary it was cut on. `warnings`, when present, are the transcript's (the file also has a transcript in the other
+        language, with the transcribe call that switches; a later audio stream): read them first.
+        Needs the CutDeck panel open and the sources transcribed.
         """,
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
          ("track", str | None, None), ("keep_ms", int, 250)),
@@ -1146,7 +1148,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         `no_quiet` says so). Returns `items` ready for
         premiere_build_sequence (source media, in/out ticks, at_ticks back to back on V1/A1; set
         v/a and add layers as needed) and `pieces` with each one's text and source. Edits
-        nothing. Read the built Short back with premiere_timeline_transcript.
+        nothing. Read the built Short back with premiere_timeline_transcript. `warnings`, when present, are the transcript's (the file also has a transcript in the other
+        language, with the transcribe call that switches; a later audio stream): read them first.
         """,
         (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60),
          ("wordless_ms", int, 0)),
@@ -1164,7 +1167,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         the clip that holds the edge word. Reads the copy back: `lines` and `cuts_in_sound` (the goal
         is no "sound" entry). The copy becomes the open sequence. Reorder afterwards with
         premiere_build_sequence (into: true on the copy, items [], steps; its description has the
-        swap recipe), then read the result back with premiere_timeline_transcript.
+        swap recipe), then read the result back with premiere_timeline_transcript. `warnings`, when present, are the transcript's (the file also has a transcript in the other
+        language, with the transcribe call that switches; a later audio stream): read them first.
         """,
         (("result_name", str), ("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None),
          ("pad_ms", int, 60), ("wordless_ms", int, 0)),
