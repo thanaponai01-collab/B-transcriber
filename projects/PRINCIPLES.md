@@ -53,6 +53,9 @@ frame")* *(guess: it applies wherever a picture is reframed, not only Shorts)*
 - **No other brand's marks on screen:** 1RaceClub removes every F1 logo; HKS blurs the TV clock and
   other sources' watermarks. One principle (rights), or two different reasons?
 - **Verify from the footage what each line is about** before cutting it (1RaceClub).
+- **Keep the source untouched under every edit** (1RaceClub RC-15, 2026-11-22: "always keep the raw footage";
+  holds and crops sit above the synced clip). Same idea as M-3 (never edit the user's work in place)? Does HKS want it?
+- **Use what's already in the project; keep agent-made files beside the .prproj** (1RaceClub RC-16). Everywhere?
 
 ## Index: every project's principles and rules
 

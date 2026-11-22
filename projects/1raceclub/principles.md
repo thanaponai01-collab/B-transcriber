@@ -80,6 +80,9 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
      face beat at ~0:12.5 today).
    - Why (guess): face is the reaction, F1 is the cause; the face stays big and readable, and
      the chin above the seam keeps the face from being cut by the image.
+   - **The image below is full:** it fills the whole part under the seam; never a dimmed or blurred
+     background with a smaller picture over it. *(confirmed, 2026-11-22: "I don't like the blackout … I want
+     it to be full at the bottom part")*
    - The face-cam position is re-set per Short to put *this* chin above the line (y 0.257 in
      Ferrari, 0.273 in Russell): the rule is the chin line, not a number. *(seen in both)*
    - The "picture changes at most every ~5 s" limit (principle 3) is a **long-video** rule.
@@ -88,7 +91,8 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
 9. **Shorts copyright limits:** F1 video **at most 3 s**; normally a **frame hold / captured
    still** stretched across the whole part where the user commentates on it. **Cut out every
    F1 logo** (F1 / F1 TV bugs in the corners: the 109% framing crops ~500 px off each side).
-   *(confirmed)*
+   *(confirmed)* **As little F1 video as possible; a Short with none is fine.** *(confirmed, 2026-11-22: "I want
+   the least video as much as possible … even if we don't have video, that's okay")*
 10. **What to show below is a story choice, not a fixed crop:** the timing tower, sector
    times, the onboard, whatever proves what the user is talking about at that moment. Crop
    and zoom it to follow the story. The agent decides this itself. *(confirmed: "as you want,
@@ -104,4 +108,12 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
    radio row, a driver told "no") is worth a Short on its own, e.g. Russell on the Mercedes
    radio wanting to go after Antonelli and the team saying no. *(confirmed: user, 2026-11-21:
    "that's a controversial clip, put that in principle")*
+
+15. **Always keep the raw footage.** The synced source stays on the timeline under every edit; holds, crops and
+   titles go on the layers above it, never in its place. *(confirmed, 2026-11-22: "always keep the raw footage")*
+   Why (guess): the edit stays re-workable (slip, re-capture a hold, change the crop) without re-finding the sync.
+16. **Work from what is already in the project.** The synced footage is in the base; use it on the timeline
+   (slip it to the moment) instead of rendering new media, and keep anything the agent must make beside the
+   .prproj (the `CutDeck` folder). *(confirmed, 2026-11-22: "you just copy the footage from the base … I already
+   synced it"; "I want it to be there … alongside the Adobe Premiere project file")*
 

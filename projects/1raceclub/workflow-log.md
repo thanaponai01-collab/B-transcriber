@@ -620,3 +620,151 @@ User: "you go cut the video for me". Agent's order (content first, so the silenc
    pieces took the source's Opacity/Screen, crop 12 and Posterize 0.2 in 24 s with no crash, and one Undo
    reverts it. Paste only onto unstyled pieces, because a piece that already has Posterize gets a second one. The
    full-live rough cut (2 h → several thousand cuts) has not been run yet; the test ran 738 cuts on a 44 min copy in 28 s.
+
+### Agent's Short: "Hamilton pit call" (2026-11-22 17:10–18:00, `TT hamilton pit call v2 (Claude)`, 22.3 s)
+User: "create me short ... for 1raceclub" from `YT editing v4 (Claude) — CutDeck e705c7bb`; the agent picked the story.
+Controversy pick: Ferrari keeps Hamilton out under the Safety Car because of his 10 s penalty, then pits him anyway and he
+drops to P14. Every beat verified on the synced feed (feed = voice − 1237.13 s): 10 SECOND TIME PENALTY banner, HAMILTON
+RADIO boxes "WE ARE STAYING OUT", "EVERYONE'S COME IN! / WE HAVE A 10 SECOND PENALTY…", "IF I TURNED IN, WE WOULD'VE
+CRASHED!", "…COMING OUT P15 OR P16 / THAT'S UNBELIEVABLE", tower "1 HAM 0" under the SC and "14 HAMILTON" after.
+| Short s | words (v4 s) | picture |
+|---|---|---|
+| 0–2.5 | hook "ห๊ะ / ถ้าไม่งั้นบอกแล้วมึงเอากูเข้าพิตทำไมวะ" (658.07–660.57) | pit stop hold + radio box "P15 OR P16 / UNBELIEVABLE"; title |
+| 2.5–9.77 | "แฮมิลตันเรดิโอ ทีมบอกสเตย์เอาท์… ทุกคนมันเข้าพิตแล้วเว้ย / เรามีสิบเพนัลตี้" (624.3–631.57) | onboard holds + "STAYING OUT", then "EVERYONE'S COME IN / 10 SECOND PENALTY" box |
+| 9.77–14.43 | "โห ตัดแทรก / แต่แฮมิลตันบอก… กูเลี้ยวเข้าไปกูก็ชนแล้วเว้ย" (697.1–701.77) | replay with the penalty banner; side-by-side replay + "IF I TURNED IN" box |
+| 14.43–22.3 | "เพราะถ้าเข้าพิตไปน่าจะออกมาที่สุดท้าย… สุดท้ายเข้าพิตเหมือนเดิม ออกมาที่สุดท้ายอยู่ดี / จะตลกให้" (647.77–655.63) | SC hold + tower rows "1 HAM 0 / VER 1 / RUS 1"; Hamilton car + "14 HAMILTON" row |
+- Route: `create_sequence` `TT editing` (empty 9:16, for settings) → `cut_copy` of v4 (5 cuts, 2 s) → `build_sequence` into:
+  reorder by clone/lift, V2 face on at y 0.235 (this episode's cam puts the chin above the seam there, not 0.273), PNG holds
+  at 109% centred (F1 / F1 TV / REPLAY marks fall outside the window), radio boxes and tower rows on V5 inside x 60–890,
+  y 250–1440; Dramatic-Vine −12 dB on the hook, the replay and the twist (3 frames ahead); F1 Radio Notification −9 dB
+  on A8, starting with each box's Glitch (9 frames); Basic Title "แฮมิลตันเดือดทีม!" on V6, 200%, ends on the hook cut.
+- v1 (`TT hamilton pit call (Claude)`) said "แฮมิลตันเรดิโอ" twice (hook + next piece): v2 starts the hook at "ห๊ะ".
+  v1 is junk for the user to delete.
+- Checks: read-back (every hold and crop ends on its cut, 669 frames), `timeline_transcript` 0 cuts in sound,
+  Premiere frames at 9 points. Not saved, not exported. Title is white Basic Title (the API can't set colour or font):
+  the user restyles it yellow / Prompt or retypes.
+
+### Agent's Short: "Ferrari contact" (2026-11-22 18:10–18:40, `TT ferrari contact (Claude)`, 21.8 s)
+User: "make another short from the same race ferrari hitting each other". Verified on the feed: Hamilton's #44 sideways under
+a yellow flag (lap 38), the HAMILTON REPLAY inset with Leclerc's car alongside (feed 5869–5871 voice s), stewards' banners
+"LECLERC, HAMILTON INCIDENT – TURN 7 – COLLISION – UNDER INVESTIGATION" (6118–6123) and "10 SECOND TIME PENALTY LECLERC –
+CAUSING A COLLISION" (6246). Race order already opens on the contact, so no reorder.
+| Short s | words (v4 s) | picture |
+|---|---|---|
+| 0–2.57 | "เอาละๆ เลอแคลร์ก็ไม่…" (1062.97) | #44 sideways at the aramco wall; title "เฟอร์รารี่ชนกันเอง!" |
+| 2.57–6.4 | "เออ แปะกันนะ เฟอร์รารี่ / เรียบร้อย แปะกับ" | REPLAY inset (Hamilton onboard, Leclerc alongside) cropped 190% on V5 |
+| 6.4–10.7 | "สองคัน / แปะกันนะ เลอแคลร์กับแฮมิลตัน" (–1073.67) | overhead of the corner + LEC/HAM name badges stacked (one PNG on V5) |
+| 10.7–13.53 | "ในที่สุดก็แปะนะครับ โอ้โห" (1073.83–1076.67) | face only; auughhh −27 dB |
+| 13.53–16.4 | "เลอแคลร์กับแฮมิลตันโดนสอบนะ / จังหวะแปะกัน" (1182.5–1185.37) | investigation banner text cropped 139% over the hold's own banner; boom |
+| 16.4–21.8 | "เลอแคลร์โดนสิบวิ โอ้โห / เฟอร์รารี่สองคันโดนไปยี่สิบวิ" (1199.6–1205.0) | penalty banner text cropped 152%; boom |
+- Lessons: a cropped banner at the hold's own size adds nothing, so crop only its text and enlarge it over the original. Avoid a hold
+  whose bottom repeats the badges placed on V5. Stills of 77 and 86 frames landed one frame short this time (115+ exact),
+  leaving a 1-frame sliver of the old feed piece: removed it and trimmed the hold out by one frame. Always read back.
+- `timeline_transcript`: one edge 12 ms into sound at 19.0 s (between "โอ้โห" and "เฟอร์รารี่"), inherited from v4's own cut.
+- Not saved, not exported. Title white Basic Title (user restyles it yellow / Prompt).
+
+### Agent's Short: "Ferrari contact v2" (2026-11-22 18:40–19:00, `TT ferrari contact v2 (Claude)`, 30.4 s)
+User: "i want the one that lec told team that tell HAM to not squezzing him in as well, and i want the action pic that they both
+hit". Leclerc's radio is on the feed at voice 3283–3286 ("LECLERC RADIO 16: HE NEEDS TO BE CAREFUL WITH THIS SQUEEZING BECAUSE
+IT'S NOT GOING TO END WELL"), streamer reading it at v4 510.87–519.5. Action picture: the live feed was on the blimp/Sphere at
+the moment of contact and there is no full-screen replay before the stewards, so the only shot of the hit is the HAMILTON REPLAY
+inset; 5869.6 has the other Ferrari sideways across Hamilton's nose. Hamilton's reply radio ("CAN YOU TELL HIM TO BACK THE ****
+OFF", voice 3413–3420, v4 529.9–534.9) exists but was left out.
+| Short s | words (v4 s) | picture |
+|---|---|---|
+| 0–2.57 | "เอาละๆ เลอแคลร์ก็ไม่…" (1062.97) | hit inset 5869.6 at 190% over the 5805 hold blurred 6 px and dimmed to 40%; title |
+| 2.57–6.4 | "เออ แปะกันนะ เฟอร์รารี่ / เรียบร้อย แปะกับ" | #44 sideways (5805) |
+| 6.4–10.7 | "สองคัน / แปะกันนะ เลอแคลร์กับแฮมิลตัน" | overhead 5803.5 + LEC/HAM badges |
+| 10.7–13.53 | "ในที่สุดก็แปะนะครับ โอ้โห" | face only; auughhh |
+| 13.53–19.03 | "…ระวังหน่อยนะ บีบกูเข้ากำแพง เดี๋ยวจะจบไม่สวย" (510.87–516.37) | hold 3284 + LECLERC RADIO box 200%; F1 radio SFX on the box's first frame |
+| 19.03–22.17 | "มันจบไม่สวย… ไม่จบทั้งคู่" (516.37–519.5) | face only (the payoff of the radio) |
+| 22.17–25.03 | investigation (1182.5–1185.37) | banner text 139%; boom |
+| 25.03–30.43 | penalty (1199.6–1205.0) | banner text 152%; boom |
+- Order: the radio was said before the contact in the race; it was moved after the hit, because the hook is the hit and the
+  radio then reads as "he warned them". Reorder by clone/lift steps (8 steps).
+- Hook: an inset on top of the sideways-car still read as a collage; a blurred, dimmed copy of the background still makes the
+  inset the only thing to look at.
+- Same one-frame-short stills again (77 and 86 frames): removed the slivers, trimmed out by one frame. Title asked 79 → landed 77.
+- `timeline_transcript`: one edge 12 ms into sound at 27.6 s (inherited from v4, same as v1); one tail 5 ms at 19.0 s.
+- Not saved, not exported.
+- Revision (19:20–19:45), user: "First shot, it should be like Leclerc about to go into the inside. Then the second shot needs to
+  be they hit each other", then "it should be the drone shot as i remember but its small". The contact IS on the live feed:
+  the blimp/drone shot over the TAG Heuer corner, cars ~20 px. 5799.8 = the two Ferraris side by side (Leclerc inside);
+  5800.0–5800.2 = one pitched sideways (the hit); yellow flag at 5801.0. Shot 1 (0–2.57) = crop 300×169 of 5799.8 at 300%,
+  shot 2 (2.57–6.4) = crop of 5800.1 at 300%, both over the dimmed 5805 hold, glitch in on each. This replaces the #44
+  sideways shot. (The onboard-replay frames 5868.93 / 5869.30 were tried first and swapped out.)
+  Lesson: when the user remembers a shot, look for it at small scale in the wide shots before saying it isn't there.
+  Placement via build_sequence into the live sequence (items only) overwrites cleanly. Stills placed exact length
+  this time (116 → 116) while a 78 landed 77, so always read back.
+- By the time of the revision the sequence ended at 856 (28.53 s): the tail "สองคันโดนไปยี่สิบวิ" (856–913) was gone on
+  every track, with the 6246 holds trimmed to 856. The user confirmed they cut it: end on "เฟอร์รารี่", not on the 20 s total.
+- Revision 2 (19:45–20:00), user: "first 1-3 secs is too static". Shot 1 is now a moving clip: the drone feed 5798.95–5800.05
+  (1.1 s, 50 fps source), with a crop that pans to follow the pair (330×186, centre x 1010→893, y 818), slowed to 2.57 s and
+  rendered to `drone_inside_slow_sq.mp4` (900×508, `setsar=1`), Motion Scale 83.33 at (90,790). It ends on the frame before
+  the hit still (5800.1), so shot 1 runs straight into shot 2. Lesson: a hook of 2+ s on a still reads as static; when the
+  source has motion, slow it down and track it instead of holding a frame.
+
+### Agent's Short: "Russell hits the wall" (2026-11-22 19:30–20:10, `TT russell wall v3 (Claude)`, 14.4 s)
+User: "make another short from the same race with RUSSELL hit the wall then max said something after that but i didnt mention".
+Feed (voice s): Russell attacks Antonelli 6755.2, slides wide 6756.4, into the T-Mobile wall 6757.6; "George RUSSELL 63"
+badge 6759.7+. VERSTAPPEN RADIO 6865–6872: "HA HA WELL DONE! MY GOD…" / "OK MAX, WELL HE IS STILL GOING". The streamer
+did read it ("แม็กเรดิโอ" 6873.6, "แม็กบอกเว้ย สุดยอดไปเลย ไม่รู้พูดถึงอะไรครับ" 6880.9) but didn't know who it was about; the
+team's reply, a lap after the crash, answers that. That stretch isn't in v4 (v4 skips 6795–6909), so the Short is cut from
+`Editing` (the full synced timeline: Editing s = voice − 1759.367; same layers as v4).
+| Short s | words | picture |
+|---|---|---|
+| 0–3.53 | "แล้วมาลึกเลยครับในอินไซน์ เอ้ย แล้วไปชนอะไรไม่รู้พี่จอร์จครับ" | crash clip, real time, feed 6755.3→ (crop 1306×980 under the F1 TV logo, 1080×810 at y 790) over a dimmed 6758.2; title "รัสเซลชนกำแพง!"; boom |
+| 3.53–6.57 | "แล้วโอ้โห ชนกำแพง เหมือนไปชนเศษ" | 6759.1 in the wall + RUSSELL 63 badge 160% (the hold is from before the badge appears, so no duplicate) |
+| 6.57–9.37 | "เศษฟร้อนวิงของฮาจาครับพี่จอร์จ" | 6762.7 |
+| 9.37–14.37 | "แม็กเรดิโอ / แม็กบอกเว้ย สุดยอดไปเลย / ไม่รู้พูดถึงอะไรครับ" | dimmed Russell-in-the-wall background + the radio box at 240%: Max's line, then on "ไม่รู้พูดถึงอะไร" the box with the team's reply; F1 radio SFX |
+- Edges: transcript word times were off by up to 0.4 s (a gate made 6880.2–6880.86 digital silence; "แล้ว" began 0.2 s
+  before its word time). v1 and v2 had cuts into words; v3 has every edge set from a 20 ms RMS scan of the voice. Lesson:
+  measure the audio at each edge before building, don't trust word starts.
+- v1 `TT russell wall (Claude)` and v2 are junk for the user to delete.
+- Crash clip rendered blank at frames 98–101 until re-encoded all-intra (PREMIERE_FACTS row).
+- Not saved, not exported. Title white Basic Title (user restyles it).
+
+#### v4 `TT russell wall v4 (Claude)`, 12.9 s (user: "ไปชนอะไรไม่รู้พี่จอร์จครับ i need that first … debris flicking up from George Russell car, I want that shot first")
+- The debris is **~5 s before the wall hit**, not near it: feed (voice s) 6752.86–6753.10 sparks and a piece fly up off the
+  Merc on the main straight (wide shot, the Red Bull to its right). I first searched 6753.6–6757.4 and missed it; the user
+  said "rewind 5 seconds before George hit the wall". Lesson: when the streamer reacts late, scan wider before the incident.
+| Short s | words | picture |
+|---|---|---|
+| 0–2.10 | "เอ้ย แล้วไปชนอะไรไม่รู้พี่จอร์จครับ" (6761.96–6764.07, RMS dips both ends) | debris slow-mo 2× from 6752.5, tracking crop 624×680 → 1080×1178 filling **the whole lower part** (y 742 = cam bottom → 1920; user asked for full bottom, not a box over the dim hold); title "รัสเซลชนอะไร?!"; boom |
+| 2.10–5.10 | "แล้วโอ้โห ชนกำแพง เหมือนไปชนเศษ" | crash clip real time from 6756.7, so the wall hit lands on "ชน" (~2.9 s); glitch in |
+| 5.10–7.90 | "เศษฟร้อนวิงของฮาจาครับพี่จอร์จ" | 6759.1 + RUSSELL 63 badge; glitch in |
+| 7.90–12.90 | radio part as v3 | as v3; glitch in |
+- "แล้วมาลึกเลยครับในอินไซน์" dropped so the hook opens on the question. Not saved, not exported.
+
+#### v5 `TT russell wall v5 (Claude)`, 12.9 s: user feedback on v4 (21:00)
+User: no "blackout" (dimmed blurred background under a box), the bottom part must be full footage; copy the text the
+user placed over mine exactly (style and position); don't render clips, use the synced footage from the base the way the
+user does (slip the synced feed to the moment); files the agent makes belong next to the .prproj, not elsewhere.
+- Built as a copy of v4 (cut_copy with a cut past the end, [[387,388]], keeps every layer and the user's text clip).
+- V4 = `Las Vegas GP 2026 Race.mp4` itself, six clips (In = voice − 1237.13), each framed by Motion to fill y 742–1920
+  (cam bottom edge at 742): anchor at the feed point, position (0.5, 1331/1920), scale = fill, Crop Top keeps it off the cam.
+  Debris 6752.5 at 50% via set_speed (32 frames placed, slowed to 63); wall 6756.7 at 120%; in-the-wall 6759.1 at 109%
+  (the RUSSELL 63 badge comes up in the live feed, no crop still needed); radio 6865.8 / 6866.6 / 6870.2 at 160% framed
+  on the VERSTAPPEN RADIO box (box live on screen 6864.5–6872+, reply text from ~6869).
+- No stills, no mp4 renders, no dim layer; V5 and my V6 title removed. Glitches on V4 at 63/153/237.
+- Title: the user's own Graphic (V7, 0–77, bold white, dark outline, sits just above the cam edge; it read
+  "เฟอร์รารี่ชนกันเอง!") kept with all its settings; text changed to "รัสเซลชนอะไร?!" with edit_text. Graphic source text
+  style isn't readable by the API, so copy the user's clip, don't rebuild from Basic Title.
+- Audio, edges and SFX unchanged from v4. Not saved, not exported.
+- **User's frame holds on v5 (21:09):** the user added CutDeck panel "Add Frame Hold" stills on V5
+  (`PREMIERE PRO\CutDeck\CutDeck_Hold_*.png`, sequence-size PNG, transparent above the cam): debris freeze 36–63, wall
+  freeze 105–237, and a disabled radio hold 237–387, then asked: "the Max radio part: just capture, cut that hold, then crop it".
+  Done: their radio hold cut to 237–333, enabled, Motion-cropped to the box (x 530–925, y 1100–1465 in the PNG) at 200%,
+  centred in the bottom part; a second hold captured at frame 375 (box with the team's reply, y to 1560), saved as
+  `CutDeck_Hold_<ms>.png` in the same folder, placed 333–387 with the same crop. Live feed keeps moving underneath.
+  Pattern: callouts = frame hold of the timeline + crop on the hold, not a PNG cut from the source file.
+- **User (21:15): "remember the safe zone and the copyright rule: least video possible, that's why I captured holds."**
+  Both were already in `shorts-rules.md` and v5 broke them: 5 s of live video behind the radio box, and the box at 200%
+  reaching x 935 / y 1696. Fixed: radio background = one CutDeck hold (feed at 109%, aerial, no radio box, no logo;
+  top 742 px transparent like the panel's holds) 237–387; boxes 190% / 150% centred at (475, 1091), inside x 60–890,
+  y 250–1440 (checked on rendered frames). Visible moving F1 video now 0–36 + 63–105 = 2.6 s. Glitch moved to the radio
+  box head (V5 237). The user also retitled their text "RUS ชนกำแพง" and trimmed it to 0–63; left alone.
+- **User (21:17): "always keep the raw footage"**: I had removed the radio part's source clips and put the hold on V4.
+  Restored: V4 = `Las Vegas GP 2026 Race.mp4` for all six parts (radio part at 109%, In 6865.8 / 6866.6 / 6870.2);
+  background hold on V5 237–387; radio boxes moved to V6 (237–333, 333–387, crops and safe-zone framing kept, glitch on
+  V6 237). Rule: the source stays; holds and crops sit on tracks above it.
