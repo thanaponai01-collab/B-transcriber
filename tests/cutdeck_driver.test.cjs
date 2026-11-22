@@ -141,6 +141,15 @@ test("export_sequence by name takes the one same-named sequence with content", a
   assert.ok(log.length > 0);
 });
 
+test("cut_copy refuses a result_name already in the project, before copying anything", async () => {
+  const h = host();
+  h.project.getSequences = async () => [{ name: "Interview" }, { name: "Interview cut" }];
+  await assert.rejects(createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "cut_copy", args: { sequence_name: "Interview", result_name: "Interview cut",
+      cuts: { ticks_per_frame: TPF, cuts_frames: [[0, 30]] } } }), /A sequence named "Interview cut" already exists/);
+  assert.deepEqual(h.undoSteps, []);
+});
+
 test("export_sequence refuses an output name the preset would not write", async () => {
   const h = host();
   let exported = false;

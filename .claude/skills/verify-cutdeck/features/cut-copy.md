@@ -33,8 +33,9 @@ API deletes a sequence.
 
 ## Gotchas
 
-- `result_name` must differ from the source (refused otherwise). A name already in the project is
-  NOT refused, so check `list_project` first.
+- `result_name` must differ from the source and from every sequence already in the project
+  (refused otherwise, before anything is copied; live 2026-11-22, run `20261122-073257-pr115-gaps`:
+  "already exists", project item count unchanged).
 - A run that fails mid-way leaves its copy in the project renamed `<result_name> (FAILED)`.
 - `ticks_per_frame` must be the source's own (`read_timeline` prints it): 8467200000 for the 30 fps scratch.
 - The copy becomes the active sequence; `C cleanup` gives the user's sequence back.

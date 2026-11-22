@@ -236,10 +236,13 @@ def _export_sequence_arguments(args: dict, jobs) -> dict:
     return result
 
 
-VALID_TRANSFORM_FIELDS ={"position-x", "position-y", "scale", "rotation", "anchor-x", "anchor-y"}
+# The fields the panel's setField takes (uxp/cutdeck/transform/edit.js EDIT_FIELDS).
+VALID_TRANSFORM_FIELDS = {"position-x", "position-y", "scale", "scale-width", "uniform-scale", "rotation",
+                          "anchor-x", "anchor-y", "anti-flicker", "crop-left", "crop-top", "crop-right",
+                          "crop-bottom", "opacity"}
 VALID_ANCHOR_TARGETS = {"top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"}
 VALID_ALIGN_EDGES = {"left", "hcenter", "right", "top", "vcenter", "bottom"}
-VALID_ALIGN_TO = {"frame", "selection"}
+VALID_ALIGN_TO = {"frame", "selection", "group"}
 VALID_DISTRIBUTE_KINDS = {"h-centers", "v-centers", "h-gaps", "v-gaps"}
 VALID_DISTRIBUTE_TO = {"frame", "selection"}
 
@@ -1247,7 +1250,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         """
         Run a Premiere menu item as a click would, by its path from premiere_list_menu, e.g.
         "Edit > Undo", "Edit > Redo", "Sequence > Add Edit to All Tracks", "Clip > Unlink",
-        "Clip > Link", "Sequence > Lift", "Sequence > Extract", "Clip > Nest". Preferred over
+        "Clip > Link", "Sequence > Lift", "Sequence > Extract" (Clip > Nest opens a dialog, so it is
+        refused: use premiere_nest_clips). Preferred over
         premiere_key_command: it presses no shortcut for the command itself. Timeline commands
         act on the focused panel, so with focus timeline (default) `sequence` (default: the active
         one) is opened, the timeline focused and checked, then the item runs. Edit > Undo/Redo need
