@@ -162,3 +162,15 @@ what the agent's call actually does.
   actions), at 14:44:55 before the first razor batch finished building, in a Premiere session started 40 s earlier.
   So neither batch size nor "use a fresh session" explains it. Untested hypothesis: editing the copy before
   Premiere settles after a commit. Fewer cuts mean fewer edits, not a crash fix.
+- **Live 2026-11-22, run `20261122-162003-rough-cut-crash-hw`** (`Editing`, 2 h, 10 lanes, 27.0.0):
+  - The 150 ms cut list (1,407 cuts) applied twice with a clean clip-by-clip read-back.
+  - Five heavy runs back to back, no crash: the crash is not reproduced, so it stays OPEN.
+  - Where a run's time goes (new timings line): re-reading the copy between batches 50-79 s, the razor 33-43 s,
+    removing pieces 3-5 s, 17,000 moves under 1 s, read-back 4-5 s, opening the copy 7-10 s.
+  - **Hardware.** Premiere does not give back what a cut uses: after the five runs it held 32.1 GB private,
+    more than the 31.7 GB of RAM, and every run was slower than the last (103 → 190 s for the same list).
+    Analysis of the same 2 h range (offline, no speech protection): 70 s on one CPU core of 24, no GPU,
+    4.4 GB peak in Python (freed when it ends; the 16 kHz audio itself is 0.46 GB).
+  - So: run a long-form rough cut in a freshly started Premiere, saved first, and not after other heavy cuts
+    in the same session. `apply_cuts` and `cut_copy` now say so to agents. The clean-session numbers (memory
+    before and after one cut) still need a run right after a Premiere restart.
