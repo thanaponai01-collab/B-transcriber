@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, screenshot
+from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -233,10 +233,13 @@ def _export_sequence_arguments(args: dict, jobs) -> dict:
     return result
 
 
-VALID_TRANSFORM_FIELDS ={"position-x", "position-y", "scale", "rotation", "anchor-x", "anchor-y"}
+# The fields the panel's setField takes (uxp/cutdeck/transform/edit.js EDIT_FIELDS).
+VALID_TRANSFORM_FIELDS = {"position-x", "position-y", "scale", "scale-width", "uniform-scale", "rotation",
+                          "anchor-x", "anchor-y", "anti-flicker", "crop-left", "crop-top", "crop-right",
+                          "crop-bottom", "opacity"}
 VALID_ANCHOR_TARGETS = {"top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"}
 VALID_ALIGN_EDGES = {"left", "hcenter", "right", "top", "vcenter", "bottom"}
-VALID_ALIGN_TO = {"frame", "selection"}
+VALID_ALIGN_TO = {"frame", "selection", "group"}
 VALID_DISTRIBUTE_KINDS = {"h-centers", "v-centers", "h-gaps", "v-gaps"}
 VALID_DISTRIBUTE_TO = {"frame", "selection"}
 
@@ -588,6 +591,20 @@ def _place_media_arguments(args: dict, jobs) -> dict:
             "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"), "v": args["v"], "a": args["a"], "mode": mode}
 
 
+def _place_text_arguments(args: dict, jobs) -> dict:
+    """Bake the texts into a copy of the template here in the helper; the panel inserts the copy."""
+    template, texts = args.get("template"), args.get("texts")
+    if not isinstance(template, str) or not template.lower().endswith(".mogrt") or not Path(template).is_file():
+        raise ValueError("template must be the path of an existing .mogrt")
+    if not isinstance(texts, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in texts.items()):
+        raise ValueError('texts must map a text name or index to its text, e.g. {"0": "สวัสดี"}')
+    v, a = args.get("v"), args.get("a", 0)
+    if type(v) is not int or v < 0 or type(a) is not int or a < 0:
+        raise ValueError("v and a must be 0-based track indexes")
+    return {**_sequence(args), "mogrt": str(mogrt_text.bake(template, texts)),
+            "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"), "v": v, "a": a}
+
+
 def _add_effect_arguments(args: dict, jobs) -> dict:
     if not isinstance(args.get("effect"), str) or not args["effect"].strip():
         raise ValueError("effect must be a video match name or audio display name (premiere_list_effects)")
@@ -726,6 +743,21 @@ CONTROL_COMMANDS: dict[str, Command] = {
         cannot overwrite A1.
         """,
         (("at_ticks", str), ("v", int), ("a", int), ("media", str | None, None), ("nest", str | None, None), ("mode", str, "overwrite"), ("sequence", str | None, None))),
+    "place_text": Command(
+        120, _place_text_arguments, "write",
+        """
+        Place a text Graphic with your own text (any language, Thai included): a Motion Graphics
+        Template (.mogrt, Premiere- or After Effects-made, e.g. Premiere's own "Essential
+        Graphics/Basic Title.mogrt") with `texts` set, at `at_ticks` on video track `v` (0-based;
+        `a` is the audio track for templates with sound). Premiere inserts it, so the track must
+        be empty from `at_ticks` on (else refused; use a new track = the track count). One
+        Edit > Undo removes it. texts maps a text's name or index to
+        its new text; a wrong key lists the template's texts. Returns the placed clip and the
+        texts read back (After Effects templates only; Premiere-made text can't be read from the
+        panel, so check it with premiere_export_frame). To change the text of a placed Graphic,
+        place a new one and remove the old: editing text in place is broken in Premiere 27.0.
+        """,
+        (("template", str), ("texts", dict), ("at_ticks", str), ("v", int), ("a", int, 0), ("sequence", str | None, None))),
     "list_effects": Command(
         60, _no_arguments, "read",
         """
@@ -822,6 +854,32 @@ def _menu_command_arguments(args: dict, jobs) -> dict:
     return {"path": args["path"], **_focus_arguments(args)}
 
 
+def _set_speed_arguments(args: dict, jobs) -> dict:
+    speed, reverse, ripple = args.get("speed"), args.get("reverse", False), args.get("ripple", False)
+    if type(speed) not in (int, float) or not 0 < speed <= 10000:
+        raise ValueError("speed must be a percent above 0 (100 = normal, 200 = twice as fast)")
+    if not isinstance(reverse, bool) or not isinstance(ripple, bool):
+        raise ValueError("reverse and ripple must be true or false")
+    return {**_sequence(args), "clips": _clip_ids(args.get("clips")), "speed": speed, "reverse": reverse, "ripple": ripple}
+
+
+def _nest_arguments(args: dict, jobs) -> dict:
+    name = args.get("name")
+    if not isinstance(name, str) or not name.strip() or len(name) > 200 or "\n" in name:
+        raise ValueError("name must be a one-line sequence name")
+    return {**_sequence(args), "clips": _clip_ids(args.get("clips")), "name": name}
+
+
+def _edit_text_arguments(args: dict, jobs) -> dict:
+    clip, text = args.get("clip"), args.get("text")
+    if not isinstance(clip, str) or not _CLIP_ID.fullmatch(clip) or not clip.startswith("V"):
+        raise ValueError("clip must be a video clip id like V2@0 (from premiere_read_timeline)")
+    if not isinstance(text, str) or not text or "\n" in text or "\r" in text:
+        raise ValueError("text must be one line of text (new lines are not supported yet)")
+    at = args.get("at_ticks")
+    return {**_sequence(args), "clip": clip, "text": text, **({"at_ticks": _ticks(at, "at_ticks")} if at is not None else {})}
+
+
 def _assistant_arguments(args: dict, jobs) -> dict:
     prompt, timeout_s = args.get("prompt"), args.get("timeout_s", 120)
     if not isinstance(prompt, str) or not prompt.strip():
@@ -889,12 +947,49 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("query", str, ""),),
         cli_target=("query", lambda target: {"query": target}),
         run=_list_menu),
+    "set_speed": Command(
+        90, _set_speed_arguments, "destructive",
+        """
+        Change clips' speed as Clip > Speed/Duration... does, by filling that dialog (Premiere UI
+        route; the user approved driving dialogs). speed is a percent (100 normal, 50 half speed,
+        200 double), reverse plays backwards, ripple shifts later clips (else a slower clip stops
+        at the next one). Selects `clips` first (give V and A of a linked clip). Returns the
+        clips after; their ids change when their length does. One Edit > Undo reverts it. Takes
+        over the keyboard for a few seconds.
+        """,
+        (("clips", list[str]), ("speed", float), ("reverse", bool, False), ("ripple", bool, False), ("sequence", str | None, None)),
+        run=lambda args, premiere: premiere_ui.set_speed(premiere, args)),
+    "nest_clips": Command(
+        90, _nest_arguments, "destructive",
+        """
+        Nest the given clips into a new sequence called `name`, as Clip > Nest... does (Premiere
+        UI route). The clips are replaced by one nested clip of that name, and the new sequence
+        is added to the project. One Edit > Undo removes both. Takes over the keyboard briefly.
+        """,
+        (("clips", list[str]), ("name", str), ("sequence", str | None, None)),
+        run=lambda args, premiere: premiere_ui.nest_clips(premiere, args)),
+    "edit_text": Command(
+        120, _edit_text_arguments, "destructive",
+        """
+        Replace the text of a Premiere-made text Graphic already on the timeline (one text layer;
+        any language, Thai included), the way a person does: it finds the text in the Program
+        Monitor, double-clicks it, selects all and types. The Program Monitor must be open with
+        the sequence in view. at_ticks: a time where the text shows (default: the clip's middle).
+        Refuses a Graphic with several text layers, and an After Effects template (use
+        premiere_place_text). The new text takes the first character's style. It picks the
+        Selection tool and moves the playhead and selection. Briefly disables and re-enables the
+        clip to find the text, and checks the rendered frame changed. One Edit > Undo reverts the
+        text. Takes the mouse and keyboard for a few seconds.
+        """,
+        (("clip", str), ("text", str), ("at_ticks", str | None, None), ("sequence", str | None, None)),
+        run=lambda args, premiere: premiere_ui.edit_text(premiere, args)),
     "menu_command": Command(
         60, _menu_command_arguments, "destructive",
         """
         Run a Premiere menu item as a click would, by its path from premiere_list_menu, e.g.
         "Edit > Undo", "Edit > Redo", "Sequence > Add Edit to All Tracks", "Clip > Unlink",
-        "Clip > Link", "Sequence > Lift", "Sequence > Extract", "Clip > Nest". Preferred over
+        "Clip > Link", "Sequence > Lift", "Sequence > Extract" (Clip > Nest opens a dialog, so it is
+        refused: use premiere_nest_clips). Preferred over
         premiere_key_command: it presses no shortcut for the command itself. Timeline commands
         act on the focused panel, so with focus timeline (default) `sequence` (default: the active
         one) is opened, the timeline focused and checked, then the item runs. Edit > Undo/Redo need

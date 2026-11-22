@@ -113,6 +113,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     const project = await activeProject(ppro);
     const matches = await sequencesNamed(project, sequenceName);
     if (matches.length !== 1) throw new Error(`Found ${matches.length} sequences named "${sequenceName}"; need exactly one.`);
+    if ((await sequencesNamed(project, resultName)).length) throw new Error(`A sequence named "${resultName}" already exists.`);
     ctl.setStatus(`Cutting a copy of "${sequenceName}" for an outside request…`, "busy");
     const r = await applyNativeCut(ppro, project, matches[0], cuts, resultName);
     return { cuts: r.cuts, removed_seconds: seconds(r.removedTicks), splits: r.splits, undo_steps: r.steps,

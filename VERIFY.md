@@ -66,6 +66,17 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: read u32 big-endian in cutdeck/prproj_reader.py, test_prproj_reader went red, reverted
 
+## place_text (text into Premiere via a baked .mogrt)
+- test: `python -m pytest tests/test_cutdeck_mogrt_text.py -q`
+- fail-signal: failed
+- live: `cdv.py call place_text` on the scratch (2026-11-21, runs `20261121-230511-mogrttext`, `20261121-232401-place-text-busy`): Thai rendered from Basic Title and an AE template, AE text read back, occupied track refused, Undo removes it.
+
+## Premiere UI route (set_speed, nest_clips, edit_text)
+- test: `python -m pytest tests/test_cutdeck_premiere_ui.py -q`
+- fail-signal: failed
+- fail-proof (2026-11-21): TICKED_MEAN raised to 200 in cutdeck/premiere_ui.py, test_ticked_box_is_told_from_an_empty_one went red, restored
+- live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
+
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`
 - test: `node tools/adobe/check-api.mjs`
@@ -77,6 +88,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: inverted the routesDiffer comparison in uxp/cutdeck/layoutProbe.js, cutdeck_layout_probe.test.cjs went red on the text-probe differ case, reverted
 - fail-proof (2026-10-26, one panel, four tabs; tests/cutdeck_one_panel.test.cjs): each went red on its own and was restored, 726/726 green: dropped the `isMounted` tab gate in features/align.js (the poll read Premiere on the Cut tab); raised the frame drawing's height cap to 300 (9:16 drawn too tall); let the fx block reset include disabled rows; never cleared the busy-tab dot; gave `#tab-align` a `data-act` (busy would disable it); laid the frame out while its width is 0. Not yet run in Premiere (plan step 8).
 - fail-proof (2026-10-26, poll cost; tests/cutdeck_align_poll_rate.test.cjs): made the idle read keep 1 s instead of doubling to 4 s while unchanged in uxp/cutdeck/features/align.js; both poll-rate tests went red; restored, 729/729 green. The poll and its Premiere listeners now start and stop with the Transform/Align tab (cutdeck_align_panel.test.cjs pins it). Not yet run in Premiere.
+- fail-proof (2026-11-22, PR 115 gaps): before the fix, cutdeck_transform_edit.test.cjs "an edit plans from Premiere's values" went red (Position x 0.1920 vs 0.1667, the stale rotation 7 that moved the picture live in run `20261122-000256-maintain-timeline`) and cutdeck_driver.test.cjs "cut_copy refuses a result_name already in the project" went red; both green with edits reading fresh (`forceRefresh` in uxp/cutdeck/transform/edit.js) and the name check in features/driver.js, 797/797. Live after a Premiere restart (run `20261122-073257-pr115-gaps`): rotate + Edit > Undo + anchor top-left wrote [0, 0] with the frame unchanged, cut_copy refused an existing name, crop/opacity/align group took effect and undid.
 - fail-proof (2026-10-26, playback; tests/cutdeck_align_poll_rate.test.cjs): disabled the playhead-moved skip in `pollAlignTransform` (uxp/cutdeck/features/align.js); the no-reads-during-playback test went red; restored, 730/730 green. Not yet run in Premiere.
 
 ## Topic Cut

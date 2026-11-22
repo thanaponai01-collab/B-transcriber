@@ -324,7 +324,7 @@ async function clipModel(ppro, clip, seqFrame, seqAspect, seq) {
 // as `m.textBoxError`). A plan's `note` is reported in the result's `notes`, the clip still done.
 async function editSelectedClips(ppro, label, plan, measure = null, group = null, layerTarget = "all", textBoxes = null) {
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const snap = await readSnapshot(ppro, { seq });
+  const snap = await readSnapshot(ppro, { seq, forceRefresh: true });
   if (snap.clips.length === 0) throw new Error("Select a clip on the timeline.");
   const seqFrame = snap.seqFrame;
   if (!seqFrame) throw new Error("Could not read the sequence frame size.");
@@ -760,7 +760,7 @@ async function alignTextLayersInGraphic(ppro, project, seq, clip, layers, edge) 
 async function alignToSelection(ppro, edge, measure = null, options = {}) {
   if (!transformGeometry.ALIGN_EDGES.includes(edge)) throw new Error(`Unknown alignment "${edge}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const snap = await readSnapshot(ppro, { seq });
+  const snap = await readSnapshot(ppro, { seq, forceRefresh: true });
   const clips = snap.clips;
   if (clips.length === 1 && clips[0].isGraphic) {
     const layers = clips[0].layers;
@@ -860,7 +860,7 @@ async function distribute(ppro, kind, measure = null, to = "selection", options 
   const spec = DISTRIBUTE[kind];
   if (!spec) throw new Error(`Unknown distribution "${kind}".`);
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const snap = await readSnapshot(ppro, { seq });
+  const snap = await readSnapshot(ppro, { seq, forceRefresh: true });
   const clips = snap.clips;
   const isFrame = to === "frame";
 
@@ -958,7 +958,7 @@ async function setField(ppro, field, text, options = {}) {
   const layerTarget = (options && options.layerTarget !== undefined) ? options.layerTarget : "all";
 
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const snap = await readSnapshot(ppro, { seq });
+  const snap = await readSnapshot(ppro, { seq, forceRefresh: true });
   const clips = snap.clips;
   if (clips.length === 0) throw new Error("Select a clip on the timeline.");
   const seqFrame = spec.param === "position" ? (snap.seqFrame || await transformParams.readSequenceFrameSize(seq)) : null;
@@ -1175,7 +1175,7 @@ async function resetField(ppro, row, options = {}) {
   if (!spec) throw new Error(`Unknown field "${row}".`);
   const layerTarget = options && options.layerTarget !== undefined ? options.layerTarget : "all";
   const { project, sequence: seq } = await activeProjectAndSequence(ppro);
-  const snap = await readSnapshot(ppro, { seq });
+  const snap = await readSnapshot(ppro, { seq, forceRefresh: true });
   if (snap.clips.length === 0) throw new Error("Select a clip on the timeline.");
 
   const writes = [];

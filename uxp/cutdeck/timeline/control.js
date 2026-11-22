@@ -68,8 +68,17 @@ async function findClip(ppro, seq, id) {
   throw new Error(`${id}: no clip starts at ${ref.start} ticks on that track.`);
 }
 
+// A MOGRT text control's start value is a MogrtText (premierepro.txt MogrtText.getText, 27.0;
+// live 2026-11-21: reads on After Effects templates, null on Premiere-made Source Text).
 async function paramValue(param) {
-  try { return unwrapKeyframeValue(await param.getStartValue()); } catch (_) { return null; }
+  try {
+    const value = await param.getStartValue();
+    if (value && typeof value.getText === "function" && typeof value.getFontName === "function") {
+      return { text: value.getText(), font: value.isUniformStyling() ? value.getFontName() : null,
+        size: value.isUniformStyling() ? value.getFontSize() : null };
+    }
+    return unwrapKeyframeValue(value);
+  } catch (_) { return null; }
 }
 
 async function readChain(item, withParams) {
@@ -107,6 +116,7 @@ async function readClip(ppro, kind, t, item, effects) {
     disabled: await item.isDisabled(), selected: await isTrackItemSelected(item),
   };
   try { clip.speed = await item.getSpeed(); } catch (_) {}
+  try { clip.reversed = !!(await item.isSpeedReversed()); } catch (_) {}
   if (kind === "video") { try { clip.adjustment_layer = await item.isAdjustmentLayer(); } catch (_) {} }
   clip.media = await mediaOf(ppro, await item.getProjectItem());
   if (effects) clip.effects = await readChain(item, effects === "params");
@@ -328,6 +338,38 @@ async function placeMedia(ppro, { sequence: name = null, media = null, nest = nu
   return { name: sequence.name, mode, placed };
 }
 
+/* place_text: insert a .mogrt the helper baked the texts into (cutdeck/mogrt_text.py).
+   SequenceEditor.insertMogrtFromPath (premierepro.txt; live 26.5 and 27.0) is a direct call,
+   not an Action, so it is its own History step. The chain fills in after load, so the texts are
+   read from the re-fetched clip after a short wait (PREMIERE_FACTS "Premiere-authored ...
+   MOGRT import"). Text is read back for After Effects templates only (MogrtText). */
+async function placeText(ppro, { sequence: name = null, mogrt, at_ticks: at, v, a }) {
+  const { sequence } = await projectAndSequenceNamed(ppro, name);
+  // insertMogrtFromPath INSERTS: live 2026-11-21 it split the V1 clip at the point and pushed the
+  // rest of V1 later, leaving A1 in place (out of sync). So only a track empty from `at` on.
+  if (v < await trackCount(sequence, "video")) {
+    for (const it of await getTrackClipItems(await track(sequence, "video", v), ppro)) {
+      if (BigInt(ticksOf(await it.getEndTime())) > BigInt(at)) {
+        throw new Error(`V${v + 1} has a clip at or after ${at} (${ticksOf(await it.getStartTime())}); place_text inserts and would push it later. Use a track that is empty from there on.`);
+      }
+    }
+  }
+  const returned = ppro.SequenceEditor.getEditor(sequence).insertMogrtFromPath(mogrt, tick(ppro, at), v, a);
+  if (!returned || !returned.length) throw new Error(`Premiere placed nothing from ${mogrt}.`);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  let placed = null;
+  for (const it of await getTrackClipItems(await track(sequence, "video", v), ppro)) {
+    if (ticksOf(await it.getStartTime()) === String(at)) placed = it;
+  }
+  if (!placed) throw new Error(`Premiere returned a clip but none starts at ${at} on V${v + 1}.`);
+  const clip = await readClip(ppro, "video", v, placed, false);
+  const texts = [];
+  for (const comp of await readChain(placed, true)) {
+    for (const p of comp.params) if (p.value && typeof p.value.text === "string") texts.push({ name: p.name, ...p.value });
+  }
+  return { name: sequence.name, clip, texts };
+}
+
 async function listEffects(ppro) {
   const safe = async (f) => { try { return await f(); } catch (e) { return { error: (e && e.message) || String(e) }; } };
   const [matchNames, displayNames] = await Promise.all([safe(() => ppro.VideoFilterFactory.getMatchNames()), safe(() => ppro.VideoFilterFactory.getDisplayNames())]);
@@ -495,6 +537,7 @@ function controlHandlers(ppro) {
     select_clips: (args) => selectClips(ppro, args),
     edit_clips: (args) => editClips(ppro, args),
     place_media: (args) => placeMedia(ppro, args),
+    place_text: (args) => placeText(ppro, args),
     list_effects: () => listEffects(ppro),
     add_effect: (args) => addEffect(ppro, args),
     set_param: (args) => setParam(ppro, args),
