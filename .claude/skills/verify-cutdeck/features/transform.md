@@ -31,6 +31,10 @@ Preconditions:
 - **Deselect.** Run `C call select_clips '{"sequence": "CutDeck verify (scratch)", "clips": []}'`.
 
 Proven 2026-11-22 with this skill (run `20261122-000256-maintain-timeline`): select, inspect, rotation 7 and undo, scale 50 + align left to frame and undo, deselect. Distribute was not driven (needs three clips).
+Proven again 2026-11-22 (run `20261122-073257-pr115-gaps`, commit 924a926): rotation 7, Edit > Undo,
+then anchor top-left wrote Position and Anchor [0, 0] with the frame unchanged to the pixel (the
+earlier run wrote 0.112, -0.031 and moved it); crop-left 20 (left 20% of the frame transparent),
+opacity 50 (alpha 128), and scale 50 + align left `to: "group"` (Position 0.25), each undone.
 
 ## Gotchas
 
