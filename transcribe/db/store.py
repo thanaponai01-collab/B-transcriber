@@ -144,6 +144,7 @@ class JobRow:
     status: str
     job_phase: Optional[str] = None
     resume_fingerprint: Optional[str] = None
+    chosen_at: Optional[str] = None
 
 
 @dataclass
@@ -471,6 +472,45 @@ def find_finished_job(
     if row is None:
         return None
     return JobRow(**dict(row))
+
+
+_FINISHED_TRANSCRIPTS = (
+    "FROM job JOIN media ON media.id = job.media_id WHERE media.sha256 = ? "
+    "AND job.status = 'done' AND job.job_phase = 'written' "
+    "AND EXISTS (SELECT 1 FROM token WHERE token.job_id = job.id) ")
+
+
+def latest_transcript_job(conn: sqlite3.Connection, sha256: str) -> Optional[JobRow]:
+    """The most recently chosen finished job (`mark_transcript_chosen`, else the newest), of any
+    engine or fingerprint, that still holds tokens for the media with this sha256. For readers
+    that map an existing transcript onto a timeline: any finished transcript of the file beats
+    listening to it again."""
+    row = conn.execute(
+        "SELECT job.* " + _FINISHED_TRANSCRIPTS
+        + "ORDER BY COALESCE(job.chosen_at, job.created_at) DESC, job.id DESC LIMIT 1",
+        (sha256,),
+    ).fetchone()
+    return JobRow(**dict(row)) if row else None
+
+
+def mark_transcript_chosen(conn: sqlite3.Connection, job_id: int) -> None:
+    """Make this job the file's transcript for `latest_transcript_job` (transcribe() returned it)."""
+    conn.execute("UPDATE job SET chosen_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?", (job_id,))
+    conn.commit()
+
+
+def transcript_scripts(conn: sqlite3.Connection, sha256: str) -> dict[int, str]:
+    """{job id: "thai" or "latin"} for every finished transcript of this file: the script most of
+    its tokens are in ("mixed" counts as Thai: only a Thai decode writes it). "other" is ignored,
+    so a job with only "other" tokens (music, numbers) has no language and is left out."""
+    rows = conn.execute(
+        "SELECT job.id AS id, "
+        "SUM(t.script IN ('thai', 'mixed')) AS thai, SUM(t.script = 'latin') AS latin "
+        + _FINISHED_TRANSCRIPTS.replace("FROM job", "FROM job JOIN token t ON t.job_id = job.id", 1)
+        + "GROUP BY job.id ORDER BY job.id",
+        (sha256,),
+    ).fetchall()
+    return {r["id"]: "thai" if r["thai"] >= r["latin"] else "latin" for r in rows if r["thai"] or r["latin"]}
 
 
 # ── token ─────────────────────────────────────────────────────────────────────

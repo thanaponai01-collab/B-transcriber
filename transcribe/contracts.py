@@ -33,7 +33,7 @@ class EngineInput:
     # {term: weight} for budget-aware prompt ranking (5.1). Optional — engines that
     # ignore it fall back to unit weight (insertion order).
     bias_weights: dict = field(default_factory=dict)
-    language_hint: Optional[str] = None  # "th", "en", or None
+    language_hint: Optional[str] = None  # "th", "en", "auto" (faster_whisper picks per file), or None
     # Pre-computed speech spans (start_ms, end_ms) from ingest to skip redundant VAD passes
     speech_spans: tuple[tuple[int, int], ...] = ()
 

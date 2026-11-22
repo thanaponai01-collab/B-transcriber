@@ -48,6 +48,21 @@ def test_transcribe_returns_job_id_and_reuses_cache(monkeypatch, tmp_path):
     conn.close()
 
 
+def test_a_cache_hit_makes_that_transcript_the_one_timeline_tools_read(monkeypatch, tmp_path):
+    from transcribe import service
+    from transcribe.db import store
+    _patch_vad(monkeypatch)
+    wav, db = _wav(), _db(tmp_path)
+    thai = service.transcribe(wav, config=_CFG, db_path=db)
+    english = service.transcribe(wav, config=_CFG, db_path=db, language="en")
+    assert english.job_id != thai.job_id
+    again = service.transcribe(wav, config=_CFG, db_path=db)  # asked for Thai again
+    assert again.cached and again.job_id == thai.job_id
+    conn = store.connect(db)
+    assert store.latest_transcript_job(conn, store.sha256_of_file(wav)).id == thai.job_id
+    conn.close()
+
+
 def test_transcribe_skips_cache_when_bias_term_added_or_config_changed(monkeypatch, tmp_path):
     from transcribe import service
     from transcribe.db import store

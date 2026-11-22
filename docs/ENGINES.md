@@ -123,3 +123,62 @@ raw per-word list in `EngineResult.raw["words"]` for CutDeck Phase 5 filler exci
 **Per-engine config (2.3):** construction knobs live under `config["engines"][<name>]`
 (model_id, compute_type, beam_size, batch_size, cue thresholds, bias budget). `run.py`
 forwards the matching block as kwargs — an engine/model/compute swap is a YAML edit.
+
+**Name glossaries make the model invent speech (2026-11-22).** A 15-min window of a 1RaceClub
+F1 watch-along (`2026-11-21 07-07-37.mp4`, 4790-5690 s) was transcribed three times into scratch
+DBs, with a 21-term name glossary (รัสเซล, นอริส, แม็คลาเรน, อัลไพน์, แฮมิลตัน, ...) through
+`transcribe(glossary=...)`:
+
+| run | chars | "รัสเซล" | invented names |
+|---|---|---|---|
+| no glossary | 2,579 | 1 (plus "ราเซล", "รัสเซีย") | 0 |
+| `bias_channel: prompt` (production) | 1,854 (−28%) | 14 | 13 × แม็คลาเรน, plus lists like "แม็คลาเรน อัลไพน์ เลอแคลร์" in place of real speech |
+| `bias_channel: hotwords` | 1,805 (−30%) | 11 | แฮมิลตัน ×6, "รัสเซล รัสเซล" |
+
+List size does not save it (prompt channel, same window):
+
+| glossary terms | chars vs no glossary | text agreement | invented |
+|---|---|---|---|
+| 3 (รัสเซล, แม็คลาเรน, นอริส) | −14% | 0.77 | แม็คลาเรน ×17 |
+| 5 | −21% | 0.65 | แม็คลาเรน ×25, อัลไพน์ ×12 |
+| 10 | −32% | 0.58 | แฮมิลตัน ×17, เลอแคลร์ ×13 |
+| 21 | −28% | 0.60 | lists in place of speech |
+
+**The flywheel's learned bias terms use the same prompt channel** (`bias_prompt_budget`), so this
+risk grows as corrections accumulate; re-check it on the harness once the bias index has terms.
+
+The real lines lost under the glossary include "แม็กทีหนึ่งครับ ราเซลที่สอง คิมมิ ที่สามนอนดี".
+Don't feed name lists to the decoder. Fix names after decoding, with a reviewed substitution list or
+corrections through the flywheel, and measure on the gold set. Scripts and outputs are in
+`output/timeline_listen/glossary/`.
+
+**English audio needs `language: en` (2026-11-22).** The pipeline hard-coded Thai as the decode
+language. On an English F1 broadcast (`2026-11-21 10-55-45.mp4`) the Thai checkpoint then translated
+much of the speech into Thai and looped ("รถหัวแข็งของรถหัวแข็ง…"). The same checkpoint told "en"
+transcribes it correctly ("They're not having a good weekend, generally. Haas looks very tricky.").
+The language is now `config["language"]` (default `th`, so existing caches keep their identity),
+carried on `JobPlan.language`; a per-job override is `transcribe(..., language="en")` (MCP
+`transcribe(media_path, language)`), cached apart from the Thai transcript.
+
+**`language: auto` (2026-11-22).** The Thai checkpoint's own language detector calls everything Thai
+(0.97-0.99 on the English broadcast). Its decode confidence separates the languages instead: on 12
+samples of 4 files (1 English, 3 Thai full of English F1 names), the token-weighted mean
+log-probability of a beam-1 decode was higher for the right language every time.
+`FasterWhisperEngine._pick_language` scores three 30 s samples each way (at 20/50/80% of the file)
+and takes the majority. Live: on the English broadcast it chose English (identical to `en`, job 89 vs
+87); on the Gillette review it chose Thai (identical to `th`, job 88 vs 84). It is opt-in
+(`transcribe(language="auto")`). The default stays `th`, because changing it would change every
+cache identity, and the harness gates on `th`.
+
+Held out on 10 files it never saw (2026-11-22; 30 s samples at 20/50/80%, the per-sample vote the
+method uses):
+
+| file | language (checked by ear-decode) | votes | per-sample th−en margin |
+|---|---|---|---|
+| `1.mp4`, `2.mp4` (the synced F1 feeds, 20261121) | English | en 3/3, en 3/3 | −0.48..−1.24, −0.23..−1.24 |
+| `2026-11-20 10-55-50.mp4` | English | en 3/3 | −0.16..−1.24 |
+| `07-07-36`, `07-07-37-cam`, `10-40-51` (20261121), `20-56-30` (tss), `LAP1 REAR LOCK`, tss news, `21-54-25` (20261108) | Thai | th, every one | +0.05 .. +1.67 |
+
+10 of 10 right. The closest single samples were +0.05 (Thai) and −0.16 (English), and no majority
+was close. Note: the 1RaceClub synced F1 feeds are English commentary, so a Thai transcript of them is
+invented text.

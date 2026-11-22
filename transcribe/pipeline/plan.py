@@ -59,6 +59,9 @@ class JobPlan:
     needs_full_audio: bool
     engine_batch_size: int
     chunk_overlap_ms: int
+    # The decode language (`config["language"]`, default Thai). The Thai checkpoint decodes English
+    # audio when told "en"; told "th" it translates it into Thai (live 2026-11-22).
+    language: str = "th"
 
 
 def canonical_engine_names(config: dict) -> tuple[str, str]:
@@ -135,6 +138,7 @@ def make_plan(config: dict, resume_phase: str | None) -> JobPlan:
         needs_full_audio=needs_full_audio,
         engine_batch_size=int(config.get("engine_batch_size", 8)),
         chunk_overlap_ms=int(config.get("chunk_overlap_ms", 750)),
+        language=str(config.get("language") or "th"),
     )
 
 

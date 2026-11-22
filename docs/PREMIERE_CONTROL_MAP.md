@@ -54,6 +54,10 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | See a rendered frame | `premiere_export_frame` | UXP `exportSequenceFrame` | LIVE 2026-11-21 |
 | List sequences, bins, media | `premiere_list_project` | UXP | LIVE 2026-11-21 |
 | Read the timeline (tracks, clips, ids, marks, playhead, markers, effect chains, param values; filter by track and time span) | `premiere_read_timeline` | UXP | LIVE 2026-11-21 |
+| Hear the timeline: what is said where, cuts that land in sound, speech the engine dropped (from each source's one transcript, no re-listening) | `premiere_timeline_transcript` | UXP read + helper | LIVE 2026-11-22 |
+| Cut words out (each cut in the pause; read back) | `premiere_cut_words` | helper + `cut_copy` | LIVE 2026-11-22 |
+| Plan a Short by its words (piece edges in the source's pauses; items for build) | `premiere_plan_pieces` | helper | LIVE 2026-11-22 |
+| Keep only these phrases on a copy, every track kept (a Short from a synced rough cut) | `premiere_keep_words` | helper + `cut_copy` | LIVE 2026-11-22 |
 | Active sequence summary | `premiere_read_sequence` | UXP | LIVE |
 | Open / switch sequence | `premiere_open_sequence` | UXP | LIVE 2026-11-21 |
 | Playhead | `premiere_set_playhead` | UXP | LIVE 2026-11-21 |

@@ -69,6 +69,10 @@
 #           handoff itself flagged in advance ("this may disqualify it on
 #           cue_BER alone, which is itself a valid verdict"). See
 #           TODO_LEDGER.md "HANDOFF_ONE_ENGINE Phase B" for the full table.
+# language (not set here on purpose: setting it changes every stored transcript's cache identity):
+#   th (the default when absent), en for English-language audio, auto (FasterWhisperEngine picks
+#   Thai or English per file from its decode confidence). Usually given per job instead:
+#   transcribe(media_path, language=...). docs/ENGINES.md "English audio needs language: en".
 engine_a: faster_whisper
 engine_b: passthrough
 engine_batch_size: 4   # chunks per forward pass when an engine supports batched inference;
