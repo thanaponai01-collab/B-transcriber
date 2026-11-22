@@ -93,7 +93,8 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Edit the text of a Graphic already on the timeline | `premiere_edit_text` | Premiere UI: double-click in the Program Monitor, type (UXP `MogrtText` write is BROKEN) | LIVE 2026-11-21 on a one-line Premiere-made text; AE-template text still via `place_text` |
 | Masks, Lumetri wheels | none | Clone a clip that has them (LIVE) | GAP |
 | Playback, playhead moves | `premiere_key_command` cmd.transport.* (focus program) | Keys | LIVE 2026-11-21 (End) |
-| Captions | none | SRT import LIVE; placement on the timeline is UI-only | GAP |
+| Subtitles from an .srt as styled, editable Graphics (captions + Upgrade Caption to Graphic) | `premiere_srt_subtitles` | UXP import + Premiere UI drag and dialog + menu + UXP build | LIVE 2026-11-22 (4 cues in 13 s, frame-exact, the user's Style and place) |
+| Other caption editing | none | UI only | GAP |
 | Panels, workspaces, dialogs | none | Pixels + keys | GAP |
 
 ## Next steps, in order

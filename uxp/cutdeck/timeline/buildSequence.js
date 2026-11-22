@@ -32,6 +32,7 @@
        lift: remove without ripple, leaving a hole (createRemoveItemsAction, ripple false);
        clone: copy each clip by dt onto its own track, overwriting (createCloneTrackItemAction,
          isInsert false; effects kept, pieces unlinked; the disabled state is not relied on);
+         v_offset (optional) puts the video copies that many tracks higher;
        trim: set the end of each clip to end_ticks (VideoClipTrackItem/AudioClipTrackItem
          .createSetOutPointAction, premierepro.txt:742/48), e.g. a copied title ending on a cut;
        move: shift by dt (createMoveAction, relative), far end first. Live 2026-11-21: a block
@@ -205,8 +206,11 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
       } else if (st.op === "clone") {
         const items = [...now.video, ...now.audio].filter(inRange);
         runTransaction(project, `CutDeck build: clone ${span} by ${secs(dt)} s`, (c) => {
-          for (const { item } of items) {
-            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), 0, 0, false, false))) throw new Error("clone refused");
+          for (const { item, kind } of items) {
+            // v_offset: copy video that many tracks up (premierepro.txt:615 videoTrackVerticalOffset), e.g. a pasted
+            // title parked on V1 past the end onto the subtitle track.
+            const vOff = kind === "video" ? (st.v_offset || 0) : 0;
+            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), vOff, 0, false, false))) throw new Error("clone refused");
           }
         });
       } else if (st.op === "trim") {
