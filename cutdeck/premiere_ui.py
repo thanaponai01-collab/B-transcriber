@@ -462,9 +462,10 @@ def type_into_text(point: tuple[int, int], text: str) -> dict:
     before = window_image()
     x, y, r = point[0], point[1], 120
     near = (slice(max(0, y - r), y + r), slice(max(0, x - r), x + r))
-    red_box = lambda image: int((_red(image)[near] & ~_red(before)[near]).sum())  # noqa: E731
+    new_red = lambda image: _red(image)[near] & ~_red(before)[near]  # noqa: E731
     double_click(left + point[0], top + point[1])
-    outline = red_box(window_when(lambda _, now: red_box(now) >= 20, 2.0))
+    box = new_red(window_when(lambda _, now: int(new_red(now).sum()) >= 20, 2.0))
+    outline = int(box.sum())
     if outline < 20:
         click(left + tool[0], top + tool[1])
         raise RuntimeError("Double-clicking did not open the text for editing (no red text box); nothing was typed")
@@ -475,8 +476,11 @@ def type_into_text(point: tuple[int, int], text: str) -> dict:
     type_text(text)
     time.sleep(0.4)
     click(left + tool[0], top + tool[1])  # leaves text editing
-    still = red_box(window_when(lambda _, now: red_box(now) < 20, 1.5))
-    return {"edit_outline_px": outline, "left_editing": still < 20}
+    # Most of the box gone, not all: the new text's selection box moves, and footage that the old one
+    # covered can be red (a red couch behind Thai text, live 2026-11-23).
+    on_box = lambda image: int((_red(image)[near] & box).sum())  # noqa: E731
+    still = on_box(window_when(lambda _, now: on_box(now) * 2 < outline, 1.5))
+    return {"edit_outline_px": outline, "left_editing": still * 2 < outline}
 
 
 async def _frame(premiere, sequence: str, ticks: str) -> Image.Image:
@@ -506,7 +510,6 @@ async def edit_text(premiere, args: dict) -> dict:
     at = args.get("at_ticks") or str((int(clip["start_ticks"]) + int(clip["end_ticks"])) // 2)
     if not int(clip["start_ticks"]) <= int(at) < int(clip["end_ticks"]):
         raise ValueError(f"at_ticks {at} is outside {clip_id}")
-    # Each window grab waits for the Program Monitor to redraw, instead of a fixed pause.
     await premiere("set_playhead", {"sequence": seq, "ticks": at})
     frame_on = await _frame(premiere, seq, at)
     win_on = await asyncio.to_thread(window_when, _steady)
