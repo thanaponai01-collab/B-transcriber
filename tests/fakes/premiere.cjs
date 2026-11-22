@@ -222,9 +222,11 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
       const raw = rawOf.get(item);
       const dt = BigInt(timeOffset.ticks);
       return action(() => {
-        for (const tracks of [s.video, s.audio]) {
-          const t = tracks.find((list) => list.includes(raw));
-          if (!t) continue;
+        for (const [tracks, offset] of [[s.video, videoOffset], [s.audio, audioOffset]]) {
+          const from = tracks.findIndex((list) => list.includes(raw));
+          if (from < 0) continue;
+          const t = tracks[from + (offset || 0)];
+          if (!t) throw new Error("clone target track does not exist");
           const copy = { ...raw, start: raw.start + dt, end: raw.end + dt };
           for (let i = t.length - 1; i >= 0; i--) if (t[i].start < copy.end && t[i].end > copy.start) t.splice(i, 1);
           t.push(copy);

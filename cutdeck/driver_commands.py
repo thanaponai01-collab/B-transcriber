@@ -154,9 +154,10 @@ def _build_arguments(args: dict, jobs) -> dict:
                      or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
                 and (st.get("tracks") is None or (isinstance(st["tracks"], dict) and not set(st["tracks"]) - {"video", "audio"}
                      and all(isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in st["tracks"].values())))
+                and (st.get("v_offset") is None or (st["op"] == "clone" and type(st["v_offset"]) is int and st["v_offset"] >= 0))
                 for st in steps):
             raise ValueError("steps must be [{op: lift|clone|move|trim, from_ticks, to_ticks, dt_ticks (clone/move), end_ticks (trim), "
-                             "tracks? {video: [index], audio: [index]}}]")
+                             "tracks? {video: [index], audio: [index]}, v_offset? (clone: video tracks up, >= 0)}]")
         result["steps"] = steps
         restyle = args.get("restyle", [])
         if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")
@@ -426,7 +427,7 @@ COMMANDS: dict[str, Command] = {
         copy you made, e.g. by premiere_keep_words or premiere_cut_copy), with settings_from and
         `steps`: [{op, from_ticks, to_ticks, dt_ticks?, end_ticks?, tracks?}], run in order on
         every clip of every track (or `tracks` {video: [i], audio: [i]}) whose START is in
-        [from, to): clone (copy by dt, overwriting), lift (remove, leaving a hole), move (shift by
+        [from, to): clone (copy by dt, overwriting; v_offset puts video copies that many tracks up), lift (remove, leaving a hole), move (shift by
         dt), trim (set end to end_ticks). Steps move whole clips, they do not razor: give block
         boundaries that sit on clip edges (premiere_read_timeline). To swap block A [0, a) and B
         [a, e): clone B by X-a, clone A by X+(e-a) (X past the end), lift [0, e), clone [X, X+e)
