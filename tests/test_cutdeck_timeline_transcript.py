@@ -142,6 +142,64 @@ def test_latest_transcript_job_any_engine(tmp_path):
     assert store.latest_transcript_job(conn, "other") is None
 
 
+def _two_language_store(tmp_path, media="x.mp4", legacy=False):
+    """A file transcribed in Thai, then in English (the English broadcast's jobs 86 and 89).
+    ``legacy``: the store as made before job.chosen_at existed."""
+    import re
+    from transcribe.db import store
+    db = tmp_path / "t.db"
+    if legacy:
+        old = re.sub(r"-- When transcribe\(\) last returned.*?chosen_at        TEXT,\n", "",
+                     store._SCHEMA.read_text(encoding="utf-8"), flags=re.DOTALL)
+        assert "chosen_at" not in old
+        conn = store.connect(db); conn.executescript(old); conn.close()
+    else:
+        store.init_db(db)
+    conn = store.connect(db)
+    media_id = store.create_media(conn, media, sha256=None if media != "x.mp4" else "abc")
+    ids = []
+    for text, script in (("ดังนั้นคุณต้องขับรถเร็ว", "thai"), ("Haas looks very tricky", "latin")):
+        job_id = store.create_job(conn, media_id, "faster_whisper", "passthrough", "v1")
+        store.create_token(conn, job_id, 0, text, 1000, 2000, script, None, "a")
+        conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (job_id,))
+        ids.append(job_id)
+    conn.commit()
+    return db, conn, ids
+
+
+def test_the_transcript_last_asked_for_wins_over_a_newer_one(tmp_path):
+    from transcribe.db import store
+    db, conn, (thai, english) = _two_language_store(tmp_path)
+    assert store.latest_transcript_job(conn, "abc").id == english
+    store.mark_transcript_chosen(conn, thai)  # transcribe(language="th") again: a cache hit
+    assert store.latest_transcript_job(conn, "abc").id == thai
+    assert store.transcript_scripts(conn, "abc") == {thai: "thai", english: "latin"}
+
+
+def test_source_words_names_a_transcript_in_the_other_language(tmp_path):
+    from transcribe.db import store
+    media = tmp_path / "a.wav"; media.write_bytes(b"not really audio")
+    db, conn, (thai, english) = _two_language_store(tmp_path, str(media))
+    store.mark_transcript_chosen(conn, thai)
+    conn.close()
+    found = tt.source_words(str(media), db)
+    assert found[0] == thai
+    assert f"job {english}" in found[4] and 'language="en"' in found[4]
+    lookup = lambda m: found  # noqa: E731
+    timeline = {"name": "S", "ticks_per_frame": str(TPF), "tracks": [{"id": "A1", "kind": "audio", "clips": [
+        {"id": "A1@0", "start_ticks": "0", "end_ticks": str(TPF * 90), "in_ticks": "0",
+         "out_ticks": str(TPF * 90), "media": str(media)}]}]}
+    r = tt.build(timeline, lookup=lookup)
+    assert r["sources"][0]["note"] == found[4] and found[4] in r["warnings"]
+
+
+def test_source_words_reads_a_store_made_before_chosen_at(tmp_path):
+    media = tmp_path / "a.wav"; media.write_bytes(b"not really audio")
+    db, conn, (thai, english) = _two_language_store(tmp_path, str(media), legacy=True)
+    conn.close()
+    assert tt.source_words(str(media), db)[0] == english
+
+
 def test_zero_length_engine_word_is_kept_inside_and_dropped_outside(tmp_path):
     media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
     words = tt.source_word_list([SimpleNamespace(text="นะ", start_ms=1500, end_ms=1500),
@@ -274,8 +332,8 @@ def test_source_words_reads_the_store_and_its_corrections(tmp_path):
     store.create_correction(conn, job_id, 1, "ไปละ", "ไปแล้ว", "a")
     conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (job_id,))
     conn.commit(); conn.close()
-    got_job, words, levels, gaps = tt.source_words(str(media), db)
-    assert got_job == job_id and levels is None and gaps == []
+    got_job, words, levels, gaps, note = tt.source_words(str(media), db)
+    assert got_job == job_id and levels is None and gaps == [] and note is None
     assert [(w.text, w.corrected) for w in words] == [("สวัสดีครับ", False), ("ไป", True), ("แล้ว", True)]
     assert (words[1].start_ms, words[2].end_ms) == (3000, 3500)
     assert tt.source_words(str(media), db)[0] == job_id  # sha256 now comes from the index

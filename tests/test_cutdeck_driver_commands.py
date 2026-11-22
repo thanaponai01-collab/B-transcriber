@@ -239,3 +239,17 @@ def test_build_sequence_takes_no_items_only_for_steps_on_a_copy():
         prepare(base, None)
     steps = [{"op": "lift", "from_ticks": "0", "to_ticks": "10"}]
     assert prepare({**base, "options": {"into": True, "steps": steps}}, None)["items"] == []
+
+
+def test_word_tools_pass_on_the_transcript_warnings(monkeypatch):
+    note = "these words are the Thai transcript (job 86) ... language=\"en\""
+    built = {"missing": [], "warnings": [note], "word_objects": [], "source_words": {}, "source_level": None}
+    monkeypatch.setattr(driver_commands.timeline_transcript, "build", lambda *a, **k: built)
+    monkeypatch.setattr(driver_commands.word_cut, "plan_pieces", lambda *a, **k: [])
+
+    async def premiere(command, args):
+        return {"name": "S", "ticks_per_frame": "8467200000"}
+
+    args = {"keep": [{"text": "x"}], "pad_ms": 60, "wordless_ms": 0}
+    result = asyncio.run(driver_commands._plan_pieces(args, premiere))
+    assert result["warnings"] == [note]
