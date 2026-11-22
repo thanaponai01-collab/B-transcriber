@@ -615,3 +615,8 @@ User: "you go cut the video for me". Agent's order (content first, so the silenc
      run stage A and keep_words. Premiere just vanished (no Application Error event). Crash recovery kept all v4
      sequences. After a fresh launch and a user save, the same 596-cut apply ran in 18 s. **Rule:** ask the user to
      save before the silence cut, and run it in a fresh Premiere session.
+8. **Workflow talk after v4** (user: "we duplicate it like 4 times... can it be only one base?"). Agreed order →
+   principle 1c. Built `premiere_paste_attributes` for the last step and tested it on throwaway copies: 744 plain
+   pieces took the source's Opacity/Screen, crop 12 and Posterize 0.2 in 24 s with no crash, and one Undo
+   reverts it. Paste only onto unstyled pieces, because a piece that already has Posterize gets a second one. The
+   full-live rough cut (2 h → several thousand cuts) has not been run yet; the test ran 738 cuts on a 44 min copy in 28 s.

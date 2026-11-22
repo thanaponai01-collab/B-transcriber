@@ -1,5 +1,5 @@
-"""Drive Premiere's own UI as a person does, for what no API reaches: the Clip Speed/Duration and
-Nest dialogs, and typing into a text layer in the Program Monitor. The user approved driving
+"""Drive Premiere's own UI as a person does, for what no API reaches: the Clip Speed/Duration,
+Nest and Paste Attributes dialogs, and typing into a text layer in the Program Monitor. The user approved driving
 dialogs and typing (2026-11-21). Live-proven on Premiere 27.0.0 (PREMIERE_FACTS "Premiere UI
 route"):
 
@@ -29,9 +29,11 @@ from PIL import Image, ImageGrab
 
 from cutdeck import keys, menu, screenshot
 
-SPEED_TITLE, NEST_TITLE = "Clip speed / duration", "Nested Sequence Name"
+SPEED_TITLE, NEST_TITLE, PASTE_TITLE = "Clip speed / duration", "Nested Sequence Name", "Paste Attributes"
 SPEED_SIZE = (488, 437)  # the dialog the offsets below were measured on (96 DPI)
 REVERSE_BOX, RIPPLE_BOX = (313, 91), (277, 351)  # checkbox centres inside the dialog window
+PASTE_SIZE = (402, 811)  # Paste Attributes at 96 DPI; its boxes are drawn by Premiere, read from pixels
+PASTE_BOXES = {"Motion": (44, 125), "Opacity": (44, 173), "Effects": (44, 249)}  # box centres in the dialog
 RING = (64, 150, 243)
 TICKED_MEAN = 110  # mean grey inside a 9x9 box: ticked ~164, unticked ~50
 VK_TAB, VK_SPACE, VK_RETURN, VK_ESCAPE, VK_CONTROL, VK_A = 0x09, 0x20, 0x0D, 0x1B, 0x11, 0x41
@@ -285,6 +287,53 @@ async def nest_clips(premiere, args: dict) -> dict:
         raise RuntimeError(f'Nest ran but no clip named "{args["name"]}" is on the timeline; read it back')
     return {"sequence": result["sequence"], "name": args["name"], "nested": nested,
             "note": "One Edit > Undo removes the nest and its new sequence."}
+
+
+# --- Paste Attributes ----------------------------------------------------------------------------
+
+def paste_dialog() -> None:
+    """Open Edit > Paste Attributes... on the selected clips and press OK, after checking from
+    pixels that Motion, Opacity and Effects are ticked (Premiere remembers the last choice)."""
+    hwnd = open_dialog("Edit > Paste Attributes...", PASTE_TITLE)
+    try:
+        left, top, right, bottom = _rect(hwnd)
+        if (right - left, bottom - top) != PASTE_SIZE or _user32().GetDpiForWindow(hwnd) != 96:
+            raise RuntimeError(f"the Paste Attributes dialog is {right - left}x{bottom - top} at "
+                               f"{_user32().GetDpiForWindow(hwnd)} DPI, not the measured {PASTE_SIZE} at 96")
+        image = grab(hwnd)
+        off = [name for name, box in PASTE_BOXES.items() if not ticked(image, *box)]
+        if off:
+            raise RuntimeError(f"Paste Attributes has {', '.join(off)} unticked; tick them once in the "
+                               "dialog by hand (Premiere remembers) and run again. Nothing was pasted")
+        _confirm(hwnd, PASTE_TITLE)
+    except Exception:
+        close_dialog(hwnd, PASTE_TITLE)
+        raise
+
+
+def _chain(clip: dict) -> list:
+    return [(e["match_name"], [(p["index"], p["value"]) for p in e.get("params", [])]) for e in clip.get("effects", [])]
+
+
+async def paste_attributes(premiere, args: dict) -> dict:
+    """Copy `source`, select `clips`, Paste Attributes, then read every clip back: each one's
+    effect chain and values must equal the source's."""
+    sequence, source, clips = args.get("sequence"), args["source"], args["clips"]
+    await premiere("select_clips", {"sequence": sequence, "clips": [source]})
+    await keys.run_focused(premiere, "timeline", sequence, lambda: menu.invoke("Edit > Copy", True))
+    await asyncio.sleep(0.5)
+    await premiere("select_clips", {"sequence": sequence, "clips": clips})
+    result = await keys.run_focused(premiere, "timeline", sequence, lambda: paste_dialog() or {})
+    tracks = sorted({c.split("@")[0] for c in [source, *clips]})
+    after = await premiere("read_timeline", {"sequence": result["sequence"], "tracks": tracks, "effects": "params"})
+    by_id = {c["id"]: c for t in after.get("tracks", []) for c in t.get("clips", [])}
+    if source not in by_id:
+        raise RuntimeError(f"{source} is not on the timeline after the paste; read it back")
+    want = _chain(by_id[source])
+    differ = [c for c in clips if c not in by_id or _chain(by_id[c]) != want]
+    return {"sequence": result["sequence"], "source": source, "effects": [name for name, _ in want],
+            "matching": len(clips) - len(differ), "differ": differ,
+            "note": "Each clip's effects and values were read back against the source. One Edit > Undo reverts the paste."}
 
 
 # --- text in the Program Monitor -----------------------------------------------------------------

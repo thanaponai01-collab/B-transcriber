@@ -880,6 +880,14 @@ def _nest_arguments(args: dict, jobs) -> dict:
     return {**_sequence(args), "clips": _clip_ids(args.get("clips")), "name": name}
 
 
+def _paste_attributes_arguments(args: dict, jobs) -> dict:
+    source = _clip_ids([args.get("source")], "source")[0]
+    clips = [c for c in _clip_ids(args.get("clips")) if c != source]
+    if not clips:
+        raise ValueError("clips must name at least one clip other than source")
+    return {**_sequence(args), "source": source, "clips": clips}
+
+
 def _edit_text_arguments(args: dict, jobs) -> dict:
     clip, text = args.get("clip"), args.get("text")
     if not isinstance(clip, str) or not _CLIP_ID.fullmatch(clip) or not clip.startswith("V"):
@@ -1241,6 +1249,20 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("clips", list[str]), ("name", str), ("sequence", str | None, None)),
         run=lambda args, premiere: premiere_ui.nest_clips(premiere, args)),
+    "paste_attributes": Command(
+        300, _paste_attributes_arguments, "destructive",
+        """
+        Give `clips` the effects of `source`, as Edit > Copy then Edit > Paste Attributes... do
+        (Premiere UI route): Motion (crop included), Opacity (blend mode included) and every
+        effect, with their values. One Premiere action however many clips, so prefer it to
+        set_param on each clip (hundreds of set_param calls in a row crashed Premiere). Paste onto
+        clips without those effects: a clip that already has one gets a second copy. Refused,
+        with nothing pasted, if the dialog has Motion, Opacity or Effects unticked. Reads every
+        clip back: `differ` lists clips whose effects do not equal the source's. One Edit > Undo
+        reverts it. Takes over the keyboard briefly.
+        """,
+        (("source", str), ("clips", list[str]), ("sequence", str | None, None)),
+        run=lambda args, premiere: premiere_ui.paste_attributes(premiere, args)),
     "edit_text": Command(
         120, _edit_text_arguments, "destructive",
         """

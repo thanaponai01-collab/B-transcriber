@@ -52,3 +52,41 @@ def test_text_is_located_in_the_monitor_from_the_frames():
 def test_frames_without_a_change_are_refused():
     with pytest.raises(RuntimeError, match="draws nothing"):
         ui.locate_in_window(_img("frame_on"), _img("frame_on"), _img("monitor_on"), _img("monitor_off"))
+
+
+def test_paste_attributes_boxes_read_from_the_dialog():
+    image = _img("paste_attributes")  # Paste Attributes as opened, live 2026-11-22: Motion, Opacity, Effects ticked
+    assert image.size == ui.PASTE_SIZE
+    assert all(ui.ticked(image, *box) for box in ui.PASTE_BOXES.values())
+    assert not ui.ticked(image, 44, 197)  # Time Remapping, unticked in the same capture
+
+
+def test_paste_attributes_reports_clips_that_differ(monkeypatch):
+    import asyncio
+
+    def clip(cid, opacity):
+        return {"id": cid, "effects": [{"match_name": "AE.ADBE Opacity", "params": [{"index": 0, "value": opacity}]}]}
+
+    calls = []
+
+    async def premiere(command, args=None):
+        calls.append(command)
+        if command == "read_timeline":
+            return {"tracks": [{"clips": [clip("V4@0", 80), clip("V4@10", 80), clip("V4@20", 100)]}]}
+        return {}
+
+    async def run_focused(premiere_, focus, sequence, action):
+        return {"sequence": "S"}
+
+    monkeypatch.setattr(ui.keys, "run_focused", run_focused)
+    out = asyncio.run(ui.paste_attributes(premiere, {"source": "V4@0", "clips": ["V4@10", "V4@20", "V4@30"]}))
+    assert out["matching"] == 1 and out["differ"] == ["V4@20", "V4@30"]
+    assert calls == ["select_clips", "select_clips", "read_timeline"]
+
+
+def test_paste_attributes_arguments_drop_the_source_and_need_a_target():
+    from cutdeck.driver_commands import COMMANDS
+    parse = COMMANDS["paste_attributes"].prepare
+    assert parse({"source": "V4@0", "clips": ["V4@0", "V4@10"]}, None)["clips"] == ["V4@10"]
+    with pytest.raises(ValueError, match="other than source"):
+        parse({"source": "V4@0", "clips": ["V4@0"]}, None)
