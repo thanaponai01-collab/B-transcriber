@@ -570,3 +570,53 @@ with a payoff, from the FP3 rough cut (rough-cut s):
   sat inside the window of the two Hamilton wide holds (1190.5, 1193.1); filled from its surroundings (diffusion fill, feathered
   4 px edge) in the hold PNGs (`hold_*_clean.png`) and swapped in, ending on their cuts. The other holds' F1 marks fall outside
   their windows. Check every hold's visible window for F1 marks before building.
+
+## Episode 20261122: Las Vegas GP Race (agent-cut long video)
+
+Project `E:\Me\2.Tasks\20261122 - 3\…\20260130 RENAME template - Copy_1.prproj`, user's synced sequence `Editing`
+(2:02:55, V1 layout / V2 cam off / V3 off / V4 race feed at 39% in the small screen, A1 voice, A2–A6 off).
+User: "you go cut the video for me". Agent's order (content first, so the silence cut runs on 21 min, not 2 h):
+1. Transcribed the voice file (11,419 words). Feed sync checked from frames: SAFETY CAR banner on "เซฟตี้" (tl 30:45), lap 50/50 at the flag.
+2. `keep_words` on `Editing` → `YT editing (Claude)`: 59 moments, 20.9 min, chronological (start, every lead change and
+   Red Bull battery "same picture" duel, Hadjar's P2 and broken wing, SC and pit stops, penalties, team radios, Russell's
+   debris, Kimi's battery loss on the last lap, the finish, the post-race strategy summary, the closing line). Dropped the
+   SC laps' chatter, the podium/ceremony (90–119 min) and repeats.
+3. F1 layer on all V4 pieces: Posterize Time 0.2, Opacity 80, Blend Mode param [2] = 10 (param [1] stayed 18; a rendered
+   frame shows the screen look, not yet checked in Effect Controls).
+4. CutDeck silence cut (aggressive, no ASR) → `YT editing (Claude) — CutDeck cef3c7f3`: **16:41**, zero gaps on every
+   track, V2/V3/A2–A6 disabled, transcript in source order. Not saved, not exported.
+5. **User feedback:** "you miss some story there like contact of ferrari, dont miss those along the live" → principle 1a.
+   v2 adds 23 beats by storyline (Ferrari pair from lap 1 to the contact and the 10 s each; Hamilton's penalty, pit
+   radio and cleared investigation; Piastri from 17th; SC radios). `YT editing v2 (Claude) — CutDeck a590dad6`:
+   **20:53**, 78 moments, zero gaps, F1 layer on all 520 pieces, transcript in source order.
+   - Premiere crashed twice on this pass: once right after the F1 params on a 78-range keep_words copy of the 2 h
+     sequence, once during the same keep_words. Fix that held: cut in two passes (cut_copy of 24 coarse blocks, then
+     keep_words on that 50 min copy), and add_effect in batches of 10 with retries ("no clip starts at" was transient).
+6. **User: "check again what you might miss and also the logo f1".** Second storyline pass added 18 beats (Kimi's
+   passes and last-laps duel with Max, Hadjar's unsafe-release investigation and clearance, Russell going for two cars,
+   the yellow flag before the crash, Max's SC radio, Gasly back to P3, Norris past Kimi and on the Alpine, Russell to
+   P4, "anyone can win now", the podium recap). **Logo rule for the long video too:** the feed's F1 logo +
+   "FIA Formula 1 World Championship" wordmark (top left, down to ~11.5% of the frame) and F1 TV (top right) are cut
+   with Motion **crop top 12%** (the user's 10% left the wordmark's bottom edge; 12% keeps "LAP x/50").
+   Final `YT editing v3 (Claude) — CutDeck 808f672d`: **23:10**, 96 moments, zero gaps, transcript in race order.
+   - **Third Premiere crash, cause found:** hundreds of per-clip `set_param` calls in a row (crashed after ~380).
+     Route that held: copy `Editing` with only the F1-only tail cut (V4 stays ONE clip), set Posterize/Opacity/Screen/
+     crop on that one clip (5 calls), then cut_copy (coarse) → keep_words (fine) → silence cut; the cuts carry the
+     effects onto all 595 pieces.
+7. **User: "dont cut the sentence out like mid way, finish it"** (v3 had cuts inside words at 05:22, 05:50, 06:44,
+   11:46, 17:16, 17:45, 20:10, 20:12) → principle 1b. Every v3 moment was extended back and forward to the nearest pause
+   (gap >= 0.6 s, cap 25 s), giving 96 moments and 32.1 min of raw keep. `keep_words` on the stage-A copy then reported 0 cuts in
+   sound (`YT editing v4 (Claude)`, 32:24). The silence cut (aggressive, speech protection on) took it to
+   `YT editing v4 (Claude) — CutDeck e705c7bb`: **25:03**, 596 cuts. It has zero gaps, V2/V3/A2–A6 off, Posterize/Opacity/
+   Screen/crop on all 629 V4 pieces, and frames (16:40 on the pre-silence copy, 20:00 on the final) matching the stream's lap with the logo gone.
+   `timeline_transcript` flags 24 "sound" edges, each within 40 ms of quiet (no clipped word on the transcript; the
+   worst one to listen to is 07:57 "ไซน์").
+   - **Fourth Premiere crash:** apply_cuts of the silence cut on v4, in a session that had already built the base and
+     run stage A and keep_words. Premiere just vanished (no Application Error event). Crash recovery kept all v4
+     sequences. After a fresh launch and a user save, the same 596-cut apply ran in 18 s. **Rule:** ask the user to
+     save before the silence cut, and run it in a fresh Premiere session.
+8. **Workflow talk after v4** (user: "we duplicate it like 4 times... can it be only one base?"). Agreed order →
+   principle 1c. Built `premiere_paste_attributes` for the last step and tested it on throwaway copies: 744 plain
+   pieces took the source's Opacity/Screen, crop 12 and Posterize 0.2 in 24 s with no crash, and one Undo
+   reverts it. Paste only onto unstyled pieces, because a piece that already has Posterize gets a second one. The
+   full-live rough cut (2 h → several thousand cuts) has not been run yet; the test ran 738 cuts on a 44 min copy in 28 s.

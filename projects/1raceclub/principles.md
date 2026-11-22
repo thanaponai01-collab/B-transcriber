@@ -38,6 +38,25 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
      free; picking the frames myself is allowed ("if you want to pick it yourself that's up
      to you") but must keep that minimum gap, e.g. merge highlights that are close together
      under one picture.
+1a. **Follow every story along the live, not only the lead fight.** A side story (the Ferraris fighting each other,
+   a penalty, a driver coming through the field) keeps each of its beats in the long video: the start of it, each
+   turn, and how it ends. *(confirmed: user, 2026-11-22, on the agent's first race cut: "you miss some story there
+   like contact of ferrari, dont miss those along the live")* How to check: list every storyline from the
+   transcript (driver/team names), then make sure each one's beats are in the keep list.
+1b. **Every kept moment is a whole sentence: never cut out mid-sentence or inside a word.** A moment starts
+   and ends at a real pause in the voice (on this channel a gap of 0.6 s or more between transcript lines, where the
+   median gap is 0.19 s). The silence cut then runs with speech protection on. *(confirmed: user, 2026-11-22, on the
+   agent's v3 race cut: "dont cut the sentence out like mid way, finish it")* How to check: extend each keep range
+   back and forward to the nearest pause, then read the final with `premiere_timeline_transcript`; its
+   `cuts_in_sound` must show no cut with a word in it.
+1c. **Order: rough cut the whole live first, then pick moments, then effects last with Paste Attributes.** The rough cut
+   is made once per episode and kept. The moments are whole pieces of it, so cuts fall at pauses. Each round of
+   feedback re-cuts from the rough cut. The F1 layer goes on at the very end: style one feed piece, then
+   `premiere_paste_attributes` onto all the others (one Premiere action, never set_param per piece). *(confirmed:
+   user, 2026-11-22: "use the rough cut first, then transcribe it there, then work from there"; "the effects on F1
+   logo... should be the last step"; "the last part I use paste attributes... select the whole live broadcast, then
+   I just paste it all")* There is no re-transcription: `premiere_timeline_transcript` maps the one source
+   transcript onto any cut.
 4. **Cut method: delete pieces and leave gaps, close them in batches.** Keeps the timeline
    readable against the source while reviewing. *(guess)*
 
