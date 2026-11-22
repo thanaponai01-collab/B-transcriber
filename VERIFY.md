@@ -78,6 +78,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - live: `cdv.py call set_speed | nest_clips | edit_text` on the scratch (run `20261121-233204-close-gaps`): speed 200 / 50+reverse read back, Thai nest name, Thai text rendered, each undone with one Edit > Undo.
 - live paste_attributes (2026-11-22, `cutdeck.premiere_ui.paste_attributes` on Paste attr test sequences): 58/58 then 744/744 plain V4 pieces read back equal to the source; one Undo reverted the 58; the 10 pre-styled pieces were listed in `differ` (Posterize twice). Through MCP (stdio client → `python -m cutdeck.mcp_server` → helper restarted on this code): `premiere_paste_attributes` listed (53 tools), 58/58 matching, `differ` empty, 2.7 s.
 
+## SRT subtitles (srt_subtitles)
+- test: `python -m pytest tests/test_cutdeck_srt_subtitles.py -q`; `node --test tests/cutdeck_build_sequence.test.cjs` (clone with a negative v_offset)
+- fail-signal: failed
+- fail-proof (2026-11-22): SELECTED_ROW set to 29 in cutdeck/srt_subtitles.py, 2 tests went red, restored
+- live: `cdv.py call srt_subtitles` on the scratch (run `20261122-222610-srt-captions`, 57): 4 cues to V2 in the "1RC Subtitle" Style, position [0.5, -0.0423], scale 112.5; every Graphic frame-exact; the rendered text matched the user's subtitle within 1 px; `edit_text` edited one.
+
 ## Decode language (th / en / auto)
 - test: `python -m pytest tests/test_language_choice.py -q -p no:cacheprovider`
 - fail-signal: failed

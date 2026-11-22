@@ -926,7 +926,10 @@ def _srt_subtitles_arguments(args: dict, jobs) -> dict:
     if position is not None and not (isinstance(position, list) and len(position) == 2
                                      and all(type(v) in (int, float) and -1 <= v <= 2 for v in position)):
         raise ValueError("position must be [x, y], Motion Position as fractions of the frame")
-    return {"sequence": seq, "srt": srt, "track": track, "style": style, "position": position}
+    scale = args.get("scale")
+    if scale is not None and not (type(scale) in (int, float) and 0 < scale <= 1000):
+        raise ValueError("scale must be the Motion Scale in percent (100 = as styled)")
+    return {"sequence": seq, "srt": srt, "track": track, "style": style, "position": position, "scale": scale}
 
 
 def _edit_text_arguments(args: dict, jobs) -> dict:
@@ -1329,13 +1332,14 @@ HELPER_COMMANDS: dict[str, Command] = {
         track" dialog (1 = first; make one once with Create Style from a styled subtitle; 0 =
         none), then Select All + Graphics and Titles > Upgrade Caption to Graphic. The Graphics
         are moved to `track` (1-based video track, empty over the subtitles' span; default:
-        where Upgrade put them) and given Motion `position` [x, y] (0-1; e.g. 1RaceClub
-        [0.5, 0.0255]). Refuses a sequence that already has captions. Reads every Graphic back
+        where Upgrade put them) and given Motion `position` [x, y] (fractions of the frame) and
+        `scale` (percent). 1RaceClub Shorts: position [0.5, -0.0423], scale 112.5 (the user's
+        subtitle size and place, rendered y 819-913 on 1080x1920). Refuses a sequence that already has captions. Reads every Graphic back
         against the frame-snapped cues (`off_cues`). Takes the mouse and keyboard for several
         seconds; several Edit > Undo steps revert it.
         """,
         (("sequence", str), ("srt", str), ("track", int | None, None), ("style", int, 1),
-         ("position", list[float] | None, None)),
+         ("position", list[float] | None, None), ("scale", float | None, None)),
         run=lambda args, premiere: srt_subtitles.run(premiere, args)),
     "menu_command": Command(
         60, _menu_command_arguments, "destructive",

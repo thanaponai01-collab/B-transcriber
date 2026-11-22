@@ -76,6 +76,7 @@ Most rules below are this principle applied to one case.
 | The title copies the user's own title exactly: settings and position | copy the user's Text clip (it carries font, outline, size and place; the API can't read the style, so never rebuild from Basic Title). Russell wall v5: bold white, dark outline, centred **just above the seam** (text bottom ~y 700, clip Motion scale 200 at (0.5, 0.102), text layer y 0.637), inside the safe zone (user: "look at the text I replace on top of your text … exact setting and the position as well") | confirmed (2026-11-22) |
 | Text ends on a cut | trim the title to the cut it belongs to; no frames hanging past it | confirmed |
 | Translate English radio into natural Thai, one short phrase at a time, on screen exactly while spoken | Prompt-Medium 100, white, black stroke 8, just below the seam | seen (Russell Short) |
+| Subtitles from an .srt in one call | `premiere_srt_subtitles` with `style` 1 (the project's saved Style **1RC Subtitle**, made once by the user with Create Style from their subtitle; a new project needs it again), `track` (the subtitle layer), `position` [0.5, -0.0423], `scale` 112.5: lands exactly where the user's subtitles sit (y 819-913). Split long lines in the SRT first: a line over ~700 px wraps upward | seen (live 2026-11-22 on scratch) |
 | Channel spellings of names | จอร์จ, คิมิ | seen |
 
 ## 7. Sound

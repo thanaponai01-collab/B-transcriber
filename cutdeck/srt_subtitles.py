@@ -16,7 +16,7 @@ Graphics"):
    upgraded (other selected clips are untouched); the Graphics keep the Style and land on the top
    video track, or a new one above it when that track is in use.
 4. `build_sequence` (into) clones them onto the chosen track (`v_offset`) and lifts the originals,
-   and sets the Motion Position. Every step is read back against the snapped cues.
+   and sets the Motion Position and Scale. Every step is read back against the snapped cues.
 
 `premiere(command, args)` runs a panel command (cutdeck/driver_commands.py `Premiere`).
 """
@@ -119,8 +119,11 @@ def find_caption_row(window: Image.Image) -> tuple[int, int]:
     return min(xs) + 90, (ys[0] + ys[-1]) // 2
 
 
-def find_timeline(window: Image.Image) -> tuple[int, int]:
-    """A drop point in the front timeline's track area: right of the column of track-lock icons."""
+def find_timeline(window: Image.Image, caption_tracks: int) -> tuple[int, int]:
+    """A drop point in the front timeline's track area, right of the column of track-lock icons,
+    on the first row below the `caption_tracks` caption rows (the top video track). Dropped on a
+    caption row, Premiere places the SRT onto that track with no dialog and its old style (live
+    2026-11-22); on a video row it asks "New caption track"."""
     from scipy.signal import fftconvolve
     template = Image.open(Path(__file__).with_name("ui_templates") / "track_lock.png").convert("L")
     t = np.where(np.asarray(template) > 100, 1.0, -1.0)
@@ -131,9 +134,9 @@ def find_timeline(window: Image.Image) -> tuple[int, int]:
         raise RuntimeError("no timeline track headers are visible; nothing was dragged")
     column = np.bincount(xs).argmax()
     rows = sorted(set(int(y) for x, y in zip(xs, ys) if abs(int(x) - int(column)) <= 2))
-    if len(rows) < 3:
+    if len(rows) < caption_tracks + 3:
         raise RuntimeError("the timeline's track headers are not visible; nothing was dragged")
-    return int(column) + t.shape[1] // 2 + 300, rows[0] + t.shape[0] // 2
+    return int(column) + t.shape[1] // 2 + 300, rows[caption_tracks] + t.shape[0] // 2
 
 
 def selected(image: Image.Image, x: int, y: int) -> bool:
@@ -165,8 +168,8 @@ def _wait_dialog(timeout_s: float = 5.0) -> int:
             time.sleep(0.3)
             return hwnd
         time.sleep(0.1)
-    raise RuntimeError(f'the drop did not open "{CAPTION_TITLE}": it may have done something else. '
-                       "Read the timeline back before anything more")
+    raise RuntimeError(f'the drop did not open "{CAPTION_TITLE}": it may have placed the captions on a '
+                       "caption track or done something else. Read the timeline back before anything more")
 
 
 def _pick_style(hwnd: int, style: int) -> None:
@@ -209,10 +212,10 @@ def caption_dialog(style: int) -> None:
         raise
 
 
-def place_by_drag(style: int) -> dict:
+def place_by_drag(style: int, caption_tracks: int) -> dict:
     """Drag the selected caption row onto the front timeline and answer the dialog (blocking)."""
     window = ui.window_image()
-    row, drop = find_caption_row(window), find_timeline(window)
+    row, drop = find_caption_row(window), find_timeline(window, caption_tracks)
     hwnd = screenshot.premiere_window()
     left, top, _, _ = ui._rect(hwnd)
     ui._user32().SetForegroundWindow(hwnd)
@@ -250,6 +253,7 @@ def _off(got: list[tuple[int, int]], frames: list[dict], tpf: int) -> list[dict]
 
 async def run(premiere, args: dict) -> dict:
     sequence, track, style, position = args["sequence"], args.get("track"), args.get("style", 1), args.get("position")
+    scale = args.get("scale")
     source = Path(args["srt"])
     seq = (await premiere("open_sequence", {"sequence": sequence}))["name"]
     info = await premiere("read_sequence")
@@ -257,7 +261,8 @@ async def run(premiere, args: dict) -> dict:
     frames, dropped = to_frames(parse_srt(source.read_text(encoding="utf-8-sig")), tpf)
     first, last = frames[0]["start_frame"] * tpf, frames[-1]["end_frame"] * tpf
 
-    if any(await _caption_report(premiere, seq)):
+    captions = await _caption_report(premiere, seq)
+    if any(captions):
         raise ValueError(f"'{seq}' already has captions; Select All + Upgrade would turn them into Graphics too. "
                          "Nothing was done")
     before = _video(await premiere("read_timeline", {"sequence": seq}))
@@ -274,7 +279,7 @@ async def run(premiere, args: dict) -> dict:
     written.write_text(srt_text(frames, tpf), encoding="utf-8")
     await premiere("import_files", {"paths": [str(written)]})
     await asyncio.sleep(1.0)
-    drop = await keys.run_focused(premiere, "timeline", seq, lambda: place_by_drag(style))
+    drop = await keys.run_focused(premiere, "timeline", seq, lambda: place_by_drag(style, len(captions)))
     await asyncio.sleep(1.0)
     placed = [t for t in await _caption_report(premiere, seq) if t]
     if len(placed) != 1:
@@ -301,8 +306,9 @@ async def run(premiere, args: dict) -> dict:
     if target != landed:
         steps = [{"op": "clone", **span, "dt_ticks": "0", "tracks": {"video": [landed - 1]}, "v_offset": target - landed},
                  {"op": "lift", **span, "tracks": {"video": [landed - 1]}}]
-    if position is not None:
-        restyle = [{"kind": "video", "track": target - 1, **span, "motion": {"position": list(position)}}]
+    motion = {**({"position": list(position)} if position is not None else {}), **({"scale": scale} if scale is not None else {})}
+    if motion:
+        restyle = [{"kind": "video", "track": target - 1, **span, "motion": motion}]
     if steps or restyle:
         await premiere("build_sequence", {"project": project, "base": seq, "name": seq, "into": True, "items": [],
                                           "steps": steps, "restyle": restyle})

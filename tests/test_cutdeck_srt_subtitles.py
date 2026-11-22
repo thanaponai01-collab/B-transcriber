@@ -77,13 +77,13 @@ def test_no_selected_caption_row_is_refused():
 
 
 def test_timeline_drop_point_is_right_of_the_track_headers():
-    x, y = subs.find_timeline(_img("timeline_headers"))
-    assert 380 <= x <= 440 and y < 120  # track area, top track row (C2 at y ~95 in the crop)
+    x, y = subs.find_timeline(_img("timeline_headers"), caption_tracks=3)
+    assert 380 <= x <= 440 and abs(y - 175) <= 6  # V4, the top video row below C3, C2 and C1
 
 
 def test_no_timeline_is_refused():
     with pytest.raises(RuntimeError, match="timeline"):
-        subs.find_timeline(_img("project_caption_selected"))
+        subs.find_timeline(_img("project_caption_selected"), 0)
 
 
 def test_start_point_radio_reads_source_timecode():
@@ -132,10 +132,10 @@ def _run(fake, monkeypatch, srt_path, **args):
     async def focused(premiere, focus, sequence, action):
         return action()
 
-    def drop(style):
+    def drop(style, caption_tracks):
         kept, _ = subs.to_frames(subs.parse_srt(Path(fake.calls_srt[0]).read_text(encoding="utf-8")), TPF)
         fake.captions = [(c["start_frame"] * TPF, c["end_frame"] * TPF) for c in kept]
-        return {"row": (1, 1), "drop": (2, 2), "style": style}
+        return {"row": (1, 1), "drop": (2, 2), "style": style, "caption_tracks": caption_tracks}
 
     async def no_sleep(_):
         return None
@@ -151,19 +151,19 @@ def _run(fake, monkeypatch, srt_path, **args):
     monkeypatch.setattr(subs, "place_by_drag", drop)
     monkeypatch.setattr(subs.asyncio, "sleep", no_sleep)
     return asyncio.run(subs.run(call, {"sequence": "short", "srt": str(srt_path), "track": None, "style": 1,
-                                       "position": None, **args}))
+                                       "position": None, "scale": None, **args}))
 
 
 def test_command_moves_upgraded_graphics_down_to_the_chosen_track(tmp_path, monkeypatch):
     srt = tmp_path / "max.srt"
     srt.write_text(SRT, encoding="utf-8")
     fake = FakePremiere(tmp_path, landing=6)
-    out = _run(fake, monkeypatch, srt, track=5, position=[0.5, 0.0255])
+    out = _run(fake, monkeypatch, srt, track=5, position=[0.5, -0.0423], scale=112.5)
     assert out["track"] == "V5" and out["upgraded_on"] == "V6" and out["off_cues"] == []
     assert out["graphics"] == [f"V5@{f * TPF}" for f in (16, 58, 98)] and [d["cue"] for d in out["dropped_cues"]] == [4]
     build = next(a for c, a in fake.calls if c == "build_sequence")
     assert build["steps"][0]["v_offset"] == -1 and build["steps"][1]["op"] == "lift"
-    assert build["restyle"][0]["track"] == 4 and build["restyle"][0]["motion"] == {"position": [0.5, 0.0255]}
+    assert build["restyle"][0]["track"] == 4 and build["restyle"][0]["motion"] == {"position": [0.5, -0.0423], "scale": 112.5}
     assert Path(out["srt_imported"]).parent == tmp_path / "CutDeck" / "Subtitles"
     menus = [a["path"] for c, a in fake.calls if c == "menu_command"]
     assert menus == ["Edit > Select All", "Graphics and Titles > Upgrade Caption to Graphic", "Edit > Deselect All"]
@@ -191,8 +191,8 @@ def test_arguments_are_checked(tmp_path):
     srt = tmp_path / "a.srt"
     srt.write_text(SRT, encoding="utf-8")
     prepare = COMMANDS["srt_subtitles"].prepare
-    good = {"sequence": "short", "srt": str(srt), "track": 5, "position": [0.5, 0.0255]}
+    good = {"sequence": "short", "srt": str(srt), "track": 5, "position": [0.5, -0.0423], "scale": 112.5}
     assert prepare(good, None) == {**good, "style": 1}
-    for bad in ({"srt": str(tmp_path / "missing.srt")}, {"track": 0}, {"style": -1}, {"position": [0.5]}, {"sequence": ""}):
+    for bad in ({"srt": str(tmp_path / "missing.srt")}, {"track": 0}, {"style": -1}, {"position": [0.5]}, {"sequence": ""}, {"scale": 0}):
         with pytest.raises(ValueError):
             prepare({**good, **bad}, None)
