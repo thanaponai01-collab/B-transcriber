@@ -1326,17 +1326,21 @@ HELPER_COMMANDS: dict[str, Command] = {
         300, _srt_subtitles_arguments, "destructive",
         """
         Turn an .srt (already timed) into styled, editable subtitle Graphics on `sequence`
-        (Premiere UI route, live-proven 27.0). The SRT is snapped to frames and imported, dragged
-        from the Project panel onto the timeline (Project panel in list view and the timeline
-        must be visible), placed as captions with the `style`-th saved Style of the "New caption
-        track" dialog (1 = first; make one once with Create Style from a styled subtitle; 0 =
-        none), then Select All + Graphics and Titles > Upgrade Caption to Graphic. The Graphics
-        are moved to `track` (1-based video track, empty over the subtitles' span; default:
-        where Upgrade put them) and given Motion `position` [x, y] (fractions of the frame) and
-        `scale` (percent). 1RaceClub Shorts: position [0.5, -0.0423], scale 112.5 (the user's
-        subtitle size and place, rendered y 819-913 on 1080x1920). Refuses a sequence that already has captions. Reads every Graphic back
-        against the frame-snapped cues (`off_cues`). Takes the mouse and keyboard for several
-        seconds; several Edit > Undo steps revert it.
+        (Premiere UI route, live-proven 27.0). Cue times are sequence time from 00:00:00 (no
+        offset), rounded to the nearest frame. The SRT is snapped and imported, dragged from the
+        Project panel onto the timeline (Project panel in list view and the timeline must be
+        visible), placed as captions with the `style`-th saved Style of the "New caption track"
+        dialog (1 = first in its list, picked by place not name; make one once per project with
+        Create Style from a styled subtitle; 0 = none), then Select All + Graphics and Titles >
+        Upgrade Caption to Graphic. The Graphics are moved to `track` (1-based video track,
+        empty over the subtitles' span; default: where Upgrade put them) and given Motion
+        `position` [x, y] (fractions of the frame) and `scale` (percent). 1RaceClub Shorts:
+        position [0.5, -0.0423], scale 112.5 (the user's subtitle size and place, rendered y
+        819-913 on 1080x1920). Refuses a sequence that already has captions (a failed run can
+        leave some: Select All + Upgrade Caption to Graphic turns them into Graphics to delete).
+        Reads every Graphic back against the snapped cues (`off_cues`). Each run leaves an empty
+        caption track, may leave an empty top video track, and clears the selection. Takes the
+        mouse and keyboard for several seconds. Undo is several Edit > Undo steps (not tested).
         """,
         (("sequence", str), ("srt", str), ("track", int | None, None), ("style", int, 1),
          ("position", list[float] | None, None), ("scale", float | None, None)),

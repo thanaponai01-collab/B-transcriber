@@ -299,6 +299,12 @@ async def run(premiere, args: dict) -> dict:
         raise RuntimeError(f"Upgrade gave {len(graphics)} Graphics on V{landed}, off the cues: {off[:5]}")
     landed = landed[0]
     left_over = [t for t in await _caption_report(premiere, seq) if t]
+    # The build below picks clips by track and start, not by id: a clip that was already on the
+    # landing track inside the span (e.g. a title in a gap between cues) would be moved too.
+    bystanders = [i for i, c in before.items() if c["track"] == landed and first <= int(c["start_ticks"]) < last]
+    if bystanders and (track not in (None, landed) or position is not None or scale is not None):
+        raise RuntimeError(f"Upgrade put the Graphics on V{landed}, which already holds {bystanders[:5]} inside the "
+                           f"subtitles' span; they were not moved or restyled. Graphics: {sorted(upgraded)[:5]}")
 
     target = track or landed
     steps, restyle = [], []

@@ -96,10 +96,10 @@ def test_start_point_radio_reads_source_timecode():
 class FakePremiere:
     """Answers the panel commands the route uses; place_by_drag and Upgrade are simulated."""
 
-    def __init__(self, tmp, landing=6, v5=()):
+    def __init__(self, tmp, landing=6, v5=(), v6=()):
         self.calls, self.captions, self.landing = [], [], landing
         self.video = {f"V{n}": [] for n in range(1, 7)}
-        self.video["V5"] = list(v5)
+        self.video["V5"], self.video["V6"] = list(v5), list(v6)
         self.project = str(tmp / "show.prproj")
 
     async def __call__(self, command, args=None):
@@ -119,7 +119,7 @@ class FakePremiere:
         if command == "menu_command" and args["path"].startswith("Graphics and Titles > Upgrade"):
             self.video[f"V{self.landing}"] += self.captions
             self.captions = []
-        if command == "build_sequence":
+        if command == "build_sequence" and args["steps"]:
             step = args["steps"][0]
             src = f"V{step['tracks']['video'][0] + 1}"
             dst = f"V{step['tracks']['video'][0] + 1 + step['v_offset']}"
@@ -196,3 +196,23 @@ def test_arguments_are_checked(tmp_path):
     for bad in ({"srt": str(tmp_path / "missing.srt")}, {"track": 0}, {"style": -1}, {"position": [0.5]}, {"sequence": ""}, {"scale": 0}):
         with pytest.raises(ValueError):
             prepare({**good, **bad}, None)
+
+
+def test_command_without_track_restyles_where_upgrade_put_them(tmp_path, monkeypatch):
+    srt = tmp_path / "max.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    fake = FakePremiere(tmp_path, landing=6)
+    out = _run(fake, monkeypatch, srt, position=[0.5, -0.0423], scale=112.5)
+    assert out["track"] == "V6" and out["off_cues"] == []
+    build = next(a for c, a in fake.calls if c == "build_sequence")
+    assert build["steps"] == [] and build["items"] == [] and build["restyle"][0]["track"] == 5
+
+
+def test_command_stops_before_moving_a_clip_already_on_the_landing_track(tmp_path, monkeypatch):
+    """A title in a gap between cues on the track Upgrade used would be cloned and lifted too."""
+    srt = tmp_path / "max.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    fake = FakePremiere(tmp_path, landing=6, v6=[(60 * TPF, 62 * TPF)])  # a title inside the subtitles' span
+    with pytest.raises(RuntimeError, match="already holds"):
+        _run(fake, monkeypatch, srt, track=5)
+    assert not any(c == "build_sequence" for c, _ in fake.calls)
