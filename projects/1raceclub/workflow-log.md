@@ -585,3 +585,10 @@ User: "you go cut the video for me". Agent's order (content first, so the silenc
    frame shows the screen look, not yet checked in Effect Controls).
 4. CutDeck silence cut (aggressive, no ASR) → `YT editing (Claude) — CutDeck cef3c7f3`: **16:41**, zero gaps on every
    track, V2/V3/A2–A6 disabled, transcript in source order. Not saved, not exported.
+5. **User feedback:** "you miss some story there like contact of ferrari, dont miss those along the live" → principle 1a.
+   v2 adds 23 beats by storyline (Ferrari pair from lap 1 to the contact and the 10 s each; Hamilton's penalty, pit
+   radio and cleared investigation; Piastri from 17th; SC radios). `YT editing v2 (Claude) — CutDeck a590dad6`:
+   **20:53**, 78 moments, zero gaps, F1 layer on all 520 pieces, transcript in source order.
+   - Premiere crashed twice on this pass: once right after the F1 params on a 78-range keep_words copy of the 2 h
+     sequence, once during the same keep_words. Fix that held: cut in two passes (cut_copy of 24 coarse blocks, then
+     keep_words on that 50 min copy), and add_effect in batches of 10 with retries ("no clip starts at" was transient).

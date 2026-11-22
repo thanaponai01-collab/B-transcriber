@@ -38,6 +38,11 @@ Status: **confirmed** = the user said so; **guess** = inferred from the timeline
      free; picking the frames myself is allowed ("if you want to pick it yourself that's up
      to you") but must keep that minimum gap, e.g. merge highlights that are close together
      under one picture.
+1a. **Follow every story along the live, not only the lead fight.** A side story (the Ferraris fighting each other,
+   a penalty, a driver coming through the field) keeps each of its beats in the long video: the start of it, each
+   turn, and how it ends. *(confirmed: user, 2026-11-22, on the agent's first race cut: "you miss some story there
+   like contact of ferrari, dont miss those along the live")* How to check: list every storyline from the
+   transcript (driver/team names), then make sure each one's beats are in the keep list.
 4. **Cut method: delete pieces and leave gaps, close them in batches.** Keeps the timeline
    readable against the source while reviewing. *(guess)*
 
