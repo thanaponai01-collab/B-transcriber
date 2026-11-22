@@ -181,13 +181,15 @@ def test_build_sequence_into_mode_checks():
     assert prepare({**args, "steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1", "end_ticks": "9"}]}, None)["steps"][0]["end_ticks"] == "9"
     assert prepare({**args, "steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "-5",
                                        "tracks": {"video": [0]}, "v_offset": 4}]}, None)["steps"][0]["v_offset"] == 4
+    assert prepare({**args, "steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "0",
+                                       "v_offset": -2}]}, None)["steps"][0]["v_offset"] == -2  # Upgrade lands Graphics on top
+    assert prepare({**args, "items": [], "steps": []}, None)["restyle"] == args["restyle"]  # restyle only
     assert out["into"] is True and out["steps"] == args["steps"] and out["restyle"] == args["restyle"]
     for bad in ({"name": "other"}, {"steps": [{"op": "move", "from_ticks": "5", "to_ticks": "1", "dt_ticks": "1"}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1"}]}, {"steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1"}]},
                 {"restyle": [{"kind": "title", "track": 0, "from_ticks": "0", "to_ticks": "1"}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "tracks": {"title": [0]}}]},
                 {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "tracks": {"video": [-1]}}]},
-                {"steps": [{"op": "clone", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "v_offset": -1}]},
                 {"steps": [{"op": "move", "from_ticks": "0", "to_ticks": "1", "dt_ticks": "1", "v_offset": 1}]},
                 {"steps": [{"op": "trim", "from_ticks": "0", "to_ticks": "1"}]},
                 {"into": False}):

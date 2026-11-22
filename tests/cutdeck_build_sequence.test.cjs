@@ -208,6 +208,23 @@ test("into clone with v_offset puts the video copy on a higher track (a pasted t
   assert.deepEqual(built.video.filter((c) => c.track === 0).map((c) => c.start / S), [0n, 60n]); // V1 untouched
 });
 
+test("into clone with a negative v_offset then lift moves Graphics down (srt_subtitles: Upgrade lands them on top)", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 9n * S, in: 0n }], [], [{ media: SHOW, start: 1n * S, end: 2n * S, in: 3n * S }, { media: SHOW, start: 2n * S, end: 4n * S, in: 5n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 9n * S, in: 0n }]] }],
+  });
+  const span = { from_ticks: t(1), to_ticks: String(2n * S + 1n), tracks: { video: [2] } };
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "clone", ...span, dt_ticks: "0", v_offset: -1 }, { op: "lift", ...span }], items: [] });
+  const built = h.sequence("cut");
+  assert.deepEqual(built.video.filter((c) => c.track === 1).map((c) => [c.start / S, c.end / S]), [[1n, 2n], [2n, 4n]]);
+  assert.equal(built.video.filter((c) => c.track === 2).length, 0);
+  assert.deepEqual(built.video.filter((c) => c.track === 0).map((c) => c.start), [0n]); // V1 untouched
+});
+
 test("into trim ends a clip on a cut (a copied title) through its out point", async () => {
   const h = fake.createTimelineHost({
     path: PROJECT,

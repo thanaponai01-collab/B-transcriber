@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, timeline_transcript, word_cut
+from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, srt_subtitles, timeline_transcript, word_cut
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -113,7 +113,7 @@ def _build_arguments(args: dict, jobs) -> dict:
         raise ValueError("base and name must be sequence names")
     # Steps on a copy (into), e.g. a reorder, may place nothing (live 2026-11-22: a reorder after
     # keep_words otherwise needed a filler item placed and removed again).
-    only_steps = args.get("into") is True and bool(args.get("steps"))
+    only_steps = args.get("into") is True and bool(args.get("steps") or args.get("restyle"))
     if not isinstance(items, list) or not (0 if only_steps else 1) <= len(items) <= MAX_BUILD_ITEMS:
         raise ValueError(f"items must be a list of 1 to {MAX_BUILD_ITEMS} items (0 only with into and steps)")
     for it in items:
@@ -154,10 +154,10 @@ def _build_arguments(args: dict, jobs) -> dict:
                      or (isinstance(st.get("dt_ticks"), str) and st["dt_ticks"].lstrip("-").isdigit()))
                 and (st.get("tracks") is None or (isinstance(st["tracks"], dict) and not set(st["tracks"]) - {"video", "audio"}
                      and all(isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in st["tracks"].values())))
-                and (st.get("v_offset") is None or (st["op"] == "clone" and type(st["v_offset"]) is int and st["v_offset"] >= 0))
+                and (st.get("v_offset") is None or (st["op"] == "clone" and type(st["v_offset"]) is int))
                 for st in steps):
             raise ValueError("steps must be [{op: lift|clone|move|trim, from_ticks, to_ticks, dt_ticks (clone/move), end_ticks (trim), "
-                             "tracks? {video: [index], audio: [index]}, v_offset? (clone: video tracks up, >= 0)}]")
+                             "tracks? {video: [index], audio: [index]}, v_offset? (clone: video tracks up, negative = down)}]")
         result["steps"] = steps
         restyle = args.get("restyle", [])
         if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")
@@ -427,7 +427,7 @@ COMMANDS: dict[str, Command] = {
         copy you made, e.g. by premiere_keep_words or premiere_cut_copy), with settings_from and
         `steps`: [{op, from_ticks, to_ticks, dt_ticks?, end_ticks?, tracks?}], run in order on
         every clip of every track (or `tracks` {video: [i], audio: [i]}) whose START is in
-        [from, to): clone (copy by dt, overwriting; v_offset puts video copies that many tracks up), lift (remove, leaving a hole), move (shift by
+        [from, to): clone (copy by dt, overwriting; v_offset puts video copies that many tracks up, negative down), lift (remove, leaving a hole), move (shift by
         dt), trim (set end to end_ticks). Steps move whole clips, they do not razor: give block
         boundaries that sit on clip edges (premiere_read_timeline). To swap block A [0, a) and B
         [a, e): clone B by X-a, clone A by X+(e-a) (X past the end), lift [0, e), clone [X, X+e)
@@ -912,6 +912,23 @@ def _paste_attributes_arguments(args: dict, jobs) -> dict:
     return {**_sequence(args), "source": source, "clips": clips}
 
 
+def _srt_subtitles_arguments(args: dict, jobs) -> dict:
+    seq, srt = args.get("sequence"), args.get("srt")
+    if not isinstance(seq, str) or not seq.strip():
+        raise ValueError("sequence must be a sequence name (premiere_list_project)")
+    if not isinstance(srt, str) or not srt.lower().endswith(".srt") or not Path(srt).is_absolute() or not Path(srt).is_file():
+        raise ValueError("srt must be an existing .srt file, absolute path")
+    track, style, position = args.get("track"), args.get("style", 1), args.get("position")
+    if track is not None and (type(track) is not int or track < 1):
+        raise ValueError("track must be a 1-based video track number (5 = V5)")
+    if type(style) is not int or style < 0:
+        raise ValueError("style must be the saved Style's place in the dialog list (1 = first, 0 = none)")
+    if position is not None and not (isinstance(position, list) and len(position) == 2
+                                     and all(type(v) in (int, float) and -1 <= v <= 2 for v in position)):
+        raise ValueError("position must be [x, y], Motion Position as fractions of the frame")
+    return {"sequence": seq, "srt": srt, "track": track, "style": style, "position": position}
+
+
 def _edit_text_arguments(args: dict, jobs) -> dict:
     clip, text = args.get("clip"), args.get("text")
     if not isinstance(clip, str) or not _CLIP_ID.fullmatch(clip) or not clip.startswith("V"):
@@ -1302,6 +1319,24 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("clip", str), ("text", str), ("at_ticks", str | None, None), ("sequence", str | None, None)),
         run=lambda args, premiere: premiere_ui.edit_text(premiere, args)),
+    "srt_subtitles": Command(
+        300, _srt_subtitles_arguments, "destructive",
+        """
+        Turn an .srt (already timed) into styled, editable subtitle Graphics on `sequence`
+        (Premiere UI route, live-proven 27.0). The SRT is snapped to frames and imported, dragged
+        from the Project panel onto the timeline (Project panel in list view and the timeline
+        must be visible), placed as captions with the `style`-th saved Style of the "New caption
+        track" dialog (1 = first; make one once with Create Style from a styled subtitle; 0 =
+        none), then Select All + Graphics and Titles > Upgrade Caption to Graphic. The Graphics
+        are moved to `track` (1-based video track, empty over the subtitles' span; default:
+        where Upgrade put them) and given Motion `position` [x, y] (0-1; e.g. 1RaceClub
+        [0.5, 0.0255]). Refuses a sequence that already has captions. Reads every Graphic back
+        against the frame-snapped cues (`off_cues`). Takes the mouse and keyboard for several
+        seconds; several Edit > Undo steps revert it.
+        """,
+        (("sequence", str), ("srt", str), ("track", int | None, None), ("style", int, 1),
+         ("position", list[float] | None, None)),
+        run=lambda args, premiere: srt_subtitles.run(premiere, args)),
     "menu_command": Command(
         60, _menu_command_arguments, "destructive",
         """
