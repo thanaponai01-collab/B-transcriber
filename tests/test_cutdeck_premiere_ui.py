@@ -98,3 +98,17 @@ def test_paste_attributes_arguments_drop_the_source_and_need_a_target():
     assert parse({"source": "V4@0", "clips": ["V4@0", "V4@10"]}, None)["clips"] == ["V4@10"]
     with pytest.raises(ValueError, match="other than source"):
         parse({"source": "V4@0", "clips": ["V4@0"]}, None)
+
+
+def test_window_wait_returns_the_first_grab_that_is_ready(monkeypatch):
+    on, off = _img("monitor_on"), _img("monitor_off")
+    grabs = iter([on, on, off, off, on])
+    monkeypatch.setattr(ui, "window_image", lambda: next(grabs))
+    got = ui.window_when(lambda a, b: ui._steady(a, b) and ui._moved(on, b) > 50)
+    assert got is off and next(grabs) is on  # the redraw settled on the second "off" grab
+
+
+def test_window_wait_gives_the_last_grab_after_its_timeout(monkeypatch):
+    on = _img("monitor_on")
+    monkeypatch.setattr(ui, "window_image", lambda: on)
+    assert ui.window_when(lambda a, b: False, timeout_s=0.05) is on

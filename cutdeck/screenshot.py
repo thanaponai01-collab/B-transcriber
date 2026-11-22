@@ -59,6 +59,14 @@ def premiere_window() -> int:
 
 def capture(output: str | None = None) -> dict:
     """Save Premiere's main window as a PNG; returns its path and size."""
+    image = window_pixels()
+    path = Path(output) if output else Path(tempfile.gettempdir()) / f"cutdeck-premiere-{int(time.time() * 1000)}.png"
+    image.save(path)
+    return {"path": str(path), "width": image.width, "height": image.height}
+
+
+def window_pixels() -> Image.Image:
+    """Premiere's main window as an RGB image, kept in memory."""
     if _user32 is None:
         raise RuntimeError("Screenshots need Windows")
     hwnd = premiere_window()
@@ -90,7 +98,4 @@ def capture(output: str | None = None) -> dict:
         _gdi32.DeleteObject(bitmap)
         _gdi32.DeleteDC(dc)
         _user32.ReleaseDC(None, screen)
-    image = Image.frombuffer("RGB", (width, height), pixels.raw, "raw", "BGRX", 0, 1)
-    path = Path(output) if output else Path(tempfile.gettempdir()) / f"cutdeck-premiere-{int(time.time() * 1000)}.png"
-    image.save(path)
-    return {"path": str(path), "width": width, "height": height}
+    return Image.frombuffer("RGB", (width, height), pixels.raw, "raw", "BGRX", 0, 1)
