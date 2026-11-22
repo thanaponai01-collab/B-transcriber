@@ -6,7 +6,8 @@
 // - Track items, Motion transforms, Graphic detection, layers and anchor frame sizes
 //   read concurrently across selected items via Promise.all.
 // - Caches the snapshot keyed by selection signature (track:startTicks keys) so subsequent
-//   reads (poll, display, edit calculations) do not re-read Premiere repeatedly.
+//   reads (poll, display) do not re-read Premiere repeatedly. Edits pass forceRefresh: the
+//   cache can't see Premiere's own changes (Edit > Undo, Effect Controls).
 // - Invalidation occurs after every write CutDeck makes or when a different selection
 //   signature is encountered.
 // Must not know: the DOM, UI panels, Rough Cut or Sync job semantics.

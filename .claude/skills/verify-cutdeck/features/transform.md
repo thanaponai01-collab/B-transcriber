@@ -2,7 +2,7 @@
 
 The panel's Transform tools act on the selected clips: set position, scale or rotation; move the
 anchor to one of nine points while the picture stays put; align or distribute clips to the frame
-or the selection. (The panel page itself also sets crop and opacity; the agent tools do not.)
+or the selection, or the whole selection to the frame as one group.
 
 ## Sub-features
 
@@ -38,5 +38,9 @@ Proven 2026-11-22 with this skill (run `20261122-000256-maintain-timeline`): sel
   on the scratch first and clear the selection at the end, or the user's clips get edited.
 - With nothing selected, `inspect_selection` lists every video clip; `has_selection` is the truth,
   not `selected_count`.
-- `set_transform_field` accepts only position-x, position-y, scale, rotation, anchor-x, anchor-y;
-  `align_clips` `to` only frame or selection. Anything else is refused before Premiere is touched.
+- `set_transform_field` takes position-x, position-y, scale, scale-width, uniform-scale (1/0),
+  rotation, anchor-x, anchor-y, anti-flicker (0-1), crop-left/top/right/bottom (%) and opacity (%);
+  `align_clips` `to` takes frame, selection or group. Anything else is refused before Premiere is touched.
+- Edits read the clip's values fresh from Premiere, so an Edit > Undo or a change in Effect
+  Controls just before is taken into account (before 2026-11-22 a cached read was used, and
+  anchor after rotate + undo moved the picture).
