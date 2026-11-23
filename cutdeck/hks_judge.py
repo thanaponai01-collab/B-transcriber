@@ -138,7 +138,30 @@ the attack), otherwise a line that makes the viewer say "what!?". Give 8 candida
 first. Each candidate is 1 to 3 consecutive lines; the editor will trim inside it.""",
         "format": SPAN_FORMAT + " List the 8 candidates best first.",
     },
+    "fb": {
+        "section": "fb_pieces",
+        "hide": ("drops", "sponsors"),
+        "inside": "long_form",
+        "rules": """Task: cut the Facebook version from the finished YouTube long form shown below (only its kept
+lines are shown). It plays after the same cold-open hook. The editor's rules: the climax of the
+main incident, one side's account of it, and an aggressive or striking last line. Keep the
+pieces in broadcast order; jump freely, a cover will hide each cut.
+The kept lines must total 145 to 155 seconds. Line lengths are shown in brackets after the time.""",
+        "format": SPAN_FORMAT,
+    },
+    "minute": {
+        "section": "minute_pieces",
+        "hide": ("drops", "sponsors"),
+        "inside": "long_form",
+        "rules": """Task: cut the 1-minute square version from the finished YouTube long form shown below (only its
+kept lines are shown). It plays after the same cold-open hook. The editor's rules: the single
+strongest moment of the main incident, told in a few pieces, ending on a line that lands. Keep the
+pieces in broadcast order.
+The kept lines must total 30 to 40 seconds. Line lengths are shown in brackets after the time.""",
+        "format": SPAN_FORMAT,
+    },
 }
+SIZED = ("cut", "fb", "minute")
 
 
 def words_of(day: str, media: str, words_dir: Path = WORDS) -> list[list]:
@@ -152,9 +175,10 @@ def hidden(ep: dict, media: str, sections=("drops",)) -> list[tuple[float, float
 
 
 def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_episode.OUT,
-                  hide=("drops",)) -> dict[str, list[Line]]:
-    """Lines per footage file, the spans of the ``hide`` sections left out. Line ids run on across
-    files (one id space a day)."""
+                  hide=("drops",), inside: str | None = None) -> dict[str, list[Line]]:
+    """Lines per footage file, the spans of the ``hide`` sections left out and, with ``inside``,
+    only the lines whose middle lies in that section's ``[[a, b], ...]`` spans. Line ids run on
+    across files (one id space a day)."""
     day = folder.name[:8]
     ep = hks_episode.load(day, ep_dir)
     out, n = {}, 0
@@ -163,6 +187,9 @@ def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_epis
         breaks = [(a + b) / 2 for a, b in silences(str(folder / "1. FOOTAGE" / media))]
         breaks += [t[0] for t in f.get("turns", [])]
         ls = lines(words_of(day, media, words_dir), hidden(ep, media, hide), breaks)
+        if inside is not None:
+            spans = f.get(inside, [])
+            ls = [l for l in ls if any(a <= (l.start + l.end) / 2 < b for a, b in spans)]
         out[media] = [Line(f"L{n + i + 1:04d}", l.start, l.end, l.text) for i, l in enumerate(ls)]
         n += len(ls)
     return out
@@ -178,18 +205,23 @@ def _speaker(turns: list, line: Line) -> str:
 
 
 def prompt_text(task: str, per_file: dict[str, list[Line]], ep: dict | None = None) -> str:
-    """The prompt. Only the "cut" task gets topic headers, line lengths and host marks from ``ep``."""
+    """The prompt. The cutting tasks (SIZED) get topic headers, line lengths and host marks from
+    ``ep``. A topic header goes before the first shown line at or after the topic's start: line ids
+    differ between tasks that hide different sections."""
     t = TASKS[task]
     body = []
     for media, ls in per_file.items():
         if len(per_file) > 1:
             body.append(f"\n## File: {media}\n")
-        f = (ep or {}).get("files", {}).get(media, {}) if task == "cut" else {}
-        heads = {tp["line"]: tp for tp in f.get("topics", [])}
+        f = (ep or {}).get("files", {}).get(media, {}) if task in SIZED else {}
+        heads = sorted(f.get("topics", []), key=lambda tp: tp["start"])
         for l in ls:
-            if l.id in heads:
-                body.append(f"=== topic (story {heads[l.id]['story']}): {heads[l.id]['title']} ===")
-            size = f" ({l.end - l.start:.1f}s)" if task == "cut" else ""
+            tp = None
+            while heads and heads[0]["start"] <= l.start + 0.05:
+                tp = heads.pop(0)  # topics wholly hidden before this line: only the latest shows
+            if tp:
+                body.append(f"=== topic (story {tp['story']}): {tp['title']} ===")
+            size = f" ({l.end - l.start:.1f}s)" if task in SIZED else ""
             body.append(f"{l.id} [{_clock(l.start)}]{size} {_speaker(f.get('turns', []), l)}{l.text}")
     return "\n\n".join([SHOW, t["rules"], t["format"], "## Transcript\n" + "\n".join(body)]) + "\n"
 
@@ -240,7 +272,7 @@ def write_prompt(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_ep
     episode's sections become later."""
     p, _ = paths(folder, task, out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    per_file = episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"])
+    per_file = episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"], inside=TASKS[task].get("inside"))
     p.write_text(prompt_text(task, per_file, hks_episode.load(folder.name[:8], ep_dir)), encoding="utf-8")
     lines_path(folder, task, out).write_text(json.dumps(
         {m: [[l.id, l.start, l.end, l.text] for l in ls] for m, ls in per_file.items()}, ensure_ascii=False),
