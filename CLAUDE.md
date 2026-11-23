@@ -134,7 +134,7 @@ Boundaries that must hold:
 
 ## Current engines
 
-Venv is **Python 3.11.9**.
+The GPU venv is **Python 3.11.9**. Tests also run on PATH Python 3.13.
 
 | Engine | Status |
 |---|---|
@@ -168,14 +168,23 @@ Plain `wer` is recorded but never gates.
 
 Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
 
+## CutDeck (Premiere)
+
+- **Helper** `python -m cutdeck.helper` on `ws://127.0.0.1:7891` runs ASR jobs and
+  anything UXP can't do. Agents reach Premiere through the MCP server
+  `cutdeck/mcp_server.py`; every route in is listed in `docs/PREMIERE_CONTROL_MAP.md`.
+- **Panel** `uxp/cutdeck/` (UXP) calls the helper through `core/rpc.js`. Rule 2 applies.
+- **Offline project reads**: `cutdeck/prproj_reader.py` reads a saved `.prproj`.
+- **HKS pipeline**: the `cutdeck/hks_*.py` modules build โหนกระแส episodes. The plan and
+  its steps are in `projects/hks/build-plan.md`.
+- **SubtitleDesk** (`subtitle_desk/`): quote editor on the shared helper; see its README.
+
 ## Agent workflow
 
 - **Issues:** GitHub Issues on `thanaponai01-collab/B-transcriber`, via the `gh` CLI.
   See `docs/agents/issue-tracker.md`.
 - **Triage labels:** the five canonical roles, each label equal to its name. See
   `docs/agents/triage-labels.md`.
-- **Domain docs:** single-context (`CONTEXT.md` + `docs/adr/` at the repo root, created
-  when first needed; neither exists yet). See `docs/agents/domain.md`.
 - **Editing projects** (1RaceClub, HKS / โหนกระแส): one folder each under [projects/](projects/README.md)
   with principles, rules, memory and logs. Read [projects/PRINCIPLES.md](projects/PRINCIPLES.md) first,
   then the project's README. New project facts go in its `memory/`, not in `docs/`.
@@ -186,43 +195,4 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   `verify-loop` builds and maintains it.
 - `FEATURES.md`: what the system has and how a user reaches each feature. Read it before driving or
   changing the app; `feature-map` keeps it true.
-- Something broken and the cause unknown: `debug-protocol`. Need the system explained plainly, not
-  changed: `explain`.
-
-<!-- agent-routing -->
-## Agent routing
-
-- Coordinator: the current Codex session (GPT-6); instructions cannot switch its model.
-- Execution role: plugin `agents/drive-executor.md` (Sonnet), for bounded implementation
-  and local checks when the host supports that configured worker.
-- Discovery role: plugin `agents/setup-reader.md` (Haiku), for bounded read-only evidence.
-- Codex host limitation: these Claude plugin workers are unavailable through the current
-  delegation API. Use the current session as a single-agent fallback; do not claim a switch.
-- Honor host and project model overrides; report the actual worker/model or fallback.
-- `project-foundation` owns foundation preparation; Drive owns execution gates and
-  task context upkeep. Setup alone does not establish product readiness or verification.
-- Worker assignments include exact paths, source pointers, immutable acceptance checks,
-  allowed edits, evidence location, output limits and supported step/spend limits.
-- Send bounded task context, not the full chat or secrets. Delegate only when it saves work.
-- Workers cannot change acceptance oracles or authorize external actions.
-  The coordinator judges retained proof and owns external-action decisions.
-- Existing context: [SYSTEM_SPEC.md](SYSTEM_SPEC.md), [FEATURES.md](FEATURES.md),
-  [VERIFY.md](VERIFY.md), [BUILD.md](BUILD.md), [MAINT_LOG.md](MAINT_LOG.md).
-<!-- /agent-routing -->
-
-<!-- start-here -->
-## Start here
-Goal: local Thai transcription/review and Premiere workflows; selected context slice is SubtitleDesk.
-intent: BRIEF.md
-work: BUILD.md
-features: FEATURES.md
-verify: VERIFY.md
-architecture: docs/architecture.md
-commands: docs/commands.md
-Read [intent](BRIEF.md), [work](BUILD.md), [features](FEATURES.md), then [checks](VERIFY.md).
-Read [architecture](docs/architecture.md) for boundaries and [commands](docs/commands.md) before running tools.
-Checks cover selected backend behavior; real GPU, browser and Premiere behavior remain unverified.
-Read feature area includes for the task; read [SubtitleDesk work](work/subtitle_desk-history.md) for existing live evidence and deferred work.
-Changed decisions replace their brief/area entries; authorized updates refresh affected intent, evidence and Next; read-only reviews report gaps.
-Memory: use installed `C:/Users/thana/.claude/plugins/cache/thanaponai01-skills/top-tier-engineer/4.61.0/skills/project-context/scripts/context.py --repo . search QUERY`; upkeep uses `index --files` for changed context.
-<!-- /start-here -->
+- Something broken and the cause unknown: `debug-protocol`.
