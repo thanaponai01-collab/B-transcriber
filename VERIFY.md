@@ -133,6 +133,14 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: set BLUE_FRAME_MIN to 0.99 and to 0.05 in cutdeck/topic_layout.py, test_top_edge_mostly_blue_is_clip / test_top_edge_mostly_not_blue_is_studio went red (the first version of the tests stayed green under 0.99 because its edges were 100% blue; fixed before use); in cutdeck/topic_speakers.py, made turns merge across a pause and set the smoothing reach to 0, test_a_pause_starts_a_new_turn_even_for_the_same_speaker and test_smoothing_removes_a_single_outlier went red; reverted, files identical to backup
 
+## HKS episode pipeline (projects/hks/build-plan.md)
+- path: cutdeck/hks_*.py
+- oracle: projects/hks/build-plan.md (each step's verify line), the user's saved projects under G:\Me\Works (hks_gold)
+- test: `python -m pytest tests/test_hks_*.py -q -p no:cacheprovider`
+- real-data checks (need G:\Me\Works and the caches): `python -m cutdeck.<module> --all G:\Me\Works --check` for hks_episode, hks_breaks, hks_layout, hks_rough, hks_tighten, hks_covers, hks_draft, hks_finish, hks_bleep, hks_versions; `--holdout` once per change, never tuned on. The judge answers they read are under `test_projects/hks_judge/<day>/`.
+- fail-signal: AssertionError
+- fail-proof: in cutdeck/hks_judge.py kept_runs, made a run join across hidden content (`if False:`), test_kept_lines_join_unless_hidden_content_lies_between went red; in cutdeck/hks_bleep.py dropped the `(?!ว)` guards, test_compounds_are_not_swears went red; reverted, `git diff` empty
+
 ## SubtitleDesk quote workspace
 - path: subtitle_desk/
 - oracle: subtitle_desk/README.md, tests/conftest.py

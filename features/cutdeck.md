@@ -174,3 +174,14 @@
 - trace: `main` @ cutdeck/shorts_check.py > `check_sequence` @ cutdeck/shorts_check.py > `read_project` @ cutdeck/prproj_reader.py
 - verify: Shorts rule check (issue 128)
 - status: proven 2026-11-23 offline on the saved 11-21 and 11-22 projects; no fresh trial on unseen Shorts yet
+
+## HKS episode drafts (โหนกระแส)
+- what: Analyse an HKS episode offline (breaks, clock, layout, turns, sponsors, topics), have a select-only judge pick the cut, then draft the long form, FB and 1-min versions as source ranges and as a `build_sequence` request for a copy. The plan and every step's numbers: projects/hks/build-plan.md.
+- cli: `python -m cutdeck.hks_judge prompt|apply <day folder> --task <task>` @ cutdeck/hks_judge.py :: sponsors, topics, cut, hook, fb, minute
+- cli: `python -m cutdeck.hks_draft --all G:\Me\Works --check` @ cutdeck/hks_draft.py :: --holdout
+- cli: `python -m cutdeck.hks_versions --all G:\Me\Works --prompt|--check` @ cutdeck/hks_versions.py :: --holdout
+- cli: `python -m cutdeck.hks_assemble <day folder> --check --out <request.json>` @ cutdeck/hks_assemble.py
+- cli: analysis and finishing checks: hks_episode, hks_breaks, hks_layout, hks_turns, hks_rough, hks_tighten, hks_covers, hks_finish, hks_bleep, hks_reels (each `--all G:\Me\Works --check`)
+- trace: `request` @ cutdeck/hks_assemble.py > `draft` @ cutdeck/hks_draft.py > `kept_runs` @ cutdeck/hks_judge.py
+- verify: HKS episode pipeline (projects/hks/build-plan.md)
+- status: offline only (2026-11-23), on 8 tuning days with the holdout run once where a step allows it; no live build of a draft yet (it needs a copied project the user opens)
