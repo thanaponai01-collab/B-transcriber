@@ -3,8 +3,8 @@
 The draft is three steps on the episode sections:
 
 1. the ``cut`` judge's keeps (``hks_judge``, task ``cut``: rules 4.2 host cuts, 4.4 content cuts,
-   4.5 story openings), read as runs of consecutive kept lines of the prompt's line table, so two
-   picked spans with no line cut between them are one keep;
+   4.5 story openings), read as runs of consecutive kept lines of the prompt's line table
+   (``hks_judge.kept_runs``), so two picked spans with no line cut between them are one keep;
 2. 4.1 ``hks_tighten`` inside those keeps (pauses cut only where a cover or a legal cut point
    hides the cut);
 3. the cuts that need a cover get 4.3 ``hks_covers`` candidates.
@@ -31,23 +31,9 @@ SIDE_SECTIONS_20261120 = ((2096.0, 2469.0), (2820.0, 2988.0))
 
 
 def judge_keeps(folder: Path, out: Path = hks_judge.OUT) -> dict[str, list[tuple[float, float]]]:
-    """Runs of consecutive kept lines per footage file, from the cut answer."""
-    shown = json.loads(hks_judge.lines_path(folder, "cut", out).read_text(encoding="utf-8"))
-    picked = hks_judge.answer(folder, "cut", out)
-    runs_of = {}
-    for media, ls in shown.items():
-        ids = {l[0]: i for i, l in enumerate(ls)}
-        kept = set()
-        for s in picked.get(media, []):
-            kept.update(range(ids[s["from"]], ids[s["to"]] + 1))
-        runs: list[tuple[float, float]] = []
-        for i in sorted(kept):
-            if runs and i - 1 in kept:
-                runs[-1] = (runs[-1][0], ls[i][2])
-            else:
-                runs.append((ls[i][1], ls[i][2]))
-        runs_of[media] = runs
-    return runs_of
+    """Runs of consecutive kept lines per footage file, from the cut answer; a run never reaches
+    over a hidden drop or sponsor."""
+    return hks_judge.kept_runs(folder, "cut", out)
 
 
 def draft(folder: Path) -> dict:
@@ -91,7 +77,7 @@ def check_day(folder: Path) -> dict:
         "keeps": {g: [list(x) for x in d[names[g.lower()]]["keeps"]] for g in gold.keeps if g.lower() in names},
         "covered": {g: [list(x) for x in d[names[g.lower()]]["covered"]] for g in gold.keeps if g.lower() in names}})
     score = hks_score.score(gold, proposal)
-    shown = json.loads(hks_judge.lines_path(folder, "cut").read_text(encoding="utf-8"))
+    shown = {m: v["lines"] for m, v in hks_judge.shown_table(folder, "cut").items()}
     ep = hks_episode.load(folder.name[:8])
     agree = host_agree = n = host_n = 0
     side = []

@@ -146,7 +146,7 @@ first. Each candidate is 1 to 3 consecutive lines; the editor will trim inside i
 lines are shown). It plays after the same cold-open hook. The editor's rules: the climax of the
 main incident, one side's account of it, and an aggressive or striking last line. Keep the
 pieces in broadcast order; jump freely, a cover will hide each cut.
-The kept lines must total 145 to 155 seconds. Line lengths are shown in brackets after the time.""",
+The kept lines must total {lo:.0f} to {hi:.0f} seconds. Line lengths are shown in brackets after the time.""",
         "format": SPAN_FORMAT,
     },
     "minute": {
@@ -157,7 +157,7 @@ The kept lines must total 145 to 155 seconds. Line lengths are shown in brackets
 kept lines are shown). It plays after the same cold-open hook. The editor's rules: the single
 strongest moment of the main incident, told in a few pieces, ending on a line that lands. Keep the
 pieces in broadcast order.
-The kept lines must total 30 to 40 seconds. Line lengths are shown in brackets after the time.""",
+The kept lines must total {lo:.0f} to {hi:.0f} seconds. Line lengths are shown in brackets after the time.""",
         "format": SPAN_FORMAT,
     },
 }
@@ -204,7 +204,7 @@ def _speaker(turns: list, line: Line) -> str:
     return "H " if host > other else "G "
 
 
-def prompt_text(task: str, per_file: dict[str, list[Line]], ep: dict | None = None) -> str:
+def prompt_text(task: str, per_file: dict[str, list[Line]], ep: dict | None = None, fill: dict | None = None) -> str:
     """The prompt. The cutting tasks (SIZED) get topic headers, line lengths and host marks from
     ``ep``. A topic header goes before the first shown line at or after the topic's start: line ids
     differ between tasks that hide different sections."""
@@ -223,7 +223,8 @@ def prompt_text(task: str, per_file: dict[str, list[Line]], ep: dict | None = No
                 body.append(f"=== topic (story {tp['story']}): {tp['title']} ===")
             size = f" ({l.end - l.start:.1f}s)" if task in SIZED else ""
             body.append(f"{l.id} [{_clock(l.start)}]{size} {_speaker(f.get('turns', []), l)}{l.text}")
-    return "\n\n".join([SHOW, t["rules"], t["format"], "## Transcript\n" + "\n".join(body)]) + "\n"
+    rules = t["rules"].format(**fill) if fill else t["rules"]
+    return "\n\n".join([SHOW, rules, t["format"], "## Transcript\n" + "\n".join(body)]) + "\n"
 
 
 def _index(per_file: dict[str, list[Line]]) -> dict[str, tuple[str, int, Line]]:
@@ -267,24 +268,63 @@ def lines_path(folder: Path, task: str, out: Path = OUT) -> Path:
     return out / folder.name[:8] / f"{task}.lines.json"
 
 
-def write_prompt(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> Path:
+def write_prompt(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT,
+                 fill: dict | None = None) -> Path:
     """The prompt, plus the line table it shows: an answer's ids mean these lines, whatever the
-    episode's sections become later."""
+    episode's sections become later. The table also keeps, per file, the hidden spans and the
+    allowed (``inside``) spans, so a kept run never reaches over content the judge did not see."""
     p, _ = paths(folder, task, out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    per_file = episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"], inside=TASKS[task].get("inside"))
-    p.write_text(prompt_text(task, per_file, hks_episode.load(folder.name[:8], ep_dir)), encoding="utf-8")
-    lines_path(folder, task, out).write_text(json.dumps(
-        {m: [[l.id, l.start, l.end, l.text] for l in ls] for m, ls in per_file.items()}, ensure_ascii=False),
-        encoding="utf-8")
+    t = TASKS[task]
+    ep = hks_episode.load(folder.name[:8], ep_dir)
+    per_file = episode_lines(folder, ep_dir=ep_dir, hide=t["hide"], inside=t.get("inside"))
+    p.write_text(prompt_text(task, per_file, ep, fill), encoding="utf-8")
+    lines_path(folder, task, out).write_text(json.dumps({m: {
+        "lines": [[l.id, l.start, l.end, l.text] for l in ls],
+        "hidden": hidden(ep, m, t["hide"]),
+        "inside": ep["files"].get(m, {}).get(t["inside"], []) if t.get("inside") else None,
+    } for m, ls in per_file.items()}, ensure_ascii=False), encoding="utf-8")
     return p
+
+
+def shown_table(folder: Path, task: str, out: Path = OUT) -> dict[str, dict]:
+    return json.loads(lines_path(folder, task, out).read_text(encoding="utf-8"))
 
 
 def answer(folder: Path, task: str, out: Path = OUT) -> dict[str, list]:
     """The parsed answer, read against the lines its prompt showed."""
-    shown = json.loads(lines_path(folder, task, out).read_text(encoding="utf-8"))
-    per_file = {m: [Line(*l) for l in ls] for m, ls in shown.items()}
+    per_file = {m: [Line(*l) for l in v["lines"]] for m, v in shown_table(folder, task, out).items()}
     return parse(task, json.loads(paths(folder, task, out)[1].read_text(encoding="utf-8")), per_file)
+
+
+def kept_runs(folder: Path, task: str, out: Path = OUT) -> dict[str, list[tuple[float, float]]]:
+    """For a span task: per file, the runs of consecutive picked lines as source ranges. A run
+    breaks between two shown lines when hidden content, or time outside the allowed spans, lies
+    between them: the judge never saw it, so it is never kept."""
+    picked = answer(folder, task, out)
+    runs_of = {}
+    for media, v in shown_table(folder, task, out).items():
+        ls, hide, inside = v["lines"], v["hidden"], v["inside"]
+        ids = {l[0]: i for i, l in enumerate(ls)}
+        kept = set()
+        for s in picked.get(media, []):
+            kept.update(range(ids[s["from"]], ids[s["to"]] + 1))
+
+        def joined(e: float, s: float) -> bool:
+            if any(a < s and b > e for a, b in hide):
+                return False
+            return inside is None or any(a <= e and s <= b for a, b in inside)
+
+        runs: list[tuple[float, float]] = []
+        for i in sorted(kept):
+            if runs and i - 1 in kept and joined(ls[i - 1][2], ls[i][1]):
+                runs[-1] = (runs[-1][0], ls[i][2])
+            else:
+                runs.append((ls[i][1], ls[i][2]))
+        if inside is not None:  # a shown line's edge may stick out past an allowed span
+            runs = [(max(a, c), min(b, d)) for a, b in runs for c, d in inside if a < d and c < b]
+        runs_of[media] = runs
+    return runs_of
 
 
 def apply(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> dict[str, list]:

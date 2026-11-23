@@ -74,7 +74,11 @@ def write_prompts(folder: Path) -> list[Path]:
         name = next(m for m in hks_episode.load(day)["files"] if m.lower() == media.lower())
         lf = untightened([(k.source_in, k.source_out) for k in keeps if k.media == media])
         hks_episode.update(day, name, "long_form", [list(x) for x in lf])
-    return [hks_judge.write_prompt(folder, task) for task, *_ in KINDS.values()]
+    # The judge counts line lengths; the runs it makes are a little longer (the pauses between
+    # lines), and fit trims the excess, so the range runs from the floor to 3 s past the target.
+    hook = gold.yt.hook_end or 0.0
+    return [hks_judge.write_prompt(folder, task, fill={"lo": floor - hook, "hi": target - hook + 3})
+            for task, _, target, floor in KINDS.values()]
 
 
 def check_day(folder: Path) -> dict:
@@ -86,13 +90,13 @@ def check_day(folder: Path) -> dict:
         if not hks_judge.paths(folder, task)[1].exists():
             out[kind] = "no answer"
             continue
-        picked = hks_judge.answer(folder, task)
+        picked = hks_judge.kept_runs(folder, task)
         user = getattr(gold, attr)
         theirs, _ = body(user)
         r = {"picked_s": 0.0, "user_s": 0.0, "hit_s": 0.0, "long_form_s": 0.0, "inside": True}
         pieces = []
         for media, spans in picked.items():
-            ours = [(s["start"], s["end"]) for s in spans]
+            ours = list(spans)
             pieces += ours
             th = [(k.source_in, k.source_out) for k in theirs if k.media.lower() == media.lower()]
             lf = [tuple(x) for x in ep["files"].get(media, {}).get("long_form", [])]
