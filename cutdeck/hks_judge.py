@@ -82,7 +82,7 @@ Use only line ids shown below. "from" and "to" may be the same line. Do not writ
 TASKS = {
     "sponsors": {
         "section": "sponsors",
-        "drops": False,  # a sponsor read can sit inside a clock-off drop: show everything
+        "hide": (),  # a sponsor read can sit inside a clock-off drop: show everything
         "rules": """Task: mark every stretch where the show promotes a sponsor: a product, brand, shop,
 app, service or event is advertised or thanked as a sponsor, read by the host or played as an ad.
 Mark the whole promotion, from its first line to its last. Do not mark news content that only
@@ -91,6 +91,7 @@ mentions a company. If there is no sponsor, answer {"spans": []}.""",
     },
     "topics": {
         "section": "topics",
+        "hide": ("drops",),
         "rules": """Task: mark where each new topic starts. A topic starts where the host opens a new
 subject: a question that moves the talk to a new incident, a new guest, a new part of the story
 (what happened, the other side, the police, the money, what happens next). Pick the first line of
@@ -100,6 +101,23 @@ incident into one story: story numbers start at 1 and only go up.""",
 {"topics": [{"start": "L0042", "story": 1, "title": "<a few words>"}]}
 Topics in broadcast order. Use only line ids shown below. Do not write times.""",
     },
+    "cut": {
+        "section": "keeps",
+        "hide": ("drops", "sponsors"),
+        "rules": """Task: cut the YouTube long form. Choose the lines to KEEP; everything else is cut.
+The editor's rules:
+1. Get into each story fast: open on the guest's first sentence of the story, or on the host's
+   summary if the guest is slow to start.
+2. Each point is told once. Cut retellings, off-topic asides, backstory, legal analysis, and
+   feelings that do not move the events forward. Shorten as much as possible.
+3. Cut the host's prompts, clarifications and opinions. Keep a host line only where two guest
+   pieces would not join without it. A short host reaction may stay for drama.
+4. Viewer comments read on air: always cut. Sponsor reads: always cut.
+5. The kept lines must total 15 to 20 minutes. Line lengths are shown in brackets after the time.
+Lines marked H are the host's voice, G someone else's (automatic, can be wrong). Topic headers
+were added by an earlier pass to help you find your way; they are not lines.""",
+        "format": SPAN_FORMAT.replace('"why": "<a few words, Thai or English>"', '"why": "<what this keep is>"'),
+    },
 }
 
 
@@ -107,19 +125,21 @@ def words_of(day: str, media: str, words_dir: Path = WORDS) -> list[list]:
     return json.loads((words_dir / day / f"{Path(media).stem}.words.json").read_text(encoding="utf-8"))
 
 
-def drops_of(ep: dict, media: str) -> list[tuple[float, float]]:
-    return [(d["start"], d["end"]) for d in ep["files"].get(media, {}).get("drops", [])]
+def hidden(ep: dict, media: str, sections=("drops",)) -> list[tuple[float, float]]:
+    """Spans of the given episode sections (each a list of {start, end}) for one file."""
+    f = ep["files"].get(media, {})
+    return [(d["start"], d["end"]) for name in sections for d in f.get(name, [])]
 
 
 def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_episode.OUT,
-                  drops: bool = True) -> dict[str, list[Line]]:
-    """Lines per footage file, drops left out unless ``drops`` is False. Line ids run on across
+                  hide=("drops",)) -> dict[str, list[Line]]:
+    """Lines per footage file, the spans of the ``hide`` sections left out. Line ids run on across
     files (one id space a day)."""
     day = folder.name[:8]
     ep = hks_episode.load(day, ep_dir)
     out, n = {}, 0
     for media in sorted(p.name for p in (folder / "1. FOOTAGE").glob("*.mp4")):
-        ls = lines(words_of(day, media, words_dir), drops_of(ep, media) if drops else [])
+        ls = lines(words_of(day, media, words_dir), hidden(ep, media, hide))
         out[media] = [Line(f"L{n + i + 1:04d}", l.start, l.end, l.text) for i, l in enumerate(ls)]
         n += len(ls)
     return out
@@ -175,14 +195,15 @@ def paths(folder: Path, task: str, out: Path = OUT) -> tuple[Path, Path]:
 def write_prompt(folder: Path, task: str, out: Path = OUT) -> Path:
     p, _ = paths(folder, task, out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(prompt_text(task, episode_lines(folder, drops=TASKS[task].get("drops", True))), encoding="utf-8")
+    p.write_text(prompt_text(task, episode_lines(folder, hide=TASKS[task]["hide"]), hks_episode.load(folder.name[:8])),
+                 encoding="utf-8")
     return p
 
 
 def apply(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> dict[str, list]:
     _, a = paths(folder, task, out)
     value = parse(task, json.loads(a.read_text(encoding="utf-8")),
-                  episode_lines(folder, ep_dir=ep_dir, drops=TASKS[task].get("drops", True)))
+                  episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"]))
     for media, v in value.items():
         hks_episode.update(folder.name[:8], media, TASKS[task]["section"], v, ep_dir)
     return value
@@ -222,7 +243,7 @@ def score_sponsors(folder: Path, out: Path = OUT) -> dict:
     the YT cut (false positives: the user always cuts sponsors)."""
     from cutdeck.hks_gold import read_day
     value = parse("sponsors", json.loads(paths(folder, "sponsors", out)[1].read_text(encoding="utf-8")),
-                  episode_lines(folder, drops=False))
+                  episode_lines(folder, hide=TASKS["sponsors"]["hide"]))
     gold = read_day(folder)
     kept = 0.0
     for media, spans in value.items():
@@ -237,3 +258,27 @@ def score_sponsors(folder: Path, out: Path = OUT) -> dict:
         r["known_hit"] = [round(_overlap(flagged, a, b) / (b - a), 2) for a, b in SPONSORS_20261120]
         r["pass"] = all(h >= MIN_SPONSOR_HIT for h in r["known_hit"])
     return r
+
+
+# Topic starts the user marked (source seconds). 20261120: the clip label-colour boundaries of the
+# day project, unlabelled (Brown) runs left out (workflow log, Step 2). 290969: the user's reviewed
+# markers (tests/data/topic_cut_starts_hks290969.json).
+TOPICS_20261120 = (266.0, 936.0, 1715.0, 1925.0, 2096.0, 2469.0, 2820.0, 2988.0, 3727.0, 3889.0)
+TOPIC_TOL = 1.5     # s, build plan 2.9
+MIN_TOPIC_HIT = 0.75  # share of the user's starts hit: the 24 of 32 the first hand picks reached on 290969
+
+
+def score_topics(folder: Path, gold_starts, out: Path = OUT) -> dict:
+    """Plan 2.9: the share of the user's topic starts with a picked start within TOPIC_TOL, and the
+    share of picked starts near one of the user's (a picker that marks every line must not pass)."""
+    value = parse("topics", json.loads(paths(folder, "topics", out)[1].read_text(encoding="utf-8")),
+                  episode_lines(folder, hide=TASKS["topics"]["hide"]))
+    picked = sorted(t["start"] for v in value.values() for t in v)
+    hit = [g for g in gold_starts if any(abs(p - g) <= TOPIC_TOL for p in picked)]
+    near = [p for p in picked if any(abs(p - g) <= TOPIC_TOL for g in gold_starts)]
+    stories = len({t["story"] for v in value.values() for t in v})
+    return {"day": folder.name[:8], "picked": len(picked), "stories": stories, "gold": len(gold_starts),
+            "hit": len(hit), "recall": round(len(hit) / len(gold_starts), 3),
+            "precision": round(len(near) / len(picked), 3) if picked else 0.0,
+            "missed": [g for g in gold_starts if g not in hit],
+            "pass": len(hit) / len(gold_starts) >= MIN_TOPIC_HIT}
