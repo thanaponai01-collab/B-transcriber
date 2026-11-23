@@ -191,7 +191,7 @@ def _describe(ch: dict) -> str:
         what = f"{ch['kind']} {name} {ch['start']:.2f}-{ch['end']:.2f}s"
         if ch["fields"]:
             what += f" ({', '.join(ch['fields'])})"
-    by = f"  [log: {', '.join(ch['explained_by'])}]" if ch["explained_by"] else "  [user]"
+    by = f"  [log: {', '.join(ch['explained_by'])}]" if ch["explained_by"] else "  [unattributed]"
     return f"  {ch['id']} {where}: {what}{by}"
 
 

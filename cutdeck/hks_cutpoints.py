@@ -432,16 +432,16 @@ def change_near(sc: Scan, t: float, tol: float = MATCH_S) -> float:
     return float(abrupt(sc.thumbs[i0 - 2:i1 + 2]).mean(axis=(1, 2)).max())
 
 
-def explained(row: dict, points: dict[str, Points]) -> str | None:
+def explained(row: dict, points: dict[tuple[str, str], Points]) -> str | None:
     """The kind of the detected point that explains a cut, from either side's source time."""
     for media, t in (row["before"], row["after"]):
-        kind = points[media.lower()].near(t)
+        kind = points[row["day"], media.lower()].near(t)
         if kind:
             return kind
     return None
 
 
-def recall(rows: list[dict], points: dict[str, Points]) -> dict[str, tuple[int, int, list]]:
+def recall(rows: list[dict], points: dict[tuple[str, str], Points]) -> dict[str, tuple[int, int, list]]:
     out = {}
     for cls in ("camera", "inset", "still"):
         mine = [r for r in rows if r["class"] == cls]
@@ -483,11 +483,11 @@ def main(argv: list[str] | None = None) -> None:
     fails = []
     for group, folders in groups:
         rows = []
-        points: dict[str, Points] = {}
+        points: dict[tuple[str, str], Points] = {}
         for folder in folders:
             for media in sorted((folder / "1. FOOTAGE").glob("*.mp4")):
                 pts = detect_file(media)
-                points[media.name.lower()] = pts
+                points[folder.name[:8], media.name.lower()] = pts
                 update(folder.name[:8], media.name, "cut_points", pts.section(), **extra)
                 print(f"{folder.name[:8]} {media.name}: {len(pts.camera)} camera, {len(pts.inset)} inset, "
                       f"{len(pts.still)} still runs", file=sys.stderr, flush=True)
@@ -497,10 +497,11 @@ def main(argv: list[str] | None = None) -> None:
             continue
         print(f"\n## {group} ({len(folders)} episodes): recall on the audit's uncovered cuts, "
               f"a point within {MATCH_S} s of either side")
-        scans = {m.name.lower(): scan(m) for f in folders for m in (f / "1. FOOTAGE").glob("*.mp4")}
+        scans = {(f.name[:8], m.name.lower()): scan(m)
+                 for f in folders for m in (f / "1. FOOTAGE").glob("*.mp4")}
 
         def change(r):
-            return max(change_near(scans[media.lower()], t) for media, t in (r["before"], r["after"]))
+            return max(change_near(scans[r["day"], media.lower()], t) for media, t in (r["before"], r["after"]))
         for cls, (hit, n, miss) in recall(rows, points).items():
             mine = [r for r in rows if r["class"] == cls]
             ceiling = "" if cls == "still" else (
@@ -519,7 +520,7 @@ def main(argv: list[str] | None = None) -> None:
                     fails.append("punch-in detected as legal")
         if group == "tuning":
             labels = json.loads(LABELS.read_text(encoding="utf-8"))
-            pr = precision(points[labels["file"].lower()], labels)
+            pr = precision(points["20261120", labels["file"].lower()], labels)
             print("\n## precision on the hand labels (20261120, 10 min)")
             for kind in ("camera", "inset"):
                 ok, n, wrong = pr[kind]

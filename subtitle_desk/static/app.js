@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const {breakLines, timestamp} = SubtitleDeskQuotes;
-let session = null, pollTimer = null, dirty = false;
+let session = null, pollTimer = null, dirty = false, rangeVersion = 0;
 
 // Serialize operations that switch the displayed range or replace its saved quotes.
 function exclusive(action) {
@@ -40,19 +40,26 @@ async function sessions() {
   return list;
 }
 async function openSession(id) {
+  const version = ++rangeVersion;
   clearTimeout(pollTimer);
   session = await api(`/api/sessions/${id}`); dirty = false;
   $("sessions").value = id;
   renderSession();
-  if (["extracting","transcribing"].includes(session.state)) pollTimer = setTimeout(() => poll(id), 2000);
+  if (["extracting","transcribing"].includes(session.state)) pollTimer = setTimeout(() => poll(id, version), 2000);
 }
-async function poll(id) {
+async function poll(id, version) {
+  const isCurrent = () => version === rangeVersion && session?.id === id;
+  if (!isCurrent()) return;
   try {
     const result = await api(`/api/sessions/${id}`);
-    if (!session || session.id !== id) return;
+    if (!isCurrent()) return;
     session = result; renderSession();
-    if (["extracting","transcribing"].includes(result.state)) pollTimer = setTimeout(() => poll(id), 2000);
-  } catch (error) { message(error.message, true); pollTimer = setTimeout(() => poll(id), 4000); }
+    if (["extracting","transcribing"].includes(result.state)) pollTimer = setTimeout(() => poll(id, version), 2000);
+  } catch (error) {
+    if (!isCurrent()) return;
+    message(error.message, true);
+    pollTimer = setTimeout(() => poll(id, version), 4000);
+  }
 }
 function element(tag, text, className) {
   const el = document.createElement(tag); if (text !== undefined) el.textContent = text;
@@ -167,4 +174,4 @@ $("export-transcript").onclick = exclusive(async () => {
   } catch (error) { message(error.message, true); }
   finally { $("export-transcript").disabled = !session.cues.length; }
 });
-(async () => { await refresh(); try { const list = await sessions(); if (list.length) await openSession(list[0].id); } catch (error) { message(error.message, true); } })();
+exclusive(async () => { await refresh(); try { const list = await sessions(); if (list.length) await openSession(list[0].id); } catch (error) { message(error.message, true); } })();

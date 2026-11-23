@@ -122,6 +122,14 @@ def test_points_section_and_matching():
     assert p.near(10.2) is None and p.near(33.2) is None
 
 
+def test_audit_keeps_same_named_footage_separate_by_episode():
+    points = {("20261119", "camera.mp4"): cp.Points(camera=[10], inset=[], still=[]),
+              ("20261120", "camera.mp4"): cp.Points(camera=[], inset=[], still=[])}
+    row = {"day": "20261119", "before": ("Camera.mp4", 10), "after": ("Camera.mp4", 20)}
+    assert cp.explained(row, points) == "camera"
+    assert cp.explained({**row, "day": "20261120"}, points) is None
+
+
 def test_hand_labels_are_inside_their_stretch_and_unique():
     labels = json.loads(cp.LABELS.read_text(encoding="utf-8"))
     legal = [t for kind in ("camera", "inset") for t in labels["legal"][kind]]
