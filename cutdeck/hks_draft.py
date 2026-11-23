@@ -9,7 +9,10 @@ The draft is three steps on the episode sections:
    hides the cut);
 3. the cuts that need a cover get 4.3 ``hks_covers`` candidates.
 
-``--check`` scores the draft against the user's YT body (``hks_score``), and reports per day:
+``--check`` scores the draft against the user's YT body (``hks_score``). The user keeps only 13-26 %
+of the span, so "cut everything" scores high on every agreement; each number is printed beside
+that baseline (``cut_all_agreement``, ``line_cut_all``, ``host_cut_all``), and keep precision
+beside its chance at the same length (``chance_precision``). Reported per day:
 - ``line_agreement``: per prompt line inside the scored span, kept or cut, against the user's
   keeps (a line counts as kept by the user when half of it is kept);
 - ``host``: the same over the host's lines only (4.2);
@@ -50,12 +53,15 @@ def draft(folder: Path) -> dict:
         # Every cut between keeps that is not on a legal point gets the best cover candidates;
         # a cut with a candidate counts as covered (4.3 places the cover over it).
         legal = hks_tighten.legal_points(f.get("cut_points", []))
-        covers = {}
+        covers, used = {}, []
         for (_, a), (b, _) in zip(k, k[1:]):
             if any(abs(b - p) <= 0.04 for p in legal) or hks_tighten.in_still(f.get("cut_points", []), a, b):
                 continue
-            c = hks_covers.candidates(a, f.get("layout", []), stories)[:3]
+            # Best candidate whose picture no earlier cover shows, so a far run is not reused.
+            c = [x for x in hks_covers.candidates(a, f.get("layout", []), stories) if x["kind"] != "hold"
+                 and not any(x["source_in"] < u + hks_covers.COVER_S and u < x["source_out"] for u in used)][:3]
             if c:
+                used.append(c[0]["source_in"])
                 covers[round(a, 2)] = c
                 if (a, b) not in covered:
                     covered.append((a, b))
@@ -80,7 +86,7 @@ def check_day(folder: Path) -> dict:
     score = hks_score.score(gold, proposal)
     shown = {m: v["lines"] for m, v in hks_judge.shown_table(folder, "cut").items()}
     ep = hks_episode.load(folder.name[:8])
-    agree = host_agree = n = host_n = 0
+    agree = host_agree = n = host_n = user_cut = host_user_cut = 0
     side = []
     for g, ranges in gold.keeps.items():
         media = names.get(g.lower())
@@ -96,23 +102,32 @@ def check_day(folder: Path) -> dict:
             ours = _kept(a, b, d[media]["keeps"]) >= (b - a) / 2
             n += 1
             agree += user == ours
+            user_cut += not user
             mid = (a + b) / 2
             if any(ta <= mid < tb and k == "host" for ta, tb, k in turns):
                 host_n += 1
                 host_agree += user == ours
+                host_user_cut += not user
         if folder.name.startswith("20261120"):
             side = [round(1 - _kept(a, b, d[media]["keeps"]) / (b - a), 3) for a, b in SIDE_SECTIONS_20261120]
+    kinds = [c[0]["kind"] for v in d.values() for c in v["covers"].values()]
     counts = {}
     for v in d.values():
         counts = {k: counts.get(k, 0) + v["counts"][k] for k in v["counts"]}
     length = sum(b - a for v in d.values() for a, b in v["keeps"])
     return {"day": folder.name[:8], "length_s": round(length, 1), "length_ok": LENGTH[0] <= length <= LENGTH[1],
             "kept_s": score.kept_s, "gold_kept_s": score.gold_kept_s,
-            "agreement": score.agreement, "keep_precision": score.keep_precision,
+            "agreement": score.agreement,
+            "cut_all_agreement": round(1 - score.gold_kept_s / score.span_s, 3) if score.span_s else None,
+            "keep_precision": score.keep_precision,
+            "chance_precision": round(score.gold_kept_s / score.span_s, 3) if score.span_s else None,
             "keep_recall": score.keep_recall, "boundary_recall": score.boundary_recall,
             "jump_cuts": score.jump_cuts,
             "line_agreement": round(agree / n, 3) if n else None,
-            "host": round(host_agree / host_n, 3) if host_n else None, "tighten": counts,
+            "line_cut_all": round(user_cut / n, 3) if n else None,
+            "covers": {k: kinds.count(k) for k in sorted(set(kinds))},
+            "host": round(host_agree / host_n, 3) if host_n else None,
+            "host_cut_all": round(host_user_cut / host_n, 3) if host_n else None, "tighten": counts,
             **({"side_sections": side} if side else {})}
 
 

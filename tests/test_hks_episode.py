@@ -35,3 +35,9 @@ def test_20261120_clock_check_passes_and_fails_without_the_blur(tmp_path, monkey
         audit.Layer(l.track, l.start, l.end, l.kind, l.media, l.path, l.source_in, l.framing, False, l.hold_at)
         for l in real(seq, footage)])
     assert len(ep.unblurred_clock(DAY, ep.load("20261120", tmp_path))) > 600
+
+
+def test_files_air_in_the_order_their_number_gives():
+    from cutdeck.hks_episode import broadcast_order
+    names = ["Show & Youtube (2).mp4", "Show (1).mp4", "Show & Youtube (10).mp4"]
+    assert broadcast_order(names) == ["Show (1).mp4", "Show & Youtube (2).mp4", "Show & Youtube (10).mp4"]

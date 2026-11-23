@@ -28,6 +28,7 @@ from pathlib import Path
 from cutdeck import hks_episode, hks_judge
 from cutdeck.hks_tighten import untightened
 
+HOOK_S = 23.0  # s: the hook's length before the user picks it (the 8 tuning days: 18.5-26.9 s)
 KINDS = {  # kind: (judge task, gold attribute, target total s, floor s)
     "fb": ("fb", "fb", 179.96, 168.0),
     "minute": ("minute", "square", 59.96, 56.0),
@@ -65,18 +66,29 @@ def fit(pieces: list[tuple[float, float]], hook: float, target: float, floor: fl
     return out
 
 
-def write_prompts(folder: Path) -> list[Path]:
-    from cutdeck.hks_gold import body, read_day
-    gold = read_day(folder)
-    keeps, _ = body(gold.yt)
+def write_prompts(folder: Path, from_draft: bool = False) -> list[Path]:
+    """``long_form`` and the two prompts. From the user's own YT body (the check), or with
+    ``from_draft`` from the Phase 4 draft, for a day with no finished project; the hook is then
+    HOOK_S long until the user picks it."""
     day = folder.name[:8]
-    for media in sorted({k.media for k in keeps}):
-        name = next(m for m in hks_episode.load(day)["files"] if m.lower() == media.lower())
-        lf = untightened([(k.source_in, k.source_out) for k in keeps if k.media == media])
-        hks_episode.update(day, name, "long_form", [list(x) for x in lf])
+    if from_draft:
+        from cutdeck import hks_draft
+        spans = {m: v["keeps"] for m, v in hks_draft.draft(folder).items()}
+        hook = HOOK_S
+    else:
+        from cutdeck.hks_gold import body, read_day
+        gold = read_day(folder)
+        keeps, _ = body(gold.yt)
+        names = {m.lower(): m for m in hks_episode.load(day)["files"]}
+        spans = {names[k.media.lower()]: [] for k in keeps}
+        for k in keeps:
+            spans[names[k.media.lower()]].append((k.source_in, k.source_out))
+        spans = {m: untightened(v) for m, v in spans.items()}
+        hook = gold.yt.hook_end or 0.0
+    for media, lf in spans.items():
+        hks_episode.update(day, media, "long_form", [list(x) for x in lf])
     # The judge counts line lengths; the runs it makes are a little longer (the pauses between
     # lines), and fit trims the excess, so the range runs from the floor to 3 s past the target.
-    hook = gold.yt.hook_end or 0.0
     return [hks_judge.write_prompt(folder, task, fill={"lo": floor - hook, "hi": target - hook + 3})
             for task, _, target, floor in KINDS.values()]
 
@@ -123,6 +135,7 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--all", required=True)
     p.add_argument("--prompt", action="store_true")
+    p.add_argument("--from-draft", action="store_true", help="--prompt: the long form is the Phase 4 draft")
     p.add_argument("--check", action="store_true")
     p.add_argument("--holdout", action="store_true")
     args = p.parse_args(argv)
@@ -131,7 +144,7 @@ def main(argv: list[str] | None = None) -> None:
     for group, folders in (("tuning", tuning), ("holdout", holdout if args.holdout else [])):
         for folder in folders:
             if args.prompt:
-                print(group, [str(x) for x in write_prompts(folder)])
+                print(group, [str(x) for x in write_prompts(folder, args.from_draft)])
             if args.check:
                 print(group, json.dumps(check_day(folder), ensure_ascii=False))
 

@@ -4,8 +4,8 @@ A cut needs a cover unless it sits on a legal cut point (2.5: a camera change, a
 change, or under a still; the user's rule of 2026-11-23). For each one, candidates in the
 user's order of preference (rule 6 of ``rules.md``, answer 3 of the audit):
 
-1. ``same_moment``: news-clip or full-frame footage picture (``layout`` 2.4) of the same story,
-   nearest the cut in source time;
+1. ``same_moment``: news-clip or full-frame footage picture (``layout`` 2.4) of the same story
+   within SAME_MOMENT_S of the cut in source time, nearest first;
 2. ``same_story``: any other such picture of the same story (``topics`` 2.9: a story runs from
    its first topic start to the next story's);
 3. ``hold``: a frame hold of a story picture, the fallback. Listener shots come from the user's
@@ -30,6 +30,7 @@ from pathlib import Path
 from cutdeck import hks_episode
 
 COVER_S = 2.0      # s of cover picture per cut
+SAME_MOMENT_S = 30.0  # s: picture this close to the cut in source is "the same moment"; further is "same story"
 POOL_KINDS = ("clip", "footage")
 TOL = 1.0          # s: a gold cover counts as in the pool when its middle is this close to a pool second
 
@@ -69,10 +70,10 @@ def candidates(cut: float, layout: list, stories) -> list[dict]:
         return 0.0 if a <= cut < b else min(abs(cut - a), abs(cut - b))
     ranked = sorted(runs, key=dist)
     out = []
-    for i, (a, b) in enumerate(ranked):
+    for a, b in ranked:
         s = min(max(cut - COVER_S / 2, a), b - COVER_S)
-        out.append({"kind": "same_moment" if i == 0 else "same_story", "source_in": round(s, 2),
-                    "source_out": round(s + COVER_S, 2)})
+        out.append({"kind": "same_moment" if dist((a, b)) <= SAME_MOMENT_S else "same_story",
+                    "source_in": round(s, 2), "source_out": round(s + COVER_S, 2)})
     a, b = ranked[0]
     out.append({"kind": "hold", "source_in": round((a + b) / 2, 2), "source_out": round((a + b) / 2, 2)})
     return out

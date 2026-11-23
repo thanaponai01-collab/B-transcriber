@@ -24,7 +24,7 @@ import ntpath
 import sys
 from pathlib import Path
 
-from cutdeck import hks_draft, hks_finish
+from cutdeck import hks_draft, hks_episode, hks_finish
 from cutdeck.hks_build import FRAME, ticks
 from cutdeck.hks_build import _secs as _s
 from cutdeck.hks_covers import COVER_S
@@ -50,7 +50,7 @@ def request(folder: Path, name: str | None = None) -> dict:
     paths = project_paths(read_day(folder).project)
     d = hks_draft.draft(folder)
     items, covers, t = [], [], 0.0
-    for media in sorted(d):
+    for media in hks_episode.broadcast_order(d):
         path = paths[media.lower()]
         for i, (a, b) in enumerate(d[media]["keeps"]):
             items.append({"id": f"V1@{t:.2f}", "media": path, "in_ticks": ticks(a), "out_ticks": ticks(b),

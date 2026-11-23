@@ -182,7 +182,7 @@ def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_epis
     day = folder.name[:8]
     ep = hks_episode.load(day, ep_dir)
     out, n = {}, 0
-    for media in sorted(p.name for p in (folder / "1. FOOTAGE").glob("*.mp4")):
+    for media in hks_episode.broadcast_order(p.name for p in (folder / "1. FOOTAGE").glob("*.mp4")):
         f = ep["files"].get(media, {})
         breaks = [(a + b) / 2 for a, b in silences(str(folder / "1. FOOTAGE" / media))]
         breaks += [t[0] for t in f.get("turns", [])]
@@ -334,16 +334,65 @@ def apply(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.O
     return value
 
 
+def measured(folder: Path, task: str, out: Path = OUT) -> tuple[float, float]:
+    """(seconds of the picked lines, seconds of the kept runs): the judge's own measure, and what
+    the draft really keeps (the pauses between lines included)."""
+    picked = answer(folder, task, out)
+    lines_s = 0.0
+    for media, v in shown_table(folder, task, out).items():
+        ids = {l[0]: i for i, l in enumerate(v["lines"])}
+        kept = set()
+        for sp in picked.get(media, []):
+            kept.update(range(ids[sp["from"]], ids[sp["to"]] + 1))
+        lines_s += sum(v["lines"][i][2] - v["lines"][i][1] for i in kept)
+    return lines_s, sum(b - a for r in kept_runs(folder, task, out).values() for a, b in r)
+
+
+def write_revision(folder: Path, task: str, max_run_s: float, out: Path = OUT) -> Path | None:
+    """When the kept runs exceed ``max_run_s``, keep the answer as ``<task>.answer.v<n>.json`` and
+    write ``<task>.revise.md``: the judge's spans with their measured lengths and a cap in its own
+    measure (line seconds), scaled by this answer's runs-to-lines ratio. None when it fits."""
+    lines_s, run_s = measured(folder, task, out)
+    if run_s <= max_run_s:
+        return None
+    cap = int(max_run_s * lines_s / run_s) - 10
+    prompt, ans = paths(folder, task, out)
+    n = len(list(ans.parent.glob(f"{task}.answer.v*.json"))) + 1
+    data = json.loads(ans.read_text(encoding="utf-8"))
+    ans.with_name(f"{task}.answer.v{n}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    per = {m: [Line(*l) for l in v["lines"]] for m, v in shown_table(folder, task, out).items()}
+    idx = _index(per)
+    order = [l.id for ls in per.values() for l in ls]
+    pos = {x: i for i, x in enumerate(order)}
+    rows = []
+    for sp in data["spans"]:
+        ids = order[pos[sp["from"]]:pos[sp["to"]] + 1]
+        rows.append(f"{sp['from']}..{sp['to']}  {sum(idx[i][2].end - idx[i][2].start for i in ids):.1f}s  {sp.get('why', '')}")
+    note = (f"# Revise your answer\n\nYour answer below was measured with code: its kept lines total {lines_s:.0f} s. "
+            f"That is too long. Pauses between kept lines add more on top, so the kept lines must total at most "
+            f"{cap} s.\n\nRemove whole spans, or shorten spans by moving \"from\" or \"to\" inward, until the total "
+            f"is at most {cap} s. Follow the same rules as the prompt ({prompt.resolve()}): cut what matters "
+            f"least first. Do not add new spans. Measure the total with the line lengths in the prompt before "
+            f"you write.\n\nWrite the revised answer, same JSON shape, to {ans.resolve()}.\n\n"
+            "## Your current spans (from..to, measured length, your reason)\n" + "\n".join(rows) + "\n")
+    r = ans.with_name(f"{task}.revise.md")
+    r.write_text(note, encoding="utf-8")
+    return r
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("action", choices=("prompt", "apply"))
+    p.add_argument("action", choices=("prompt", "apply", "revise"))
     p.add_argument("folder")
     p.add_argument("--task", required=True, choices=sorted(TASKS))
+    p.add_argument("--max-run-s", type=float, default=1200.0, help="revise: the longest the kept runs may total")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     folder = Path(args.folder)
     if args.action == "prompt":
         print(write_prompt(folder, args.task))
+    elif args.action == "revise":
+        print(write_revision(folder, args.task, args.max_run_s) or "fits: no revision needed")
     else:
         value = apply(folder, args.task)
         print(json.dumps({m: len(v) for m, v in value.items()}, ensure_ascii=False))

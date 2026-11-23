@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -37,6 +38,15 @@ from cutdeck.hks_gold import day_folders, read_day
 
 OUT = Path("test_projects/hks_episode")
 CACHE = Path(tempfile.gettempdir()) / "hks_audit"  # the audit's clock tracks, so neither recomputes
+
+
+def broadcast_order(names) -> list[str]:
+    """Footage files in the order they aired: by the "(n)" in the name when there is one
+    (20261112: "... Facebook 121169 (1).mp4" is the opening, though its name sorts last)."""
+    def key(name: str):
+        m = re.search(r"\((\d+)\)\.\w+$", name)
+        return (int(m.group(1)) if m else 0, name)
+    return sorted(names, key=key)
 
 
 def path_of(day: str, out: Path = OUT) -> Path:

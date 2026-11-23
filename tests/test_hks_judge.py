@@ -51,3 +51,17 @@ def test_a_silence_or_a_turn_ends_a_line_even_when_words_touch():
     assert [l.text for l in j.lines(words)] == ["กขค"]
     assert [l.text for l in j.lines(words, breaks=[0.7])] == ["ก", "ขค"]
     assert [l.start for l in j.lines(words, breaks=[0.7, 2.0])] == [0.0, 1.0, 2.0]
+
+
+def test_an_answer_too_long_gets_a_revision_prompt_and_is_kept(tmp_path):
+    import json
+    folder = tmp_path / "20990101 - x"
+    lines = [["L0001", 0.0, 10.0, "a"], ["L0002", 10.5, 20.0, "b"], ["L0003", 21.0, 30.0, "c"]]
+    j.lines_path(folder, "cut", tmp_path).parent.mkdir(parents=True)
+    j.lines_path(folder, "cut", tmp_path).write_text(json.dumps({"a.mp4": {"lines": lines, "hidden": [], "inside": None}}))
+    j.paths(folder, "cut", tmp_path)[1].write_text(json.dumps({"spans": [{"from": "L0001", "to": "L0003"}]}))
+    assert j.measured(folder, "cut", tmp_path) == (28.5, 30.0)
+    assert j.write_revision(folder, "cut", 40.0, tmp_path) is None
+    note = j.write_revision(folder, "cut", 20.0, tmp_path).read_text(encoding="utf-8")
+    assert "at most 9 s" in note and "L0001..L0003  28.5s" in note
+    assert (j.paths(folder, "cut", tmp_path)[1].parent / "cut.answer.v1.json").exists()
