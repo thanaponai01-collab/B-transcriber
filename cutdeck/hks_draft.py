@@ -27,6 +27,7 @@ from pathlib import Path
 
 from cutdeck import hks_covers, hks_episode, hks_judge, hks_tighten
 
+LENGTH = (900.0, 1200.0)  # s: the whole draft, 15 to 20 min (the scorer's own range counts only its span)
 SIDE_SECTIONS_20261120 = ((2096.0, 2469.0), (2820.0, 2988.0))
 
 
@@ -104,10 +105,12 @@ def check_day(folder: Path) -> dict:
     counts = {}
     for v in d.values():
         counts = {k: counts.get(k, 0) + v["counts"][k] for k in v["counts"]}
-    return {"day": folder.name[:8], "kept_s": score.kept_s, "gold_kept_s": score.gold_kept_s,
+    length = sum(b - a for v in d.values() for a, b in v["keeps"])
+    return {"day": folder.name[:8], "length_s": round(length, 1), "length_ok": LENGTH[0] <= length <= LENGTH[1],
+            "kept_s": score.kept_s, "gold_kept_s": score.gold_kept_s,
             "agreement": score.agreement, "keep_precision": score.keep_precision,
             "keep_recall": score.keep_recall, "boundary_recall": score.boundary_recall,
-            "jump_cuts": score.jump_cuts, "length_in_range": score.length_in_range,
+            "jump_cuts": score.jump_cuts,
             "line_agreement": round(agree / n, 3) if n else None,
             "host": round(host_agree / host_n, 3) if host_n else None, "tighten": counts,
             **({"side_sections": side} if side else {})}
