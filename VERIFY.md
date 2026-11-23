@@ -74,6 +74,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: read u32 big-endian in cutdeck/prproj_reader.py, test_prproj_reader went red, reverted
 
+## Shorts rule check (issue 128)
+- test: `python -m pytest tests/test_shorts_check.py -q -p no:cacheprovider`
+- fail-signal: AssertionError
+- fail-proof (2026-11-23): safe-zone bottom back to 1440 (1 red); moving-video limit raised to 99 s (4 red); each restored.
+- offline (2026-11-23, `python -m cutdeck.shorts_check` on the saved 11-21 and 11-22 projects): moving race video 3.53 s on `TT russell wall v3`, 5.10 s on v4, under 3 s on v5, equal to the hand measurements in projects/1raceclub/workflow-log.md; 0 flags on the user's `TT editing` (11-21) and `max interview`. Not a fresh trial: every timeline was seen in the first trial and the definitions were set against them. On the 11-21 project the race feed is date-named, so `--feed 10-55-45` is needed (it then measures 1.73 s and 2.3 s).
+
 ## place_text (text into Premiere via a baked .mogrt)
 - test: `python -m pytest tests/test_cutdeck_mogrt_text.py -q`
 - fail-signal: failed

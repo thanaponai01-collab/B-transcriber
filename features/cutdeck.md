@@ -167,3 +167,10 @@
 - trace: `main` @ cutdeck/prproj_reader.py
 - verify: Premiere project readers
 - status: proven @ 2ad7576 for `prproj_reader --help`; not run on a project
+
+## Check a Short against the written rules
+- what: Flag each 9:16 timeline in a saved `.prproj` that breaks the measurable 1RaceClub Shorts rules: moving race video over 3 s, a box outside the safe zone, a title not ending on a cut. Exit 1 when anything is flagged.
+- cli: `python -m cutdeck.shorts_check <project>` @ cutdeck/shorts_check.py :: --sequence, --feed
+- trace: `main` @ cutdeck/shorts_check.py > `check_sequence` @ cutdeck/shorts_check.py > `read_project` @ cutdeck/prproj_reader.py
+- verify: Shorts rule check (issue 128)
+- status: proven 2026-11-23 offline on the saved 11-21 and 11-22 projects; no fresh trial on unseen Shorts yet

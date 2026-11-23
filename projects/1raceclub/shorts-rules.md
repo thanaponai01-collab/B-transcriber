@@ -65,7 +65,7 @@ Most rules below are this principle applied to one case.
 | A callout is a hold, cut, then cropped | capture a frame hold at the moment, cut it to the line, Motion-crop it to the box and scale it; a new hold when the box changes (Max's line, then the team's reply) (user: "just capture, cut that hold, then crop it, and that's it") | confirmed (2026-11-22) |
 | Crop **only the part that's needed** | one tower row (e.g. "8 HAM +1.506"), not the whole table; table crops on the left | confirmed |
 | All cropped assets on **one layer** | V5 (Russell wall v5: holds on V5, crops on V6, because the user's holds took V5) | confirmed (layer number seen) |
-| Keep assets in the **safe zone of every platform** | union of TikTok / Shorts / Reels UI on 1080x1920: keep inside **x 60–890, y 250–1440** (top bar, bottom caption and music bar, right action buttons; Shorts has the widest right column). Check it on a rendered frame with the box drawn; under the seam that leaves y 742–1440 for a box | confirmed (values are the agent's; user 2026-11-22: "remember the safe zone, don't forget about it") |
+| Keep assets in the **safe zone of every platform** | union of TikTok / Shorts / Reels UI on 1080x1920: keep inside **x 60–890, y 250–1561** (top bar, bottom caption and music bar, right action buttons; Shorts has the widest right column). Check it on a rendered frame with the box drawn; under the seam that leaves y 742–1561 for a box | confirmed (user 2026-11-22: "remember the safe zone, don't forget about it"; bottom raised from the agent's 1440 to 1561 by the user 2026-11-23, matching their own boxes; x and top are still the agent's) |
 | A radio box arrives as a hit the eye follows | **Glitch transition** (Film Impact `AE.AE_Impact_Glitch`, 9 frames) on the box's head, starting on the same frame as the F1 radio notification sound | seen |
 
 ## 6. Text
@@ -75,7 +75,7 @@ Most rules below are this principle applied to one case.
 | One colour per text role | hook title **yellow** (255,234,0) **or white** with a dark outline (Russell wall v5, user: "white is fine too"); **white** = subtitles | confirmed (white title 2026-11-22) |
 | Text must stay editable | a Premiere **Text layer** (Graphic), never a PNG; the agent copies the user's own Text layer and changes only the words with `edit_text` (it types in the Program Monitor; live-proven on Russell wall v5) | confirmed |
 | The title copies the user's own title exactly: settings and position | copy the user's Text clip (it carries font, outline, size and place; the API can't read the style, so never rebuild from Basic Title). Russell wall v5: bold white, dark outline, centred **just above the seam** (text bottom ~y 700, clip Motion scale 200 at (0.5, 0.102), text layer y 0.637), inside the safe zone (user: "look at the text I replace on top of your text … exact setting and the position as well") | confirmed (2026-11-22) |
-| Text ends on a cut | trim the title to the cut it belongs to; no frames hanging past it | confirmed |
+| Text ends on a cut | trim the title to the cut it belongs to; no frames hanging past it. **The title is the text that starts on the Short's first frame**; subtitles and driver labels may end anywhere | confirmed (title definition: user 2026-11-23) |
 | Translate English radio into natural Thai, one short phrase at a time, on screen exactly while spoken | Prompt-Medium 100, white, black stroke 8, just below the seam | seen (Russell Short) |
 | Subtitles from an .srt in one call | `premiere_srt_subtitles` with `style` 1 (the project's saved Style **1RC Subtitle**, made once by the user with Create Style from their subtitle; a new project needs it again), `track` (the subtitle layer), `position` [0.5, -0.0423], `scale` 112.5: lands exactly where the user's subtitles sit (y 819-913). Split long lines in the SRT first: a line over ~700 px wraps upward | seen (live 2026-11-22 on scratch) |
 | Translate fully; never shorten or paraphrase to fit (user 2026-11-22, Max interview) | a line too long for the frame is **cut into two subtitles at a natural break, timed to the words** (e.g. "บอกตรงๆ" → "ผมไม่ได้สนใจเลย"), not reworded shorter | confirmed |
@@ -96,7 +96,7 @@ Most rules below are this principle applied to one case.
 |---|---|---|
 | **No F1 logos anywhere visible** | the F1 / F1 TV bug, the F1 REPLAY tag, the F1 mark on the tower: crop them out, or remove them from the hold (smooth fill from the surroundings), or blur **smoothly** (feathered, no hard box) | confirmed |
 | Sponsors are fine | TAG Heuer on the name badge, liveries, track ads stay | confirmed |
-| Broadcast video kept to a minimum | holds, moving F1 ≤ 3 s | confirmed |
+| Broadcast video kept to a minimum | holds, moving F1 ≤ 3 s. **Only the race broadcast counts**, not an interview or press-conference clip whose footage is the content | confirmed (race-only: user 2026-11-23) |
 
 ## 9. Timeline conventions
 
@@ -104,8 +104,8 @@ Most rules below are this principle applied to one case.
 |---|---|
 | Layers: V1 YT stream layout (on, under the face), V2 face cam (rotation 90), V3 me-with-data (off), V4 F1 synced feed (raw, always kept), V5 frame holds, V6 cropped assets, V7 title text; A1 voice, A2–A6 off (duplicate and silent streams, cam, data), A7 SFX, A8 radio SFX | seen (Russell wall v5, 2026-11-22; earlier Shorts had V4 hold, V5 crops, V6 title) |
 | **Copy the rough cut and work from there** (all layers and 6 audio tracks come along), don't rebuild from items | confirmed |
-| All Shorts of an episode live in one 9:16 timeline, each parked after the last, exported by In/Out over that Short only | confirmed |
-| Zero gaps | confirmed |
+| All Shorts of an episode live in one 9:16 timeline, each parked after the last, exported by In/Out over that Short only. **An empty stretch of the timeline is the parking between two Shorts** | confirmed (gap = boundary: user 2026-11-23) |
+| Zero gaps inside a Short | confirmed |
 | The user exports and saves; the agent never runs an export, not even to check (M-2) | confirmed |
 | Check every frame before handing over (composited offline from the source files when not rendering) (M-5) | confirmed |
 | Export name `YYYYMMDD - TT <topic>.mp4`, 1080x1920 30 fps | seen |
@@ -120,7 +120,7 @@ Most rules below are this principle applied to one case.
 6. Copy the user's Text layer for the title (`steps: clone` with `tracks`, or `cut_copy` the sequence that holds it), change only the words with `edit_text`, then `trim` it to end on a cut.
 7. SFX on A7.
 8. Read back: every still ends on its cut. Stills under ~120 frames land one frame short, so pad those by one frame.
-9. Composite every piece's frame offline: framing, safe zone, no F1 logo. Hand over unsaved and unexported.
+9. Save, then run `python -m cutdeck.shorts_check <project.prproj>` (moving race video ≤ 3 s, boxes in the safe zone, title ends on a cut; `--feed` names a date-named race recording). Composite every piece's frame offline: framing, safe zone, no F1 logo. Hand over unsaved and unexported.
 
 ## 11. Gaps: what the user hasn't covered yet (notes and questions)
 - **Faster subtitle route (user idea, 2026-11-22):** built as `premiere_srt_subtitles` (.srt → caption track → *Upgrade Caption to Graphic*, PR #122); see the §6 row. It replaces retyping copied Text layers one by one (~10 s of mouse/keyboard per subtitle on the Max interview Short).
@@ -141,4 +141,4 @@ Most rules below are this principle applied to one case.
 - **Driver labels** (RUS/ANT) seen once: are they needed on every multi-car still?
 - **How many Shorts per episode,** and how to rank candidates beyond "controversy".
 - **Caption, hashtags and upload** per platform: not covered.
-- **Safe-zone values** are the agent's own union of the platforms; please confirm or correct them.
+- **Safe-zone values:** bottom 1561 set by the user 2026-11-23; x 60–890 and top 250 are still the agent's union of the platforms.
