@@ -21,8 +21,8 @@
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
 const { buildSequence } = require("../timeline/buildSequence.js");
-const { activeProjectAndSequence, activeProject, sequencesNamed, runTransaction } = require("../host/project.js");
-const { TICKS_PER_SECOND } = require("../host/ticks.js");
+const { activeProjectAndSequence, activeProject, sequencesNamed, sequenceWithContent, emptySequenceNamed, cloneSequence, runTransaction } = require("../host/project.js");
+const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { PROBES, runProbe } = require("./probes.js");
 const { controlHandlers } = require("../timeline/control.js");
 const { getSelectedTrackItems, getTrackClipItems, trackItemName } = require("../host/trackItems.js");
@@ -132,6 +132,36 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     return { name: sequence.name, sequence_id: String(sequence.guid), width: size.width, height: size.height,
       ticks_per_frame: String(await sequence.getTimebase()), video_tracks: await sequence.getVideoTrackCount(),
       audio_tracks: await sequence.getAudioTrackCount() };
+  }
+
+  /* duplicate_sequence: copy `sequence_name` as `result_name`, never opening the copy (HKS reels,
+     build plan 6.2). Sequence.createCloneAction (premierepro.txt:586) in its own transaction, found
+     by its new guid (PREMIERE_FACTS "Sequence.createCloneAction()": CATCH), then renamed through its
+     project item (Sequence.getProjectItem :601, ProjectItem.createSetNameAction :539; PREMIERE_FACTS
+     "ProjectItem.createSetNameAction": WORKS). The source, of several sharing its name: the one with
+     content, or with `empty` the first empty one (a day template's blank reel). Refuses a name in
+     use. Returns the copy's frame size, track and clip counts. */
+  async function duplicateSequence({ sequence_name: sequenceName, result_name: resultName, empty = false }) {
+    const project = await activeProject(ppro);
+    if ((await sequencesNamed(project, resultName)).length) throw new Error(`A sequence named "${resultName}" already exists.`);
+    const source = empty ? await emptySequenceNamed(project, sequenceName) : await sequenceWithContent(project, sequenceName);
+    const created = await cloneSequence(project, source, `CutDeck: copy ${sequenceName}`);
+    if (created.length !== 1) throw new Error(`Copying "${sequenceName}" gave ${created.length} new sequences.`);
+    const id = String(created[0].guid);
+    const item = await created[0].getProjectItem();
+    runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
+      if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+    });
+    const copy = (await project.getSequences()).find((s) => String(s.guid) === id);
+    if (!copy || copy.name !== resultName) throw new Error(`The copy of "${sequenceName}" did not take the name "${resultName}".`);
+    const videoTracks = await copy.getVideoTrackCount(), audioTracks = await copy.getAudioTrackCount();
+    let videoClips = 0, audioClips = 0;
+    for (let i = 0; i < videoTracks; i++) videoClips += (await getTrackClipItems(await copy.getVideoTrack(i), ppro)).length;
+    for (let i = 0; i < audioTracks; i++) audioClips += (await getTrackClipItems(await copy.getAudioTrack(i), ppro)).length;
+    const size = await copy.getFrameSize();
+    return { name: copy.name, sequence_id: id, source_id: String(source.guid), width: size.width, height: size.height,
+      video_tracks: videoTracks, audio_tracks: audioTracks, video_clips: videoClips, audio_clips: audioClips,
+      end_ticks: toTicks(await copy.getEndTime()).toString() };
   }
 
   async function addMarkers({ markers }) {
@@ -344,6 +374,7 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
     export_sequence: exportSequence,
     cut_copy: cutCopy,
     create_sequence: createSequence,
+    duplicate_sequence: duplicateSequence,
     // General control (timeline/control.js; route map docs/PREMIERE_CONTROL_MAP.md).
     ...controlHandlers(ppro),
     build_sequence: (args) => buildSequence(ppro, args, (line) => console.log(`CutDeck build: ${line}`)),

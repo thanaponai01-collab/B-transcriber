@@ -4,8 +4,9 @@ How the show is cut and finished today. Rules can change; the why behind them be
 [principles.md](principles.md). Values are this episode's examples, not presets.
 
 **Status: under audit.** Every rule came from one episode (20261120). [rule-audit.md](rule-audit.md)
-checks them on all 11 day folders, and its **Questions for the user** (7, open) must be answered
-before anything is built on a rule that failed or is unclear.
+checks them on all 11 day folders. The user answered its seven questions on 2026-11-23 (end of
+that file): rule 5 now allows inset camera changes and cuts under a still, and a punch-in needs
+a cover.
 
 **IDs:** `HKS-R<n>` = cut rule *n* below. Code cites the rule doc (`cutdeck/hks_*.py` →
 [build-plan.md](build-plan.md) / [rule-audit.md](rule-audit.md)).

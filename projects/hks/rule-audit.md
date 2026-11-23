@@ -358,3 +358,18 @@ Found in step 0.3; findings 1 and 2 were closed in step 0.5 (2026-11-21), see th
    only the bumper. The ads change per episode, so reference matching (plan 2.2) can't find
    them; a clock-off run can. Is "drop every clock-off run in the TV part, except news
    graphics" the right rule? On 20261001 three such runs were flood-map graphics you kept.
+
+## The user's answers (2026-11-23)
+
+| question | answer |
+|---|---|
+| 1 | A punch-in is **not** a camera change: cover it. The two same-shot cuts on 20261120 were slips. |
+| 2 | **Both allowed**: a camera change inside the studio inset, and a cut under a still picture, are legal uncovered cuts. |
+| 3 | A frame hold of the footage is a cover drafts may use, **as a fallback** after same-story B-roll and listener shots. |
+| 4 | FB 179.96 s is a **ceiling**: never 180 s or more. |
+| 5 | The 1-min cut aims at 59.96 s; **56–64 s passes**. |
+| 6 | The automatic blur **follows the clock exactly**. |
+| 7 | **Drop every clock-off run** of 10 s or more in the TV part; the user un-drops the graphics they keep in review. |
+
+Model route (build plan, Assumption 4): **the agent in a Claude Code session** judges by meaning.
+Phase 7 (title cards, live notes): skipped for now.

@@ -6,6 +6,8 @@ const CUTDECK_BIN_NAME = "CutDeck";
 const ROUGH_CUTS_BIN_NAME = "Rough Cuts";
 const SYNCED_BIN_NAME = "Synced";
 
+const { toTicks } = require("./ticks.js");
+
 // Resolves a folder-like item's createBinAction/getItems, casting to FolderItem when
 // the plain methods aren't directly present.
 function asBinLike(item) {
@@ -142,6 +144,30 @@ async function sequenceNamed(project, name) {
   return found[0];
 }
 
+/* The sequence named `name` when a day template left empty copies of it beside the user's: the
+   only one with that name, else the one with content (Sequence.getEndTime :596 past 0, as
+   export_sequence picks). Anything else refuses: same-named sequences with content are told
+   apart by nothing a caller can send. */
+async function sequenceWithContent(project, name) {
+  const named = await sequencesNamed(project, name);
+  if (named.length === 1) return named[0];
+  const full = [];
+  for (const s of named) if (toTicks(await s.getEndTime()) > 0n) full.push(s);
+  if (full.length !== 1) {
+    throw new Error(named.length
+      ? `${full.length} of the ${named.length} sequences named "${name}" have content; need exactly 1.`
+      : `No sequence named "${name}".`);
+  }
+  return full[0];
+}
+
+// The first empty sequence named `name` (a day template's blank reel), or a refusal.
+async function emptySequenceNamed(project, name) {
+  const named = await sequencesNamed(project, name);
+  for (const s of named) if (toTicks(await s.getEndTime()) === 0n) return s;
+  throw new Error(`None of the ${named.length} sequences named "${name}" is empty.`);
+}
+
 async function projectAndSequenceNamed(ppro, name) {
   const project = await activeProject(ppro);
   return { project, sequence: await sequenceNamed(project, name) };
@@ -178,6 +204,8 @@ module.exports = {
   activeProject,
   sequencesNamed,
   sequenceNamed,
+  sequenceWithContent,
+  emptySequenceNamed,
   projectAndSequenceNamed,
   cloneSequence,
   openAndActivate,

@@ -133,6 +133,13 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: set BLUE_FRAME_MIN to 0.99 and to 0.05 in cutdeck/topic_layout.py, test_top_edge_mostly_blue_is_clip / test_top_edge_mostly_not_blue_is_studio went red (the first version of the tests stayed green under 0.99 because its edges were 100% blue; fixed before use); in cutdeck/topic_speakers.py, made turns merge across a pause and set the smoothing reach to 0, test_a_pause_starts_a_new_turn_even_for_the_same_speaker and test_smoothing_removes_a_single_outlier went red; reverted, files identical to backup
 
+## HKS episode pipeline (projects/hks/build-plan.md)
+- path: cutdeck/hks_*.py
+- oracle: projects/hks/build-plan.md
+- test: `python -m pytest tests/test_hks_assemble.py tests/test_hks_bleep.py tests/test_hks_breaks.py tests/test_hks_covers.py tests/test_hks_draft.py tests/test_hks_episode.py tests/test_hks_finish.py tests/test_hks_judge.py tests/test_hks_tighten.py tests/test_hks_turns.py tests/test_hks_versions.py -q -p no:cacheprovider`
+- fail-signal: AssertionError
+- fail-proof: in cutdeck/hks_judge.py kept_runs, made a run join across hidden content (`if False:`), test_kept_lines_join_unless_hidden_content_lies_between went red; in cutdeck/hks_bleep.py dropped the `(?!ว)` guards, test_compounds_are_not_swears went red; reverted, `git diff` empty
+
 ## SubtitleDesk quote workspace
 - path: subtitle_desk/
 - oracle: subtitle_desk/README.md, tests/conftest.py
@@ -150,5 +157,6 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - Live Premiere is opt-in, not part of `verify.py run`. Before releasing CutDeck: start the helper (`python -m cutdeck.helper`), open a sequence with In/Out marks and the CutDeck panel, check with `python -m cutdeck.live_check`, then run `python -m pytest tests/test_cutdeck_live_premiere.py --live -m live -v` (add `--live-edit` only if you accept the selected clips being edited). It fails, never skips, if any piece is missing.
 - Live run 2026-09-28 (`2 FACEBOOK D1`, nothing selected): 8/8 passed. With nothing selected the four transform/anchor/align/distribute tests only proved the "Select a clip" refusal, so their success path on real clips is still unproven.
 - The offline mode of those tests runs the real panel driver against the fake Premiere with nothing selected, so the success path of transform/anchor/align/distribute on a real selection is only proven by the live run.
+- HKS episode pipeline: the unit tests use synthetic data; the real-data checks need G:\Me\Works and the caches: `python -m cutdeck.<module> --all G:\Me\Works --check` for hks_episode, hks_breaks, hks_layout, hks_rough, hks_tighten, hks_covers, hks_draft, hks_finish, hks_bleep, hks_versions (`--holdout` once per change, never tuned on). The judge answers they read are under `test_projects/hks_judge/<day>/` (gitignored). No draft has been built in live Premiere.
 - One equivalent mutant is left alive in flywheel/diff.py (`hi = j2` for `max(hi, j2)`).
 - Topic Cut: the two real-episode tests are opt-in (about 2 minutes together, over the runner's 120 s limit): `TOPIC_CUT_REAL=1 python -m pytest tests/test_cutdeck_topic_layout.py tests/test_cutdeck_topic_speakers.py -q -p no:cacheprovider`. They need the 4.5 GB `HKS Facebook 290969 Full.mp4`; the speaker one also needs speechbrain and a GPU. Run them before changing the layout or speaker modules. Their accuracy floors (layout 93%, speaker host/guest 85% / 15%) come from labels made by eye and a threshold tuned on the same frames, so they are optimistic. The topic-start judgement itself (which host run opens a new topic) is not code and has no check; its answer key is `tests/data/topic_cut_starts_hks290969.json`.
