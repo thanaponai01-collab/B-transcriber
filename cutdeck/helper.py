@@ -16,6 +16,7 @@ to it as {"call": ...} messages from a fixed command list, and its `driver_reply
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,10 @@ from cutdeck import frame_bounds, sequence_model, text_box
 from cutdeck.helper_protocol import PORT, VERSION
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
+
+# One JSON line per event in the jobs folder: a "start" before a Premiere command runs, an "end"
+# (ok, result or error) after. A start with no end is a command that never finished.
+COMMAND_LOG = "premiere_commands.jsonl"
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
@@ -429,18 +434,46 @@ class Jobs:
 
     async def premiere(self, command, args=None) -> object:
         """Run one fixed Premiere command: the helper's own (menu, keys, window pixels, Adobe's AI
-        Assistant) here, any other through the panel. The one way in for every client."""
+        Assistant) here, any other through the panel. The one way in for every client, so every
+        command is logged here (COMMAND_LOG): a save diff minus the log is the user's own edit."""
         args = {} if args is None else args
-        if command not in COMMANDS or not isinstance(args, dict):
-            raise ValueError(f"Unknown Premiere command; one of: {', '.join(COMMANDS)}")
-        spec = COMMANDS[command]
-        if spec.run is None:
-            return await self._call_driver(command, args)
-        args = spec.prepare(args, self._job)
+        spec = COMMANDS.get(command)
+        call = uuid.uuid4().hex
+        self._log_command({"call": call, "event": "start", "command": command,
+                           "hint": spec.hint if spec else None, "args": args})
         try:
-            return await asyncio.wait_for(spec.run(args, self.premiere), spec.timeout_s)
-        except asyncio.TimeoutError:
-            raise ValueError(f"{command} did not finish in time") from None
+            if spec is None or not isinstance(args, dict):
+                raise ValueError(f"Unknown Premiere command; one of: {', '.join(COMMANDS)}")
+            if spec.run is None:
+                result = await self._call_driver(command, args)
+            else:
+                try:
+                    result = await asyncio.wait_for(spec.run(spec.prepare(args, self._job), self.premiere),
+                                                    spec.timeout_s)
+                except asyncio.TimeoutError:
+                    raise ValueError(f"{command} did not finish in time") from None
+        except BaseException as e:
+            self._log_command_end({"call": call, "event": "end", "ok": False, "error": f"{type(e).__name__}: {e}"})
+            raise
+        # A read changes nothing, so its result can't explain a diff; only its size is kept.
+        outcome = ({"result_bytes": len(json.dumps(result, default=str))} if spec.hint == "read"
+                   else {"result": result})
+        self._log_command_end({"call": call, "event": "end", "ok": True, **outcome})
+        return result
+
+    def _log_command(self, record: dict) -> None:
+        line = json.dumps({"time": datetime.now().astimezone().isoformat(timespec="milliseconds"), **record},
+                          ensure_ascii=False, default=str)
+        with open(self.directory / COMMAND_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
+    def _log_command_end(self, record: dict) -> None:
+        # The command has already run: a log failure must not report an applied edit as failed,
+        # which would invite a retry that applies it twice.
+        try:
+            self._log_command(record)
+        except OSError as e:
+            print(f"command log: {e}", flush=True)
 
     async def _call_driver(self, command: str, args: dict):
         """Forward one panel command to the panel and wait for its answer."""
