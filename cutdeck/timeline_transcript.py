@@ -513,18 +513,29 @@ def source_levels(media: str, cache: Path, sample_rate: int = 16000):
     return levels
 
 
+_stream_counts: dict[str, int] = {}
+
+
 def audio_stream_count(media: str) -> int | None:
     """How many audio streams the file has (ffprobe), or None when ffprobe can't say. The
     transcript and levels read the first one, as the Rough Cut does; UXP does not say which
-    stream a Premiere clip plays."""
+    stream a Premiere clip plays. Remembered for the process by (path, size, mtime), as
+    `media_sha256` is, so a timeline read does not spawn ffprobe per source per call."""
     import shutil
     import subprocess
+    st = os.stat(media)
+    key = f"{os.path.abspath(media)}|{st.st_size}|{st.st_mtime_ns}"
+    if key in _stream_counts:
+        return _stream_counts[key]
     if shutil.which("ffprobe") is None:
         return None
     result = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
                              "stream=index", "-of", "csv=p=0", media], capture_output=True, text=True,
                             **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
-    return len(result.stdout.split()) if result.returncode == 0 else None
+    if result.returncode != 0:
+        return None
+    _stream_counts[key] = len(result.stdout.split())
+    return _stream_counts[key]
 
 
 # ── sources: the store ───────────────────────────────────────────────────────
