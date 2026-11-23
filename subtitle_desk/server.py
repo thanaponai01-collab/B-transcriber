@@ -11,6 +11,7 @@ import difflib
 from contextlib import asynccontextmanager
 from dataclasses import replace
 import json
+import logging
 from pathlib import Path
 import re
 import uuid
@@ -32,19 +33,10 @@ from transcribe.subtitles import frame_cues
 from transcribe.timebase import Timebase
 
 HERE = Path(__file__).parent
+logger = logging.getLogger(__name__)
 
 
-def quotes_srt(quotes: list[dict], tb: Timebase) -> str:
-    """SRT for the sequence the range came from, snapped to its frames (frame_cues)."""
-    if not quotes:
-        raise ValueError("Select at least one quote before exporting")
-
-    def stamp(ms):
-        hours, rest = divmod(ms, 3600000)
-        minutes, rest = divmod(rest, 60000)
-        seconds, millis = divmod(rest, 1000)
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
-
+def validate_quotes(quotes: list[dict]) -> list[dict]:
     quotes = sorted(quotes, key=lambda q: q["start_ms"])
     previous_end = 0
     for quote in quotes:
@@ -55,6 +47,21 @@ def quotes_srt(quotes: list[dict], tb: Timebase) -> str:
         if not 1 <= len(lines) <= 3 or any(not line.strip() or "\n" in line or "\r" in line for line in lines):
             raise ValueError("Use one to three non-empty lines for each exported quote")
         previous_end = end
+    return quotes
+
+
+def quotes_srt(quotes: list[dict], tb: Timebase) -> str:
+    """SRT for the sequence the range came from, snapped to its frames (frame_cues)."""
+    if not quotes:
+        raise ValueError("Select at least one quote before exporting")
+    quotes = validate_quotes(quotes)
+
+    def stamp(ms):
+        hours, rest = divmod(ms, 3600000)
+        minutes, rest = divmod(rest, 60000)
+        seconds, millis = divmod(rest, 1000)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+
     blocks = [f"{index}\n{stamp(q['start_ms'])} --> {stamp(q['end_ms'])}\n" + "\n".join(q["lines"])
               for index, q in enumerate(frame_cues(quotes, tb), 1)]
     return "\n\n".join(blocks) + "\n\n"
@@ -134,11 +141,20 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
             raise HTTPException(404, "Unknown SubtitleDesk session")
         return directory / session_id
 
+    def read_session(path: Path) -> dict:
+        session = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(session, dict) or session.get("id") != path.parent.name
+                or session.get("state") not in ("extracting", "transcribing", "ready", "failed")):
+            raise ValueError("Invalid SubtitleDesk session")
+        return session
+
     def load(session_id: str) -> dict:
         try:
-            return json.loads((folder(session_id) / "session.json").read_text(encoding="utf-8"))
+            return read_session(folder(session_id) / "session.json")
         except FileNotFoundError:
             raise HTTPException(404, "Unknown SubtitleDesk session")
+        except (OSError, ValueError):
+            raise HTTPException(422, "This saved SubtitleDesk session cannot be read")
 
     def save(session: dict):
         write_json(folder(session["id"]) / "session.json", session)
@@ -205,7 +221,11 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
     async def lifespan(app):
         # A stopped extraction cannot silently appear to be running forever.
         for path in directory.glob("*/session.json"):
-            session = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                session = read_session(path)
+            except (OSError, ValueError) as exc:
+                logger.warning("Skipping unreadable SubtitleDesk session %s: %s", path, exc)
+                continue
             if session["state"] in ("extracting", "transcribing") and not session.get("helper_job_id"):
                 session.update(state="failed", error="SubtitleDesk stopped before submitting audio; start a new range.")
                 save(session)
@@ -243,8 +263,14 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
     @app.get("/api/sessions")
     def list_sessions():
         paths = sorted(directory.glob("*/session.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-        return [{k: s.get(k) for k in ("id", "sequence_name", "state", "in_ms", "out_ms")}
-                for s in (json.loads(p.read_text(encoding="utf-8")) for p in paths)]
+        sessions = []
+        for path in paths:
+            try:
+                session = read_session(path)
+            except (OSError, ValueError):
+                continue
+            sessions.append({k: session.get(k) for k in ("id", "sequence_name", "state", "in_ms", "out_ms")})
+        return sessions
 
     @app.post("/api/sessions")
     async def start(req: StartRequest):
@@ -331,11 +357,13 @@ def create_app(directory: Path | None = None, backend=None, extractor=extract_ra
                     raise HTTPException(400, "Quote refers to an unknown transcript cue")
                 if indices != list(range(indices[0], indices[-1] + 1)):
                     raise HTTPException(400, "Choose consecutive cues for a quote")
-                if not any(line.strip() for line in quote.lines):
-                    raise HTTPException(400, "Quote text cannot be empty")
                 out.append({"cue_indices": indices, "lines": quote.lines,
                             "start_ms": session["cues"][indices[0]]["start_ms"],
                             "end_ms": session["cues"][indices[-1]]["end_ms"]})
+            try:
+                validate_quotes(out)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
             session["quotes"] = out
             save(session)
             record_corrections(session)

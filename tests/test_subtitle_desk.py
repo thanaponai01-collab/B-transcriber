@@ -101,12 +101,32 @@ def test_session_reaches_ready_with_cues_shifted_by_range_offset(client):
     assert [s["id"] for s in client.get("/api/sessions").json()] == [session["id"]]
 
 
+def test_corrupt_session_does_not_block_startup_or_listing(tmp_path):
+    directory = tmp_path / "sessions"
+    bad = directory / ("a" * 32)
+    bad.mkdir(parents=True)
+    (bad / "session.json").write_text("{", encoding="utf-8")
+    good_id = "b" * 32
+    good = directory / good_id
+    good.mkdir()
+    server.write_json(good / "session.json", {"id": good_id, "state": "ready"})
+
+    with TestClient(server.create_app(directory, FakeBackend(tmp_path / "p.prproj"))) as client:
+        assert [s["id"] for s in client.get("/api/sessions").json()] == [good_id]
+        assert client.get(f"/api/sessions/{good_id}").status_code == 200
+        assert client.get(f"/api/sessions/{bad.name}").status_code == 422
+
+
 def test_quote_selection_rules(client):
     sid = ready_session(client)["id"]
     url = f"/api/sessions/{sid}/quotes"
     assert client.put(url, json={"quotes": [{"cue_indices": [0, 2], "lines": ["x"]}]}).status_code == 400
     assert client.put(url, json={"quotes": [{"cue_indices": [3], "lines": ["x"]}]}).status_code == 400
     assert client.put(url, json={"quotes": [{"cue_indices": [0], "lines": [" "]}]}).status_code == 400
+    assert client.put(url, json={"quotes": [{"cue_indices": [0], "lines": ["x", " "]}]}).status_code == 400
+    assert client.put(url, json={"quotes": [
+        {"cue_indices": [0, 1], "lines": ["x"]}, {"cue_indices": [1], "lines": ["y"]},
+    ]}).status_code == 400
     ok = client.put(url, json={"quotes": [{"cue_indices": [1, 0], "lines": ["x", "y"]}]})
     assert ok.status_code == 200
     assert ok.json()["quotes"][0]["start_ms"] == 10_000 and ok.json()["quotes"][0]["end_ms"] == 12_000
