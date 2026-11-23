@@ -251,6 +251,13 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   → verify on the other gold episodes, one-sided: no second of a proposed drop is kept in the YT
   cut, and the 22 bumper and ad dips of the audit are all covered (the three flood-map dips of
   20261001 are not drops).
+  **Built offline (2026-11-23):** `python -m cutdeck.hks_breaks --all G:\Me\Works --check
+  [--holdout]` writes `drops` (opening, credits and bumper stings by audio fingerprint from
+  reference clips cut once off 20261117 with `--cut-refs`; every clock-off run of 10 s or more,
+  the user's rule 7). 20261120: opening end -0.32 s, break 2 +0.24 / +0.32 s, credits +0.14 s,
+  but break 1 ends 1.60 s early: the user cuts after the welcome-back line there and before it in
+  break 2, so no one rule hits both. Elsewhere no drop overlaps a YT keep (the three 20261001
+  flood maps are listed, not failed) and all 16 tuning dips are covered. Holdout, run once: ok.
 - [x] **2.3** TV clock presence per second, top-left. This drives the blur and the start of the
   social part; no OCR is needed, and break gaps are only the user's markers.
   → verify: present to 2815 s and absent from 2825 s on 20261120; every clock-on second shown at
@@ -262,6 +269,12 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
 - [ ] **2.4** Picture layout per second: studio / news-clip window / full-frame footage / bumper.
   `topic_layout` calls full-frame CCTV "studio" today. → verify on labelled frames, including the
   44 s full-frame CCTV cover (source 583.92–627.96) as footage.
+  **Built offline (2026-11-23):** `python -m cutdeck.hks_layout --all G:\Me\Works --check
+  [--holdout]` reads the show's blue frame and the set's red per second; bumper seconds come from
+  `drops` (rerun after 2.2). 434 tuning labels (fit): studio 96.4 %, clip 99.2 %, footage 94.1 %;
+  the CCTV run reads 100 % footage. Holdout, scored once: studio 98.7 %, clip 100 %, **footage 3
+  of 9**: blue or red footage (chat screenshots, maps, posters) reads as studio. The next fix
+  needs a structural cue, not another colour threshold.
 - [ ] **2.5** Legal uncovered cut points: camera changes in studio picture, camera changes inside
   the studio inset of the news-clip layout, and still pictures (the last two pending audit
   question 2). Whole-frame difference misses the inset changes (11–17, below the threshold of
@@ -272,10 +285,18 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
 - [ ] **2.6** Host vs guest turns (`topic_speakers`) → verify: the host prompt cuts of story 1
   (266.04–298.80, 312.60–321.40) fall in host turns, and a hand-labelled 10 min gives host
   precision and recall (a detector that calls everything host must fail).
+  **Built offline (2026-11-23):** `cutdeck/hks_turns.py` with one cross-episode host profile
+  (`cutdeck/hks_host_profile.json`); `turns` written for all 11. Host precision / recall on the
+  hand labels: 0.81 / 0.76 (20261120), 0.93 / 0.68 (20261012).
 - [ ] **2.7** Sponsor candidates (transcript + position; needs the model, Assumption 4). The
   second sponsor sits in the social part, where the clock gives nothing. → verify: both 20261120
   sponsors flagged (≈824.56–860, 3947.00–4407.48). The other episodes have no sponsor labels:
   count there the flagged seconds that the user kept in the YT cut (false positives).
+  **Built offline (2026-11-23):** `hks_judge` task `sponsors` (select-only judge, answers kept
+  under `test_projects/hks_judge/<day>/`). 7 of 8 tuning days keep 0 flagged seconds in YT;
+  20261012 keeps 15.2 s. 20261120 fails as written: the first sponsor is found, but of
+  3947–4407.48 only the read-out (4262–4353) is flagged; 3947–4262 is a foundation interview
+  the user cut as content. The bar was not moved.
 - [ ] **2.8** ⚑ Write the findings as markers on the `Footage` sequence (`add_markers`) → verify:
   the user sees them in Premiere.
 - [ ] **2.9** Story units, picked by meaning (Assumption 4), then snapped to a legal cut point
@@ -288,19 +309,36 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   (`tests/data/topic_cut_starts_hks290969.json`) hit within 1.5 s is at least the 24 that the
   first hand picks reached, and the same share on the label-colour boundaries of 20261120
   (workflow log, Step 2).
+  **Built offline, fails (2026-11-23):** `hks_judge` task `topics`, applied on the 8 tuning
+  days. Judge lines now break at audio silences and turn edges, so every 20261120 start is
+  reachable (0.91 on 290969). Hit within 1.5 s: 20261120 5 of 10, 290969 11 of 32 (the bar is 24
+  of 32). Even within 10 s it is 0.7 / 0.56, so the judge and the user split topics differently;
+  placement is not the main gap. The stories it gives are enough for 4.3.
 
 ## Phase 3: Rough cut
 - [ ] **3.1** Drop list = opening + bumpers and ads + credits (2.2) + sponsors the user approved
   (2.7). Applied with `apply_cuts` on a copy. → verify: keepers match the 20261120 `Edit` within
   0.5 s per boundary. On the other gold episodes, which have no `Edit` sequence: no dropped
   second is kept in the YT cut.
+  **Built offline (2026-11-23):** `python -m cutdeck.hks_rough --all G:\Me\Works --check`.
+  No dropped second is kept in YT on 7 of 8 tuning days; 20261001 keeps 79.8 s, the flood maps
+  the user un-drops. Against the 20261120 `Edit`: break 1's edges miss (see 2.2), and
+  3947–4407.48 waits for the user's sponsor approval (`sponsors.approved.json`).
 
 ## Phase 4: Long-form story-cut draft (the 2 h step; the user approves)
 - [ ] **4.1** Tighten (stumbles, pauses, false starts) **only where a cover is possible**: news-clip
   or footage picture, or a listener shot. In studio picture, cut only on camera changes (2.5).
   → verify: precision on gold <0.6 s and 0.6–3 s cuts; jump cuts = 0.
+  **Built offline (2026-11-23):** `cutdeck/hks_tighten.py` (pauses from ffmpeg silencedetect).
+  On the user's keeps with gaps under 3 s closed, tightening precision is 0–0.91 (<0.6 s) and
+  0.25–1.0 (0.6–3 s) by day; 20261117 0.71 / 0.80, 20261120 0.50 / 0.68. No camera-change cuts
+  yet: 2.5 is still running. The check's jump count comes from the user's own ≥3 s cuts, which it
+  does not mark covered, so it does not measure tightening.
 - [ ] **4.2** Host prompts, clarifications and opinions cut. A host connector is kept only where
   two guest pieces don't join. Viewer comments are always cut. → verify against gold host cuts.
+  **Built offline (2026-11-23), with 4.4 and 4.5:** one `cut` judge per day (rules 1–5 of the
+  prompt; H/G marks from 2.6), turned into a draft by `python -m cutdeck.hks_draft --all
+  G:\Me\Works --check`. On the 8 tuning days, host lines kept or cut as the user did: 0.73–0.91.
 - [ ] **4.3** Covers: B-roll from the same story (same moment first), else a static listener shot.
   Film damage goes on all B-roll; news-window clips are zoomed to fill the width (box detection).
   The cover candidates come from a finder: news-clip and footage picture of the same story
@@ -309,9 +347,18 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   does.
   → verify: every non-camera-change cut is covered; the zoom fills the width (frame check); the
   finder's candidates include the source of the covers the user chose (recall on gold covers).
+  **Built offline (2026-11-23):** `python -m cutdeck.hks_covers --all G:\Me\Works --check`:
+  recall on the user's clip and footage covers is 1.0 on 6 days, 0.79 on 20261120 (20261110 has
+  only studio covers). In the draft, every cut with a candidate counts as covered: jump cuts are
+  0 on 7 of 8 days (12 on 20261110). Zoom and film damage are live steps.
 - [ ] **4.4** Content cuts (retellings, off-topic, side sections such as backstory and legal
   analysis), ranked until the length lands at 15–20 min. **Blocked on the decision in Assumption 4.**
   → verify on gold: the dropped side sections match the user's (20261120: 34:56–41:09, 47:00–49:48).
+  **Built offline (2026-11-23):** the 20261120 draft drops 92 % and 89 % of those two sections.
+  Every draft is 15.3–19.9 min. Keep precision against the user is 0.31–0.49 (chance at the same
+  length: 0.13–0.26) and recall 0.28–0.55; line agreement 0.70–0.85. The draft carries signal
+  but is far from the user's choices; the next lever is showing the judge the user's own past
+  cuts of other days.
 - [ ] **4.5** Story opening: the guest's first story sentence, or the host's summary if the guest
   is slow → verify on gold story starts.
 
@@ -345,6 +392,11 @@ checked on the user's hand cut first, before Phase 4 exists.
   three end at -9 dB. **Open:** the live build and read-back of the levels.
 - [ ] **5.3** Bleeps on swear words (word list + transcript) → verify: the swear at 1693.00 is found;
   precision on gold bleeps.
+  **Built offline (2026-11-23):** `python -m cutdeck.hks_bleep --all G:\Me\Works --check
+  [--holdout]`, swear patterns that skip Thai compounds (สัตว์, เชี่ยวชาญ). False proposals: 1 on
+  the tuning days, 0 on the holdout. **The 1693.00 swear is not found:** the Thai medium CT2 model,
+  Systran large-v3 and the Thai large-v3 CT2 all skip it, with or without a swear prompt. The user
+  cuts that word out and lays the bleep in the gap.
 - [ ] **5.4** Hook template:
   - title cards;
   - a swoosh at each card change;
@@ -352,6 +404,9 @@ checked on the user's hand cut first, before Phase 4 exists.
 
   Soundbites are ranked (climax / most violent or emotional / "what!?"), and the user picks.
   → verify: same structure as the 18:32 save.
+  **Soundbites built offline (2026-11-23):** `hks_judge` task `hook`, 8 candidates best first.
+  The user's hook moments found in the top 8: 20261003 3 of 3, 20261120 3 of 5, 20261117 1 of 5
+  (bar 0.5). The template build is live.
 - [ ] **5.5** Ending: goodbye → sting → `CG_END LOGO` (YT only) → verify.
 
 ## Phase 6: Versions
