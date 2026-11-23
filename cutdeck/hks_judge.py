@@ -1,0 +1,239 @@
+"""HKS judgment by meaning, done by the agent in a Claude Code session (the user's route, 2026-11-23).
+
+The steps that need meaning (2.7 sponsors, 2.9 topics and stories, 4.2/4.4/4.5 the story cut,
+5.4 hook bites) go through one select-only loop:
+
+1. ``prompt`` turns a footage file's word transcript into numbered lines (``L0001``) and writes
+   ``<out>/<day>/<task>.prompt.md``: the task in the user's own rules, the answer format, and the
+   lines. Nothing else: no gold, no plan, no audit numbers. Lines inside a 2.2 drop are left out.
+2. A **fresh** agent, given only that file, writes ``<task>.answer.json``. It picks line ids and
+   never writes times or text of its own.
+3. ``apply`` validates the answer (every id must be a shown line, ``from`` not after ``to``;
+   anything else raises ``JudgeAnswerError``), turns ids into source seconds and writes the
+   episode section. The prompt and the answer stay on disk as the artifact.
+
+    python -m cutdeck.hks_judge prompt "G:\\Me\\Works\\20261120 - โหนกระแส" --task sponsors
+    python -m cutdeck.hks_judge apply  "G:\\Me\\Works\\20261120 - โหนกระแส" --task sponsors
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from cutdeck import hks_episode
+
+OUT = Path("test_projects/hks_judge")
+WORDS = Path("test_projects/hks_words")
+MAX_GAP = 0.3    # s of silence that ends a line (Whisper word times touch: 90 % of gaps are under 0.1 s)
+MAX_LINE = 8.0   # s: a line never runs longer (20261120: 822 lines, 4.8 s on average)
+
+
+class JudgeAnswerError(ValueError):
+    """The answer names a line that was not shown, or a span that runs backwards."""
+
+
+@dataclass(frozen=True)
+class Line:
+    id: str
+    start: float
+    end: float
+    text: str
+
+
+def lines(words: list[list], drops: list[tuple[float, float]] = ()) -> list[Line]:
+    """Word pieces ``[[start, end, text], ...]`` -> lines broken at pauses and at MAX_LINE.
+    Words inside a drop are left out, and a drop always ends a line."""
+    def dropped(t: float) -> bool:
+        return any(a <= t < b for a, b in drops)
+
+    out, cur = [], []
+    for w in words:
+        if dropped((w[0] + w[1]) / 2):
+            if cur:
+                out.append(cur)
+                cur = []
+            continue
+        if cur and (w[0] - cur[-1][1] > MAX_GAP or w[1] - cur[0][0] > MAX_LINE):
+            out.append(cur)
+            cur = []
+        cur.append(w)
+    if cur:
+        out.append(cur)
+    return [Line(f"L{i + 1:04d}", ws[0][0], ws[-1][1], "".join(w[2] for w in ws).strip())
+            for i, ws in enumerate(out)]
+
+
+def _clock(t: float) -> str:
+    return f"{int(t // 3600)}:{int(t % 3600 // 60):02d}:{int(t % 60):02d}"
+
+
+SHOW = """You are helping edit a Thai live news-talk show. One host interviews guests about a news
+incident (often a crime, a dispute or a scam); the live broadcast runs about two hours, first as
+the TV part, then a social-media-only part. The words below are an automatic transcript (it has
+errors), one numbered line per stretch of speech, with its position in the broadcast."""
+
+SPAN_FORMAT = """Answer with JSON only, in a file, in this shape:
+{"spans": [{"from": "L0123", "to": "L0130", "why": "<a few words, Thai or English>"}]}
+Use only line ids shown below. "from" and "to" may be the same line. Do not write times."""
+
+TASKS = {
+    "sponsors": {
+        "section": "sponsors",
+        "drops": False,  # a sponsor read can sit inside a clock-off drop: show everything
+        "rules": """Task: mark every stretch where the show promotes a sponsor: a product, brand, shop,
+app, service or event is advertised or thanked as a sponsor, read by the host or played as an ad.
+Mark the whole promotion, from its first line to its last. Do not mark news content that only
+mentions a company. If there is no sponsor, answer {"spans": []}.""",
+        "format": SPAN_FORMAT,
+    },
+    "topics": {
+        "section": "topics",
+        "rules": """Task: mark where each new topic starts. A topic starts where the host opens a new
+subject: a question that moves the talk to a new incident, a new guest, a new part of the story
+(what happened, the other side, the police, the money, what happens next). Pick the first line of
+the opening question or introduction. Then group consecutive topics that are about the same
+incident into one story: story numbers start at 1 and only go up.""",
+        "format": """Answer with JSON only, in a file, in this shape:
+{"topics": [{"start": "L0042", "story": 1, "title": "<a few words>"}]}
+Topics in broadcast order. Use only line ids shown below. Do not write times.""",
+    },
+}
+
+
+def words_of(day: str, media: str, words_dir: Path = WORDS) -> list[list]:
+    return json.loads((words_dir / day / f"{Path(media).stem}.words.json").read_text(encoding="utf-8"))
+
+
+def drops_of(ep: dict, media: str) -> list[tuple[float, float]]:
+    return [(d["start"], d["end"]) for d in ep["files"].get(media, {}).get("drops", [])]
+
+
+def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_episode.OUT,
+                  drops: bool = True) -> dict[str, list[Line]]:
+    """Lines per footage file, drops left out unless ``drops`` is False. Line ids run on across
+    files (one id space a day)."""
+    day = folder.name[:8]
+    ep = hks_episode.load(day, ep_dir)
+    out, n = {}, 0
+    for media in sorted(p.name for p in (folder / "1. FOOTAGE").glob("*.mp4")):
+        ls = lines(words_of(day, media, words_dir), drops_of(ep, media) if drops else [])
+        out[media] = [Line(f"L{n + i + 1:04d}", l.start, l.end, l.text) for i, l in enumerate(ls)]
+        n += len(ls)
+    return out
+
+
+def prompt_text(task: str, per_file: dict[str, list[Line]]) -> str:
+    t = TASKS[task]
+    body = []
+    for media, ls in per_file.items():
+        if len(per_file) > 1:
+            body.append(f"\n## File: {media}\n")
+        body += [f"{l.id} [{_clock(l.start)}] {l.text}" for l in ls]
+    return "\n\n".join([SHOW, t["rules"], t["format"], "## Transcript\n" + "\n".join(body)]) + "\n"
+
+
+def _index(per_file: dict[str, list[Line]]) -> dict[str, tuple[str, int, Line]]:
+    return {l.id: (media, i, l) for media, ls in per_file.items() for i, l in enumerate(ls)}
+
+
+def parse(task: str, answer: dict, per_file: dict[str, list[Line]]) -> dict[str, list]:
+    """Validated answer -> episode section value per footage file (source seconds)."""
+    idx = _index(per_file)
+
+    def get(i) -> tuple[str, int, Line]:
+        if i not in idx:
+            raise JudgeAnswerError(f"line {i!r} was not shown")
+        return idx[i]
+
+    out: dict[str, list] = {m: [] for m in per_file}
+    if task == "topics":
+        last = 0
+        for t in answer.get("topics", []):
+            media, _, line = get(t["start"])
+            story = int(t["story"])
+            if story < last or story < 1:
+                raise JudgeAnswerError(f"story numbers must start at 1 and only go up ({t})")
+            last = story
+            out[media].append({"start": line.start, "line": line.id, "story": story, "title": str(t.get("title", ""))})
+        return out
+    for s in answer.get("spans", []):
+        (ma, ia, a), (mb, ib, b) = get(s["from"]), get(s["to"])
+        if ma != mb or ib < ia:
+            raise JudgeAnswerError(f"span {s['from']}..{s['to']} runs backwards or across files")
+        out[ma].append({"start": a.start, "end": b.end, "from": a.id, "to": b.id, "why": str(s.get("why", ""))})
+    return out
+
+
+def paths(folder: Path, task: str, out: Path = OUT) -> tuple[Path, Path]:
+    d = out / folder.name[:8]
+    return d / f"{task}.prompt.md", d / f"{task}.answer.json"
+
+
+def write_prompt(folder: Path, task: str, out: Path = OUT) -> Path:
+    p, _ = paths(folder, task, out)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(prompt_text(task, episode_lines(folder, drops=TASKS[task].get("drops", True))), encoding="utf-8")
+    return p
+
+
+def apply(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> dict[str, list]:
+    _, a = paths(folder, task, out)
+    value = parse(task, json.loads(a.read_text(encoding="utf-8")),
+                  episode_lines(folder, ep_dir=ep_dir, drops=TASKS[task].get("drops", True)))
+    for media, v in value.items():
+        hks_episode.update(folder.name[:8], media, TASKS[task]["section"], v, ep_dir)
+    return value
+
+
+def main(argv: list[str] | None = None) -> None:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("action", choices=("prompt", "apply"))
+    p.add_argument("folder")
+    p.add_argument("--task", required=True, choices=sorted(TASKS))
+    args = p.parse_args(argv)
+    sys.stdout.reconfigure(encoding="utf-8")
+    folder = Path(args.folder)
+    if args.action == "prompt":
+        print(write_prompt(folder, args.task))
+    else:
+        value = apply(folder, args.task)
+        print(json.dumps({m: len(v) for m, v in value.items()}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+
+
+# --- scoring (gold is read here only, never put in a prompt) -----------------------------------
+
+SPONSORS_20261120 = ((824.56, 860.0), (3947.00, 4407.48))  # build plan 2.7: the two known sponsors
+MIN_SPONSOR_HIT = 0.5  # share of a known sponsor's seconds the flagged spans must cover; set before the first run
+
+
+def _overlap(spans, a: float, b: float) -> float:
+    return sum(max(0.0, min(b, e) - max(a, s)) for s, e in spans)
+
+
+def score_sponsors(folder: Path, out: Path = OUT) -> dict:
+    """Plan 2.7. 20261120: both known sponsors flagged. Every day: flagged seconds the user kept in
+    the YT cut (false positives: the user always cuts sponsors)."""
+    from cutdeck.hks_gold import read_day
+    value = parse("sponsors", json.loads(paths(folder, "sponsors", out)[1].read_text(encoding="utf-8")),
+                  episode_lines(folder, drops=False))
+    gold = read_day(folder)
+    kept = 0.0
+    for media, spans in value.items():
+        flagged = [(s["start"], s["end"]) for s in spans]
+        kept += sum(_overlap(flagged, k.source_in, k.source_out) for k in gold.yt.keeps if k.media.lower() == media.lower())
+    r = {"day": folder.name[:8], "spans": sum(len(v) for v in value.values()),
+         "flagged_s": round(sum(s["end"] - s["start"] for v in value.values() for s in v), 1),
+         "kept_in_yt_s": round(kept, 1)}
+    if folder.name.startswith("20261120"):
+        (spans,) = value.values()
+        flagged = [(s["start"], s["end"]) for s in spans]
+        r["known_hit"] = [round(_overlap(flagged, a, b) / (b - a), 2) for a, b in SPONSORS_20261120]
+        r["pass"] = all(h >= MIN_SPONSOR_HIT for h in r["known_hit"])
+    return r
