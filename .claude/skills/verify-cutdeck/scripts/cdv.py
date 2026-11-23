@@ -24,9 +24,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-from cutdeck import live_check  # noqa: E402
 from cutdeck.ai_backend import Backend  # noqa: E402
-from cutdeck.helper import PORT, VERSION  # noqa: E402
+from cutdeck.helper_protocol import PORT, VERSION  # noqa: E402
 
 ROOT = REPO / "output" / "verify-cutdeck"
 STATE = ROOT / "current.json"
@@ -112,6 +111,7 @@ def wait_for_panel(timeout_s: float = 60) -> dict:
 def cmd_launch(args) -> None:
     """Make the stack drivable: a helper on this checkout's code, the panel connected, and with
     --reload-panel the panel reloaded on this checkout's code (the project is saved first)."""
+    from cutdeck import live_check  # here, not at import: `call` stays free of the helper's modules
     if not live_check.premiere_running():
         fail("Premiere Pro is not running: start it and open a project (an agent never opens or closes projects)")
     hello = helper_hello()
@@ -174,6 +174,7 @@ async def _restart_request() -> None:
 
 def cmd_doctor(args) -> None:
     """Read-only: is this instance worth driving? Exit 0 only when every line is PASS."""
+    from cutdeck import live_check
     ok = True
     steps, _ = live_check.check(PORT)
     for s in steps:

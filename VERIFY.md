@@ -61,6 +61,10 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test (2026-11-21, menu and keyboard routes): `python -m pytest tests/test_cutdeck_keys.py -q -p no:cacheprovider`
 - fail-proof: each went red on its own and was restored: dropped the Ctrl+Alt-last sort in keys.pick (Ctrl+Alt+Z picked); removed the active-sequence check in run_focused (pressed after a switch); took "close" out of menu.BLOCKED (File > Close Project runnable).
 
+- test (2026-11-23, cdv call startup): `python -m pytest tests/test_cutdeck_cdv_startup.py -q -p no:cacheprovider` (importing cdv or ai_backend leaves cutdeck.helper, driver_commands, live_check, premiere_ui, numpy and PIL unloaded)
+- fail-proof: all 3 tests red on 26ca379 (before PORT/VERSION moved to cutdeck/helper_protocol.py), green after.
+- live (2026-11-23, bench `output/perf/2026-11-23-cutdeck-profile/cdv_bench.py`, helper on :7891 not restarted): fresh-process `cdv.py call read_sequence` timed from outside, 4 alternating block pairs of 6 per side, one warm-up dropped per side; old 26ca379 median 507 ms (477-618, n=24), new median 302 ms (278-359, n=24), 0 failures; the recorded result and the unknown-command error are identical on both sides. `import cdv` 354 ms to 155 ms. What is left is asyncio + websockets + python start (~280 ms), not cutdeck.
+
 ## Premiere project readers
 - test: `python -m pytest tests/test_prproj_anchor_check.py tests/test_prproj_pixels.py tests/test_prproj_reader.py tests/test_scrub_fcpxml.py -q -p no:cacheprovider`
 - fail-signal: AssertionError

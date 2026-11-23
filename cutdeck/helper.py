@@ -26,12 +26,11 @@ import uuid
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS, PANEL_COMMANDS  # noqa: F401 (MAX_MARKERS: tests)
 from cutdeck import frame_bounds, sequence_model, text_box
+from cutdeck.helper_protocol import PORT, VERSION
 from cutdeck.sequence_model import Sequence, check_reference_audio
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 
 ROOT = Path(__file__).resolve().parent.parent
-PORT = 7891
-VERSION = "cutdeck-7"  # premiere_transcript: clip transcript JSON for Premiere
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
 TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
 RESTARTING = "CutDeck helper is restarting; try again in a moment"

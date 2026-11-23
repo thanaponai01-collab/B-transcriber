@@ -12,8 +12,7 @@ import json
 from pathlib import Path
 import re
 
-from cutdeck.driver_commands import COMMANDS
-from cutdeck.helper import PORT, VERSION
+from cutdeck.helper_protocol import PORT, VERSION
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +37,7 @@ class Backend:
         self.port = port
 
     def capabilities(self) -> dict:
+        from cutdeck.driver_commands import COMMANDS  # here, not at import: a plain call needs none of it
         return {
             "version": "4", "tools": ["transcribe", "premiere_status", "premiere_rough_cut",
                                       *(f"premiere_{name}" for name in COMMANDS)],
