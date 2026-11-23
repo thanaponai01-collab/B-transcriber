@@ -242,3 +242,17 @@ test("activeProjectAndSequence returns both project and sequence when present", 
   const res = await activeProjectAndSequence(ppro);
   assert.deepEqual(res, { project, sequence });
 });
+
+// --- sequenceWithContent (place_media nest, duplicate_sequence) ---------------
+
+test("sequenceWithContent takes a lone name as is, else the one same-named sequence with content", async () => {
+  const { sequenceWithContent } = require("../uxp/cutdeck/host/project.js");
+  const seq = (name, end) => ({ name, getEndTime: async () => ({ ticks: String(end) }) });
+  const sequences = [seq("3 SQUARE SELECT D1", 0), seq("3 SQUARE SELECT D1", 15230000000000), seq("blank", 0),
+    seq("FB", 5), seq("FB", 5)];
+  const project = { getSequences: async () => sequences };
+  assert.equal(await sequenceWithContent(project, "3 SQUARE SELECT D1"), sequences[1]);
+  assert.equal(await sequenceWithContent(project, "blank"), sequences[2]);
+  await assert.rejects(sequenceWithContent(project, "FB"), /2 of the 2 sequences named "FB" have content/);
+  await assert.rejects(sequenceWithContent(project, "none"), /No sequence named "none"/);
+});

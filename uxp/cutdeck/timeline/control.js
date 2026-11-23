@@ -35,7 +35,7 @@
    removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
    values (host/components.js). */
 
-const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSequenceNamed, openAndActivate, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, sequenceWithContent, projectAndSequenceNamed, openAndActivate, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
@@ -331,16 +331,17 @@ async function projectItemForMedia(ppro, project, path) {
   return walk((await binItems(await project.getRootItem())) || []);
 }
 
-/* place_media: put a media file (imported first if no project item uses it) or a sequence (`nest`)
-   on the timeline at `at_ticks`, video on track `v`, audio on track `a` (0-based; an index equal to
-   the track count creates that track, one new track per call). mode overwrite (default; covers and
+/* place_media: put a media file (imported first if no project item uses it) or a sequence (`nest`;
+   of several sharing its name, the one with content: host/project.js sequenceWithContent) on the
+   timeline at `at_ticks`, video on track `v`, audio on track `a` (0-based; an index equal to the
+   track count creates that track, one new track per call). mode overwrite (default; covers and
    splits what is there) or insert (ripples later clips). CATCH: audio -1 is not "no audio", it
    lands on A1 (PREMIERE_FACTS "audio track index -1"). */
 async function placeMedia(ppro, { sequence: name = null, media = null, nest = null, at_ticks: at, v, a, mode = "overwrite" }) {
   const { project, sequence } = await projectAndSequenceNamed(ppro, name);
   let item;
   if (nest) {
-    item = await (await sequenceNamed(project, nest)).getProjectItem();
+    item = await (await sequenceWithContent(project, nest)).getProjectItem();
   } else {
     item = await projectItemForMedia(ppro, project, media);
     if (!item) {

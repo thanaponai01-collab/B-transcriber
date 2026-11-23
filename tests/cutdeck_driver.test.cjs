@@ -353,3 +353,59 @@ test("reload_panel tears the panel down (Premiere listeners off) before it reloa
   }
   assert.deepEqual(order, ["teardown", "reload"]);
 });
+
+/* duplicate_sequence (HKS reels): a day project holds the user's sequence and an empty template
+   copy under one name, so the source is picked by content. */
+// 20261020 has two identical FB sequences with content: nothing tells them apart.
+function twin() {
+  const clip = { media: "a.mp4", start: 0n, end: 50n, in: 0n };
+  return fake.createTimelineHost({
+    media: [{ path: "a.mp4", video: true, audio: true, duration: 1000n }],
+    sequences: [1, 2].map(() => ({ name: "2 FACEBOOK D1", video: [[{ ...clip }]], audio: [[{ ...clip }]] })),
+  });
+}
+
+function dayHost() {
+  const clip = (start, end) => ({ media: "a.mp4", start, end, in: 0n });
+  return fake.createTimelineHost({
+    media: [{ path: "a.mp4", video: true, audio: true, duration: 1000n }],
+    sequences: [
+      { name: "2 FACEBOOK D1", video: [[], []], audio: [[]] },
+      { name: "2 FACEBOOK D1", video: [[clip(0n, 50n)], [clip(0n, 100n)]], audio: [[clip(0n, 50n)]] },
+      { name: "4 REEL SIZE D1", video: [[clip(0n, 60n)], [], [clip(0n, 60n)]], audio: [[clip(0n, 60n)], []] },
+      { name: "4 REEL SIZE D1", video: [[], []], audio: [[], []] },
+    ],
+  });
+}
+
+test("duplicate_sequence copies the same-named sequence with content, names the copy and counts it", async () => {
+  const h = dayHost();
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "duplicate_sequence", args: { sequence_name: "2 FACEBOOK D1", result_name: "FB copy" } });
+  assert.equal(out.name, "FB copy");
+  assert.equal(out.source_id, "seq1");
+  assert.deepEqual([out.video_tracks, out.audio_tracks, out.video_clips, out.audio_clips, out.end_ticks], [2, 1, 2, 1, "100"]);
+  assert.deepEqual(h.sequence("FB copy").video.map((c) => [c.track, c.end]), [[0, 50n], [1, 100n]]);
+  assert.deepEqual(h.undoSteps, ["CutDeck: copy 2 FACEBOOK D1", "CutDeck: name FB copy"]);
+});
+
+test("duplicate_sequence with empty copies the template's blank sequence, not the user's", async () => {
+  const h = dayHost();
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "duplicate_sequence", args: { sequence_name: "4 REEL SIZE D1", result_name: "reel", empty: true } });
+  assert.equal(out.source_id, "seq3");
+  assert.deepEqual([out.video_tracks, out.audio_tracks, out.video_clips, out.audio_clips, out.end_ticks], [2, 2, 0, 0, "0"]);
+});
+
+test("duplicate_sequence refuses a name in use, an unknown source and two sources with content, before copying", async () => {
+  const h = dayHost();
+  const driver = createDriver({ ppro: h.ppro, ctl: controller() });
+  const run = (args) => driver.handle({ command: "duplicate_sequence", args });
+  await assert.rejects(run({ sequence_name: "2 FACEBOOK D1", result_name: "4 REEL SIZE D1" }), /A sequence named "4 REEL SIZE D1" already exists/);
+  await assert.rejects(run({ sequence_name: "missing", result_name: "x" }), /No sequence named "missing"/);
+  await assert.rejects(run({ sequence_name: "missing", result_name: "x", empty: true }), /None of the 0 sequences named "missing" is empty/);
+  assert.deepEqual(h.undoSteps, []);
+  const twice = createDriver({ ppro: twin().ppro, ctl: controller() });
+  await assert.rejects(twice.handle({ command: "duplicate_sequence", args: { sequence_name: "2 FACEBOOK D1", result_name: "y" } }),
+    /2 of the 2 sequences named "2 FACEBOOK D1" have content; need exactly 1/);
+});

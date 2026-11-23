@@ -210,6 +210,18 @@ def _create_sequence_arguments(args: dict, jobs) -> dict:
     return {"name": name, "preset_path": preset}
 
 
+def _duplicate_sequence_arguments(args: dict, jobs) -> dict:
+    """Validate `duplicate_sequence`: a source name, a different new name, and `empty`."""
+    source, result_name, empty = args.get("sequence_name"), args.get("result_name"), args.get("empty", False)
+    if not isinstance(source, str) or not source.strip() or not isinstance(result_name, str) or not result_name.strip():
+        raise ValueError("sequence_name and result_name must be sequence names")
+    if source == result_name:
+        raise ValueError("result_name must differ from sequence_name (the source is never edited)")
+    if not isinstance(empty, bool):
+        raise ValueError("empty must be true or false")
+    return {"sequence_name": source, "result_name": result_name, "empty": empty}
+
+
 def _export_sequence_arguments(args: dict, jobs) -> dict:
     """Export the active sequence with a Media Encoder preset to a new file (never overwrites)."""
     output, preset = args.get("output_file"), args.get("preset_file")
@@ -465,6 +477,16 @@ COMMANDS: dict[str, Command] = {
         ticks per frame and track counts. Needs the CutDeck panel open.
         """,
         (("name", str), ("preset_path", str))),
+    "duplicate_sequence": Command(
+        60, _duplicate_sequence_arguments, "write",
+        """
+        Copy the sequence `sequence_name` (never edited) as `result_name`, with every track,
+        clip and effect; the copy is not opened. Of several sequences sharing the name, the one
+        with content is copied; with `empty` true, the first empty one (a day template's blank
+        reel). Refuses a name already in use. Returns the copy's frame size, track and clip
+        counts. Needs the CutDeck panel open.
+        """,
+        (("sequence_name", str), ("result_name", str), ("empty", bool, False))),
     "export_sequence": Command(
         3600, _export_sequence_arguments, "write",
         """
@@ -772,9 +794,9 @@ CONTROL_COMMANDS: dict[str, Command] = {
         300, _place_media_arguments, "write",
         """
         Place a media file (absolute path; imported first if the project lacks it) or nest a
-        sequence (by name) at `at_ticks`. v / a: 0-based video / audio track (the track count
-        makes a new track). mode overwrite (splits and covers what is there) or insert (ripples
-        later clips). Media without audio still needs an `a`; use the audio track count so it
+        sequence (by name; of several sharing it, the one with content) at `at_ticks`. v / a:
+        0-based video / audio track (the track count makes a new track). mode overwrite (splits
+        and covers what is there) or insert (ripples later clips). Media without audio still needs an `a`; use the audio track count so it
         cannot overwrite A1.
         """,
         (("at_ticks", str), ("v", int), ("a", int), ("media", str | None, None), ("nest", str | None, None), ("mode", str, "overwrite"), ("sequence", str | None, None))),

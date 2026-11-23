@@ -169,6 +169,19 @@ def test_cut_copy_checks_names_and_frames():
         raise AssertionError(f"accepted {bad}")
 
 
+def test_duplicate_sequence_checks_names_and_empty():
+    prepare = driver_commands.COMMANDS["duplicate_sequence"].prepare
+    ok = {"sequence_name": "2 FACEBOOK D1", "result_name": "2 FACEBOOK D1 Copy 01 (CutDeck)"}
+    assert prepare(ok, None) == {**ok, "empty": False}
+    assert prepare({**ok, "empty": True}, None)["empty"] is True
+    for bad in ({"result_name": "2 FACEBOOK D1"}, {"result_name": " "}, {"sequence_name": None}, {"empty": "yes"}):
+        try:
+            prepare({**ok, **bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")
+
+
 def test_build_sequence_into_mode_checks():
     prepare = driver_commands.COMMANDS["build_sequence"].prepare
     item = {"id": "p", "media": "D:\a.mp4", "in_ticks": "0", "out_ticks": "1", "at_ticks": "0", "v": 0, "a": None}
