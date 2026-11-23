@@ -7,4 +7,5 @@ One line per memory file: `- [Title](file.md) — hook`. Format and upkeep: [pro
 - [Gold-reading gotchas](gold-reading-gotchas.md) — audio decides kept footage, show/hook end, frame holds
 - [Phase 0 status](phase0-status.md) — done; rule questions and model route answered 2026-11-23
 - [Watch method](watch-method.md) — user narrates, agent reads saves + transcript, logs, asks
+- [YT 20261123 lessons](yt-20261123-lessons.md) — user's finished cut measured vs agent drafts v1–v3
 - [Marker draft](marker-draft.md) — day draft on the timeline: questions by story phase + breaks + sponsors
