@@ -39,7 +39,7 @@ const { runTransaction, asBinLike, activeProject, sequenceNamed, projectAndSeque
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
-const { waitForFile } = require("../host/files.js");
+const { pngWritten, waitForFile } = require("../host/files.js");
 const { projectItemMediaPath } = require("../host/sequenceRead.js");
 const { getHoldExportFolder } = require("./frameHold.js");
 
@@ -565,9 +565,10 @@ async function exportFrame(ppro, { sequence: name = null, ticks = null }) {
   if (!(await ppro.Exporter.exportSequenceFrame(sequence, at, file, folder.nativePath, size.width, size.height))) {
     throw new Error("exportSequenceFrame returned false");
   }
-  const bytes = await waitForFile(folder, file, { timeoutMs: 20000, intervalMs: 50, stablePolls: 3 });
-  return { name: sequence.name, ticks: ticksOf(at), width: size.width, height: size.height,
-    path: `${String(folder.nativePath).replace(/[\\/]$/, "")}\\${file}`, bytes };
+  const path = `${String(folder.nativePath).replace(/[\\/]$/, "")}\\${file}`;
+  const bytes = await waitForFile(folder, file, { timeoutMs: 20000, intervalMs: 20, stablePolls: 2,
+    done: (written) => pngWritten(path, written) });
+  return { name: sequence.name, ticks: ticksOf(at), width: size.width, height: size.height, path, bytes };
 }
 
 function controlHandlers(ppro) {

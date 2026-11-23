@@ -21,7 +21,19 @@ function fakeFolder(nativePath, children = {}) {
 
 const temp = fakeFolder("C:\\Temp\\PluginData");
 let projectFolder = null;
+// The panel's require('fs'): each read gives the next listed last-8-bytes (the last one repeats).
+const PNG_END = [0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+let tails = [PNG_END];
+let tailReads = 0;
 const stubs = {
+  fs: {
+    open: async (path) => path,
+    read: async (fd, buffer, offset, length) => {
+      new Uint8Array(buffer).set(tails[Math.min(tailReads++, tails.length - 1)]);
+      return { bytesRead: length, buffer };
+    },
+    close: async () => {},
+  },
   uxp: {
     storage: {
       localFileSystem: {
@@ -83,4 +95,15 @@ test("export_frame: an unsaved project still uses the temp folder", async () => 
   const out = await controlHandlers(ppro).export_frame({ ticks: "0" });
   assert.equal(writes[0].dir, "C:\\Temp\\PluginData");
   assert.match(out.path, /^C:\\Temp\\PluginData\\cutdeck-frame-\d+\.png$/);
+});
+
+test("export_frame: a frame whose size has settled is not returned until it ends with IEND", async () => {
+  projectFolder = null;
+  tails = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], PNG_END];
+  tailReads = 0;
+  const { ppro } = fakePpro("");
+  const out = await controlHandlers(ppro).export_frame({ ticks: "0" });
+  assert.equal(out.bytes, 2048);
+  assert.equal(tailReads, 3);
+  tails = [PNG_END];
 });
