@@ -67,7 +67,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Move, trim head/tail, enable/disable, rename, remove (ripple or not) | `premiere_edit_clips` | UXP | LIVE 2026-11-21 (ripple: video and audio in one action, else it shifts twice) |
 | Place media / nest a sequence, overwrite or insert | `premiere_place_media` | UXP | LIVE 2026-11-21 (nest across frame size/rate placed nothing: now an error) |
 | Import files | `premiere_import_files` | UXP | LIVE 2026-11-21 |
-| Import sequences (by GUID) from a saved `.prproj`; a donor copy from `python -m cutdeck.prproj_donor` | `premiere_import_sequences` | UXP `Project.importSequences` | FAKE (live trial: issue #130) |
+| Import sequences (by GUID) from a saved `.prproj`; a donor copy from `python -m cutdeck.prproj_donor` | `premiere_import_sequences` | UXP `Project.importSequences` | LIVE 2026-11-23 (a patched Motion Scale read back; issue #130) |
 | Effects catalogue | `premiere_list_effects` | UXP | LIVE 2026-11-21 |
 | Add a video/audio effect | `premiere_add_effect` | UXP | LIVE 2026-11-21 |
 | Set any effect parameter or keyframe | `premiere_set_param` | UXP | LIVE 2026-11-21 |
