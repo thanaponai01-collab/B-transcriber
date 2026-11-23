@@ -2,9 +2,10 @@
 
 The donor keeps one sequence's clips, effects and masks as Premiere saved them, gives that
 sequence a fresh GUID and a new name (so it never collides with what the open project already
-has), and can change one Motion value on one clip. Everything is patched as text on the
-decompressed XML, each patch exactly once, so the rest of the file stays byte for byte what
-Premiere wrote. The reader's object index (``prproj_reader``) only finds what to patch.
+has), and can change one static Motion value on one clip. Everything is patched as text on the
+decompressed XML (the value exactly once; the name and GUID wherever they occur), so the rest of
+the file stays byte for byte what Premiere wrote. The reader's object index (``prproj_reader``)
+only finds what to patch. Proven live: docs/PREMIERE_FACTS.md, ``Project.importSequences``.
 
     python -m cutdeck.prproj_donor SRC.prproj DST.prproj --sequence NAME --name NEW
         [--track 1 --clip 1 --param scale --value 137.25]
@@ -19,6 +20,7 @@ import re
 import uuid
 from pathlib import Path
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
 
 from cutdeck.prproj_reader import _TRANSFORM_PARAMS, _Objects
 
@@ -40,7 +42,11 @@ def _motion_param_id(objs: _Objects, seq: ET.Element, track: int, clip: int, par
         if group is None or group.tag != "VideoTrackGroup":
             continue
         tracks = [objs.ref(t) for t in group.findall("TrackGroup/Tracks/Track")]
+        if track > len(tracks):
+            break
         items = [objs.ref(r) for r in tracks[track - 1].findall("ClipTrack/ClipItems/TrackItems/TrackItem")]
+        if clip > len(items):
+            break
         chain = objs.ref(items[clip - 1].find("ClipTrackItem/ComponentOwner/Components"))
         for comp_ref in chain.findall("ComponentChain/Components/Component"):
             comp = objs.ref(comp_ref)
@@ -65,9 +71,11 @@ def write_donor(src: str | Path, dst: str | Path, *, sequence: str, name: str,
     old_id = seq.get("ObjectUID")
 
     if param is not None:
-        if param not in _NUMERIC or track is None or clip is None or value is None:
-            raise ValueError(f"param must be one of {sorted(_NUMERIC)}, with track, clip and value")
+        if param not in _NUMERIC or not (isinstance(track, int) and track >= 1 and isinstance(clip, int) and clip >= 1) or value is None:
+            raise ValueError(f"param must be one of {sorted(_NUMERIC)}, with track and clip from 1, and a value")
         param_id = _motion_param_id(objs, seq, track, clip, param)
+        if objs.by_id[param_id].findtext("Keyframes"):
+            raise ValueError(f"Motion {param} on V{track} clip {clip} is keyframed; only a static value can be patched")
         start = objs.by_id[param_id].findtext("StartKeyframe")
         fields = start.split(",")
         fields[1] = repr(float(value))
@@ -77,9 +85,10 @@ def write_donor(src: str | Path, dst: str | Path, *, sequence: str, name: str,
         xml = _replace_once(xml, body, patched, f"Motion param object {param_id}")
 
     # The sequence's own <Name> and its project item's <Name> both carry the name.
-    if xml.count(f"<Name>{sequence}</Name>") < 1:
-        raise ValueError(f"no <Name>{sequence}</Name> to rename")
-    xml = xml.replace(f"<Name>{sequence}</Name>", f"<Name>{name}</Name>")
+    old_tag, new_tag = f"<Name>{escape(sequence)}</Name>", f"<Name>{escape(name)}</Name>"
+    if old_tag not in xml:
+        raise ValueError(f"no {old_tag} to rename")
+    xml = xml.replace(old_tag, new_tag)
     new_id = str(uuid.uuid4())
     xml = xml.replace(old_id, new_id)
 
