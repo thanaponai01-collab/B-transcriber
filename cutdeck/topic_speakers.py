@@ -32,8 +32,8 @@ class Turn:
     is_host: bool
 
 
-def speech_window_starts(audio: np.ndarray) -> list[float]:
-    """Start times (s) of every WINDOW_S window that lies fully inside detected speech."""
+def speech_window_starts(audio: np.ndarray, hop_s: float = HOP_S) -> list[float]:
+    """Start times (s) of every WINDOW_S window, ``hop_s`` apart, that lies fully inside detected speech."""
     import torch  # noqa: F401  must load before onnxruntime (the VAD) or the process dies on a cuDNN clash
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
@@ -44,7 +44,7 @@ def speech_window_starts(audio: np.ndarray) -> list[float]:
         end = span["end"] / SR
         while s + WINDOW_S <= end:
             starts.append(s)
-            s += HOP_S
+            s += hop_s
     return starts
 
 
