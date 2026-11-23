@@ -43,4 +43,4 @@ for d, p, seqs in half:
             shorts += 1; total += len(f); blind += feed == 0
             print(f"{d} | {s['name']} | {a:.2f}-{b:.2f} | feed {feed} boxes {boxes} title {title} nested {nested} | "
                   + json.dumps(f, ensure_ascii=False))
-print(f"Shorts {shorts}, flags {total}, moving-video blind {blind}")
+print(f"runs {shorts}, flags {total}, moving-video blind {blind}")
