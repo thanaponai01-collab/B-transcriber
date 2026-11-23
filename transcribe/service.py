@@ -173,12 +173,9 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     finally:
         conn.close()
 
-    try:
-        job_id, cues = pipeline_run.run_file_job(media_path, config, db_path, ingest_result,
-                                                 glossary=glossary, sha256=media_sha256)
-    except TypeError:
-        job_id, cues = pipeline_run.run_file_job(media_path, config, db_path, ingest_result,
-                                                 glossary=glossary)
+    job_id, cues = pipeline_run.run_file_job(
+        media_path, config, db_path, ingest_result, glossary=glossary, sha256=media_sha256,
+    )
     conn = store.connect(db_path)
     try:
         words = words_for_job(conn, job_id)

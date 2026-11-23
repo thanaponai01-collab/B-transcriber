@@ -1,6 +1,17 @@
 const $ = id => document.getElementById(id);
 const {breakLines, timestamp} = SubtitleDeskQuotes;
-let session = null, pollTimer = null, dirty = false;
+let session = null, pollTimer = null, dirty = false, rangeVersion = 0;
+
+// Serialize operations that switch the displayed range or replace its saved quotes.
+function exclusive(action) {
+  return async () => {
+    const main = document.querySelector("main");
+    if (main.inert) return;
+    main.inert = true;
+    try { await action(); }
+    finally { main.inert = false; }
+  };
+}
 
 function message(text, error = false) { $("message").textContent = text; $("message").classList.toggle("error", error); }
 async function api(path, method = "GET", body) {
@@ -29,19 +40,26 @@ async function sessions() {
   return list;
 }
 async function openSession(id) {
+  const version = ++rangeVersion;
   clearTimeout(pollTimer);
   session = await api(`/api/sessions/${id}`); dirty = false;
   $("sessions").value = id;
   renderSession();
-  if (["extracting","transcribing"].includes(session.state)) pollTimer = setTimeout(() => poll(id), 2000);
+  if (["extracting","transcribing"].includes(session.state)) pollTimer = setTimeout(() => poll(id, version), 2000);
 }
-async function poll(id) {
+async function poll(id, version) {
+  const isCurrent = () => version === rangeVersion && session?.id === id;
+  if (!isCurrent()) return;
   try {
     const result = await api(`/api/sessions/${id}`);
-    if (!session || session.id !== id) return;
+    if (!isCurrent()) return;
     session = result; renderSession();
-    if (["extracting","transcribing"].includes(result.state)) pollTimer = setTimeout(() => poll(id), 2000);
-  } catch (error) { message(error.message, true); pollTimer = setTimeout(() => poll(id), 4000); }
+    if (["extracting","transcribing"].includes(result.state)) pollTimer = setTimeout(() => poll(id, version), 2000);
+  } catch (error) {
+    if (!isCurrent()) return;
+    message(error.message, true);
+    pollTimer = setTimeout(() => poll(id, version), 4000);
+  }
 }
 function element(tag, text, className) {
   const el = document.createElement(tag); if (text !== undefined) el.textContent = text;
@@ -98,8 +116,8 @@ function renderQuotes() {
     const copyAll = element("button", "Copy quote"), copies = element("span");
     function update() {
       quote.lines = text.value.replace(/\r/g, "").split("\n");
-      const valid = quote.lines.length <= 3 && quote.lines.some(l => l.trim());
-      status.textContent = valid ? `${quote.lines.length} / 3 lines · Review against the audio before copying.` : "Use at most three lines. Split a longer passage into another quote.";
+      const valid = quote.lines.length <= 3 && quote.lines.every(l => l.trim());
+      status.textContent = valid ? `${quote.lines.length} / 3 lines · Review against the audio before copying.` : "Use one to three non-empty lines.";
       status.classList.toggle("invalid", !valid); copyAll.disabled = !valid;
       preview.textContent = text.value; copies.replaceChildren();
       quote.lines.slice(0, 3).forEach((line, n) => { const b = element("button", `Copy line ${n + 1}`); b.onclick = () => copy(line); b.disabled = !valid; copies.append(b); });
@@ -111,17 +129,17 @@ function renderQuotes() {
   });
 }
 $("refresh").onclick = refresh;
-$("start").onclick = async () => {
+$("start").onclick = exclusive(async () => {
   if (dirty && !confirm("You have unsaved quote edits. Start a new range without saving them?")) return;
   $("start").disabled = true;
   try { session = await api("/api/sessions", "POST", {audio_track: $("track").value === "" ? null : Number($("track").value)}); dirty = false; await sessions(); await openSession(session.id); }
   catch (error) { message(error.message, true); $("start").disabled = false; }
-};
-$("sessions").onchange = async () => {
+});
+$("sessions").onchange = exclusive(async () => {
   const id = $("sessions").value; if (!id) return;
   if (dirty && !confirm("You have unsaved quote edits. Open another range without saving them?")) { $("sessions").value = session.id; return; }
   try { await openSession(id); } catch (error) { message(error.message, true); }
-};
+});
 $("add").onclick = () => {
   const indices = Array.from(document.querySelectorAll(".cue input:checked"), el => Number(el.value));
   if (!indices.length) return;
@@ -131,11 +149,11 @@ $("add").onclick = () => {
   session.quotes.push({cue_indices:indices, lines:breakLines(text, count), start_ms:selected[0].start_ms, end_ms:selected.at(-1).end_ms});
   dirty = true; renderQuotes(); document.querySelectorAll(".cue input:checked").forEach(el => el.checked = false); $("add").disabled = true;
 };
-$("save").onclick = async () => {
+$("save").onclick = exclusive(async () => {
   try { session = await api(`/api/sessions/${session.id}/quotes`, "PUT", {quotes:session.quotes.map(q => ({cue_indices:q.cue_indices, lines:q.lines}))}); dirty = false; renderQuotes(); message("Quotes saved. You can reopen this range later."); }
   catch (error) { message(error.message, true); }
-};
-$("export").onclick = async () => {
+});
+$("export").onclick = exclusive(async () => {
   $("export").disabled = true;
   try {
     session = await api(`/api/sessions/${session.id}/quotes`, "PUT", {quotes:session.quotes.map(q => ({cue_indices:q.cue_indices, lines:q.lines}))});
@@ -145,9 +163,9 @@ $("export").onclick = async () => {
     message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-SubtitleDesk-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
   } catch (error) { message(error.message, true); }
   finally { $("export").disabled = !session.quotes.length; }
-};
+});
 window.addEventListener("beforeunload", event => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
-$("export-transcript").onclick = async () => {
+$("export-transcript").onclick = exclusive(async () => {
   $("export-transcript").disabled = true;
   try {
     const response = await fetch(`/api/sessions/${session.id}/transcript.srt`);
@@ -155,5 +173,5 @@ $("export-transcript").onclick = async () => {
     message(`Saved SRT: ${decodeURIComponent(response.headers.get("X-SubtitleDesk-Export-Path") || "")}. Import it at sequence start (00:00) in Premiere.`);
   } catch (error) { message(error.message, true); }
   finally { $("export-transcript").disabled = !session.cues.length; }
-};
-(async () => { await refresh(); try { const list = await sessions(); if (list.length) await openSession(list[0].id); } catch (error) { message(error.message, true); } })();
+});
+exclusive(async () => { await refresh(); try { const list = await sessions(); if (list.length) await openSession(list[0].id); } catch (error) { message(error.message, true); } })();

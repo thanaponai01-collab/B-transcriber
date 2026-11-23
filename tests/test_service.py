@@ -194,6 +194,26 @@ def test_hotwords_channel_ranks_by_weight_and_rejects_bad_value():
         fw.FasterWhisperEngine(bias_channel="nope")
 
 
+def test_transcribe_propagates_pipeline_typeerror_without_retry(monkeypatch, tmp_path):
+    import pytest
+    from transcribe import service
+
+    media = tmp_path / "input.wav"
+    media.write_bytes(b"mock media")
+    error = TypeError("pipeline failed after starting")
+    calls = []
+
+    def failing_pipeline(path, config, db_path, ingest_result, *, glossary, sha256=None):
+        calls.append(sha256)
+        raise error
+
+    monkeypatch.setattr(service.pipeline_run, "run_file_job", failing_pipeline)
+    with pytest.raises(TypeError) as raised:
+        service.transcribe(media, config=_CFG, db_path=_db(tmp_path))
+    assert raised.value is error
+    assert calls == [service.store.sha256_of_file(media)]
+
+
 def test_transcribe_hashes_file_once_on_uncached_run(monkeypatch, tmp_path):
     from transcribe import service
     from transcribe.db import store

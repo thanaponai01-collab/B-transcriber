@@ -1,0 +1,21 @@
+{
+ "file": "HKS Facebook 201169 Full.mp4",
+ "how": "Hand labels for build plan step 2.5, made 2026-11-23 by looking at frames (before/after pairs of a loose candidate list, frame-by-frame sheets at every gap and layout change, and inset crops at 2x in the news-clip layout). A time is the source second of the first frame of the new picture (frame index / 25). Not made from the detector's output.",
+ "stretch": [[700.0, 821.0], [877.0, 1356.0]],
+ "stretch_note": "10 min of the TV part: 700-1356 s without the ad break 821-877 (a clock-off dip that rule 3 drops). It holds studio picture (700-749, 799-821, 877-962, 1060-1122), the news-clip layout (749-755, 780-799, 962-1060, 1158-1356), full-frame phone video (755-780) and full-frame CCTV (1122-1158).",
+ "stills_note": "No still picture in this stretch, nor anywhere in the TV part of 20261120: the still runs the 5 audited still cuts sit in are on 20261002 and 20261020.",
+ "legal": {
+  "camera": [708.76, 716.16, 779.72, 806.92, 815.64, 816.64, 904.72, 911.28, 924.6, 927.2, 929.12, 937.96, 942.56, 1061.84, 1071.04, 1075.44, 1088.96, 1093.76, 1095.88, 1096.76],
+  "inset": [751.92, 785.8, 797.2, 973.12, 980.64, 986.0, 992.8, 1007.6, 1010.96, 1013.2, 1018.8, 1031.2, 1033.16, 1036.84, 1049.24, 1052.16, 1056.68, 1162.72, 1181.12, 1185.8, 1191.8, 1194.68, 1200.56, 1209.12, 1215.92, 1218.0, 1220.6, 1228.92, 1230.96, 1248.6, 1250.36, 1290.72, 1293.4, 1299.08, 1309.0, 1319.28, 1321.96, 1326.44, 1352.88],
+  "still": []
+ },
+ "not_legal_examples": {
+  "note": "Picture changes that are not legal cut points. Examples, not an exhaustive list: the window cuts of the news-clip layout run to about one every few seconds. background_loop: the news-clip layout's animated blue background jumps when its loop restarts; only the background changes.",
+  "punch": [1124.28],
+  "dissolve": [[753.92, 754.04], [755.36, 755.52], [780.08, 780.24], [798.68, 798.84], [962.68, 962.84], [1059.96, 1060.12], [1122.6, 1122.72], [1158.4, 1158.56]],
+  "window": [751.56, 786.44, 977.28, 981.04, 992.44, 1000.08, 1011.76, 1013.76, 1023.6, 1025.44, 1030.28, 1046.08, 1049.4, 1055.2, 1164.16, 1171.08, 1173.68, 1197.52, 1206.64, 1239.88, 1254.88, 1255.88],
+  "overlay": [886.52, 1125.0, 1251.96, 1261.4, 1289.72, 1309.72],
+  "pan_or_5fps_motion": [757.72, 758.32, 763.84, 769.12, 769.32, 771.68, 773.32, 773.52, 777.52],
+  "background_loop": [784.04, 793.16, 970.36, 979.48, 1012.72]
+ }
+}
