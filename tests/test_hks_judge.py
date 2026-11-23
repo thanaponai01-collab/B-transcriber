@@ -33,3 +33,14 @@ def test_an_answer_is_select_only():
         j.parse("topics", {"topics": [{"start": "L0002", "story": 2}, {"start": "L0003", "story": 1}]}, per)
     topics = j.parse("topics", {"topics": [{"start": "L0002", "story": 1, "title": "x"}]}, per)
     assert topics["a.mp4"] == [{"start": 2.0, "line": "L0002", "story": 1, "title": "x"}]
+
+
+def test_an_answer_keeps_the_lines_its_prompt_showed(tmp_path, monkeypatch):
+    folder = tmp_path / "20990101 - x"
+    shown = {"a.mp4": j.lines(WORDS)}
+    monkeypatch.setattr(j, "episode_lines", lambda *a, **k: shown)
+    monkeypatch.setattr(j.hks_episode, "load", lambda *a, **k: {"files": {}})
+    j.write_prompt(folder, "sponsors", tmp_path)
+    shown = {"a.mp4": j.lines(WORDS, drops=[(1.9, 3.1)])}  # a later drop renumbers the lines
+    j.paths(folder, "sponsors", tmp_path)[1].write_text('{"spans": [{"from": "L0003", "to": "L0003"}]}')
+    assert j.answer(folder, "sponsors", tmp_path)["a.mp4"][0]["start"] == 10.0

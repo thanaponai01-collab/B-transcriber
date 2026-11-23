@@ -218,18 +218,32 @@ def paths(folder: Path, task: str, out: Path = OUT) -> tuple[Path, Path]:
     return d / f"{task}.prompt.md", d / f"{task}.answer.json"
 
 
-def write_prompt(folder: Path, task: str, out: Path = OUT) -> Path:
+def lines_path(folder: Path, task: str, out: Path = OUT) -> Path:
+    return out / folder.name[:8] / f"{task}.lines.json"
+
+
+def write_prompt(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> Path:
+    """The prompt, plus the line table it shows: an answer's ids mean these lines, whatever the
+    episode's sections become later."""
     p, _ = paths(folder, task, out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(prompt_text(task, episode_lines(folder, hide=TASKS[task]["hide"]), hks_episode.load(folder.name[:8])),
-                 encoding="utf-8")
+    per_file = episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"])
+    p.write_text(prompt_text(task, per_file, hks_episode.load(folder.name[:8], ep_dir)), encoding="utf-8")
+    lines_path(folder, task, out).write_text(json.dumps(
+        {m: [[l.id, l.start, l.end, l.text] for l in ls] for m, ls in per_file.items()}, ensure_ascii=False),
+        encoding="utf-8")
     return p
 
 
+def answer(folder: Path, task: str, out: Path = OUT) -> dict[str, list]:
+    """The parsed answer, read against the lines its prompt showed."""
+    shown = json.loads(lines_path(folder, task, out).read_text(encoding="utf-8"))
+    per_file = {m: [Line(*l) for l in ls] for m, ls in shown.items()}
+    return parse(task, json.loads(paths(folder, task, out)[1].read_text(encoding="utf-8")), per_file)
+
+
 def apply(folder: Path, task: str, out: Path = OUT, ep_dir: Path = hks_episode.OUT) -> dict[str, list]:
-    _, a = paths(folder, task, out)
-    value = parse(task, json.loads(a.read_text(encoding="utf-8")),
-                  episode_lines(folder, ep_dir=ep_dir, hide=TASKS[task]["hide"]))
+    value = answer(folder, task, out)
     for media, v in value.items():
         hks_episode.update(folder.name[:8], media, TASKS[task]["section"], v, ep_dir)
     return value
@@ -268,8 +282,7 @@ def score_sponsors(folder: Path, out: Path = OUT) -> dict:
     """Plan 2.7. 20261120: both known sponsors flagged. Every day: flagged seconds the user kept in
     the YT cut (false positives: the user always cuts sponsors)."""
     from cutdeck.hks_gold import read_day
-    value = parse("sponsors", json.loads(paths(folder, "sponsors", out)[1].read_text(encoding="utf-8")),
-                  episode_lines(folder, hide=TASKS["sponsors"]["hide"]))
+    value = answer(folder, "sponsors", out)
     gold = read_day(folder)
     kept = 0.0
     for media, spans in value.items():
@@ -297,8 +310,7 @@ MIN_TOPIC_HIT = 0.75  # share of the user's starts hit: the 24 of 32 the first h
 def score_topics(folder: Path, gold_starts, out: Path = OUT) -> dict:
     """Plan 2.9: the share of the user's topic starts with a picked start within TOPIC_TOL, and the
     share of picked starts near one of the user's (a picker that marks every line must not pass)."""
-    value = parse("topics", json.loads(paths(folder, "topics", out)[1].read_text(encoding="utf-8")),
-                  episode_lines(folder, hide=TASKS["topics"]["hide"]))
+    value = answer(folder, "topics", out)
     picked = sorted(t["start"] for v in value.values() for t in v)
     hit = [g for g in gold_starts if any(abs(p - g) <= TOPIC_TOL for p in picked)]
     near = [p for p in picked if any(abs(p - g) <= TOPIC_TOL for g in gold_starts)]
@@ -320,8 +332,7 @@ def score_hook(folder: Path, out: Path = OUT) -> dict:
     """Plan 5.4: the user's hook moments (body-gold pieces before the hook end, grouped) found by
     the top HOOK_TOP candidates."""
     from cutdeck.hks_gold import read_day
-    value = parse("hook", json.loads(paths(folder, "hook", out)[1].read_text(encoding="utf-8")),
-                  episode_lines(folder, hide=TASKS["hook"]["hide"]))
+    value = answer(folder, "hook", out)
     cands = [(m, s["start"], s["end"]) for m, v in value.items() for s in v][:HOOK_TOP]
     gold = read_day(folder)
     pieces = sorted((k.media.lower(), k.source_in, k.source_out) for k in gold.yt.keeps
