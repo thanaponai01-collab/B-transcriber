@@ -299,6 +299,13 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   the user cut as content. The bar was not moved.
 - [ ] **2.8** ⚑ Write the findings as markers on the `Footage` sequence (`add_markers`) → verify:
   the user sees them in Premiere.
+  **Built and run live (2026-11-23), on `Editing` (the user's choice):** `python -m cutdeck.hks_day
+  "<day folder>"` does 2.1, 2.2 and two judges (`questions`: the host's questions grouped into
+  story parts, the user's slowest manual step; `sponsors`) through headless `claude -p`, writes
+  `CutDeck\Questions\<day> questions.md` and `CutDeck\Transcript\<day> transcript.txt` next to the project, and
+  replaces its own earlier markers. First day: 20261123, one run end to end: 18 questions in 5
+  parts, opening, 2 breaks, the social part, 1 sponsor read and credits (24 markers, read back). Not scored: there is no gold for question lists yet; the user's
+  moved and deleted markers are the feedback.
 - [ ] **2.9** Story units, picked by meaning (Assumption 4), then snapped to a legal cut point
   (2.5). 4.3 ("same story") and the interim slice need them. Two levels:
   - topic starts (a host question opens one);

@@ -221,6 +221,7 @@ Installed Premiere: **27.0.0** since 2026-11-11; every live run below was on **2
 |---|---|---|---|
 | `Markers.createAddMarkerAction(name, "Comment", start, duration)` | WORKS | 432 ranged markers in one transaction; one Ctrl+Z removed all; read-back matched. | Ledger 09-24 Phase 2 |
 | ↳ 5th argument `comments` | WORKS | Through the helper v2 driver: `Markers.getMarkers(sequence)` (static, async), then one transaction adding a marker with name + comment; the comment shows in Premiere's Markers panel. One undo step. | `premiere_cli add_markers`, live 2026-09-24 (seen by the user) |
+| ↳ `add_markers` right after `open_sequence` | CATCH | `open_sequence footage` returned `activated: true` and `read_sequence` read `footage`, but the 23 markers then landed on `Editing`, the sequence whose timeline tab had focus, and `read_sequence` read `Editing` again. Check the active sequence just before adding markers, and focus the target timeline (Window > Timelines > name) first. | Live 2026-11-23, HKS 20261123, screenshot |
 | `EventManager.addGlobalEventListener(SequenceEvent.ACTIVATED)` | WORKS | Fires on sequence switch. | `features/align.js`, ledger 09-24 |
 | global `SequenceEvent.SELECTION_CHANGED` | BROKEN | Doesn't fire globally. Attach it to the sequence (`EventManager.addEventListener(seq, …)`) and move it on every switch. | Ledger 09-24 |
 

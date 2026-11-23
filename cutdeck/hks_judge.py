@@ -111,6 +111,22 @@ incident into one story: story numbers start at 1 and only go up.""",
 {"topics": [{"start": "L0042", "story": 1, "title": "<a few words>"}]}
 Topics in broadcast order. Use only line ids shown below. Do not write times.""",
     },
+    "questions": {  # the editor's question list (hks_day): topics grouped into story parts, named
+        "section": "questions",
+        "hide": ("drops",),
+        "rules": """Task: list the host's questions for the editor's question list. A question starts where
+the host opens a new subject: a question that moves the talk to a new incident, a new guest, a new
+part of the story (what happened, the other side, the police, the money, what happens next). Pick
+the first line of the opening question or introduction, and give each a short Thai title.
+Then group consecutive questions into parts, numbered from 1 and only going up, each with a short
+Thai name. When the show covers several incidents, one part per incident. When it is about one
+incident, split it into its 3 to 6 phases (for example: what happened, the demand, the climax,
+the police and the law, what happens next).""",
+        "format": """Answer with JSON only, in a file, in this shape:
+{"parts": [{"part": 1, "name": "<a few Thai words>"}],
+ "topics": [{"start": "L0042", "story": 1, "title": "<a few Thai words>"}]}
+"story" is the part number. Topics in broadcast order. Use only line ids shown below. Do not write times.""",
+    },
     "cut": {
         "section": "keeps",
         "hide": ("drops", "sponsors"),
@@ -241,7 +257,7 @@ def parse(task: str, answer: dict, per_file: dict[str, list[Line]]) -> dict[str,
         return idx[i]
 
     out: dict[str, list] = {m: [] for m in per_file}
-    if task == "topics":
+    if task in ("topics", "questions"):
         last = 0
         for t in answer.get("topics", []):
             media, _, line = get(t["start"])
