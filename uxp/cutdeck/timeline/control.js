@@ -10,7 +10,7 @@
    ONE transaction (one Ctrl+Z) and re-read what they changed.
 
    APIs, each a line of reference/adobe/api/premierepro.txt (status rows in docs/PREMIERE_FACTS.md):
-   Project.getSequences/getActiveSequence/getRootItem/importFiles/save/name/path; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
+   Project.getSequences/getActiveSequence/getRootItem/importFiles/importSequences/save/name/path; Guid.fromString; Sequence.getPlayerPosition/setPlayerPosition/createSetInPointAction/
    createSetOutPointAction/clearSelection/setSelection/getFrameSize/getTimebase/getInPoint/
    getOutPoint/getEndTime/getProjectItem/get{Video,Audio}Track(Count); {Video,Audio}Track.name/
    isMuted/setMute/getTrackItems; {Video,Audio}ClipTrackItem.getName/getStartTime/getEndTime/
@@ -537,6 +537,19 @@ async function importFiles(ppro, { paths }) {
   return { imported, items };
 }
 
+/* import_sequences: bring named sequences of a saved .prproj into the open project.
+   Project.importSequences (premierepro.txt:508; samples premiere-api/src/import.ts) and
+   Guid.fromString (premierepro.txt:389). Ids are always passed: the sample passes them, and an
+   import without them is unproven. Reports the sequences that were not there before. */
+async function importSequences(ppro, { path, sequence_ids }) {
+  const project = await activeProject(ppro);
+  const before = new Set((await project.getSequences()).map((s) => String(s.guid)));
+  const imported = await project.importSequences(path, sequence_ids.map((id) => ppro.Guid.fromString(id)));
+  const sequences = (await project.getSequences()).filter((s) => !before.has(String(s.guid)))
+    .map((s) => ({ name: s.name, sequence_id: String(s.guid) }));
+  return { imported, sequences };
+}
+
 async function saveProject(ppro) {
   const project = await activeProject(ppro);
   return { saved: await project.save(), path: project.path };
@@ -591,6 +604,7 @@ function controlHandlers(ppro) {
     set_track_mute: (args) => setTrackMute(ppro, args),
     remove_markers: (args) => removeMarkers(ppro, args),
     import_files: (args) => importFiles(ppro, args),
+    import_sequences: (args) => importSequences(ppro, args),
     save_project: () => saveProject(ppro),
     export_frame: (args) => exportFrame(ppro, args),
   };

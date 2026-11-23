@@ -240,3 +240,19 @@ test("remove_rough_cuts deletes only copies in CutDeck > Rough Cuts, never the a
   assert.deepEqual(await run.remove_rough_cuts({ sequences: ["Edit cut"] }), { removed: ["Edit cut"], still_there: [] });
   assert.deepEqual((await h.project.getSequences()).map((s) => s.name), ["Edit", "Mine"]);
 });
+
+// importSequences is unproven live (issue #130), so it lives in this test, not in the shared fake.
+test("import_sequences passes Guids and reports only the sequences it added", async () => {
+  const { h, run } = setup();
+  const before = await h.project.getSequences();
+  const calls = [];
+  h.ppro.Guid = { fromString: (s) => ({ s }) };
+  h.project.importSequences = async (path, ids) => {
+    calls.push([path, ids.map((g) => g.s)]);
+    h.project.getSequences = async () => [...before, { name: "Donor", guid: { toString: () => "g1" } }];
+    return true;
+  };
+  const out = await run.import_sequences({ path: "D:\d.prproj", sequence_ids: ["g1"] });
+  assert.deepEqual(calls, [["D:\d.prproj", ["g1"]]]);
+  assert.deepEqual(out, { imported: true, sequences: [{ name: "Donor", sequence_id: "g1" }] });
+});
