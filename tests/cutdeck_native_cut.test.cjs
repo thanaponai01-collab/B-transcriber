@@ -78,6 +78,33 @@ test("refuses before any edit: a sped-up clip under a cut", async () => {
   assert.equal(h.sequences.length, 1, "no copy should be made on a refusal");
 });
 
+/* Premiere has quit mid-cut (docs/PREMIERE_FACTS.md, "Native Rough Cut, Premiere crash"), so the
+   project is saved before the copy is made: a crash then costs a restart, not work. */
+test("saves the project before it makes the copy", async () => {
+  const h = fakeHost(golden.before);
+  const r = await applyNativeCut(h.ppro, h.project, h.source, golden, "Saved first");
+  assert.equal(r.saved, true);
+  assert.equal(h.events.filter((e) => e === "save").length, 1);
+  assert.ok(h.events.indexOf("save") < h.events.indexOf("tx cloneSeq"), `save came after the copy: ${h.events.slice(0, 4)}`);
+  assert.ok("save project" in r.timings);
+});
+
+test("a refused cut saves nothing", async () => {
+  const h = fakeHost(golden.before, { speedOf: (r) => (r.kind === "video" && r.track === 1 ? 2 : 1) });
+  await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /Cannot cut natively/);
+  assert.deepEqual(h.events, []);
+});
+
+for (const [name, save] of [["answers false", async () => false], ["throws", async () => { throw new Error("read-only project"); }]]) {
+  test(`a project whose save ${name} is still cut, and the result says it was not saved`, async () => {
+    const h = fakeHost(golden.before);
+    h.project.save = save;
+    const r = await applyNativeCut(h.ppro, h.project, h.source, golden, "Unsaved");
+    assert.equal(r.saved, false);
+    assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "Unsaved")), golden.after.map((x) => JSON.stringify(x)).sort());
+  });
+}
+
 test("refuses before any edit: a transition a cut lands inside", async () => {
   const h = fakeHost(golden.before, { transitions: [{ kind: "video", track: 0, start: 995n * TPF, end: 1005n * TPF }] });
   await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /transition/);
@@ -143,7 +170,7 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   // reads now skip paths, flags are read only under a cut, the copy is not pre-read.
   console.log(`scale test host reads: ${h.hostReads}`);
   assert.deepEqual(Object.keys(r.timings).sort(), ["close gaps", "make razor fillers", "open copy", "read source",
-    "read-back", "reads", "remove cut pieces", "split at cut edges", "trim razor fillers"]);
+    "read-back", "reads", "remove cut pieces", "save project", "split at cut edges", "trim razor fillers"]);
   // 2026-10-01: split and close-gaps run in 3,000-action batches, each from a fresh read (48,445 here).
   assert.ok(h.hostReads < 50000, `host reads ${h.hostReads}`);
 });

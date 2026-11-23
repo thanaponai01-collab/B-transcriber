@@ -18,7 +18,7 @@
 - cli: `python -m cutdeck.rough_cut <sequence.json> --cuts-json <cuts.json>` @ cutdeck/rough_cut.py :: --dry-run
 - trace: `bindPrimaryActions` @ uxp/cutdeck/core/panel.js > `onCut` @ uxp/cutdeck/main.js > `onCut` @ uxp/cutdeck/features/roughCut.js > `doCut` @ uxp/cutdeck/features/roughCut.js > `nativeCut` @ uxp/cutdeck/features/roughCut.js
 - needs: helper running; the active sequence open in Premiere
-- effect: a new sequence `<name> — CutDeck <id>`; the original is untouched
+- effect: a new sequence `<name> — CutDeck <id>`; the original is untouched; the project is saved before the copy is made (Premiere can quit mid-cut, PREMIERE_FACTS.md)
 - verify: CutDeck panel (UXP)
 - status: proven offline 2026-10-11: JSON analysis, source-snapshot refusal, exact native golden and bounded handle recovery; live Premiere confirmation remains pending (verification/rough-cut-retirement-evidence.md)
 

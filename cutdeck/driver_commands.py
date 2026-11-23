@@ -345,7 +345,7 @@ COMMANDS: dict[str, Command] = {
         """
         Apply a finished rough_cut job's cut list in live Premiere, to a COPY of the active
         sequence (the original is never edited). The active sequence must be the one the job
-        analysed. Takes minutes on long sequences. Premiere keeps the memory a cut uses until it
+        analysed. The project is SAVED first (Premiere can quit mid-cut). Takes minutes on long sequences. Premiere keeps the memory a cut uses until it
         quits (one 2 h cut: +6.6 GB, not freed by deleting the copy; five in one session: each
         slower), so ask the user to save and restart Premiere before a long-form cut. Delete test
         copies with remove_rough_cuts. Needs the CutDeck panel open.
@@ -450,7 +450,8 @@ COMMANDS: dict[str, Command] = {
         Copy the sequence `sequence_name` (never edited) as `result_name` and cut frame ranges
         out of the copy with the Rough Cut engine, keeping every synced layer, effect and disabled
         state. cuts: {ticks_per_frame (the sequence's), cuts_frames [[start, end], ...] sorted
-        whole frames}. The copy opens when done. Premiere keeps the memory a long cut uses until
+        whole frames}. The copy opens when done. The project is SAVED first (Premiere can quit
+        mid-cut). Premiere keeps the memory a long cut uses until
         it quits: before a long-form cut, ask the user to save and restart Premiere. Needs the
         CutDeck panel open.
         """,
