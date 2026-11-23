@@ -253,10 +253,14 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   → verify on the other gold episodes, one-sided: no second of a proposed drop is kept in the YT
   cut, and the 22 bumper and ad dips of the audit are all covered (the three flood-map dips of
   20261001 are not drops).
-- [ ] **2.3** TV clock presence per second, top-left. This drives the blur and the start of the
+- [x] **2.3** TV clock presence per second, top-left. This drives the blur and the start of the
   social part; no OCR is needed, and break gaps are only the user's markers.
   → verify: present to 2815 s and absent from 2825 s on 20261120; every clock-on second shown at
   the main framing is inside a gold blur range (the gold blur is wider than the clock, see 5.1).
+  **Done (2026-11-23):** `python -m cutdeck.hks_episode --all G:\Me\Works --clock --check` writes
+  the `clock` and `tv_part` sections of `episode.json` (the format, keyed by footage file in
+  source seconds, is in the module docstring). It passes on all eight tuning days: 0 clock
+  seconds unblurred. With the blur stripped from 20261120, the same check finds 694.
 - [ ] **2.4** Picture layout per second: studio / news-clip window / full-frame footage / bumper.
   `topic_layout` calls full-frame CCTV "studio" today. → verify on labelled frames, including the
   44 s full-frame CCTV cover (source 583.92–627.96) as footage.
