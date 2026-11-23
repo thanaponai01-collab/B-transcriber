@@ -175,6 +175,13 @@
 - verify: Shorts rule check (issue 128)
 - status: proven 2026-11-23 offline on the saved 11-21 and 11-22 projects; no fresh trial on unseen Shorts yet
 
+## The user's own edits between saves
+- what: Diff consecutive saves of one `.prproj` (auto-saves or manual), drop what the helper's command log explains, and print what is left as the user's edits; with `--corrections`, score the issue 129 trial (pass at half the spoken corrections found).
+- cli: `python -m cutdeck.save_diff <save>... --log output/premiere/premiere_commands.jsonl` @ cutdeck/save_diff.py :: --corrections, --json
+- trace: `main` @ cutdeck/save_diff.py > `report` @ cutdeck/save_diff.py > `diff` @ cutdeck/save_diff.py > `read_project` @ cutdeck/prproj_reader.py
+- verify: save diff minus the command log, #129
+- status: proven 2026-11-23 offline on the 11-22 LV GP auto-saves and the live helper's log; the trial session itself has not run
+
 ## HKS episode drafts (โหนกระแส)
 - what: Analyse an HKS episode offline (breaks, clock, layout, turns, sponsors, topics), have a select-only judge pick the cut, then draft the long form, FB and 1-min versions as source ranges and as a `build_sequence` request for a copy. The plan and every step's numbers: projects/hks/build-plan.md.
 - cli: `python -m cutdeck.hks_judge prompt|apply <day folder> --task <task>` @ cutdeck/hks_judge.py :: sponsors, topics, cut, hook, fb, minute
