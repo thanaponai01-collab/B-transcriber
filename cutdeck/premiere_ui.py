@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import time
+from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
 
@@ -139,7 +140,27 @@ def grab(hwnd: int) -> Image.Image:
 
 def window_image() -> Image.Image:
     """Premiere's main window as drawn (PrintWindow: works even when something covers it)."""
-    return Image.open(screenshot.capture()["path"]).convert("RGB")
+    return screenshot.window_pixels()
+
+
+def window_when(ready: Callable[[Image.Image, Image.Image], bool], timeout_s: float = 3.0) -> Image.Image:
+    """Grab the window until `ready(previous grab, this grab)` holds and return that grab. After
+    `timeout_s` it returns the last grab anyway: the check that reads it says what is wrong."""
+    previous, end = window_image(), time.monotonic() + timeout_s
+    while True:
+        current = window_image()
+        if ready(previous, current) or time.monotonic() > end:
+            return current
+        previous = current
+
+
+def _moved(a: Image.Image, b: Image.Image) -> int:
+    """Pixels whose grey level differs by more than 24 between two window grabs."""
+    return int(_changed(a, b, 24).sum())
+
+
+def _steady(a: Image.Image, b: Image.Image) -> bool:
+    return _moved(a, b) <= 50
 
 
 def ring_at(image: Image.Image, x: int, y: int, r: int = 13) -> int:
@@ -439,12 +460,12 @@ def type_into_text(point: tuple[int, int], text: str) -> dict:
     tool = find_selection_tool(window_image())
     click(left + tool[0], top + tool[1])
     before = window_image()
-    double_click(left + point[0], top + point[1])
-    time.sleep(0.8)
-    after = window_image()
     x, y, r = point[0], point[1], 120
     near = (slice(max(0, y - r), y + r), slice(max(0, x - r), x + r))
-    outline = int((_red(after)[near] & ~_red(before)[near]).sum())
+    new_red = lambda image: _red(image)[near] & ~_red(before)[near]  # noqa: E731
+    double_click(left + point[0], top + point[1])
+    box = new_red(window_when(lambda _, now: int(new_red(now).sum()) >= 20, 2.0))
+    outline = int(box.sum())
     if outline < 20:
         click(left + tool[0], top + tool[1])
         raise RuntimeError("Double-clicking did not open the text for editing (no red text box); nothing was typed")
@@ -455,9 +476,11 @@ def type_into_text(point: tuple[int, int], text: str) -> dict:
     type_text(text)
     time.sleep(0.4)
     click(left + tool[0], top + tool[1])  # leaves text editing
-    time.sleep(0.5)
-    still = int((_red(window_image())[near] & ~_red(before)[near]).sum())
-    return {"edit_outline_px": outline, "left_editing": still < 20}
+    # Most of the box gone, not all: the new text's selection box moves, and footage that the old one
+    # covered can be red (a red couch behind Thai text, live 2026-11-23).
+    on_box = lambda image: int((_red(image)[near] & box).sum())  # noqa: E731
+    still = on_box(window_when(lambda _, now: on_box(now) * 2 < outline, 1.5))
+    return {"edit_outline_px": outline, "left_editing": still * 2 < outline}
 
 
 async def _frame(premiere, sequence: str, ticks: str) -> Image.Image:
@@ -488,15 +511,15 @@ async def edit_text(premiere, args: dict) -> dict:
     if not int(clip["start_ticks"]) <= int(at) < int(clip["end_ticks"]):
         raise ValueError(f"at_ticks {at} is outside {clip_id}")
     await premiere("set_playhead", {"sequence": seq, "ticks": at})
-    await asyncio.sleep(0.8)
-    frame_on, win_on = await _frame(premiere, seq, at), await asyncio.to_thread(window_image)
+    frame_on = await _frame(premiere, seq, at)
+    win_on = await asyncio.to_thread(window_when, _steady)
     await premiere("edit_clips", {"sequence": seq, "edits": [{"clip": clip_id, "op": "disable"}]})
     try:
-        await asyncio.sleep(0.8)
-        frame_off, win_off = await _frame(premiere, seq, at), await asyncio.to_thread(window_image)
+        frame_off = await _frame(premiere, seq, at)
+        win_off = await asyncio.to_thread(window_when, lambda a, b: _steady(a, b) and _moved(win_on, b) > 50)
     finally:
         await premiere("edit_clips", {"sequence": seq, "edits": [{"clip": clip_id, "op": "enable"}]})
-    await asyncio.sleep(0.8)
+    await asyncio.to_thread(window_when, lambda _, now: _moved(win_on, now) <= 50)
     where = locate_in_window(frame_on, frame_off, win_on, win_off)
     typed = await asyncio.to_thread(type_into_text, where["point"], text)
     frame_after = await _frame(premiere, seq, at)

@@ -28,7 +28,7 @@ Preconditions:
 - **Edit.** `C call edit_text '{"sequence": "CutDeck verify (scratch)", "clip": "V2@0", "text": "ข้อความใหม่"}'`. Reply `changed_px_elsewhere` 0, `left_editing` true; `C shot edited --frame` shows the Thai text in the same style.
 - **Undo.** One Undo restores "OLD TEXT" (`C shot edit-undone --frame`). Three more Undos (Enable, Disable, place) remove `V2@0`; read back V1 and A1 only.
 
-Proven 2026-11-22 with this skill, every step above (run `20261122-000256-maintain-timeline`); place from an After Effects template with read-back proven 2026-11-21 (run `20261121-230511-mogrttext`).
+Proven 2026-11-22 with this skill, every step above (run `20261122-000256-maintain-timeline`); edit and undo again 2026-11-23 after its fixed pauses became waits on the window (run `20261123-001015-edit-text-sleeps`, median 7.66 s to 4.27 s over the bars, 7.73 s to 4.34 s over real footage with Thai text); place from an After Effects template with read-back proven 2026-11-21 (run `20261121-230511-mogrttext`).
 
 ## Gotchas
 
