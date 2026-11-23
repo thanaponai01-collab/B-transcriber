@@ -351,6 +351,15 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   const refusal = planCutApply(before.transitions, cuts).refusal || planCutApply(before.items, cuts).refusal;
   if (refusal) throw new Error(`Cannot cut natively: ${refusal}`);
 
+  // Premiere has quit mid-cut, about once in 20 to 40 one-cut copies and for a cause inside
+  // Premiere (PREMIERE_FACTS.md, "Native Rough Cut, Premiere crash"). So the project is saved
+  // first (Project.save, premierepro.txt:516; WORKS in PREMIERE_FACTS.md): a crash then costs a
+  // restart, not work. A project that will not save is still cut.
+  let saved = false;
+  try { saved = !!(await timed("save project", () => project.save())); } catch (e) {
+    console.log(`CutDeck rough cut: the project could not be saved first (${e.message})`);
+  }
+
   const created = await cloneSequence(project, source, "CutDeck: copy sequence");
   if (!created.length) throw new Error("Copying the sequence gave no new sequence; nothing was cut");
   // From here a copy exists, so every failure goes through the catch below.
@@ -404,7 +413,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     }
     const splits = plan.edits.filter((e) => e.op === "split").length;
     console.log(`CutDeck rough cut timings (s): ${JSON.stringify(timings)}`);
-    return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings };
+    return { cuts: cuts.length, removedTicks: plan.removedTicks, splits, steps, name: resultName, elapsedSeconds, timings, saved };
   } catch (error) {
     // A half-cut copy must not pass for the result, nor collide with the next attempt's name.
     for (const seq of created) {

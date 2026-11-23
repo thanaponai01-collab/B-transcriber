@@ -124,6 +124,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
     getActiveSequence: async () => wrapSeq(src),
     setActiveSequence: async (w) => { events.push(`open ${w.name}`); return true; },
     lockedAccess: (cb) => cb(),
+    save: async () => { events.push("save"); return true; }, // Project.save (premierepro.txt:516)
     executeTransaction: (fn) => {
       const actions = [];
       inTx = true;
