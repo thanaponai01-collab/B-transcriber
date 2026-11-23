@@ -540,3 +540,18 @@ Still to do: export by In/Out
 
 **Open:** export file naming; AE title-card template (where, which layers change); what the
 live notes contain.
+
+## 2026-11-23 evening: issue 129 trial session (`20261123 - โหนกระแส`)
+Helper restarted 21:57 (pid 35452); `output/premiere/premiere_commands.jsonl` covers the session from there.
+Last save before the session: 21:12:03 auto-save. Starting sequence: `1 YOUTUBE D1`.
+Each correction the user speaks is written here at the time, in the user's words, **before any save diff is read**.
+Scored afterwards with `python -m cutdeck.save_diff` against the pass line on issue 129.
+
+### Spoken corrections
+None spoken in the agent's chat during the session. The user said "already finish" at 22:52.
+
+### What the session left (checked 22:52, before any diff was read)
+- Saves of this project since 21:57: the main `.prproj` at 22:17:18 only (no new auto-saves). The pair to diff is the 21:12:03 auto-save and the 22:17:18 save.
+- Commands logged in that window: reads only (read_sequence, screenshot, inspect_selection at 21:57). So in the diff, every change in 21:12→22:17 would count as the user's.
+- From 22:18 another agent session drove Premiere: save_project, import_sequences, create/duplicate/build_sequence, menu_command and others. Its 22:18:40 and 22:38:16 save_project calls left the `.prproj` mtime at 22:17:18.
+- 22:55: the user closed issue 129 without scoring this run (closed as not planned). The 21:12 → 22:17 diff was not read.
