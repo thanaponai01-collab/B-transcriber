@@ -12,8 +12,7 @@ import json
 from pathlib import Path
 import re
 
-from cutdeck.driver_commands import COMMANDS
-from cutdeck.helper import PORT, VERSION
+from cutdeck.helper_protocol import NOT_RUNNING, PORT, VERSION, checked
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +37,7 @@ class Backend:
         self.port = port
 
     def capabilities(self) -> dict:
+        from cutdeck.driver_commands import COMMANDS  # here, not at import: a plain call needs none of it
         return {
             "version": "4", "tools": ["transcribe", "premiere_status", "premiere_rough_cut",
                                       *(f"premiere_{name}" for name in COMMANDS)],
@@ -58,13 +58,9 @@ class Backend:
             async with connect(f"ws://127.0.0.1:{self.port}", max_size=1 << 24) as socket:
                 for message in ({"type": "hello", "version": VERSION}, request):
                     await socket.send(json.dumps(message))
-                    reply = json.loads(await socket.recv())
-                    if not reply.get("ok"):
-                        raise ValueError(reply.get("message", "Helper refused the request"))
+                    reply = checked(json.loads(await socket.recv()))
         except OSError as exc:
-            raise RuntimeError(
-                f"CutDeck helper is not running on 127.0.0.1:{self.port}; "
-                "start it with: python -m cutdeck.helper") from exc
+            raise RuntimeError(NOT_RUNNING.format(port=self.port)) from exc
         return reply
 
     @staticmethod

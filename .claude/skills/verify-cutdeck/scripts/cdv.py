@@ -10,12 +10,9 @@ passed; anything else prints why on stderr.
 from __future__ import annotations
 
 import argparse
-import asyncio
-import ctypes
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -24,9 +21,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-from cutdeck import live_check  # noqa: E402
-from cutdeck.ai_backend import Backend  # noqa: E402
-from cutdeck.helper import PORT, VERSION  # noqa: E402
+from cutdeck.helper_protocol import PORT, VERSION, ask, exchange  # noqa: E402
 
 ROOT = REPO / "output" / "verify-cutdeck"
 STATE = ROOT / "current.json"
@@ -57,25 +52,21 @@ def run_dir(state: dict) -> Path:
     return ROOT / "runs" / state["run_id"]
 
 
-async def premiere(command: str, args: dict | None = None):
-    return await Backend(PORT).premiere(command, args or {})
+def premiere(command: str, args: dict | None = None):
+    return ask({"type": "premiere", "command": command, "args": args or {}})["result"]
 
 
 def helper_hello() -> dict | None:
     """The helper's hello reply ({version, pid}), or None when nothing answers on the port."""
-    async def ask():
-        from websockets.asyncio.client import connect
-        async with connect(f"ws://127.0.0.1:{PORT}", open_timeout=3) as ws:
-            await ws.send(json.dumps({"type": "hello", "version": VERSION}))
-            return json.loads(await ws.recv())
     try:
-        return asyncio.run(ask())
+        return exchange([{"type": "hello", "version": VERSION}], open_timeout=3, check=False)
     except Exception:
         return None
 
 
 def process_started(pid: int) -> float | None:
     """Epoch seconds the process started (Windows), or None."""
+    import ctypes
     k32 = ctypes.windll.kernel32
     handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
@@ -97,7 +88,7 @@ def wait_for_panel(timeout_s: float = 60) -> dict:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            status = asyncio.run(Backend(PORT).premiere_status())
+            status = ask({"type": "premiere_status"})
             if status.get("connected"):
                 return status
         except Exception:
@@ -112,6 +103,8 @@ def wait_for_panel(timeout_s: float = 60) -> dict:
 def cmd_launch(args) -> None:
     """Make the stack drivable: a helper on this checkout's code, the panel connected, and with
     --reload-panel the panel reloaded on this checkout's code (the project is saved first)."""
+    import subprocess  # here and below, not at import: `call` is one process per command and needs none of it
+    from cutdeck import live_check
     if not live_check.premiere_running():
         fail("Premiere Pro is not running: start it and open a project (an agent never opens or closes projects)")
     hello = helper_hello()
@@ -121,7 +114,7 @@ def cmd_launch(args) -> None:
     if hello and args.restart_helper:
         # The helper restarts in place: it starts its own successor on this checkout's code
         # (observed: the new helper's parent is the old one), so never start a second one here.
-        asyncio.run(_restart_request())
+        _restart_request()
         for _ in range(60):
             time.sleep(0.5)
             new = helper_hello()
@@ -155,25 +148,24 @@ def cmd_launch(args) -> None:
     status = wait_for_panel()
     print(f"PASS  panel connected, {len(status['commands'])} panel commands")
     if args.reload_panel:
-        print("      saving the project before reloading the panel:", asyncio.run(premiere("save_project"))["saved"])
-        asyncio.run(premiere("reload_panel"))
+        print("      saving the project before reloading the panel:", premiere("save_project")["saved"])
+        premiere("reload_panel")
         time.sleep(4)
         status = wait_for_panel()
         print(f"PASS  panel reloaded on {REPO / 'uxp' / 'cutdeck'}, {len(status['commands'])} panel commands")
 
 
-async def _restart_request() -> None:
-    from websockets.asyncio.client import connect
-    async with connect(f"ws://127.0.0.1:{PORT}") as ws:
-        for message in ({"type": "hello", "version": VERSION}, {"type": "restart"}):
-            await ws.send(json.dumps(message))
-            reply = json.loads(await ws.recv())
-            if not reply.get("ok"):
-                fail(f"helper refused restart: {reply.get('message')}")
+def _restart_request() -> None:
+    try:
+        ask({"type": "restart"})
+    except ValueError as exc:
+        fail(f"helper refused restart: {exc}")
 
 
 def cmd_doctor(args) -> None:
     """Read-only: is this instance worth driving? Exit 0 only when every line is PASS."""
+    import subprocess
+    from cutdeck import live_check
     ok = True
     steps, _ = live_check.check(PORT)
     for s in steps:
@@ -213,7 +205,7 @@ def cmd_start(args) -> None:
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + (f"-{args.label}" if args.label else "")
     folder = ROOT / "runs" / run_id
     folder.mkdir(parents=True, exist_ok=True)
-    active = asyncio.run(premiere("read_sequence"))
+    active = premiere("read_sequence")
     state.update({"run_id": run_id, "user_sequence": active["name"], "calls": 0})
     save_state(state)
     (folder / "run.json").write_text(json.dumps({"run_id": run_id, "started": datetime.now().isoformat(),
@@ -225,6 +217,7 @@ def cmd_start(args) -> None:
 def cmd_scratch(args) -> None:
     """Make the scratch sequence ready: create it once (9:16 30 fps preset), clear it, and place
     the verify clip on V1/A1 at 0. Idempotent: every run starts from the same timeline."""
+    import subprocess
     state = load_state()
     run_dir(state)
     if not MEDIA.exists():
@@ -232,17 +225,17 @@ def cmd_scratch(args) -> None:
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30",
                         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "6",
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(MEDIA)], check=True)
-    project = asyncio.run(premiere("list_project", {"depth": 1}))
+    project = premiere("list_project", {"depth": 1})
     if not any(s["name"] == SCRATCH for s in project["sequences"]):
         if not PRESET.exists():
             fail(f"sequence preset not found: {PRESET}")
-        asyncio.run(premiere("create_sequence", {"name": SCRATCH, "preset_path": str(PRESET)}))
-    timeline = asyncio.run(premiere("read_timeline", {"sequence": SCRATCH}))
+        premiere("create_sequence", {"name": SCRATCH, "preset_path": str(PRESET)})
+    timeline = premiere("read_timeline", {"sequence": SCRATCH})
     clips = [c["id"] for t in timeline["tracks"] for c in t["clips"]]
     if clips:
-        asyncio.run(premiere("edit_clips", {"sequence": SCRATCH, "edits": [{"clip": c, "op": "remove"} for c in clips]}))
-    asyncio.run(premiere("open_sequence", {"sequence": SCRATCH}))
-    placed = asyncio.run(premiere("place_media", {"sequence": SCRATCH, "media": str(MEDIA), "at_ticks": "0", "v": 0, "a": 0}))
+        premiere("edit_clips", {"sequence": SCRATCH, "edits": [{"clip": c, "op": "remove"} for c in clips]})
+    premiere("open_sequence", {"sequence": SCRATCH})
+    placed = premiere("place_media", {"sequence": SCRATCH, "media": str(MEDIA), "at_ticks": "0", "v": 0, "a": 0})
     state["scratch"] = SCRATCH
     save_state(state)
     print(f"PASS  scratch {SCRATCH!r} reset: removed {len(clips)} clip(s), placed {[c['id'] for c in placed['placed']]}")
@@ -258,7 +251,7 @@ def cmd_call(args) -> None:
     save_state(state)
     record = {"n": state["calls"], "command": args.command, "args": payload, "at": datetime.now().isoformat()}
     try:
-        record["result"] = asyncio.run(premiere(args.command, payload))
+        record["result"] = premiere(args.command, payload)
         record["ok"] = True
     except Exception as exc:
         record["error"], record["ok"] = str(exc), False
@@ -275,12 +268,12 @@ def cmd_shot(args) -> None:
     state = load_state()
     folder = run_dir(state)
     stamp = datetime.now().strftime("%H%M%S")
-    window = asyncio.run(premiere("screenshot"))
+    window = premiere("screenshot")
     out = folder / f"shot-{stamp}-{args.label}-window.png"
     shutil.copyfile(window["path"], out)
     print(f"PASS  window {out}")
     if args.frame:
-        frame = asyncio.run(premiere("export_frame", {"sequence": state.get("scratch", SCRATCH)}))
+        frame = premiere("export_frame", {"sequence": state.get("scratch", SCRATCH)})
         out = folder / f"shot-{stamp}-{args.label}-frame.png"
         shutil.copyfile(frame["path"], out)
         print(f"PASS  frame {out}")
@@ -290,12 +283,13 @@ def cmd_cleanup(args) -> None:
     """Give Premiere back: reopen the user's sequence, stop only a helper this run started, close
     the run. Never deletes evidence, never saves the project, never deletes the scratch sequence
     (no API can; it is reused next run)."""
+    import subprocess
     state = load_state()
     folder = run_dir(state)
     notes = []
     if state.get("user_sequence"):
         try:
-            asyncio.run(premiere("open_sequence", {"sequence": state["user_sequence"]}))
+            premiere("open_sequence", {"sequence": state["user_sequence"]})
             notes.append(f"reopened {state['user_sequence']!r}")
         except Exception as exc:
             notes.append(f"could not reopen {state['user_sequence']!r}: {exc}")

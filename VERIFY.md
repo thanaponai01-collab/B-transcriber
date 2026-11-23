@@ -61,6 +61,11 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test (2026-11-21, menu and keyboard routes): `python -m pytest tests/test_cutdeck_keys.py -q -p no:cacheprovider`
 - fail-proof: each went red on its own and was restored: dropped the Ctrl+Alt-last sort in keys.pick (Ctrl+Alt+Z picked); removed the active-sequence check in run_focused (pressed after a switch); took "close" out of menu.BLOCKED (File > Close Project runnable).
 
+- test (2026-11-23, cdv call startup): `python -m pytest tests/test_cutdeck_cdv_startup.py -q -p no:cacheprovider` (a cdv round trip leaves asyncio, websockets, ai_backend, the helper, driver_commands, premiere_ui, numpy and PIL unloaded; the standard-library client in cutdeck/helper_protocol.py gives the same replies and errors as Backend against a real serve(), answers pings during a slow reply, and round-trips every frame length and a fragmented reply)
+- fail-proof: the first 3 tests red on 26ca379 (before PORT/VERSION moved to cutdeck/helper_protocol.py), green after; removing the pong, the continuation join, or the refusal check in `ask` each turned tests red, restored.
+- live (2026-11-23, bench `output/perf/2026-11-23-cutdeck-profile/cdv_bench.py`, helper on :7891 not restarted): fresh-process `cdv.py call read_sequence` timed from outside, 4 alternating block pairs of 6 per side, one warm-up dropped per side; old 26ca379 median 507 ms (477-618, n=24), new median 302 ms (278-359, n=24), 0 failures; the recorded result and the unknown-command error are identical on both sides. `import cdv` 354 ms to 155 ms.
+- live (2026-11-23, same bench, standard-library client and lazy subprocess/ctypes): c4b47d3 median 281 ms (275-325, n=24), new median 102 ms (97-109, n=24), 0 failures; recorded result, unknown-command record, stdout and exit code identical to c4b47d3; 0 bytes added to the helper log; `doctor` and plain `launch` run live on the new client (`scratch`, `cleanup`, `launch --restart-helper` not run live). Left: python start ~32 ms, argparse + re ~19, socket + client ~9, pathlib/json ~11, first Winsock connect ~4, the command ~4.
+
 ## Premiere project readers
 - test: `python -m pytest tests/test_prproj_anchor_check.py tests/test_prproj_pixels.py tests/test_prproj_reader.py tests/test_scrub_fcpxml.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
