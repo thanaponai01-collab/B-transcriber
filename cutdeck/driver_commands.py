@@ -716,6 +716,19 @@ def _import_files_arguments(args: dict, jobs) -> dict:
     return {"paths": paths}
 
 
+_GUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def _import_sequences_arguments(args: dict, jobs) -> dict:
+    path, ids = args.get("path"), args.get("sequence_ids")
+    if not (isinstance(path, str) and Path(path).is_absolute() and Path(path).suffix.lower() == ".prproj"
+            and Path(path).is_file()):
+        raise ValueError("path must be an existing .prproj, absolute path")
+    if not isinstance(ids, list) or not 0 < len(ids) <= 50 or not all(isinstance(i, str) and _GUID.fullmatch(i) for i in ids):
+        raise ValueError("sequence_ids must be 1 to 50 sequence GUIDs (the ObjectUID of each <Sequence> in the .prproj)")
+    return {"path": path, "sequence_ids": ids}
+
+
 def _export_frame_arguments(args: dict, jobs) -> dict:
     result = _sequence(args)
     if args.get("ticks") is not None:
@@ -867,6 +880,13 @@ CONTROL_COMMANDS: dict[str, Command] = {
         Import files (absolute paths) into the project root, without dialogs.
         """,
         (("paths", list[str]),)),
+    "import_sequences": Command(
+        600, _import_sequences_arguments, "write",
+        """
+        Import sequences (by GUID) from a saved .prproj into the open project, with what they
+        use. Returns the sequences that are new in the project.
+        """,
+        (("path", str), ("sequence_ids", list[str]))),
     "save_project": Command(
         120, _no_arguments, "write",
         """

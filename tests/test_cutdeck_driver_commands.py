@@ -225,6 +225,10 @@ def test_control_commands_check_ids_ticks_and_ops(tmp_path):
     media = tmp_path / "b.mp4"
     media.write_bytes(b"x")
     assert c["place_media"].prepare({"media": str(media), "at_ticks": "0", "v": 0, "a": 2}, None)["mode"] == "overwrite"
+    donor = tmp_path / "d.prproj"
+    donor.write_bytes(b"x")
+    ids = ["8e214d18-932a-4ad9-b6aa-663740045e4b"]
+    assert c["import_sequences"].prepare({"path": str(donor), "sequence_ids": ids}, None) == {"path": str(donor), "sequence_ids": ids}
     bad = [
         ("edit_clips", {"edits": [{"clip": "V0@0", "op": "move", "dt_ticks": "1"}]}),       # track 0
         ("edit_clips", {"edits": [{"clip": "V1@0", "op": "razor"}]}),                       # not an op
@@ -240,6 +244,9 @@ def test_control_commands_check_ids_ticks_and_ops(tmp_path):
         ("read_timeline", {"effects": "all"}),
         ("read_timeline", {"tracks": ["V0"]}),
         ("read_timeline", {"from_ticks": "9", "to_ticks": "3"}),
+        ("import_sequences", {"path": str(media), "sequence_ids": ["8e214d18-932a-4ad9-b6aa-663740045e4b"]}),  # not a .prproj
+        ("import_sequences", {"path": str(donor), "sequence_ids": []}),
+        ("import_sequences", {"path": str(donor), "sequence_ids": ["Gate4"]}),
     ]
     for name, args in bad:
         try:

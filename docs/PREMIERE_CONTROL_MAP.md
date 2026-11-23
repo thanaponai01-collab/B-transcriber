@@ -67,6 +67,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Move, trim head/tail, enable/disable, rename, remove (ripple or not) | `premiere_edit_clips` | UXP | LIVE 2026-11-21 (ripple: video and audio in one action, else it shifts twice) |
 | Place media / nest a sequence, overwrite or insert | `premiere_place_media` | UXP | LIVE 2026-11-21 (nest across frame size/rate placed nothing: now an error) |
 | Import files | `premiere_import_files` | UXP | LIVE 2026-11-21 |
+| Import sequences (by GUID) from a saved `.prproj`; a donor copy from `python -m cutdeck.prproj_donor` | `premiere_import_sequences` | UXP `Project.importSequences` | LIVE 2026-11-23 (a patched Motion Scale read back; issue #130) |
 | Effects catalogue | `premiere_list_effects` | UXP | LIVE 2026-11-21 |
 | Add a video/audio effect | `premiere_add_effect` | UXP | LIVE 2026-11-21 |
 | Set any effect parameter or keyframe | `premiere_set_param` | UXP | LIVE 2026-11-21 |
@@ -91,7 +92,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Place a text Graphic with your own text (Thai too), from any .mogrt | `premiere_place_text` | Helper bakes the text into a copy of the template, UXP `insertMogrtFromPath` | LIVE 2026-11-21 (Thai into Premiere's Basic Title and an AE template; frames + read-back; a wrong key lists the texts) |
 | Read MOGRT text | `premiere_read_timeline` (`params: true`: `{text, font, size}`) | UXP `MogrtText` | After Effects templates; Premiere-made text reads null in UXP, read it from the saved `.prproj` (`prproj_reader`) |
 | Edit the text of a Graphic already on the timeline | `premiere_edit_text` | Premiere UI: double-click in the Program Monitor, type (UXP `MogrtText` write is BROKEN) | LIVE 2026-11-21 on a one-line Premiere-made text; AE-template text still via `place_text` |
-| Masks, Lumetri wheels | none | Clone a clip that has them (LIVE) | GAP |
+| Masks, Lumetri (onto another sequence) | `python -m cutdeck.prproj_donor --effect` (copy the effect from a clip that has it), `premiere_import_sequences`, then `premiere_select_clips` + `premiere_menu_command` Edit > Copy / Edit > Paste (`premiere_set_playhead` first) | Offline .prproj + UXP import + Menu | LIVE 2026-11-23 (masked blur box and Lumetri params read back on the target; issue #130). Inside one sequence: clone. Editing a mask's shape: GAP |
 | Playback, playhead moves | `premiere_key_command` cmd.transport.* (focus program) | Keys | LIVE 2026-11-21 (End) |
 | Subtitles from an .srt as styled, editable Graphics (captions + Upgrade Caption to Graphic) | `premiere_srt_subtitles` | UXP import + Premiere UI drag and dialog + menu + UXP build | LIVE 2026-11-22 (4 cues in 13 s, frame-exact, the user's Style and place) |
 | Other caption editing | none | UI only | GAP |
