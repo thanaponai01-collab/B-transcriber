@@ -354,11 +354,16 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
 - [ ] **4.4** Content cuts (retellings, off-topic, side sections such as backstory and legal
   analysis), ranked until the length lands at 15–20 min. **Blocked on the decision in Assumption 4.**
   → verify on gold: the dropped side sections match the user's (20261120: 34:56–41:09, 47:00–49:48).
-  **Built offline (2026-11-23):** the 20261120 draft drops 92 % and 89 % of those two sections.
-  Every draft is 15.3–19.9 min. Keep precision against the user is 0.31–0.49 (chance at the same
-  length: 0.13–0.26) and recall 0.28–0.55; line agreement 0.70–0.85. The draft carries signal
-  but is far from the user's choices; the next lever is showing the judge the user's own past
-  cuts of other days.
+  **Built offline (2026-11-23):** the 20261120 draft drops 94 % and 89 % of those two sections.
+  Every draft is 16.8–19.6 min, measured on the whole draft. The judge's own totals were wrong
+  (20261120: it said 921 s, its lines were 1230 s), so 20261120 and 20261112 had one revision
+  pass: the judge saw its answer with the measured total and removed keeps. Keep precision
+  against the user is 0.31–0.52 (chance at the same length: 0.13–0.26) and recall 0.28–0.53; line
+  agreement 0.70–0.85. Uncovered cuts: 0 on 5 days, 1 / 4 / 12 on 20261001 / 20261003 / 20261110.
+  The draft carries signal but is far from the user's choices; the next lever is showing the
+  judge the user's own past cuts of other days. `python -m cutdeck.hks_assemble <day> --check`
+  turns a draft into the `build_sequence` request (body, covers, bed; 20261120: 275 items, 124
+  covers, no problems); the hook, blur, cover effects and ending are not in it yet.
 - [ ] **4.5** Story opening: the guest's first story sentence, or the host's summary if the guest
   is slow → verify on gold story starts.
 
@@ -424,6 +429,13 @@ checked on the user's hand cut first, before Phase 4 exists.
   - B-roll filled, banner B-roll fitted, square logo, no end logo.
 
   → verify: length, and the pieces are a subset of YT.
+  **Built offline (2026-11-23):** `hks_judge` task `fb` sees only the long form's lines
+  (`long_form`, here the user's own YT body, so 6.1 is checked apart from the draft), and
+  `python -m cutdeck.hks_versions --all G:\Me\Works --check` fits the picks under 179.96 s.
+  On the 8 tuning days: every piece inside the long form; length 169.8–179.96 s (6 days exactly
+  179.96, all within the user's past 168.28–179.96); overlap with the user's FB body, precision
+  0.0–0.42 against a chance of 0.12–0.15 (20261110 0: the user took 2485 s on, the judge 1347 s
+  on). Banner B-roll, square logo and the live build are open.
 - [ ] **6.2** Two parts:
   - the 1-min square cut. Length waits on audit question 5 (past cuts run 56.92–63.04 s, 6 of
     11 at 59.96);
@@ -432,6 +444,11 @@ checked on the user's hand cut first, before Phase 4 exists.
     user's own FB and 1-min cuts.
 
   → verify: lengths, and the frame layer is on top.
+  **1-min cut built offline (2026-11-23):** `hks_judge` task `minute`, the body range set from
+  each day's hook (56 s floor to 59.96 s + 3 s, then fitted). Lengths 57.78–59.96 s on 7 days;
+  20261003 55.02 s, 1 s under the floor. It is one moment out of about 19 min (chance 3 %): one
+  run overlapped the user's moment on 2 of 8 days, an earlier run with a fixed 30–40 s range on
+  5 of 8, so the pick is not stable between runs.
 - [x] **6.3** Export (done).
 
 ## Phase 7: Blocked on the user's answers
