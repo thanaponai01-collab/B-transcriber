@@ -42,6 +42,8 @@ FRAME = 0.04  # 25 fps
 HALF = FRAME / 2
 HOOK_SFX = "transition complex 14"
 HOLDOUT = ("20261002", "20261109", "20261118")  # never tuned on; scored once, at the end (step 0.6)
+# The gold days, fixed so a new day folder (one still being edited) never joins a check unasked.
+TUNING = ("20261001", "20261003", "20261012", "20261020", "20261110", "20261112", "20261117", "20261120")
 HOLD = "cutdeck_hold_"  # CutDeck frame-hold stills: a full-frame picture that is not the footage
 OUTPUTS = {"yt": "1 YOUTUBE", "fb": "2 FACEBOOK", "square": "3 SQUARE SELECT"}
 EDIT_SEQUENCE = "Edit"
@@ -277,7 +279,7 @@ def is_holdout(folder: str | Path) -> bool:
 def day_folders(root: str | Path) -> tuple[list[Path], list[Path]]:
     """The day folders under ``root`` as (tuning, holdout)."""
     days = sorted(Path(root).glob("*โหนกระแส"))
-    return [d for d in days if not is_holdout(d)], [d for d in days if is_holdout(d)]
+    return [d for d in days if d.name[:8] in TUNING], [d for d in days if is_holdout(d)]
 
 
 def _duration(path: Path) -> float:
