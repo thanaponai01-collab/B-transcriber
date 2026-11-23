@@ -27,8 +27,8 @@ def _loaded_after(code: str) -> list[str]:
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
-async def _helper(body):
-    server = await serve(Jobs(Path("unused")), 0)
+async def _helper(body, jobs_dir):
+    server = await serve(Jobs(jobs_dir), 0)
     try:
         return await body(server.sockets[0].getsockname()[1])
     finally:
@@ -36,12 +36,12 @@ async def _helper(body):
         await server.wait_closed()
 
 
-def test_a_cdv_round_trip_leaves_heavy_modules_unloaded():
+def test_a_cdv_round_trip_leaves_heavy_modules_unloaded(tmp_path):
     async def body(port):
         code = ("sys.path.insert(0, '.claude/skills/verify-cutdeck/scripts'); import cdv; "
                 f"assert cdv.ask({{'type': 'premiere_status'}}, {port})['ok']")
         return await asyncio.to_thread(_loaded_after, code)
-    assert asyncio.run(_helper(body)) == []
+    assert asyncio.run(_helper(body, tmp_path)) == []
 
 
 def test_helper_protocol_is_what_the_helper_speaks():
@@ -69,18 +69,18 @@ async def _async_outcome(coro):
     {"type": "premiere", "command": "no_such_command", "args": {}},
     {"type": "no_such_type"},
 ])
-def test_client_answers_as_backend_does(request_):
+def test_client_answers_as_backend_does(request_, tmp_path):
     async def body(port):
         sync = await asyncio.to_thread(_outcome, lambda: helper_protocol.ask(request_, port))
         return sync, await _async_outcome(Backend(port)._ask(request_))
-    sync, websockets_ = asyncio.run(_helper(body))
+    sync, websockets_ = asyncio.run(_helper(body, tmp_path))
     assert sync == websockets_
 
 
-def test_client_version_mismatch_matches_backend(monkeypatch):
+def test_client_version_mismatch_matches_backend(monkeypatch, tmp_path):
     monkeypatch.setattr(helper_protocol, "VERSION", "cutdeck-0")
     monkeypatch.setattr(ai_backend, "VERSION", "cutdeck-0")
-    test_client_answers_as_backend_does({"type": "premiere_status"})
+    test_client_answers_as_backend_does({"type": "premiere_status"}, tmp_path)
 
 
 def test_client_nothing_listening_matches_backend():
@@ -111,7 +111,7 @@ def _ask_in_thread(request, **server):
 
 def test_client_answers_pings_during_a_long_command():
     # The helper pings every 20 s; a client that never pongs is dropped mid-command.
-    reply = _ask_in_thread({"type": "slow"}, delay=0.5, ping_interval=0.05, ping_timeout=0.1)
+    reply = _ask_in_thread({"type": "slow"}, delay=1.5, ping_interval=0.1, ping_timeout=0.5)
     assert reply["echo"] == {"type": "slow"}
 
 

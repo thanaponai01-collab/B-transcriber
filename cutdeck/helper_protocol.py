@@ -1,8 +1,8 @@
 """Where the helper listens, which protocol it speaks, and a standard-library client for it.
 
 cdv.py is one fresh process per Premiere command, so it talks to the helper through `ask` below
-(socket + json, ~70 ms a call) instead of asyncio + websockets (~260 ms). The client speaks plain
-RFC 6455: no extensions, so the helper never compresses its replies to it.
+(socket + json: a whole `cdv call` measured ~100 ms) instead of asyncio + websockets (~280 ms).
+The client speaks plain RFC 6455: no extensions, so the helper never compresses its replies to it.
 """
 import base64
 import json

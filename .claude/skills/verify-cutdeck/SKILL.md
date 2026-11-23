@@ -79,8 +79,9 @@ cdv.py cleanup [--keep-helper]    # give Premiere back (see Cleanup)
 ```
 
 `call` takes any command name from `cutdeck/driver_commands.py` (the MCP tool name without
-`premiere_`) with its arguments as JSON. This is the same path MCP tools, `premiere_cli` and
-`Backend().premiere` use. Handles to use:
+`premiere_`) with its arguments as JSON. It sends the helper the same `premiere` request MCP tools,
+`premiere_cli` and `Backend().premiere` send, through the standard-library client in
+`cutdeck/helper_protocol.py` (tests hold its replies and errors equal to `Backend`'s). Handles to use:
 
 - Sequences by name: `"sequence": "CutDeck verify (scratch)"`.
 - Clips by id `V<track>@<start_ticks>` exactly as `read_timeline` prints them. After `scratch`:
