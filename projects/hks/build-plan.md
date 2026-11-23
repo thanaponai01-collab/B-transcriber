@@ -90,7 +90,10 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
     find them;
   - blur wherever the clock shows: **holds** (no clock visible in any of the 11 exports).
 
-  **Waiting on the user's answers**, per step (questions in the audit report):
+  **Answered 2026-11-23** (answers at the end of [rule-audit.md](rule-audit.md)): punch-ins are
+  covered, inset and still cuts are legal, frame holds are a fallback cover, FB 179.96 s is a
+  ceiling, the 1-min cut passes at 56–64 s, the blur follows the clock, every clock-off run is
+  dropped. The questions were, per step:
 
   | question | blocks |
   |---|---|
@@ -377,10 +380,9 @@ checked on the user's hand cut first, before Phase 4 exists.
 5. 5.3 / 5.4, 6.1 and the 1-min cut (FB ~50 min, hook ~20 min, 1-min ~10 min of the user's time
    today), then Phase 7 as answers arrive.
 
-## Decisions needed from the user
-1. Which model route judges by meaning: local, external API, or the agent in a session
-   (Assumption 4). It gates 2.7, 2.9, 4.2, 4.4, 4.5 and 5.4.
-2. The seven rule questions in [rule-audit.md](rule-audit.md) (4 is likely answered;
-   confirm).
-3. Where the AE title-card template is, and what changes per episode.
-4. What the live notes contain.
+## Decisions from the user (2026-11-23)
+1. Model route: **the agent in a Claude Code session** judges by meaning. A fresh subagent gets
+   only the transcript and the prompt (never the gold, the plan or the audit), answers
+   select-only, and its answer file is kept as the artifact.
+2. The seven rule questions: answered, see the end of [rule-audit.md](rule-audit.md).
+3. and 4. (AE title-card template, live notes): Phase 7 is skipped for now.
