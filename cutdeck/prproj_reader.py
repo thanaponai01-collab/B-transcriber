@@ -73,44 +73,70 @@ def _u32(b: bytes, o: int) -> int:
     return struct.unpack_from("<I", b, o)[0]
 
 
-def _fb_table(b: bytes, pos: int) -> dict[int, int]:
-    """FlatBuffer table at ``pos`` -> {field index: absolute position of the field}."""
-    vt = pos - struct.unpack_from("<i", b, pos)[0]
-    size = struct.unpack_from("<H", b, vt)[0]
-    fields = {}
-    for k in range((size - 4) // 2):
-        off = struct.unpack_from("<H", b, vt + 4 + 2 * k)[0]
-        if off:
-            fields[k] = pos + off
-    return fields
-
-
-def _fb_target(b: bytes, slot: int) -> int:
+def _deref(b: bytes, slot: int) -> int:
     return slot + _u32(b, slot)
 
 
-def _fb_string(b: bytes, slot: int) -> str:
-    t = _fb_target(b, slot)
+def _string(b: bytes, slot: int) -> str:
+    t = _deref(b, slot)
     return b[t + 4:t + 4 + _u32(b, t)].decode("utf-8")
 
 
-def _fb_vector(b: bytes, slot: int) -> list[int]:
-    v = _fb_target(b, slot)
-    return [v + 4 + 4 * i for i in range(_u32(b, v))]
+class _Table:
+    """A FlatBuffer table. Premiere leaves any field out at its default, so a table has no
+    indexing: every read says what an omitted field stands for."""
+
+    def __init__(self, b: bytes, pos: int | None):
+        self._b, self._fields = b, {}
+        if pos is None:
+            return
+        vt = pos - struct.unpack_from("<i", b, pos)[0]
+        for k in range((struct.unpack_from("<H", b, vt)[0] - 4) // 2):
+            off = struct.unpack_from("<H", b, vt + 4 + 2 * k)[0]
+            if off:
+                self._fields[k] = pos + off
+
+    def has(self, i: int) -> bool:
+        return i in self._fields
+
+    def _read(self, fmt: str, i: int, default):
+        return struct.unpack_from(fmt, self._b, self._fields[i])[0] if i in self._fields else default
+
+    def u32(self, i: int, default: int) -> int:
+        return self._read("<I", i, default)
+
+    def float(self, i: int, default: float) -> float:
+        return self._read("<f", i, default)
+
+    def flag(self, i: int) -> bool:
+        return self._read("<B", i, 0) == 1
+
+    def string(self, i: int) -> str:
+        return _string(self._b, self._fields[i]) if i in self._fields else ""
+
+    def table(self, i: int) -> _Table:
+        return _Table(self._b, _deref(self._b, self._fields[i]) if i in self._fields else None)
+
+    def _slots(self, i: int) -> list[int]:
+        if i not in self._fields:
+            return []
+        v = _deref(self._b, self._fields[i])
+        return [v + 4 + 4 * k for k in range(_u32(self._b, v))]
+
+    def tables(self, i: int) -> list[_Table]:
+        return [_Table(self._b, _deref(self._b, slot)) for slot in self._slots(i)]
+
+    def strings(self, i: int) -> list[str]:
+        return [_string(self._b, slot) for slot in self._slots(i)]
 
 
 # Premiere leaves a field out at its default; 100 is the default font size (T1/T6, 2026-09-25).
 _DEFAULT_TEXT_SIZE = 100.0
 
 
-def _fb_float(b: bytes, fields: dict[int, int], index: int, default: float) -> float:
-    return struct.unpack_from("<f", b, fields[index])[0] if index in fields else default
-
-
-def _fb_rgb(b: bytes, slot: int) -> list[int]:
+def _rgb(colour: _Table) -> list[int]:
     """A colour table: one byte per channel (f0 R, f1 G, f2 B); a channel left out is 255."""
-    ch = _fb_table(b, _fb_target(b, slot))
-    return [b[ch[i]] if i in ch else 255 for i in range(3)]
+    return [colour._read("<B", i, 255) for i in range(3)]
 
 
 # Document f4 (omitted = left). 2 = centre was confirmed; 1 = right is inferred: it is the only other
@@ -127,35 +153,35 @@ def parse_source_text(blob: bytes) -> dict:
     on flag and f6 the stroke width (float, default 4), f15 faux italic, f16 underline. Document
     f4 is the alignment, f6 the leading (float) and f11 the shadow flag.
 
-    ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's.
+    ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's. A layer
+    with no text leaves out its runs and fonts: ``runs`` is empty and ``font`` None.
 
     Some layers (a third-party transition's, HKS 20261120) are UTF-16 JSON instead; see
     ``_parse_json_source_text``."""
     if blob[8:10] == b"{\x00":
         return _parse_json_source_text(blob)
-    doc =_fb_table(blob, _fb_target(blob, _fb_table(blob, _fb_target(blob, 12))[0]))
-    fonts = [_fb_string(blob, slot) for slot in _fb_vector(blob, doc[1])]
+    doc = _Table(blob, _deref(blob, 12)).table(0)
+    fonts = doc.strings(1)
     runs = []
-    for slot in _fb_vector(blob, doc[0]):
-        run = _fb_table(blob, _fb_target(blob, slot))
-        style = _fb_table(blob, _fb_target(blob, run[1]))
+    for run in doc.tables(0):
+        style = run.table(1)
         runs.append({
-            "text": _fb_string(blob, run[0]),
-            "font": fonts[_u32(blob, style[0]) if 0 in style else 0],
-            "size": _fb_float(blob, style, 1, _DEFAULT_TEXT_SIZE),
-            "tracking": _fb_float(blob, style, 8, 0.0),
-            "bold": 14 in style and blob[style[14]] == 1,
-            "italic": 15 in style and blob[style[15]] == 1,
-            "underline": 16 in style and blob[style[16]] == 1,
-            "fill": _fb_rgb(blob, style[2]) if 2 in style else [255, 255, 255],
+            "text": run.string(0),
+            "font": fonts[style.u32(0, 0)],
+            "size": style.float(1, _DEFAULT_TEXT_SIZE),
+            "tracking": style.float(8, 0.0),
+            "bold": style.flag(14),
+            "italic": style.flag(15),
+            "underline": style.flag(16),
+            "fill": _rgb(style.table(2)),
             # Style f4 keeps a stroke colour even when the stroke is off; f5 is the on flag.
-            "stroke": _fb_rgb(blob, style[4]) if 4 in style and 5 in style and blob[style[5]] == 1 else None,
-            "stroke_width": _fb_float(blob, style, 6, 4.0),
+            "stroke": _rgb(style.table(4)) if style.has(4) and style.flag(5) else None,
+            "stroke_width": style.float(6, 4.0),
         })
-    return {"text": "".join(r["text"] for r in runs), "font": runs[0]["font"],
-            "size": runs[0]["size"], "leading": _fb_float(blob, doc, 6, 0.0),
-            "alignment": _ALIGNMENT.get(_u32(blob, doc[4]) if 4 in doc else 0),
-            "shadow": 11 in doc and blob[doc[11]] == 1, "runs": runs}
+    first = runs[0] if runs else {"font": None, "size": _DEFAULT_TEXT_SIZE}
+    return {"text": "".join(r["text"] for r in runs), "font": first["font"],
+            "size": first["size"], "leading": doc.float(6, 0.0),
+            "alignment": _ALIGNMENT.get(doc.u32(4, 0)), "shadow": doc.flag(11), "runs": runs}
 
 
 def _first(style: dict, key: str, default):
@@ -188,6 +214,15 @@ def _b64(text: str) -> bytes:
     return base64.b64decode(text)  # tolerates the stray non-base64 byte Premiere writes
 
 
+def _decode_source_text(encoded: str) -> dict:
+    """``parse_source_text``, or ``{"text": None, "unreadable": why}`` for a layout not yet
+    mapped, so one such layer doesn't stop the rest of the project being read."""
+    try:
+        return parse_source_text(_b64(encoded))
+    except (struct.error, IndexError, KeyError, ValueError) as e:
+        return {"text": None, "unreadable": f"{type(e).__name__}: {e}"}
+
+
 def _text_of(objs: _Objects, comp: ET.Element) -> dict | None:
     """The Source Text of an ``AE.ADBE Text`` component, plus its keyframes if it has any."""
     for p in comp.findall("Component/Params/Param"):
@@ -195,11 +230,12 @@ def _text_of(objs: _Objects, comp: ET.Element) -> dict | None:
         if param is None or param.tag != "ArbVideoComponentParam" or _text(param, "Name") != "Source Text":
             continue
         start = param.find("StartKeyframeValue")
-        out = parse_source_text(_b64(start.text or objs.blobs[start.get("BinaryHash")]))
+        out = _decode_source_text(start.text or objs.blobs[start.get("BinaryHash")])
         stamps = [e.split(",", 1) for e in (_text(param, "Keyframes") or "").split(";") if e]
         if stamps:
             out["keyframes"] = [
-                {"time": _seconds(t), "text": parse_source_text(_b64(v))["text"]} for t, v in stamps
+                {"time": _seconds(t), **{k: v for k, v in _decode_source_text(raw).items() if k in ("text", "unreadable")}}
+                for t, raw in stamps
             ]
         return out
     return None
