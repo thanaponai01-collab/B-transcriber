@@ -349,17 +349,21 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   finder's candidates include the source of the covers the user chose (recall on gold covers).
   **Built offline (2026-11-23):** `python -m cutdeck.hks_covers --all G:\Me\Works --check`:
   recall on the user's clip and footage covers is 1.0 on 6 days, 0.79 on 20261120 (20261110 has
-  only studio covers). In the draft, every cut with a candidate counts as covered: jump cuts are
-  0 on 7 of 8 days (12 on 20261110). Zoom and film damage are live steps.
+  only studio covers). In the draft, a cut counts as covered when an unused candidate lies within
+  30 s: uncovered cuts are 0–45 a day on the round-2 drafts. Zoom and film damage are live steps.
 - [ ] **4.4** Content cuts (retellings, off-topic, side sections such as backstory and legal
   analysis), ranked until the length lands at 15–20 min. **Blocked on the decision in Assumption 4.**
   → verify on gold: the dropped side sections match the user's (20261120: 34:56–41:09, 47:00–49:48).
   **Built offline (2026-11-23):** the 20261120 draft drops 94 % and 89 % of those two sections.
-  Every draft is 16.8–19.6 min, measured on the whole draft. The judge's own totals were wrong
-  (20261120: it said 921 s, its lines were 1230 s), so 20261120 and 20261112 had one revision
-  pass: the judge saw its answer with the measured total and removed keeps. Keep precision
-  against the user is 0.31–0.52 (chance at the same length: 0.13–0.26) and recall 0.28–0.53; line
-  agreement 0.70–0.85. Uncovered cuts: 0 on 5 days, 1 / 4 / 12 on 20261001 / 20261003 / 20261110.
+  The judge's own totals were wrong (20261120: it said 921 s, its lines were 1230 s), so the
+  length is measured in code: `python -m cutdeck.hks_judge revise <day folder> --task cut
+  --max-run-s 1200` shows the judge its answer with the measured total and a cap.
+  Round 2 (new prompt, revised where over; 2026-11-23): every draft is 16.0–19.8 min (960–1188 s).
+  Keep precision against the user is 0.31–0.53, about twice chance at the same length
+  (0.13–0.26); recall 0.26–0.50. Second-level agreement 0.70–0.84 and line agreement 0.74–0.86
+  are **below** the "cut all" baseline on 6 of 8 days, and host lines kept or cut as the user did
+  (0.77–0.93) beat "cut all" on only 4: those metrics reward cutting and do not show skill.
+  Uncovered cuts: 0–45 a day (covers are now bounded at 30 s and never reused).
   The draft carries signal but is far from the user's choices; the next lever is showing the
   judge the user's own past cuts of other days. `python -m cutdeck.hks_assemble <day> --check`
   turns a draft into the `build_sequence` request (body, covers, bed; 20261120: 275 items, 124
