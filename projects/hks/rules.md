@@ -53,6 +53,22 @@ Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Autom
      over it, cut to its main point (here the recording's first 30 s, 30:17–30:47).
    - *Keep the law short and late:* the lawyer stays (148 s of 1171 s) where it explains what
      happened, not as a separate lecture. *End fast:* the last three topics take 31 s.
+
+   **From the user's red markers on YT draft v4** (2026-11-23):
+   - *Never a jump cut, not even one frame.* A cover must start on exactly the body's cut tick
+     (v4's covers drifted 1–4 frames and flashed the jump). It must also open on a frame where the
+     footage is fully on: v4's marker-1 cover started at a box insert's first second, which was still
+     the studio. Render each cover's first and last frame before building.
+   - *Full-frame footage, not the soft box crop,* wherever the show also aired that footage full
+     screen (the user: "show the full one"), and B-roll that matches the words: the 16th's house
+     CCTV and the phone video for "what happened on the 16th".
+   - *No sponsor strip, no 3HD bug, no clock.* The phone clip before the second break (src
+     2536.5–2584.6) carries the sponsor and credits strip (from y 521). Zoom it in, centred on the
+     video: Scale 240, Position (0.475, 0.667), which keeps the source window x 260–1060, y 60–510.
+   - *No snappy scene changes.* A camera change within 1 s of a visible cut leaves a sliver shot
+     (marker 3: 0.16 s). Don't trim speech to fix it; hold the picture on V2 instead (keep the
+     outgoing shot to the change, or bring the incoming shot in at it). The hold must show a
+     masked face or a wide shot, never a talking host. Covers last at least 4 s.
 7. Swear words bleeped. Same ending every episode.
 
 ## Clip label colours (user, 2026-11-23)
@@ -76,6 +92,9 @@ boundaries, not these meanings.
 thats it color one … i mainly relate to question"): each question piece gets ONE colour, for the
 person the host is asking. Don't split at every speaker change; both halves of a question cut by a
 break share its colour. A host-only piece (intro, reading the news) is green.
+Every draft the agent builds is labelled too (user, 2026-11-23: "you forget on all your draft"):
+each body piece takes the colour of the question piece its source comes from, and every cover on
+the upper tracks (B-roll, cutaway, zoomed insert) is light green.
 
 Working layout seen the same day: the story is split at the topic marks; keepers go up to V2 with
 their audio left on A1 and re-linked; drops (opening, breaks, sponsor, credits) stay on V1.

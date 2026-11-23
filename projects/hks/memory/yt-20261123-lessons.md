@@ -21,5 +21,18 @@ Source: `1 YOUTUBE D1` (the one with clips) in the 20261123 project, saved 19:13
   v3 = the user's edited v2 + 10 host questions + the voice clip with its own sound, 18.4 min. The
   user saw talking, out-of-sync faces in the listener pops (cause in [rules.md](../rules.md), rule 6).
 
+- v4 (agent's own judgment, 16:43): picture decided before sound. Per-second "who is on screen" from
+  48 look-clusters named by eye; hard cuts only under same-moment inserts or B-roll matched to the
+  words; studio joins kept only on a real shot change (else the gap went back); no listener pops;
+  every cover rendered across its length and checked by eye; labels applied. Judge moved 4 pieces
+  (the recording right after the 5:36 call it records).
+
+- v4 red markers (user): a 1-frame jump flash at 624.4 (cover off by a frame and opening on the studio),
+  the sponsor strip on the phone clip at 684, and a 0.16 s sliver at 969.7. v5 fixed them across the
+  whole draft: 19 covers and 4 picture holds; the read-back matched the plan on every clip; labels
+  were read back by colour. The user's "sponsor" means only the logo strip across the bottom
+  (source 2548–2551, the only place it appears); sponsors in the studio picture (screen behind,
+  desk products, small corner logos) are fine.
+
 Tools and data for the next episode: judge prompts in `test_projects/hks_judge/20261123/v2/`
 (phrase chunks with the user's cut part as a worked example; host-question pass).
