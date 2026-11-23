@@ -132,7 +132,7 @@ def test_asr_rough_cut_shares_one_raw_ingest_with_run_file(
     calls = _count_ingest_calls(monkeypatch)
     seen = {}
 
-    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=()):
+    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=(), *, sha256=None):
         seen["result"] = ingest_result
         return 0, []
 
@@ -160,7 +160,7 @@ def _asr_run(monkeypatch, tmp_path, mixdown_path, sequence_json_path, *, extract
     store.init_db(db)
     made = {}
 
-    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=()):
+    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=(), *, sha256=None):
         conn = store.connect(db_path)
         media_id = store.create_media(conn, path)
         job_id = store.create_job(conn, media_id, "a", "passthrough", "1.0.0")
@@ -221,7 +221,7 @@ def test_asr_rerun_on_same_mixdown_makes_no_asr_pass_and_same_cuts(
     store.init_db(db)
     calls = []
 
-    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=()):
+    def fake_run_file_job(path, config, db_path, ingest_result=None, glossary=(), *, sha256=None):
         calls.append(path)
         conn = store.connect(db_path)
         media_id = store.create_media(conn, path)
