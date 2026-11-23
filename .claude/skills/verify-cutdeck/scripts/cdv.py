@@ -10,11 +10,9 @@ passed; anything else prints why on stderr.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -68,6 +66,7 @@ def helper_hello() -> dict | None:
 
 def process_started(pid: int) -> float | None:
     """Epoch seconds the process started (Windows), or None."""
+    import ctypes
     k32 = ctypes.windll.kernel32
     handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
@@ -104,7 +103,8 @@ def wait_for_panel(timeout_s: float = 60) -> dict:
 def cmd_launch(args) -> None:
     """Make the stack drivable: a helper on this checkout's code, the panel connected, and with
     --reload-panel the panel reloaded on this checkout's code (the project is saved first)."""
-    from cutdeck import live_check  # here, not at import: `call` stays free of the helper's modules
+    import subprocess  # here and below, not at import: `call` is one process per command and needs none of it
+    from cutdeck import live_check
     if not live_check.premiere_running():
         fail("Premiere Pro is not running: start it and open a project (an agent never opens or closes projects)")
     hello = helper_hello()
@@ -164,6 +164,7 @@ def _restart_request() -> None:
 
 def cmd_doctor(args) -> None:
     """Read-only: is this instance worth driving? Exit 0 only when every line is PASS."""
+    import subprocess
     from cutdeck import live_check
     ok = True
     steps, _ = live_check.check(PORT)
@@ -216,6 +217,7 @@ def cmd_start(args) -> None:
 def cmd_scratch(args) -> None:
     """Make the scratch sequence ready: create it once (9:16 30 fps preset), clear it, and place
     the verify clip on V1/A1 at 0. Idempotent: every run starts from the same timeline."""
+    import subprocess
     state = load_state()
     run_dir(state)
     if not MEDIA.exists():
@@ -281,6 +283,7 @@ def cmd_cleanup(args) -> None:
     """Give Premiere back: reopen the user's sequence, stop only a helper this run started, close
     the run. Never deletes evidence, never saves the project, never deletes the scratch sequence
     (no API can; it is reused next run)."""
+    import subprocess
     state = load_state()
     folder = run_dir(state)
     notes = []

@@ -26,7 +26,7 @@ def exchange(messages: list[dict], port: int = PORT, open_timeout: float = 10, c
     """Send each message on one connection, wait for its reply, and return the last reply.
     With `check`, a refused message raises ValueError and the rest are not sent."""
     try:
-        sock = socket.create_connection(("127.0.0.1", port), timeout=open_timeout)
+        sock = socket.create_connection((b"127.0.0.1", port), timeout=open_timeout)  # bytes: no idna codec import
     except OSError as exc:
         raise RuntimeError(NOT_RUNNING.format(port=port)) from exc
     with sock:
