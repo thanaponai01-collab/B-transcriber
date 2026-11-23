@@ -269,6 +269,32 @@ def test_rough_cut_maps_stored_source_transcripts_into_the_window(tmp_path, monk
     assert rough_cut._mapped_transcript(seq, None, window, {}, db) is None
 
 
+def test_audio_streams_are_probed_once_per_file_version(tmp_path, monkeypatch):
+    import os
+    import shutil
+    import subprocess
+    media = tmp_path / "a.mp4"; media.write_bytes(b"v1")
+    db = tmp_path / "t.db"; db.write_bytes(b"")
+    probes = []
+
+    def fake_run(cmd, **kw):
+        probes.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="0\n1\n" if len(probes) == 1 else "0\n1\n2\n")
+
+    monkeypatch.setattr(tt, "_stream_counts", {})
+    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: (5, SOURCE, None))
+    monkeypatch.setattr(shutil, "which", lambda name: name)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    tl = timeline(clip("A1@0", 0, 0, 7000, str(media)))
+    for _ in range(2):
+        assert tt.build(tl, db_path=db)["sources"][0]["audio_streams"] == 2
+    assert len(probes) == 1  # the second read reuses the count
+    media.write_bytes(b"version 2")  # replaced: new size and mtime
+    os.utime(media, ns=(1, 1))
+    assert tt.build(tl, db_path=db)["sources"][0]["audio_streams"] == 3
+    assert len(probes) == 2  # a changed file is probed again
+
+
 def test_speed_changed_clip_maps_through_premieres_scaled_in_out(tmp_path):
     media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
     # 200% over source 0.9-2.1 s: Premiere reads In 0.45 s, Out 1.05 s, 0.6 s long on the sequence.
