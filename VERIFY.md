@@ -82,8 +82,9 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 ## Donor project + import_sequences (issue 130)
 - test: `python -m pytest tests/test_prproj_donor.py tests/test_cutdeck_driver_commands.py -q -p no:cacheprovider` and `node --test tests/cutdeck_control.test.cjs`
 - fail-signal: AssertionError
-- fail-proof: left the Motion value unpatched in cutdeck/prproj_donor.py, test_donor_changes_one_scale... went red, reverted
+- fail-proof: left the Motion value unpatched in cutdeck/prproj_donor.py, test_donor_changes_one_scale... went red, reverted; dropped the appended effect objects in `_graft`, both test_donor_grafts_an_effect... cases went red, reverted
 - live (2026-11-23, scratch project `output/issue130/scratch_130.prproj`, runs `20261123-221826-issue130-import-sequences` and `20261123-222215-issue130-full-readback`): `cdv.py call import_sequences` of a plain and a Scale-137.25 donor of `a5_start.prproj` `Gate4`; both imported, all 6 clips' Motion read back equal to the donor, V1 Scale 137.25 only on the patched arm
+- live graft + cross-sequence (2026-11-23, run `20261123-223331-issue130-cross-seq-paste`): a donor of `Plattern_FB SIZE` and a donor with its masked Gaussian Blur and Lumetri grafted (`--effect`) onto two testsrc clips, imported, Edit > Copy / Edit > Paste onto another sequence; blur changed only the mask's 208x170 box, Lumetri's 130 params equal the template's
 
 ## Shorts rule check (issue 128)
 - test: `python -m pytest tests/test_shorts_check.py -q -p no:cacheprovider`
