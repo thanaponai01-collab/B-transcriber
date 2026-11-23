@@ -1,6 +1,6 @@
 """HKS build plan Phase 2: ``episode.json``, the analysis of one day's footage, plus step 2.3.
 
-One file per day, ``<out>/<yyyymmdd>.json``. Every value is keyed by footage file name and given
+One folder per day, ``<out>/<yyyymmdd>/<section>.json``, read back as one dict. Every value is keyed by footage file name and given
 in **source seconds of that file**, as ``hks_score`` keys keeps: 20261112 has five footage files.
 Each analysis step writes only its own section, so steps run in any order and a re-run replaces
 its section and nothing else:
@@ -43,18 +43,34 @@ def path_of(day: str, out: Path = OUT) -> Path:
     return out / f"{day}.json"
 
 
+def _section_path(day: str, section: str, out: Path) -> Path:
+    return out / day / f"{section}.json"
+
+
 def load(day: str, out: Path = OUT) -> dict:
-    p = path_of(day, out)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"day": day, "files": {}}
+    """The whole episode: every section file of the day merged (and a pre-split ``<day>.json``)."""
+    ep = {"day": day, "files": {}}
+    legacy = path_of(day, out)
+    if legacy.exists():
+        ep["files"] = json.loads(legacy.read_text(encoding="utf-8"))["files"]
+    for f in sorted((out / day).glob("*.json")) if (out / day).is_dir() else []:
+        for media, value in json.loads(f.read_text(encoding="utf-8")).items():
+            ep["files"].setdefault(media, {})[f.stem] = value
+    return ep
 
 
 def update(day: str, file: str, section: str, value, out: Path = OUT) -> dict:
-    """Replace one section of one file and write the episode back."""
-    ep = load(day, out)
-    ep["files"].setdefault(file, {})[section] = value
-    out.mkdir(parents=True, exist_ok=True)
-    path_of(day, out).write_text(json.dumps(ep, ensure_ascii=False, indent=1), encoding="utf-8")
-    return ep
+    """Replace one section of one file. Each section lives in its own file
+    (``<out>/<day>/<section>.json``, footage file -> value), so steps that write different
+    sections never touch the same file."""
+    p = _section_path(day, section, out)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    data[file] = value
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(p)
+    return load(day, out)
 
 
 def spans(flags) -> list[list[int]]:
