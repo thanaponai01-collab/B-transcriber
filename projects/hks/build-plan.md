@@ -326,11 +326,23 @@ checked on the user's hand cut first, before Phase 4 exists.
   20261001, a clock-free file on 20261112); the extent waits on audit question 6. → verify: the
   export check of 0.3 (0 clock seconds in the export); "0 extra" only if the answer is "follow
   the clock exactly".
+  **Built offline (2026-11-23):** `hks_finish.blur_spans` follows the clock exactly (the user's
+  answer 6): footage at the main framing with the clock on in its source second, padded 1 s. On
+  the eight tuning days 0 clock seconds fall outside a span, and it blurs less than the user did by
+  hand (20261001: 348 s against 431 s). The box is the template's `BLUR TIME YT` (route 1).
+  **Open:** the live build; a `CutDeck_Hold_*` still showing a clock is not checked.
 - [ ] **5.2** Music bed `[BGM]Where Everything Began.wav`:
   - looped with 3 s overlaps;
   - -24 dB under the hook, -33 dB under the body, -12 dB at the end.
 
   → verify: read-back levels, and the loop covers the full length.
+  **Built offline (2026-11-23):** `cutdeck/hks_finish.music_bed` (rule in its docstring: a piece
+  every 56.48 s in two lanes, -24 dB to two frames past the hook SFX, the last piece ending on the
+  show end with its last 7.84 s at -12 dB). `python -m cutdeck.hks_finish --all G:\Me\Works --check
+  --holdout`: the same piece count as the saved bed on all 11; frame agreement 96.7–100 % (20261117
+  and 20261120 exact; holdout 96.2 / 99.97 / 99.99 %, but the rule was read off all 11, so the
+  holdout is not blind here). The gaps: four episodes start the last piece off the slot grid,
+  three end at -9 dB. **Open:** the live build and read-back of the levels.
 - [ ] **5.3** Bleeps on swear words (word list + transcript) → verify: the swear at 1693.00 is found;
   precision on gold bleeps.
 - [ ] **5.4** Hook template:
@@ -343,6 +355,13 @@ checked on the user's hand cut first, before Phase 4 exists.
 - [ ] **5.5** Ending: goodbye → sting → `CG_END LOGO` (YT only) → verify.
 
 ## Phase 6: Versions
+  **Built offline (2026-11-23):** `hks_finish.ending` times the parts from L, the goodbye's end:
+  slowed footage (about 24 %) from where the goodbye stops and the `Plattern_YT SIZE` stack
+  [23.48, 26.32) for 2.84 s, glitch L-0.08 to L+0.40, invert flash L-0.04 to L+0.08, sting L to
+  L+3.08, `CG_END LOGO` at 194 % L+2.84 to L+7.84. Every part within 0.24 s of the saved ending on
+  all 11 (four exact). The stack's effects can't be read from a saved project, so they are pasted
+  from the template (menu copy/paste, PREMIERE_FACTS), and the slow-down uses the Speed dialog.
+  **Open:** the live run.
 - [ ] **6.1** FB:
   - 1080x1080, target 179.96 s and never 180 s or more (past cuts run 168.28–179.96; audit
     question 4 to confirm);
