@@ -44,3 +44,10 @@ def test_an_answer_keeps_the_lines_its_prompt_showed(tmp_path, monkeypatch):
     shown = {"a.mp4": j.lines(WORDS, drops=[(1.9, 3.1)])}  # a later drop renumbers the lines
     j.paths(folder, "sponsors", tmp_path)[1].write_text('{"spans": [{"from": "L0003", "to": "L0003"}]}')
     assert j.answer(folder, "sponsors", tmp_path)["a.mp4"][0]["start"] == 10.0
+
+
+def test_a_silence_or_a_turn_ends_a_line_even_when_words_touch():
+    words = [[0.0, 1.0, "ก"], [1.0, 2.0, "ข"], [2.0, 3.0, "ค"]]  # Whisper stretched "ก" over a pause
+    assert [l.text for l in j.lines(words)] == ["กขค"]
+    assert [l.text for l in j.lines(words, breaks=[0.7])] == ["ก", "ขค"]
+    assert [l.start for l in j.lines(words, breaks=[0.7, 2.0])] == [0.0, 1.0, 2.0]

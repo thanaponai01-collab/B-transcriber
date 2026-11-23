@@ -18,16 +18,19 @@ The steps that need meaning (2.7 sponsors, 2.9 topics and stories, 4.2/4.4/4.5 t
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_right
 import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from cutdeck import hks_episode
+from cutdeck.hks_tighten import silences
 
 OUT = Path("test_projects/hks_judge")
 WORDS = Path("test_projects/hks_words")
 MAX_GAP = 0.3    # s of silence that ends a line (Whisper word times touch: 90 % of gaps are under 0.1 s)
+BREAK_SLACK = 0.1  # s: a break this far past the next word's start still ends the line before it
 MAX_LINE = 8.0   # s: a line never runs longer (20261120: 822 lines, 4.8 s on average)
 
 
@@ -43,11 +46,18 @@ class Line:
     text: str
 
 
-def lines(words: list[list], drops: list[tuple[float, float]] = ()) -> list[Line]:
+def lines(words: list[list], drops: list[tuple[float, float]] = (), breaks: list[float] = ()) -> list[Line]:
     """Word pieces ``[[start, end, text], ...]`` -> lines broken at pauses and at MAX_LINE.
-    Words inside a drop are left out, and a drop always ends a line."""
+    Words inside a drop are left out, and a drop always ends a line. A time in ``breaks`` (a
+    silence in the audio, a change of speaker) ends the line before the first word starting
+    after it: Whisper stretches words over pauses, so the word gaps alone miss most of them."""
     def dropped(t: float) -> bool:
         return any(a <= t < b for a, b in drops)
+
+    marks = sorted(breaks)
+    def broken(prev: list, w: list) -> bool:
+        i = bisect_right(marks, prev[0])
+        return i < len(marks) and marks[i] <= w[0] + BREAK_SLACK
 
     out, cur = [], []
     for w in words:
@@ -56,7 +66,7 @@ def lines(words: list[list], drops: list[tuple[float, float]] = ()) -> list[Line
                 out.append(cur)
                 cur = []
             continue
-        if cur and (w[0] - cur[-1][1] > MAX_GAP or w[1] - cur[0][0] > MAX_LINE):
+        if cur and (w[0] - cur[-1][1] > MAX_GAP or w[1] - cur[0][0] > MAX_LINE or broken(cur[-1], w)):
             out.append(cur)
             cur = []
         cur.append(w)
@@ -149,7 +159,10 @@ def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_epis
     ep = hks_episode.load(day, ep_dir)
     out, n = {}, 0
     for media in sorted(p.name for p in (folder / "1. FOOTAGE").glob("*.mp4")):
-        ls = lines(words_of(day, media, words_dir), hidden(ep, media, hide))
+        f = ep["files"].get(media, {})
+        breaks = [(a + b) / 2 for a, b in silences(str(folder / "1. FOOTAGE" / media))]
+        breaks += [t[0] for t in f.get("turns", [])]
+        ls = lines(words_of(day, media, words_dir), hidden(ep, media, hide), breaks)
         out[media] = [Line(f"L{n + i + 1:04d}", l.start, l.end, l.text) for i, l in enumerate(ls)]
         n += len(ls)
     return out
