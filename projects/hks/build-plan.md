@@ -217,7 +217,7 @@ own probe in the step named next to it.
 The FCP7 XML route is the fallback only after its own Premiere-import check, which is still unproven.
 
 ## Phase 2: Episode analysis (offline, no Premiere) → `episode.json` + markers
-- [ ] **2.1** Word transcript of the footage (existing engine), for **all 11 episodes** (about
+- [x] **2.1** Word transcript of the footage (existing engine), for **all 11 episodes** (about
   12 min each). With the gold cuts this gives the words under every one of the 1,502 cuts, so
   Phase 4 is scored per cut class on every episode. → verify (`python -m cutdeck.hks_words --all
   G:\Me\Works --check`): on every episode, at least 97 % of the YT body keeps of 2 s or more have
@@ -230,10 +230,8 @@ The FCP7 XML route is the fallback only after its own Premiere-import check, whi
   The 5 s rule was added after a synthetic one-minute hole inside kept speech passed the 97 %
   bar alone; with it, that hole fails.
 
-  **Status: 9 of 11 done.** The 9 transcribed episodes pass with no holes in 872 keeps,
-  holdout 20261002 and 20261109 included. The run stopped on low system memory before
-  **20261117** and **20261118**; rerun the same command without `--check` to finish them (done
-  files are skipped).
+  **Done (2026-11-23):** all 11 episodes pass: 1,156 keeps of 2 s or more, every one with a word
+  inside, no holes (holdout 20261002, 20261109 and 20261118 included).
 - [ ] **2.2** Break and fixed-graphics finder. Two signals, because neither covers everything:
   - a clock-off run of 10 s or more inside the TV part: bumpers, the real TV ads of the Facebook
     feeds (they change per episode, so reference clips cannot find them) and clock-free graphics.
