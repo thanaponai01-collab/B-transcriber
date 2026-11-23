@@ -111,8 +111,6 @@ Read from the saved .prproj at 16:01 plus file times. Not yet confirmed by the u
   | 73:27–73:48 | Magenta (11) (goodbye) |
   **User: the colours themselves mean nothing.** Only the boundaries matter; colours just
   alternate so neighbouring topics look different.
-  *(2026-11-23: the user gave a colour meaning per speaker/role; see "Clip label colours" in
-  [rules.md](rules.md).)*
 - **User: the 3 gaps in `1 YOUTUBE D1` mark where the live went to a break.** The live
   usually has 3 breaks. The gaps are not the same length as what was cut:
   | YouTube gap | length | source cut at that point |
