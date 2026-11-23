@@ -15,7 +15,7 @@ against the saved one frame by frame.
 
 **5.1 Clock blur** (``blur_spans``): the user's answer (2026-11-23) is "follow the clock exactly".
 Blur spans are the timeline seconds whose picture is footage at the main framing with the clock
-on in its source second (``episode.json`` ``clock``), padded 0.5 s each side (1 fps samples) and
+on in its source second (``episode.json`` ``clock``), padded 1 s each side (the clock is known at whole source seconds only) and
 joined across gaps under 1 s. The box is the template's ``BLUR TIME YT`` (its effect mask: route 1
 of HKS spike 1b). ``--check``: no clock second of the YT body left outside a span. Not covered: a
 ``CutDeck_Hold_*`` still that shows a clock.
@@ -183,7 +183,7 @@ HALF = FRAME / 2
 ENDING_TOL = 0.25  # s: every ending part within this of the saved one (descriptive: set after reading all 11)
 
 
-BLUR_PAD = 0.5   # s each side: the clock is sampled once a second, so a span edge is known to ±0.5 s
+BLUR_PAD = 1.0   # s each side: the clock is known only at whole source seconds, and samples fall between them
 BLUR_JOIN = 1.0  # s: blur spans closer than this become one (no flicker between them)
 
 

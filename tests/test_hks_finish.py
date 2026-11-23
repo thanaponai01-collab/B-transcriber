@@ -54,7 +54,7 @@ def test_blur_follows_the_clock_and_skips_a_zoomed_insert():
     covered = lambda t: any(a <= t < b for a, b in spans)
     assert len(spans) == 2
     assert all(covered(t) for t in (10, 20, 29.9, 40.1, 50, 59.9))   # every clock second
-    assert not any(covered(t) for t in (5, 31, 35, 39, 61, 80))      # not the zoom, not off-clock
+    assert not any(covered(t) for t in (5, 32, 35, 38, 62, 80))      # not the zoom past the 1 s pad, not off-clock
 
 
 @pytest.mark.skipif(not DAY.exists(), reason="needs the G: day folders")
