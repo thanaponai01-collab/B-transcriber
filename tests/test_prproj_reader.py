@@ -179,6 +179,29 @@ def test_parse_source_text_reads_the_json_form():
     assert [r["text"] for r in got["runs"]] == [got["text"]]
 
 
+def test_parse_source_text_reads_a_layer_with_no_text():
+    # 1RaceClub 20261122 - 3, "TT russell wall v3 (Claude)" V5 Graphic: the document leaves out
+    # its runs (f0), fonts (f1) and alignment (f4), the defaults of an empty layer.
+    got = parse_source_text(_blob("E1_empty_text_layer"))
+    assert (got["text"], got["runs"], got["font"], got["size"]) == ("", [], None, 100.0)
+    assert (got["alignment"], got["shadow"]) == ("left", False)
+
+
+def test_an_unreadable_source_text_is_marked_and_the_rest_still_read():
+    from cutdeck.prproj_reader import _Objects, _text_of
+    from xml.etree import ElementTree as ET
+
+    good = _BLOBS["T1_hello_arial_100"]
+    cut = base64.b64encode(_blob("T1_hello_arial_100")[:40]).decode()
+    xml = SOURCE_TEXT_PROJECT.replace("START", cut).replace("KF", f"0,{good};254016000000,{cut};")
+    objs = _Objects(ET.fromstring(xml))
+    got = _text_of(objs, objs.by_id["5"])
+    assert got["text"] is None and got["unreadable"]
+    first, second = got["keyframes"]
+    assert first["text"] == "Hello" and "unreadable" not in first
+    assert second["text"] is None and second["unreadable"]
+
+
 SOURCE_TEXT_PROJECT = """<?xml version="1.0" encoding="UTF-8" ?>
 <PremiereData Version="3">
   <VideoFilterComponent ObjectID="5"><Component><DisplayName>Text</DisplayName>
