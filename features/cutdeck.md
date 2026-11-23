@@ -176,7 +176,7 @@
 - status: proven 2026-11-23 offline on the saved 11-21 and 11-22 projects; no fresh trial on unseen Shorts yet
 
 ## The user's own edits between saves
-- what: Diff consecutive saves of one `.prproj` (auto-saves or manual), drop what the helper's command log explains, and print what is left as the user's edits; with `--corrections`, score the issue 129 trial (pass at half the spoken corrections found).
+- what: Diff consecutive saves of one `.prproj` (auto-saves or manual), use successful helper commands to flag possible attribution on explicitly named sequences, and show the remaining changes as candidate manual edits; with `--corrections`, score the issue 129 trial (pass at half the spoken corrections found).
 - cli: `python -m cutdeck.save_diff <save>... --log output/premiere/premiere_commands.jsonl` @ cutdeck/save_diff.py :: --corrections, --json
 - trace: `main` @ cutdeck/save_diff.py > `report` @ cutdeck/save_diff.py > `diff` @ cutdeck/save_diff.py > `read_project` @ cutdeck/prproj_reader.py
 - verify: save diff minus the command log, #129

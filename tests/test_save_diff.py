@@ -40,6 +40,16 @@ def test_an_unchanged_save_has_no_changes():
     assert save_diff.diff(BASE, copy.deepcopy(BASE)) == []
 
 
+def test_marker_and_frame_changes_appear_without_track_edits():
+    after = _edit(lambda p: p["sequences"][0].update(
+        frame=[1920, 1080], markers=[{"name": "Review", "start": 1}]))
+    [change] = save_diff.diff(BASE, after)
+    assert (change["kind"], change["sequence"], change["track"]) == ("sequence", "Short", None)
+    assert change["fields"] == ["frame", "markers"]
+    assert change["before"] == {"frame": [1080, 1920], "markers": []}
+    assert change["after"] == {"frame": [1920, 1080], "markers": [{"name": "Review", "start": 1}]}
+
+
 def test_a_trim_is_one_changed_clip_with_its_span():
     after = _edit(lambda p: p["sequences"][0]["video_tracks"][1]["clips"][0].update(end=2.1, source_out=2.1))
     [ch] = save_diff.diff(BASE, after)
@@ -74,9 +84,11 @@ def _save(tmp_path, when: datetime, project, projects):
 def _run(tmp_path, monkeypatch, logged, after):
     """Two saves around commands logged now by the helper's own writer."""
     jobs = Jobs(tmp_path / "jobs")
-    for command, hint, args in logged:
+    for command, hint, args, *outcome in logged:
         jobs._log_command({"call": command, "event": "start", "command": command, "hint": hint, "args": args})
-        jobs._log_command({"call": command, "event": "end", "ok": True})
+        ok = outcome[0] if outcome else True
+        if ok is not None:
+            jobs._log_command({"call": command, "event": "end", "ok": ok})
     now, projects = datetime.now(), {}
     saves = [_save(tmp_path, now - timedelta(minutes=1), BASE, projects),
              _save(tmp_path, now + timedelta(minutes=1), after, projects)]
@@ -98,9 +110,17 @@ def test_reads_and_writes_to_other_sequences_explain_nothing(tmp_path, monkeypat
     assert [ch["explained_by"] for ch in iv["changes"]] == [[]]
 
 
-def test_a_write_naming_no_sequence_explains_the_whole_interval(tmp_path, monkeypatch):
+def test_a_write_naming_no_sequence_cannot_explain_changes(tmp_path, monkeypatch):
     [iv] = _run(tmp_path, monkeypatch, [("key_command", "destructive", {"keys": "ctrl+k"})], TRIM)
-    assert [len(ch["explained_by"]) for ch in iv["changes"]] == [1]
+    assert [ch["explained_by"] for ch in iv["changes"]] == [[]]
+
+
+def test_failed_and_unfinished_writes_cannot_explain_changes(tmp_path, monkeypatch):
+    [iv] = _run(tmp_path, monkeypatch, [
+        ("failed", "write", {"sequence": "Short"}, False),
+        ("unfinished", "write", {"sequence": "Short"}, None),
+    ], TRIM)
+    assert [ch["explained_by"] for ch in iv["changes"]] == [[]]
 
 
 def test_score_passes_at_half_the_spoken_corrections():

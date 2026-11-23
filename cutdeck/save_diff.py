@@ -1,5 +1,5 @@
-"""Save diff minus the command log (#129): what changed between two consecutive saves of a
-.prproj that no logged Premiere command explains is the user's own edit.
+"""Save diff minus the command log (#129): surface changes between consecutive .prproj saves
+that could be manual edits.
 
     python -m cutdeck.save_diff SAVE... --log output/premiere/premiere_commands.jsonl
     python -m cutdeck.save_diff SAVE... --log ... --corrections corrections.json
@@ -7,9 +7,8 @@
 A save's time is the stamp in a Premiere auto-save name (``..._2026-11-22_21-29-15.prproj``),
 else the file's mtime. Clips carry no ID that survives a save, so a clip is matched by its full
 reader record; a removed and an added clip with the same name on the same track are paired as
-one ``changed`` clip. A logged command that is not a read explains every change in the
-sequences it names, and every change in the interval when it names none. That can only hide
-user edits, never invent them.
+one changed clip. A completed write can explain changes in the sequences its arguments name
+when the whole call falls between the saves. This is sequence-level attribution.
 
 ``--corrections`` is a JSON list written from the day's workflow-log, one entry per spoken
 correction: ``{"said": "...", "change": "<id from the report>" | null}``. A correction is found
@@ -98,7 +97,13 @@ def diff(a: dict, b: dict) -> list[dict]:
             out.append({"kind": "sequence", "sequence": name, "track": None, "start": None, "end": None,
                         "fields": ["added" if name in seqs_b else "removed"]})
             continue
-        tracks_a, tracks_b = _tracks(seqs_a[name]), _tracks(seqs_b[name])
+        sa, sb = seqs_a[name], seqs_b[name]
+        fields = [key for key in ("frame", "markers") if sa.get(key) != sb.get(key)]
+        if fields:
+            out.append({"kind": "sequence", "sequence": name, "track": None, "start": None, "end": None,
+                        "fields": fields, "before": {key: sa.get(key) for key in fields},
+                        "after": {key: sb.get(key) for key in fields}})
+        tracks_a, tracks_b = _tracks(sa), _tracks(sb)
         for track in sorted(tracks_a.keys() | tracks_b.keys()):
             ta, tb = tracks_a.get(track), tracks_b.get(track)
             if ta is None or tb is None:
@@ -115,28 +120,36 @@ def diff(a: dict, b: dict) -> list[dict]:
 
 
 def read_log(path: Path) -> list[dict]:
-    """The start record of every logged command that may have changed the project."""
+    """Read successful non-read calls, with their start and completion times."""
+    records = [json.loads(line) for line in path.read_text("utf-8").splitlines()]
+    ends = {r["call"]: r for r in records if r["event"] == "end" and r.get("ok") is True}
     out = []
-    for line in path.read_text("utf-8").splitlines():
-        r = json.loads(line)
-        if r["event"] == "start" and r.get("hint") != "read":
-            r["time"] = datetime.fromisoformat(r["time"]).astimezone().replace(tzinfo=None)
-            out.append(r)
+    for start in records:
+        if start["event"] != "start" or start.get("hint") == "read":
+            continue
+        end = ends.get(start.get("call"))
+        if end is not None:
+            out.append({**start, "time": _local_time(start["time"]), "end_time": _local_time(end["time"])})
     return out
 
 
-def named_sequences(args) -> set[str] | None:
-    """The sequences a command's args name, or None when it names none (the active one)."""
+def _local_time(stamp: str) -> datetime:
+    return datetime.fromisoformat(stamp).astimezone().replace(tzinfo=None)
+
+
+def named_sequences(args) -> set[str]:
+    """The sequences explicitly named in the command arguments."""
     if not isinstance(args, dict):
-        return None
+        return set()
     names = {args[k] for k in _SEQUENCE_KEYS if isinstance(args.get(k), str)}
-    names |= {s for s in args.get("sequences") or [] if isinstance(s, str)}
-    return names or None
+    multiple = args.get("sequences")
+    if isinstance(multiple, list):
+        names.update(s for s in multiple if isinstance(s, str))
+    return names
 
 
 def explains(command: dict, change: dict) -> bool:
-    names = named_sequences(command.get("args"))
-    return names is None or change["sequence_name"] in names
+    return change["sequence_name"] in named_sequences(command.get("args"))
 
 
 def report(saves: list[Path], commands: list[dict]) -> list[dict]:
@@ -146,7 +159,7 @@ def report(saves: list[Path], commands: list[dict]) -> list[dict]:
     for prev, path in zip(saves, saves[1:]):
         after = read_project(path)
         t0, t1 = save_time(prev), save_time(path)
-        in_window = [c for c in commands if t0 <= c["time"] < t1]
+        in_window = [c for c in commands if t0 <= c["time"] <= c["end_time"] < t1]
         changes = diff(before, after)
         for ch in changes:
             ids += 1
