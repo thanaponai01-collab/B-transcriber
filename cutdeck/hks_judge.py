@@ -118,6 +118,16 @@ Lines marked H are the host's voice, G someone else's (automatic, can be wrong).
 were added by an earlier pass to help you find your way; they are not lines.""",
         "format": SPAN_FORMAT.replace('"why": "<a few words, Thai or English>"', '"why": "<what this keep is>"'),
     },
+    "hook": {
+        "section": "hook_bites",
+        "hide": ("drops", "sponsors"),
+        "rules": """Task: find soundbites for the cold-open hook, the ~20 s before the show's title that makes a
+viewer stay. The editor's rule: short, punchy first-person lines from the climax of the main
+incident: the most violent or emotional moment if there is one ("I almost died", the moment of
+the attack), otherwise a line that makes the viewer say "what!?". Give 8 candidates, best
+first. Each candidate is 1 to 3 consecutive lines; the editor will trim inside it.""",
+        "format": SPAN_FORMAT + " List the 8 candidates best first.",
+    },
 }
 
 
@@ -145,13 +155,29 @@ def episode_lines(folder: Path, words_dir: Path = WORDS, ep_dir: Path = hks_epis
     return out
 
 
-def prompt_text(task: str, per_file: dict[str, list[Line]]) -> str:
+def _speaker(turns: list, line: Line) -> str:
+    """H or G by the larger overlap with 2.6's turns; empty when there are no turns."""
+    if not turns:
+        return ""
+    host = sum(max(0.0, min(line.end, b) - max(line.start, a)) for a, b, who in turns if who == "host")
+    other = sum(max(0.0, min(line.end, b) - max(line.start, a)) for a, b, who in turns if who != "host")
+    return "H " if host > other else "G "
+
+
+def prompt_text(task: str, per_file: dict[str, list[Line]], ep: dict | None = None) -> str:
+    """The prompt. Only the "cut" task gets topic headers, line lengths and host marks from ``ep``."""
     t = TASKS[task]
     body = []
     for media, ls in per_file.items():
         if len(per_file) > 1:
             body.append(f"\n## File: {media}\n")
-        body += [f"{l.id} [{_clock(l.start)}] {l.text}" for l in ls]
+        f = (ep or {}).get("files", {}).get(media, {}) if task == "cut" else {}
+        heads = {tp["line"]: tp for tp in f.get("topics", [])}
+        for l in ls:
+            if l.id in heads:
+                body.append(f"=== topic (story {heads[l.id]['story']}): {heads[l.id]['title']} ===")
+            size = f" ({l.end - l.start:.1f}s)" if task == "cut" else ""
+            body.append(f"{l.id} [{_clock(l.start)}]{size} {_speaker(f.get('turns', []), l)}{l.text}")
     return "\n\n".join([SHOW, t["rules"], t["format"], "## Transcript\n" + "\n".join(body)]) + "\n"
 
 
@@ -282,3 +308,32 @@ def score_topics(folder: Path, gold_starts, out: Path = OUT) -> dict:
             "precision": round(len(near) / len(picked), 3) if picked else 0.0,
             "missed": [g for g in gold_starts if g not in hit],
             "pass": len(hit) / len(gold_starts) >= MIN_TOPIC_HIT}
+
+
+HOOK_TOP = 8
+HOOK_GROUP = 15.0  # s: hook pieces this close in source are one moment
+HOOK_TOL = 2.0     # s: a candidate within this of a moment's pieces finds it
+MIN_HOOK_RECALL = 0.5  # share of the user's hook moments among the top 8; set before the first run
+
+
+def score_hook(folder: Path, out: Path = OUT) -> dict:
+    """Plan 5.4: the user's hook moments (body-gold pieces before the hook end, grouped) found by
+    the top HOOK_TOP candidates."""
+    from cutdeck.hks_gold import read_day
+    value = parse("hook", json.loads(paths(folder, "hook", out)[1].read_text(encoding="utf-8")),
+                  episode_lines(folder, hide=TASKS["hook"]["hide"]))
+    cands = [(m, s["start"], s["end"]) for m, v in value.items() for s in v][:HOOK_TOP]
+    gold = read_day(folder)
+    pieces = sorted((k.media.lower(), k.source_in, k.source_out) for k in gold.yt.keeps
+                    if gold.yt.hook_end is not None and k.tl_start < gold.yt.hook_end)
+    moments: list[list] = []
+    for m, a, b in pieces:
+        if moments and moments[-1][0] == m and a - moments[-1][2] <= HOOK_GROUP:
+            moments[-1][2] = max(moments[-1][2], b)
+        else:
+            moments.append([m, a, b])
+    found = [mo for mo in moments if any(c[0].lower() == mo[0] and c[1] - HOOK_TOL <= mo[2] and mo[1] <= c[2] + HOOK_TOL
+                                         for c in cands)]
+    return {"day": folder.name[:8], "candidates": len(cands), "moments": len(moments), "found": len(found),
+            "recall": round(len(found) / len(moments), 2) if moments else None,
+            "pass": bool(moments) and len(found) / len(moments) >= MIN_HOOK_RECALL}
