@@ -31,6 +31,7 @@ import tempfile
 from pathlib import Path
 
 from cutdeck import hks_episode, hks_judge
+from transcribe.timebase import Timebase, ms_to_frame, probe
 
 SEQUENCE = "Editing"
 JUDGE_MODEL = "opus"
@@ -133,8 +134,16 @@ def draft(questions: list[dict], parts: dict[int, str], lines: list[list], drops
     return markers, "\n".join(md)
 
 
-def transcript(lines: list[list]) -> str:
-    return "\n".join(f"[{clock(l[1])}] {l[3]}" for l in lines) + "\n"
+def timecode(t: float, tb: Timebase) -> str:
+    """Premiere's HH:MM:SS:FF for ``t`` seconds of footage: the nearest frame, counted at the
+    whole-number rate (non-drop-frame)."""
+    s, f = divmod(ms_to_frame(t * 1000, tb), round(tb.fps_num / tb.fps_den))
+    return f"{s // 3600:02d}:{s // 60 % 60:02d}:{s % 60:02d}:{f:02d}"
+
+
+def transcript(lines: list[list], tb: Timebase) -> str:
+    """One line per cue: its start and end as Premiere timecode, then the text."""
+    return "\n".join(f"[{timecode(l[1], tb)} - {timecode(l[2], tb)}] {l[3]}" for l in lines) + "\n"
 
 
 async def place_markers(markers: list[dict], footage_s: float, sequence: str = SEQUENCE) -> str:
@@ -193,7 +202,9 @@ def run(folder: Path, markers: bool = True, model: str = JUDGE_MODEL) -> list[st
     tx = out.parent / "Transcript"
     tx.mkdir(exist_ok=True)
     (tx / f"{day} transcript.txt").write_text(
-        "".join((f"# {m}\n" if len(full) > 1 else "") + transcript(v["lines"]) for m, v in full.items()), encoding="utf-8")
+        "".join((f"# {m}\n" if len(full) > 1 else "")
+                + transcript(v["lines"], probe(str(folder / "1. FOOTAGE" / m))) for m, v in full.items()),
+        encoding="utf-8")
     log.append(f"wrote {out / f'{day} questions.md'} and {tx / f'{day} transcript.txt'}")
     if not markers:
         log.append("markers skipped (--no-markers)")

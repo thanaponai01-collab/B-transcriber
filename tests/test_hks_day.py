@@ -92,3 +92,11 @@ def test_markers_replace_only_the_earlier_draft(monkeypatch):
 def test_markers_are_refused_unless_editing_is_active_and_uncut(monkeypatch, fake, why):
     assert why in _place(monkeypatch, fake)
     assert not any(c in ("add_markers", "remove_markers") for c, _ in fake.calls)
+
+
+def test_transcript_lines_carry_start_and_end_as_premiere_timecode():
+    from transcribe.timebase import Timebase
+    lines = [["L0001", 22.55, 27.33, "สวัสดีค่ะ"], ["L0002", 3725.0, 3726.94, "ครับ"]]
+    assert d.transcript(lines, Timebase(25, 1)) == (
+        "[00:00:22:14 - 00:00:27:08] สวัสดีค่ะ\n"     # 22.55 s = frame 563.75 -> 564 = 22 s + 14
+        "[01:02:05:00 - 01:02:06:24] ครับ\n")         # 3726.94 s -> frame 93173.5 -> 93174 = 1:02:06 + 24
