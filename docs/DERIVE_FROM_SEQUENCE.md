@@ -62,7 +62,7 @@ track. If they work, "pick question 3" is one call.
 **Done, LIVE 2026-11-24.** On the scratch sequence, In 1 s / Out 4 s gave `<name>_Sub_01` in
 56 ms. Every track came across, edges frame-exact, Scale and Gaussian Blur kept. Its frame is
 pixel-identical to the parent's at the same moment. One Undo removes it. Row in
-`docs/PREMIERE_FACTS.md`; probe `run_probe subseq`. Still untried: keyframes cut mid-clip,
+`docs/PREMIERE_FACTS.md`; now the `make_subsequence` command. Still untried: keyframes cut mid-clip,
 transitions at the edges, clip label colours. So "pick question 3" is: set In/Out on the split
 sequence, make the subsequence. Step 3 can paste from it, so a range mid-clip needs no
 `cut_copy` scratch.
@@ -87,8 +87,12 @@ paste lands on the lowest targeted track, overwrites at the playhead, and must p
 If step 1 works, a range mid-clip becomes a subsequence first. Otherwise it is a `cut_copy` to a
 scratch sequence first.
 
-Check: paste one masked `backup` insert and one mid-clip piece of a split sequence into a scratch
-YT copy. Read back the effects and the edges, and render frames at each join.
+**Done, LIVE 2026-11-24** as `premiere_paste_from {source, in_ticks, out_ticks, target, at_ticks,
+v_offset}`. It makes a subsequence of the range, copies and pastes it 30 s past the target's end,
+clones it into place (overwriting), lifts the park and deletes the piece. It reads back where the
+paste landed and corrects for track targeting. A 1–4 s range with a blur and a Scale-50 layer
+landed frame-exact with both effects. Still untried through this route: a masked insert from a
+real `backup` (the menu rows in FACTS carry masks and Lumetri), keyframes cut mid-clip.
 
 ### 4. Pieces by question, read from the user's split sequence
 

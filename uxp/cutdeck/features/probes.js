@@ -9,7 +9,6 @@ const layoutProbe = () => require("../layoutProbe.js");
 const rippleProbe = () => require("../rippleProbe.js");
 const mcpToolsProbe = () => require("../mcpToolsProbe.js");
 const hksSpike = () => require("../hksSpikeProbe.js");
-const subsequence = () => require("../subsequenceProbe.js");
 
 // HKS build plan Phase 1 (hksSpikeProbe.js): run only through the driver, on the spike copy.
 const HKS_SPIKE = [
@@ -110,14 +109,6 @@ const PROBES = [
     run: (ppro) => layoutProbe().probeTextCanvas(ppro),
     format: (report) => layoutProbe().formatTextCanvasReport(report),
     logLabel: "CutDeck text canvas probe",
-  },
-  {
-    id: "subseq",
-    startText: "Making a subsequence of the scratch sequence's 1-4 s…",
-    run: (ppro) => subsequence().probeSubsequence(ppro),
-    format: (report) => subsequence().formatReport(report),
-    logReplacer: (k, v) => (typeof v === "bigint" ? v.toString() : v),
-    logLabel: "CutDeck subsequence probe",
   },
   {
     id: "captiontiming",

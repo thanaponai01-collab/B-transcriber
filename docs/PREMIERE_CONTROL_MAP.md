@@ -58,6 +58,9 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Cut words out (each cut in the pause; read back) | `premiere_cut_words` | helper + `cut_copy` | LIVE 2026-11-22 |
 | Plan a Short by its words (piece edges in the source's pauses; items for build) | `premiere_plan_pieces` | helper | LIVE 2026-11-22 |
 | Keep only these phrases on a copy, every track kept (a Short from a synced rough cut) | `premiere_keep_words` | helper + `cut_copy` | LIVE 2026-11-22 |
+| A range of a sequence as its own sequence, every track and effect (Make Subsequence) | `premiere_make_subsequence` | UXP | LIVE 2026-11-24 |
+| Take a range of one sequence (split, backup pool, YT cut) into another at a time, every track and effect kept, overwriting | `premiere_paste_from` | helper: `make_subsequence` + menu Copy/Paste + `build_sequence` into + `remove_piece` | LIVE 2026-11-24 |
+| Delete a piece sequence `paste_from` kept (name ends ` (CutDeck piece)`) | `premiere_remove_piece` | UXP | LIVE 2026-11-24 |
 | Active sequence summary | `premiere_read_sequence` | UXP | LIVE |
 | Open / switch sequence | `premiere_open_sequence` | UXP | LIVE 2026-11-21 |
 | Delete rough-cut copies (CutDeck > Rough Cuts only, never the active one) | `premiere_remove_rough_cuts` | UXP `FolderItem.createRemoveItemAction` | LIVE 2026-11-22 |
