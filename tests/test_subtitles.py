@@ -44,13 +44,13 @@ def test_every_boundary_names_one_frame_under_round_or_ceil(tb):
 
 
 def test_frame_cues_snaps_to_nearest_frame():
-    out = frame_cues([{"text": "x", "start_ms": 1019, "end_ms": 2021}], Timebase(25, 1))
+    out = frame_cues([{"text": "x", "start_ms": 1019, "end_ms": 2021}], Timebase(25, 1), lead_in_ms=0)
     assert (out[0]["start_ms"], out[0]["end_ms"]) == (1000, 2040)
 
 
 def test_sub_frame_cue_keeps_one_frame():
     # Premiere drops a cue shorter than a frame (PREMIERE_FACTS "Sub-frame SRT cue").
-    out = frame_cues([{"text": "x", "start_ms": 75_889, "end_ms": 75_890}], Timebase(30000, 1001))
+    out = frame_cues([{"text": "x", "start_ms": 75_889, "end_ms": 75_890}], Timebase(30000, 1001), lead_in_ms=0)
     frames = [_frame_of(out[0][k], Timebase(30000, 1001), round) for k in ("start_ms", "end_ms")]
     assert frames[1] - frames[0] == 1
 
@@ -59,7 +59,7 @@ def test_cues_sharing_a_frame_never_overlap():
     cues = [{"text": "a", "start_ms": 1000, "end_ms": 1010},
             {"text": "b", "start_ms": 1010, "end_ms": 1015},
             {"text": "c", "start_ms": 1015, "end_ms": 2000}]
-    out = frame_cues(cues, Timebase(25, 1))
+    out = frame_cues(cues, Timebase(25, 1), lead_in_ms=0)
     assert [(c["start_ms"], c["end_ms"]) for c in out] == [(1000, 1040), (1040, 1080), (1080, 2000)]
 
 
@@ -69,7 +69,7 @@ def test_pushed_cues_never_overlap_a_later_cue_past_a_real_gap():
     cues = [{"text": "a", "start_ms": 1000, "end_ms": 1001},
             {"text": "b", "start_ms": 1002, "end_ms": 1003},
             {"text": "c", "start_ms": 1043, "end_ms": 2000}]
-    out = frame_cues(cues, Timebase(25, 1))
+    out = frame_cues(cues, Timebase(25, 1), lead_in_ms=0)
     assert [(c["start_ms"], c["end_ms"]) for c in out] == [(1000, 1040), (1040, 1080), (1080, 2000)]
 
 
@@ -85,13 +85,36 @@ def test_sub_frame_gap_closes_but_a_real_gap_stays():
     cues = [{"text": "a", "start_ms": 0, "end_ms": 1019},      # end -> frame 25
             {"text": "b", "start_ms": 1044, "end_ms": 2000},   # 25 ms gap -> would be frame 26
             {"text": "c", "start_ms": 2080, "end_ms": 3000}]   # 2-frame gap is a pause
-    out = frame_cues(cues, tb)
+    out = frame_cues(cues, tb, lead_in_ms=0)
     assert out[1]["start_ms"] == out[0]["end_ms"] == 1000
     assert out[2]["start_ms"] - out[1]["end_ms"] == 80
 
 
+def test_lead_in_starts_cues_early_and_moves_a_shared_boundary():
+    tb = Timebase(25, 1)
+    cues = [{"text": "a", "start_ms": 1000, "end_ms": 2000},
+            {"text": "b", "start_ms": 2000, "end_ms": 3000},   # touches a
+            {"text": "c", "start_ms": 4000, "end_ms": 5000}]   # after a real pause
+    out = frame_cues(cues, tb, lead_in_ms=120)
+    assert [(c["start_ms"], c["end_ms"]) for c in out] == [
+        (880, 1880), (1880, 3000), (3880, 5000)]
+
+
+def test_lead_in_never_reaches_into_a_cue_past_a_short_gap_or_before_zero():
+    tb = Timebase(25, 1)
+    cues = [{"text": "a", "start_ms": 50, "end_ms": 1000},
+            {"text": "b", "start_ms": 1040, "end_ms": 2000}]   # 40 ms gap, 120 ms lead
+    out = frame_cues(cues, tb, lead_in_ms=120)
+    assert [(c["start_ms"], c["end_ms"]) for c in out] == [(0, 920), (920, 2000)]
+
+
+def test_write_subtitles_leads_in_by_default_on_frame_exports():
+    srt = write_subtitles([{"text": "x", "start_ms": 2000, "end_ms": 3000}], "srt", fps=25)
+    assert "00:00:01,880 --> 00:00:03,000" in srt   # 2000 - 133 ms -> frame 47
+
+
 def test_write_subtitles_with_fps_writes_frame_exact_stamps():
-    content = write_subtitles([{"text": "hello", "start_ms": 1001, "end_ms": 2003}], "srt", fps=29.97)
+    content = write_subtitles([{"text": "hello", "start_ms": 1001, "end_ms": 2003}], "srt", fps=29.97, lead_in_ms=0)
     # frames 30 and 60 at 30000/1001: 1001.0 ms and 2002.0 ms exactly
     assert "00:00:01,001 --> 00:00:02,002" in content
 
@@ -177,7 +200,7 @@ def test_vtt_round_trip():
 def test_srt_round_trip_already_frame_aligned_is_lossless_under_quantization():
     fps = 25.0  # frame_ms = 40, exact — every multiple of 40ms is already on a frame
     tokens = [{"text": "hello", "start_ms": 40, "end_ms": 2000}]
-    content = write_subtitles(tokens, "srt", fps=fps)
+    content = write_subtitles(tokens, "srt", fps=fps, lead_in_ms=0)
     parsed = read_subtitles(content, "srt")
     assert parsed[0]["start_ms"] == 40
     assert parsed[0]["end_ms"] == 2000

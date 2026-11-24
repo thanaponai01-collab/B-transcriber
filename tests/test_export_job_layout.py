@@ -32,7 +32,8 @@ def test_export_layout_uses_saved_corrections_and_keeps_timing(tmp_path, monkeyp
                                 ext, preserve_line_breaks=True)
         assert parsed[0]['text'].replace('\n', '') == 'ลูกต้องการการดูแลจากเราอยู่'
         assert '\n' in parsed[0]['text']
-        assert (parsed[0]['start_ms'], parsed[0]['end_ms']) == (1000, 3000)
+        # layout keeps the timing; only the export's lead-in (133 ms -> frame 22) moves the start
+        assert (parsed[0]['start_ms'], parsed[0]['end_ms']) == (880, 3000)
 
 
 def test_export_refuses_srt_without_a_frame_rate(monkeypatch):

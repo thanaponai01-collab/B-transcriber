@@ -53,19 +53,31 @@ def _frame_start_ms(frame: int, tb: Timebase) -> int:
     return frame * tb.fps_den * 1000 // tb.fps_num
 
 
-def frame_cues(cues: list[dict], tb: Timebase) -> list[dict]:
+# Hand-cut subtitles start before the speech; engine cue starts land just after
+# it. Measured 2026-11-24 on the hand-cut gold shorts (Short1-3): see the commit.
+LEAD_IN_MS = 133
+
+
+def frame_cues(cues: list[dict], tb: Timebase, lead_in_ms: int = LEAD_IN_MS) -> list[dict]:
     """Snap time-ordered cues to whole frames of the target sequence.
 
     Premiere does this rounding itself on import, cue by cue, and drops a cue
     that rounds to zero frames (PREMIERE_FACTS "Sub-frame SRT cue"). Doing it
     here instead makes the file say exactly what the timeline will show:
 
+    * every start moves ``lead_in_ms`` earlier; a previous cue it reaches into
+      ends there instead, so touching cues move their shared boundary
     * every boundary is the nearest frame, written as ``_frame_start_ms``
     * every cue lasts at least one frame
     * no cue starts before the previous one ends, even when both snap to one frame
     * a gap shorter than one frame is rounding noise and closes on the frame;
       a gapless input stays gapless
     """
+    if lead_in_ms:
+        starts = [max(c["start_ms"] - lead_in_ms, 0) for c in cues]
+        ends = [max(min(c["end_ms"], nxt), s + 1)
+                for c, s, nxt in zip(cues, starts, starts[1:] + [float("inf")])]
+        cues = [{**c, "start_ms": s, "end_ms": e} for c, s, e in zip(cues, starts, ends)]
     frame_ms = Fraction(tb.fps_den * 1000, tb.fps_num)
     out: list[dict] = []
     prev_end_ms, prev_end = None, 0
@@ -92,12 +104,14 @@ def _ms_to_vtt(ms: int) -> str:
     return _ms_to_srt(ms).replace(",", ".")
 
 
-def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -> str:
+def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None,
+                    lead_in_ms: int = LEAD_IN_MS) -> str:
     """Format a token list (dicts with text/start_ms/end_ms) as SRT or VTT text.
 
-    fps: if given, snaps cues to the target sequence's frames (``frame_cues``)
-    before formatting. Varies per clip/target sequence, so it is passed per
-    call (module docstring, issue #7); every Premiere-facing export passes it.
+    fps: if given, snaps cues to the target sequence's frames (``frame_cues``,
+    which also applies ``lead_in_ms``) before formatting. Varies per clip/target
+    sequence, so it is passed per call (module docstring, issue #7); every
+    Premiere-facing export passes it.
 
     Returns the formatted text; writing it to disk is the caller's job.
     """
@@ -107,7 +121,7 @@ def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None) -
     # Blanks go before frame snapping so they never push a real cue.
     cues = [t for t in tokens if t["text"].strip()]
     if fps:
-        cues = frame_cues(cues, Timebase.from_decimal_fps(fps))
+        cues = frame_cues(cues, Timebase.from_decimal_fps(fps), lead_in_ms)
 
     ms_to_ts = _ms_to_srt if fmt == "srt" else _ms_to_vtt
 
