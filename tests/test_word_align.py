@@ -1,7 +1,7 @@
 """Word-start alignment (transcribe/pipeline/word_align.py): starts move, text stays."""
 from types import SimpleNamespace as Cue
 
-from transcribe.pipeline.word_align import retime_cue_starts, retime_starts
+from transcribe.pipeline.word_align import retime_cues, retime_words
 
 
 def w(text, s, e):
@@ -28,7 +28,7 @@ def fake(heard):
 
 def test_starts_move_to_what_the_aligner_heard_and_a_word_ends_by_the_next_start():
     align, calls = fake({"สวัสดี": 1080, "ครับ": 1460, "วันนี้": 2960})
-    new = retime_starts(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000)
+    new = retime_words(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000)
     assert [(x["start_ms"], x["end_ms"]) for x in new] == [(1080, 1460), (1460, 1900), (2960, 3400), (3400, 3700)]
     assert [x["text"] for x in new] == [x["text"] for x in WORDS]
     assert calls[0] == (600, 2300, ["สวัสดี", "ครับ"])  # one padded window per cue
@@ -38,14 +38,14 @@ def test_starts_move_to_what_the_aligner_heard_and_a_word_ends_by_the_next_start
 def test_a_word_the_model_cannot_align_walls_off_its_own_audio():
     words = [w("ปี", 1000, 1300), w("20", 1300, 1600), w("อย่างนี้", 1600, 2000)]
     align, calls = fake({"ปี": 950, "อย่างนี้": 1620})
-    new = retime_starts(words, [Cue(start_ms=1000, end_ms=2000)], align, thai, pad_ms=400, duration_ms=10_000)
+    new = retime_words(words, [Cue(start_ms=1000, end_ms=2000)], align, thai, pad_ms=400, duration_ms=10_000)
     assert calls == [(600, 1300, ["ปี"]), (1600, 2400, ["อย่างนี้"])]
     assert [x["start_ms"] for x in new] == [950, 1300, 1620]
 
 
 def test_starts_never_go_backwards_and_a_word_keeps_one_ms():
     align, _ = fake({"สวัสดี": 1600, "ครับ": 1400})
-    new = retime_starts(WORDS[:2], CUES[:1], align, thai, pad_ms=0, duration_ms=10_000)
+    new = retime_words(WORDS[:2], CUES[:1], align, thai, pad_ms=0, duration_ms=10_000)
     assert [(x["start_ms"], x["end_ms"]) for x in new] == [(1600, 1601), (1600, 1900)]
 
 
@@ -53,7 +53,7 @@ def test_touching_cues_move_their_shared_boundary_either_way():
     cues = [Cue(start_ms=1000, end_ms=1900), Cue(start_ms=1900, end_ms=3000), Cue(start_ms=3000, end_ms=3700)]
     old = [w("a", 1000, 1400), w("b", 1900, 2500), w("c", 3000, 3400)]
     new = [w("a", 1060, 1400), w("b", 1850, 2500), w("c", 3080, 3400)]
-    retime_cue_starts(cues, old, new)
+    retime_cues(cues, old, new)
     assert [(c.start_ms, c.end_ms) for c in cues] == [(1060, 1850), (1850, 3080), (3080, 3700)]
 
 
@@ -61,7 +61,7 @@ def test_a_cue_after_a_pause_never_reaches_into_the_previous_one():
     cues = [Cue(start_ms=1000, end_ms=1900), Cue(start_ms=2100, end_ms=3000)]
     old = [w("a", 1000, 1400), w("b", 2100, 2500)]
     new = [w("a", 1000, 1400), w("b", 1800, 2500)]
-    retime_cue_starts(cues, old, new)
+    retime_cues(cues, old, new)
     assert [(c.start_ms, c.end_ms) for c in cues] == [(1000, 1900), (1900, 3000)]
 
 
@@ -104,7 +104,7 @@ def test_no_snap_where_the_sound_never_drops_into_a_real_pause():
 
 def test_snap_moves_every_start_then_the_clamps_hold():
     align, _ = fake({"สวัสดี": 1080, "ครับ": 1460, "วันนี้": 2960})
-    new = retime_starts(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000, snap=lambda s, prev: s - 100)
+    new = retime_words(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000, snap=lambda s, prev: s - 100)
     assert [(x["start_ms"], x["end_ms"]) for x in new] == [(980, 1360), (1360, 1900), (2860, 3300), (3300, 3700)]
 
 
@@ -114,7 +114,7 @@ def test_the_second_word_of_a_phrase_keeps_its_start():
     lev = levels_db(_speech((1000, 2000)), 16000)
     words = [w("ก็", 1080, 1150), w("ทำ", 1150, 1600)]
     align, _ = fake({"ก็": 1080, "ทำ": 1150})
-    new = retime_starts(words, [Cue(start_ms=1000, end_ms=2000)], align, thai, pad_ms=0, duration_ms=3000,
+    new = retime_words(words, [Cue(start_ms=1000, end_ms=2000)], align, thai, pad_ms=0, duration_ms=3000,
                         snap=lambda s, prev: snap_to_sound(s, prev, lev))
     assert 970 <= new[0]["start_ms"] <= 1000
     assert new[1]["start_ms"] == 1150 and new[0]["end_ms"] == 1150
@@ -125,3 +125,64 @@ def test_a_missing_checkpoint_names_the_export_command():
     from transcribe.pipeline.word_align import model_path
     with pytest.raises(FileNotFoundError, match="export_checkpoint"):
         model_path("models/never-exported.pt")
+
+
+def test_an_end_before_a_pause_moves_onto_where_the_sound_fades():
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
+    lev = levels_db(_speech((1000, 1500)), 16000)
+    assert 1490 <= snap_end_to_sound(1000, 1300, lev) <= 1520  # CTC's last letter 200 ms early
+    assert 1490 <= snap_end_to_sound(1000, 1700, lev) <= 1520  # an engine end in the quiet
+
+
+def test_no_end_snap_without_a_real_pause_or_far_into_the_quiet():
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
+    lev = levels_db(_speech((1000, 1500), (1540, 2000)), 16000)
+    assert snap_end_to_sound(1000, 1300, lev) is None  # 40 ms gap: not a pause
+    lev = levels_db(_speech((1000, 1500)), 16000)
+    assert snap_end_to_sound(1000, 2300, lev) is None  # 800 ms into the quiet: out of reach
+
+
+def test_an_anchor_in_room_noise_does_not_carry_the_end_through_it():
+    """CTC put an unheard letter in fading room noise after the word: the end must not run on into it."""
+    import numpy as np
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
+    y = _speech((1000, 1500), level=0.03, floor=0.0)  # a quiet voice, about -33 dB
+    t = np.arange(700 * 16)
+    amp = 10 ** ((-50 - 20 * t / len(t)) / 20)  # room noise fading -50 -> -70 dB, then the gate
+    y[1500 * 16:2200 * 16] = np.random.default_rng(1).normal(0, 1, len(t)) * amp
+    lev = levels_db(y, 16000)
+    assert snap_end_to_sound(1000, 1850, lev) is None
+
+
+def test_a_cue_followed_by_a_gap_ends_with_its_last_word_and_a_touching_cue_does_not_move():
+    cues = [Cue(start_ms=1000, end_ms=2000), Cue(start_ms=2500, end_ms=3000), Cue(start_ms=3000, end_ms=3500)]
+    old = [w("a", 1000, 2000), w("b", 2500, 3000), w("c", 3000, 3500)]
+    new = [w("a", 1000, 1700), w("b", 2500, 2800), w("c", 3000, 3400)]
+    retime_cues(cues, old, new)
+    assert [(c.start_ms, c.end_ms) for c in cues] == [(1000, 1700), (2500, 3000), (3000, 3400)]
+
+
+def test_end_snap_runs_from_ctc_last_letter_and_never_passes_the_next_start():
+    align, _ = fake({"สวัสดี": 1000, "ครับ": 1500, "วันนี้": 3000})
+    got = []
+
+    def snap_end(start, anchor):
+        got.append((start, anchor))
+        return anchor + 450
+    new = retime_words(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000, snap_end=snap_end)
+    assert got == [(1000, 1100), (1500, 1600), (3000, 3100), (3400, 3700)]  # last letter = start + 100; F1 has
+    assert [x["end_ms"] for x in new] == [1500, 2050, 3400, 4150]  # no letters: its own end. Clipped to the next start
+
+
+def test_a_word_with_no_sound_of_its_own_gets_no_end_snap():
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
+    lev = levels_db(_speech((1000, 1500)), 16000)  # the previous word's sound; this word sits in the pause
+    assert snap_end_to_sound(1700, 1800, lev) is None
+
+
+def test_a_gapped_cue_whose_end_moves_far_back_does_not_reach_into_the_previous_cue():
+    cues = [Cue(start_ms=0, end_ms=1000), Cue(start_ms=1200, end_ms=2600)]  # cue 1 holds past its word
+    old = [w("a", 0, 800), w("b", 1200, 2600)]
+    new = [w("a", 0, 800), w("b", 850, 950)]  # start snapped back, end snapped back 1.65 s
+    retime_cues(cues, old, new)
+    assert cues[1].start_ms >= cues[0].end_ms and cues[1].end_ms > cues[1].start_ms

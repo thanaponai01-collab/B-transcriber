@@ -1,19 +1,18 @@
-"""Word-start alignment: re-time each engine word's start against the audio with a Thai CTC model.
+"""Word alignment: re-time each engine word's start, and its end before a pause, against the audio.
 
 Whisper's word times come from its attention, which lands a word start within one 25 fps frame
-of the real onset only about half the time (``transcribe.eval.timing``). A CTC acoustic model
-scores every 20 ms frame against every letter, so forced alignment of the engine's own text
-finds where each word actually begins.
+of the real onset only about half the time, and an end before a pause one time in ten
+(``transcribe.eval.timing``). A CTC acoustic model scores every 20 ms frame against every
+letter, so forced alignment of the engine's own text finds where each word actually is.
 
-Times only: the text never changes. Starts move. CTC ends stop before a syllable's sound
-fades (measured 168 ms early), so ends stay the engine's, cut back only where the next word
-now starts sooner; a cue touching the next one ends where that one now starts. A word the
-model has no letters for (Latin, digits) keeps its times and bounds its neighbours' windows.
-CTC fires on a letter's spike, late after a pause, so a start next to a pause then moves onto
-the edge of the sound in the waveform (``snap_to_sound``).
-
-Runs after Engine A is unloaded (one model on the GPU at a time). Each cue is aligned in its
-own window, padded by ``pad_ms``, so a long file never goes through the model at once.
+Times only: the text never changes. CTC fires on a letter's spike, late after a pause, so a
+start next to a pause then moves onto the edge of the sound in the waveform
+(``snap_to_sound``). CTC's last letter stops before a syllable fades (measured 168 ms early),
+so an end before a pause walks on from it to where the sound fades (``snap_end_to_sound``);
+elsewhere a word ends at the engine's end, cut back where the next word now starts sooner. A
+cue touching the next one ends where that one now starts; a cue before a gap ends with its
+last word. A word the model has no letters for (Latin, digits) keeps its engine times as the
+starting point and bounds its neighbours' windows.
 """
 from __future__ import annotations
 
@@ -44,6 +43,16 @@ def levels_db(audio: np.ndarray, sr: int) -> np.ndarray:
     return 20 * np.log10(np.sqrt(ms) + 1e-9)
 
 
+DIGITAL_DB = -120.0  # a noise gate's digital silence: below any room
+
+
+def _floor(window: np.ndarray) -> float:
+    """The quietest level in ``window``, leaving out a noise gate's digital silence (OBS): there
+    the room's noise between the voice and the gate closing must count as quiet, not sound."""
+    live = window[window > DIGITAL_DB]
+    return float(live.min() if len(live) else window.min())
+
+
 def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20, pause: int = 6,
                   ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0) -> int:
     """A start next to a pause, moved onto the edge of the sound. CTC places a word at its
@@ -58,7 +67,7 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
     f = start_ms // 10
     if f >= len(lev):
         return start_ms
-    floor = lev[max(0, f - ctx):f + ctx].min()
+    floor = _floor(lev[max(0, f - ctx):f + ctx])
     if lev[f:f + 15].max() - floor < range_db:
         return start_ms
     q = floor + quiet_db
@@ -76,15 +85,54 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
     return start_ms if g == f else g * 10
 
 
-def retime_starts(words: list[dict], cues: list, align: AlignWindow, alignable: Callable[[str], bool],
-                  pad_ms: int, duration_ms: int, snap: Callable[[int, int], int] | None = None) -> list[dict]:
-    """New word dicts with aligned starts. ``cues`` give the windows: each word goes with the cue
-    its start falls in. A word the model cannot align (Latin, digits) keeps its times and walls
-    off its own audio: the Thai words either side align only up to its start or from its end,
-    so they cannot latch onto its sound. ``snap(start, previous word's start)`` then moves every
-    start (aligned or kept) onto the sound's edge. Starts never go backwards; a word ends by the next word's start and keeps
-    at least 1 ms."""
+def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int = 40, pause: int = 6,
+                      ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0,
+                      below_peak_db: float = 30.0, tail_db: float = 25.0) -> int | None:
+    """The end of a word followed by a pause: where its sound fades into the quiet, or None.
+
+    ``anchor_ms`` is a time inside the word's last sound (CTC's last letter, which stops before
+    the syllable fades) or just after it. From there the end walks forward while the sound runs
+    on unbroken, at most ``reach`` frames, or back out of quiet. It counts only if ``pause`` quiet frames follow. An anchor on sound but already
+    ``tail_db`` under the peak walks nowhere: CTC puts letters it did not hear late, in the
+    noise. Quiet is as in ``snap_to_sound``, or ``below_peak_db`` under the loudest frame from
+    the word's start to the anchor, whichever is higher: a fading tail is not speech, and
+    neither is room noise. The music-bed gate is as there."""
+    f = min(anchor_ms // 10, len(lev) - 1)
+    if f < 0:
+        return None
+    floor = _floor(lev[max(0, f - ctx):f + ctx])
+    peak = lev[min(max(0, start_ms // 10), f):f + 1].max()
+    if peak - floor < range_db:
+        return None
+    q = max(floor + quiet_db, peak - below_peak_db)
+    g = f
+    if lev[f] >= q:
+        if lev[f] < peak - tail_db:
+            return None
+        while g < len(lev) - 1 and g - f < reach and lev[g] >= q:
+            g += 1
+    else:
+        while g > 0 and f - g < reach and lev[g - 1] < q:
+            g -= 1
+    if abs(g - f) >= reach or (lev[g:g + pause] >= q).any():
+        return None
+    return g * 10
+
+
+def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: Callable[[str], bool],
+                 pad_ms: int, duration_ms: int, snap: Callable[[int, int], int] | None = None,
+                 snap_end: Callable[[int, int], int | None] | None = None) -> list[dict]:
+    """New word dicts with aligned starts and, where a pause follows, ends. ``cues`` give the
+    windows: each word goes with the cue its start falls in. A word the model cannot align
+    (Latin, digits) keeps its times and walls off its own audio: the Thai words either side
+    align only up to its start or from its end, so they cannot latch onto its sound.
+    ``snap(start, previous word's start)`` then moves every start (aligned or kept) onto the
+    sound's edge. Starts never go backwards. ``snap_end(start, anchor)`` gives the
+    end of a word a pause follows, from CTC's last letter (the engine's end where the model
+    has no letters); elsewhere a word ends at the engine's end. A word ends by the next word's
+    start and keeps at least 1 ms."""
     out = [dict(w) for w in words]
+    last_letter: dict[int, float] = {}
     for c in cues:
         idx = [i for i, w in enumerate(words) if c.start_ms <= w["start_ms"] < c.end_ms]
         lo = max(c.start_ms - pad_ms, 0)
@@ -98,6 +146,7 @@ def retime_starts(words: list[dict], cues: list, align: AlignWindow, alignable: 
                 for j, span in zip(run, align(lo, hi, [words[j]["text"] for j in run])):
                     if span is not None:
                         out[j]["start_ms"] = int(round(span[0]))
+                        last_letter[j] = span[1]
             run = []
             if i is not None:
                 lo = words[i]["end_ms"]
@@ -109,20 +158,29 @@ def retime_starts(words: list[dict], cues: list, align: AlignWindow, alignable: 
     for w in out:
         w["start_ms"] = max(w["start_ms"], prev)
         prev = w["start_ms"]
-    for w, nxt in zip(out, out[1:] + [None]):
-        end = w["end_ms"] if nxt is None else min(w["end_ms"], nxt["start_ms"])
+    for i, (w, nxt) in enumerate(zip(out, out[1:] + [None])):
+        nxt_ms = duration_ms if nxt is None else nxt["start_ms"]
+        heard = snap_end(w["start_ms"], int(last_letter.get(i, w["end_ms"]))) if snap_end else None
+        end = min(w["end_ms"] if heard is None else heard, nxt_ms)
         w["end_ms"] = max(end, w["start_ms"] + 1)
     return out
 
 
-def retime_cue_starts(cues: list, old_words: list[dict], new_words: list[dict]) -> None:
+def retime_cues(cues: list, old_words: list[dict], new_words: list[dict]) -> None:
     """In place: each cue starts where its first word now starts. A cue that touched the
     previous one moves their shared boundary, so the pair stays gapless; otherwise the start
-    never reaches back into the previous cue. A cue keeps at least 1 ms."""
+    never reaches back into the previous cue. A cue followed by a gap moves its end as far as its
+    last word's end moved, never past the next cue's start. A cue keeps at least 1 ms."""
     prev = None
-    for c in cues:
+    for k, c in enumerate(cues):
         touching = prev is not None and c.start_ms == prev.end_ms
-        firsts = [n["start_ms"] for o, n in zip(old_words, new_words) if c.start_ms <= o["start_ms"] < c.end_ms]
+        mine = [(o, n) for o, n in zip(old_words, new_words) if c.start_ms <= o["start_ms"] < c.end_ms]
+        firsts = [n["start_ms"] for o, n in mine]
+        nxt = cues[k + 1] if k + 1 < len(cues) else None
+        if mine and not (nxt and nxt.start_ms == c.end_ms):
+            end = c.end_ms + mine[-1][1]["end_ms"] - mine[-1][0]["end_ms"]  # keeps any hold past the word
+            end = max(end, c.start_ms + 1)  # so the start clamp below never reaches the previous cue
+            c.end_ms = end if nxt is None else min(end, nxt.start_ms)
         if firsts:
             if touching:
                 c.start_ms = min(max(firsts[0], prev.start_ms + 1), c.end_ms - 1)
@@ -134,20 +192,19 @@ def retime_cue_starts(cues: list, old_words: list[dict], new_words: list[dict]) 
 
 def align_words(words: list[dict], cues: list, audio: np.ndarray, sr: int, device: str, cfg: dict) -> list[dict]:
     """The step as the pipeline runs it (config ``word_align``): load the CTC model, re-time the
-    word starts, snap them to the sound unless ``snap_to_sound`` is off, unload. New word dicts;
-    the cue starts move in place."""
-    snap = None
-    if cfg.get("snap_to_sound", True):
-        lev = levels_db(audio, sr)
-        snap = lambda s, prev: snap_to_sound(s, prev, lev)  # noqa: E731
+    word starts, snap them to the sound unless ``snap_to_sound`` is off, snap the ends before a
+    pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place."""
+    lev = levels_db(audio, sr)
+    snap = (lambda s, prev: snap_to_sound(s, prev, lev)) if cfg.get("snap_to_sound", True) else None
+    snap_end = (lambda s, a: snap_end_to_sound(s, a, lev)) if cfg.get("snap_ends", True) else None
     aligner = ThaiCTCAligner(audio, sr, cfg.get("model", DEFAULT_MODEL), device)
     aligner.load()
     try:
-        new = retime_starts(words, cues, aligner, aligner.alignable, int(cfg.get("pad_ms", 400)),
-                            len(audio) * 1000 // sr, snap)
+        new = retime_words(words, cues, aligner, aligner.alignable, int(cfg.get("pad_ms", 400)),
+                           len(audio) * 1000 // sr, snap, snap_end)
     finally:
         aligner.unload()
-    retime_cue_starts(cues, words, new)
+    retime_cues(cues, words, new)
     return new
 
 
@@ -182,6 +239,8 @@ class ThaiCTCAligner:
     """A wav2vec2 CTC model with a Thai letter vocabulary (a torchaudio checkpoint), as an ``AlignWindow``."""
 
     def __init__(self, audio: np.ndarray, sr: int, model: str = DEFAULT_MODEL, device: str = "cuda"):
+        if sr != 16000:
+            raise ValueError(f"the CTC model needs 16 kHz audio, got {sr} Hz")
         self._audio, self._sr, self._name, self._device = audio, sr, model, device
         self._model = None
 

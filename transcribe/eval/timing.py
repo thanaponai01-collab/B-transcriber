@@ -31,12 +31,19 @@ HOP_MS = 10
 PAUSE_MS = 100        # quiet this long before an onset (after an offset) makes it an edge
 QUIET_DB = 6          # above the clip's noise floor (10th percentile of 10 ms frame levels)
 LOUD_DB = 14
+DECAY_MS = 300        # an offset needs a loud frame this close before the quiet: speech fades, it does not stop
+BELOW_PEAK_DB = 30    # an offset's quiet also counts 30 dB under the speech before it: a fading tail is not speech
+DIGITAL_DB = -120     # below this a frame is a noise gate's digital silence, left out of the offset floor
 MATCH_MS = 300        # an edge with no engine time this close is not counted
 FRAME_MS = 40         # one frame at 25 fps, for the "within a frame" share
 
 
 def audio_edges(y: np.ndarray, sr: int = 16000) -> tuple[list[int], list[int]]:
-    """(onsets, offsets) in ms: a loud 10 ms frame right after (before) PAUSE_MS of quiet."""
+    """(onsets, offsets) in ms. An onset is a loud 10 ms frame right after PAUSE_MS of quiet. An
+    offset is where PAUSE_MS of quiet begins, with a loud frame within DECAY_MS before it. For an
+    offset, quiet is under the room's noise + QUIET_DB or BELOW_PEAK_DB under the loudest frame
+    of those DECAY_MS, whichever is higher, and the room's noise leaves out a noise gate's
+    digital silence: on gated audio (OBS) the gate closes up to a second after the voice stops."""
     import librosa
     rms = librosa.feature.rms(y=y, frame_length=sr * 25 // 1000, hop_length=sr * HOP_MS // 1000)[0]
     level = 20 * np.log10(rms + 1e-9)
@@ -44,7 +51,17 @@ def audio_edges(y: np.ndarray, sr: int = 16000) -> tuple[list[int], list[int]]:
     quiet, loud = level < floor + QUIET_DB, level > floor + LOUD_DB
     n = PAUSE_MS // HOP_MS
     on = [i * HOP_MS for i in range(n, len(level) - n) if loud[i] and quiet[i - n:i].all()]
-    off = [(i + 1) * HOP_MS for i in range(n, len(level) - n) if loud[i] and quiet[i + 1:i + 1 + n].all()]
+    live = level[level > DIGITAL_DB]
+    room = np.percentile(live, 10) if len(live) > len(level) // 10 else floor
+    d = DECAY_MS // HOP_MS
+    off: list[int] = []
+    for j in range(1, len(level) - n):
+        if off and j * HOP_MS < off[-1] + PAUSE_MS:  # one offset per pause
+            continue
+        peak = level[max(0, j - d):j].max()
+        thr = max(room + QUIET_DB, peak - BELOW_PEAK_DB)
+        if peak > room + LOUD_DB and level[j - 1] >= thr and (level[j:j + n] < thr).all():
+            off.append(j * HOP_MS)
     return on, off
 
 
@@ -72,7 +89,9 @@ def score(y: np.ndarray, words: list[dict], cues: list[dict], sr: int = 16000) -
     on, off = audio_edges(y, sr)
     return {"word_start": edge_errors([w["start_ms"] for w in words], on),
             "word_end": edge_errors([w["end_ms"] for w in words], off),
-            "cue_start": edge_errors([c["start_ms"] for c in cues], on)}
+            "cue_start": edge_errors([c["start_ms"] for c in cues], on),
+            "cue_end": edge_errors([c["end_ms"] for c, n in zip(cues, cues[1:] + [None])  # a cue touching
+                                    if n is None or n["start_ms"] > c["end_ms"]], off)}  # the next ends at its start
 
 
 def _run(path: str, config: dict, db: Path) -> tuple[list[dict], list[dict]]:
