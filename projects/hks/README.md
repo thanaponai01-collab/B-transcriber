@@ -4,6 +4,12 @@ A ~2 h live news-talk show, cut by the user into 4 deliverables per episode: You
 (15–20 min), Facebook (1080², 2:59:24), Reel 3 min and Reel 1 min. Goal: the user approves drafts
 instead of cutting by hand ([build-plan.md](build-plan.md)).
 
+**Two programs (the user, 2026-11-24):**
+- **โหนกระแส**: the main show. Each day's ~2 h broadcast is cut into the four deliverables above.
+- **โหนหลังกระแส**: a compilation. It usually joins **4 videos**, each one a **long โหนกระแส video that is
+  already edited** (a day's finished YT cut, ~20 min), cut down again into one video (EP.162, EP.167, EP.168;
+  study files `*-compilation.md`, `20261111-ep168-paper-edit.md`).
+
 ## Read order
 1. [Main principles](../PRINCIPLES.md)
 2. [principles.md](principles.md): the show's why (`HKS-n`; none confirmed yet)
@@ -12,6 +18,8 @@ instead of cutting by hand ([build-plan.md](build-plan.md)).
 5. [build-plan.md](build-plan.md) → [rule-audit.md](rule-audit.md): the automation plan and its checks
 6. [workflow-log.md](workflow-log.md): the evidence (episode 20261120, steps 0–8)
 7. [design-topic-cut.md](design-topic-cut.md): earlier topic-cut design; its findings still hold
+8. [study/README.md](study/README.md): the agent's study of every finished cut (2026-11-23): synthesis,
+   candidate principles HKS-1–13, holdout test, questions for the user
 
 ## Where things live
 - Day folders: `G:\Me\Works\YYYYMMDD - โหนกระแส` ([memory](memory/day-folders.md))
