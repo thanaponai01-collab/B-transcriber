@@ -211,8 +211,10 @@ particles (ครับ/ค่ะ). The adapter windows the audio itself with `c
 
 **`temperature` is a no-op on the batched path (faster-whisper 1.2.1).** `generate_segment_batched`
 passes `sampling_temperature` but not `sampling_topk`, and CTranslate2 then decodes greedily. The
-sequential path sets `sampling_topk: 0`. So the adapter's `temperature` argument changes nothing;
-open, not fixed.
+sequential path sets `sampling_topk: 0`. So the adapter's `temperature` argument changes nothing.
+Known and proven since 2026-08-05: byte-identical output at 0.0-1.0 and an unchanged harness run
+(`config.yaml` `self_ensemble` notes, TODO_LEDGER "Phase D"). The only caller is the self-ensemble,
+which is off and closed; the argument stays in case faster-whisper threads `sampling_topk` through.
 
 **The checkpoint must be CTranslate2.** `WhisperModel` can't load a raw HF checkpoint; convert it
 once with `ct2-transformers-converter` (see `requirements.txt`).
