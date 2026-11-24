@@ -59,9 +59,13 @@ in `reference/adobe/api/premierepro.txt` and have no `PREMIERE_FACTS` row. They 
 Make Subsequence: a range of a sequence becomes a new sequence with real clips, effects and every
 track. If they work, "pick question 3" is one call.
 
-Check: on a `cdv.py scratch` project, never the user's, set in/out on a three-clip sequence with
-an effect and a label, make the subsequence and read it back (clips, effects, labels, frame-exact
-edges). Add a FACTS row either way.
+**Done, LIVE 2026-11-24.** On the scratch sequence, In 1 s / Out 4 s gave `<name>_Sub_01` in
+56 ms. Every track came across, edges frame-exact, Scale and Gaussian Blur kept. Its frame is
+pixel-identical to the parent's at the same moment. One Undo removes it. Row in
+`docs/PREMIERE_FACTS.md`; probe `run_probe subseq`. Still untried: keyframes cut mid-clip,
+transitions at the edges, clip label colours. So "pick question 3" is: set In/Out on the split
+sequence, make the subsequence. Step 3 can paste from it, so a range mid-clip needs no
+`cut_copy` scratch.
 
 ### 2. `arrange`: reorder blocks on a copy by order, not arithmetic
 

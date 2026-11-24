@@ -88,7 +88,7 @@ def _marker_arguments(args: dict, jobs) -> dict:
 
 def _run_probe_arguments(args: dict, jobs) -> dict:
     probe = args.get("probe")
-    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming",
+    valid = {"timing", "motion", "effect", "transform", "keyframe", "alcreate", "syncmoves", "nativecut", "mutestate", "textcanvas", "captiontiming", "subseq",
              "hks1a", "hks1b", "hks1c", "hks1d", "hks1e"}  # HKS build plan Phase 1 spike (hksSpikeProbe.js)
     if not isinstance(probe, str) or probe not in valid:
         raise ValueError(f"probe must be one of: {', '.join(sorted(valid))}")
