@@ -112,16 +112,25 @@ opening words from the stored transcript. Its `from_ticks` / `to_ticks` go strai
 `Edit` reads too. It needs the project saved, because Premiere gives a panel no clip labels.
 Not checked against `hks_day`'s `questions.md`, which is the judge's grouping, not the user's.
 
-### 5. Make the rebuild routes hard to reach
+### 5. Route order: XML is the last way, not blocked
 
-- A Claude Code `PreToolUse` hook that refuses a Write or a script that writes `<xmeml` into a
-  day folder. The memory alone did not hold.
-- `build_sequence` with `media` items refuses when the named base has a parent in the chain
-  (open question: how the tool knows. A name prefix, or a note next to the project).
-- When the day's project is not open, the agent asks the user to open it and waits. It never
-  writes an XML in its place.
-- `cutdeck/honekasae_export.py` is the older story-pipeline FCP7 export, with tests. Retire it,
-  or keep it for that pipeline only.
+The user's call (2026-11-24): don't block FCP7 XML, keep it as the backup. The agent takes the
+first route that works and says in the handover which one it used:
+
+1. **Derive in Premiere from the parent sequence**: `duplicate_sequence`, `cut_copy`,
+   `keep_words`, `paste_from`, `arrange`, then patch with `edit_clips` / `set_param`. This is the
+   default for every stage that has a parent: YT from the split, FB and reels from YT, draft vN+1
+   from vN.
+2. **Build in Premiere from the footage** (`plan_pieces` → `build_sequence` with `media`): only
+   when no sequence holds the material yet, such as a first cut of a new compilation.
+3. **FCP7 XML for the user to import**: only when Premiere cannot be driven live. For example,
+   the day's project is not the open one and the user is away (an overnight run). The handover
+   names which of routes 1 and 2 failed and why. The XML lands in the day's `CutDeck` folder as an
+   option next to the user's work, never in place of it. When the user is there, the agent asks
+   them to open the project instead.
+
+`cutdeck/honekasae_export.py` (the older story-pipeline FCP7 export) stays as that pipeline's
+route 3.
 
 ### 6. One timing source for words (check)
 
@@ -134,5 +143,5 @@ the measured one. Check which one `keep_words` and `paste_from` edges use, and k
 
 1. **Stage names.** What do you call the split sequence and the sequences after it? Fixed names
    let every tool find a parent without asking.
-2. **XML.** Block it with a hook (hard stop) or keep it as a rule (soft)?
+2. **XML.** Answered 2026-11-24: keep it as the last way, not blocked (step 5).
 3. **Order.** Steps 1 → 2 → 3 first (they remove the rebuilds you see), then 4, 5 and 6?

@@ -94,6 +94,12 @@ How the agent builds an HKS draft (why: [principles.md](principles.md) HKS-C13 t
    user picks; record the pick and the user's reason in `memory/`.
 4. **Cut:** tighten at speaker changes first; inside one speaker's run only under cover (HKS-C17).
 
+**Route order** (user, 2026-11-24: XML stays, as the last way): (1) copy the parent sequence in
+Premiere and pick from it (`paste_from`, `arrange`, `keep_words`, `cut_copy`, `duplicate_sequence`);
+(2) build from the footage only when no sequence holds the material yet; (3) an FCP7 XML in the day's
+`CutDeck` folder only when Premiere can't be driven live, saying in the handover why 1 and 2 failed.
+Details: `docs/DERIVE_FROM_SEQUENCE.md` step 5.
+
 Checks before handover (each one listed in the handover, with timecodes):
 - **Promises:** every question from the hook, the cards and the host is answered, or open on purpose (HKS-C13).
 - **Middle:** no stretch of about 3–4 min without a new picture, a host question or a turn (HKS-C14).
