@@ -48,8 +48,8 @@ frame")* *(guess: it applies wherever a picture is reframed, not only Shorts)*
   edits the user's day project" (agent-written); 1RaceClub "copy the rough cut and work from there" is
   confirmed, but its reason is that the layers and audio tracks come along. Same principle or not?
 - **Watch time:** judge every second by whether it keeps the viewer watching longer
-  (1RaceClub Shorts, [shorts-rules.md](1raceclub/shorts-rules.md) section 0). Does it hold for HKS
-  long form too?
+  (1RaceClub Shorts, [shorts-rules.md](1raceclub/shorts-rules.md) section 0). HKS: **partly** (user,
+  2026-11-24): after honesty and fairness ([hks/principles.md](hks/principles.md) HKS-C18).
 - **No other brand's marks on screen:** 1RaceClub removes every F1 logo; HKS blurs the TV clock and
   other sources' watermarks. One principle (rights), or two different reasons?
 - **Verify from the footage what each line is about** before cutting it (1RaceClub).

@@ -82,6 +82,26 @@ Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Autom
    rule 6's "no fixed minimum" (user, 2026-11-24).
 7. Swear words bleeped. Same ending every episode.
 
+## Draft workflow and checks before handover (user agreed, 2026-11-24)
+
+How the agent builds an HKS draft (why: [principles.md](principles.md) HKS-C13 to C19):
+
+1. **Topic and colour pass first** (HKS-16): razor the broadcast at every topic change and label each
+   topic by colour. The user approves what goes in before the agent cuts how.
+2. **Split-screen index:** list every stretch where the broadcast shows a split screen (evidence, B-roll).
+   That is the cover pool (HKS-C9).
+3. **2–3 hook options**, each built a different way (the clash, the shocking fact, the question). The
+   user picks; record the pick and the user's reason in `memory/`.
+4. **Cut:** tighten at speaker changes first; inside one speaker's run only under cover (HKS-C17).
+
+Checks before handover (each one listed in the handover, with timecodes):
+- **Promises:** every question from the hook, the cards and the host is answered, or open on purpose (HKS-C13).
+- **Middle:** no stretch of about 3–4 min without a new picture, a host question or a turn (HKS-C14).
+- **Strongest lines:** each side's single strongest line, named, and kept (HKS-C15).
+- **Ending:** if the story is open, the last line says so (HKS-C16).
+- **Challenge notes** (HKS-C19): where the hook could hit harder, where an explanation or B-roll runs long,
+  where a cut is snappy or clips a word at a camera switch.
+
 ## Clip label colours (user, 2026-11-23)
 
 The label colour of a clip says who speaks or what the piece is for. This replaces the

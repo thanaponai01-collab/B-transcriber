@@ -58,6 +58,33 @@ Each is **confirmed**; the user's own words are quoted where they added to the o
   each source from YouTube and numbers the file: play them by that number. With no number, by the date the
   video was posted on YouTube. A story told across several videos stays in its own order.
 
+## Agreed improvements (agent proposed, user agreed 2026-11-24)
+
+Proposed by the agent from gaps in the user's own cuts; the user agreed to each. **confirmed** as the way
+forward, not as a description of past cuts. The checks are in [rules.md](rules.md) ("Checks before handover").
+
+- **HKS-C13. Every promise is kept.** Whatever the hook, a headline card or the host raises is answered in
+  the cut, or left open on purpose. Why: an unanswered question reads as a mistake. Misses seen: 1020 "is it
+  real?", 1110 WatchDog (answered 15 min later), 1012 the money never repaid, 1117 premise not said until 5:27.
+- **HKS-C14. The middle is re-hooked.** No stretch of about 3–4 min without a new picture, a host question
+  or a turn. Why: that is where viewers drop off (1120 8–14 min, 1123 7–10 min ran 4–6 min with none).
+- **HKS-C15. Each side's strongest line is in.** Before locking, name each side's single strongest line and
+  check it is kept. Why: they were cut on 1003 ("20,000 a month, a bucket"), 1117 ("if only I'd picked
+  up") and 1120 (the witness's points for the guest).
+- **HKS-C16. An open ending says it is open.** If the story is unresolved, end on a line that says so (a
+  threat, a pending case, a follow-up), not on a cut that just stops (1002, 1003, 1012).
+- **HKS-C17. Tighten at speaker changes first** (HKS-27 confirmed). Dropping another speaker's restatement
+  lands on the broadcast's own camera switch, so no cover is needed; tighten inside one speaker's run only
+  under split-screen cover (HKS-C9).
+- **HKS-C18. Watch time counts, but partly** (the main file's watch-time candidate, for HKS). Each second is
+  judged by whether it keeps the viewer watching, **after** honesty and fairness: the accused's answer
+  (HKS-6), legal cover and the facts that keep the story true stay even when slow.
+- **HKS-C19. Challenge the user's cuts** on three things (the user: hooks "maybe there's something stronger,
+  harder, or more dramatic"; the pace, "too long for the whole video, like keeps explaining something, or
+  the footage, B-roll"; and the cuts, "jump cut or snappy cut … when the [broadcast] switch camera, is it
+  cut off"). In every draft, say where the agent would hook harder, where an explanation or a B-roll piece
+  runs long, and where a cut lands snappy or clips a word at a camera switch.
+
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
 Read from the user's finished YT cuts of 1001, 1003, 1012, 1020, 1110, 1112, 1117, 1120, 1123 and the
