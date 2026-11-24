@@ -119,9 +119,10 @@ def _tokens_from_pipeline(audio_path: str, config_path: str) -> list[dict]:
     from transcribe.db import store
     from transcribe.pipeline import run as pipeline_run
     cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
-    scratch = Path(tempfile.mkdtemp(prefix="make_gold_")) / "scratch.db"
-    store.init_db(scratch)
-    return pipeline_run.run_file(audio_path, cfg, scratch)
+    with tempfile.TemporaryDirectory(prefix="make_gold_", ignore_cleanup_errors=True) as tmp:
+        scratch = Path(tmp) / "scratch.db"
+        store.init_db(scratch)
+        return pipeline_run.run_file(audio_path, cfg, scratch)
 
 
 def main() -> None:

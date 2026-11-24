@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import uuid
 import zipfile
 from pathlib import Path
 
 TEXT_CONTROL = 6
-BAKE_DIR = Path(tempfile.gettempdir()) / "cutdeck-mogrt"
+MAX_AGE_S = 7 * 24 * 3600  # baked copies older than this are deleted on the next bake
 
 
 def _name(control: dict) -> str:
@@ -50,8 +51,15 @@ def bake(template: str | Path, texts: dict[str, str]) -> Path:
         raise ValueError(f"unknown text {unknown} for {template.name}; its texts are: {known}")
     wanted = {by_key[k]: v for k, v in texts.items()}
 
-    BAKE_DIR.mkdir(exist_ok=True)
-    out = BAKE_DIR / f"{template.stem}-{uuid.uuid4().hex[:8]}.mogrt"
+    bake_dir = Path(tempfile.gettempdir()) / "cutdeck-mogrt"
+    bake_dir.mkdir(exist_ok=True)
+    for old in bake_dir.glob("*.mogrt"):
+        try:
+            if time.time() - old.stat().st_mtime > MAX_AGE_S:
+                old.unlink(missing_ok=True)
+        except FileNotFoundError:  # another bake removed it first
+            pass
+    out = bake_dir / f"{template.stem}-{uuid.uuid4().hex[:8]}.mogrt"
     with zipfile.ZipFile(template) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
         for info in src.infolist():
             data = src.read(info)

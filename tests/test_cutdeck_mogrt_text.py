@@ -46,3 +46,17 @@ def test_bake_by_index_counts_text_controls_only(tmp_path):
 def test_unknown_text_lists_the_templates_texts(tmp_path):
     with pytest.raises(ValueError, match='0 "Title", 1 "Sub"'):
         mogrt_text.bake(_template(tmp_path / "t.mogrt"), {"Nope": "x"})
+
+
+def test_bake_deletes_copies_older_than_a_week_and_keeps_recent_ones(tmp_path, monkeypatch):
+    import os, time
+    monkeypatch.setattr(mogrt_text.tempfile, "gettempdir", lambda: str(tmp_path))
+    bake_dir = tmp_path / "cutdeck-mogrt"
+    bake_dir.mkdir()
+    old, recent = bake_dir / "old.mogrt", bake_dir / "recent.mogrt"
+    for f, age_days in ((old, 8), (recent, 6)):
+        f.write_bytes(b"x")
+        t = time.time() - age_days * 86400
+        os.utime(f, (t, t))
+    out = mogrt_text.bake(_template(tmp_path / "t.mogrt"), {"Title": "x"})
+    assert not old.exists() and recent.exists() and out.exists()

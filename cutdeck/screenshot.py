@@ -18,6 +18,7 @@ from PIL import Image
 
 PROCESS_NAMES = ("adobe premiere pro.exe", "adobe premiere pro (beta).exe")
 PW_RENDERFULLCONTENT = 2
+KEEP = 20  # default-path screenshots kept in %TEMP%; older ones are deleted on each capture
 _user32 = ctypes.WinDLL("user32", use_last_error=True) if hasattr(ctypes, "WinDLL") else None
 _gdi32 = ctypes.WinDLL("gdi32") if hasattr(ctypes, "WinDLL") else None
 _kernel32 = ctypes.WinDLL("kernel32") if hasattr(ctypes, "WinDLL") else None
@@ -62,6 +63,9 @@ def capture(output: str | None = None) -> dict:
     image = window_pixels()
     path = Path(output) if output else Path(tempfile.gettempdir()) / f"cutdeck-premiere-{int(time.time() * 1000)}.png"
     image.save(path)
+    if not output:
+        for old in sorted(path.parent.glob("cutdeck-premiere-*.png"))[:-KEEP]:  # names carry the ms time
+            old.unlink(missing_ok=True)
     return {"path": str(path), "width": image.width, "height": image.height}
 
 
