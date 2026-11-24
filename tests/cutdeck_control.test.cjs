@@ -276,3 +276,10 @@ test("remove_piece deletes only a CutDeck piece", async () => {
   assert.deepEqual(await run.remove_piece({ name: "Q1 (CutDeck piece)" }), { removed: true });
   assert.equal(h.sequence("Q1 (CutDeck piece)"), undefined);
 });
+
+test("make_subsequence of a range that starts in a gap starts on its first clip (as Premiere does)", async () => {
+  const { h, run } = setup();
+  await run.edit_clips({ edits: [{ clip: "V1@0", op: "trim_in", in_ticks: String(2n * S) }, { clip: "A1@0", op: "trim_in", in_ticks: String(2n * S) }] });
+  await run.make_subsequence({ in_ticks: String(S), out_ticks: String(5n * S), result_name: "gap (CutDeck piece)" });
+  assert.deepEqual(h.sequence("gap (CutDeck piece)").video.map((c) => [c.start, c.end, c.in]), [[0n, 3n * S, 2n * S]]);
+});

@@ -36,8 +36,9 @@ def pieces(sequence: dict, fps: float, keeper_track: int = 2) -> list[dict]:
     tracks = sequence["video_tracks"]
     if len(tracks) < keeper_track:
         raise ValueError(f"{sequence['name']!r} has no V{keeper_track}: is it the split sequence?")
-    tpf = round(PPRO_TICKS_PER_SECOND / fps)
-    frame = lambda s: round(s * fps) * tpf  # noqa: E731  (edges are on frames)
+    # Ticks per frame as timeline_transcript counts them (NTSC rates are nominal x 1000/1001).
+    tpf = int(timeline_transcript.timeline_from_prproj({"audio_tracks": []}, fps)["ticks_per_frame"])
+    frame = lambda s: round(s * PPRO_TICKS_PER_SECOND / tpf) * tpf  # noqa: E731  (edges are on frames)
     out, prev_end = [], None
     for n, c in enumerate(sorted(tracks[keeper_track - 1]["clips"], key=lambda c: c["start"]), 1):
         colour = COLOURS.get(c.get("label"))

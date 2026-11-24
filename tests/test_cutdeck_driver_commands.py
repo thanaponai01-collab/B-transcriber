@@ -303,8 +303,9 @@ class _PasteHost:
         self.calls.append(command)
         if command == "make_subsequence":
             a, b = int(args["in_ticks"]), int(args["out_ticks"])
-            self.seqs[args["result_name"]] = [(k, n, max(s, a) - a, min(e, b) - a)
-                                              for k, n, s, e in self.seqs[args["sequence"]] if s < b and e > a]
+            cut = [(k, n, max(s, a), min(e, b)) for k, n, s, e in self.seqs[args["sequence"]] if s < b and e > a]
+            first = min((s for _, _, s, _ in cut), default=a)  # Make Subsequence drops the empty lead-in
+            self.seqs[args["result_name"]] = [(k, n, s - first, e - first) for k, n, s, e in cut]
         elif command == "read_timeline":
             return self.timeline(args["sequence"])
         elif command == "set_playhead":
@@ -312,10 +313,10 @@ class _PasteHost:
         elif command == "menu_command" and args["path"] == "Edit > Copy":
             self.clipboard = list(self.seqs[args["sequence"]])
         elif command == "menu_command" and args["path"] == "Edit > Paste":
-            at = self.playhead[args["sequence"]]
+            at = self.playhead[args["sequence"]] - min(s for _, _, s, _ in self.clipboard)  # earliest clip at the playhead
             self.seqs[args["sequence"]] += [(k, n + (self.land_v if k == "V" else 0), s + at, e + at) for k, n, s, e in self.clipboard]
         elif command == "list_project":
-            return {"path": "E:/day.prproj"}
+            return {"path": "E:/day.prproj", "sequences": [{"name": n} for n in self.seqs]}
         elif command == "build_sequence":
             seq = self.seqs[args["base"]]
             for st in args["options"]["steps"]:
@@ -426,3 +427,34 @@ def test_arrange_blocks_must_tile_one_stretch():
         except ValueError:
             continue
         raise AssertionError(f"accepted {blocks}")
+
+
+def test_paste_from_keeps_a_gap_at_the_start_of_the_range():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Split"] = [("V", 1, 2 * S, 6 * S), ("A", 1, 2 * S, 6 * S)]  # nothing before 2 s
+    out = _paste(host)  # range 1-4 s into YT at 5 s
+    assert out["missing"] == [] and out["left_at_park"] == []
+    assert ("V", 1, 6 * S, 8 * S) in host.seqs["YT"] and ("A", 1, 6 * S, 8 * S) in host.seqs["YT"]
+
+
+def test_paste_from_an_empty_range_leaves_no_piece_behind():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Split"] = [("V", 1, 5 * S, 6 * S)]
+    try:
+        _paste(host)
+    except ValueError as e:
+        assert "no clips" in str(e)
+    else:
+        raise AssertionError("pasted an empty range")
+    assert not any(n.endswith(driver_commands.PIECE_SUFFIX) for n in host.seqs)
+
+
+def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
+    S = _PasteHost.S
+    host = _PasteHost()
+    stale = "Split 1.000-4.000s" + driver_commands.PIECE_SUFFIX
+    host.seqs[stale] = [("V", 1, 0, S)]
+    assert _paste(host)["missing"] == []
+    assert stale not in host.seqs and ("V", 1, 5 * S, 8 * S) in host.seqs["YT"]

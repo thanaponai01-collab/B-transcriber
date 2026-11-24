@@ -814,8 +814,11 @@ CONTROL_COMMANDS: dict[str, Command] = {
         60, _make_subsequence_arguments, "write",
         """
         Premiere's Make Subsequence: the range [in_ticks, out_ticks) of `sequence` (default the
-        active one) becomes a new sequence with every track, clip and effect, frame-exact (one
-        undo step). The source's clips are not edited and its own In/Out marks are put back.
+        active one) becomes a new sequence with every track, clip and effect, frame-exact. The
+        source's clips are not edited and its own In/Out marks are put back. A range that starts in
+        a gap loses the gap: the new sequence starts on its first clip. Undo takes three
+        steps (four with result_name), last first: the rename, the marks put back, the subsequence,
+        the range marks.
         result_name names it (default Premiere's "<name>_Sub_NN"). Returns its name and clip count.
         """,
         (("in_ticks", str), ("out_ticks", str), ("sequence", str | None, None), ("result_name", str | None, None))),
@@ -1261,11 +1264,18 @@ async def _paste_from(args: dict, premiere: Premiere) -> dict:
         raise ValueError("source and target must be different sequences")
     piece = (f"{source} {a / PPRO_TICKS_PER_SECOND:.3f}-{b / PPRO_TICKS_PER_SECOND:.3f}s"
              f"{PIECE_SUFFIX}")
+    # Make Subsequence drops a range's empty lead-in (live 2026-11-24: 0.5-3 s with the first clip
+    # at 1 s gave a piece starting at 0), so measure it here and add it back when placing.
+    starts = [max(s, a) for _, _, s, e in _clips(await premiere("read_timeline", {"sequence": source})) if s < b and e > a]
+    if not starts:
+        raise ValueError(f"{source} has no clips in that range")
+    offset = min(starts) - a
+    project = await premiere("list_project", {"depth": 1})
+    if any(s["name"] == piece for s in project["sequences"]):
+        await premiere("remove_piece", {"name": piece})  # kept by an earlier failed run of this paste
     await premiere("make_subsequence", {"sequence": source, "in_ticks": str(a), "out_ticks": str(b), "result_name": piece})
     timeline = await premiere("read_timeline", {"sequence": piece})
     want = _clips(timeline)
-    if not want:
-        raise ValueError(f"{source} has no clips in that range")
     before = await premiere("read_timeline", {"sequence": target})
     length = b - a
     park = max(int(before["end_ticks"]), at + length) + PARK_GAP_TICKS
@@ -1274,28 +1284,34 @@ async def _paste_from(args: dict, premiere: Premiere) -> dict:
     await premiere("set_playhead", {"sequence": target, "ticks": str(park)})
     await premiere("menu_command", {"path": "Edit > Paste", "sequence": target})
     pasted = _clips(await premiere("read_timeline", {"sequence": target}), park)
-    # Paste lands on the lowest targeted tracks (PREMIERE_FACTS "Edit > Copy in one sequence"):
-    # find how far each kind landed from the piece's tracks, then put video where asked.
+    # Paste lands at the playhead on the lowest targeted tracks (PREMIERE_FACTS "Edit > Copy in one
+    # sequence"), assumed to put the earliest copied clip there (`lead`, 0 while subsequences start
+    # on a clip). Find how far each kind landed from the piece's tracks, then put video where asked.
+    lead = min(s for _, _, s, _ in want)
     shift = {}
     for kind in ("V", "A"):
         got = [p for p in pasted if p[0] == kind]
         exp = [w for w in want if w[0] == kind]
         if got and exp:
             shift[kind] = min(g[1] for g in got) - min(e[1] for e in exp)
-    landed = sorted((k, n + shift.get(k, 0), s + park, e + park) for k, n, s, e in want)
-    if pasted != landed or shift.get("A", 0) != 0:
-        raise ValueError(f"the paste at {park} did not land as the piece reads (audio must land on its own "
-                         f"tracks; check track targeting): expected {landed}, got {pasted}. The park is left "
-                         f"on {target} for you to see; piece {piece!r} kept.")
+    landed = sorted((k, n + shift.get(k, 0), s - lead + park, e - lead + park) for k, n, s, e in want)
+    left = f"The pasted copy is left at {park} ticks on {target!r} and piece {piece!r} is kept, for you to see."
+    if shift.get("A", 0) != 0:
+        raise ValueError(f"the audio landed {-shift['A']} track(s) lower than in the source (Paste uses the lowest "
+                         f"targeted tracks and paste_from cannot move audio between tracks). {left}")
+    if pasted != landed:
+        raise ValueError(f"the paste did not land as the piece reads: expected {landed}, got {pasted}. {left}")
     v_up = args["v_offset"] - shift.get("V", 0)
-    project = (await premiere("list_project", {"depth": 1}))["path"]
-    steps = [{"op": "clone", "from_ticks": str(park), "to_ticks": str(park + length), "dt_ticks": str(at - park), "v_offset": v_up},
+    steps = [{"op": "clone", "from_ticks": str(park), "to_ticks": str(park + length), "dt_ticks": str(at + offset + lead - park), "v_offset": v_up},
              {"op": "lift", "from_ticks": str(park), "to_ticks": str(park + length)}]
-    await premiere("build_sequence", {"project": project, "base": target, "name": target, "items": [],
-                                      "options": {"into": True, "steps": steps}})
+    try:
+        await premiere("build_sequence", {"project": project["path"], "base": target, "name": target, "items": [],
+                                          "options": {"into": True, "steps": steps}})
+    except Exception as e:
+        raise ValueError(f"moving the paste into place failed: {e}. {left}") from e
     after = await premiere("read_timeline", {"sequence": target})
-    placed = [c for c in _clips(after) if at <= c[2] < at + length]
-    expected = sorted((k, n + (args["v_offset"] if k == "V" else 0), s + at, e + at) for k, n, s, e in want)
+    placed = [c for c in _clips(after) if at + offset <= c[2] < at + length]
+    expected = sorted((k, n + (args["v_offset"] if k == "V" else 0), s + at + offset, e + at + offset) for k, n, s, e in want)
     missing = sorted(set(expected) - set(placed))
     left_at_park = _clips(after, park)
     if not args["keep_piece"]:

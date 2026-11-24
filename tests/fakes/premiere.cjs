@@ -188,12 +188,15 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         createSetInPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), in: BigInt(t.ticks) }; }),
         createSetOutPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), out: BigInt(t.ticks) }; }),
         // PREMIERE_FACTS "createSubsequence": the In-Out range as a new sequence `<name>_Sub_NN`,
-        // every track kept (empty ones too), clips cut at the marks and shifted to start at 0.
+        // every track kept (empty ones too), clips cut at the marks; the range's empty lead-in is
+        // dropped, so its first clip starts at 0.
         createSubsequence: async () => {
           const { in: a = 0n, out: b = 0n } = s.marks || {};
-          const cut = (list) => list.map((t) => t.filter((c) => c.start < b && c.end > a).map((c) => {
+          const inside = (c) => c.start < b && c.end > a;
+          const first = [...s.video, ...s.audio].flat().filter(inside).reduce((m, c) => { const st = c.start > a ? c.start : a; return st < m ? st : m; }, b);
+          const cut = (list) => list.map((t) => t.filter(inside).map((c) => {
             const start = c.start > a ? c.start : a;
-            return { ...c, start: start - a, end: (c.end < b ? c.end : b) - a, in: c.in + (start - c.start) };
+            return { ...c, start: start - first, end: (c.end < b ? c.end : b) - first, in: c.in + (start - c.start) };
           }));
           const n = raws.filter((r) => r.name.startsWith(`${s.name}_Sub_`)).length + 1;
           const sub = addSequence({ name: `${s.name}_Sub_${String(n).padStart(2, "0")}`, guid: `seq${guids++}`,
