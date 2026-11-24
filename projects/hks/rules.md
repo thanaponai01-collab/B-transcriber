@@ -112,6 +112,40 @@ Checks before handover (each one listed in the handover, with timecodes):
 
 First run, on the user's own 1123 cut: [study/20261123-checks.md](study/20261123-checks.md).
 
+## Short versions and finishing (from the user's fixes, 2026-11-24)
+
+What the user changed in the agent's highlight, FB and 1-min builds of 20261124 (why: [principles.md](principles.md)
+HKS-28 to 31; numbers: [memory/yt-20261124-draft.md](memory/yt-20261124-draft.md)). Seen once each; ask before
+treating one as fixed.
+
+- **Music bed under the whole piece, never a gap** (already the rule in [workflow-log.md](workflow-log.md),
+  "BGM under the whole show"; the agent's builds broke it twice). `[BGM]Where Everything Began.wav` looped:
+  −24 dB under the hook, −33 dB under talk, −12 dB under the end sting (Premiere stores these as levels
+  0.0112 / 0.00398 / 0.0447). The agent's FB left 59–162 s with no music; its hook bed had no level set.
+  Check: every second of a short sits under one BGM clip, at the level for what plays there.
+- **A flash at every section change, including the start of the body** (hook → sting → body): glitch
+  (`Glitch redblue.mov`) + an invert AL frame + a whoosh just before the cut. The user added one at the
+  sting → body join that the agent left plain.
+- **Hook button = set-up + payoff** (HKS-28). Before picking a hook's last line, read the line before it in
+  the source; if the payoff needs it, take both.
+- **Short body: no mid-body clip that's already in the hook** (HKS-29). Check the source ranges of every
+  body piece against the hook's; only the ending may overlap, and then with more than the hook showed.
+- **Square reframe per shot** (HKS-30). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame
+  (the user: 263 → 333, 363, 368). Where the subject moves, razor the cover and re-position each part.
+  Render a frame of each cover in the square before handover.
+- **The 1-min ends on a held face under the sting** (HKS-31), then the end card; target just under 60 s
+  (the user's: 58.00).
+- **Tighten under a cover, and let a piece start early for its set-up.** In the FB the user cut one 18 s
+  piece into seven under a new B-roll cover, and started pieces 1.5–6.7 s earlier or later than the agent
+  to catch the line that sets them up.
+- **Clock blur in squares: the user's `Blur below logo` boxes, enabled, one per span.** The agent's
+  disabled YT blur ALs were deleted, not kept switched off.
+- **Reels:** the user built `4 REEL SIZE D1` and `5 REEL 1-3 SIZE D1` as workflow-log steps 7–8 say (nest
+  the square, `1.png` frame on top; the 3-min nests a logo-less FB copy). Unchanged from 20261120.
+- **Export when asked:** `python -m cutdeck.honekasae_export "<day folder>"` (one command; picks the
+  same-named copy with content, queues all four in AME). The agent hand-rolled `export_sequence` calls on
+  20261124 instead; use the command.
+
 ## Clip label colours (user, 2026-11-23)
 
 The label colour of a clip says who speaks or what the piece is for. This replaces the
@@ -159,7 +193,8 @@ Not yet lifted out; each is a user rule recorded in [workflow-log.md](workflow-l
 - **Story opening, cuts, host and viewers:** Step 3 ("User rule for the story opening", "User rules
   for cuts", "User rules on the host and viewers").
 - **Picture finishing** (clock blur, insert zoom, film damage): Step 5.
-- **Sound bed and audio levels** (BGM loop, −33 / −24 / −12 dB): "Long form: sound bed and graphics".
+- **Sound bed and audio levels** (BGM loop, −33 / −24 / −12 dB): "Long form: sound bed and graphics"
+  (the short form is lifted into "Short versions and finishing" above).
 - **Facebook cut** (1080x1080, 2:59:24, main story only, same hook, no end logo): Step 6.
 - **1-min and 3-min reels:** Steps 7–8.
 - **Export** (BAS4, `<day folder>\5. EXPORTS`, `โหนกระแส <DDMMYY BE> <YT|FB|REEL 3M|REEL 1M> D<n>.mp4`):

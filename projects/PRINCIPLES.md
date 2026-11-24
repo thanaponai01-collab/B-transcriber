@@ -29,7 +29,8 @@ scratch folder to check its own build. Check a build by read-back, frames and au
 source media, and the transcript; hand it over unrendered and say so. *(confirmed on 1RaceClub,
 2026-11-21: "dont export your self that me to do it")* For HKS the user asked on 2026-11-20 for
 `python -m cutdeck.honekasae_export` to queue and start the export. *(guess: the rule is "no export
-unless the user asks for it"; ask which holds)*
+unless the user asks for it"; ask which holds)* On 2026-11-24 the HKS user asked "all done export for me" after approving every cut, and the
+agent exported with BAS4 (seen: on HKS, the export follows the user's ask).
 
 ## Editing
 

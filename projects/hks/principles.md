@@ -223,6 +223,25 @@ New patterns:
 - **HKS-27 (agent, EP.168 v6). Tighten at speaker changes.** The broadcast cuts to whoever speaks, so dropping
   another speaker's restatement lands on a camera change and needs no cover (10 of 10 joins, difference 35–82).
   Tightening inside one speaker's run makes a same-shot jump (HKS-21 covers it).
+## From the user's fixes to the agent's 20261124 builds (seen once, none confirmed)
+
+Read by diffing the auto-save taken right after each agent build with the user's final save. Evidence:
+[memory/yt-20261124-draft.md](memory/yt-20261124-draft.md), "What the user changed". The how is in
+[rules.md](rules.md), "Short versions and finishing".
+
+- **HKS-28. A punchline needs its set-up.** The agent's hook ended on the bet's payoff alone ("ผมโกนรอเลยพี่");
+  the user put its condition in front ("500 ล้านพี่หนุ่มเปิดผมตาม"). A cold viewer can't laugh at a bet they
+  haven't heard. This is HKS-24 the other way round, and the same idea as ask-then-tell (HKS-C6).
+- **HKS-29. The body doesn't replay a hook clip in the middle; the ending may, as the payoff.** The user took
+  the MV jab ("อย่าพูด", already in the hook) out of the FB body and put the My Way piece there instead,
+  but kept the bet at the end, with more of it than the hook shows. The hook promises; the ending pays.
+- **HKS-30. Every shot is framed on its own.** The user re-zoomed the agent's trailer shots one by one
+  (263 → 280–296, the MV cutaway 263 → 338) and, in the square, cut a wide cover in two and moved the
+  second half to follow the subject. One zoom for a whole set of shots is a preset (M-1), not framing.
+- **HKS-31. A short ends on a held face.** The user's 1-min ends on the last speaker's face held under
+  the sting (0.5 s of source stretched over the 2.84 s sting, zoomed in 187 %), with glitch flashes and
+  a whoosh, then the end card. The last thing the viewer sees is a reaction, not the logo.
+
 Rules weakened (read the evidence before using them):
 - **HKS-4:** the *better* telling wins, not always the first: 1001 T7 keeps the host's 10 s restatement
   over a 148 s first telling; 1120 keeps the second challenge for its better answer; 1117 keeps two
