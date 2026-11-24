@@ -103,8 +103,14 @@ every HKS day). A question is one run of same-colour clips between razor cuts on
 sequence. The reader returns each question's range in sequence time, its colour (who is asked)
 and its words from the day transcript.
 
-Check: on a saved day with the user's split, the questions it finds match `<day> questions.md`
-from `hks_day`, colour for colour.
+**Done 2026-11-24** as `python -m cutdeck.split_pieces --prproj <day>.prproj --sequence Editing`.
+Seen on the real splits: every keeper on V2 is one razor piece with one colour, and drops stay on
+V1 (slot 14, the default). So a question is one V2 clip, not a run of clips. It prints each
+question's timecode, length, colour and meaning, whether a drop came right before, and its
+opening words from the stored transcript. Its `from_ticks` / `to_ticks` go straight into
+`paste_from` and `arrange`. On 20261123 `Editing` it found the 22 V2 pieces in 1.4 s; 20261120
+`Edit` reads too. It needs the project saved, because Premiere gives a panel no clip labels.
+Not checked against `hks_day`'s `questions.md`, which is the judge's grouping, not the user's.
 
 ### 5. Make the rebuild routes hard to reach
 

@@ -139,7 +139,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - arrange live (2026-11-24, run `20261124-131438-arrange`): three pieces played 3, 1, 2 on a copy, read back exact with the cover's Scale 50, frames pixel-identical to the source.
 - live (2026-11-24, runs `20261124-125650-subseq-probe`, `20261124-130315-paste-from`): Make Subsequence of 1-4 s kept every track, edges, Scale and Gaussian Blur, frame pixel-identical to its parent, one Undo removes it; `paste_from` put that range into another sequence at 3 s with `v_offset` 1, read back frame-exact with the blur and Scale, park cleaned, piece deleted. Design: docs/DERIVE_FROM_SEQUENCE.md.
 
-## Timeline transcript and cut by words
+## Question pieces from the user's split (label colours)
+- test: `python -m pytest tests/test_split_pieces.py tests/test_prproj_reader.py -q -p no:cacheprovider`
+- fail-signal: failed
+- fail-proof (2026-11-24): a wrong label pattern in `cutdeck/prproj_reader.py` (`LabelColorX`) turned `test_a_clip_label_colour_is_read_as_its_slot` red; restored, green.
+- real (2026-11-24, offline): `python -m cutdeck.split_pieces` on 20261123 `Editing` gave the 22 V2 pieces with their colours and opening words in 1.4 s; 20261120 `Edit` gave 15.
+
 - test: `python -m pytest tests/test_cutdeck_timeline_transcript.py tests/test_cutdeck_word_cut.py -q -p no:cacheprovider`
 - fail-signal: failed
 - fail-proof (2026-11-22): dropped `- clip.in_` from the mapping in cutdeck/timeline_transcript.py (3 red); widened the sound threshold in `tighten` (1 red); cut at the word edges instead of in the pauses in cutdeck/word_cut.py (1 red); each restored.

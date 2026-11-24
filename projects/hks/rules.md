@@ -86,7 +86,7 @@ Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Autom
 
 How the agent builds an HKS draft (why: [principles.md](principles.md) HKS-C13 to C19):
 
-1. **Topic and colour pass first** (HKS-16): razor the broadcast at every topic change and label each
+1. **Topic and colour pass first** (HKS-16; once saved, `python -m cutdeck.split_pieces --prproj <day>.prproj --sequence Editing` lists each question piece with its colour and words, ready for `premiere_paste_from` / `premiere_arrange`): razor the broadcast at every topic change and label each
    topic by colour. The user approves what goes in before the agent cuts how.
 2. **Split-screen index:** list every stretch where the broadcast shows a split screen (evidence, B-roll).
    That is the cover pool (HKS-C9).

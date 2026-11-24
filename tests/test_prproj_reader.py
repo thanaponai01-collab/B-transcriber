@@ -370,3 +370,16 @@ def test_key_parses_scalar_and_point_records():
     from cutdeck.prproj_reader import _key
     assert _key(f"{2 * T},50.,0,0,0") == {"time": 2.0, "value": 50.0}
     assert _key(f"{T},0.25:0.5,0,0,5,4") == {"time": 1.0, "value": [0.25, 0.5]}
+
+
+def test_a_clip_label_colour_is_read_as_its_slot(tmp_path):
+    labelled = PROJECT.replace(
+        f"<OutPoint>{4 * T}</OutPoint></Clip></VideoClip>",
+        f"<OutPoint>{4 * T}</OutPoint></Clip><Node><Properties>"
+        f"<asl.clip.label.name>BE.Prefs.LabelColors.1</asl.clip.label.name></Properties></Node></VideoClip>")
+    assert labelled != PROJECT
+    path = tmp_path / "p.prproj"
+    path.write_text(labelled, encoding="utf-8")
+    seq = read_project(path)["sequences"][0]
+    assert seq["video_tracks"][0]["clips"][0]["label"] == 1
+    assert "label" not in seq["audio_tracks"][0]["clips"][0]  # no label saved, no key

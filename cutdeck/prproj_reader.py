@@ -17,6 +17,7 @@ import argparse
 import base64
 import gzip
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -368,6 +369,12 @@ def _track_item(objs: _Objects, item: ET.Element) -> dict:
     # always the in point. Only the value 4 occurs in the 11 HKS day projects (329 clips).
     if _text(clip, "FrameHold") not in (None, "0"):
         out["frame_hold"] = _seconds(_text(clip, "FrameHoldStart") or 0)
+    # The clip's label colour: its Properties' asl.clip.label.name = "BE.Prefs.LabelColors.<n>"
+    # (read from every HKS day's cuts, projects/hks/study/labels.md). UXP cannot read it live.
+    label = clip.find(".//asl.clip.label.name") if clip is not None else None
+    found = re.search(r"LabelColors\.(\d+)", label.text or "") if label is not None else None
+    if found:
+        out["label"] = int(found.group(1))
     out["effects"] = _effects(objs, item)
     for effect in out["effects"]:
         # Source Text keyframe times are source time: seconds into an untrimmed clip = time - source_in.
