@@ -1,0 +1,19 @@
+{
+  "about": "Clean-speech clips for python -m transcribe.eval.timing --manifest. Each is 180 s of mono 16 kHz audio cut from the source at start_s. 'tune' clips were used to pick word_align settings; judge a change on 'heldout'. Sources are local recordings; a missing source is skipped.",
+  "clips": [
+    {"name": "obs_review", "set": "tune", "start_s": 30, "source": "E:/Me/2.Tasks/20261117 - 02 gillete review/1. FOOTAGE/2026-11-17 09-30-15.mp4"},
+    {"name": "obs_lec", "set": "tune", "start_s": 120, "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
+    {"name": "obs_tiw", "set": "tune", "start_s": 600, "source": "E:/Me/2.Tasks/20261119 - tiw/1. FOOTAGE/2026-11-19 20-02-41.mp4"},
+    {"name": "hks_studio", "set": "tune", "start_s": 1500, "source": "G:/Me/Works/20261123 - โหนกระแส/1. FOOTAGE/HKS Facebook 231169 Full.mp4"},
+    {"name": "vlog", "set": "tune", "start_s": 20, "source": "G:/Me/Works/20261111 - BeamOil/1. FOOTAGE/130 พาเมียกินข้าววันนี้นำเสนอร้านลับแบบลับมาก บ้านลำไย.mp4"},
+    {"name": "obs_review2", "set": "heldout", "start_s": 210, "source": "E:/Me/2.Tasks/20261117 - 02 gillete review/1. FOOTAGE/2026-11-17 09-30-15.mp4"},
+    {"name": "obs_lec2", "set": "heldout", "start_s": 400, "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
+    {"name": "obs_lec3", "set": "heldout", "start_s": 700, "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
+    {"name": "obs_tiw2", "set": "heldout", "start_s": 1800, "source": "E:/Me/2.Tasks/20261119 - tiw/1. FOOTAGE/2026-11-19 20-02-41.mp4"},
+    {"name": "obs_tiw3", "set": "heldout", "start_s": 3600, "source": "E:/Me/2.Tasks/20261119 - tiw/1. FOOTAGE/2026-11-19 20-02-41.mp4"},
+    {"name": "obs_tiw4", "set": "heldout", "start_s": 5000, "source": "E:/Me/2.Tasks/20261119 - tiw/1. FOOTAGE/2026-11-19 20-02-41.mp4"},
+    {"name": "hks_studio2", "set": "heldout", "start_s": 2500, "source": "G:/Me/Works/20261123 - โหนกระแส/1. FOOTAGE/HKS Facebook 231169 Full.mp4"},
+    {"name": "hks_studio3", "set": "heldout", "start_s": 3500, "source": "G:/Me/Works/20261123 - โหนกระแส/1. FOOTAGE/HKS Facebook 231169 Full.mp4"},
+    {"name": "vlog2", "set": "heldout", "start_s": 200, "source": "G:/Me/Works/20261111 - BeamOil/1. FOOTAGE/130 พาเมียกินข้าววันนี้นำเสนอร้านลับแบบลับมาก บ้านลำไย.mp4"}
+  ]
+}

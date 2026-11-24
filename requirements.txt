@@ -16,6 +16,8 @@ faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-convert
                         #   ct2-transformers-converter --model biodatlab/whisper-th-medium-combined \
                         #     --output_dir models/whisper-th-medium-ct2 --quantization float16 \
                         #     --copy_files tokenizer.json preprocessor_config.json
+# word_align's Thai CTC model, exported once as a torchaudio checkpoint (models/wav2vec2-th-ctc.pt):
+#   python -c "from transcribe.pipeline.word_align import export_checkpoint; export_checkpoint()"
 funasr>=1.1.0
 # Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree
 # (pytorch-lightning, optuna, wandb, ...) — kept commented out of the default

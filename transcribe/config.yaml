@@ -412,8 +412,9 @@ store:
 # word ends are unchanged. Checked with `python -m transcribe.eval.timing` on clean speech.
 word_align:
   enabled: true
-  model: sakares/wav2vec2-large-xlsr-thai-demo
+  model: models/wav2vec2-th-ctc.pt   # sakares/wav2vec2-large-xlsr-thai-demo as a torchaudio checkpoint (requirements.txt)
   pad_ms: 400   # audio either side of each cue window
+  snap_to_sound: true   # a start next to a pause moves onto the sound's edge (word_align.snap_to_sound)
 
 # Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
 # (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU

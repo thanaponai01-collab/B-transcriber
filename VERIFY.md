@@ -42,7 +42,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test: `python -m pytest tests/test_word_align.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: dropped the never-go-backwards clamp in word_align.retime_starts, test_starts_never_go_backwards_and_a_word_keeps_one_ms went red, reverted
+- fail-proof: dropped the music-bed gate in word_align.snap_to_sound, test_no_snap_where_the_sound_never_drops_into_a_real_pause went red, reverted
 - live (GPU, manual): `python -m transcribe.eval.timing <clean speech .wav ...>` reports word and cue starts against the audio's own onsets; on 5 three-minute clean clips (2026-11-24) word starts within one 25 fps frame went 42% → 72% (60 onsets), cue starts 44% → 71%
+- replay (GPU, manual): `python -m transcribe.eval.timing --manifest transcribe/eval/timing_clips.json --cache output/timing` cuts the 14 clips of the manifest, runs Engine A once per clip into the cache, then re-aligns and scores per set (about 30 s once cached). 2026-11-24 with snap_to_sound, heldout (128 onsets): word starts within one frame 46% (Whisper) → 91%, p90 |err| 20 ms; cue starts 43% → 92%. The snap and the ruler read the same waveform, so this number is not independent: judge snap changes also by eye on moved starts the ruler cannot see, and by the gold gate (cue_BER 0.3214, unchanged). word_end lines mean nothing on gated OBS audio: there the 'offset' is the noise gate closing.
+- fail-proof: let snap_to_sound walk back past the previous word's start, test_the_second_word_of_a_phrase_keeps_its_start went red, reverted (unbounded, it added 134 one-ms words over the 14 clips)
+- speed (2026-11-24, hks_studio clip, 2-3 runs each): alignment adds 3.2-3.5 s to a 3-minute clip (run_file_job 18.0-18.3 s vs 14.8 s without), down from 17.7 s (32.2 s vs 14.5 s); the model is the torchaudio checkpoint models/wav2vec2-th-ctc.pt (export: requirements.txt), loading in 1.4 s instead of 15.7 s, with no transformers import; its words are identical to the Hugging Face model's on all 14 clips
+- long file: the 103-minute tiw source runs end to end in 293 s, 0 overlapping cues, no word starting before the previous one
 
 ## Thai cue legality lint
 - test: `python -m pytest tests/test_thai_lint.py -q -p no:cacheprovider`

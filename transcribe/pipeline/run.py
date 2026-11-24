@@ -103,17 +103,10 @@ def _align_word_starts(conn, job_id: int, cues: list, ingest_result, device: str
     words = json.loads(result.raw_words_json) if result and result.raw_words_json else []
     if not words:
         return
-    audio, sr = ingest_result.audio, ingest_result.sample_rate
-    aligner = word_align.ThaiCTCAligner(audio, sr, cfg.get("model", word_align.DEFAULT_MODEL), device)
-    aligner.load()
     try:
-        new = word_align.retime_starts(words, cues, aligner, aligner.alignable, int(cfg.get("pad_ms", 400)),
-                                       len(audio) * 1000 // sr)
+        new = word_align.align_words(words, cues, ingest_result.audio, ingest_result.sample_rate, device, cfg)
     finally:
-        aligner.unload()
-        del aligner
         engine_run._free_vram()
-    word_align.retime_cue_starts(cues, words, new)
     store.save_engine_result(conn, job_id, "a", result.engine_name, result.tokens_json,
                              result.timestamps_final, json.dumps(new, ensure_ascii=False))
     moved = sum(o["start_ms"] != n["start_ms"] for o, n in zip(words, new))
@@ -145,6 +138,9 @@ def run_file_job(
     no chunk engine is active (whole-file engines want the raw track and no
     chunks); otherwise ignored and ingestion runs as usual.
     """
+    align_cfg = config.get("word_align") or {}
+    if align_cfg.get("enabled"):
+        word_align.model_path(align_cfg.get("model", word_align.DEFAULT_MODEL))  # before Engine A runs
     store.init_db(db_path)  # Apply additive migrations before resume lookup.
     conn = store.connect(db_path)
 
@@ -305,7 +301,6 @@ def run_file_job(
                     engine_run._free_vram()
 
         # ── Phase 7c: word starts against the audio (Engine A is unloaded now) ──
-        align_cfg = config.get("word_align") or {}
         if align_cfg.get("enabled"):
             if caller_owns_engine_a:
                 raise ValueError("word_align loads its own model: run without a resident engine_a")

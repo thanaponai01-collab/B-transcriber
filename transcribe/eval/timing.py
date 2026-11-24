@@ -9,6 +9,12 @@ Descriptive, not gated. Use clean speech (a raw mic or studio track): music unde
 hides the pauses. A clip with few pauses gives few edges, and the report says how many.
 
     python -m transcribe.eval.timing clip1.wav clip2.wav [--config transcribe/config.yaml]
+
+Replay mode, for tuning word_align: the clips in a manifest are cut from their sources and run
+through Engine A once (word_align off), and the words and cues are cached. Each later run only
+re-aligns the cached words, about a second per clip, and reports Whisper vs aligned per set:
+
+    python -m transcribe.eval.timing --manifest transcribe/eval/timing_clips.json --cache output/timing
 """
 from __future__ import annotations
 
@@ -81,15 +87,64 @@ def _run(path: str, config: dict, db: Path) -> tuple[list[dict], list[dict]]:
     return json.loads(raw) if raw else [], cues
 
 
+def _replay(manifest: Path, cache: Path, config: dict) -> dict[str, dict[str, list[float]]]:
+    """Per '<set> whisper' and '<set> aligned': the score of every clip in the manifest."""
+    import copy
+    import subprocess
+    from types import SimpleNamespace
+
+    import librosa
+    from transcribe.pipeline import word_align
+    cache.mkdir(parents=True, exist_ok=True)
+    whisper_only = copy.deepcopy(config)
+    whisper_only.setdefault("word_align", {})["enabled"] = False
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    total: dict[str, dict[str, list[float]]] = {}
+    for clip in json.loads(manifest.read_text(encoding="utf-8"))["clips"]:
+        wav, raw = cache / f"{clip['name']}.wav", cache / f"{clip['name']}.whisper.json"
+        if not wav.exists():
+            if not Path(clip["source"]).exists():
+                print(f"{clip['name']}: source missing, skipped")
+                continue
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(clip["start_s"]), "-t", "180",
+                            "-i", clip["source"], "-vn", "-ac", "1", "-ar", "16000", str(wav)], check=True)
+        if not raw.exists():
+            words, cues = _run(str(wav), whisper_only, cache / "timing.db")
+            raw.write_text(json.dumps({"words": words, "cues": cues}, ensure_ascii=False), encoding="utf-8")
+        d = json.loads(raw.read_text(encoding="utf-8"))
+        y, _ = librosa.load(wav, sr=16000, mono=True)
+        cues = [SimpleNamespace(**c) for c in d["cues"]]
+        new = word_align.align_words(d["words"], cues, y, 16000, device, config.get("word_align") or {})
+        for label, w, c in (("whisper", d["words"], d["cues"]), ("aligned", new, [vars(c) for c in cues])):
+            for k, v in score(y, w, c).items():
+                total.setdefault(f"{clip['set']} {label}", {}).setdefault(k, []).extend(v)
+    return total
+
+
+def _print_all(name: str, total: dict[str, list[float]]) -> None:
+    for k, v in total.items():
+        s = summary(v)
+        if s["n"]:
+            print(f"{name} {k:10s} n={s['n']} median {s['median_ms']:+.0f} ms, |err| median {s['median_abs_ms']:.0f} ms, "
+                  f"p90 {s['p90_abs_ms']:.0f} ms, within one 25 fps frame {s['within_frame']:.0%}")
+
+
 def main(argv: list[str] | None = None) -> int:
     import librosa
     import yaml
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("audio", nargs="+")
+    p.add_argument("audio", nargs="*")
+    p.add_argument("--manifest", help="clip manifest for replay mode (transcribe/eval/timing_clips.json)")
+    p.add_argument("--cache", default="output/timing", help="replay mode: where clips and Engine A output are kept")
     p.add_argument("--config", default=str(Path(__file__).parents[1] / "config.yaml"))
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    if args.manifest:
+        for name, total in sorted(_replay(Path(args.manifest), Path(args.cache), config).items()):
+            _print_all(name, total)
+        return 0
     total: dict[str, list[float]] = {}
     with tempfile.TemporaryDirectory() as tmp:
         db = Path(tmp) / "timing.db"
@@ -99,11 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             for k, v in score(y, words, cues).items():
                 total.setdefault(k, []).extend(v)
                 print(f"{Path(path).name:28s} {k:10s} {summary(v)}")
-    for k, v in total.items():
-        s = summary(v)
-        if s["n"]:
-            print(f"ALL {k:10s} n={s['n']} median {s['median_ms']:+.0f} ms, |err| median {s['median_abs_ms']:.0f} ms, "
-                  f"p90 {s['p90_abs_ms']:.0f} ms, within one 25 fps frame {s['within_frame']:.0%}")
+    _print_all("ALL", total)
     return 0
 
 

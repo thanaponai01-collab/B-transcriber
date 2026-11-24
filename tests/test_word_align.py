@@ -63,3 +63,65 @@ def test_a_cue_after_a_pause_never_reaches_into_the_previous_one():
     new = [w("a", 1000, 1400), w("b", 1800, 2500)]
     retime_cue_starts(cues, old, new)
     assert [(c.start_ms, c.end_ms) for c in cues] == [(1000, 1900), (1900, 3000)]
+
+
+def _speech(*spans_ms, total_ms=3000, level=0.3, floor=1e-4):
+    """16 kHz audio: low noise, with a tone at ``level`` over each (start, end) in ms."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    y = rng.normal(0, floor, total_ms * 16).astype(np.float32)
+    for a, b in spans_ms:
+        t = np.arange((b - a) * 16) / 16000
+        y[a * 16:b * 16] += level * np.sin(2 * np.pi * 220 * t)
+    return y
+
+
+def test_a_late_start_after_a_pause_moves_back_onto_the_sound():
+    from transcribe.pipeline.word_align import levels_db, snap_to_sound
+    lev = levels_db(_speech((1000, 2000)), 16000)
+    assert 970 <= snap_to_sound(1150, 0, lev) <= 1000  # CTC spike 150 ms in -> the sound's edge
+    assert 970 <= snap_to_sound(900, 0, lev) <= 1000   # a start in the quiet moves forward onto it
+
+
+def test_a_start_inside_running_speech_or_far_from_the_edge_stays():
+    from transcribe.pipeline.word_align import levels_db, snap_to_sound
+    lev = levels_db(_speech((1000, 2000)), 16000)
+    assert snap_to_sound(1500, 0, lev) == 1500  # sound runs back more than 200 ms: no pause near
+    assert snap_to_sound(500, 0, lev) == 500    # quiet for more than 200 ms ahead
+
+
+def test_a_sound_before_a_dip_does_not_capture_the_start():
+    from transcribe.pipeline.word_align import levels_db, snap_to_sound
+    lev = levels_db(_speech((850, 950), (1000, 2000)), 16000)  # a breath, a 50 ms dip, the word
+    assert snap_to_sound(1100, 0, lev) == 1100  # too short a dip to call a pause: CTC's start stands
+
+
+def test_no_snap_where_the_sound_never_drops_into_a_real_pause():
+    from transcribe.pipeline.word_align import levels_db, snap_to_sound
+    lev = levels_db(_speech((1000, 2000), floor=0.05), 16000)  # music bed under the voice
+    assert snap_to_sound(1150, 0, lev) == 1150
+
+
+def test_snap_moves_every_start_then_the_clamps_hold():
+    align, _ = fake({"สวัสดี": 1080, "ครับ": 1460, "วันนี้": 2960})
+    new = retime_starts(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000, snap=lambda s, prev: s - 100)
+    assert [(x["start_ms"], x["end_ms"]) for x in new] == [(980, 1360), (1360, 1900), (2860, 3300), (3300, 3700)]
+
+
+def test_the_second_word_of_a_phrase_keeps_its_start():
+    """ก็ at the phrase onset, then ทำ 150 ms in with no pause between: only ก็ moves."""
+    from transcribe.pipeline.word_align import levels_db, snap_to_sound
+    lev = levels_db(_speech((1000, 2000)), 16000)
+    words = [w("ก็", 1080, 1150), w("ทำ", 1150, 1600)]
+    align, _ = fake({"ก็": 1080, "ทำ": 1150})
+    new = retime_starts(words, [Cue(start_ms=1000, end_ms=2000)], align, thai, pad_ms=0, duration_ms=3000,
+                        snap=lambda s, prev: snap_to_sound(s, prev, lev))
+    assert 970 <= new[0]["start_ms"] <= 1000
+    assert new[1]["start_ms"] == 1150 and new[0]["end_ms"] == 1150
+
+
+def test_a_missing_checkpoint_names_the_export_command():
+    import pytest
+    from transcribe.pipeline.word_align import model_path
+    with pytest.raises(FileNotFoundError, match="export_checkpoint"):
+        model_path("models/never-exported.pt")
