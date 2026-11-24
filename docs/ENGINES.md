@@ -182,3 +182,52 @@ method uses):
 10 of 10 right. The closest single samples were +0.05 (Thai) and −0.16 (English), and no majority
 was close. Note: the 1RaceClub synced F1 feeds are English commentary, so a Thai transcript of them is
 invented text.
+
+## Why the `faster_whisper` adapter and `stitch.py` look the way they do
+
+These notes used to be code comments. They moved here in the no-comments pilot (2026-11-24).
+
+**Long spans (`_LONG_SPAN_SAFE_S` 25 s, `_LONG_SPAN_OVERLAP_S` 4 s).** Whisper decodes at most
+~30 s at a time. A pause-free run longer than that makes faster-whisper's VAD cut mid-utterance with
+no overlap, and several seconds at the cut come out garbled or missing. Spans over 25 s are split
+into our own overlapping windows (`transcribe/audio/windows.py`) and stitched back. Tried: 15-20 s
+windows recovered one gap inside a dense 25 s window but stuttered at many seams; 25 s / 4 s was
+stutter-free with one small gap. The stutter was later traced to `stitch.py`'s IoU gate (below), not
+text matching (2026-07-30), so a shorter window is worth re-measuring. Stutter inside one window is
+the model's and no seam handling fixes it.
+
+**Early end-of-speech (`_TRUNCATION_TAIL_MS` 1500 ms).** faster-whisper can stop a window early in
+two ways. (A) It stretches the last word's timestamp to cover the gap. Recovery used to require that
+word to end within 500 ms of the window end; production audio showed real losses with the word
+ending 1.5-4 s short, so it now gates on the word's duration and on leftover audio only
+(2026-08-10). (B) It just stops after a normal word: a 45.6 s span's first window ended on a 180 ms
+word at 17.58 s with the window running to 25 s, dropping ~3.4 s of speech (2026-08-10). Both cases
+redecode the tail alone and concatenate, with no overlap splice: Thai has no word boundaries, so a
+fixed-offset splice left a stray syllable on both sides however it was tuned. No recursion.
+
+**VAD thresholds.** This engine is whole-file, so `ingest.py`'s VAD never runs on its audio. Left
+alone, faster-whisper uses threshold 0.5 / min silence 2000 ms, which clips soft Thai sentence-final
+particles (ครับ/ค่ะ). The adapter windows the audio itself with `config.yaml`'s tuned ingest values.
+
+**`temperature` is a no-op on the batched path (faster-whisper 1.2.1).** `generate_segment_batched`
+passes `sampling_temperature` but not `sampling_topk`, so CTranslate2 keeps its default top-k of 1:
+beam search at `beam_size` > 1 and argmax at 1, never sampling. The
+sequential path sets `sampling_topk: 0`. So the adapter's `temperature` argument changes nothing.
+Known and proven since 2026-08-05: byte-identical output at 0.0-1.0 and an unchanged harness run
+(`config.yaml` `self_ensemble` notes, TODO_LEDGER "Phase D"). The only caller is the self-ensemble,
+which is off and closed; the argument stays in case faster-whisper threads `sampling_topk` through.
+
+**The checkpoint must be CTranslate2.** `WhisperModel` can't load a raw HF checkpoint; convert it
+once with `ct2-transformers-converter` (see `requirements.txt`).
+
+**Seam dedup in `stitch.py`.** Whisper emits zero-length combining-mark pieces for Thai, so IoU is
+always 0 for them; `_coincident` (centre within `_COINCIDENT_MS` 60 ms) catches those duplicates.
+Fuzzy (non-identical text) matches need an anchored overlap of `_MIN_FUZZY_OVERLAP` characters,
+because plain character overlap scores distinct 2-character words ('มา'/'นา') like real
+split-point matches. Text alone still can't tell a duplicate from two real words sharing a morpheme
+(หมา/มานะ, ขนม/นมสด, ตลาด/ลาดยาง all false-merged), so one side must also be brief:
+`_FUZZY_FRAGMENT_MAX_MS` 80 ms, the measured 20-80 ms range of real sub-word pieces. 150 ms still
+false-merged real pairs; 250 ms rested on a misread measurement (an exact-text token's 160 ms). No
+real fuzzy duplicate has ever been measured; recalibrate only from the debug log that path emits.
+Two real words both under 80 ms can still merge (`test_brief_zero_gap_real_words_can_still_collide`).
+A missed stutter is cheaper than a dropped word.

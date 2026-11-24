@@ -12,7 +12,7 @@ reconciler/align_hyp unit tests already cover:
    BatchedInferencePipeline (beam search is deterministic; CTranslate2's
    sampling_temperature has no effect while beam_size>1) — beam_size=1 is
    what actually produces a decorrelated second hypothesis. See
-   faster_whisper.py's _transcribe_batched docstring.
+   docs/ENGINES.md and transcribe/config.yaml's self_ensemble notes.
 2. `pipeline.run.run_file()` never instantiates a second model when
    self_ensemble.enabled is set — it decodes hypothesis 2 from the same
    Engine A instance, before unload(), and the resulting tokens reach

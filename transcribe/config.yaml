@@ -187,7 +187,7 @@ engines:
 # hypotheses at temperature 0.0 through 1.0 on a real gold clip, and the full
 # 8-clip harness run reproduced eval_run.id=47 to the last decimal — zero
 # reconciler disagreements, zero possible metric movement). See
-# faster_whisper.py's _transcribe_batched docstring and TODO_LEDGER.md
+# docs/ENGINES.md and TODO_LEDGER.md
 # "HANDOFF_ONE_ENGINE Phase D" for the full diagnosis.
 #
 # Adapted probe (still Phase D, same residency, zero second load):
