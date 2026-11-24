@@ -16,6 +16,7 @@ to it as {"call": ...} messages from a fixed command list, and its `driver_reply
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from datetime import datetime
 import json
 import os
@@ -38,6 +39,9 @@ from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 COMMAND_LOG = "premiere_commands.jsonl"
 COMMAND_LOG_MAX = 10 * 2**20  # past this, the log moves to premiere_commands.jsonl.1 and starts again
 JOB_MAX_AGE_S = 30 * 24 * 3600  # job folders untouched this long are deleted when a helper starts
+# The `caller` a `premiere` request named (helper_protocol.caller). A context variable, so the panel
+# commands a helper command runs on the way are logged under the same caller.
+CALLER = contextvars.ContextVar("caller", default=None)
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
@@ -280,6 +284,8 @@ class Jobs:
         return {"connected": self.driver is not None, "commands": list(self.driver_commands)}
 
     async def _on_premiere(self, req: dict, client: Client | None) -> dict:
+        caller = req.get("caller")
+        CALLER.set(caller[:200] if isinstance(caller, str) else None)  # this request's own task
         return {"result": await self.premiere(req.get("command"), req.get("args") or {})}
 
     async def _on_watch(self, req: dict, client: Client | None) -> dict:
@@ -456,7 +462,7 @@ class Jobs:
         args = {} if args is None else args
         spec = COMMANDS.get(command)
         call = uuid.uuid4().hex
-        self._log_command({"call": call, "event": "start", "command": command,
+        self._log_command({"call": call, "event": "start", "command": command, "caller": CALLER.get(),
                            "hint": spec.hint if spec else None, "args": args})
         try:
             if spec is None or not isinstance(args, dict):

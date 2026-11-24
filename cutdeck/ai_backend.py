@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import re
 
-from cutdeck.helper_protocol import NOT_RUNNING, PORT, VERSION, checked
+from cutdeck.helper_protocol import NOT_RUNNING, PORT, VERSION, caller, checked
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -98,7 +98,8 @@ class Backend:
 
     async def premiere(self, command: str, args: dict | None = None):
         """Run one fixed command in Premiere through the CutDeck panel; returns its result."""
-        return (await self._ask({"type": "premiere", "command": command, "args": args or {}}))["result"]
+        return (await self._ask({"type": "premiere", "command": command, "args": args or {},
+                                 "caller": caller()}))["result"]
 
     async def result(self, job_id: str, offset: int = 0, limit: int = 100) -> dict:
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 500:

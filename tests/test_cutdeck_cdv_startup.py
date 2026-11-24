@@ -112,13 +112,13 @@ def _ask_in_thread(request, **server):
 def test_client_answers_pings_during_a_long_command():
     # The helper pings every 20 s; a client that never pongs is dropped mid-command.
     reply = _ask_in_thread({"type": "slow"}, delay=1.5, ping_interval=0.1, ping_timeout=0.5)
-    assert reply["echo"] == {"type": "slow"}
+    assert reply["echo"] == {"type": "slow", "caller": helper_protocol.caller()}
 
 
 @pytest.mark.parametrize("size", [0, 3, 125, 126, 65535, 65536, 300_000])
 def test_client_round_trips_every_frame_length(size):
     request = {"type": "x", "text": "ก" * size}  # Thai: 3 bytes each in UTF-8
-    assert _ask_in_thread(request)["echo"] == request
+    assert _ask_in_thread(request)["echo"] == {"caller": helper_protocol.caller(), **request}
 
 
 def test_client_joins_a_fragmented_reply():
