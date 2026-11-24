@@ -16,16 +16,25 @@ a cover.
 Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Automation candidates).
 
 1. Get into each story fast: the guest's first story sentence, or the host's summary if the
-   guest is slow.
-2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory, legal analysis and
-   feelings that don't move events (shorten as much as possible).
-3. Cut host prompts, clarifications and opinions. Keep a host connector only to bridge pieces
-   that don't join. Host reactions may be added for drama.
-4. Viewer comments read on air: always cut. Sponsors: always cut.
+   guest is slow, or the host question that sets it up (ask, then tell; HKS-C6, 2026-11-24).
+2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory and feelings that
+   don't move events (shorten as much as possible). Law stays only as the answer to the guest's own
+   case: right after the fact it explains, or as the verdict, often near the end once the story is
+   told; never a lecture (HKS-C8, 2026-11-24).
+3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants
+   asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions,
+   name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a
+   host connector to bridge pieces that don't join. Host reactions may be added for drama.
+4. Viewer comments read on air: cut, unless one is the objection a guest or the host then answers
+   (HKS-C5, 2026-11-24). Sponsors: always cut.
 5. No jump cuts: in studio picture cut only at a thought end or a camera change. Cut hard
    (stumbles, pauses, repeats) only under a cover.
 6. Cover = B-roll from the same story (ideally the same moment, this episode only), else a
-   static listener shot (`Backup`). Film damage on all B-roll.
+   static listener shot (`Backup`). Film damage on B-roll zoomed to full screen (HKS-C10).
+   No fixed minimum length: a cover lasts as long as the words that point at it, on the footage
+   at the moment the speaker talks about it. The broadcast's split screens are where the evidence
+   and B-roll are: use that footage to cover a cut when it is on the topic or the broadcast was
+   showing it then (HKS-C9, 2026-11-24).
    The trick (user, 2026-11-23): where the guest talks about something that has B-roll, put the
    B-roll on top and cut aggressively underneath.
 
@@ -62,13 +71,15 @@ Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Autom
    - *Full-frame footage, not the soft box crop,* wherever the show also aired that footage full
      screen (the user: "show the full one"), and B-roll that matches the words: the 16th's house
      CCTV and the phone video for "what happened on the 16th".
-   - *No sponsor strip, no 3HD bug, no clock.* The phone clip before the second break (src
+   - *No sponsor strip, no 3HD bug, no clock* on footage (on studio frames the bug and clock are
+     fine, HKS-C3). The phone clip before the second break (src
      2536.5–2584.6) carries the sponsor and credits strip (from y 521). Zoom it in, centred on the
      video: Scale 240, Position (0.475, 0.667), which keeps the source window x 260–1060, y 60–510.
    - *No snappy scene changes.* A camera change within 1 s of a visible cut leaves a sliver shot
      (marker 3: 0.16 s). Don't trim speech to fix it; hold the picture on V2 instead (keep the
      outgoing shot to the change, or bring the incoming shot in at it). The hold must show a
-     masked face or a wide shot, never a talking host. Covers last at least 4 s.
+     masked face or a wide shot, never a talking host. ~~Covers last at least 4 s.~~ Replaced by
+   rule 6's "no fixed minimum" (user, 2026-11-24).
 7. Swear words bleeped. Same ending every episode.
 
 ## Clip label colours (user, 2026-11-23)

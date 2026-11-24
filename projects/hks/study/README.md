@@ -173,6 +173,9 @@ Nine daily cuts plus the EP.167 compilation. Each point names the episodes it wa
 
 ## Where the rules and the cuts disagree (for the user)
 
+**Answered 2026-11-24** (all but point 7, which the user is not sure of): see HKS-C1 to C12 in
+[../principles.md](../principles.md) and the rewritten rules 1–6 in [../rules.md](../rules.md).
+
 Many contradictions are older cuts made before the 2026-11-23 rules (covers ≥ 4 s, not one frame of
 jump). The rest are real questions:
 

@@ -127,8 +127,9 @@ Gotcha: ffmpeg `apad` before `atrim` in one chain ran without end and filled dri
 Lesson: check a clip's true peak before raising it; measure in float, since a 16-bit render hides overs.
 Still open: hearing the mix by ear (no audio playback for the agent; measured against EP.167 instead).
 
-**How to apply:** read the questions in [../study/README.md](../study/README.md) to the user before
-turning any study point into a rule.
+**How to apply:** the user answered the study's questions on 2026-11-24 (HKS-C1 to C12 in
+[../principles.md](../principles.md); rules 1–6 rewritten). Other study points are still candidates: ask
+before turning one into a rule. Open: 1012 A-TECH (evidence or ad), HKS-C10's exceptions.
 Related: [[yt-20261123-lessons]], [[gold-reading-gotchas]], [[holdout-episodes]]
 **Tenth pass (loop 2):** all 16 studies re-read against principles.md by four parallel readers; the claims
 that would change a rule or the draft were checked by hand. Seven candidate principles were added

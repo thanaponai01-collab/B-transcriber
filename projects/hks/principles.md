@@ -7,8 +7,8 @@ departs from them, this file wins for HKS.
 
 ## Principles
 
-None written down yet. The HKS work so far recorded **rules** (how the user cuts) rather than the
-reasons. The next time the user edits or answers questions, ask the why behind each rule in
+The first confirmed principles are HKS-C1 to C12 (2026-11-24). The HKS work before that recorded
+**rules** (how the user cuts) rather than the reasons. The next time the user edits or answers questions, ask the why behind each rule in
 [rules.md](rules.md) and record it here: the principle, then *(confirmed / seen / guess)* and the
 user's words.
 
@@ -19,6 +19,44 @@ Already shared with 1RaceClub and moved to the main file: **each point is told o
 from the dailies are about cutting a broadcast, and rules read from EP.162/167 (HKS-18 on) are about re-cutting
 finished cuts: a compilation's "kept share" (19–23 %) is of an already-cut video, and its longer pieces (median
 8–10 s) can be longer because each source was already tightened once (inference, not yet asked).
+
+## Confirmed by the user (2026-11-24, answers to the overnight study's questions)
+
+Each is **confirmed**; the user's own words are quoted where they added to the offered answer.
+
+- **HKS-C1. No jump cuts in the studio picture** (rule 5): viewers notice them **and** the show should
+  look like the broadcast. Both reasons.
+- **HKS-C2. Cover only with footage from the episode itself** (rule 6): it keeps the story honest (the
+  picture is this case's real evidence) **and** avoids copyright claims.
+- **HKS-C3. The TV clock is blurred to hide that it is a re-cut**: a clock that jumps between pieces shows
+  the edit. So the clock and the 3HD bug are **fine on studio frames** (seen 1123, 1110); cover them where
+  they would show the cut.
+- **HKS-C4. The host's on-air intro and recap are cut** (HKS-22) because the hook does the intro's job and
+  a recap repeats what the viewer just saw, **and** for length.
+- **HKS-C5. Viewer comments and the host's warm-up opinions are cut** because they slow the story **and**
+  for neutrality. Exception: a viewer comment that is the objection a guest or the host then answers.
+- **HKS-C6. Ask, then tell is an allowed opening** (1110, 1117): the story may open on the host question
+  that sets up the guest's first story sentence.
+- **HKS-C7. The host stays when he carries the story** (HKS-8 confirmed, rule 3 rewritten): the chapter
+  question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his
+  warm-up, clarifying questions, name checks, filler and most jokes.
+- **HKS-C8. Law answers the guest's own case, never lectures** (HKS-12 confirmed, rule 2 rewritten): right
+  after the fact it explains, or as the verdict. The user: "sometimes it could be somewhere at around
+  ending like every story tells, then law answers": the whole story first, then the law as its answer.
+- **HKS-C9. A cover has no fixed minimum length** (replaces "covers ≥ 4 s"; HKS-21 confirmed): it lasts as
+  long as the words that point at it, and sits on the footage at the exact moment the speaker talks about
+  it. The user: the broadcast "mostly split[s] the screen when they have evidence or b-roll. So the split
+  screen, that's where you can use b-roll and to cover the cut as long as it's in a topic or at the real
+  broadcast showing it." So: look for the broadcast's split screens first; that footage may cover a cut
+  when it is on the topic, or when the broadcast was showing it at that moment.
+- **HKS-C10. Film damage goes on B-roll that is zoomed to full screen** (rule 6 narrowed; the user: "for the
+  B-roll things that is zoomed to full screen"). The study's exceptions (HKS-17 note: 1123's CCTV, 1012's
+  body covers without it, 1117's screenshots with it) are not yet re-checked against "zoomed full screen".
+- **HKS-C11. Headline cards mainly pay off in the body**; a card may tease beyond it, but the default is a
+  payoff (so the "every headline card is paid off" check below stays a check, not an absolute rule).
+- **HKS-C12. A compilation plays its cases in source order** (EP.168 question; HKS-18). The user downloads
+  each source from YouTube and numbers the file: play them by that number. With no number, by the date the
+  video was posted on YouTube. A story told across several videos stays in its own order.
 
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
@@ -49,8 +87,8 @@ and 1118 ([study/holdout/README.md](study/holdout/README.md)). **seen** = read i
   nothing moves. Only 2 are real same-shot jumps: 1120 686.6 inside an insert clip, and 1123 1178.9 on
   the masked three-shot (0.2 s). Why: no visible jump, and proof on screen when a claim is made.
 - **HKS-8. The host stays as the questioner** (seen in all 9; held), narrowing rule 3. The chapter
-  question, the challenge, the clearest summary stay. **The host's own verdict is unsettled:** kept in
-  1003, 1012 and 167, cut in 1109. Ask.
+  question, the challenge, the clearest summary stay. **Confirmed as HKS-C7** (2026-11-24), verdict
+  included (1109 cut it; guess: the host was himself a party there, HKS-13).
 - **HKS-9 → see HKS-12.** (Was "law follows the fact it explains"; the holdouts showed the test is
   whether it answers a guest's own case, not where it sits.)
 - **HKS-10. The ending closes the lead thread** (narrowed: the hook-echo ending is seen only in 1112
@@ -96,7 +134,7 @@ and 1118 ([study/holdout/README.md](study/holdout/README.md)). **seen** = read i
 - **HKS-18. A compilation is one theme, four equal cases** (seen EP.162, EP.167). The title card
   names the theme ("รวมเรื่องช้ำใจ", "รวมมหากาพย์บ้านพักคนชรา"); each case gets about the same time
   (19–24 % of its source); the hook is the single strongest confrontation; each case opens on its
-  premise and ends on a button; the source runs on 2–5 s under the case card with only silence or the
+  premise and ends on a button; the cases play in source order (HKS-C12, confirmed); the source runs on 2–5 s under the case card with only silence or the
   broadcast's goodbye under it (EP.162, words checked), never a cut-off line. Why (guess): a compilation is watched for a mood, so balance beats ranking.
   The title card is the episode's thumbnail animated in After Effects, same headline (seen EP.162's
   comp); the thumbnail and its headline PNGs already sit in the day folder before the cut (seen
@@ -190,9 +228,8 @@ Checks for any agent cut, from gaps the user's cuts show (guess; each costs seco
 
 ## Questions to ask (the why)
 
-- No jump cuts in the studio picture (HKS-R5): why? Viewers notice them, or the show's style?
-- Cover only footage from the episode itself: copyright, or keeping the story honest?
-- Viewer comments and host opinions always cut: because they slow the story, or for neutrality?
-- TV clock always blurred: a rights issue with the broadcaster, or to hide that it's a re-cut?
-- A headline card that the body never proves (1002, 1109, 1118): left out on purpose, or a gap?
-- Why are the host's intro and recap always cut: the hook replaces them, or length?
+All six questions here and the eight in [study/README.md](study/README.md) were answered on 2026-11-24; the
+answers are HKS-C1 to C12 above. Still open:
+- **1012 951–967** (16.6 s, A-TECH rice-ring video, no cover): evidence or an ad? The user is not sure;
+  check it by eye before using it as a precedent either way.
+- **HKS-C10's exceptions:** re-check the covers listed in the HKS-17 note for "zoomed to full screen".
