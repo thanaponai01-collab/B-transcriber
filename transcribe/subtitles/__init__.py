@@ -53,9 +53,9 @@ def _frame_start_ms(frame: int, tb: Timebase) -> int:
     return frame * tb.fps_den * 1000 // tb.fps_num
 
 
-# Hand-cut subtitles start before the speech; engine cue starts land just after
-# it. Measured 2026-11-24 on the hand-cut gold shorts (Short1-3): see the commit.
-LEAD_IN_MS = 133
+# Hand-cut subtitles start before the speech; engine cue starts (re-timed by
+# word_align) sit on it. Measured 2026-11-24 on the hand-cut gold shorts (Short1-3).
+LEAD_IN_MS = 100
 
 
 def frame_cues(cues: list[dict], tb: Timebase, lead_in_ms: int = LEAD_IN_MS) -> list[dict]:

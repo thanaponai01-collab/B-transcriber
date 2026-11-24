@@ -107,7 +107,7 @@ def _align_word_starts(conn, job_id: int, cues: list, ingest_result, device: str
     aligner = word_align.ThaiCTCAligner(audio, sr, cfg.get("model", word_align.DEFAULT_MODEL), device)
     aligner.load()
     try:
-        new = word_align.retime_starts(words, cues, aligner, int(cfg.get("pad_ms", 400)),
+        new = word_align.retime_starts(words, cues, aligner, aligner.alignable, int(cfg.get("pad_ms", 400)),
                                        len(audio) * 1000 // sr)
     finally:
         aligner.unload()

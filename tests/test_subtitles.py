@@ -110,7 +110,7 @@ def test_lead_in_never_reaches_into_a_cue_past_a_short_gap_or_before_zero():
 
 def test_write_subtitles_leads_in_by_default_on_frame_exports():
     srt = write_subtitles([{"text": "x", "start_ms": 2000, "end_ms": 3000}], "srt", fps=25)
-    assert "00:00:01,880 --> 00:00:03,000" in srt   # 2000 - 133 ms -> frame 47
+    assert "00:00:01,920 --> 00:00:03,000" in srt   # 2000 - 100 ms -> frame 47.5 -> 48
 
 
 def test_write_subtitles_with_fps_writes_frame_exact_stamps():

@@ -19,9 +19,9 @@ def q(start, end, *lines):
 def test_quotes_srt_orders_by_start_and_formats_stamps():
     out = server.quotes_srt([q(3_661_005, 3_662_000, "b"), q(0, 1500, "a1", "a2")], PAL)
     # snapped to 25 fps frames: 1500 ms is frame 37.5 -> 38 = 1520 ms; starts lead
-    # in by LEAD_IN_MS (133): 3 661 005 - 133 is frame 91 521.8 -> 91 522 = 3 660 880 ms
+    # in by LEAD_IN_MS (100): 3 661 005 - 100 is frame 91 522.6 -> 91 523 = 3 660 920 ms
     assert out == ("1\n00:00:00,000 --> 00:00:01,520\na1\na2\n\n"
-                   "2\n01:01:00,880 --> 01:01:02,000\nb\n\n")
+                   "2\n01:01:00,920 --> 01:01:02,000\nb\n\n")
 
 
 @pytest.mark.parametrize("quotes", [
@@ -141,7 +141,7 @@ def test_exports_write_bom_crlf_srt_beside_the_project(client, tmp_path):
     saved = tmp_path / "proj" / "CutDeck" / "SubtitleDesk" / f"Ep 1-{sid[:8]}-quotes.srt"
     raw = saved.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf") and b"\r\n" in raw
-    assert raw.decode("utf-8-sig") == "1\r\n00:00:09,880 --> 00:00:11,000\r\nหนึ่ง\r\n\r\n"
+    assert raw.decode("utf-8-sig") == "1\r\n00:00:09,920 --> 00:00:11,000\r\nหนึ่ง\r\n\r\n"
     full = client.get(f"/api/sessions/{sid}/transcript.srt")
     assert full.status_code == 200
     text = (saved.parent / f"Ep 1-{sid[:8]}-transcript.srt").read_bytes().decode("utf-8-sig")
@@ -154,9 +154,9 @@ def test_exports_snap_to_the_sequence_frame_rate(client, monkeypatch):
     monkeypatch.setattr(server, "from_panel_json", lambda _: ntsc)
     path = unquote(client.get(f"/api/sessions/{sid}/transcript.srt").headers["X-SubtitleDesk-Export-Path"])
     text = open(path, encoding="utf-8-sig").read()
-    # led in by 133 ms: 9 867 ms is frame 295.7 at 29.97 -> frame 296 = 9 876 ms; the
-    # next cue touches it, so the shared boundary 10 867 ms -> frame 326 = 10 877 ms
-    assert "00:00:09,876 --> 00:00:10,877" in text
+    # led in by 100 ms: 9 900 ms is frame 296.7 at 29.97 -> frame 297 = 9 909 ms; the
+    # next cue touches it, so the shared boundary 10 900 ms -> frame 327 = 10 910 ms
+    assert "00:00:09,909 --> 00:00:10,910" in text
 
 
 def test_exports_wait_for_ready_and_quotes(client):
