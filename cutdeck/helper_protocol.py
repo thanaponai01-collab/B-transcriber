@@ -9,11 +9,20 @@ import json
 import os
 import socket
 import struct
+import sys
 
 PORT = 7891
 VERSION = "cutdeck-7"  # premiere_transcript: clip transcript JSON for Premiere
 MAX_REPLY = 1 << 24  # the helper's MAX_MESSAGE, and Backend's max_size
 NOT_RUNNING = "CutDeck helper is not running on 127.0.0.1:{port}; start it with: python -m cutdeck.helper"
+
+
+def caller() -> str:
+    """Who is asking, for the helper's command log: the program, and the Claude Code session that
+    ran it (its transcript is ~/.claude/projects/<project>/<session>.jsonl)."""
+    program = os.path.basename(sys.argv[0]) or "python"
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    return f"{program} {session}" if session else program
 
 
 def checked(reply: dict) -> dict:
@@ -51,7 +60,7 @@ def exchange(messages: list[dict], port: int = PORT, open_timeout: float = 10, c
 
 def ask(request: dict, port: int = PORT) -> dict:
     """One request after the version hello, as Backend._ask does over websockets."""
-    return exchange([{"type": "hello", "version": VERSION}, request], port)
+    return exchange([{"type": "hello", "version": VERSION}, {"caller": caller(), **request}], port)
 
 
 def _send(sock: socket.socket, opcode: int, data: bytes) -> None:

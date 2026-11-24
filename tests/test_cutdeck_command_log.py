@@ -83,6 +83,41 @@ def test_a_helper_command_logs_the_panel_calls_it_makes(tmp_path, monkeypatch):
     assert starts == ["menu_command", "read_sequence", "read_sequence"]
 
 
+def test_every_logged_call_names_its_caller_including_nested_panel_calls(tmp_path, monkeypatch):
+    from cutdeck import menu
+    monkeypatch.setattr(menu, "invoke", lambda path, front=False: {"menu": path})
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "session-a")
+
+    async def body(port):
+        ws, _, task = await _driver(port, lambda c: {"ok": True, "result": {"name": "Edit"}},
+                                    commands=["read_sequence", "open_sequence"])
+        await Backend(port).premiere("menu_command", {"path": "Clip > Unlink"})
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "session-b")
+        await Backend(port).premiere("read_sequence")
+        task.cancel()
+        await ws.close()
+
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
+    starts = [(r["command"], r["caller"].split()[-1]) for r in _log(tmp_path) if r["event"] == "start"]
+    assert starts == [("menu_command", "session-a"), ("read_sequence", "session-a"),
+                      ("read_sequence", "session-a"), ("read_sequence", "session-b")]
+
+
+def test_the_socket_client_sends_its_caller(tmp_path, monkeypatch):
+    from cutdeck import helper_protocol
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "session-c")
+
+    async def body(port):
+        ws, _, task = await _driver(port, lambda c: {"ok": True, "result": {"name": "Edit"}})
+        await asyncio.to_thread(helper_protocol.ask, {"type": "premiere", "command": "read_sequence"}, port)
+        task.cancel()
+        await ws.close()
+
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
+    (start,) = [r for r in _log(tmp_path) if r["event"] == "start"]
+    assert start["caller"].endswith(" session-c")
+
+
 def test_a_command_still_running_has_a_start_and_no_end(tmp_path):
     async def body(port):
         ws, _, task = await _driver(port, lambda c: None)  # the panel never answers
