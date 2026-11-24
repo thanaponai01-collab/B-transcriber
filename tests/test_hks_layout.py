@@ -80,7 +80,7 @@ def _footage(day: str, file: str) -> Path:
 
 
 def _second(path: Path, t: int) -> np.ndarray:
-    """The frame ``hks_layout.frames`` holds for second ``t``: the fps=1 filter picks the one at
+    """The frame ``hks_layout.measures`` measures for second ``t``: the fps=1 filter picks the one at
     t + 0.48 s of this 25 fps footage."""
     raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t + 0.46:.2f}", "-i", str(path), "-frames:v", "1",
                           "-vf", "scale=320:180:flags=area", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
@@ -105,3 +105,19 @@ def test_cctv_cover_reads_as_footage():
     path = _footage(day, "HKS Facebook 201169 Full.mp4")
     share = sum(_kind(_second(path, t)) == FOOTAGE for t in range(a, b)) / (b - a)
     assert share >= 0.9, share  # 100 % measured
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+def test_measures_streams_the_frames_and_keeps_only_the_result(tmp_path):
+    from cutdeck import hks_layout
+    video = tmp_path / "v.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25:duration=3",
+                    "-pix_fmt", "yuv420p", str(video)], check=True)
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-an", "-vf", "fps=1,scale=320:180:flags=area",
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+    want = hks_layout.measure(np.frombuffer(raw, np.uint8).reshape(-1, 180, 320, 3))
+    cache = tmp_path / "cache"
+    got = hks_layout.measures(str(video), cache)
+    assert np.array_equal(got, want) and len(got) == 3
+    assert [p.suffix for p in cache.iterdir()] == [".npy"]
+    assert np.array_equal(hks_layout.measures(str(video), cache), want)  # second call: from the cache

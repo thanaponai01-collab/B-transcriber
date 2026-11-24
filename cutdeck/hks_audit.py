@@ -49,6 +49,7 @@ from cutdeck.hks_clock import CROP_H, CROP_W, CROP_X, CROP_Y, clock_in_frame, gr
 from cutdeck.hks_gold import (FRAME, HALF, HOLD, _framing, _non_empty, body, day_folders, is_holdout,
                               read_day)
 from cutdeck.prproj_reader import read_project
+from cutdeck import hks_cache
 
 CAMERA_CHANGE = 20.0  # mean |RGB difference| at 1280x720; set in projects/hks/rule-audit.md, rule 1
 MIN_DIP_S = 10        # a clock-off run this long inside the TV part is a bumper candidate
@@ -216,6 +217,7 @@ def clock_track(path: str, cache: Path) -> np.ndarray:
     """Clock on/off for each second of ``path`` (index i = the frame nearest i s), cached."""
     out = cache / f"{_key(path)}.clock.npy"
     if out.exists():
+        hks_cache.touch(out)
         return np.load(out)
     vf = f"fps=1,scale=1280:720,crop={CROP_W}:{CROP_H}:{CROP_X}:{CROP_Y}"
     proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", vf, "-f", "rawvideo",
@@ -229,6 +231,7 @@ def clock_track(path: str, cache: Path) -> np.ndarray:
     track = np.array(flags, bool)
     cache.mkdir(parents=True, exist_ok=True)
     np.save(out, track)
+    hks_cache.trim(cache.parent)
     return track
 
 

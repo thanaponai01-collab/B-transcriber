@@ -70,6 +70,7 @@ from PIL import Image
 from scipy import ndimage
 
 from cutdeck.topic_layout import CLIP, classify_frame
+from cutdeck import hks_cache
 
 CACHE = Path(tempfile.gettempdir()) / "hks_cutpoints"
 LABELS = Path(__file__).resolve().parent.parent / "tests" / "data" / "hks_cutpoints_20261120.json"
@@ -135,7 +136,9 @@ def scan(path: str | Path, cache: Path = CACHE) -> Scan:
     cache.mkdir(parents=True, exist_ok=True)
     base = cache / _key(path)
     meta, thumbs_f, pairs_f = base.with_suffix(".npz"), base.with_suffix(".thumbs"), base.with_suffix(".pairs")
-    if not meta.exists():
+    if meta.exists() and thumbs_f.exists() and pairs_f.exists():  # a half-trimmed entry is rebuilt
+        hks_cache.touch(meta)
+    else:
         size = SCAN_W * SCAN_H * 3
         proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(path), "-an", "-fps_mode", "passthrough",
                                  "-vf", f"scale={SCAN_W}:{SCAN_H}:flags=area", "-f", "rawvideo",
@@ -165,6 +168,7 @@ def scan(path: str | Path, cache: Path = CACHE) -> Scan:
         # field-coded 20261112 files say 50 fps and decode 25 frames a second.
         np.savez(meta, fps=len(diffs) / _duration(path), diff=np.array(diffs, np.float32),
                  pair_at=np.array(pair_at, np.int64))
+        hks_cache.trim(cache.parent)
     m = np.load(meta)
     n, k = len(m["diff"]), len(m["pair_at"])
     th, tw = SCAN_H // THUMB, SCAN_W // THUMB

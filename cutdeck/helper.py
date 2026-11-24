@@ -21,8 +21,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import time
 import uuid
 
 from cutdeck.driver_commands import COMMANDS, MAX_MARKERS, PANEL_COMMANDS  # noqa: F401 (MAX_MARKERS: tests)
@@ -34,6 +36,8 @@ from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND, SequenceRefusal
 # One JSON line per event in the jobs folder: a "start" before a Premiere command runs, an "end"
 # (ok, result or error) after. A start with no end is a command that never finished.
 COMMAND_LOG = "premiere_commands.jsonl"
+COMMAND_LOG_MAX = 10 * 2**20  # past this, the log moves to premiere_commands.jsonl.1 and starts again
+JOB_MAX_AGE_S = 30 * 24 * 3600  # job folders untouched this long are deleted when a helper starts
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
@@ -190,6 +194,7 @@ class Jobs:
     def __init__(self, directory: Path):
         self.directory = directory.resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
+        self._drop_old_jobs()
         self.jobs: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
         self.active: str | None = None  # the GPU lane: rough cut, transcribe
@@ -368,6 +373,18 @@ class Jobs:
         job["state"] = "running"
         return self._launch(job, self._run(job))
 
+    def _drop_old_jobs(self) -> None:
+        """Job folders (32 hex characters, holding a job.json) whose job.json is older than
+        JOB_MAX_AGE_S: no helper is running them, and nobody resumes a month-old job."""
+        cutoff = time.time() - JOB_MAX_AGE_S
+        for d in self.directory.iterdir():
+            job = d / "job.json"
+            try:
+                if re.fullmatch(r"[0-9a-f]{32}", d.name) and job.stat().st_mtime < cutoff:
+                    shutil.rmtree(d, ignore_errors=True)
+            except OSError:
+                continue
+
     def _job(self, job_id) -> dict:
         """A job from memory, or from its job.json when an earlier helper made it. A job that
         earlier helper was running died with it: it reads as `interrupted`, never as running."""
@@ -464,7 +481,13 @@ class Jobs:
     def _log_command(self, record: dict) -> None:
         line = json.dumps({"time": datetime.now().astimezone().isoformat(timespec="milliseconds"), **record},
                           ensure_ascii=False, default=str)
-        with open(self.directory / COMMAND_LOG, "a", encoding="utf-8") as f:
+        log = self.directory / COMMAND_LOG
+        try:  # rotate before a start, never between a call's start and end
+            if record.get("event") == "start" and log.stat().st_size > COMMAND_LOG_MAX:  # save_diff may read .1
+                os.replace(log, log.with_name(log.name + ".1"))
+        except OSError:
+            pass  # no log yet, or a reader holds it: rotate on a later line
+        with open(log, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
     def _log_command_end(self, record: dict) -> None:

@@ -28,6 +28,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from cutdeck import hks_cache
+
 CACHE = Path(tempfile.gettempdir()) / "hks_silence"
 NOISE_DB = -35
 MIN_SILENCE = 0.3   # s that silencedetect reports
@@ -42,6 +44,7 @@ def silences(path: str, cache: Path = CACHE) -> list[tuple[float, float]]:
     """Silences of at least MIN_SILENCE s under NOISE_DB in the file's audio, cached."""
     key = cache / f"{re.sub(r'[^A-Za-z0-9]+', '_', Path(path).stem)[:40]}_{Path(path).stat().st_size}.json"
     if key.exists():
+        hks_cache.touch(key)
         return [tuple(s) for s in json.loads(key.read_text())]
     err = subprocess.run(["ffmpeg", "-v", "info", "-i", path, "-vn", "-af",
                           f"silencedetect=noise={NOISE_DB}dB:d={MIN_SILENCE}", "-f", "null", "-"],
@@ -51,6 +54,7 @@ def silences(path: str, cache: Path = CACHE) -> list[tuple[float, float]]:
     out = list(zip(starts, ends))
     cache.mkdir(parents=True, exist_ok=True)
     key.write_text(json.dumps(out))
+    hks_cache.trim(cache.parent)
     return out
 
 

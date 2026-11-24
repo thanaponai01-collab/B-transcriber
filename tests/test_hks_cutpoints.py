@@ -4,6 +4,7 @@ mounted."""
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -150,3 +151,20 @@ def test_the_real_punch_in_is_one_shot_and_a_real_camera_change_is_not():
     assert cp.same_shot(tight, after) >= cp.SAME_SHOT
     a, b = cp._grab_pair(FOOTAGE, round(708.76 * 25), sc)  # studio close-up to the wide shot
     assert cp.same_shot(a, b) < cp.SAME_SHOT
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None, reason="ffmpeg not on PATH")
+def test_scan_rebuilds_an_entry_whose_data_file_was_trimmed(tmp_path):
+    import subprocess
+    from cutdeck import hks_cutpoints
+    video = tmp_path / "v.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25:duration=2",
+                    "-pix_fmt", "yuv420p", str(video)], check=True)
+    cache = tmp_path / "cache"
+    first = hks_cutpoints.scan(video, cache)
+    n = first.n
+    del first
+    (thumbs,) = cache.glob("*.thumbs")
+    thumbs.unlink()
+    again = hks_cutpoints.scan(video, cache)
+    assert again.n == n and thumbs.exists()

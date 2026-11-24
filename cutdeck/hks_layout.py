@@ -39,7 +39,7 @@ from pathlib import Path
 
 import numpy as np
 
-from cutdeck import hks_episode
+from cutdeck import hks_cache, hks_episode
 from cutdeck.hks_audit import _key
 from cutdeck.hks_gold import day_folders
 
@@ -108,33 +108,26 @@ def kind_at(layout: list[list], t: int) -> str | None:
 
 # --- ffmpeg shell --------------------------------------------------------------------------------
 
-def frames(path: str, cache: Path = CACHE) -> np.ndarray:
-    """Every second of ``path`` at 320x180 RGB, as a read-only memmap: index i is the frame the
-    ``fps=1`` filter picks for second i, the one at i + 0.48 s on this 25 fps footage (the same
-    frames as ``hks_audit.clock_track``). Decoded once, streamed to disk."""
-    out = cache / f"{_key(path)}.{W}x{H}.rgb"
-    if not out.exists():
-        cache.mkdir(parents=True, exist_ok=True)
-        part = out.with_suffix(".part")
-        with open(part, "wb") as fh:
-            proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-an", "-vf",
-                                     f"fps=1,scale={W}:{H}:flags=area", "-f", "rawvideo",
-                                     "-pix_fmt", "rgb24", "-"], stdout=fh)
-            if proc.wait() != 0:
-                raise RuntimeError(f"ffmpeg failed reading {path}")
-        part.replace(out)
-    n = out.stat().st_size // FRAME_BYTES
-    return np.memmap(out, np.uint8, "r", shape=(n, H, W, 3))
-
-
 def measures(path: str, cache: Path = CACHE) -> np.ndarray:
-    """``measure`` of every second of ``path``, cached next to the frames."""
+    """``measure`` of every second of ``path``, cached. Second i is the frame the ``fps=1`` filter
+    picks, the one at i + 0.48 s on this 25 fps footage (the same frames as
+    ``hks_audit.clock_track``), decoded at 320x180 RGB and streamed: the frames are never kept."""
     out = cache / f"{_key(path)}.layout.npy"
     if out.exists():
+        hks_cache.touch(out)
         return np.load(out)
-    f = frames(path, cache)
-    m = np.concatenate([measure(np.asarray(f[a:a + 256])) for a in range(0, len(f), 256)])
+    proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-an", "-vf", f"fps=1,scale={W}:{H}:flags=area",
+                             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    chunks = []
+    while len(buf := proc.stdout.read(256 * FRAME_BYTES)) >= FRAME_BYTES:
+        n = len(buf) // FRAME_BYTES
+        chunks.append(measure(np.frombuffer(buf, np.uint8, n * FRAME_BYTES).reshape(n, H, W, 3)))
+    if proc.wait() != 0:
+        raise RuntimeError(f"ffmpeg failed reading {path}")
+    m = np.concatenate(chunks)
+    cache.mkdir(parents=True, exist_ok=True)
     np.save(out, m)
+    hks_cache.trim(cache.parent)
     return m
 
 

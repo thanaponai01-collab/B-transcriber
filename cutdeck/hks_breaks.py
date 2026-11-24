@@ -64,6 +64,7 @@ import numpy as np
 from cutdeck.hks_audit import clock_track, dips, tv_part
 from cutdeck.hks_episode import CACHE as CLOCK_CACHE, OUT, update
 from cutdeck.hks_gold import day_folders, read_day
+from cutdeck import hks_cache
 
 SR = 16000
 HOP = 640           # 40 ms: one feature frame per 25 fps video frame
@@ -138,6 +139,7 @@ def audio_features(path: str, cache: Path = CACHE) -> tuple[np.ndarray, np.ndarr
     second, frame i centred on i / FPS s. The audio is streamed from ffmpeg and cached."""
     out = cache / f"{_key(path)}.{FEATURES}.npz"
     if out.exists():
+        hks_cache.touch(out)
         z = np.load(out)
         return z["mel"].astype(np.float32), z["db"].astype(np.float32)
     bank, window = _mel_bank(), np.hanning(WIN).astype(np.float32)
@@ -162,6 +164,7 @@ def audio_features(path: str, cache: Path = CACHE) -> tuple[np.ndarray, np.ndarr
     mel, db = np.concatenate(mels), np.concatenate(dbs)
     cache.mkdir(parents=True, exist_ok=True)
     np.savez(out, mel=mel, db=db)
+    hks_cache.trim(cache.parent)
     return mel.astype(np.float32), db.astype(np.float32)
 
 

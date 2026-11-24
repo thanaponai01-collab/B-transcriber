@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 
 from cutdeck.hks_episode import OUT, load, update
+from cutdeck import hks_cache
 from cutdeck.hks_gold import day_folders
 from cutdeck.topic_speakers import (HOST_THRESHOLD, SR, WINDOW_S, embed_windows, smooth,
                                     speech_window_starts, turns_from_scores)
@@ -66,6 +67,7 @@ def windows(media: Path, cache: Path = CACHE) -> tuple[np.ndarray, np.ndarray]:
     """Speech window starts and unit speaker embeddings of one footage file, cached per file."""
     path = cache / f"{media.parent.parent.name[:8]} {media.stem} {media.stat().st_size} h{HOP_S}.npz"
     if path.exists():
+        hks_cache.touch(path)
         z = np.load(path)
         return z["starts"], z["emb"]
     audio = load_audio(media)
@@ -74,6 +76,7 @@ def windows(media: Path, cache: Path = CACHE) -> tuple[np.ndarray, np.ndarray]:
     del audio
     cache.mkdir(parents=True, exist_ok=True)
     np.savez(path, starts=starts, emb=emb)
+    hks_cache.trim(cache.parent)
     return starts, emb
 
 
