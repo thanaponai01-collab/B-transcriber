@@ -219,6 +219,37 @@ def test_a_panel_that_disconnects_fails_the_pending_call(tmp_path):
     asyncio.run(_with_helper(Jobs(tmp_path), body))
 
 
+def test_without_a_panel_the_routes_the_refusal_names_still_run(tmp_path, monkeypatch):
+    # The refusal tells a stranded agent how to save and look (2026-11-24: an agent sent File > Save
+    # with the default timeline focus, which needs the panel, and concluded nothing could save).
+    from cutdeck import keys, menu, screenshot
+    posted = []
+    monkeypatch.setattr(menu, "invoke", lambda path, front=False: posted.append(path) or {"menu": path})
+    monkeypatch.setattr(menu, "list_items", lambda query: [{"path": "File > Save"}])
+    monkeypatch.setattr(keys, "list_commands", lambda query: [])
+    monkeypatch.setattr(keys, "active_kys", lambda: "Win.kys")
+    monkeypatch.setattr(screenshot, "capture", lambda: {"path": "C:/shot.png"})
+    runs = {"menu_command with focus null": ("menu_command", {"path": "File > Save", "focus": None}),
+            "list_menu": ("list_menu", {}), "list_key_commands": ("list_key_commands", {}),
+            "screenshot": ("screenshot", {})}
+    assert set(runs) == set(helper.PANEL_FREE)
+
+    async def body(port):
+        backend = Backend(port)
+        ws, _, task = await _driver(port, lambda c: {"ok": True, "result": {}})
+        task.cancel()
+        await ws.close()  # the panel was here and left
+        while (await backend.premiere_status())["connected"]:
+            await asyncio.sleep(0.01)
+        with pytest.raises(ValueError, match=r"since \d\d:\d\d:\d\d.*menu_command with focus null"):
+            await backend.premiere("read_sequence")
+        for command, args in runs.values():
+            await backend.premiere(command, args)
+        assert posted == ["File > Save"]
+
+    asyncio.run(_with_helper(Jobs(tmp_path), body))
+
+
 def test_the_panels_refusal_is_the_callers_error(tmp_path):
     async def body(port):
         ws, _, task = await _driver(port, lambda c: {"ok": False, "message": "CutDeck panel is busy"})
