@@ -1,7 +1,7 @@
 """Stitch dedup for sub-word / zero-length Thai pieces (_coincident).
 
 The fixed defect was misdiagnosed for a long time as an exact-text-matching
-problem (see the old note in faster_whisper.py's _LONG_SPAN_SAFE_S block). It
+problem (see docs/ENGINES.md, "Long spans"). It
 was not: the seam duplicates matched on text fine, and were lost to the IoU
 gate. Whisper's Thai output is sub-word — pieces run 20-80ms and combining
 marks land at start == end, where IoU is structurally 0.0 and no threshold can

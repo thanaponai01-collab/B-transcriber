@@ -95,6 +95,13 @@ def _seam_between(a: ChunkTokens, b: ChunkTokens, tol_ms: int) -> int | None:
 
 
 def cut_seams(chunks: list[ChunkTokens], tol_ms: int = _SEAM_BOUNDARY_TOL_MS) -> list[ChunkTokens]:
+    """Trim consecutive overlapping chunks so each token is owned by one chunk.
+
+    A chunk keeps tokens whose centre lies between its two seams (the left seam
+    with the previous chunk, the right seam with the next). Non-overlapping
+    neighbours get no seam, so their tokens are untouched. Returns new
+    ChunkTokens; the inputs are not modified. Run ``stitch`` on the result to
+    mop up any token that still straddles a seam."""
     order = sorted(range(len(chunks)), key=lambda i: chunks[i].start_ms)
     seams = [_seam_between(chunks[order[k]], chunks[order[k + 1]], tol_ms)
              for k in range(len(order) - 1)]

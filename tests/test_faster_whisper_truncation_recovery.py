@@ -2,7 +2,7 @@
 
 Covers the failure mode where faster-whisper stops generating early within a
 long-span window and stretches the last word's timestamp out to the window's
-end to fill the gap (see _TRUNCATION_TAIL_MS docs in faster_whisper.py) —
+end to fill the gap (see docs/ENGINES.md, "Early end-of-speech") —
 and the fix's own pitfall: a fixed-offset cut can land mid-syllable and
 reproduce a stray piece on both sides, since Thai subword pieces don't align
 to word boundaries. _find_safe_cut is tested for choosing a real inter-token
