@@ -38,6 +38,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: narrowed the candidate set in reconcile.py to engine A only, test_smoke went red, reverted
 
+## Word-start alignment (word_align)
+- test: `python -m pytest tests/test_word_align.py -q -p no:cacheprovider`
+- fail-signal: AssertionError
+- fail-proof: dropped the never-go-backwards clamp in word_align.retime_starts, test_starts_never_go_backwards_and_a_word_keeps_one_ms went red, reverted
+- live (GPU, manual): `python -m transcribe.eval.timing <clean speech .wav ...>` reports word and cue starts against the audio's own onsets; on 5 three-minute clean clips (2026-11-24) word starts within one 25 fps frame went 42% → 72% (60 onsets)
+
 ## Thai cue legality lint
 - test: `python -m pytest tests/test_thai_lint.py -q -p no:cacheprovider`
 - fail-signal: AssertionError

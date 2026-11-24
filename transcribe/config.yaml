@@ -407,6 +407,14 @@ segment:
 store:
   path: transcriber.db
 
+# Word-start alignment (transcribe/pipeline/word_align.py): after Engine A unloads, a Thai
+# CTC model re-times each word start (and so each cue start) against the audio. Text and
+# word ends are unchanged. Checked with `python -m transcribe.eval.timing` on clean speech.
+word_align:
+  enabled: true
+  model: sakares/wav2vec2-large-xlsr-thai-demo
+  pad_ms: 400   # audio either side of each cue window
+
 # Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
 # (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU
 # harness run shows speech_coverage_miss drops with no gated regression.

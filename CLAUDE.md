@@ -93,6 +93,7 @@ audio → ingest.py        denoise + VAD → chunks
       → reconcile.py     select-only → (RecognizedToken, source_engine) pairs
       → normalize.py     script-boundary spacing + Thai cleanup
       → align_force.py   final timestamps → token table + SRT/VTT
+      → word_align.py    Thai CTC re-times word + cue starts (Engine A unloaded first)
       → editor/          human corrections → diff.py → correction table → biasindex.py
 ```
 

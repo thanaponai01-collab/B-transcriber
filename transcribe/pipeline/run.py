@@ -26,6 +26,7 @@ import torch
 from transcribe.db import store
 from transcribe.contracts import PipelineToken
 from transcribe.pipeline import align_force, coverage, engine_run, ingest, refine
+from transcribe.pipeline import word_align
 from transcribe.pipeline import plan as planning
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,30 @@ def run_file(
         audio_path, config, db_path, ingest_result,
         sha256=sha256, engine_a=engine_a,
     )[1]
+
+
+def _align_word_starts(conn, job_id: int, cues: list, ingest_result, device: str, cfg: dict) -> None:
+    """Re-time Engine A's persisted words (CutDeck reads them) and the cue starts in place."""
+    import json
+    result = store.get_engine_result(conn, job_id, "a")
+    words = json.loads(result.raw_words_json) if result and result.raw_words_json else []
+    if not words:
+        return
+    audio, sr = ingest_result.audio, ingest_result.sample_rate
+    aligner = word_align.ThaiCTCAligner(audio, sr, cfg.get("model", word_align.DEFAULT_MODEL), device)
+    aligner.load()
+    try:
+        new = word_align.retime_starts(words, cues, aligner, int(cfg.get("pad_ms", 400)),
+                                       len(audio) * 1000 // sr)
+    finally:
+        aligner.unload()
+        del aligner
+        engine_run._free_vram()
+    word_align.retime_cue_starts(cues, words, new)
+    store.save_engine_result(conn, job_id, "a", result.engine_name, result.tokens_json,
+                             result.timestamps_final, json.dumps(new, ensure_ascii=False))
+    moved = sum(o["start_ms"] != n["start_ms"] for o, n in zip(words, new))
+    logger.info("Job %d: word_align moved %d of %d word starts", job_id, moved, len(words))
 
 
 def run_file_job(
@@ -278,6 +303,13 @@ def run_file_job(
                 finally:
                     del resident_engine_a
                     engine_run._free_vram()
+
+        # ── Phase 7c: word starts against the audio (Engine A is unloaded now) ──
+        align_cfg = config.get("word_align") or {}
+        if align_cfg.get("enabled"):
+            if caller_owns_engine_a:
+                raise ValueError("word_align loads its own model: run without a resident engine_a")
+            _align_word_starts(conn, job_id, pipeline_tokens, ingest_result, device, align_cfg)
 
         # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{

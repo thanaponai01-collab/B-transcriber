@@ -193,8 +193,9 @@ def run_harness(
 
         # In single-engine mode (engine_b == "passthrough" or self-ensemble),
         # keep Engine A loaded once across all clips instead of loading and
-        # unloading the 1.5 GB model per clip.
-        if config.get("engine_a") and (
+        # unloading the 1.5 GB model per clip. Not with word_align on: its CTC model
+        # loads after Engine A is unloaded, one model on the GPU at a time.
+        if config.get("engine_a") and not (config.get("word_align") or {}).get("enabled") and (
             config.get("engine_b", "passthrough") == "passthrough"
             or bool((config.get("self_ensemble") or {}).get("enabled", False))
         ):
