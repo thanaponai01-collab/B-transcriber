@@ -9,7 +9,7 @@ from transcribe.thai.atoms import BreakLexicon, is_verb_tag, pos_tag_texts
 @dataclass(frozen=True)
 class CueViolation:
     """index: the cue that OWNS the illegal edge (the earlier of the two cues
-    a rule spans, for the pair/term rules — see each rule's docstring below).
+    a rule spans, for the pair/term rules — see find_cue_legality_violations).
     rule: one of the RULE_* constants. detail: the offending text, for the
     harness's per-clip print."""
     index: int

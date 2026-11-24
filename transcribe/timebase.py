@@ -14,6 +14,11 @@ _TARGET_SR = 16000
 
 @dataclass(frozen=True)
 class Timebase:
+    """The exact, rational frame rate of a piece of source media.
+
+    fps_num/fps_den is the truth; ``ntsc`` and the decimal rate are derived
+    views for human display and FCP7 XML — never inputs to frame math.
+    """
     fps_num: int
     fps_den: int
     sample_rate: int = _TARGET_SR

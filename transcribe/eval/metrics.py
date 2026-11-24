@@ -194,6 +194,10 @@ def _match_points(ref_pts: list[float], hyp_pts: list[float], tol_ms: float) -> 
 
 
 def boundary_f1_error(matched: int, ref_count: int, hyp_count: int) -> float:
+    """1 − F1 from switch-point counts. Also the corpus-level aggregation rule:
+    sum matched/ref/hyp over all samples and call this once (micro-F1), so
+    hallucinated switches on zero-switch samples are penalized instead of
+    vanishing under a ref-weighted mean (metrics v2)."""
     if not ref_count and not hyp_count:
         return 0.0
     precision = matched / hyp_count if hyp_count else 0.0

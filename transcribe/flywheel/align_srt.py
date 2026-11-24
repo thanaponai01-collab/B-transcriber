@@ -14,8 +14,8 @@ _REASON_TAG = "srt_reimport"
 
 
 class TimebaseMismatch(Exception):
-    """Raised when the final SRT's time range diverges too far from the
-    original job's — almost always a paired-wrong-file or re-encode mistake."""
+    """Raised when more than `_MAX_UNMATCHED_MASS_FRAC` of the original job's token
+    time overlaps no cue in the final SRT: almost always the wrong file or a re-encode."""
 
 
 @dataclass

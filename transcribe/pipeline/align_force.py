@@ -90,7 +90,8 @@ def conform_cues(
     (ForcedToken, PipelineToken, ...). Guarantees on return:
 
     * time-ordered, and re-indexed if the tokens carry an ``idx``
-    * ``0 <= start_ms < end_ms`` (and ``<= duration_ms`` when given)
+    * ``0 <= start_ms < end_ms`` and, when given, ``<= duration_ms``, except that a
+      cue at the very end keeps 1 ms and so may end 1 ms past it
     * **no two cues overlap** — an overlapping cue's start is pushed to the
       previous cue's end
     * when ``max_close_gap_ms > 0``, any gap that small is closed by extending
@@ -145,7 +146,7 @@ def forced_align(
 ) -> list[ForcedToken]:
     """
     Assign final timestamps to words.
-    Returns tokens with monotonic, audio-bounded timestamps.
+    Returns tokens with monotonic timestamps.
     """
     if aligner is None:
         aligner = CTCForcedAligner()

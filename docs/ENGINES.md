@@ -238,7 +238,7 @@ Claims the pass could not check today are marked *unverified*.
 
 **Ingest and VAD.**
 - `ingest.py` decodes `.ts`, `.m2ts`, `.mts`, `.vob`, `.mxf` and `.ogv` through PyAV, because
-  librosa can't read them; `.m4a` also goes through PyAV, which handles it better.
+  librosa can't read them. Audio-only containers such as `.m4a` also go through PyAV.
 - Ingest's VAD is the `silero-vad` pip package, not faster-whisper's vendored copy, plus a
   minimum-speech floor and an RMS sub-split. Its output is a timeline of speech and silence, not
   decode windows, so it does not sit behind `transcribe/audio/`. Both paths use config's 0.35 / 500 ms.
@@ -250,16 +250,16 @@ Claims the pass could not check today are marked *unverified*.
   per-call overhead and an alignment pass per chunk.
 
 **Decoding.**
-- faster-whisper 1.2.1's `get_prompt` keeps the *last* 223 prompt tokens, so an over-long bias
-  prompt loses its front, where `build_prompt` puts the highest-value terms. Only `get_prompt` was
-  read, not the batched path into it.
+- Whisper's `initial_prompt` is capped at about 224 tokens, and Thai is token-expensive, so an
+  unbounded bias list would be truncated. `build_prompt` packs the highest-weight terms into a
+  200-token budget (`inject._BUDGET_TOKENS`), counted with the engine's own tokenizer, so the cap
+  is not hit.
 - transformers' `compression_ratio_threshold` works only in long-form (non-chunked) generation, so
   `no_repeat_ngram_size=3` is the repetition guard on `_hf_whisper`'s chunked path. Older
   checkpoints fall back from `return_timestamps="word"` to segment-level chunks.
 - Hugging Face pads each batch to its longest item. `whisper-large-v3` needs about 3 GB in fp16.
-- Transducers (`typhoon_rt`) give no usable per-token confidence, and NeMo's result shapes differ
-  between versions. FunASR's Paraformer returns `sentence_info`; SenseVoiceSmall puts its special
-  tokens in `text`, not `words`.
+- Transducers (`typhoon_rt`) give no usable per-token confidence. FunASR's Paraformer returns
+  `sentence_info`; SenseVoiceSmall has none, only per-word text with `[start, end]`.
 - `qwen3_asr` uses `overlap_s=0.0` because it has no seam-dedup pass; turning on `merge_max_gap_s`
   needs its own harness probe.
 - The review thresholds in `service.py` (avg logprob -0.8, no-speech 0.4, compression 2.2) sit just
@@ -270,11 +270,11 @@ Claims the pass could not check today are marked *unverified*.
 - Whisper word starts land within one 25 fps frame of the onset about half the time, and word ends
   before a pause about one time in ten. CTC starts after a pause can land ~170 ms late, and CTC's
   last letter stops ~168 ms before the syllable fades; `word_align.py`'s sound snapping covers both.
-- OBS's noise gate outputs digital silence, and the room noise just before it closes must also
-  count as quiet.
+- OBS's noise gate outputs digital silence and closes up to a second after the voice stops. The
+  noise floor leaves that digital silence out, so the room noise before the gate closes counts as quiet.
 - `LEAD_IN_MS` = 100 was measured on 2026-11-24 on the hand-cut Short1-3.
-- pythainlp's crfcut is trained on unpunctuated text and may download a model on first use.
-  pythainlp split "เทส"+pause+"รอบ" as "เท|สร|อบ", and atom glue once merged "ปะ" + 17 s + "ครับ"
+- pythainlp's crfcut is trained on unpunctuated running text. pythainlp split "เทส" + 45 s of
+  silence + "รอบ" as "เท|สร|อบ", and atom glue once merged "ปะ" + 17 s + "ครับ"
   into one cue (`cues/split.py`).
 - *Possible bug, open:* `_frame_start_ms` is right only if Premiere does not round frame times down.
   PREMIERE_FACTS says it does, tested at 30 fps only, so at 29.97 fps a cue may land one frame early.

@@ -35,6 +35,15 @@ def _floor(window: np.ndarray) -> float:
 
 def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20, pause: int = 6,
                   ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0) -> int:
+    """A start next to a pause, moved onto the edge of the sound. CTC places a word at its
+    first letter's spike, which after a pause lands up to ~170 ms after the sound begins.
+
+    Quiet means within ``quiet_db`` of the lowest level in the ±``ctx`` frames around the
+    start. On sound, the start walks back while the sound runs on unbroken, at most ``reach``
+    frames, and moves only if ``pause`` quiet frames come before it, all after the previous
+    word's start ``prev_ms``: a word with no pause before it stays put. In quiet, it walks
+    forward to the first sound within ``reach``. Where the sound rises less than ``range_db``
+    out of the quiet (music under the voice, no real pause) the start stays."""
     f = start_ms // 10
     if f >= len(lev):
         return start_ms
@@ -59,6 +68,17 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
 def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int = 40, pause: int = 6,
                       ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0,
                       below_peak_db: float = 30.0, tail_db: float = 25.0, hold_db: float = 3.0) -> int | None:
+    """The end of a word followed by a pause: where its sound fades into the quiet, or None.
+
+    ``anchor_ms`` is CTC's last letter, which stops before the syllable fades, or lands after it.
+    Quiet is as in ``snap_to_sound``, or ``below_peak_db`` under the loudest frame from the
+    word's start ``start_ms`` to the anchor, whichever is higher: a fading tail is not speech.
+    An anchor ``tail_db`` under that peak sits in the word's tail, or in noise where CTC put
+    letters it did not hear, so there the tail counts as quiet too. From a sounding anchor the
+    end walks forward while the sound runs on, at most ``reach`` frames; from a quiet one it
+    walks back to the sound, never past the word's start. It counts only if ``pause`` frames
+    follow that stay under quiet + ``hold_db`` (room noise flickers). The music-bed gate is as
+    in ``snap_to_sound``."""
     f = min(anchor_ms // 10, len(lev) - 1)
     if f < 0:
         return None
@@ -89,6 +109,16 @@ def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int
 def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: Callable[[str], bool],
                  pad_ms: int, duration_ms: int, snap: Callable[[int, int], int] | None = None,
                  snap_end: Callable[[int, int], int | None] | None = None) -> list[dict]:
+    """New word dicts with aligned starts and, where a pause follows, ends. ``cues`` give the
+    windows: each word goes with the cue its start falls in. A word the model cannot align
+    (Latin, digits) keeps its times and walls off its own audio: the Thai words either side
+    align only up to its start or from its end, so they cannot latch onto its sound.
+    ``snap(start, previous word's start)`` then moves every start (aligned or kept) onto the
+    sound's edge. Starts never go backwards. ``snap_end(start, anchor)`` gives the
+    end of a word a pause follows, from CTC's last letter (the engine's end where the model
+    has no letters), kept before the next word's start; an end found past that start is
+    dropped. Elsewhere a word ends at the engine's end. A word ends by the next word's
+    start and keeps at least 1 ms."""
     out = [dict(w) for w in words]
     last_letter: dict[int, float] = {}
     for c in cues:
@@ -128,6 +158,10 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
 
 
 def retime_cues(cues: list, old_words: list[dict], new_words: list[dict]) -> None:
+    """In place: each cue starts where its first word now starts. A cue that touched the
+    previous one moves their shared boundary, so the pair stays gapless; otherwise the start
+    never reaches back into the previous cue. A cue followed by a gap moves its end as far as its
+    last word's end moved, never past the next cue's start. A cue keeps at least 1 ms."""
     prev = None
     for k, c in enumerate(cues):
         touching = prev is not None and c.start_ms == prev.end_ms
