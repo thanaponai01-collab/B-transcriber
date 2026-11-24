@@ -73,10 +73,10 @@ class FakeBackend:
         raise AssertionError(command)
 
 
-def _place(monkeypatch, fake, footage_s=420.0):
+def _place(monkeypatch, fake, footage_s=420.0, **kw):
     import cutdeck.ai_backend
     monkeypatch.setattr(cutdeck.ai_backend, "Backend", lambda: fake)
-    return asyncio.run(d.place_markers([{"start_s": 1, "name": "S1.1 x"}], footage_s))
+    return asyncio.run(d.place_markers([{"start_s": 1, "name": "S1.1 x"}], footage_s, **kw))
 
 
 def test_markers_replace_only_the_earlier_draft(monkeypatch):
@@ -85,6 +85,19 @@ def test_markers_replace_only_the_earlier_draft(monkeypatch):
     assert "1 on 'Editing'" in _place(monkeypatch, fake)
     removed = [a for c, a in fake.calls if c == "remove_markers"][0]
     assert removed == {"sequence": "Editing", "starts_ticks": ["1", "2"]}
+
+
+def test_markers_go_on_a_named_sequence(monkeypatch):
+    fake = FakeBackend(active="Edit", markers=[{"name": "S1.1 old", "start_ticks": "1"}])
+    assert "1 on 'Edit'" in _place(monkeypatch, fake, sequence="Edit")
+    assert [a for c, a in fake.calls if c == "remove_markers"][0]["sequence"] == "Edit"
+
+
+def test_cli_passes_the_sequence_to_run(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(d, "run", lambda folder, markers, model, sequence: seen.update(seq=sequence) or [])
+    d.main(["G:/day", "--sequence", "Edit"])
+    assert seen == {"seq": "Edit"}
 
 
 @pytest.mark.parametrize("fake, why", [

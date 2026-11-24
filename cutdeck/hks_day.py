@@ -2,6 +2,7 @@
 
     python -m cutdeck.hks_day "G:\\Me\\Works\\20261123 - โหนกระแส"
     python -m cutdeck.hks_day "<day folder>" --no-markers      # files only, Premiere untouched
+    python -m cutdeck.hks_day "<day folder>" --sequence Edit   # markers on a timeline not named Editing
 
 Steps (each is cached, so a re-run only redoes what is missing):
 
@@ -14,7 +15,7 @@ Steps (each is cached, so a re-run only redoes what is missing):
 4. Files next to the Premiere project, not in the repo:
    ``<day>\\4. PROJECTS\\1. PREMIERE PRO\\CutDeck\\Questions\\<day> questions.md`` and
    ``CutDeck\\Transcript\\<day> transcript.txt``.
-5. Ranged markers on the ``Editing`` sequence (one undo step), replacing the draft markers of an
+5. Ranged markers on the ``Editing`` sequence (``--sequence`` names another) (one undo step), replacing the draft markers of an
    earlier run. Only when the CutDeck panel is connected, ``Editing`` is the active sequence and
    its length equals the footage's (so timeline time is footage time; one footage file only).
    The marker kinds are in ``projects/hks/memory/marker-draft.md``.
@@ -162,7 +163,7 @@ async def place_markers(markers: list[dict], footage_s: float, sequence: str = S
     return f"markers: {r['added']} on {sequence!r} ({len(old)} earlier draft markers replaced)"
 
 
-def run(folder: Path, markers: bool = True, model: str = JUDGE_MODEL) -> list[str]:
+def run(folder: Path, markers: bool = True, model: str = JUDGE_MODEL, sequence: str = SEQUENCE) -> list[str]:
     from cutdeck import hks_breaks, hks_words
     from cutdeck.hks_audit import clock_track, tv_part
     from cutdeck.hks_gold import _duration
@@ -206,7 +207,7 @@ def run(folder: Path, markers: bool = True, model: str = JUDGE_MODEL) -> list[st
     elif len(files) > 1:
         log.append(f"markers skipped: {len(files)} footage files; markers need one file at timeline 0")
     else:
-        log.append(asyncio.run(place_markers(all_markers, durations[0])))
+        log.append(asyncio.run(place_markers(all_markers, durations[0], sequence)))
     return log
 
 
@@ -215,9 +216,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("folder", help="the day folder, e.g. G:\\Me\\Works\\20261123 - โหนกระแส")
     p.add_argument("--no-markers", action="store_true", help="write the files only; leave Premiere alone")
     p.add_argument("--model", default=JUDGE_MODEL, help="the judges' Claude model")
+    p.add_argument("--sequence", default=SEQUENCE, help="the uncut timeline the markers go on (default: Editing)")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
-    for line in run(Path(args.folder), not args.no_markers, args.model):
+    for line in run(Path(args.folder), not args.no_markers, args.model, args.sequence):
         print(line, flush=True)
     return 0
 
