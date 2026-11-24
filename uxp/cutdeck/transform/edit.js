@@ -1,3 +1,5 @@
+// Must not know: the DOM, UI panels, Rough Cut or Sync job semantics.
+
 const trackItems = require("../host/trackItems.js");
 const transformParams = require("./params.js");
 const { unwrapKeyframeValue } = require("../host/components.js");
@@ -65,6 +67,9 @@ function textFields(text, frameSize, anchorFrame, transform) {
   return fields;
 }
 
+// Every value that moves where a clip is drawn: Motion, Vector Motion and each text layer. A
+// cached text box (transform/frameBounds.js) is good only while this string is unchanged, so a
+// change made in Effect Controls (Motion Scale, a text Anchor Point...) re-measures the text.
 const SIGNATURE_MOTION = ["position", "anchorPoint", "scale", "scaleWidth", "uniformScale", "rotation",
   "cropLeft", "cropTop", "cropRight", "cropBottom"];
 const SIGNATURE_LAYER = ["position", "anchorPoint", "scale", "scaleWidth", "horizontalScale", "uniformScale", "rotation"];

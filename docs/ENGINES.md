@@ -210,7 +210,8 @@ alone, faster-whisper uses threshold 0.5 / min silence 2000 ms, which clips soft
 particles (ครับ/ค่ะ). The adapter windows the audio itself with `config.yaml`'s tuned ingest values.
 
 **`temperature` is a no-op on the batched path (faster-whisper 1.2.1).** `generate_segment_batched`
-passes `sampling_temperature` but not `sampling_topk`, and CTranslate2 then decodes greedily. The
+passes `sampling_temperature` but not `sampling_topk`, so CTranslate2 keeps its default top-k of 1:
+beam search at `beam_size` > 1 and argmax at 1, never sampling. The
 sequential path sets `sampling_topk: 0`. So the adapter's `temperature` argument changes nothing.
 Known and proven since 2026-08-05: byte-identical output at 0.0-1.0 and an unchanged harness run
 (`config.yaml` `self_ensemble` notes, TODO_LEDGER "Phase D"). The only caller is the self-ensemble,
