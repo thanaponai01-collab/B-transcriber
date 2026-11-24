@@ -43,6 +43,9 @@ ROOT = Path(__file__).resolve().parent.parent
 MAX_MESSAGE = 1 << 24  # 16 MiB: the MCP client's limit too; a JSON sequence read can pass 64 KB
 TERMINAL_STATES = frozenset({"ready", "no_cuts", "failed", "interrupted"})
 RESTARTING = "CutDeck helper is restarting; try again in a moment"
+# Helper commands that never reach the panel, named in the no-panel refusal so an agent knows what it
+# can still do (save, look) while the panel is gone. tests/test_cutdeck_helper_v2.py runs each with none.
+PANEL_FREE = ("menu_command with focus null", "list_menu", "list_key_commands", "screenshot")
 
 
 _PROGRESS_LINE = re.compile(r"PROGRESS:(\d{1,3}):(.+)")
@@ -204,6 +207,7 @@ class Jobs:
         self.watchers: dict[str, set[Client]] = {}
         self.driver: Client | None = None
         self.driver_commands: list[str] = []
+        self.driver_lost_at: str | None = None  # local time the last panel disconnected
         self.calls: dict[str, tuple[Client, asyncio.Future]] = {}
 
     # Request type -> the method that answers it. Requests not listed here address an existing job
@@ -272,7 +276,7 @@ class Jobs:
         commands = req.get("commands")
         if not isinstance(commands, list) or not set(commands) <= set(PANEL_COMMANDS):
             raise ValueError("Unknown driver commands")
-        self.driver, self.driver_commands = client, list(commands)
+        self.driver, self.driver_commands, self.driver_lost_at = client, list(commands), None
         print(f"driver registered: {', '.join(commands)}", flush=True)
         return {"registered": True}
 
@@ -502,7 +506,9 @@ class Jobs:
         """Forward one panel command to the panel and wait for its answer."""
         driver = self.driver
         if driver is None:
-            raise ValueError("No CutDeck panel is connected: open the CutDeck panel in Premiere")
+            since = f" since {self.driver_lost_at}" if self.driver_lost_at else ""
+            raise ValueError(f"No CutDeck panel is connected{since}: open the CutDeck panel in Premiere "
+                             f"(Window > UXP Plugins > CutDeck). These run without it: {', '.join(PANEL_FREE)}")
         if command not in self.driver_commands:
             raise ValueError(f"The connected panel does not offer {command}; update the panel")
         args = COMMANDS[command].prepare(args, self._job)
@@ -531,7 +537,8 @@ class Jobs:
             watchers.discard(client)
         if self.driver is client:
             self.driver, self.driver_commands = None, []
-            print("driver disconnected", flush=True)
+            self.driver_lost_at = datetime.now().strftime("%H:%M:%S")
+            print(f"driver disconnected {self.driver_lost_at}", flush=True)
         for driver, future in list(self.calls.values()):
             if driver is client and not future.done():
                 future.set_exception(ValueError("The CutDeck panel disconnected before it answered"))
