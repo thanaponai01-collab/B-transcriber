@@ -1,9 +1,3 @@
-"""Null engine — always returns an empty EngineResult.
-
-Used when a second engine is unavailable (e.g. missing deps). The reconciler's
-"only A has a candidate" path handles all slots, giving pure Engine A output.
-"""
-
 from __future__ import annotations
 
 from transcribe.contracts import EngineInput, EngineResult
@@ -21,6 +15,3 @@ class NullEngine(Engine):
 
     def transcribe(self, inp: EngineInput) -> EngineResult:
         return EngineResult(tokens=[], engine_name="null", raw={})
-
-    # unload() and _release() are inherited as-is: this engine holds nothing
-    # to release, so the base ritual's default no-op _release() is correct.

@@ -1,11 +1,3 @@
-"""Shared OOM-safe batching helper for HF ASR pipeline engines.
-
-VAD chunks vary widely in length, and the HF pipeline pads every item in a
-batch to the longest one in that batch, so memory cost is unpredictable from
-batch_size alone. On a CUDA OOM, halve batch_size and retry rather than
-losing the whole job.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -21,8 +13,6 @@ def run_batched_with_oom_backoff(
     generate_kwargs: dict,
     batch_size: int,
 ) -> list[dict]:
-    """Run `pipe` over all of `batch`, retrying with a smaller batch_size on
-    CUDA OOM instead of failing the whole job."""
     bs = max(1, min(batch_size, len(batch)))
     while True:
         try:

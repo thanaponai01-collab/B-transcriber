@@ -1,4 +1,3 @@
-"""Learn display preferences and wrap cues without changing speech or timing."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,8 +31,6 @@ def fit_profile(corrected_srts: list[str]) -> LayoutProfile:
     multiline = [c for c in cues if '\n' in c['text']]
     lines = [len(line.strip()) for c in (multiline or cues) for line in c['text'].splitlines() if line.strip()]
     lengths = [(len(c['text'].replace('\n', '')), '\n' in c['text']) for c in cues]
-    # Misclassification cost treats missed and unnecessary wraps equally.
-    # Prefer the larger threshold on ties to avoid unnecessary two-line cues.
     candidates = range(1, max(n for n, _ in lengths) + 2)
     threshold = min(candidates, key=lambda t: (sum((n >= t) != wrapped for n, wrapped in lengths), -t))
     return LayoutProfile(round(statistics.median(lines)), threshold, len(cues), len(multiline),
@@ -61,7 +58,7 @@ def wrap_text(text: str, profile: LayoutProfile, config: dict | None = None) -> 
             cost -= 6
         choices.append((cost, pos, left, right))
     if not choices:
-        return text  # an unsplittable name/term stays intact
+        return text
     _, _, left, right = min(choices)
     return left + '\n' + right
 

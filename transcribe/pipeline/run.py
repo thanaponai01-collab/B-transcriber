@@ -1,21 +1,3 @@
-"""Pipeline orchestrator — runs the full batch pipeline for one audio file.
-
-`run_file` keeps its three-argument interface: it is the right shape, it is
-genuinely deep, and the CLI, the eval harness and tools/make_gold.py all depend
-on it. What changed is behind it — the 383-line undivided body now composes three
-internal seams, each addressable by this package's own tests without a WAV file
-or a database:
-
-  plan.py        pure decisions: which engines, which phases to skip, whether
-                 self-ensemble is valid, batch/overlap settings.
-  engine_run.py  the load → decode → unload → persist bracket, written once for
-                 both the real-Engine-B and self-ensemble-pseudo-B cases.
-  refine.py      the post-decode token stages: align, reconcile, normalize,
-                 filter, expand, force-align, conform.
-
-Depth is a property of the interface, not the implementation.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -35,8 +17,6 @@ logger = logging.getLogger(__name__)
 # code change alters decode output, or cached media keep the old transcript.
 PIPELINE_VERSION = "1.0.1"
 
-# The phase vocabulary is defined once, in plan.py — resume semantics depend on
-# these exact strings. Named here too because this is where they are consumed.
 _PHASE_RECONCILED = planning.PHASE_RECONCILED
 _PHASE_WRITTEN = planning.PHASE_WRITTEN
 
@@ -45,9 +25,6 @@ def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestRe
     audio_arr, sr = ingest.load_audio(audio_path)
     return ingest.ingest(
         audio_path,
-        # Denoise only helps chunk engines. Whole-file engines load the raw
-        # track, so denoising here burns ~1.8k file writes/hr and desyncs the
-        # silence timeline from the audio the engine actually hears (3.2).
         denoise=config.get("denoise", True) and job_plan.chunk_engine_active,
         **ingest.ingest_settings(config),
         audio=audio_arr, sr=sr,
@@ -57,7 +34,6 @@ def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestRe
 
 
 def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config, engine=None):
-    """Re-decode speech no cue covers (see coverage.py). Engine A tokens only."""
     cues = [{"text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms, "script": t.script,
              "confidence": t.confidence, "source_engine": t.source_engine} for t in tokens]
     speech = [(s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "speech"]
@@ -69,7 +45,6 @@ def _fill_coverage_gaps(tokens, ingest_result, job_plan, device, config, engine=
         redecoder_ctx = engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
                                                 ingest_result.sample_rate, engine=engine)
     except TypeError:
-        # Backward compatibility if gap_redecoder was monkeypatched with 5 arguments
         redecoder_ctx = engine_run.gap_redecoder(job_plan, device, config, ingest_result.audio,
                                                 ingest_result.sample_rate)
     with redecoder_ctx as redecode:
@@ -97,7 +72,6 @@ def run_file(
 
 
 def _align_word_starts(conn, job_id: int, cues: list, ingest_result, device: str, cfg: dict) -> None:
-    """Re-time Engine A's persisted words (CutDeck reads them) and the cue starts in place."""
     import json
     result = store.get_engine_result(conn, job_id, "a")
     words = json.loads(result.raw_words_json) if result and result.raw_words_json else []
@@ -140,32 +114,22 @@ def run_file_job(
     """
     align_cfg = config.get("word_align") or {}
     if align_cfg.get("enabled"):
-        word_align.model_path(align_cfg.get("model", word_align.DEFAULT_MODEL))  # before Engine A runs
-    store.init_db(db_path)  # Apply additive migrations before resume lookup.
+        word_align.model_path(align_cfg.get("model", word_align.DEFAULT_MODEL))
+    store.init_db(db_path)
     conn = store.connect(db_path)
 
-    # Bias terms from flywheel (+ weights for budget-aware prompt ranking, 5.1)
     bias_terms = store.get_bias_term_strings(conn)
     bias_weights = store.get_bias_term_weights(conn)
     for term in dict.fromkeys(t.strip() for t in glossary if t and t.strip()):
         if term not in bias_weights:
             bias_terms.append(term)
-        # A user-supplied term outranks learned ones when the prompt budget is tight.
         bias_weights[term] = max([1.0, *bias_weights.values()])
     resume_fingerprint = planning.resume_fingerprint(config, bias_terms, bias_weights)
 
-    # The resume key includes media, engine pair, version and settings/bias, so identity
-    # has to be decided before the job can be looked up. plan.make_plan below
-    # re-derives the same names from the same function, so there is exactly one
-    # rule — see canonical_engine_names for the defect that motivates it.
     engine_a_name, engine_b_name = planning.canonical_engine_names(config)
 
-    # ── Media record ──────────────────────────────────────────────────────────
     media_id = store.create_media(conn, audio_path, sha256=sha256)
 
-    # 4.1 (GAP-8): a 'failed' job with matching media, engines, version and
-    # settings/bias is resumable — reuse it instead of starting over from scratch, so
-    # a crash after the (expensive, GPU-bound) engine passes doesn't cost them.
     resume_job = store.find_resumable_job(
         conn, media_id, engine_a_name, engine_b_name, PIPELINE_VERSION, resume_fingerprint)
     if resume_job is not None:
@@ -179,7 +143,6 @@ def run_file_job(
         logger.info("Job %d started: %s", job_id, audio_path)
     store.update_job_status(conn, job_id, "running")
 
-    # ── Timebase probe (GAP-1) — best-effort; needs ffprobe + a video stream ──
     try:
         from transcribe.timebase import probe as probe_timebase
         tb = probe_timebase(audio_path)
@@ -193,17 +156,12 @@ def run_file_job(
         logger.info("Timebase probe skipped (%s)", e)
 
     try:
-        # ── Plan ──────────────────────────────────────────────────────────────
-        # Inside the try so a rejected plan (e.g. self_ensemble with a chunk
-        # Engine A) marks the job failed exactly as it always did. Logged as a
-        # value so a resumed job's decisions can be read rather than inferred.
         job_plan = planning.make_plan(config, resume_phase)
         logger.info("Job %d plan: %s", job_id, job_plan)
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info("Using device: %s", device)
 
-        # ── Phase 2: Ingestion — decode ONCE, share the array with the engines ─
         if ingest_result is not None and job_plan.chunk_engine_active:
             ingest_result = None
         if ingest_result is None:
@@ -211,15 +169,9 @@ def run_file_job(
         if getattr(ingest_result, "duration_ms", None) is not None:
             store.set_media_duration(conn, media_id, ingest_result.duration_ms)
         chunks = ingest_result.chunks
-        # The exact array the VAD/spans came from — feed it to the engine so the
-        # silence filter can never drop words the engine heard (3.2).
         engine_audio = ingest_result.audio
         logger.info("Ingestion: %d chunks, %d VAD spans", len(chunks), len(ingest_result.spans))
 
-        # Persist the VAD master timeline (GAP-3). Ingestion isn't itself
-        # persisted across a resume (4.1) — it's cheap/CPU-only and deterministic,
-        # so it always re-runs; clear any spans a prior attempt already wrote so
-        # resuming doesn't duplicate them against the UNIQUE(job_id, idx) index.
         store.delete_speech_spans(conn, job_id)
         store.bulk_create_speech_spans(conn, job_id, [
             {"idx": s.idx, "start_ms": s.start_ms, "end_ms": s.end_ms, "kind": s.kind}
@@ -232,7 +184,6 @@ def run_file_job(
             (s.start_ms, s.end_ms) for s in ingest_result.spans if s.kind == "speech"
         )
 
-        # ── Phase 3: Dual-engine transcription (sequential) ───────────────────
         coverage_enabled = bool((config.get("coverage_guard") or {}).get("enabled", False))
         caller_owns_engine_a = engine_a is not None
         keep_engine_a = caller_owns_engine_a or (
@@ -272,10 +223,6 @@ def run_file_job(
                 hypotheses = run_res
                 resident_engine_a = None
 
-            # ── Phases 4-7b: align, reconcile, normalize, filter, conform ─────────
-            # CTCForcedAligner's constructor only records a device (the model loads
-            # inside align()), so building it here costs nothing on the whole-file
-            # path that never calls it.
             pipeline_tokens = refine.refine(
                 hypotheses,
                 config=config,
@@ -300,13 +247,11 @@ def run_file_job(
                     del resident_engine_a
                     engine_run._free_vram()
 
-        # ── Phase 7c: word starts against the audio (Engine A is unloaded now) ──
         if align_cfg.get("enabled"):
             if caller_owns_engine_a:
                 raise ValueError("word_align loads its own model: run without a resident engine_a")
             _align_word_starts(conn, job_id, pipeline_tokens, ingest_result, device, align_cfg)
 
-        # ── Write to DB ───────────────────────────────────────────────────────
         db_rows = [{
             "job_id": job_id,
             "idx": t.idx,
@@ -318,9 +263,6 @@ def run_file_job(
             "source_engine": t.source_engine,
             "speaker_id": None,
         } for t in pipeline_tokens]
-        # A resumed job may have partially written tokens from the attempt that
-        # crashed after this point but before job_phase reached 'written' (4.1) —
-        # clear first so the UNIQUE(job_id, idx) index can't reject the re-write.
         store.delete_tokens(conn, job_id)
         store.bulk_create_tokens(conn, db_rows)
         store.update_job_phase(conn, job_id, _PHASE_WRITTEN)

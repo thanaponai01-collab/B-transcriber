@@ -1,11 +1,3 @@
-"""Coverage guard — find speech that produced no cue, and offer it a second decode.
-
-Internal to `transcribe/pipeline/`. Pure functions of spans and cues, plus one
-injected `redecode` callable, so it is testable without a GPU. It never invents
-text: a gap is filled only with tokens an engine decoded from that audio, and a
-gap that stays empty is reported, not papered over.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -14,9 +6,9 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-MIN_GAP_MS = 600       # speech this long with no cue is a gap
-ORPHAN_MS = 300        # an isolated cue shorter than this beside a gap is an orphan
-CONTEXT_MS = 1000      # audio decoded on each side of a gap
+MIN_GAP_MS = 600
+ORPHAN_MS = 300
+CONTEXT_MS = 1000
 
 
 @dataclass(frozen=True)

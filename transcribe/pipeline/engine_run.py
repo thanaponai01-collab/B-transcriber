@@ -1,21 +1,3 @@
-"""The engine-run bracket — instantiate, load, decode, unload, persist, advance.
-
-Internal to `transcribe/pipeline/`. Not part of any public interface; deliberately
-absent from `pipeline/__init__.py`'s exports.
-
-This is where the duplication died. The self-ensemble second-decode block existed
-twice in `run_file`, near-verbatim: once on the fresh path and once on the resume
-path, the second copy existing only because a crash landing in one narrow window
-(cached hypothesis A, uncomputed hypothesis B) would otherwise emit
-`result_b_tokens=None`. That is what an unseamed body does under pressure — a
-second copy was cheaper to add than a seam. Both paths now route through
-`_decode_self_ensemble_b`, so a fix to it cannot be applied to one copy and
-missed on the other.
-
-It is also where CLAUDE.md's VRAM discipline (load → run → unload → del →
-empty_cache, never two models resident) is written once instead of by repetition.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -36,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass(frozen=True)
 class DecodeInputs:
-    """Everything an engine needs to decode this job, independent of which engine."""
-
     chunks: list
     full_audio: object | None
     bias_terms: list[str]
@@ -47,8 +27,6 @@ class DecodeInputs:
 
 @dataclasses.dataclass(frozen=True)
 class Hypotheses:
-    """The two token streams the reconciler will be given."""
-
     tokens_a: list[RecognizedToken]
     timestamps_final_a: bool
     tokens_b: list[RecognizedToken]
@@ -63,17 +41,12 @@ def build_engine(name: str, device: str, config: dict):
     engines_cfg = (config.get("engines", {}) or {}).get(name, {})
     kw = {"device": device, **engines_cfg}
     if name == "faster_whisper":
-        # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon needs the full
-        # pipeline config (thai_atoms + normalization.exception_lexicon), not just
-        # this engine's own config["engines"]["faster_whisper"] sub-block —
-        # threaded only to this engine so other engines' kwarg sets are untouched.
         kw.setdefault("config", config)
     return get_engine(name, **kw)
 
 
 @contextmanager
 def _engine_residency(engine, stage: str):
-    """Always release even a partially loaded engine before propagating failure."""
     try:
         engine.load()
         yield engine
@@ -137,8 +110,6 @@ def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
         raise
 
     if resident_a is not None and not final_a and not caller_owns_a:
-        # Non-final timestamps require forced alignment in refine(), which loads
-        # CTC aligner into VRAM; unload A now to preserve the one-model-at-a-time rule.
         try:
             resident_a.unload()
         finally:
@@ -151,11 +122,6 @@ def run_engines(conn, job_id: int, plan: JobPlan, inputs: DecodeInputs,
 
 def _run_engine_a(conn, job_id, plan, inputs, device, config,
                   keep_resident: bool = False, engine=None):
-    """Hypothesis A, plus the self-ensemble pseudo-B decoded inside A's own
-    residency (never a second model load).
-
-    Returns (tokens_a, timestamps_final_a, pseudo_b_tokens, pseudo_b_raw_words, resident_engine).
-    """
     caller_owns_engine = engine is not None
     if plan.skip_engine_a:
         cached_a = store.get_engine_result(conn, job_id, "a")
@@ -163,11 +129,6 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config,
         tokens_a = _tokens_from_json(cached_a.tokens_json)
         final_a = cached_a.timestamps_final
         pseudo_b_tokens = pseudo_b_raw_words = None
-        # Resumed exactly at engine_a_done: hypothesis A was cached but the
-        # self-ensemble's own pseudo-B pass (never separately persisted until the
-        # "b" phase below) was not — reload once to produce it. Rare (only a crash
-        # landing in this exact window hits it), but a resumed self-ensemble job
-        # must not silently emit result_b_tokens=None.
         if plan.self_ensemble_enabled and not plan.skip_engine_b:
             if caller_owns_engine:
                 pseudo_b_tokens, pseudo_b_raw_words = _decode_self_ensemble_b(engine, plan, inputs)
@@ -249,7 +210,6 @@ def _run_engine_a(conn, job_id, plan, inputs, device, config,
 
 def _run_engine_b(conn, job_id, plan, inputs, device, config,
                   final_a, pseudo_b_tokens, pseudo_b_raw_words):
-    """Hypothesis B — cached, the self-ensemble pseudo-B, or a real second model."""
     if plan.skip_engine_b:
         cached_b = store.get_engine_result(conn, job_id, "b")
         logger.info("Job %d: reusing cached engine-b result (resume)", job_id)
@@ -258,9 +218,6 @@ def _run_engine_b(conn, job_id, plan, inputs, device, config,
         return tokens_b
 
     if plan.self_ensemble_enabled:
-        # Already decoded inside Engine A's residency — no engine is constructed
-        # or loaded here at all. The result is labelled with the canonical
-        # "self_ensemble" name, which is record-keeping, never a registry lookup.
         tokens_b = pseudo_b_tokens
         raw_words_b = pseudo_b_raw_words
         timestamps_final_b = final_a
@@ -288,11 +245,6 @@ def _run_engine_b(conn, job_id, plan, inputs, device, config,
 
 
 def _decode_self_ensemble_b(engine, plan: JobPlan, inputs: DecodeInputs):
-    """The self-ensemble second hypothesis, from an ALREADY-LOADED Engine A.
-
-    The one copy of this. Both the fresh path and the resume-at-engine_a_done
-    path call it, which is the point of this module.
-    """
     res = engine.transcribe(
         EngineInput(audio=inputs.full_audio, bias_terms=inputs.bias_terms,
                     bias_weights=inputs.bias_weights, language_hint=plan.language,
@@ -307,24 +259,6 @@ def _decode_self_ensemble_b(engine, plan: JobPlan, inputs: DecodeInputs):
 def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, language_hint,
                      batch_size, chunk_overlap_ms=750, temperature=None, beam_size=None,
                      speech_spans=()):
-    """Run one engine over the audio → (global-timestamped tokens, word_level, raw_words).
-
-    Whole-file engines get the full track in a single call (their own VAD and
-    segmentation is the point) and already return absolute timestamps. Chunk
-    engines get the VAD chunks; we offset each chunk's tokens to global time and
-    stitch overlaps.
-
-    raw_words (4.2): the engine's own per-word timestamp list, when it provides
-    one (`EngineResult.raw["words"]` — faster-whisper does; re-derived on demand
-    downstream, e.g. CutDeck Phase 5 filler excision, instead of discarded here.
-    Only captured for whole-file engines — chunk-engine raw words would need
-    per-chunk offsetting/restitching that isn't wired up yet.
-
-    temperature/beam_size (HANDOFF_ONE_ENGINE §6, Phase D): only passed to
-    engine.transcribe() when explicitly given, so engines whose transcribe(inp)
-    doesn't accept the kwargs (mock, passthrough, every non-faster_whisper
-    adapter) are unaffected.
-    """
     if getattr(engine, "prefers_whole_file", False):
         inp = EngineInput(audio=full_audio, bias_terms=bias_terms,
                            bias_weights=bias_weights, language_hint=language_hint,
@@ -350,12 +284,6 @@ def _transcribe_with(engine, chunks, full_audio, bias_terms, bias_weights, langu
     def decode_fn(_chunk_audio):
         return next(results_iter).tokens
 
-    # GAP-4 / issue #13: decode_windows drops duplicate words from any
-    # chunk-overlap windows. The seam search window matches the overlap
-    # ingest actually materialized. `chunks` (pipeline.ingest.AudioChunk)
-    # already has the .audio/.start_ms/.end_ms shape decode_windows wants —
-    # decode already happened above in one batched call, so decode_fn just
-    # hands back each chunk's precomputed (still chunk-local) tokens in order.
     return decode_windows(chunks, decode_fn, seam_window_ms=chunk_overlap_ms), timestamps_final, None
 
 
@@ -374,7 +302,5 @@ def _log_vram(stage: str) -> None:
 
 
 def _free_vram() -> None:
-    """Close each engine's bracket. CLAUDE.md's ceiling is 8GB and engines run
-    sequentially precisely so two are never resident at once."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

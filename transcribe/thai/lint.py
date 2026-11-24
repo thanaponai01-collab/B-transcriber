@@ -1,18 +1,3 @@
-"""transcribe/thai/lint.py — HANDOFF_THAI_BREAK_ATOMS.md Phase 3.
-
-The incident (see the handoff's §0) was discovered by the user, in Premiere,
-after export — the harness had no eyes for "is this cue break legal" at all.
-This module gives it those eyes: scan a transcript's cues (hypothesis OR
-reference — both, separately, per §5) for breaks `BreakLexicon` says should
-never happen, the same knowledge `glue_atoms()` already uses to prevent them
-at construction time.
-
-Reuses `BreakLexicon` rather than restating its rules — the lint and the
-splitter must share one knowledge source or they will drift apart (the same
-law `db/store.py` follows for SQL). Pure text scan: no model/pipeline access,
-so it costs nothing beyond what the harness already computes per clip.
-"""
-
 from __future__ import annotations
 
 import bisect
@@ -39,10 +24,6 @@ RULE_UNSPLITTABLE_TERM_SPLIT = "unsplittable_term_split"
 
 
 def _cue_edge_tokens(text: str) -> tuple[str, str]:
-    """(first, last) non-whitespace pythainlp token in one cue's text — "" for
-    a cue with no real token (pure whitespace/punctuation). Same tokenizer
-    `cutdeck/words.py::timed_tokens` uses, so a cue's "first/last word" here
-    means the same thing it means to `glue_atoms`."""
     from pythainlp.tokenize import word_tokenize
 
     toks = [t for t in word_tokenize(text, keep_whitespace=False) if t.strip()]

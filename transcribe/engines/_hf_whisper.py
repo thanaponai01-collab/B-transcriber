@@ -1,19 +1,3 @@
-"""Shared HuggingFace-Whisper decode path (internal to `engines/`, issue #10).
-
-`whisper_thai.py` (Thai specialist) and `whisper_multi.py` (multilingual
-generalist) drive the same stack — `transformers`
-`AutoModelForSpeechSeq2Seq` + `AutoProcessor`, an `automatic-speech-
-recognition` pipeline with `return_timestamps="word"`, the shared `_batch.py`
-OOM-backoff helper — and differ only in checkpoint, `engine_name`, and
-whether `language` is pinned in `generate_kwargs`. `HFWhisperEngine` here
-holds that shared implementation as a base class; it is never registered as
-an engine itself and is reached only through the two adapters that subclass
-it (same role `_batch.py` already plays for both).
-
-Not an Engine Contract breach: CLAUDE.md forbids one engine adapter
-importing another, not both subclassing a shared internal base.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -32,16 +16,10 @@ logger = logging.getLogger(__name__)
 class HFWhisperEngine(Engine):
     """Base class for HF-`transformers`-backed Whisper adapters.
 
-    Subclasses supply the three real differences as class attributes:
-    `_engine_name` (the registry name, stamped onto every `EngineResult`),
-    `_language` (`None` ⇒ the `language` key is left out of
-    `generate_kwargs` entirely so Whisper auto-detects per segment — a
-    genuine absence, not `language=None` passed through), and `_log_label`
-    (cosmetic, for load/unload log lines). `_DEFAULT_MODEL` stays on each
-    adapter module, not here, since a subclass's `__init__` supplies it as
-    the `model_id` default.
+    Subclasses supply `_engine_name` (the registry name, stamped onto every
+    `EngineResult`), `_language` (`None` leaves the `language` key out of
+    `generate_kwargs`, so Whisper auto-detects per segment) and `_log_label`.
     """
-
     _engine_name: str = ""
     _language: Optional[str] = None
     _log_label: str = "HFWhisper"
@@ -65,7 +43,6 @@ class HFWhisperEngine(Engine):
             low_cpu_mem_usage=True,
         ).to(self._device)
         self._model.eval()
-        # Build ASR pipeline for word-timestamp support
         self._pipe = hf_pipeline(
             "automatic-speech-recognition",
             model=self._model,
@@ -92,7 +69,6 @@ class HFWhisperEngine(Engine):
             ))
 
         if not tokens:
-            # Last-resort fallback: whole transcript as one token
             full_text = (result.get("text") or "").strip()
             if full_text:
                 tokens.append(RecognizedToken(
@@ -102,16 +78,9 @@ class HFWhisperEngine(Engine):
         return tokens, raw_chunks
 
     def _generate_kwargs(self, bias_terms: list[str]) -> dict:
-        # no_repeat_ngram_size kills Whisper's repetition loops on non-speech
-        # (music/silence/breaths). ponytail: 3-gram block is the standard chunked-
-        # path loop guard; compression_ratio_threshold only works on the long-form
-        # (non-chunked) algorithm, which we don't use.
         kwargs: dict = {"task": "transcribe", "no_repeat_ngram_size": 3}
         if self._language is not None:
             kwargs["language"] = self._language
-        # GAP-5: pack flywheel bias terms into the prompt under a token budget,
-        # using THIS engine's tokenizer so the count is real. Non-fatal — a
-        # prompt failure must never block transcription.
         prompt_ids = build_prompt_ids(self._processor, self._device, bias_terms)
         if prompt_ids is not None:
             kwargs["prompt_ids"] = prompt_ids
@@ -120,15 +89,11 @@ class HFWhisperEngine(Engine):
     def transcribe(self, inp: EngineInput) -> EngineResult:
         assert self._pipe is not None, "load() must be called first"
         if self._language is not None and inp.language_hint not in (None, self._language):
-            # A pinned engine would decode the audio as its own language and the job would be
-            # cached under the other one's identity (third review, 2026-11-22).
             raise ValueError(f"{self._engine_name} decodes only {self._language!r}; "
                              f"language {inp.language_hint!r} needs faster_whisper")
         audio = self._load_array(inp)
         generate_kwargs = self._generate_kwargs(inp.bias_terms)
 
-        # return_timestamps="word" gives per-word chunks when supported;
-        # falls back to segment-level chunks on older checkpoints.
         result = self._pipe(
             {"raw": audio, "sampling_rate": 16000},
             generate_kwargs=generate_kwargs,
@@ -145,12 +110,6 @@ class HFWhisperEngine(Engine):
         )
 
     def transcribe_batch(self, inputs: list[EngineInput], batch_size: int = 8) -> list[EngineResult]:
-        """Batched GPU inference — one or few forward passes instead of len(inputs).
-
-        Bias terms are assumed identical across the batch (true for every caller
-        in this pipeline, which reuses the same flywheel bias_terms per job); the
-        prompt is built once from the first input rather than per-chunk.
-        """
         assert self._pipe is not None, "load() must be called first"
         if not inputs:
             return []

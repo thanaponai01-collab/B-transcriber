@@ -98,7 +98,7 @@ def test_mock_and_passthrough_load_transcribe_unload_via_registry():
 def test_unload_survives_torch_being_unimportable(monkeypatch):
     """mock/passthrough must tear down cleanly even where `import torch`
     fails — the ritual wraps that import exactly like typhoon_rt's own
-    unload() already did (see base.py's unload() docstring/comment), which
+    unload() already did, which
     is what makes "no torch import required" true for these two engines."""
     import builtins
 

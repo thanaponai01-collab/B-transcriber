@@ -14,7 +14,7 @@
 #           2026-07-15/16 "WER_latin regressed / BER improved" numbers earlier
 #           recorded here were measuring that garbage, not a real accuracy
 #           tradeoff — DO NOT cite them as evidence about decorrelated engines
-#           in general. See engines/funasr.py's docstring and TODO_LEDGER.md.
+#           in general. See docs/ENGINES.md and TODO_LEDGER.md.
 #           Not re-testable without a different underlying model.
 #
 #           typhoon_rt (2026-07-16) — TRIED and rejected on genuine accuracy
@@ -47,7 +47,7 @@
 #           initial probe was a false negative (adapter bug: one whole-clip
 #           token at a placeholder 0,0ms timestamp couldn't align against
 #           Engine A's real per-cue timestamps in align_hyp.py, so B was a
-#           silent no-op — see engines/qwen3_asr.py's docstring). Fixed via
+#           silent no-op — see TODO_LEDGER.md). Fixed via
 #           internal VAD chunking (real per-span timestamps,
 #           timestamps_final=True). Re-probed: CER_thai unchanged (0.1415,
 #           no dilution), BER improved (0.8169→0.8056), but WER_latin stayed
@@ -165,7 +165,7 @@ engines:
     # a real-disagreement instrumentation pass found every _script_fallback
     # disagreement was Engine A's ~2-5s phrase cue vs one Qwen3-ASR token
     # spanning up to 25s of multi-sentence speech, never a comparable
-    # head-to-head. See engines/qwen3_asr.py's _speech_spans_s docstring and
+    # head-to-head. See
     # TODO_LEDGER.md "Qwen3-ASR span-granularity fix".
     max_span_s: 8.0
 
@@ -392,7 +392,7 @@ segment:
 #   Round 1 (stale prompt, fixed ta=slot-0 mapping): LLM picked Engine A on
 #   11/11 real disagreements — positional bias, not judgment.
 #   Round 2 (llm_reconcile.py fixed: phrase-cue-aware prompt + per-call
-#   position randomization, see its module docstring): the degenerate lock-in
+#   position randomization, see docs/ENGINES.md): the degenerate lock-in
 #   is confirmed gone (7/11 A, 4/11 B on re-instrumentation) — but corpus
 #   CER_thai got WORSE (0.3505 vs round 1's 0.2323 vs 0.1451 baseline). This
 #   is the fix correctly exposing a model-quality problem, not a new bug:

@@ -1,11 +1,9 @@
-"""Portable passage review: local audio, alternatives, editable original cues."""
 from __future__ import annotations
 
 import json
 
 
 def render_review(report: dict) -> str:
-    # Transcript content is data, never HTML or script markup.
     data = json.dumps(report, ensure_ascii=False).replace('<', '\\u003c')
     return _PAGE.replace('__REPORT_DATA__', data)
 

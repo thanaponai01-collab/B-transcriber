@@ -36,8 +36,7 @@ candidates below are eval-gated, not environment-blocked.
   output inspection: an explicit `<|yue|>` tag, CJK codepoints). Every prior
   harness number for this engine — including the "byte-identical to
   passthrough" result below and the 2026-07-15/16 WER_latin/BER probes — was
-  measuring that garbage, not a real Thai accuracy tradeoff. See
-  `engines/funasr.py`'s docstring. Do not re-probe without a different model.
+  measuring that garbage, not a real Thai accuracy tradeoff. Do not re-probe without a different model.
 - **`whisper_multi`**: `openai/whisper-large-v3` — multilingual generalist /
   code-switch slot, genuinely Thai-capable (~100 languages incl. Thai) so this
   is the architecturally correct decorrelated candidate, unlike funasr. A real
@@ -231,3 +230,68 @@ false-merged real pairs; 250 ms rested on a misread measurement (an exact-text t
 real fuzzy duplicate has ever been measured; recalibrate only from the debug log that path emits.
 Two real words both under 80 ms can still merge (`test_brief_zero_gap_real_words_can_still_collide`).
 A missed stutter is cheaper than a dropped word.
+
+## Why the rest of `transcribe/` looks the way it does
+
+More notes from code comments, moved here in the no-comments pass over `transcribe/` (2026-11-24).
+Claims the pass could not check today are marked *unverified*.
+
+**Ingest and VAD.**
+- `ingest.py` decodes `.ts`, `.m2ts`, `.mts`, `.vob`, `.mxf` and `.ogv` through PyAV, because
+  librosa can't read them; `.m4a` also goes through PyAV, which handles it better.
+- Ingest's VAD is the `silero-vad` pip package, not faster-whisper's vendored copy, plus a
+  minimum-speech floor and an RMS sub-split. Its output is a timeline of speech and silence, not
+  decode windows, so it does not sit behind `transcribe/audio/`. Both paths use config's 0.35 / 500 ms.
+- The two VADs can disagree, so a confident token over ingest's "silence" is not by itself a
+  hallucination (`normalize.drop_tokens_over_silence`).
+- Denoising a whole-file run costs about 1.8k file writes per hour and puts the silence timeline out
+  of step with the audio, so whole-file engines skip it (`run.py`).
+- A whole-file engine (`prefers_whole_file`) runs its own VAD and segmentation; feeding it chunks adds
+  per-call overhead and an alignment pass per chunk.
+
+**Decoding.**
+- faster-whisper 1.2.1's `get_prompt` keeps the *last* 223 prompt tokens, so an over-long bias
+  prompt loses its front, where `build_prompt` puts the highest-value terms. Only `get_prompt` was
+  read, not the batched path into it.
+- transformers' `compression_ratio_threshold` works only in long-form (non-chunked) generation, so
+  `no_repeat_ngram_size=3` is the repetition guard on `_hf_whisper`'s chunked path. Older
+  checkpoints fall back from `return_timestamps="word"` to segment-level chunks.
+- Hugging Face pads each batch to its longest item. `whisper-large-v3` needs about 3 GB in fp16.
+- Transducers (`typhoon_rt`) give no usable per-token confidence, and NeMo's result shapes differ
+  between versions. FunASR's Paraformer returns `sentence_info`; SenseVoiceSmall puts its special
+  tokens in `text`, not `words`.
+- `qwen3_asr` uses `overlap_s=0.0` because it has no seam-dedup pass; turning on `merge_max_gap_s`
+  needs its own harness probe.
+- The review thresholds in `service.py` (avg logprob -0.8, no-speech 0.4, compression 2.2) sit just
+  inside the adapter's decode thresholds (-1.0 / 0.6 / 2.4). *Unverified:* that those segments are
+  retried at decode time.
+
+**Word and cue timing.**
+- Whisper word starts land within one 25 fps frame of the onset about half the time, and word ends
+  before a pause about one time in ten. CTC starts after a pause can land ~170 ms late, and CTC's
+  last letter stops ~168 ms before the syllable fades; `word_align.py`'s sound snapping covers both.
+- OBS's noise gate outputs digital silence, and the room noise just before it closes must also
+  count as quiet.
+- `LEAD_IN_MS` = 100 was measured on 2026-11-24 on the hand-cut Short1-3.
+- pythainlp's crfcut is trained on unpunctuated text and may download a model on first use.
+  pythainlp split "เทส"+pause+"รอบ" as "เท|สร|อบ", and atom glue once merged "ปะ" + 17 s + "ครับ"
+  into one cue (`cues/split.py`).
+- *Possible bug, open:* `_frame_start_ms` is right only if Premiere does not round frame times down.
+  PREMIERE_FACTS says it does, tested at 30 fps only, so at 29.97 fps a cue may land one frame early.
+
+**Flywheel, reconcile and eval.**
+- `flywheel/diff.py` diffs Thai by words: a character-level SequenceMatcher smears across a cue
+  when a short syllable recurs nearby.
+- `align_srt.py`: `_MATCH_PROX_MS` stops two far-apart copies of a word from matching, and
+  `_MAX_UNMATCHED_MASS_FRAC` tolerates a title card or outro with no cue.
+- `llm_reconcile` labels candidates "Candidate 0/1", never "Engine A/B", because a model can read
+  "A" as the primary.
+- `reconcile._script_fallback` breaks ties by confidence first: the script rule alone can't separate
+  two Thai candidates.
+- The regression gate must not re-read `get_last_passing_eval` after the harness writes its row, or
+  the new run is compared with itself. SQLite's `datetime('now')` has one-second resolution, so that
+  lookup breaks ties by `id`.
+- An empty gold set writes no `eval_run` row: a zero baseline would make every later run look like
+  a regression. In metrics v4, clip edges count as clear time for orphan cues.
+- Exporting the word-alignment checkpoint once saves ~6 s of transformers import per run (0.4 s to
+  load the weights), with bit-identical output.

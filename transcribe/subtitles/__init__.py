@@ -1,13 +1,4 @@
-"""Subtitle read/write — the one place this repo turns token dicts into an
-SRT/VTT cue file and reads a human-authored cue file back into token dicts.
-
-This is the flywheel's round trip: the pipeline writes a cue file, the user
-recuts it in an NLE (e.g. Premiere), and transcribe.flywheel.align_srt reads
-it back as corrections. tools/make_gold.py and tools/make_finetune_set.py
-read hand-corrected cue files into gold-set/fine-tune data through the same
-reader.
-
-fps stays an explicit, optional per-call argument on the writer — it is
+"""fps stays an explicit, optional per-call argument on the writer — it is
 never resolved from the source media's own probed timebase. The media this
 pipeline ingests is frequently audio extracted from footage (no video
 stream to probe), so the footage's real frame rate is not recoverable from
@@ -41,20 +32,9 @@ def _srt_ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
 
 
 def _frame_start_ms(frame: int, tb: Timebase) -> int:
-    """The whole millisecond at or just before ``frame`` starts (floor, exact math).
-
-    Premiere snaps an SRT time to a frame of the sequence. A stamp up to 1 ms
-    before the frame's exact start names that frame whether Premiere rounds to
-    the nearest frame or up; writing the *nearest* millisecond instead could land
-    just after the start and be pushed to the next frame by rounding up. It
-    fails only if Premiere rounds down, which the live round trip
-    (tools/srt_roundtrip.py) checks.
-    """
     return frame * tb.fps_den * 1000 // tb.fps_num
 
 
-# Hand-cut subtitles start before the speech; engine cue starts (re-timed by
-# word_align) sit on it. Measured 2026-11-24 on the hand-cut gold shorts (Short1-3).
 LEAD_IN_MS = 100
 
 
@@ -118,7 +98,6 @@ def write_subtitles(tokens: list[dict], fmt: Format, fps: float | None = None,
     _check_format(fmt)
     # A blank cue is invalid output, and a blank line inside a cue's text would
     # end the cue early and corrupt the file, so both are dropped/collapsed here.
-    # Blanks go before frame snapping so they never push a real cue.
     cues = [t for t in tokens if t["text"].strip()]
     if fps:
         cues = frame_cues(cues, Timebase.from_decimal_fps(fps), lead_in_ms)

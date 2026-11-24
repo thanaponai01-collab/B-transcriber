@@ -1,15 +1,3 @@
-"""Phase 8 — Web editor backend (FastAPI).
-
-Scope: correction-capture only. No accounts, no dashboard.
-Endpoints:
-  GET  /jobs                       → list jobs
-  GET  /jobs/{job_id}              → job + tokens
-  GET  /jobs/{job_id}/audio        → stream audio file
-  POST /jobs/{job_id}/save         → accept corrected tokens, write correction rows
-  GET  /jobs/{job_id}/export/srt   → download corrected SRT
-  GET  /jobs/{job_id}/export/vtt   → download corrected VTT
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,8 +21,6 @@ app.mount("/static", StaticFiles(directory=str(_HERE / "static"), html=True), na
 def _conn():
     return store.connect(_DB_PATH)
 
-
-# ── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def root():
@@ -68,8 +54,6 @@ def get_job(job_id: int):
         raise HTTPException(404, "Job not found")
     tokens = store.get_tokens(conn, job_id)
     media = store.get_media(conn, job.media_id)
-    # Merge saved corrections into the view: reopening a corrected job must show
-    # the corrected text, not silently present the raw ASR output again.
     corrections = {c.token_idx: c.corrected_text for c in store.get_corrections(conn, job_id)}
     conn.close()
     return {
@@ -116,7 +100,6 @@ def get_audio(job_id: int):
 class TokenPatch(BaseModel):
     idx: int
     text: str
-    # GAP-7: optional one-tap reason tag. Never required — must not block a save.
     reason: str | None = None
 
 
@@ -155,7 +138,7 @@ def export_srt_endpoint(job_id: int, fps: float = Query(..., gt=0, allow_inf_nan
 
     try:
         content = write_subtitles(token_dicts, "srt", fps=fps)
-    except ValueError as exc:  # a decimal fps that names no known frame rate
+    except ValueError as exc:
         raise HTTPException(422, str(exc))
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8",
                              headers={"Content-Disposition": f"attachment; filename=job{job_id}.srt"})

@@ -1,20 +1,3 @@
-"""GAP-5 — bias-term injection into an engine prompt.
-
-`EngineInput.bias_terms` exists, but the only mechanism Whisper has to consume a
-term list is `initial_prompt`, which is capped (~224 tokens). Thai is
-token-expensive, so an unbounded bias list silently truncates and the
-highest-value terms can fall off the end.
-
-`build_prompt` packs the highest-weight terms into a fixed token budget using the
-engine's own tokenizer count, so what survives is deliberate, not whatever the
-list happened to start with. This is prompt-only: the joined string never affects
-output normalization (that stays the single authority of normalize.py).
-
-Each engine adapter decides how to consume the returned string (`whisper_*`:
-`initial_prompt`; future engines: their own slot). This module stays behind the
-Engine Contract.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -31,14 +14,10 @@ _BUDGET_TOKENS = 200
 class BiasTerm:
     term: str
     weight: float = 1.0
-    recency: float = 1.0  # 0..1, newer corrections score higher
+    recency: float = 1.0
 
 
 def _approx_tokens(text: str) -> int:
-    """Tokenizer-free fallback count. Approximates Whisper's behaviour where
-    Thai is far more token-dense than Latin: count each Thai char as a token,
-    each whitespace-delimited non-Thai run as one. Real engines pass their own
-    tokenizer via ``count_tokens`` — this only keeps the function total."""
     thai = sum(1 for c in text if _THAI_LO <= c <= _THAI_HI)
     nonthai = "".join(" " if _THAI_LO <= c <= _THAI_HI else c for c in text)
     words = len(nonthai.split())
@@ -67,7 +46,6 @@ def build_prompt(
     used = 0
     for t in ranked:
         cost = count(t.term)
-        # +1 for the joining space once the prompt is non-empty.
         sep = 1 if chosen else 0
         if used + sep + cost <= budget_tokens:
             chosen.append(t.term)
@@ -96,6 +74,6 @@ def build_prompt_ids(processor, device: str, bias_terms: list[str],
         if not prompt:
             return None
         return processor.get_prompt_ids(prompt, return_tensors="pt").to(device)
-    except Exception as e:  # tokenizer/version differences must not break ASR
+    except Exception as e:
         logger.warning("Bias prompt injection skipped (%s)", e)
         return None

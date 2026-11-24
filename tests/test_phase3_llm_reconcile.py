@@ -169,7 +169,7 @@ def test_llm_fn_failure_falls_back_to_script(monkeypatch):
     assert results[0][1] == "a"
 
 
-# ── _script_fallback: confidence-first fix (the circularity the doc flags) ─
+# ── _script_fallback: confidence-first fix (script alone can't break a Thai-vs-Thai tie) ─
 
 def test_script_fallback_prefers_confidence_over_script():
     from transcribe.contracts import RecognizedToken

@@ -52,11 +52,9 @@ class EngineResult:
     tokens: list[RecognizedToken]
     engine_name: str
     # True ⇒ these tokens carry final timestamps; the pipeline skips forced
-    # alignment and word expansion. (Renamed from word_level_timestamps: the
-    # faster-whisper tokens are phrase cues with final timestamps, not words —
-    # word granularity is re-derived on demand from `raw`. See CLAUDE.md 5.4.)
+    # alignment and word expansion.
     timestamps_final: bool = False
-    raw: dict = field(default_factory=dict)  # untouched native output, for debugging
+    raw: dict = field(default_factory=dict)
 
 
 @dataclass
