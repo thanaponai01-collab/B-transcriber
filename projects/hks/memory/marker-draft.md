@@ -15,7 +15,7 @@ ranged markers:
 
 **Why:** the user said "what you didn't do is flag the break, sponsor" after the first draft held
 questions only.
-**How to apply:** `python -m cutdeck.hks_day "<day folder>"` does all of it (transcript,
+**How to apply:** `python -m cutdeck.hks_day "<day folder>"` does all of it (`--sequence Edit` when the day's uncut timeline has another name, as on 20261124) (transcript,
 breaks, judges via headless `claude -p`, files, markers). Every marker draft carries all three: questions by phase, breaks, sponsors.
 The list goes next to the Premiere project, not in the repo:
 `<day folder>\4. PROJECTS\1. PREMIERE PRO\CutDeck\Questions\<day> questions.md` (the same
