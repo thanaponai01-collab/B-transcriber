@@ -1,28 +1,3 @@
-"""Phase 6 — Normalization: an explicit, deterministic text policy.
-
-This is the single source of truth for the transcription style decisions in
-STYLE_GUIDE.md. It is applied to pipeline hypotheses (run.py) AND, identically,
-to the gold set during evaluation (eval/metrics.py) — so the metric never scores
-against an un-normalized, moving target.
-
-Every transform here is deterministic and tokenization-free. Decisions that
-require segmentation or semantics (loanword script choice, number *verbalization*
-สิบ↔10, mai-yamok word-repeat expansion) are gold-authoring policy, not code —
-see STYLE_GUIDE.md §2/§3 for why this deliberately diverges from the Na-Thalang
-et al. (2025) canonical standard the Typhoon ASR project trains and benchmarks
-against.
-
-Order matters: digits → mai yamok → boundary spacing → protect exceptions →
-Thai cleanup → restore exceptions. Digits and mai-yamok run unprotected because
-no exception-lexicon term contains a Thai numeral or ๆ, and Thai-numeral input
-must normalize identically to pre-converted Arabic-numeral input before
-boundary spacing sees it. Boundary spacing also runs unprotected so
-exception-lexicon brand terms (iPhone, Shopee, ...) get spaced from
-surrounding Thai like any other code-switch word (STYLE_GUIDE §6); the
-lexicon only shields a term's literal characters from PyThaiNLP cleanup, the
-one remaining pass that could touch them.
-"""
-
 from __future__ import annotations
 
 import re
@@ -32,34 +7,21 @@ from transcribe.contracts import PipelineToken
 
 _THAI_RE = re.compile(r"[฀-๿]")
 
-# Script-boundary spacing patterns (lookbehind/lookahead safe in Python re)
 _THAI_TO_LATIN = re.compile(r"(?<=[฀-๿])(?=[a-zA-Z0-9])")
 _LATIN_TO_THAI = re.compile(r"(?<=[a-zA-Z0-9])(?=[฀-๿])")
 
-# Thai digits ๐-๙ → Arabic 0-9. Deterministic; unlike verbalization (สิบ↔10)
-# this never requires context, so we always apply it.
 _THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
-# Mai yamok (ๆ) = "repeat preceding word". Canonical form attaches it to the
-# word with no preceding whitespace; we do NOT expand it, because expansion
-# requires word segmentation (ambiguous). Collapse runs and strip leading space.
-# The group repeats so space-separated runs ("เร็ว ๆ ๆ") collapse to a single ๆ
-# in one pass — r"\s*ๆ+" only handled contiguous repeats.
 _MAI_YAMOK = re.compile(r"(?:\s*ๆ)+")
 
 
 def _load_exception_lexicon(config: dict) -> list[str]:
-    """Load exception terms from config (no-split list)."""
     return list(config.get("normalization", {}).get("exception_lexicon", []))
 
 
 def _protect_exceptions(text: str, exceptions: list[str]) -> tuple[str, dict[str, str]]:
-    """Replace exception terms with placeholders before PyThaiNLP cleanup.
-
-    Called AFTER boundary spacing, so a term's edges are already spaced
-    naturally against surrounding Thai; this only shields its interior."""
     placeholders: dict[str, str] = {}
-    for term in sorted(exceptions, key=len, reverse=True):  # longest first
+    for term in sorted(exceptions, key=len, reverse=True):
         if term in text:
             key = f"\x00EX{len(placeholders)}\x00"
             placeholders[key] = term
@@ -74,12 +36,10 @@ def _restore_exceptions(text: str, placeholders: dict[str, str]) -> str:
 
 
 def _normalize_thai_digits(text: str, enabled: bool) -> str:
-    """Map Thai numerals ๐-๙ to Arabic 0-9 (STYLE_GUIDE: numbers as Arabic digits)."""
     return text.translate(_THAI_DIGITS) if enabled else text
 
 
 def _canonical_mai_yamok(text: str, enabled: bool) -> str:
-    """Collapse 'word ๆ' / 'wordๆๆ' to the canonical attached single 'wordๆ'."""
     return _MAI_YAMOK.sub("ๆ", text) if enabled else text
 
 
@@ -90,7 +50,6 @@ def _add_boundary_spaces(text: str) -> str:
 
 
 def _thai_cleanup(text: str) -> str:
-    """Apply PyThaiNLP normalization for Thai text."""
     try:
         from pythainlp.util import normalize as thai_normalize
         return thai_normalize(text)
@@ -99,25 +58,7 @@ def _thai_cleanup(text: str) -> str:
 
 
 def normalize(text: str, config: dict | None = None) -> str:
-    """
-    Normalize a transcript string per STYLE_GUIDE.md:
-    0. Thai numerals → Arabic digits (policy: numbers written as Arabic). Runs
-       unprotected: no exception-lexicon term contains a Thai numeral, and
-       Thai-numeral vs. Arabic-numeral input must normalize identically before
-       boundary spacing sees it (`test_normalize_thai_digits`).
-    1. Mai yamok (ๆ) → canonical attached form (no expansion). Also unprotected:
-       no exception term contains ๆ.
-    2. Add spaces at Thai↔Latin boundaries — exception-lexicon terms included
-       (STYLE_GUIDE §6: they read as ordinary code-switch words at their edges).
-    3. Protect exception lexicon items (brands/mixed-script proper nouns) from
-       the one remaining pass that operates on literal Thai characters.
-    4. PyThaiNLP Thai cleanup (tone-mark/sara ordering).
-    5. Restore exceptions.
-    6. Collapse multiple spaces.
-
-    The same function is applied to hypotheses and to the gold set, so policy
-    toggles can never desync the two sides of an evaluation.
-    """
+    """Normalize a transcript string per STYLE_GUIDE.md."""
     config = config or {}
     norm_cfg = config.get("normalization", {})
     exceptions = _load_exception_lexicon(config)
@@ -150,22 +91,14 @@ def drop_tokens_over_silence(
     overlap: float = 0.8,
     max_confidence: float | None = None,
 ) -> list[PipelineToken]:
-    """Phase 6b — drop tokens that sit mostly inside VAD silence (GAP-3).
+    """Drop tokens that sit mostly inside VAD silence.
 
     A token whose span overlaps silence by >= ``overlap`` of its own duration is
-    a hallucination *candidate* — a stronger signal than the >3x repeat rule.
+    a hallucination *candidate*.
     A token straddling a boundary (e.g. 50% overlap) is kept.
 
-    ``silence_spans`` come from ingest's own Silero VAD pass, which is a
-    *different* VAD implementation than the one whole-file engines (e.g.
-    faster_whisper) run internally before decoding — the two can legitimately
-    disagree on the same audio. If a token was transcribed with real
-    confidence, that means the engine's own VAD judged the span speech and
-    decoded it — ingest's independent VAD disagreeing is not by itself
-    hallucination evidence, and dropping it would silently delete real words.
     When ``max_confidence`` is set, a silence-overlapping token is only
-    dropped if its confidence is also <= that threshold (or unknown — a
-    hallucinated token's confidence isn't always reported). Re-indexes
+    dropped if its confidence is also <= that threshold (or unknown). Re-indexes
     survivors so idx stays contiguous.
     """
     if not silence_spans or not tokens:

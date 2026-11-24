@@ -1,5 +1,3 @@
-"""Eval harness — runs a pipeline config over the golden set and records metrics."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -21,16 +19,10 @@ from transcribe.thai.lint import find_cue_legality_violations
 
 _GOLDENSET = Path(__file__).parent / "goldenset"
 
-# _safe_print was born here (Thai cue-legality details crashing a cp1252 console)
-# and now lives in transcribe.console, because the CutDeck exporters hit the same
-# wall on Thai media paths. Aliased rather than renamed at ~4 call sites below.
-
 
 class HarnessResult(NamedTuple):
-    """The harness is the single gate authority: it captures the prior passing
-    baseline *before* writing the new eval_run, gates on all four paired
-    signals, and returns its verdict. Callers must consume `passed` — never
-    re-read get_last_passing_eval (that would compare the new run against itself)."""
+    """Callers must consume `passed` — never re-read get_last_passing_eval
+    (that would compare the new run against itself)."""
     metrics: EvalMetrics
     passed: bool
     baseline: store.EvalRunRow | None
@@ -47,7 +39,6 @@ def _config_hash(config: dict) -> str:
 
 
 def _pipeline_version() -> str:
-    """Read the live pipeline version without importing the GPU stack at module load."""
     try:
         from transcribe.pipeline.run import PIPELINE_VERSION
         return PIPELINE_VERSION
@@ -56,26 +47,16 @@ def _pipeline_version() -> str:
 
 
 def _bias_hash(conn) -> str:
-    """Hash of the active bias index — makes a regression attributable to the
-    exact term set that produced it (A.2)."""
     terms = sorted(store.get_bias_term_strings(conn))
     return hashlib.sha256("\n".join(terms).encode()).hexdigest()[:16]
 
 
 def _media_extensions() -> tuple[str, ...]:
-    """Every extension the pipeline can actually ingest (audio + AV containers) —
-    a gold sample's source clip is frequently a raw video export, not audio-only."""
     from transcribe.pipeline.ingest import _AV_CONTAINERS
     return (".wav", ".mp3", ".flac") + tuple(sorted(_AV_CONTAINERS))
 
 
 def _audio_duration_s(path: Path) -> float:
-    """Best-effort audio duration in seconds, for RTF (wall-clock decode time
-    ÷ audio duration, HANDOFF_ONE_ENGINE §3.1). Returns 0.0 on any failure —
-    e.g. the synthetic `Path("fake.wav")` fixtures unit tests pass as
-    pipeline_fn's audio_path — so a clip that can't be duration-probed just
-    doesn't contribute to RTF rather than crashing the run; RTF is
-    descriptive-only, never gated."""
     try:
         from transcribe.pipeline.ingest import load_audio
         samples, sr = load_audio(str(path))
@@ -85,7 +66,6 @@ def _audio_duration_s(path: Path) -> float:
 
 
 def _load_goldenset() -> list[tuple[Path, list[dict]]]:
-    """Return [(audio_path, ref_tokens), ...] for every sample in the golden set."""
     samples = []
     for gt_file in sorted(_GOLDENSET.glob("*.json")):
         audio_candidates = [gt_file.with_suffix(ext) for ext in _media_extensions()]
@@ -100,18 +80,11 @@ def _load_goldenset() -> list[tuple[Path, list[dict]]]:
 
 
 def _cue_excluded(audio_path: Path, config: dict) -> bool:
-    """True when the clip's reference cues aren't subtitle-sized (config
-    `eval_cue_metric_exclude`, by sample stem), so it can't score segmentation."""
     return audio_path.stem in (config.get("eval_cue_metric_exclude") or [])
 
 
 def _clip_key(audio_path: Path, ref_tokens: list[dict], config: dict,
               *, audio_sha256: str | None = None) -> str:
-    """Pair only identical media, references and scoring policies.
-
-    Missing paths support synthetic pipeline_fn fixtures; real gold media are
-    content-hashed. Sample names keep identical-content clips distinct.
-    """
     if audio_sha256 is not None:
         audio_hash = audio_sha256
     else:
@@ -150,25 +123,16 @@ def run_harness(
                     promotion) stay experiment=False — the gate must compare
                     them against the previous production baseline and, on pass,
                     only a confirmed pass becomes the new one.
-    Returns:
-        EvalMetrics aggregate over all golden samples.
     """
     if establish_baseline and experiment:
         raise ValueError("baseline establishment requires a production run, not an experiment")
     store.init_db(db_path)
     samples = _load_goldenset()
     if not samples:
-        # An empty gold set scores 0.0 on every metric. Writing that as a passing
-        # eval_run poisons the baseline: the gate is `new > last × 1.02`, so a
-        # zero baseline makes every future real run fail forever. Refuse to write.
         print("[harness] WARNING: goldenset is empty - add audio+json pairs to "
               "eval/goldenset/. No eval_run recorded.")
         return None
 
-    # #5: eval transcription writes media/job/token rows. Keep those OUT of the
-    # caller's DB (the editor and flywheel read it) by sending run_file to a
-    # throwaway scratch DB. eval_run *history* still goes to db_path below, so the
-    # regression gate stays coherent across runs.
     scratch_dir: Path | None = None
     scratch_db: Path | None = None
     warm_engine_a = None
@@ -180,10 +144,6 @@ def run_harness(
         scratch_dir = Path(tempfile.mkdtemp(prefix="eval_scratch_"))
         scratch_db = scratch_dir / "scratch.db"
         store.init_db(scratch_db)
-        # run_file reads its bias index from the DB it runs against. A fresh
-        # scratch DB has no bias terms, so the eval would silently measure a
-        # prompt-less pipeline — the one thing a bias-update gate must not do.
-        # Mirror the live bias index into the scratch DB before any sample runs.
         _src = store.connect(db_path)
         _dst = store.connect(scratch_db)
         for _t in store.get_bias_terms(_src):
@@ -191,10 +151,6 @@ def run_harness(
         _src.close()
         _dst.close()
 
-        # In single-engine mode (engine_b == "passthrough" or self-ensemble),
-        # keep Engine A loaded once across all clips instead of loading and
-        # unloading the 1.5 GB model per clip. Not with word_align on: its CTC model
-        # loads after Engine A is unloaded, one model on the GPU at a time.
         if config.get("engine_a") and not (config.get("word_align") or {}).get("enabled") and (
             config.get("engine_b", "passthrough") == "passthrough"
             or bool((config.get("self_ensemble") or {}).get("enabled", False))
@@ -205,15 +161,10 @@ def run_harness(
 
     tol = float(config.get("boundary_tol_ms", 300.0))
 
-    # Corpus aggregation is EvalMetrics.aggregate's job — each metric's weighting
-    # rule lives next to its definition, so the two cannot silently disagree.
     clip_metrics: list[EvalMetrics] = []
     clips_by_key: dict[str, EvalMetrics] = {}
     total_wall_s = 0.0
     total_audio_s = 0.0
-    # Phase 3 cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): shares the
-    # splitter's own BreakLexicon so the lint can never drift from what
-    # glue_atoms actually protects.
     lexicon = default_lexicon(config)
     total_hyp_lint_violations = 0
     total_ref_lint_violations = 0
@@ -248,11 +199,8 @@ def run_harness(
                     total_audio_s += _audio_duration_s(audio_path)
             else:
                 total_audio_s += _audio_duration_s(audio_path)
-            # Pass config so reference and hypothesis are normalized identically.
             m = compute_metrics(ref_tokens, hyp_tokens, config=config, boundary_tol_ms=tol)
             if _cue_excluded(audio_path, config):
-                # Zero only the cue-boundary micro-F1 inputs: text metrics and the
-                # overlapping_cues hard invariant still count this clip.
                 m = dataclasses.replace(m, ref_cues=0, hyp_cues=0, matched_cues=0, cue_boundary_error_rate=0.0)
             clip_metrics.append(m)
             clips_by_key[key] = m
@@ -265,9 +213,6 @@ def run_harness(
                 detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in hyp_violations)
                 _safe_print(f"[harness] cue_legality VIOLATION {audio_path.stem}: {detail}")
             if ref_violations:
-                # The gold recuts define taste — a violation the reference also
-                # commits means the lexicon is wrong, not the hypothesis. Printed,
-                # never hidden (§5).
                 detail = "; ".join(f"{v.rule}[{v.index}]={v.detail!r}" for v in ref_violations)
                 _safe_print(f"[harness] cue_legality REFERENCE also violates (lexicon may be wrong, "
                             f"not a hyp bug) {audio_path.stem}: {detail}")
@@ -286,9 +231,6 @@ def run_harness(
     conn = store.connect(db_path)
     cfg_hash = _config_hash(config)
 
-    # Bootstrap CIs (Phase A, HANDOFF_ONE_ENGINE §3.1): resample clips, not
-    # just report a point estimate. n_draws=1000 is cheap at this corpus size
-    # (thousands of clip-count-sized resamples, no re-transcription involved).
     ci_bounds = {name: bootstrap_ci(clip_metrics, name) for name in CI_METRICS}
     rtf = total_wall_s / total_audio_s if total_audio_s > 0 else None
 
@@ -324,9 +266,6 @@ def run_harness(
     if verdict.improvements:
         print("[harness] CONFIRMED IMPROVEMENT: " + "; ".join(verdict.improvements))
 
-    # Hard structural invariant (§3.1): an overlapping cue is a shipped bug,
-    # not a tolerance band — it fails the run unconditionally, even on the
-    # very first v3 run with no prior baseline to compare against.
     if agg.overlapping_cues > 0:
         print(f"[harness] HARD FAIL: {agg.overlapping_cues} overlapping cue(s) in hypothesis output")
 
@@ -433,8 +372,6 @@ if __name__ == "__main__":
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     self_ensemble = bool(args.self_ensemble or args.self_ensemble_temp_b is not None
                           or args.self_ensemble_beam_b is not None)
-    # Any CLI override means this run measures a config that is NOT config.yaml —
-    # its result must not become the production baseline.
     experiment = bool(args.experiment or args.engine_b or args.llm_enabled or self_ensemble)
     if args.engine_b:
         cfg["engine_b"] = args.engine_b

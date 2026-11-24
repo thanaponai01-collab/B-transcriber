@@ -1,15 +1,9 @@
-"""Flywheel Phase 9a — diff raw ASR output vs human corrections → correction pairs."""
-
 from __future__ import annotations
 
 import difflib
 from dataclasses import dataclass
 from typing import Optional
 
-# Tokens are now ~7 s phrase cues (faster-whisper). A one-word edit on a cue would
-# otherwise promote the whole sentence as a bias "term", devouring the prompt
-# budget and biasing toward sentence repetition. When either side is longer than
-# this, extract just the minimal changed word/phrase (5.3).
 _SPAN_THRESHOLD = 15
 
 
@@ -17,16 +11,13 @@ _SPAN_THRESHOLD = 15
 class CorrectionPair:
     token_idx: int
     raw_text: str
-    corrected_text: str            # full corrected cue — audit + editor display
+    corrected_text: str
     source_engine: str
-    reason: Optional[str] = None   # GAP-7: optional one-tap tag from the editor
-    corrected_span: Optional[str] = None  # 5.3: minimal promotable word/phrase
+    reason: Optional[str] = None
+    corrected_span: Optional[str] = None
 
 
 def _word_spans(text: str) -> list[tuple[str, int, int]]:
-    """(word, start, end) over `text`. newmm for Thai, whitespace preserved so
-    Latin runs and spaces keep their offsets. Falls back to a crude split if
-    pythainlp is unavailable."""
     try:
         from pythainlp.tokenize import word_tokenize
         toks = word_tokenize(text, keep_whitespace=True)
@@ -44,14 +35,7 @@ def extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRESH
     """Minimal changed region of `corrected` vs `raw`, expanded to word boundaries.
 
     Returns the full `corrected` when both sides are short (nothing to gain) or if
-    no change is found. For "…ChatGBT…" → "…ChatGPT…" this yields "ChatGPT", not
-    the whole sentence.
-
-    Diffs at word granularity, not characters: a character-level diff on Thai text
-    gets smeared across the whole cue when a short syllable (e.g. "อ" inside a
-    removed "อ๋อ") also recurs in unrelated nearby words, since SequenceMatcher
-    then treats most of the string as "changed". Word tokens don't have that
-    collision.
+    no change is found.
     """
     if len(raw) <= threshold and len(corrected) <= threshold:
         return corrected
@@ -66,9 +50,6 @@ def extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRESH
     if lo is None:
         return corrected
     hi = max(hi, lo + 1)
-    # Widen outward until the picked range has non-whitespace content — a pure
-    # deletion (e.g. dropping a filler word) can leave the diff straddling only
-    # a whitespace token, which would otherwise strip to "".
     while True:
         picked = "".join(corr_words[lo:hi]).strip()
         if picked or (lo == 0 and hi >= len(corr_words)):
@@ -80,8 +61,8 @@ def extract_changed_span(raw: str, corrected: str, threshold: int = _SPAN_THRESH
 
 
 def diff_corrections(
-    original_tokens: list[dict],   # from DB: {"idx", "text", "source_engine", ...}
-    corrected_tokens: list[dict],  # from editor: {"idx", "text", "reason"?, ...}
+    original_tokens: list[dict],
+    corrected_tokens: list[dict],
 ) -> list[CorrectionPair]:
     """
     Compare original and corrected token lists by idx.
@@ -110,8 +91,7 @@ def diff_corrections(
 def save_corrections(conn, job_id: int, edits: list[dict]) -> dict:
     """Write human edits of a stored job (`{"idx", "text", "reason"?}`) as correction rows.
 
-    The one write path for every tool that edits a transcript (editor, SubtitleDesk), so all
-    of them feed the same bias index. A re-save replaces the earlier row per token; an edit
+    A re-save replaces the earlier row per token; an edit
     back to the raw text deletes it."""
     from transcribe.db import store
 

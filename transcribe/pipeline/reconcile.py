@@ -1,10 +1,3 @@
-"""Phase 5 — Reconciler.
-
-SELECTS between candidate tokens. NEVER generates text that no engine proposed.
-The no-generation constraint is enforced by an explicit raise in _pick() — not
-an assert, which vanishes under `python -O`.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -28,30 +21,20 @@ def _pick(
     bias_terms: list[str],
     llm_fn=None,
 ) -> tuple[RecognizedToken, str]:
-    """
-    Choose one token from the slot. Returns (token, source_engine).
-    source_engine: 'a' | 'b' | 'both'
-
-    The raise at the end guarantees no-generation.
-    """
     a_tokens = slot.candidates_a
     b_tokens = slot.candidates_b
 
-    # Only A has a candidate
     if a_tokens and not b_tokens:
         chosen = a_tokens[0]
         source = "a"
 
-    # Only B has a candidate
     elif b_tokens and not a_tokens:
         chosen = b_tokens[0]
         source = "b"
 
     else:
         ta, tb = a_tokens[0], b_tokens[0]
-        # Agreement: both tokens have the same text
         if ta.text == tb.text:
-            # Merge: prefer whichever has a confidence; average if both do
             if ta.confidence is not None and tb.confidence is not None:
                 conf = (ta.confidence + tb.confidence) / 2
             else:
@@ -65,7 +48,6 @@ def _pick(
             )
             source = "both"
         else:
-            # Disagreement — try LLM
             if llm_fn is not None:
                 try:
                     idx = llm_fn(ta, tb, bias_terms)
@@ -79,7 +61,6 @@ def _pick(
             else:
                 chosen, source = _script_fallback(ta, tb)
 
-    # ── No-generation guard (raise, not assert: survives python -O) ───────────
     allowed = _candidates_text(slot)
     if chosen.text not in allowed:
         raise ReconcilerViolation(
@@ -93,9 +74,6 @@ def _pick(
 def _script_fallback(
     ta: RecognizedToken, tb: RecognizedToken
 ) -> tuple[RecognizedToken, str]:
-    """Confidence decides when both engines report one; A's own script classification
-    of A's own output is a weak signal (circular on the hard Thai-disagreement case),
-    so it's only the tiebreaker when confidence can't decide."""
     if ta.confidence is not None and tb.confidence is not None and ta.confidence != tb.confidence:
         return (ta, "a") if ta.confidence > tb.confidence else (tb, "b")
     script = ta.script

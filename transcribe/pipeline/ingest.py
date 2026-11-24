@@ -1,8 +1,3 @@
-"""Phase 2 — Ingestion: decode audio, rolling-window denoise, VAD → speech chunks.
-
-Disposable layer — do not over-tune thresholds here.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -13,60 +8,45 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 _TARGET_SR = 16000
-_WINDOW_MS = 2000        # rolling RMS window
-_NOISE_DB_THRESHOLD = -35  # windows below this RMS (dB) trigger denoiser
+_WINDOW_MS = 2000
+_NOISE_DB_THRESHOLD = -35
 
 
 @dataclass
 class AudioChunk:
-    audio: np.ndarray  # float32, 16kHz mono
+    audio: np.ndarray
     start_ms: int
     end_ms: int
 
 
 @dataclass
 class SpeechSpan:
-    """One span of the VAD master timeline (GAP-3)."""
     idx: int
     start_ms: int
     end_ms: int
-    kind: str  # 'speech' | 'silence'
+    kind: str
 
 
 @dataclass
 class IngestResult:
-    """Output of ingestion: the speech chunks fed to engines, plus the full
-    speech/silence timeline (persisted to speech_span for CutDeck + the
-    hallucination filter) and the sample rate.
-
-    `audio` is the exact array the VAD/spans were derived from — raw for
-    whole-file engines (denoise skipped), denoised when a chunk engine is active.
-    run.py feeds THIS same array to the engine so the silence timeline and the
-    audio the engine hears can never desync (3.2)."""
+    """`audio` is the exact array the VAD/spans were derived from."""
     chunks: list[AudioChunk]
     spans: list[SpeechSpan]
     sample_rate: int
     duration_ms: int
     audio: np.ndarray | None = None
-    # Runs of audible sound (ms) found by the energy guard; empty when it is off.
     sound_runs: list[tuple[int, int]] | None = None
 
 
 _AV_CONTAINERS = frozenset({
-    # Common video containers
     ".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm",
-    # Broadcast / transport stream containers (ffmpeg handles these; librosa does not)
     ".ts", ".m2ts", ".mts", ".vob", ".mxf", ".ogv",
-    # Audio-only containers also better served by PyAV
     ".m4a",
 })
 
 
 def load_audio(path: str) -> tuple[np.ndarray, int]:
-    """Decode audio to 16kHz mono float32. Returns (samples, sample_rate).
-
-    Supports WAV/FLAC/etc via librosa and all containers in _AV_CONTAINERS via PyAV.
-    """
+    """Decode audio to 16kHz mono float32. Returns (samples, sample_rate)."""
     import pathlib
     ext = pathlib.Path(path).suffix.lower()
     if ext in _AV_CONTAINERS:
@@ -80,21 +60,14 @@ def load_audio(path: str) -> tuple[np.ndarray, int]:
 
 
 def _stream_start_offset_sec(first_pts: int, time_base, container_start_us: int) -> float:
-    """Seconds between the container's global t=0 and the audio stream's first
-    decoded frame. MP4/AAC audio commonly starts with a small nonzero PTS
+    """MP4/AAC audio commonly starts with a small nonzero PTS
     relative to the video's presentation clock (encoder priming samples, an
-    edit-list offset) — positive here means the audio stream starts *after*
-    the container's t=0, which is the common case."""
+    edit-list offset)."""
     first_pts_sec = float(first_pts * time_base)
     return first_pts_sec - (container_start_us / 1_000_000.0)
 
 
 def _align_audio_start(audio: np.ndarray, sr: int, offset_sec: float) -> np.ndarray:
-    """Pad (or trim) so sample 0 lines up with the container's global t=0.
-
-    Left uncorrected, every downstream ms timestamp derived from this array
-    carries the same small constant offset vs. the video's actual clock — a
-    systematic sync drift, not a growing one."""
     n = int(round(abs(offset_sec) * sr))
     if n == 0:
         return audio
@@ -104,7 +77,6 @@ def _align_audio_start(audio: np.ndarray, sr: int, offset_sec: float) -> np.ndar
 
 
 def _load_audio_av(path: str) -> tuple[np.ndarray, int]:
-    """Decode any audio/video container via PyAV, resample to 16kHz mono."""
     import av
     chunks: list[np.ndarray] = []
     offset_sec = 0.0
@@ -119,7 +91,7 @@ def _load_audio_av(path: str) -> tuple[np.ndarray, int]:
             if first_pts is None and frame.pts is not None:
                 first_pts = frame.pts
             # Packed formats (camera PCM: s16/s32) arrive as one interleaved row
-            # of raw integers; reshape to (channels, samples) and scale to [-1, 1].
+            # of raw integers.
             arr = frame.to_ndarray()
             if not frame.format.is_planar:
                 arr = arr.reshape(-1, len(frame.layout.channels)).T
@@ -127,14 +99,13 @@ def _load_audio_av(path: str) -> tuple[np.ndarray, int]:
                 arr = arr.astype(np.float32) / float(np.iinfo(arr.dtype).max + 1)
             elif arr.dtype.kind == "u":
                 arr = (arr.astype(np.float32) - 128.0) / 128.0
-            chunks.append(arr.astype(np.float32).mean(axis=0))  # mix to mono
+            chunks.append(arr.astype(np.float32).mean(axis=0))
         if first_pts is not None:
             offset_sec = _stream_start_offset_sec(first_pts, stream.time_base, container_start_us)
     if not chunks:
         raise ValueError(f"No audio frames decoded from {path}")
     audio = np.concatenate(chunks)
     audio = _align_audio_start(audio, native_sr, offset_sec)
-    # Resample to target SR if needed
     if native_sr != _TARGET_SR:
         import librosa
         audio = librosa.resample(audio, orig_sr=native_sr, target_sr=_TARGET_SR)
@@ -147,11 +118,6 @@ def _rms_db(window: np.ndarray) -> float:
 
 
 def _denoise_window(window: np.ndarray, sr: int, model, df_state, enhance_fn) -> np.ndarray:
-    """Apply a pre-loaded DeepFilterNet model to one audio window, in-memory.
-
-    4.4: the previous version round-tripped through a temp WAV per window
-    (~1.8k file writes/hr at the 2s window size) purely to satisfy
-    `load_audio`'s file-path signature. Build the tensor directly instead."""
     import torch
 
     try:
@@ -174,10 +140,9 @@ def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
 
 
 def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
-    """Apply DeepFilterNet only to windows whose RMS exceeds the noise threshold."""
     try:
         from df.enhance import enhance, init_df
-        model, df_state, _ = init_df()  # load once for all windows
+        model, df_state, _ = init_df()
     except Exception as e:
         logger.warning("DeepFilterNet unavailable (%s), skipping denoise", e)
         return audio
@@ -201,9 +166,6 @@ def _apply_rolling_denoise(audio: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _load_silero():
-    """Load Silero VAD. Prefer the pip package `silero-vad` (no first-run network
-    fetch, no torch.hub supply-chain surface); fall back to torch.hub only if the
-    package is absent. Returns (model, get_speech_timestamps_fn)."""
     try:
         from silero_vad import load_silero_vad, get_speech_timestamps
         return load_silero_vad(onnx=False), get_speech_timestamps
@@ -222,7 +184,6 @@ def _vad_chunks(audio: np.ndarray, sr: int,
                 threshold: float = 0.5,
                 min_speech_ms: int = 250,
                 min_silence_ms: int = 300) -> list[tuple[int, int]]:
-    """Run Silero VAD; return list of (start_sample, end_sample) speech segments."""
     try:
         import torch
         model, get_speech_ts = _load_silero()
@@ -238,33 +199,22 @@ def _vad_chunks(audio: np.ndarray, sr: int,
         return [(0, len(audio))]
 
 
-_FLOOR_DB_FALLBACK = -55.0     # used only when a file has too little speech to estimate from
-_FLOOR_DB_MIN = -80.0          # clamp: never gate this aggressively even on a very clean file
-_FLOOR_DB_MAX = -35.0          # clamp: never gate this leniently even on a very noisy file
+_FLOOR_DB_FALLBACK = -55.0
+_FLOOR_DB_MIN = -80.0
+_FLOOR_DB_MAX = -35.0
 
 
 def _estimate_speech_floor_db(
     audio: np.ndarray, sr: int, segments: list[tuple[int, int]],
     percentile: float = 10.0, window_ms: int = 50,
 ) -> float:
-    """Per-file noise floor: the ``percentile``-th quietest 50ms window *within
-    VAD-flagged speech segments* (not the whole file — real cut silence would
-    just pull this down to the digital floor and defeat the estimate).
-
-    A fixed dB threshold is calibrated to one recording's gain staging; a
-    quieter room mic or a hotter on-camera preamp shifts the whole noise floor
-    and needs a different number. Sampling from this file's own quietest
-    "speech" content instead means the gate self-calibrates per file. Clamped
-    to [_FLOOR_DB_MIN, _FLOOR_DB_MAX] so a pathological file (near-silent or
-    all-loud) can't make the gate absurdly aggressive or a no-op.
-    """
     window = max(1, int(window_ms * sr / 1000))
     vals: list[float] = []
     for start_s, end_s in segments:
         seg = audio[start_s:end_s]
         for i in range(0, len(seg) - window, window):
             vals.append(_rms_db(seg[i:i + window]))
-    if len(vals) < 20:  # not enough speech to estimate anything meaningful from
+    if len(vals) < 20:
         return _FLOOR_DB_FALLBACK
     floor = float(np.percentile(vals, percentile))
     return max(_FLOOR_DB_MIN, min(_FLOOR_DB_MAX, floor))
@@ -274,19 +224,6 @@ def _rms_gate_segments(
     audio: np.ndarray, sr: int, segments: list[tuple[int, int]],
     floor_db: float = -55.0, min_gap_ms: int = 300, window_ms: int = 50,
 ) -> list[tuple[int, int]]:
-    """Sub-split each VAD speech segment wherever raw RMS energy drops below
-    ``floor_db`` for at least ``min_gap_ms`` — independent of ``vad_threshold``.
-
-    Silero VAD is a probability model: at the low threshold Thai particle
-    survival needs (0.35), it happily calls extended stretches of near-silent
-    room tone "speech" as long as *something* voice-shaped is present nearby,
-    producing multi-second "speech" spans that are audibly mostly dead air.
-    Raising the threshold to fix that re-clips soft particles (measured
-    regression, see config.yaml). This is a second, orthogonal signal — plain
-    loudness — so it only removes stretches that are quiet by any measure,
-    without touching VAD's voice/no-voice judgement at segment edges (where
-    the particle-survival tuning actually matters).
-    """
     window = max(1, int(window_ms * sr / 1000))
     min_windows = max(1, int(min_gap_ms / window_ms))
     out: list[tuple[int, int]] = []
@@ -299,7 +236,7 @@ def _rms_gate_segments(
         gaps: list[tuple[int, int]] = []
         run_start = None
         run_len = 0
-        for wi, is_quiet in enumerate(below + [False]):  # sentinel flushes trailing run
+        for wi, is_quiet in enumerate(below + [False]):
             if is_quiet:
                 if run_start is None:
                     run_start = wi
@@ -323,7 +260,7 @@ def _rms_gate_segments(
 
 
 _GUARD_WINDOW_MS = 20
-_GUARD_FLOOR_MIN_DB = -65.0   # digital silence must not make room tone look like sound
+_GUARD_FLOOR_MIN_DB = -65.0
 _GUARD_FLOOR_MAX_DB = -35.0
 
 
@@ -331,9 +268,7 @@ def sound_runs(audio: np.ndarray, sr: int, *, margin_db: float = 15.0,
                tail_db: float = 6.0, min_ms: int = 100) -> list[tuple[int, int]]:
     """Runs of audible sound as (start_ms, end_ms), judged by loudness alone.
 
-    VAD answers "does this sound like speech?", and a sustained vowel ("ahhhh"), a
-    hum or a fading tail can score no. For a silence cutter the only safe question is
-    "is anything audible here?": a window counts as sound when it is ``margin_db``
+    A window counts as sound when it is ``margin_db``
     above the file's own noise floor (its 5th-percentile window level). A run grows
     outward while the level stays ``tail_db`` above the floor, so decays are kept, and
     survives only with at least ``min_ms`` of seed windows, so clicks and pops are not.
@@ -375,9 +310,6 @@ def _union_segments(segments: list[tuple[int, int]], extra: list[tuple[int, int]
 
 
 def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -> list[SpeechSpan]:
-    """Turn VAD speech segments into a gap-free, ordered speech/silence timeline
-    covering [0, total]. The silence between/around speech is the master timeline
-    CutDeck cuts against and the silence-overlap hallucination filter consults."""
     def to_ms(s: int) -> int:
         return int(s * 1000 / sr)
 
@@ -402,11 +334,6 @@ def _build_spans(segments: list[tuple[int, int]], total_samples: int, sr: int) -
 def _materialize_chunks(audio: np.ndarray, sr: int,
                         segments: list[tuple[int, int]],
                         overlap_ms: int) -> list[AudioChunk]:
-    """Cut speech chunks, extending each window by `overlap_ms` on both sides so
-    adjacent chunks overlap (GAP-4). The engine then transcribes each boundary
-    word in both chunks and stitch.py drops the duplicate — words are no longer
-    lost at segment seams. start_ms is the extended window's true global start, so
-    run.py's token offset stays correct."""
     overlap = int(overlap_ms * sr / 1000)
     n = len(audio)
     chunks = []
@@ -424,11 +351,8 @@ def _materialize_chunks(audio: np.ndarray, sr: int,
 def ingest_settings(config: dict) -> dict:
     """The config.yaml -> ingest() kwargs mapping, resolved in one place.
 
-    Covers VAD and RMS-gate knobs only. `denoise` is caller policy (chunk
-    engines want it, whole-file engines must hear the raw track) so it is not
-    resolved here. Fallbacks must match config.yaml (0.35/500 keep Thai
-    sentence-final particles from being clipped); the test in
-    tests/test_pipeline_run_config_fallbacks.py pins them.
+    Covers VAD and RMS-gate knobs only. `denoise` is caller policy so it is not
+    resolved here.
     """
     return dict(
         vad_threshold=float(config.get("vad_threshold", 0.35)),
@@ -458,14 +382,7 @@ def ingest(path: str, denoise: bool = True,
            sound_guard_tail_db: float = 6.0,
            sound_guard_min_ms: int = 100) -> IngestResult:
     """
-    Main ingestion entry point.
-
-    Returns an IngestResult: speech AudioChunks plus the full VAD speech/silence
-    timeline (GAP-3), the sample rate, and the array the timeline was derived from.
-
-    `audio`/`sr`: pass a pre-decoded array to avoid re-decoding (3.2 — run.py
-    decodes once). `materialize_chunks=False` skips chunk cutting entirely (whole-
-    file engines don't need them — only the span timeline). `chunk_overlap_ms`
+    `audio`/`sr`: pass a pre-decoded array to avoid re-decoding. `materialize_chunks=False` skips chunk cutting entirely. `chunk_overlap_ms`
     (>0) makes adjacent chunks overlap so stitch.py can dedupe seam words.
 
     `rms_gate_floor_db=None` (default) estimates the gate's loudness floor from
@@ -474,8 +391,7 @@ def ingest(path: str, denoise: bool = True,
 
     `sound_guard_db` (off when None): after VAD and the RMS gate, every run of audio at
     least this many dB above the file's noise floor is added to the speech segments
-    (`sound_runs`), judged on the pre-denoise audio. For silence cutters, where losing
-    a held vowel the VAD called non-speech is worse than keeping a little extra.
+    (`sound_runs`), judged on the pre-denoise audio.
     """
     logger.info("Ingesting: %s", path)
     if audio is None:

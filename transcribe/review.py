@@ -1,8 +1,3 @@
-"""Targeted acoustic review, separate from transcription and caption layout.
-
-Flags are review priorities, not proof of errors. Alternatives always cover
-the complete contextual window and are never assigned invented word timings.
-"""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -103,7 +98,6 @@ def plan_windows(cues: list[dict], duration_ms: int, *, requested=(),
             if priority == 100:
                 raise ValueError('Requested passage is too long; choose a smaller cue range')
             continue
-        # Add complete neighbor cues, avoiding cuts through words at context edges.
         lo, hi = max(0, start - context_ms), min(duration_ms, end + context_ms)
         neighbors = [i for i, c in enumerate(cues)
                      if c['start_ms'] < hi and c['end_ms'] > lo]
@@ -125,7 +119,6 @@ def plan_windows(cues: list[dict], duration_ms: int, *, requested=(),
                         tuple(dict.fromkeys(prev.reasons + tuple(reasons))), max(priority, prev.priority))
                     merged = True
                     break
-                # A fully covered flag needs no second decode.
                 if prev.start_ms <= start and end <= prev.end_ms:
                     merged = True
                     break
@@ -159,8 +152,6 @@ def recheck_windows(audio, windows: list[ReviewWindow], *, engine_factory,
                 if not len(excerpt):
                     raise ValueError('Empty review audio window')
                 result = engine.transcribe(EngineInput(audio=excerpt, language_hint=language))
-                # These adapters return phrase cues. Separate them for display
-                # so adjacent English words cannot silently fuse at cue edges.
                 proposal['alternatives'][name] = ' '.join(t.text.strip() for t in result.tokens if t.text.strip())
                 proposal['candidate_tokens'][name] = [
                     {**asdict(t), 'start_ms': t.start_ms + window.start_ms,

@@ -1,8 +1,3 @@
-"""Engine registry — maps name strings to adapter classes.
-
-Config drives engine selection; no component imports a concrete engine directly.
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -17,7 +12,6 @@ _REGISTRY: dict[str, type[Engine]] = {}
 
 
 def register(name: str):
-    """Decorator that registers an Engine subclass under a name."""
     def decorator(cls: type[Engine]) -> type[Engine]:
         _REGISTRY[name] = cls
         return cls
@@ -28,7 +22,7 @@ def get_engine(name: str, **kwargs) -> Engine:
     """Validate constructor arguments, then instantiate exactly once.
 
     Binding errors identify the engine and invalid setting. Constructor errors
-    propagate unchanged: retrying without overrides would hide an internal bug.
+    propagate unchanged.
     Constructors that explicitly accept **kwargs retain that capability.
     """
     if name not in _REGISTRY:
@@ -42,7 +36,6 @@ def get_engine(name: str, **kwargs) -> Engine:
 
 
 def _lazy_load(name: str) -> None:
-    """Import adapter modules on first use so heavy deps load only when needed."""
     loaders = {
         "mock":          "transcribe.engines.mock",
         "whisper_thai":  "transcribe.engines.whisper_thai",
@@ -60,15 +53,7 @@ def _lazy_load(name: str) -> None:
 
 
 def prefers_whole_file(name: str) -> bool:
-    """Whether an engine is whole-file — answered WITHOUT instantiating it.
-
-    `prefers_whole_file` is a class attribute on `Engine`, so a capability
-    question (does this engine want the full track? is it a chunk engine?) never
-    needs a constructed engine, which would mean a model directory, a device and
-    the engine's own config block. That lets the pipeline decide its plan — which
-    engines to run, whether ingest must cut chunks, whether self-ensemble is even
-    valid — as a pure function of config.
-    """
+    """Whether an engine is whole-file — answered WITHOUT instantiating it."""
     if name not in _REGISTRY:
         _lazy_load(name)
     return bool(getattr(_REGISTRY[name], "prefers_whole_file", False))

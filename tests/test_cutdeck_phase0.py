@@ -71,8 +71,7 @@ def test_no_decimal_ntsc_fps_literal_in_codebase():
 
     That lookup (added for issue #12) is the single controlled boundary
     where a human decimal fps is accepted and converted to an exact
-    (fps_num, fps_den) pair — see ``Timebase.from_decimal_fps`` and the
-    module docstring. Every other internal frame-math path (including
+    (fps_num, fps_den) pair — see ``Timebase.from_decimal_fps``. Every other internal frame-math path (including
     transcribe/subtitles's cue quantizer) must route through it rather than
     holding its own decimal literal.
 

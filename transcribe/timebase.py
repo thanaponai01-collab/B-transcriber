@@ -1,22 +1,3 @@
-"""Timebase — the single authority for millisecond↔frame conversion.
-
-GAP-1. Once XML export exists, every millisecond stored on a token must be
-convertible to an exact frame number under the source media's true rational
-frame rate. Float frame rates accumulate drift over long timelines, so this
-module does *exact integer math on the rational rate only*.
-
-Grep-able rule enforced by tests: a decimal NTSC fps literal must never appear in
-the codebase. Rates are always carried as the integer pair ``(fps_num, fps_den)``
-— NTSC 30 is 30000/1001, NTSC 24 is 24000/1001, PAL 25 is 25/1.
-
-The one deliberate exception is ``_DECIMAL_NTSC_RATES`` below: humans (CLI
-flags, UI fields) only ever type a decimal fps, so somewhere has to hold the
-mapping from that decimal to its exact rational rate. ``Timebase.from_decimal_fps()``
-is that single controlled boundary — decimal fps is allowed to exist as input
-to it, and nowhere else, and it is converted to an exact ``(fps_num, fps_den)``
-pair before touching any arithmetic. See issue #12.
-"""
-
 from __future__ import annotations
 
 import json
@@ -50,22 +31,16 @@ class Timebase:
 
     @property
     def ntsc(self) -> bool:
-        """FCP7 expresses 30000/1001 etc. as an integer timebase + ntsc flag.
-
-        Map: fps_den == 1001 → ntsc TRUE; else ntsc FALSE.
-        """
+        """FCP7 expresses 30000/1001 etc. as an integer timebase + ntsc flag."""
         return self.fps_den == 1001
 
     @classmethod
     def from_decimal_fps(cls, fps: float) -> "Timebase":
-        """Build a Timebase from a human-entered decimal fps (CLI args, UI fields).
+        """Build a Timebase from a human-entered decimal fps.
 
         Whole numbers map directly (25.0 -> 25/1). Known NTSC drop-frame
-        decimals map to their exact rational rate via ``_DECIMAL_NTSC_RATES``
-        — never ``Fraction(fps)`` on the float itself, since that would let
-        the float's own rounding error into a "rational" rate. Raises on any
-        other decimal rather than guessing, so an unrecognized rate fails
-        loudly instead of silently drifting.
+        decimals map to their exact rational rate via ``_DECIMAL_NTSC_RATES``. Raises on any
+        other decimal rather than guessing.
         """
         if fps == int(fps):
             return cls(fps_num=int(fps), fps_den=1)
@@ -79,11 +54,6 @@ class Timebase:
         )
 
 
-# Decimal NTSC fps -> exact (fps_num, fps_den). The only literals of this
-# form permitted in transcribe/ — see the module docstring and issue #12.
-# Limited to rates this codebase actually names (config.yaml, CLAUDE.md,
-# export_job.py's --fps help text) rather than every broadcast NTSC rate —
-# add an entry here, with a test, before a caller needs it.
 _DECIMAL_NTSC_RATES: dict[float, tuple[int, int]] = {
     23.976: (24000, 1001),
     29.97: (30000, 1001),
@@ -93,28 +63,19 @@ _DECIMAL_FPS_TOLERANCE = 1e-6
 
 
 def ms_to_frame(ms: float, tb: Timebase) -> int:
-    """Convert a millisecond offset to the nearest frame index.
-
-    Exact: frame = round(ms * fps_num / (fps_den * 1000)) evaluated over
-    ``Fraction`` so no float fps ever enters the arithmetic.
-    """
+    """Convert a millisecond offset to the nearest frame index."""
     exact = Fraction(int(round(ms)) * tb.fps_num, tb.fps_den * 1000)
     return _round_half_up(exact)
 
 
 def frame_to_ms(frame: int, tb: Timebase) -> float:
-    """Convert a frame index back to its exact millisecond offset.
-
-    ms = frame * fps_den * 1000 / fps_num. Returned as float for storage, but
-    computed exactly first so round-tripping never compounds error.
-    """
+    """Convert a frame index back to its exact millisecond offset."""
     exact = Fraction(frame * tb.fps_den * 1000, tb.fps_num)
     return float(exact)
 
 
 def _round_half_up(value: Fraction) -> int:
-    """Round a Fraction to the nearest int, ties going up — deterministic and
-    float-free (Python's round() is banker's rounding and takes floats)."""
+    """Python's round() is banker's rounding."""
     floor = value.numerator // value.denominator
     remainder = value - floor
     return floor + 1 if remainder >= Fraction(1, 2) else floor
@@ -124,16 +85,14 @@ def probe(media_path: str) -> Timebase:
     """Probe a media file's true frame rate, sample rate, and duration via ffprobe.
 
     Uses ``avg_frame_rate`` as truth. If ``r_frame_rate != avg_frame_rate`` the
-    source is variable-frame-rate (VFR) — flagged via ``is_vfr`` so downstream
-    frame-based work (GAP-2) can refuse it.
+    source is variable-frame-rate (VFR) — flagged via ``is_vfr``.
 
     Falls back to a 25/1 timebase if ffprobe is unavailable or the file has no
-    video stream (audio-only) — frame math is only meaningful once a video
-    track exists, but a sane default keeps the contract total.
+    video stream (audio-only).
     """
     try:
         info = _ffprobe(media_path)
-    except Exception as e:  # ffprobe missing, malformed file, etc.
+    except Exception as e:
         logger.warning("ffprobe failed for %s (%s); defaulting to 25fps CFR", media_path, e)
         return Timebase(fps_num=25, fps_den=1)
 
@@ -142,12 +101,10 @@ def probe(media_path: str) -> Timebase:
 
     v = info.get("video")
     if v is None:
-        # Audio-only: no frames to convert against, but stay total.
         return Timebase(fps_num=25, fps_den=1, sample_rate=sample_rate, duration_ms=duration_ms)
 
     avg_num, avg_den = v["avg"]
     r_num, r_den = v["r"]
-    # VFR when the average rate disagrees with the nominal container rate.
     is_vfr = (avg_num * r_den) != (r_num * avg_den)
     return Timebase(
         fps_num=avg_num,
@@ -159,7 +116,6 @@ def probe(media_path: str) -> Timebase:
 
 
 def _parse_rate(rate: str) -> tuple[int, int]:
-    """Parse an ffprobe rate string like '30000/1001' into (num, den)."""
     if "/" in rate:
         num, den = rate.split("/", 1)
         num, den = int(num), int(den)
@@ -171,14 +127,12 @@ def _parse_rate(rate: str) -> tuple[int, int]:
 
 
 def _ffprobe(media_path: str) -> dict:
-    """Run ffprobe and extract video rate(s), audio sample rate, duration_ms."""
     cmd = [
         "ffprobe", "-v", "error", "-of", "json",
         "-show_entries",
         "stream=codec_type,r_frame_rate,avg_frame_rate,sample_rate:format=duration",
         media_path,
     ]
-    # encoding/errors explicit:
     # text=True decodes ffprobe's UTF-8 output with the locale codec, and a Thai
     # media path in its stderr then loses the whole error message.
     out = subprocess.run(cmd, capture_output=True, text=True,

@@ -1,4 +1,3 @@
-"""Pure paired regression gate: pass, regression or unresolved."""
 from __future__ import annotations
 
 from typing import NamedTuple

@@ -1,19 +1,3 @@
-"""Word alignment: re-time each engine word's start, and its end before a pause, against the audio.
-
-Whisper's word times come from its attention, which lands a word start within one 25 fps frame
-of the real onset only about half the time, and an end before a pause one time in ten
-(``transcribe.eval.timing``). A CTC acoustic model scores every 20 ms frame against every
-letter, so forced alignment of the engine's own text finds where each word actually is.
-
-Times only: the text never changes. CTC fires on a letter's spike, late after a pause, so a
-start next to a pause then moves onto the edge of the sound in the waveform
-(``snap_to_sound``). CTC's last letter stops before a syllable fades (measured 168 ms early),
-so an end before a pause walks on from it to where the sound fades (``snap_end_to_sound``);
-elsewhere a word ends at the engine's end, cut back where the next word now starts sooner. A
-cue touching the next one ends where that one now starts; a cue before a gap ends with its
-last word. A word the model has no letters for (Latin, digits) keeps its engine times as the
-starting point and bounds its neighbours' windows.
-"""
 from __future__ import annotations
 
 import logging
@@ -24,31 +8,27 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# (lo_ms, hi_ms, word texts) -> each word's (start_ms, end_ms), or None where nothing aligned
 AlignWindow = Callable[[int, int, list[str]], list[tuple[float, float] | None]]
 
 HUB_MODEL = "sakares/wav2vec2-large-xlsr-thai-demo"
-DEFAULT_MODEL = "models/wav2vec2-th-ctc.pt"  # HUB_MODEL as a torchaudio checkpoint (export_checkpoint)
+DEFAULT_MODEL = "models/wav2vec2-th-ctc.pt"
 
 
 def levels_db(audio: np.ndarray, sr: int) -> np.ndarray:
-    """RMS level in dB of each 10 ms hop (25 ms frames); frame f covers [10f, 10f + 25) ms."""
     hop, size = sr // 100, sr * 25 // 1000
     n = max(0, (len(audio) - size) // hop + 1)
     if not n:
         return np.zeros(0)
-    frames = np.lib.stride_tricks.sliding_window_view(audio, size)[::hop][:n]  # a view, no copy
-    ms = np.concatenate([(frames[i:i + 6000].astype(np.float64) ** 2).mean(axis=1)  # 1 min at a time
+    frames = np.lib.stride_tricks.sliding_window_view(audio, size)[::hop][:n]
+    ms = np.concatenate([(frames[i:i + 6000].astype(np.float64) ** 2).mean(axis=1)
                          for i in range(0, n, 6000)])
     return 20 * np.log10(np.sqrt(ms) + 1e-9)
 
 
-DIGITAL_DB = -120.0  # a noise gate's digital silence: below any room
+DIGITAL_DB = -120.0
 
 
 def _floor(window: np.ndarray) -> float:
-    """The quietest level in ``window``, leaving out a noise gate's digital silence (OBS): there
-    the room's noise between the voice and the gate closing must count as quiet, not sound."""
     live = window[window > DIGITAL_DB]
     return float(live.min() if len(live) else window.min())
 
@@ -168,9 +148,9 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
         prev = w["start_ms"]
     for i, (w, nxt) in enumerate(zip(out, out[1:] + [None])):
         nxt_ms = duration_ms if nxt is None else nxt["start_ms"]
-        anchor = min(int(last_letter.get(i, w["end_ms"])), nxt_ms - 10)  # CTC can put it in the next word
+        anchor = min(int(last_letter.get(i, w["end_ms"])), nxt_ms - 10)
         heard = snap_end(w["start_ms"], anchor) if snap_end and anchor > w["start_ms"] else None
-        if heard is not None and heard > nxt_ms:  # walked into the next word: no pause between them
+        if heard is not None and heard > nxt_ms:
             heard = None
         end = min(w["end_ms"] if heard is None else heard, nxt_ms)
         w["end_ms"] = max(end, w["start_ms"] + 1)
@@ -189,8 +169,8 @@ def retime_cues(cues: list, old_words: list[dict], new_words: list[dict]) -> Non
         firsts = [n["start_ms"] for o, n in mine]
         nxt = cues[k + 1] if k + 1 < len(cues) else None
         if mine and not (nxt and nxt.start_ms == c.end_ms):
-            end = c.end_ms + mine[-1][1]["end_ms"] - mine[-1][0]["end_ms"]  # keeps any hold past the word
-            end = max(end, c.start_ms + 1)  # so the start clamp below never reaches the previous cue
+            end = c.end_ms + mine[-1][1]["end_ms"] - mine[-1][0]["end_ms"]
+            end = max(end, c.start_ms + 1)
             c.end_ms = end if nxt is None else min(end, nxt.start_ms)
         if firsts:
             if touching:
@@ -230,9 +210,6 @@ def model_path(model: str = DEFAULT_MODEL) -> Path:
 
 
 def export_checkpoint(out: str = DEFAULT_MODEL, hub_model: str = HUB_MODEL) -> None:
-    """Save a Hugging Face wav2vec2 CTC model as the torchaudio checkpoint ``ThaiCTCAligner`` loads:
-    fp16 weights, builder config, letter vocabulary. Run once; loading it then needs no
-    transformers import (about 6 s, against 0.4 s for the weights). Emissions are bit-identical."""
     import torch
     from torchaudio.models.wav2vec2.utils import import_huggingface_model
     from torchaudio.models.wav2vec2.utils.import_huggingface import _get_config
@@ -247,8 +224,6 @@ def export_checkpoint(out: str = DEFAULT_MODEL, hub_model: str = HUB_MODEL) -> N
 
 
 class ThaiCTCAligner:
-    """A wav2vec2 CTC model with a Thai letter vocabulary (a torchaudio checkpoint), as an ``AlignWindow``."""
-
     def __init__(self, audio: np.ndarray, sr: int, model: str = DEFAULT_MODEL, device: str = "cuda"):
         if sr != 16000:
             raise ValueError(f"the CTC model needs 16 kHz audio, got {sr} Hz")
@@ -266,7 +241,6 @@ class ThaiCTCAligner:
         self._vocab, self._blank = ck["vocab"], ck["blank"]
 
     def alignable(self, text: str) -> bool:
-        """True when the model has a letter for at least one character of ``text``."""
         return any(self._vocab.get(ch, self._blank) != self._blank for ch in text)
 
     def unload(self) -> None:

@@ -1,9 +1,3 @@
-"""Flywheel Phase 9b — build bias terms from recurring corrections.
-
-Staleness rule: down-weight corrections from engines no longer in the active config.
-Regression gate: auto-run eval harness; reject changes that worsen WER/BER.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -14,28 +8,20 @@ from transcribe.db import store
 
 logger = logging.getLogger(__name__)
 
-# Defaults only — the live values come from config.flywheel (config.yaml) and are
-# threaded through update_bias_index(). Kept here purely as fallbacks.
-_MIN_OCCURRENCES = 3     # a term must be corrected this many times to enter the index
-_STALE_WEIGHT = 0.2      # weight applied to corrections from inactive engines
+_MIN_OCCURRENCES = 3
+_STALE_WEIGHT = 0.2
 
 
 def _too_long_to_promote(term: str, max_chars: int = 30, max_words: int = 6) -> bool:
-    """A bias term must be a word or short phrase, never a sentence (5.3)."""
     return len(term) > max_chars or len(term.split()) > max_words
 
 
 def _classify_term(term: str) -> tuple[str, str | None]:
-    """
-    Heuristic classification of a corrected term.
-    Returns (term_type, script).
-    """
     thai = sum(1 for c in term if "฀" <= c <= "๿")
     latin = sum(1 for c in term if c.isascii() and c.isalpha())
 
     if latin and not thai:
         script = "latin"
-        # Capitalized Latin → likely proper noun / brand
         if term[0].isupper():
             return "brand", script
         return "technical", script
@@ -76,21 +62,13 @@ def update_bias_index(
 
     counts = store.get_correction_counts(conn)
 
-    # Weight correction counts by staleness; aggregation done in SQLite
     weighted: Counter[str] = Counter()
     for corrected_text, source_engine, n in counts:
         weight = 1.0 if source_engine in active_engines else stale_engine_weight
         weighted[corrected_text] += weight * n
 
-    # Promote terms that cross the threshold. Guard against sentence-length "terms"
-    # (5.3): even with sub-cue span extraction, never promote something that would
-    # eat the prompt budget or bias toward phrase repetition.
     promoted = []
     for term, w in weighted.items():
-        # Deleting a hallucinated cue is a legitimate correction whose
-        # corrected text is "" — a valid signal for the corpus, but never a
-        # promotable term (an empty bias term would pollute the index and the
-        # prompt, and _classify_term would crash on term[0]).
         if not term or not term.strip():
             continue
         if w >= min_occurrences and not _too_long_to_promote(term):
@@ -106,13 +84,6 @@ def update_bias_index(
 
 
 def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> None:
-    """Run eval harness; roll back new bias terms if the harness gate fails.
-
-    The harness is the single gate authority (5.2): it captures the prior passing
-    baseline before writing the new run and gates on cer_thai + wer_latin + BER.
-    We consume its verdict directly — re-reading get_last_passing_eval here would
-    fetch the run the harness just wrote and compare it against itself.
-    """
     from transcribe.eval.harness import run_harness
 
     def _rollback(reason: str) -> None:
@@ -127,8 +98,6 @@ def _run_regression_gate(config: dict, db_path: Path, new_terms: list[str]) -> N
     logger.info("Regression gate: running eval harness after bias update")
     result = run_harness(config, db_path)
     if result is None:
-        # Empty gold set — nothing to validate against. Roll back rather than
-        # promote unvalidated terms.
         _rollback("no gold set to validate against")
     if not result.passed:
         if result.status == "unresolved":

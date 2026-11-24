@@ -1,5 +1,3 @@
-"""All database access. No raw SQL outside this module."""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,8 +16,7 @@ _REPO_ROOT = _DEFAULT_DB.parent
 def resolve_db_path(config: Optional[dict] = None) -> Path:
     """The one database every tool shares: `store.path` from config.yaml, resolved
     against the repo root when relative (never the CWD), else the default
-    `transcriber.db`. Callers that take an explicit path (tests, scratch DBs)
-    keep doing so; this is for entry points that previously guessed."""
+    `transcriber.db`."""
     configured = ((config or {}).get("store") or {}).get("path")
     if not configured:
         return _DEFAULT_DB
@@ -27,21 +24,10 @@ def resolve_db_path(config: Optional[dict] = None) -> Path:
     return path if path.is_absolute() else _REPO_ROOT / path
 
 
-# Table-level constraint clauses (not columns) that can appear inside a
-# CREATE TABLE's parens, plus the marker for a PRIMARY KEY column — neither
-# is valid in an ALTER TABLE ... ADD COLUMN statement.
 _NOT_A_COLUMN = {"PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "CONSTRAINT"}
 
 
 def _schema_columns(table: str) -> list[tuple[str, str]]:
-    """(name, full DDL fragment) for every real column of `table`, parsed out
-    of schema.sql's own CREATE TABLE block.
-
-    schema.sql is CLAUDE.md's single source of truth for the schema, and stays
-    hand-written. This reads it — instead of a second hand-typed column list —
-    so `_migrate`'s ALTER TABLE additions can never disagree with the CREATE
-    TABLE they exist to backfill on a pre-existing database (issue #15).
-    """
     text = _SCHEMA.read_text(encoding="utf-8")
     match = re.search(
         rf"CREATE TABLE IF NOT EXISTS {re.escape(table)}\s*\((.*?)\n\);",
@@ -51,11 +37,8 @@ def _schema_columns(table: str) -> list[tuple[str, str]]:
     if match is None:
         raise ValueError(f"no CREATE TABLE block for {table!r} in schema.sql")
 
-    # Drop `-- comment` text (both full-line and trailing) before splitting.
     body = "\n".join(line.split("--", 1)[0] for line in match.group(1).splitlines())
 
-    # Split on top-level commas only — CHECK(...) and datetime('now') contain
-    # commas/parens of their own that must not be split on.
     fragments: list[str] = []
     depth = 0
     current = ""
@@ -78,7 +61,7 @@ def _schema_columns(table: str) -> list[tuple[str, str]]:
             continue
         name = frag.split(" ", 1)[0]
         if name.upper() in _NOT_A_COLUMN or "PRIMARY KEY" in frag.upper():
-            continue  # table-level constraint, or the PK column (always present)
+            continue
         columns.append((name, frag))
     return columns
 
@@ -99,27 +82,18 @@ def init_db(db_path: Path = _DEFAULT_DB) -> None:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Idempotent column additions for tables created before a schema bump.
-
-    CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns
-    must be added explicitly for pre-existing databases. (New *tables* like
-    speech_span are created by re-running schema.sql in init_db.)"""
+    """CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns
+    must be added explicitly for pre-existing databases."""
     def _add(table: str, column: str, ddl: str) -> None:
         cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
-    # Every column's name/type/nullability/default is declared once, in
-    # schema.sql — backfill whichever ones a pre-existing database is still
-    # missing, for every table, without re-typing any of them here (issue #15).
-    # A hand-typed list here forgot engine_result.raw_segments_json (65cc1b7).
     tables = re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", _SCHEMA.read_text(encoding="utf-8"))
     for table in tables:
         for name, ddl in _schema_columns(table):
             _add(table, name, ddl)
 
-
-# ── dataclasses mirroring schema rows ─────────────────────────────────────────
 
 @dataclass
 class MediaRow:
@@ -264,17 +238,6 @@ class EvalRunRow:
 class EvalRun:
     """What a caller writes: `EvalRunRow` minus the database-assigned fields.
 
-    `EvalRunRow` is the read shape and carries `id` and `ran_at`, which the
-    database assigns; making those optional to reuse one class would muddy the
-    semantics of both directions. The small duplication buys a write record where
-    every field is one the caller actually supplies.
-
-    This exists because `create_eval_run` was twenty-eight positional-friendly
-    parameters over a single INSERT: three parallel sequences (column list,
-    placeholder count, values tuple) kept in agreement by hand, with nothing
-    stopping two same-typed arguments — say a pair of CI bounds — from being
-    transposed into plausible-looking wrong columns.
-
     `metrics_version=None` means "stamp the current metric definitions' version".
     """
 
@@ -314,8 +277,6 @@ class EvalRun:
     paired_delta_ci_json: Optional[str] = None
     gate_status: Optional[str] = None
 
-
-# ── media ─────────────────────────────────────────────────────────────────────
 
 def sha256_of_file(path: str) -> str:
     h = hashlib.sha256()
@@ -374,15 +335,12 @@ def set_media_timebase(
     fps_den: int,
     is_vfr: bool,
 ) -> None:
-    """Persist a probed Timebase (GAP-1/2). fps stored as an integer pair only."""
     conn.execute(
         "UPDATE media SET fps_num = ?, fps_den = ?, is_vfr = ? WHERE id = ?",
         (fps_num, fps_den, int(is_vfr), media_id),
     )
     conn.commit()
 
-
-# ── job ───────────────────────────────────────────────────────────────────────
 
 def create_job(
     conn: sqlite3.Connection,
@@ -434,10 +392,7 @@ def find_resumable_job(
     """The most recent 'failed' or 'running' job for this exact (media, engine pair,
     pipeline version, resume fingerprint). Legacy callers without a fingerprint
     only match legacy jobs. Fingerprinted runs never reuse unknown settings.
-    A hard kill never reaches run_file's except, so it leaves 'running', not 'failed'.
-    Engine/version must match exactly: swapping an engine invalidates any
-    persisted engine_result rows, so that job is not resumable, only re-runnable
-    as a fresh job."""
+    """
     row = conn.execute(
         "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
         "AND pipeline_version = ? AND resume_fingerprint IS ? "
@@ -458,9 +413,7 @@ def find_finished_job(
     resume_fingerprint: Optional[str] = None,
 ) -> Optional[JobRow]:
     """The most recent completed job for this exact (media, engine pair, pipeline
-    version, resume fingerprint) that still holds its tokens — a transcript we can
-    reuse instead of running ASR again. The token check skips jobs whose bulk rows
-    were purged (`purge_job_transcript_data`): they are 'done' but empty."""
+    version, resume fingerprint) that still holds its tokens."""
     row = conn.execute(
         "SELECT * FROM job WHERE media_id = ? AND engine_a = ? AND engine_b = ? "
         "AND pipeline_version = ? AND resume_fingerprint IS ? "
@@ -482,9 +435,7 @@ _FINISHED_TRANSCRIPTS = (
 
 def latest_transcript_job(conn: sqlite3.Connection, sha256: str) -> Optional[JobRow]:
     """The most recently chosen finished job (`mark_transcript_chosen`, else the newest), of any
-    engine or fingerprint, that still holds tokens for the media with this sha256. For readers
-    that map an existing transcript onto a timeline: any finished transcript of the file beats
-    listening to it again."""
+    engine or fingerprint, that still holds tokens for the media with this sha256."""
     row = conn.execute(
         "SELECT job.* " + _FINISHED_TRANSCRIPTS
         + "ORDER BY COALESCE(job.chosen_at, job.created_at) DESC, job.id DESC LIMIT 1",
@@ -494,14 +445,14 @@ def latest_transcript_job(conn: sqlite3.Connection, sha256: str) -> Optional[Job
 
 
 def mark_transcript_chosen(conn: sqlite3.Connection, job_id: int) -> None:
-    """Make this job the file's transcript for `latest_transcript_job` (transcribe() returned it)."""
+    """Make this job the file's transcript for `latest_transcript_job`."""
     conn.execute("UPDATE job SET chosen_at = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?", (job_id,))
     conn.commit()
 
 
 def transcript_scripts(conn: sqlite3.Connection, sha256: str) -> dict[int, str]:
     """{job id: "thai" or "latin"} for every finished transcript of this file: the script most of
-    its tokens are in ("mixed" counts as Thai: only a Thai decode writes it). "other" is ignored,
+    its tokens are in ("mixed" counts as Thai). "other" is ignored,
     so a job with only "other" tokens (music, numbers) has no language and is left out."""
     rows = conn.execute(
         "SELECT job.id AS id, "
@@ -512,8 +463,6 @@ def transcript_scripts(conn: sqlite3.Connection, sha256: str) -> dict[int, str]:
     ).fetchall()
     return {r["id"]: "thai" if r["thai"] >= r["latin"] else "latin" for r in rows if r["thai"] or r["latin"]}
 
-
-# ── token ─────────────────────────────────────────────────────────────────────
 
 def create_token(
     conn: sqlite3.Connection,
@@ -550,12 +499,9 @@ def get_tokens(conn: sqlite3.Connection, job_id: int) -> list[TokenRow]:
 
 
 def delete_tokens(conn: sqlite3.Connection, job_id: int) -> None:
-    """Clear a job's tokens before re-writing (idempotent final write on resume, 4.1)."""
     conn.execute("DELETE FROM token WHERE job_id = ?", (job_id,))
     conn.commit()
 
-
-# ── correction ────────────────────────────────────────────────────────────────
 
 def create_correction(
     conn: sqlite3.Connection,
@@ -568,10 +514,6 @@ def create_correction(
     reason: Optional[str] = None,
     corrected_span: Optional[str] = None,
 ) -> int:
-    # Latest correction wins per (job, token): a re-save of the same job must
-    # replace the earlier row, not stack a duplicate — stacked rows inflate the
-    # flywheel's occurrence counts (min_occurrences could be crossed by saving
-    # the same edit three times instead of by three independent corrections).
     conn.execute(
         "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
         (job_id, token_idx),
@@ -587,7 +529,6 @@ def create_correction(
 
 
 def delete_correction(conn: sqlite3.Connection, job_id: int, token_idx: int) -> None:
-    """Remove the correction for one token (the user reverted it to the raw text)."""
     conn.execute(
         "DELETE FROM correction WHERE job_id = ? AND token_idx = ?",
         (job_id, token_idx),
@@ -608,9 +549,9 @@ def get_all_corrections(conn: sqlite3.Connection) -> list[CorrectionRow]:
 
 
 def get_correction_counts(conn: sqlite3.Connection) -> list[tuple[str, str, int]]:
-    """Return (term, source_engine, count) aggregated in SQLite.
+    """Return (term, source_engine, count).
 
-    `term` is the minimal promotable span (5.3) — COALESCE so pre-5.3 rows without
+    `term` is the minimal promotable span; rows without
     a span fall back to the full corrected cue."""
     rows = conn.execute(
         "SELECT COALESCE(corrected_span, corrected_text) AS term, source_engine, COUNT(*) AS n "
@@ -619,10 +560,7 @@ def get_correction_counts(conn: sqlite3.Connection) -> list[tuple[str, str, int]
     return [(r["term"], r["source_engine"], r["n"]) for r in rows]
 
 
-# ── speech_span (VAD master timeline, GAP-3) ──────────────────────────────────
-
 def bulk_create_speech_spans(conn: sqlite3.Connection, job_id: int, spans: list[dict]) -> None:
-    """Persist VAD spans for a job. Each span dict: {idx, start_ms, end_ms, kind}."""
     conn.executemany(
         """INSERT INTO speech_span (job_id, idx, start_ms, end_ms, kind)
            VALUES (:job_id, :idx, :start_ms, :end_ms, :kind)""",
@@ -639,17 +577,13 @@ def get_speech_spans(conn: sqlite3.Connection, job_id: int) -> list[SpeechSpanRo
 
 
 def delete_speech_spans(conn: sqlite3.Connection, job_id: int) -> None:
-    """Clear spans for a job before re-inserting (idempotent re-ingest on resume, 4.1)."""
     conn.execute("DELETE FROM speech_span WHERE job_id = ?", (job_id,))
     conn.commit()
 
 
-# ── engine_result (4.1/4.2, GAP-8) ────────────────────────────────────────────
-
 def purge_job_transcript_data(conn: sqlite3.Connection, job_id: int) -> None:
     """Drop a job's per-run bulk rows (tokens, speech spans, engine results) but
-    keep the media/job rows, so cut_plan rows referencing the job stay valid.
-    For throwaway inputs (cutdeck's temp mixdown) that can never be resumed."""
+    keep the media/job rows, so cut_plan rows referencing the job stay valid."""
     for table in ("token", "speech_span", "engine_result"):
         conn.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
     conn.commit()
@@ -657,7 +591,6 @@ def purge_job_transcript_data(conn: sqlite3.Connection, job_id: int) -> None:
 
 def save_engine_segments(conn: sqlite3.Connection, job_id: int, engine_slot: str,
                          raw_segments_json: str) -> None:
-    """Attach per-segment decode statistics to an already-saved engine_result."""
     conn.execute("UPDATE engine_result SET raw_segments_json = ? WHERE job_id = ? AND engine_slot = ?",
                  (raw_segments_json, job_id, engine_slot))
     conn.commit()
@@ -703,8 +636,6 @@ def get_engine_result(conn: sqlite3.Connection, job_id: int, engine_slot: str) -
     return EngineResultRow(**r)
 
 
-# ── cut_plan (CutDeck Layer-4 artifact, Part B) ───────────────────────────────
-
 def create_cut_plan(
     conn: sqlite3.Connection,
     job_id: int,
@@ -739,8 +670,6 @@ def update_cut_plan_status(conn: sqlite3.Connection, plan_id: int, status: str) 
     conn.commit()
 
 
-# ── bias_term ─────────────────────────────────────────────────────────────────
-
 def upsert_bias_term(
     conn: sqlite3.Connection,
     term: str,
@@ -771,8 +700,6 @@ def get_bias_term_strings(conn: sqlite3.Connection) -> list[str]:
 
 
 def get_bias_term_weights(conn: sqlite3.Connection) -> dict[str, float]:
-    """{term: weight} so prompt packing can rank by learned weight, not insertion
-    order (5.1)."""
     return {r.term: r.weight for r in get_bias_terms(conn)}
 
 
@@ -781,12 +708,6 @@ def delete_bias_term(conn: sqlite3.Connection, term: str) -> None:
     conn.commit()
 
 
-# ── eval_run ──────────────────────────────────────────────────────────────────
-
-# The one source the INSERT's column list, placeholder count and values tuple
-# all derive from — they used to be three hand-maintained parallel sequences of
-# 28 entries. Names are explicit rather than taken from dataclass field order,
-# so a field reorder can never silently re-map values onto different columns.
 _EVAL_RUN_COLUMNS = (
     "config_hash", "wer", "boundary_error_rate", "cer_thai", "wer_latin",
     "kind", "pipeline_version", "engine_pair", "bias_hash", "is_experiment",
@@ -801,7 +722,6 @@ _EVAL_RUN_COLUMNS = (
     "speech_coverage_miss_ci_lo", "speech_coverage_miss_ci_hi", "passed",
 )
 
-# Columns whose stored type is narrower than what a caller may hand in.
 _EVAL_RUN_COERCE = {
     "is_experiment": int, "passed": int, "metrics_version": int,
     "cue_boundary_error_rate": float, "overlapping_cues": int,
@@ -811,15 +731,8 @@ _EVAL_RUN_COERCE = {
 
 def create_eval_run(conn: sqlite3.Connection, run: EvalRun,
                     clip_metrics: Optional[dict[str, str]] = None) -> int:
-    """Persist one eval run. Takes the whole record, so adding a metric is a
-    field on `EvalRun` plus a name in `_EVAL_RUN_COLUMNS` — not an edit to a
-    column list, a placeholder count and a values tuple in three parallel
-    positions."""
     metrics_version = run.metrics_version
     if metrics_version is None:
-        # None → stamp the current metric definitions' version. Lazy import: the
-        # semantic owner of the version is eval/metrics.py, and the db layer must
-        # not import the eval layer at module load.
         from transcribe.eval.metrics import METRICS_VERSION
         metrics_version = METRICS_VERSION
 
@@ -864,17 +777,6 @@ def get_last_passing_eval(
     kind: str = "transcribe",
     metrics_version: Optional[int] = None,
 ) -> Optional[EvalRunRow]:
-    # Filter by kind so a future CutDeck cut-quality run can never become the
-    # transcription gate's baseline (or vice versa), and exclude experiment runs
-    # (e.g. `harness --engine-b X` A/B probes) — an experiment is *judged against*
-    # the production baseline but must never become it, or a passing experiment
-    # on a different engine pair / bias index would silently shift what the next
-    # production run is compared against. Baselines also partition by
-    # metrics_version (None → current METRICS_VERSION): scores computed under
-    # different metric definitions are incomparable, so the first run after a
-    # metric change establishes a fresh baseline instead of tripping the gate
-    # against numbers a different rule produced. id tie-breaks runs that land
-    # within the same datetime('now') second.
     if metrics_version is None:
         from transcribe.eval.metrics import METRICS_VERSION
         metrics_version = METRICS_VERSION

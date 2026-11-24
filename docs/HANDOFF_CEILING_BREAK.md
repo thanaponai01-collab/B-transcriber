@@ -527,7 +527,7 @@ These are decisions, not code (ledger, 2026-07-30):
 
 | Idea | Status | Where the evidence lives |
 |---|---|---|
-| SenseVoiceSmall (`funasr`) for Thai | **Structurally incapable** (5-language model, misdetects Thai as Cantonese) | TODO_LEDGER 2026-07-16, `engines/funasr.py` docstring |
+| SenseVoiceSmall (`funasr`) for Thai | **Structurally incapable** (5-language model, misdetects Thai as Cantonese) | TODO_LEDGER 2026-07-16, docs/ENGINES.md |
 | `typhoon_rt` (FastConformer) as Engine B | Rejected — regresses CER & WER_latin | TODO_LEDGER 2026-07-16 |
 | `typhoon-whisper-turbo` as Engine A | Rejected — CER 0.1336 vs 0.1069 | docs/IMPLEMENT_IMPROVEMENTS.md Phase 1 |
 | `whisper_multi` + qwen2.5:3b tiebreak | Rejected — dilution + model too weak; wiring/bias fixes done, don't redo | TODO_LEDGER 2026-07-16 (four probes) |

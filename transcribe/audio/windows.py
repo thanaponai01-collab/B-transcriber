@@ -1,37 +1,3 @@
-"""Speech windowing — audio in, decodable windows out.
-
-The concept the codebase had no name for: turning a raw audio array into time
-ranges a model can actually decode. Three steps that only make sense together —
-
-1. Silero VAD span detection with **no** max-duration cap.
-2. The zero-gap span merge (2026-08-06 dropped-content incident fix).
-3. Splitting an over-long span into sub-windows under the decoder's limit.
-
-— previously lived as three separately-importable privates inside the
-faster-whisper adapter, and `engines/qwen3_asr.py` imported two of the three.
-That import walked straight through the Engine Contract, and the two-of-three
-is exactly the cost: Qwen3-ASR never got step 2, so the content-loss fix
-applied to one engine's path only.
-
-`speech_windows` therefore does all three steps in one call. Exposing them
-separately would preserve the defect in a new location.
-
-This module must not import anything from `transcribe/engines/`. It depends on
-`faster_whisper.vad` for Silero only — the vendored VAD utility, not the
-adapter — so a windowing unit test needs neither a GPU nor a model directory.
-
-**`pipeline/ingest.py` is a related but distinct concern and deliberately does
-not sit behind this seam** (investigated for issue #4). Ingest runs a different
-Silero — the `silero-vad` pip package, not faster-whisper's vendored copy — at
-different settings (threshold 0.5 vs 0.35, min_silence 300ms vs 500ms, plus a
-minimum-speech floor this has no equivalent for), then sub-splits each segment
-on raw RMS energy, and produces a persisted master timeline of *both* speech and
-silence spans (the `speech_span` table, which CutDeck and the editor read)
-rather than decodable windows. It also owns denoising and optional chunk
-materialization with overlap. Forcing it behind one call would mean changing one
-side's detection behaviour, which is a harness-gated probe, not a refactor.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -77,7 +43,7 @@ class WindowPolicy:
     """How to turn audio into decodable windows.
 
     Defaults are faster-whisper's production values. Qwen3-ASR's differ
-    deliberately — see `QWEN3_LIKE` below and the test that pins the difference.
+    deliberately.
 
     `merge_max_gap_s`: maximum reported inter-span gap to treat as an artifact
     of VAD padding and merge across. **`None` disables merging entirely**, which
@@ -273,9 +239,6 @@ def _merge_contiguous_spans(spans: list[tuple[float, float]],
 
 def _split_long_span(start_s: float, end_s: float,
                       max_span_s: float, overlap_s: float) -> list[tuple[float, float]]:
-    """Chop a speech span longer than max_span_s into overlapping sub-windows,
-    each safely under the decoder's context limit. Returns [(start_s, end_s)]
-    unchanged if the span is already short enough."""
     if end_s - start_s <= max_span_s:
         return [(start_s, end_s)]
     stride = max_span_s - overlap_s
