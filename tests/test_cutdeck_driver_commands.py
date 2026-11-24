@@ -279,3 +279,182 @@ def test_word_tools_pass_on_the_transcript_warnings(monkeypatch):
     args = {"keep": [{"text": "x"}], "pad_ms": 60, "wordless_ms": 0}
     result = asyncio.run(driver_commands._plan_pieces(args, premiere))
     assert result["warnings"] == [note]
+
+
+class _PasteHost:
+    """Just enough Premiere for paste_from, following PREMIERE_FACTS: Make Subsequence cuts a range
+    to a new sequence; Edit > Paste lands at the playhead on the lowest targeted tracks (here
+    `land_v` tracks up); build_sequence clone overwrites, lift removes clips starting in range."""
+    S = 254016000000
+
+    def __init__(self, land_v=0):
+        self.seqs = {"Split": [("V", 1, 0, 6 * self.S), ("V", 2, 2 * self.S, 8 * self.S), ("A", 1, 0, 6 * self.S)],
+                     "YT": [("V", 1, 0, 10 * self.S), ("A", 1, 0, 10 * self.S)]}
+        self.land_v, self.clipboard, self.playhead, self.calls = land_v, None, {}, []
+
+    def timeline(self, name):
+        tracks = {}
+        for k, n, s, e in self.seqs[name]:
+            tracks.setdefault(f"{k}{n}", []).append({"id": f"{k}{n}@{s}", "start_ticks": str(s), "end_ticks": str(e)})
+        end = max((e for *_, e in self.seqs[name]), default=0)
+        return {"name": name, "end_ticks": str(end), "tracks": [{"id": i, "clips": c} for i, c in tracks.items()]}
+
+    async def __call__(self, command, args):
+        self.calls.append(command)
+        if command == "make_subsequence":
+            a, b = int(args["in_ticks"]), int(args["out_ticks"])
+            cut = [(k, n, max(s, a), min(e, b)) for k, n, s, e in self.seqs[args["sequence"]] if s < b and e > a]
+            first = min((s for _, _, s, _ in cut), default=a)  # Make Subsequence drops the empty lead-in
+            self.seqs[args["result_name"]] = [(k, n, s - first, e - first) for k, n, s, e in cut]
+        elif command == "read_timeline":
+            return self.timeline(args["sequence"])
+        elif command == "set_playhead":
+            self.playhead[args["sequence"]] = int(args["ticks"])
+        elif command == "menu_command" and args["path"] == "Edit > Copy":
+            self.clipboard = list(self.seqs[args["sequence"]])
+        elif command == "menu_command" and args["path"] == "Edit > Paste":
+            at = self.playhead[args["sequence"]] - min(s for _, _, s, _ in self.clipboard)  # earliest clip at the playhead
+            self.seqs[args["sequence"]] += [(k, n + (self.land_v if k == "V" else 0), s + at, e + at) for k, n, s, e in self.clipboard]
+        elif command == "list_project":
+            return {"path": "E:/day.prproj", "sequences": [{"name": n} for n in self.seqs]}
+        elif command == "build_sequence":
+            seq = self.seqs[args["base"]]
+            for st in args["options"]["steps"]:
+                lo, hi = int(st["from_ticks"]), int(st["to_ticks"])
+                moving = [c for c in seq if lo <= c[2] < hi]
+                if st["op"] == "lift":
+                    seq[:] = [c for c in seq if c not in moving]
+                    continue
+                dt, up = int(st["dt_ticks"]), st.get("v_offset", 0)
+                for k, n, s, e in moving:
+                    new = (k, n + (up if k == "V" else 0), s + dt, e + dt)
+                    seq[:] = [c for c in seq if not (c[:2] == new[:2] and c[2] < new[3] and c[3] > new[2])] + [new]
+        elif command == "remove_piece":
+            del self.seqs[args["name"]]
+        elif command == "duplicate_sequence":
+            self.seqs[args["result_name"]] = list(self.seqs[args["sequence_name"]])
+        return {}
+
+
+def _paste(host, **extra):
+    S = _PasteHost.S
+    args = driver_commands.COMMANDS["paste_from"].prepare(
+        {"source": "Split", "in_ticks": str(1 * S), "out_ticks": str(4 * S), "target": "YT", "at_ticks": str(5 * S), **extra}, None)
+    return asyncio.run(driver_commands.COMMANDS["paste_from"].run(args, host))
+
+
+def test_paste_from_puts_every_track_of_the_range_at_the_place_and_cleans_up():
+    S = _PasteHost.S
+    host = _PasteHost()
+    out = _paste(host)
+    assert out["missing"] == [] and out["left_at_park"] == [] and out["piece"] is None
+    yt = sorted(host.seqs["YT"])
+    # V1/A1 of 1-4 s at 5 s (overwriting the YT clip there), V2's 2-4 s at 6 s.
+    assert ("V", 1, 5 * S, 8 * S) in yt and ("A", 1, 5 * S, 8 * S) in yt and ("V", 2, 6 * S, 8 * S) in yt
+    assert all(s < 30 * S for _, _, s, _ in yt)
+    assert host.seqs["Split"][0] == ("V", 1, 0, 6 * S)  # source untouched
+    assert not any(n.endswith(driver_commands.PIECE_SUFFIX) for n in host.seqs)
+
+
+def test_paste_from_corrects_where_the_paste_landed_and_honours_v_offset():
+    S = _PasteHost.S
+    host = _PasteHost(land_v=1)  # V1 not targeted: the paste lands one track up
+    out = _paste(host, v_offset=2)
+    assert out["missing"] == []
+    assert ("V", 3, 5 * S, 8 * S) in host.seqs["YT"] and ("V", 4, 6 * S, 8 * S) in host.seqs["YT"]
+
+
+def test_paste_from_checks_its_arguments():
+    prep = driver_commands.COMMANDS["paste_from"].prepare
+    good = {"source": "a", "target": "b", "in_ticks": "0", "out_ticks": "5", "at_ticks": "0"}
+    for bad in ({"out_ticks": "0"}, {"v_offset": -1}, {"v_offset": True}, {"keep_piece": "yes"}, {"target": ""}):
+        try:
+            prep({**good, **bad}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad}")
+    try:
+        driver_commands.COMMANDS["remove_piece"].prepare({"name": "1 YOUTUBE D1"}, None)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("remove_piece accepted a user sequence")
+
+
+def _arrange(host, blocks, sequence="Cut"):
+    args = driver_commands.COMMANDS["arrange"].prepare(
+        {"sequence": sequence, "result_name": "Cut v2",
+         "blocks": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in blocks]}, None)
+    return asyncio.run(driver_commands.COMMANDS["arrange"].run(args, host))
+
+
+def test_arrange_plays_the_blocks_in_the_new_order_on_a_copy():
+    S = _PasteHost.S
+    host = _PasteHost()
+    # A 2 s intro left alone, then three pieces A (2-4), B (4-7, with a V2 cover), C (7-8); an outro.
+    cut = [("V", 1, 0, 2 * S), ("V", 1, 2 * S, 4 * S), ("V", 1, 4 * S, 7 * S), ("V", 2, 5 * S, 6 * S),
+           ("V", 1, 7 * S, 8 * S), ("A", 1, 2 * S, 4 * S), ("A", 1, 4 * S, 7 * S), ("V", 1, 8 * S, 9 * S)]
+    host.seqs["Cut"] = list(cut)
+    out = _arrange(host, [(7 * S, 8 * S), (4 * S, 7 * S), (2 * S, 4 * S)])  # C, B, A
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert sorted(host.seqs["Cut v2"]) == sorted([
+        ("V", 1, 0, 2 * S), ("V", 1, 2 * S, 3 * S),                          # intro, C
+        ("V", 1, 3 * S, 6 * S), ("V", 2, 4 * S, 5 * S), ("A", 1, 3 * S, 6 * S),  # B with its cover
+        ("V", 1, 6 * S, 8 * S), ("A", 1, 6 * S, 8 * S),                      # A
+        ("V", 1, 8 * S, 9 * S)])                                            # outro untouched
+    assert sorted(host.seqs["Cut"]) == sorted(cut)  # the source is never edited
+
+
+def test_arrange_refuses_a_clip_across_a_block_edge_before_copying():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Cut"] = [("V", 1, 0, 3 * S), ("V", 1, 3 * S, 4 * S)]
+    try:
+        _arrange(host, [(2 * S, 4 * S), (0, 2 * S)])
+    except ValueError as e:
+        assert "cross a block edge" in str(e)
+    else:
+        raise AssertionError("arranged across a clip")
+    assert "Cut v2" not in host.seqs
+
+
+def test_arrange_blocks_must_tile_one_stretch():
+    prep = driver_commands.COMMANDS["arrange"].prepare
+    for blocks in ([[0, 5]], [[0, 5], [6, 9]], [[0, 5], [4, 9]], [[0, 5], [0, 5]]):
+        try:
+            prep({"sequence": "a", "result_name": "b",
+                  "blocks": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in blocks]}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {blocks}")
+
+
+def test_paste_from_keeps_a_gap_at_the_start_of_the_range():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Split"] = [("V", 1, 2 * S, 6 * S), ("A", 1, 2 * S, 6 * S)]  # nothing before 2 s
+    out = _paste(host)  # range 1-4 s into YT at 5 s
+    assert out["missing"] == [] and out["left_at_park"] == []
+    assert ("V", 1, 6 * S, 8 * S) in host.seqs["YT"] and ("A", 1, 6 * S, 8 * S) in host.seqs["YT"]
+
+
+def test_paste_from_an_empty_range_leaves_no_piece_behind():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Split"] = [("V", 1, 5 * S, 6 * S)]
+    try:
+        _paste(host)
+    except ValueError as e:
+        assert "no clips" in str(e)
+    else:
+        raise AssertionError("pasted an empty range")
+    assert not any(n.endswith(driver_commands.PIECE_SUFFIX) for n in host.seqs)
+
+
+def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
+    S = _PasteHost.S
+    host = _PasteHost()
+    stale = "Split 1.000-4.000s" + driver_commands.PIECE_SUFFIX
+    host.seqs[stale] = [("V", 1, 0, S)]
+    assert _paste(host)["missing"] == []
+    assert stale not in host.seqs and ("V", 1, 5 * S, 8 * S) in host.seqs["YT"]

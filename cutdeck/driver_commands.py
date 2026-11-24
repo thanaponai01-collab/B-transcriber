@@ -96,6 +96,8 @@ def _run_probe_arguments(args: dict, jobs) -> dict:
 
 
 MAX_BUILD_ITEMS = 5000
+PIECE_SUFFIX = " (CutDeck piece)"  # the only sequences remove_piece deletes
+PARK_GAP_TICKS = 30 * PPRO_TICKS_PER_SECOND  # PREMIERE_FACTS "Edit > Paste at a parking spot": end + 30 s
 
 
 def _build_arguments(args: dict, jobs) -> dict:
@@ -590,6 +592,30 @@ def _set_in_out_arguments(args: dict, jobs) -> dict:
     return result
 
 
+def _range_arguments(args: dict) -> dict:
+    result = {"in_ticks": _ticks(args.get("in_ticks"), "in_ticks"), "out_ticks": _ticks(args.get("out_ticks"), "out_ticks")}
+    if int(result["out_ticks"]) <= int(result["in_ticks"]):
+        raise ValueError("out_ticks must be after in_ticks")
+    return result
+
+
+def _make_subsequence_arguments(args: dict, jobs) -> dict:
+    result = {**_sequence(args), **_range_arguments(args)}
+    name = args.get("result_name")
+    if name is not None:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("result_name must be a sequence name (omit it for Premiere's <name>_Sub_NN)")
+        result["result_name"] = name
+    return result
+
+
+def _remove_piece_arguments(args: dict, jobs) -> dict:
+    name = args.get("name")
+    if not isinstance(name, str) or not name.endswith(PIECE_SUFFIX):
+        raise ValueError(f"name must be a sequence paste_from made (ends with {PIECE_SUFFIX!r})")
+    return {"name": name}
+
+
 def _select_clips_arguments(args: dict, jobs) -> dict:
     return {**_sequence(args), "clips": _clip_ids(args.get("clips"), allow_empty=True)}
 
@@ -784,6 +810,25 @@ CONTROL_COMMANDS: dict[str, Command] = {
         Set the sequence In and/or Out mark (tick strings), one undo step.
         """,
         (("in_ticks", str | None, None), ("out_ticks", str | None, None), ("sequence", str | None, None))),
+    "make_subsequence": Command(
+        60, _make_subsequence_arguments, "write",
+        """
+        Premiere's Make Subsequence: the range [in_ticks, out_ticks) of `sequence` (default the
+        active one) becomes a new sequence with every track, clip and effect, frame-exact. The
+        source's clips are not edited and its own In/Out marks are put back. A range that starts in
+        a gap loses the gap: the new sequence starts on its first clip. Undo takes three
+        steps (four with result_name), last first: the rename, the marks put back, the subsequence,
+        the range marks.
+        result_name names it (default Premiere's "<name>_Sub_NN"). Returns its name and clip count.
+        """,
+        (("in_ticks", str), ("out_ticks", str), ("sequence", str | None, None), ("result_name", str | None, None))),
+    "remove_piece": Command(
+        60, _remove_piece_arguments, "destructive",
+        """
+        Delete a piece sequence that premiere_paste_from made and kept (its name ends with
+        " (CutDeck piece)"). Refuses any other name and the active sequence. One undo step.
+        """,
+        (("name", str),)),
     "select_clips": Command(
         60, _select_clips_arguments, "write",
         """
@@ -1188,6 +1233,159 @@ async def _keep_words(args: dict, premiere: Premiere) -> dict:
             **_warnings(before)}
 
 
+def _paste_from_arguments(args: dict, jobs) -> dict:
+    result = {}
+    for key in ("source", "target"):
+        if not isinstance(args.get(key), str) or not args[key].strip():
+            raise ValueError(f"{key} must be a sequence name")
+        result[key] = args[key]
+    v_offset = args.get("v_offset", 0)
+    if not isinstance(v_offset, int) or isinstance(v_offset, bool) or v_offset < 0:
+        raise ValueError("v_offset must be a whole number of tracks, 0 or more")
+    keep_piece = args.get("keep_piece", False)
+    if not isinstance(keep_piece, bool):
+        raise ValueError("keep_piece must be true or false")
+    return {**result, **_range_arguments(args), "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"),
+            "v_offset": v_offset, "keep_piece": keep_piece}
+
+
+def _clips(timeline: dict, since: int = 0) -> list[tuple[str, int, int, int]]:
+    """(V|A, track number, start, end) of every clip starting at `since` or later."""
+    return sorted((t["id"][0], int(t["id"][1:]), int(c["start_ticks"]), int(c["end_ticks"]))
+                  for t in timeline["tracks"] for c in t["clips"] if int(c["start_ticks"]) >= since)
+
+
+async def _paste_from(args: dict, premiere: Premiere) -> dict:
+    """make_subsequence of the source range → Edit > Copy → Edit > Paste parked past the target's
+    end → build_sequence into: clone to at_ticks, lift the park → read back → remove the piece."""
+    source, target, at = args["source"], args["target"], int(args["at_ticks"])
+    a, b = int(args["in_ticks"]), int(args["out_ticks"])
+    if source == target:
+        raise ValueError("source and target must be different sequences")
+    piece = (f"{source} {a / PPRO_TICKS_PER_SECOND:.3f}-{b / PPRO_TICKS_PER_SECOND:.3f}s"
+             f"{PIECE_SUFFIX}")
+    # Make Subsequence drops a range's empty lead-in (live 2026-11-24: 0.5-3 s with the first clip
+    # at 1 s gave a piece starting at 0), so measure it here and add it back when placing.
+    starts = [max(s, a) for _, _, s, e in _clips(await premiere("read_timeline", {"sequence": source})) if s < b and e > a]
+    if not starts:
+        raise ValueError(f"{source} has no clips in that range")
+    offset = min(starts) - a
+    project = await premiere("list_project", {"depth": 1})
+    if any(s["name"] == piece for s in project["sequences"]):
+        await premiere("remove_piece", {"name": piece})  # kept by an earlier failed run of this paste
+    await premiere("make_subsequence", {"sequence": source, "in_ticks": str(a), "out_ticks": str(b), "result_name": piece})
+    timeline = await premiere("read_timeline", {"sequence": piece})
+    want = _clips(timeline)
+    before = await premiere("read_timeline", {"sequence": target})
+    length = b - a
+    park = max(int(before["end_ticks"]), at + length) + PARK_GAP_TICKS
+    await premiere("select_clips", {"sequence": piece, "clips": [c["id"] for t in timeline["tracks"] for c in t["clips"]]})
+    await premiere("menu_command", {"path": "Edit > Copy", "sequence": piece})
+    await premiere("set_playhead", {"sequence": target, "ticks": str(park)})
+    await premiere("menu_command", {"path": "Edit > Paste", "sequence": target})
+    pasted = _clips(await premiere("read_timeline", {"sequence": target}), park)
+    # Paste lands at the playhead on the lowest targeted tracks (PREMIERE_FACTS "Edit > Copy in one
+    # sequence"), assumed to put the earliest copied clip there (`lead`, 0 while subsequences start
+    # on a clip). Find how far each kind landed from the piece's tracks, then put video where asked.
+    lead = min(s for _, _, s, _ in want)
+    shift = {}
+    for kind in ("V", "A"):
+        got = [p for p in pasted if p[0] == kind]
+        exp = [w for w in want if w[0] == kind]
+        if got and exp:
+            shift[kind] = min(g[1] for g in got) - min(e[1] for e in exp)
+    landed = sorted((k, n + shift.get(k, 0), s - lead + park, e - lead + park) for k, n, s, e in want)
+    left = f"The pasted copy is left at {park} ticks on {target!r} and piece {piece!r} is kept, for you to see."
+    if shift.get("A", 0) != 0:
+        raise ValueError(f"the audio landed {-shift['A']} track(s) lower than in the source (Paste uses the lowest "
+                         f"targeted tracks and paste_from cannot move audio between tracks). {left}")
+    if pasted != landed:
+        raise ValueError(f"the paste did not land as the piece reads: expected {landed}, got {pasted}. {left}")
+    v_up = args["v_offset"] - shift.get("V", 0)
+    steps = [{"op": "clone", "from_ticks": str(park), "to_ticks": str(park + length), "dt_ticks": str(at + offset + lead - park), "v_offset": v_up},
+             {"op": "lift", "from_ticks": str(park), "to_ticks": str(park + length)}]
+    try:
+        await premiere("build_sequence", {"project": project["path"], "base": target, "name": target, "items": [],
+                                          "options": {"into": True, "steps": steps}})
+    except Exception as e:
+        raise ValueError(f"moving the paste into place failed: {e}. {left}") from e
+    after = await premiere("read_timeline", {"sequence": target})
+    placed = [c for c in _clips(after) if at + offset <= c[2] < at + length]
+    expected = sorted((k, n + (args["v_offset"] if k == "V" else 0), s + at + offset, e + at + offset) for k, n, s, e in want)
+    missing = sorted(set(expected) - set(placed))
+    left_at_park = _clips(after, park)
+    if not args["keep_piece"]:
+        await premiere("remove_piece", {"name": piece})
+    return {"target": target, "at_ticks": str(at), "clips": len(want), "missing": missing,
+            "left_at_park": left_at_park, "end_ticks": after["end_ticks"],
+            "piece": piece if args["keep_piece"] else None}
+
+
+def _arrange_arguments(args: dict, jobs) -> dict:
+    for key in ("sequence", "result_name"):
+        if not isinstance(args.get(key), str) or not args[key].strip():
+            raise ValueError(f"{key} must be a sequence name")
+    if args["sequence"] == args["result_name"]:
+        raise ValueError("result_name must differ from sequence (the source is never edited)")
+    blocks = args.get("blocks")
+    if not isinstance(blocks, list) or len(blocks) < 2:
+        raise ValueError("blocks must list 2 or more {from_ticks, to_ticks} in the order they should play")
+    spans = [(int(_ticks(b.get("from_ticks"), "from_ticks")), int(_ticks(b.get("to_ticks"), "to_ticks")))
+             if isinstance(b, dict) else (0, 0) for b in blocks]
+    tiled = sorted(spans)
+    if any(t <= f for f, t in spans) or any(a[1] != b[0] for a, b in zip(tiled, tiled[1:])):
+        raise ValueError("blocks must cover one stretch exactly, each once, with no gap or overlap "
+                         "(drop pieces first with premiere_keep_words or premiere_cut_copy)")
+    return {"sequence": args["sequence"], "result_name": args["result_name"], "blocks": spans}
+
+
+def arrange_steps(blocks: list[tuple[int, int]], park: int) -> list[dict]:
+    """build_sequence `into` steps that play `blocks` back to back, in this order, from the start of
+    the stretch they tile: clone each to the park in its new order, lift the stretch, clone the park
+    back, lift the park. Clone, never move (PREMIERE_FACTS "createMoveAction of a block backward")."""
+    start = min(f for f, _ in blocks)
+    end = max(t for _, t in blocks)
+    steps, at = [], park
+    for f, t in blocks:
+        steps.append({"op": "clone", "from_ticks": str(f), "to_ticks": str(t), "dt_ticks": str(at - f)})
+        at += t - f
+    return steps + [{"op": "lift", "from_ticks": str(start), "to_ticks": str(end)},
+                    {"op": "clone", "from_ticks": str(park), "to_ticks": str(at), "dt_ticks": str(start - park)},
+                    {"op": "lift", "from_ticks": str(park), "to_ticks": str(at)}]
+
+
+def _arranged(clips: list[tuple], blocks: list[tuple[int, int]]) -> list[tuple]:
+    """Where every clip should sit once the blocks play in their new order."""
+    shift, at = {}, min(f for f, _ in blocks)
+    for f, t in blocks:
+        shift[(f, t)] = at - f
+        at += t - f
+    def moved(c):
+        k, n, s, e = c
+        block = next((b for b in blocks if b[0] <= s < b[1]), None)
+        return (k, n, s + shift[block], e + shift[block]) if block else c
+    return sorted(moved(c) for c in clips)
+
+
+async def _arrange(args: dict, premiere: Premiere) -> dict:
+    blocks = args["blocks"]
+    source = await premiere("read_timeline", {"sequence": args["sequence"]})
+    start, end = min(f for f, _ in blocks), max(t for _, t in blocks)
+    crossing = [c for c in _clips(source) if (c[2] < start < c[3]) or (c[2] < end < c[3])
+                or any(f <= c[2] < t < c[3] for f, t in blocks)]
+    if crossing:
+        raise ValueError(f"these clips cross a block edge; cut there first (Add Edit) or move the edge: {crossing[:10]}")
+    expected = _arranged(_clips(source), blocks)
+    await premiere("duplicate_sequence", {"sequence_name": args["sequence"], "result_name": args["result_name"]})
+    park = max(int(source["end_ticks"]), end) + PARK_GAP_TICKS
+    project = (await premiere("list_project", {"depth": 1}))["path"]
+    await premiere("build_sequence", {"project": project, "base": args["result_name"], "name": args["result_name"],
+                                      "items": [], "options": {"into": True, "steps": arrange_steps(blocks, park)}})
+    after = _clips(await premiere("read_timeline", {"sequence": args["result_name"]}))
+    return {"sequence": args["result_name"], "blocks": [[str(f), str(t)] for f, t in blocks],
+            "missing": sorted(set(expected) - set(after)), "unexpected": sorted(set(after) - set(expected))}
+
+
 HELPER_COMMANDS: dict[str, Command] = {
     "timeline_transcript": Command(
         300, _timeline_transcript_arguments, "read",
@@ -1249,6 +1447,35 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("keep", list[dict]), ("sequence", str | None, None), ("track", str | None, None), ("pad_ms", int, 60),
          ("wordless_ms", int, 0)),
         run=_plan_pieces),
+    "paste_from": Command(
+        900, _paste_from_arguments, "write",
+        """
+        Take the range [in_ticks, out_ticks) of sequence `source` (a split, the backup pool, a
+        finished YT cut) and put it into sequence `target` at at_ticks as real clips: every
+        track, effect, mask and Lumetri kept, as the user would copy and paste. It OVERWRITES what
+        is under it on those tracks. v_offset puts the video that many tracks higher than in the
+        source (audio stays on its own tracks). The source is never edited. Route: Make
+        Subsequence of the range, Edit > Copy, Edit > Paste parked 30 s past the target's end,
+        then clone into place and lift the park; the temporary piece sequence is deleted unless
+        keep_piece. Returns `missing` (expected clips not found at the place; empty = landed
+        frame-exact) and `left_at_park` (should be empty). Needs the CutDeck panel open; takes
+        Premiere's focus briefly.
+        """,
+        (("source", str), ("in_ticks", str), ("out_ticks", str), ("target", str), ("at_ticks", str),
+         ("v_offset", int, 0), ("keep_piece", bool, False)),
+        run=_paste_from),
+    "arrange": Command(
+        900, _arrange_arguments, "write",
+        """
+        Reorder pieces of a sequence on a COPY named result_name (the source is never edited):
+        `blocks` [{from_ticks, to_ticks}] in the order they should play. Together they must cover
+        one stretch exactly (drop pieces first with premiere_keep_words or premiere_cut_copy), and
+        every clip must start and end inside one block (cut at the edges first). Every track,
+        effect and hand fix moves with its block; what lies outside the stretch stays put. Returns
+        `missing` and `unexpected` clips against the planned layout (both empty = exact).
+        """,
+        (("sequence", str), ("result_name", str), ("blocks", list[dict])),
+        run=_arrange),
     "keep_words": Command(
         1800, _keep_words_arguments, "write",
         """

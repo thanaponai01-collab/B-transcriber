@@ -86,13 +86,19 @@ Moved word for word on 2026-11-22 from [workflow-log.md](workflow-log.md) (Autom
 
 How the agent builds an HKS draft (why: [principles.md](principles.md) HKS-C13 to C19):
 
-1. **Topic and colour pass first** (HKS-16): razor the broadcast at every topic change and label each
+1. **Topic and colour pass first** (HKS-16; once saved, `python -m cutdeck.split_pieces --prproj <day>.prproj --sequence Editing` lists each question piece with its colour and words, ready for `premiere_paste_from` / `premiere_arrange`): razor the broadcast at every topic change and label each
    topic by colour. The user approves what goes in before the agent cuts how.
 2. **Split-screen index:** list every stretch where the broadcast shows a split screen (evidence, B-roll).
    That is the cover pool (HKS-C9).
 3. **2–3 hook options**, each built a different way (the clash, the shocking fact, the question). The
    user picks; record the pick and the user's reason in `memory/`.
 4. **Cut:** tighten at speaker changes first; inside one speaker's run only under cover (HKS-C17).
+
+**Route order** (user, 2026-11-24: XML stays, as the last way): (1) copy the parent sequence in
+Premiere and pick from it (`paste_from`, `arrange`, `keep_words`, `cut_copy`, `duplicate_sequence`);
+(2) build from the footage only when no sequence holds the material yet; (3) an FCP7 XML in the day's
+`CutDeck` folder only when Premiere can't be driven live, saying in the handover why 1 and 2 failed.
+Details: `docs/DERIVE_FROM_SEQUENCE.md` step 5.
 
 Checks before handover (each one listed in the handover, with timecodes):
 - **Promises:** every question from the hook, the cards and the host is answered, or open on purpose (HKS-C13).

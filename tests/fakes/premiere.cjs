@@ -168,7 +168,9 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
   const rawSeq = new WeakMap(); // Sequence -> raw sequence
   const wrap = (s) => {
     if (!wrappers.has(s)) {
-      const item = { name: s.name, getId: () => `item:${s.guid}`, createSetNameAction: (name) => action(() => { s.name = name; }) };
+      const item = { name: s.name, getId: () => `item:${s.guid}`, createSetNameAction: (name) => action(() => { s.name = name; }),
+        // Its bin, enough to delete the sequence (PREMIERE_FACTS "Deleting a sequence").
+        getParentBin: () => ({ createRemoveItemAction: (it) => action(() => { if (it === item) raws.splice(raws.indexOf(s), 1); }) }) };
       const copy = (list) => list.map((t) => t.map((c) => ({ ...c })));
       const seq = {
         get name() { return s.name; },
@@ -185,6 +187,23 @@ function createTimelineHost({ path = "", media = [], sequences = [], place = () 
         getOutPoint: async () => tickTime((s.marks || {}).out || 0n),
         createSetInPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), in: BigInt(t.ticks) }; }),
         createSetOutPointAction: (t) => action(() => { s.marks = { ...(s.marks || {}), out: BigInt(t.ticks) }; }),
+        // PREMIERE_FACTS "createSubsequence": the In-Out range as a new sequence `<name>_Sub_NN`,
+        // every track kept (empty ones too), clips cut at the marks; the range's empty lead-in is
+        // dropped, so its first clip starts at 0.
+        createSubsequence: async () => {
+          const { in: a = 0n, out: b = 0n } = s.marks || {};
+          const inside = (c) => c.start < b && c.end > a;
+          const first = [...s.video, ...s.audio].flat().filter(inside).reduce((m, c) => { const st = c.start > a ? c.start : a; return st < m ? st : m; }, b);
+          const cut = (list) => list.map((t) => t.filter(inside).map((c) => {
+            const start = c.start > a ? c.start : a;
+            return { ...c, start: start - first, end: (c.end < b ? c.end : b) - first, in: c.in + (start - c.start) };
+          }));
+          const n = raws.filter((r) => r.name.startsWith(`${s.name}_Sub_`)).length + 1;
+          const sub = addSequence({ name: `${s.name}_Sub_${String(n).padStart(2, "0")}`, guid: `seq${guids++}`,
+            video: cut(s.video), audio: cut(s.audio), frame: s.frame });
+          undoSteps.push("Make Subsequence");
+          return wrap(sub);
+        },
         getFrameSize: async () => ({ width: 1920, height: 1080 }),
         getTimebase: async () => "8475667200",
         getEndTime: async () => tickTime([...s.video, ...s.audio].flat().reduce((m, c) => (c.end > m ? c.end : m), 0n)),

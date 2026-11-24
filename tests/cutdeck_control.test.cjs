@@ -256,3 +256,30 @@ test("import_sequences passes Guids and reports only the sequences it added", as
   assert.deepEqual(calls, [["D:\d.prproj", ["g1"]]]);
   assert.deepEqual(out, { imported: true, sequences: [{ name: "Donor", sequence_id: "g1" }] });
 });
+
+test("make_subsequence cuts the range to a new named sequence and puts the source marks back", async () => {
+  const { h, run } = setup();
+  await run.set_in_out({ in_ticks: String(S), out_ticks: String(2n * S) });
+  const out = await run.make_subsequence({ in_ticks: String(5n * S), out_ticks: String(15n * S), result_name: "Q1 (CutDeck piece)" });
+  assert.deepEqual([out.name, out.clips], ["Q1 (CutDeck piece)", 4]);
+  const sub = h.sequence("Q1 (CutDeck piece)");
+  assert.deepEqual(sub.video.map((c) => [c.start, c.end, c.in]), [[0n, 5n * S, 5n * S], [5n * S, 10n * S, 30n * S]]);
+  assert.deepEqual(h.sequence("Edit").marks, { in: S, out: 2n * S });
+  assert.equal(h.sequence("Edit").video.length, 2);
+  await assert.rejects(run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" }), /already exists/);
+});
+
+test("remove_piece deletes only a CutDeck piece", async () => {
+  const { h, run } = setup();
+  await run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" });
+  await assert.rejects(run.remove_piece({ name: "Edit" }), /not a CutDeck piece/);
+  assert.deepEqual(await run.remove_piece({ name: "Q1 (CutDeck piece)" }), { removed: true });
+  assert.equal(h.sequence("Q1 (CutDeck piece)"), undefined);
+});
+
+test("make_subsequence of a range that starts in a gap starts on its first clip (as Premiere does)", async () => {
+  const { h, run } = setup();
+  await run.edit_clips({ edits: [{ clip: "V1@0", op: "trim_in", in_ticks: String(2n * S) }, { clip: "A1@0", op: "trim_in", in_ticks: String(2n * S) }] });
+  await run.make_subsequence({ in_ticks: String(S), out_ticks: String(5n * S), result_name: "gap (CutDeck piece)" });
+  assert.deepEqual(h.sequence("gap (CutDeck piece)").video.map((c) => [c.start, c.end, c.in]), [[0n, 3n * S, 2n * S]]);
+});

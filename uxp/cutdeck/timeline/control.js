@@ -250,6 +250,60 @@ async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null,
   return { name: sequence.name, in_ticks: ticksOf(await sequence.getInPoint()), out_ticks: ticksOf(await sequence.getOutPoint()) };
 }
 
+/* make_subsequence: the range [in, out) of a sequence as a new sequence with every track, clip
+   and effect (Premiere's Make Subsequence). Sequence.createSetInPointAction / createSetOutPointAction
+   / createSubsequence(true) (premierepro.txt; PREMIERE_FACTS "createSubsequence": WORKS, one undo
+   step), then the source's own marks are put back and the new sequence renamed through its project
+   item (ProjectItem.createSetNameAction: WORKS). The source's clips are not edited. */
+async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks, out_ticks: outTicks, result_name: resultName = null }) {
+  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  if (resultName && (await project.getSequences()).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
+  const oldIn = ticksOf(await sequence.getInPoint()), oldOut = ticksOf(await sequence.getOutPoint());
+  const marks = (a, b, label) => runTransaction(project, label, (compound) => {
+    if (!compound.addAction(sequence.createSetInPointAction(tick(ppro, a)))) throw new Error("addAction(In) returned false");
+    if (!compound.addAction(sequence.createSetOutPointAction(tick(ppro, b)))) throw new Error("addAction(Out) returned false");
+  });
+  marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
+  let sub;
+  try {
+    sub = await sequence.createSubsequence(true);
+  } finally {
+    marks(oldIn, oldOut, "CutDeck: put the marks back");
+  }
+  if (!sub) throw new Error(`createSubsequence returned nothing for "${sequence.name}".`);
+  if (resultName) {
+    const item = await sub.getProjectItem();
+    runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
+      if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+    });
+  }
+  const id = String(sub.guid);
+  const made = (await project.getSequences()).find((s) => String(s.guid) === id) || sub;
+  let clips = 0;
+  for (let i = 0; i < await made.getVideoTrackCount(); i++) clips += (await getTrackClipItems(await made.getVideoTrack(i), ppro)).length;
+  for (let i = 0; i < await made.getAudioTrackCount(); i++) clips += (await getTrackClipItems(await made.getAudioTrack(i), ppro)).length;
+  return { name: made.name, source: sequence.name, in_ticks: String(inTicks), out_ticks: String(outTicks), clips };
+}
+
+/* remove_piece: delete a sequence that paste_from made for one piece. Only a name ending in
+   PIECE_SUFFIX, never the active one. FolderItem.createRemoveItemAction on its bin (PREMIERE_FACTS
+   "Deleting a sequence": WORKS), the bin from ProjectItem.getParentBin (premierepro.txt). */
+const PIECE_SUFFIX = " (CutDeck piece)";
+async function removePiece(ppro, { name }) {
+  if (!String(name).endsWith(PIECE_SUFFIX)) throw new Error(`"${name}" is not a CutDeck piece; nothing removed`);
+  const project = await activeProject(ppro);
+  const found = (await project.getSequences()).filter((s) => s.name === name);
+  if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
+  const active = await project.getActiveSequence();
+  if (active && String(active.guid) === String(found[0].guid)) throw new Error(`"${name}" is the active sequence; nothing removed`);
+  const item = await found[0].getProjectItem();
+  const bin = item.getParentBin();
+  runTransaction(project, "CutDeck: remove piece", (compound) => {
+    if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
+  });
+  return { removed: !(await project.getSequences()).some((s) => s.name === name) };
+}
+
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */
 async function selectClips(ppro, { sequence: name = null, clips }) {
   const { sequence } = await projectAndSequenceNamed(ppro, name);
@@ -593,6 +647,8 @@ function controlHandlers(ppro) {
     remove_rough_cuts: (args) => removeRoughCuts(ppro, args),
     set_playhead: (args) => setPlayhead(ppro, args),
     set_in_out: (args) => setInOut(ppro, args),
+    make_subsequence: (args) => makeSubsequence(ppro, args),
+    remove_piece: (args) => removePiece(ppro, args),
     select_clips: (args) => selectClips(ppro, args),
     edit_clips: (args) => editClips(ppro, args),
     place_media: (args) => placeMedia(ppro, args),
