@@ -100,7 +100,11 @@ Checks before handover (each one listed in the handover, with timecodes):
 - **Strongest lines:** each side's single strongest line, named, and kept (HKS-C15).
 - **Ending:** if the story is open, the last line says so (HKS-C16).
 - **Challenge notes** (HKS-C19): where the hook could hit harder, where an explanation or B-roll runs long,
-  where a cut is snappy or clips a word at a camera switch.
+  where a cut is snappy or clips a word at a camera switch. Snappy cuts: `output/hks_study/sliver_check.py
+  <export or render> <pieces>` lists every shot under 0.4 s at an edit point (a flicker; a 0.7–0.9 s shot
+  that reads before the switch is fine, HKS-C20); look at the frames before calling one.
+
+First run, on the user's own 1123 cut: [study/20261123-checks.md](study/20261123-checks.md).
 
 ## Clip label colours (user, 2026-11-23)
 

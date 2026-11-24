@@ -67,7 +67,8 @@ forward, not as a description of past cuts. The checks are in [rules.md](rules.m
   the cut, or left open on purpose. Why: an unanswered question reads as a mistake. Misses seen: 1020 "is it
   real?", 1110 WatchDog (answered 15 min later), 1012 the money never repaid, 1117 premise not said until 5:27.
 - **HKS-C14. The middle is re-hooked.** No stretch of about 3–4 min without a new picture, a host question
-  or a turn. Why: that is where viewers drop off (1120 8–14 min, 1123 7–10 min ran 4–6 min with none).
+  or a turn. A turn said aloud counts; one picture held a long time is fine (user, 2026-11-24, on 1123's
+  3:20 single shot: "it would be fine"). Why: that is where viewers drop off (1120 8–14 min, 1123 7–10 min ran 4–6 min with none).
 - **HKS-C15. Each side's strongest line is in.** Before locking, name each side's single strongest line and
   check it is kept. Why: they were cut on 1003 ("20,000 a month, a bucket"), 1117 ("if only I'd picked
   up") and 1120 (the witness's points for the guest).
@@ -84,6 +85,15 @@ forward, not as a description of past cuts. The checks are in [rules.md](rules.m
   the footage, B-roll"; and the cuts, "jump cut or snappy cut … when the [broadcast] switch camera, is it
   cut off"). In every draft, say where the agent would hook harder, where an explanation or a B-roll piece
   runs long, and where a cut lands snappy or clips a word at a camera switch.
+
+- **HKS-C20. A flicker is a jump; a short shot is not** (user, 2026-11-24, on 1123's 0.7–0.9 s shots after a
+  cut: "it's just flow through story, not just snap like flickering… It's there first, then got switch off").
+  The "no snappy scene changes" rule is about a shot too short to read (v4: 0.16 s), not any shot under 1 s.
+- **HKS-C21. When a guest accuses, the other side's rebuttal stays** if the broadcast has it (user,
+  2026-11-24, 1123: the dead man's family say no gun was thrown). Narrows HKS-6 to a rule.
+- **HKS-C22. A fact the picture shows need not be said** (user, 2026-11-24: "the evidence show on the
+  B-roll"). The check is then that the picture really shows it: in 1123 the graphic marks the boss
+  "ออกหมายจับ", not "จับแล้ว".
 
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
