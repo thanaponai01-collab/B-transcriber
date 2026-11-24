@@ -1,16 +1,3 @@
-"""Engine — faster-whisper (CTranslate2) backend.
-
-Same Whisper checkpoint family as whisper_thai, but run through CTranslate2 instead
-of HuggingFace transformers: typically 3-4x faster and lower VRAM at equal accuracy,
-which is why it's the default Engine A on the 8GB card. Needs a CT2-converted model
-dir (produced once by `ct2-transformers-converter`, see README); it cannot load a raw
-HF checkpoint.
-
-CTranslate2 exposes the real Whisper anti-hallucination knobs the HF pipeline buried:
-condition_on_previous_text=False stops loops propagating across windows, and the
-compression/log-prob/no-speech thresholds drop garbage segments outright.
-"""
-
 from __future__ import annotations
 
 from bisect import bisect_right
@@ -86,43 +73,10 @@ def _register_cuda_dll_dirs() -> str:
     return original_path
 
 
-# Converted once via ct2-transformers-converter (see README). Repo-root-relative so
-# it resolves regardless of the caller's cwd.
 _DEFAULT_MODEL = str(Path(__file__).resolve().parents[2] / "models" / "whisper-th-medium-ct2")
-
-# Cue segmentation lives in transcribe/cues/ — this adapter only builds a
-# CuePolicy from its constructor kwargs and hands the word pieces over. The
-# knob defaults are imported above so the engine's signature keeps naming the
-# same values it always did.
 
 _SR = 16000
 
-# Whisper's encoder hard-caps a single decode window at ~30s. A speech run longer
-# than this with no pause anywhere near the cap forces faster-whisper's own VAD to
-# split "aggressively" mid-utterance with no overlap — decode quality collapses
-# right at that seam (observed: several seconds of garbled/missing text at the
-# cut). Any span longer than _LONG_SPAN_SAFE_S gets split into our own overlapping
-# windows instead (transcribe/audio/windows.py), decoded separately, and stitched
-# back together — the same seam-recovery trick chunk engines get from
-# config.yaml's chunk_overlap_ms, applied here to this whole-file engine's rare
-# long-pause-free-run case.
-# Tuning note: shrinking _LONG_SPAN_SAFE_S (e.g. to 15-20s) recovers a decode-
-# quality drop that can still happen *within* a single 25s window on very dense
-# speech, but widening the overlap that comes with it exposes stitch.py's dedup
-# to more words in the ambiguous zone — Thai has no word boundaries, so two
-# independent decodes of the same audio often tokenize it slightly differently,
-# producing visible stutter (e.g. "ที่ี่เกี่ี่ยว") across many seams. Verified
-# empirically: 25s/4s stutter-free with one small residual gap on a hard passage;
-# 15-20s recovers that gap but stutters broadly.
-#
-# Update (2026-07-30): that stutter turned out NOT to be a text-matching problem
-# — the seam duplicates matched on text fine and were lost to stitch.py's IoU
-# gate, which is structurally 0.0 for the zero-length combining-mark pieces
-# Whisper emits for Thai. stitch.py now also accepts centre-coincident
-# duplicates (_coincident), which fixed the observed stutter at 25s. Re-probing
-# a shorter _LONG_SPAN_SAFE_S is now worth doing, but measure it — the residual
-# artifacts here are the model stuttering inside one window, which no amount of
-# seam handling can fix.
 _LONG_SPAN_SAFE_S = 25.0
 _LONG_SPAN_OVERLAP_S = 4.0
 
@@ -134,19 +88,6 @@ _LONG_SPAN_OVERLAP_S = 4.0
 # long a single word's span has to be to count as suspicious.
 # _TRUNCATION_LOOKBACK_MS bounds how far back _find_safe_cut searches for a
 # genuine inter-token pause to cut on. See _recover_truncated_tail.
-#
-# Update (2026-08-10, TODO_LEDGER.md incident investigation): this used to
-# also require the suspicious word's end to land within 500ms of the
-# window's own end ("stretched all the way to the boundary") before
-# attempting recovery. Confirmed on real production audio that this was too
-# strict — several genuine content-loss cases had a suspicious word ending
-# 1.5-4s *short* of the window boundary (the model produced a stray fragment
-# then simply stopped, without reaching for the boundary at all), and were
-# silently skipped. Redecoding the same passage as a differently-windowed
-# clip recovered real, coherent speech at every one of those spots. The
-# recovery attempt is now gated only on the word's own suspicious duration
-# plus there being meaningful leftover audio to redecode (checked below via
-# the tail-audio length) — not on how close it lands to the window edge.
 _TRUNCATION_TAIL_MS = 1500
 # When zero-length pieces follow it, a shorter stretch already counts (#94:
 # a 1300 ms vowel mark before two 0 ms pieces dropped a clause). Over 4 real
@@ -169,7 +110,6 @@ def _lib_seek(seconds: float) -> int:
 
 
 def _is_cuda_oom(e: Exception) -> bool:
-    """True for a CUDA out-of-memory error, however the stack surfaces it."""
     try:
         import torch
         if isinstance(e, torch.cuda.OutOfMemoryError):
@@ -181,7 +121,6 @@ def _is_cuda_oom(e: Exception) -> bool:
 
 @register("faster_whisper")
 class FasterWhisperEngine(Engine):
-    """Thai-specialist Whisper via CTranslate2."""
 
     prefers_whole_file = True
 
@@ -201,8 +140,6 @@ class FasterWhisperEngine(Engine):
                  compression_ratio_threshold: float = 2.4):
         self._model_id = model_id
         self._device = device
-        # compute_type override lets an 8GB card fall back to int8_float16 if a
-        # large model OOMs at float16. None → pick a sane default per device.
         self._compute_type = compute_type
         self._beam_size = beam_size
         self._bias_prompt_budget = bias_prompt_budget
@@ -211,20 +148,11 @@ class FasterWhisperEngine(Engine):
         self._no_speech_threshold = no_speech_threshold
         self._log_prob_threshold = log_prob_threshold
         self._compression_ratio_threshold = compression_ratio_threshold
-        # How bias/glossary terms reach the decoder: "prompt" (initial_prompt, the
-        # production behaviour), "hotwords" (faster-whisper's hotwords argument) or
-        # "both". Only the harness should change this (item 4, arch-design doc).
         if bias_channel not in ("prompt", "hotwords", "both"):
             raise ValueError(f"bias_channel must be prompt, hotwords or both, got {bias_channel!r}")
         self._bias_channel = bias_channel
         self._hotwords: str | None = None
         self._segment_stats: list[dict] = []
-        # Cue splitting is transcribe/cues/'s job; this adapter only decides the
-        # policy. Assembled once at construction — pure, cheap, no GPU.
-        # HANDOFF_THAI_BREAK_ATOMS.md: the break-atom lexicon it carries is
-        # consumed by both split algorithms. `config` is the full pipeline config
-        # (not the engines.faster_whisper sub-block) so `thai_atoms` and
-        # `normalization.exception_lexicon` are both visible.
         from transcribe.thai.atoms import default_lexicon
         self._cue_policy = CuePolicy(
             gap_ms=cue_gap_ms,
@@ -235,23 +163,6 @@ class FasterWhisperEngine(Engine):
             algorithm=cue_split_algorithm,
             lexicon=default_lexicon(config),
         )
-        # This is a whole-file engine (prefers_whole_file=True), so ingest.py's VAD
-        # never runs on this audio — we window it ourselves via the shared
-        # transcribe/audio/ seam using these thresholds, instead of letting
-        # faster-whisper fall back to its defaults (threshold=0.5,
-        # min_silence_duration_ms=2000), which clip soft Thai sentence-final
-        # particles (ครับ/ค่ะ) exactly like ingest.vad_threshold's docstring warns
-        # about. Defaulting these to match config.yaml's tuned ingest values keeps
-        # both VAD paths consistent.
-        #
-        # ingest.py's VAD is deliberately NOT behind this seam (investigated for
-        # issue #4): it runs a different Silero (the `silero-vad` pip package, not
-        # faster_whisper's vendored copy) at different settings (threshold 0.5,
-        # min_silence 300ms, plus a min_speech floor), then sub-splits on raw RMS
-        # energy, and its output is a persisted master timeline of BOTH speech and
-        # silence rather than decodable windows. Sharing an implementation would
-        # mean changing one of the two engines' detection behaviour — a probe, not
-        # a refactor. See transcribe/audio/windows.py's module docstring.
         self._window_policy = WindowPolicy(
             vad_threshold=vad_threshold,
             vad_min_silence_ms=vad_min_silence_ms,
@@ -263,25 +174,17 @@ class FasterWhisperEngine(Engine):
         self._pre_load_path: str | None = None
 
     def load(self) -> None:
-        # Restored in unload() — see _register_cuda_dll_dirs's docstring for
-        # why this PATH mutation must not outlive this engine's residency.
         self._pre_load_path = _register_cuda_dll_dirs()
-        self._auto_language = None  # `language: auto` is decided once per loaded file
+        self._auto_language = None
         from faster_whisper import WhisperModel, BatchedInferencePipeline
 
         compute_type = self._compute_type or ("float16" if self._device != "cpu" else "int8")
         logger.info("Loading FasterWhisper: %s (%s)", self._model_id, compute_type)
         self._model = WhisperModel(self._model_id, device=self._device, compute_type=compute_type)
-        # BatchedInferencePipeline VAD-segments the track and decodes voiced regions
-        # as parallel batches (WhisperX-style) — ~3× the sequential 30 s-window path
-        # on the 3070 (3.1). self._model is kept for tokenizer access + unload.
         self._pipeline = BatchedInferencePipeline(model=self._model)
         logger.info("FasterWhisper (batched) loaded on %s", self._device)
 
     def _ct2_token_counter(self):
-        """CT2's own tokenizer counts prompt tokens (Thai is token-dense; a Latin
-        heuristic under-counts). Falls back to inject._approx_tokens if the
-        installed faster-whisper doesn't expose hf_tokenizer."""
         tok = getattr(self._model, "hf_tokenizer", None)
         if tok is None:
             return None
@@ -291,7 +194,6 @@ class FasterWhisperEngine(Engine):
             return None
 
     def _note_segments(self, segments, offset_ms: int = 0) -> None:
-        """Keep each segment's decode statistics."""
         for g in segments:
             if getattr(g, "avg_logprob", None) is None:
                 continue
@@ -317,16 +219,10 @@ class FasterWhisperEngine(Engine):
         return build_prompt(
             terms,
             budget_tokens=self._bias_prompt_budget,
-            count_tokens=self._ct2_token_counter(),  # None → inject's approx fallback
+            count_tokens=self._ct2_token_counter(),
         )
 
     def _decode(self, audio_arr, clip_timestamps, vad_filter, common_kwargs, bs):
-        """One BatchedInferencePipeline.transcribe call, halving batch_size on CUDA
-        OOM. The batched API is a generator that runs inference lazily, so we
-        materialize it inside the try — that's where an OOM actually surfaces.
-        Mirrors _batch.py's OOM-halving philosophy without reusing it (that path
-        is HF-pipeline-specific). Returns (segments, batch_size_used) so the
-        caller's next call starts from whatever size succeeded."""
         import torch
 
         # BatchedInferencePipeline asserts duration >= duration_after_vad when formatting
@@ -352,7 +248,7 @@ class FasterWhisperEngine(Engine):
                     **common_kwargs,
                 )
                 return list(segments), bs  # materialize here so OOM lands in this try
-            except Exception as e:  # noqa: BLE001 — narrowed by _is_cuda_oom
+            except Exception as e:
                 if _is_cuda_oom(e) and bs > 1:
                     bs = max(1, bs // 2)
                     logger.warning("CUDA OOM in batched decode — retrying at batch_size=%d", bs)
@@ -390,15 +286,6 @@ class FasterWhisperEngine(Engine):
 
     @staticmethod
     def _find_safe_cut(tokens_before, anchor_ms, lookback_ms=_TRUNCATION_LOOKBACK_MS):
-        """Index of the token after which to cut, chosen as the largest
-        inter-token gap within lookback_ms of anchor_ms — an actual acoustic
-        pause Whisper's own timings already show, not an arbitrary time
-        offset. A fixed offset back from the suspicious word can land
-        mid-syllable regardless of how big it is (Thai subword pieces don't
-        align to word boundaries), which is what caused earlier attempts at
-        this fix to reproduce a stray syllable on both sides of the cut.
-        Returns None if there aren't at least two tokens within range to
-        compare (nothing to cut between)."""
         in_range = [i for i, t in enumerate(tokens_before) if anchor_ms - t.end_ms <= lookback_ms]
         if len(in_range) < 2:
             return None
@@ -415,7 +302,6 @@ class FasterWhisperEngine(Engine):
         if not windows or not segments:
             return grouped
 
-        # A rounded key misses starts like 15.746s and drops to the fallback below (a9f1d89).
         seek_map = {_lib_seek(w.start_s): idx for idx, w in enumerate(windows)}
         all_have_matching_seek = all(
             getattr(s, "seek", None) is not None and getattr(s, "seek", None) in seek_map
@@ -426,7 +312,6 @@ class FasterWhisperEngine(Engine):
                 grouped[seek_map[s.seek]].append(s)
             return grouped
 
-        # Fallback for mocks without seek: stream sequentially matching chunk order
         win_idx = 0
         prev_start = -1.0
         for seg in segments:
@@ -441,8 +326,6 @@ class FasterWhisperEngine(Engine):
         return grouped
 
     def _plan_truncated_tail(self, tokens, sub_audio, *, require_speech=False):
-        """Check if an early-EOS truncated tail is suspected. If so, return
-        (tokens, kept, tail_audio, tail_start_ms, clip) for redecoding; otherwise None."""
         if not tokens and not require_speech:
             return None
         # Zero-length pieces at the end mean Whisper ran out of timeline: the
@@ -462,15 +345,11 @@ class FasterWhisperEngine(Engine):
             kept = []
             tail_start_ms = 0
         elif cut_i is not None:
-            # (A) the suspect itself is stretched — discard it and what follows,
-            # and redecode from a genuine inter-token pause before it.
             kept = body[:cut_i + 1]
             tail_start_ms = body[cut_i + 1].start_ms
         elif body is tokens and dur >= _TRUNCATION_TAIL_MS:
-            return None  # a stretched last piece with no pause to cut on
+            return None
         elif trailing_gap_ms >= _TRUNCATION_TAIL_MS:
-            # (B) the last word is trustworthy — keep it, redecode only the
-            # real leftover audio after it.
             kept = tokens
             tail_start_ms = last.end_ms
         else:
@@ -482,8 +361,6 @@ class FasterWhisperEngine(Engine):
 
         clip = None
         if require_speech:
-            # Detect actual speech again in the omitted region. VAD padding on
-            # the original span is not evidence that its trailing audio is speech.
             windows = speech_windows(tail_audio, self._window_policy)
             if not windows:
                 return None
@@ -491,9 +368,6 @@ class FasterWhisperEngine(Engine):
         return tokens, kept, tail_audio, tail_start_ms, clip
 
     def _batch_recover_tails(self, tail_candidates, common, bs):
-        """Batch-redecode candidate tails.
-        tail_candidates: list of (key, plan) where plan is (tokens, kept, tail_audio, tail_start_ms, clip).
-        Returns ({key: merged_tokens}, bs)."""
         recovered_map = {}
         if not tail_candidates:
             return recovered_map, bs
@@ -514,7 +388,6 @@ class FasterWhisperEngine(Engine):
                 recovered_map[key] = kept + tail_tokens
             return recovered_map, bs
 
-        # Multiple candidate tails: concatenate audio into a single array and batch-decode clips
         combined_audio = np.concatenate([plan[2] for _, plan in tail_candidates])
         combined_clips = []
         offset_samples = 0
@@ -555,38 +428,9 @@ class FasterWhisperEngine(Engine):
         return recovered_map, bs
 
     def _recover_truncated_tail(self, tokens, sub_audio, common, bs, *, require_speech=False):
-        """Detect and recover content dropped by an early-EOS decode within one
-        decode window. Two independent failure modes, both early-EOS, that
-        look nothing alike on the wire:
-
-        (A) faster-whisper stretches the *last* word's own timestamp out to
-        (near) the window's end to paper over the gap — see _TRUNCATION_TAIL_MS
-        above, and its 2026-08-10 update for why this no longer requires the
-        suspicious word to reach the window's own end.
-
-        (B) 2026-08-10 incident (this update): faster-whisper just stops, with
-        a totally normal-duration last word, leaving real undecoded audio
-        sitting after it — confirmed on production audio (job with a 45.6s
-        long-span clip): window 1's last word ended at 17.58s with an ordinary
-        180ms duration while its own window ran to 25s, silently dropping ~3.4s
-        of real speech that (A)'s stretched-word check can never see, since
-        there's no anomalous word to trigger on.
-
-        Both redecode standalone (a much shorter, easier decode) and
-        concatenate — no overlap-and-dedup splice, since Thai's lack of clean
-        word boundaries makes stitch.py's exact-text dedup miss the resulting
-        near-duplicates (verified empirically while building the original (A)
-        fix: a fixed-offset cut reproduced a stray syllable on both sides no
-        matter how the offset was tuned). No recursion — if the redecode hits
-        the same issue, its result is kept as-is.
-
-        require_speech gates retries on VAD evidence and also permits one retry
-        for a completely empty decode. False preserves legacy long-span behavior.
-        """
         plan = self._plan_truncated_tail(tokens, sub_audio, require_speech=require_speech)
         if plan is None:
             return tokens, bs
-        # One tail redecode path: the batched one (fd6d21d had to strip the prompt in both).
         recovered, bs = self._batch_recover_tails([(None, plan)], common, bs)
         merged = recovered[None]
         if merged is tokens:
@@ -605,8 +449,6 @@ class FasterWhisperEngine(Engine):
     _AUTO_SAMPLE_S = 30
 
     def _language_score(self, audio, language: str) -> float | None:
-        """Token-weighted mean log-probability of a quick decode (beam 1) in `language`, or None
-        when the sample holds no speech."""
         segments, _ = self._model.transcribe(audio, language=language, beam_size=1, vad_filter=True,
                                              condition_on_previous_text=False)
         segments = list(segments)
@@ -616,10 +458,6 @@ class FasterWhisperEngine(Engine):
         return sum(seg.avg_logprob * len(seg.tokens) for seg in segments) / tokens
 
     def _resolve_language(self, hint: str | None, audio) -> str | None:
-        """The decode language for this audio. "auto" on a whole file (a minute or more) decides
-        afresh: an engine kept resident across files, as the eval harness does, must not carry one
-        file's language into the next. A short excerpt (a gap re-decode) is too little to decide on:
-        it gets the file's choice, else Thai."""
         if hint != "auto":
             return hint
         if len(audio) >= 60 * 16000:
@@ -652,34 +490,6 @@ class FasterWhisperEngine(Engine):
     def _transcribe_batched(self, audio, language_hint, initial_prompt,
                              temperature=None, beam_size=None,
                              speech_spans=()) -> list[tuple[str, int, int, float | None]]:
-        """Decode the whole file, splitting+stitching any pause-free run too long
-        for Whisper's encoder window (see _LONG_SPAN_SAFE_S). word_timestamps +
-        the anti-hallucination knobs are all supported by the batched signature
-        (verified against fw 1.2.x).
-
-        temperature: None (default) omits the key entirely, so faster-whisper
-        falls through to its own cascading fallback list — production
-        behaviour, byte-identical to before this param existed. A scalar
-        pins decode to that single temperature.
-
-        IMPORTANT (found probing HANDOFF_ONE_ENGINE §6 Phase D, 2026-08-05):
-        `temperature` alone is a no-op through this batched path when beam_size
-        stays at its production value. faster-whisper's
-        BatchedInferencePipeline.generate_segment_batched always calls
-        ctranslate2's Whisper.generate(beam_size=options.beam_size, ...) — beam
-        search is deterministic search, not sampling, and CTranslate2's
-        sampling_temperature has no effect while beam_size>1 (verified against
-        installed faster-whisper 1.2.1 source: transcribe.py's
-        generate_segment_batched never reads options.best_of and always passes
-        the fixed beam_size). A temperature override only produces a genuinely
-        different decode when paired with beam_size=1 (switches CTranslate2
-        into sampling mode). See TODO_LEDGER.md "HANDOFF_ONE_ENGINE Phase D".
-
-        beam_size: None (default) uses self._beam_size (production, 5). An
-        override lets a self-ensemble second hypothesis decode at beam_size=1
-        (+ temperature>0) to get real sampling diversity from the same
-        residency, without touching the primary hypothesis's beam width.
-        """
         common = dict(
             language=language_hint or "th",
             task="transcribe",
@@ -698,10 +508,6 @@ class FasterWhisperEngine(Engine):
         bs = self._batch_size
         words: list[tuple[str, int, int, float | None]] = []
 
-        # Windows sharing a span_index are overlapping pieces of one continuous
-        # speech run; a span short enough to decode whole yields exactly one
-        # window. So a one-window run is a normal span, and a multi-window run is
-        # a long pause-free span that needs decode-per-window plus a stitch.
         runs: list[list[Window]] = []
         if speech_spans:
             raw_windows = speech_windows(audio, self._window_policy, speech_spans=speech_spans)
@@ -716,8 +522,6 @@ class FasterWhisperEngine(Engine):
         long_runs = [run for run in runs if len(run) > 1]
 
         if normal:
-            # One batched call for every normal-length span (own VAD spans, already
-            # each under the encoder cap, so no arbitrary internal re-split happens).
             clip = [{"start": w.start_s, "end": w.end_s} for w in normal]
             segments, bs = self._decode(audio, clip, False, common, bs)
             self._note_segments(segments)
@@ -756,8 +560,6 @@ class FasterWhisperEngine(Engine):
             for tok in decoded:
                 words.append((tok.text, tok.start_ms, tok.end_ms, tok.confidence))
         elif not long_runs:
-            # No speech spans detected at all (rare) — fall back to faster-whisper's
-            # own automatic VAD/whole-file path rather than emitting nothing.
             segments, bs = self._decode(audio, None, True, common, bs)
             self._note_segments(segments)
             for tok in self._words_of(segments, self._no_speech_threshold, self._log_prob_threshold):
@@ -811,21 +613,9 @@ class FasterWhisperEngine(Engine):
 
     def transcribe(self, inp: EngineInput, temperature: float | list[float] | None = None,
                     beam_size: int | None = None) -> EngineResult:
-        """temperature/beam_size: optional decode overrides — None preserves the
-        exact production defaults. Not part of the abstract Engine.transcribe(inp)
-        contract; existing callers (transcribe_batch, other engines) are
-        unaffected since both are keyword-only with no-op defaults. See
-        HANDOFF_ONE_ENGINE §6 (Phase D) and _transcribe_batched's docstring
-        (temperature alone is a no-op at beam_size>1 — pair it with beam_size=1
-        for real sampling diversity): this lets the pipeline call the same
-        loaded residency twice at different decode settings for a
-        self-ensemble N-best pair, with zero second model load."""
         assert self._model is not None, "load() must be called first"
         audio = self._load_array(inp)
 
-        # bias terms ride in as initial_prompt (CT2's native biasing channel).
-        # GAP-5 / 5.1: budget-aware packing, ranked by learned weight (not insertion
-        # order), counted with CT2's own tokenizer so Thai token density is honoured.
         use_prompt = self._bias_channel in ("prompt", "both")
         initial_prompt = self._build_bias_prompt(inp) if inp.bias_terms and use_prompt else None
         self._hotwords = (self._build_hotwords(inp)
@@ -852,10 +642,7 @@ class FasterWhisperEngine(Engine):
         return EngineResult(
             tokens=tokens,
             engine_name="faster_whisper",
-            timestamps_final=True,  # phrase cues are final; skip re-align
-            # 5.4: keep the subdivided per-word list. Tokens persisted to the DB are phrase
-            # cues; word granularity is re-derived on demand from here (CutDeck Phase
-            # 5 filler excision needs word-level cuts inside a cue).
+            timestamps_final=True,
             raw={
                 "segments": list(self._segment_stats),
                 "words": [
@@ -872,13 +659,6 @@ class FasterWhisperEngine(Engine):
         if self._model is not None:
             del self._model
             self._model = None
-        # Undo _register_cuda_dll_dirs's PATH prepend now that this engine no
-        # longer needs it — an engine loaded afterward in this process (e.g. a
-        # NeMo-based Engine B) must not inherit a CUDA-12 cudnn64_9.dll ahead
-        # of its own on PATH. See that function's docstring for the crash this
-        # caused before the fix (CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH).
-        # This restore is this engine's own obligation, not the shared
-        # teardown ritual's — it stays here rather than moving to base.py.
         if self._pre_load_path is not None:
             os.environ["PATH"] = self._pre_load_path
             self._pre_load_path = None
