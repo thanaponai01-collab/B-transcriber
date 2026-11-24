@@ -134,16 +134,30 @@ def test_an_end_before_a_pause_moves_onto_where_the_sound_fades():
     assert 1490 <= snap_end_to_sound(1000, 1700, lev) <= 1520  # an engine end in the quiet
 
 
-def test_no_end_snap_without_a_real_pause_or_far_into_the_quiet():
+def test_no_end_snap_without_a_real_pause():
     from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
     lev = levels_db(_speech((1000, 1500), (1540, 2000)), 16000)
     assert snap_end_to_sound(1000, 1300, lev) is None  # 40 ms gap: not a pause
+
+
+def test_an_anchor_deep_in_the_pause_walks_back_to_the_word_s_end():
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
     lev = levels_db(_speech((1000, 1500)), 16000)
-    assert snap_end_to_sound(1000, 2300, lev) is None  # 800 ms into the quiet: out of reach
+    assert 1490 <= snap_end_to_sound(1000, 2300, lev) <= 1520  # CTC dumped the last letter 800 ms on
 
 
-def test_an_anchor_in_room_noise_does_not_carry_the_end_through_it():
-    """CTC put an unheard letter in fading room noise after the word: the end must not run on into it."""
+def test_flickering_room_noise_still_makes_a_pause():
+    import numpy as np
+    from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
+    y = _speech((1000, 1500), floor=1e-3)
+    y[1525 * 16:1555 * 16] += 0.0105 * np.sin(2 * np.pi * 300 * np.arange(30 * 16) / 16000)  # inside the pause,
+    # about 2 dB over its quiet line (30 dB under the word)
+    lev = levels_db(y, 16000)
+    assert 1490 <= snap_end_to_sound(1000, 1300, lev) <= 1520
+
+
+def test_an_anchor_in_room_noise_walks_back_to_the_word_not_on_through_the_noise():
+    """CTC put an unheard letter in fading room noise after the word: the end walks back, not on to the gate."""
     import numpy as np
     from transcribe.pipeline.word_align import levels_db, snap_end_to_sound
     y = _speech((1000, 1500), level=0.03, floor=0.0)  # a quiet voice, about -33 dB
@@ -151,7 +165,9 @@ def test_an_anchor_in_room_noise_does_not_carry_the_end_through_it():
     amp = 10 ** ((-50 - 20 * t / len(t)) / 20)  # room noise fading -50 -> -70 dB, then the gate
     y[1500 * 16:2200 * 16] = np.random.default_rng(1).normal(0, 1, len(t)) * amp
     lev = levels_db(y, 16000)
-    assert snap_end_to_sound(1000, 1850, lev) is None
+    # Back toward the voice, never on to the gate. Noise this loud (18 dB under the voice) still
+    # counts as sound, so the end may stop inside it (1780 today), not at 1500.
+    assert 1490 <= snap_end_to_sound(1000, 1850, lev) <= 1850
 
 
 def test_a_cue_followed_by_a_gap_ends_with_its_last_word_and_a_touching_cue_does_not_move():
@@ -186,3 +202,19 @@ def test_a_gapped_cue_whose_end_moves_far_back_does_not_reach_into_the_previous_
     new = [w("a", 0, 800), w("b", 850, 950)]  # start snapped back, end snapped back 1.65 s
     retime_cues(cues, old, new)
     assert cues[1].start_ms >= cues[0].end_ms and cues[1].end_ms > cues[1].start_ms
+
+
+def test_a_last_letter_inside_the_next_word_is_kept_before_it_and_an_end_past_it_is_dropped():
+    words = [w("ก", 1000, 1500), w("ข", 2000, 2500)]
+
+    def align(lo, hi, texts):  # CTC put ก's last letter at 2400, inside ข
+        return [(1000, 2400) if t == "ก" else (2000, 2100) for t in texts]
+    seen = []
+
+    def snap_end(start, anchor):
+        seen.append(anchor)
+        return anchor + 300  # the walk runs on into the next word
+    new = retime_words(words, [Cue(start_ms=1000, end_ms=2500)], align, thai, pad_ms=0, duration_ms=3000,
+                       snap_end=snap_end)
+    assert seen[0] == 1990  # kept before ข's start
+    assert new[0]["end_ms"] == 1500  # 2290 is past ข's start: dropped, the engine's end stands

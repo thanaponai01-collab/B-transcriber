@@ -87,16 +87,18 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
 
 def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int = 40, pause: int = 6,
                       ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0,
-                      below_peak_db: float = 30.0, tail_db: float = 25.0) -> int | None:
+                      below_peak_db: float = 30.0, tail_db: float = 25.0, hold_db: float = 3.0) -> int | None:
     """The end of a word followed by a pause: where its sound fades into the quiet, or None.
 
-    ``anchor_ms`` is a time inside the word's last sound (CTC's last letter, which stops before
-    the syllable fades) or just after it. From there the end walks forward while the sound runs
-    on unbroken, at most ``reach`` frames, or back out of quiet. It counts only if ``pause`` quiet frames follow. An anchor on sound but already
-    ``tail_db`` under the peak walks nowhere: CTC puts letters it did not hear late, in the
-    noise. Quiet is as in ``snap_to_sound``, or ``below_peak_db`` under the loudest frame from
-    the word's start to the anchor, whichever is higher: a fading tail is not speech, and
-    neither is room noise. The music-bed gate is as there."""
+    ``anchor_ms`` is CTC's last letter, which stops before the syllable fades, or lands after it.
+    Quiet is as in ``snap_to_sound``, or ``below_peak_db`` under the loudest frame from the
+    word's start ``start_ms`` to the anchor, whichever is higher: a fading tail is not speech.
+    An anchor ``tail_db`` under that peak sits in the word's tail, or in noise where CTC put
+    letters it did not hear, so there the tail counts as quiet too. From a sounding anchor the
+    end walks forward while the sound runs on, at most ``reach`` frames; from a quiet one it
+    walks back to the sound, never past the word's start. It counts only if ``pause`` frames
+    follow that stay under quiet + ``hold_db`` (room noise flickers). The music-bed gate is as
+    in ``snap_to_sound``."""
     f = min(anchor_ms // 10, len(lev) - 1)
     if f < 0:
         return None
@@ -105,16 +107,21 @@ def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int
     if peak - floor < range_db:
         return None
     q = max(floor + quiet_db, peak - below_peak_db)
+    if q <= lev[f] < peak - tail_db:
+        q = peak - tail_db
     g = f
     if lev[f] >= q:
-        if lev[f] < peak - tail_db:
-            return None
         while g < len(lev) - 1 and g - f < reach and lev[g] >= q:
             g += 1
+        if g - f >= reach:
+            return None
     else:
-        while g > 0 and f - g < reach and lev[g - 1] < q:
+        first = max(0, start_ms // 10)
+        while g > first and lev[g - 1] < q:
             g -= 1
-    if abs(g - f) >= reach or (lev[g:g + pause] >= q).any():
+        if g <= first:
+            return None
+    if (lev[g:g + pause] >= q + hold_db).any():
         return None
     return g * 10
 
@@ -129,7 +136,8 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
     ``snap(start, previous word's start)`` then moves every start (aligned or kept) onto the
     sound's edge. Starts never go backwards. ``snap_end(start, anchor)`` gives the
     end of a word a pause follows, from CTC's last letter (the engine's end where the model
-    has no letters); elsewhere a word ends at the engine's end. A word ends by the next word's
+    has no letters), kept before the next word's start; an end found past that start is
+    dropped. Elsewhere a word ends at the engine's end. A word ends by the next word's
     start and keeps at least 1 ms."""
     out = [dict(w) for w in words]
     last_letter: dict[int, float] = {}
@@ -160,7 +168,10 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
         prev = w["start_ms"]
     for i, (w, nxt) in enumerate(zip(out, out[1:] + [None])):
         nxt_ms = duration_ms if nxt is None else nxt["start_ms"]
-        heard = snap_end(w["start_ms"], int(last_letter.get(i, w["end_ms"]))) if snap_end else None
+        anchor = min(int(last_letter.get(i, w["end_ms"])), nxt_ms - 10)  # CTC can put it in the next word
+        heard = snap_end(w["start_ms"], anchor) if snap_end and anchor > w["start_ms"] else None
+        if heard is not None and heard > nxt_ms:  # walked into the next word: no pause between them
+            heard = None
         end = min(w["end_ms"] if heard is None else heard, nxt_ms)
         w["end_ms"] = max(end, w["start_ms"] + 1)
     return out

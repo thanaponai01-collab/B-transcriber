@@ -41,8 +41,8 @@ FRAME_MS = 40         # one frame at 25 fps, for the "within a frame" share
 def audio_edges(y: np.ndarray, sr: int = 16000) -> tuple[list[int], list[int]]:
     """(onsets, offsets) in ms. An onset is a loud 10 ms frame right after PAUSE_MS of quiet. An
     offset is where PAUSE_MS of quiet begins, with a loud frame within DECAY_MS before it. For an
-    offset, quiet is under the room's noise + QUIET_DB or BELOW_PEAK_DB under the loudest frame
-    of those DECAY_MS, whichever is higher, and the room's noise leaves out a noise gate's
+    offset, quiet is under the room's noise + QUIET_DB or BELOW_PEAK_DB under the speech's peak
+    (the DECAY_MS up to its last loud frame), whichever is higher, and the room's noise leaves out a noise gate's
     digital silence: on gated audio (OBS) the gate closes up to a second after the voice stops."""
     import librosa
     rms = librosa.feature.rms(y=y, frame_length=sr * 25 // 1000, hop_length=sr * HOP_MS // 1000)[0]
@@ -54,13 +54,17 @@ def audio_edges(y: np.ndarray, sr: int = 16000) -> tuple[list[int], list[int]]:
     live = level[level > DIGITAL_DB]
     room = np.percentile(live, 10) if len(live) > len(level) // 10 else floor
     d = DECAY_MS // HOP_MS
+    loud_room = level > room + LOUD_DB
     off: list[int] = []
+    last_loud = -1
     for j in range(1, len(level) - n):
-        if off and j * HOP_MS < off[-1] + PAUSE_MS:  # one offset per pause
-            continue
-        peak = level[max(0, j - d):j].max()
+        if loud_room[j - 1]:
+            last_loud = j - 1
+        if last_loud < 0 or j - last_loud > d or (off and j * HOP_MS < off[-1] + PAUSE_MS):
+            continue  # one offset per pause, within DECAY_MS of the speech
+        peak = level[max(0, last_loud - d):last_loud + 1].max()  # the speech's peak, not the tail's
         thr = max(room + QUIET_DB, peak - BELOW_PEAK_DB)
-        if peak > room + LOUD_DB and level[j - 1] >= thr and (level[j:j + n] < thr).all():
+        if level[j - 1] >= thr and (level[j:j + n] < thr).all():
             off.append(j * HOP_MS)
     return on, off
 
