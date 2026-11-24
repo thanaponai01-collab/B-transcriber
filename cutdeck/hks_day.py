@@ -40,11 +40,6 @@ DRAFT_NAME = re.compile(r"^(S\d+\.\d+ |\[(OPENING|BREAK|BREAK 3|CREDITS|SPONSOR\
 PRINT_NOTE = "\n\nDo not write a file: print the JSON answer as your whole reply, nothing else.\n"
 
 
-def clock(t: float) -> str:
-    t = int(t)
-    return f"{t // 3600}:{t // 60 % 60:02d}:{t % 60:02d}"
-
-
 def answer_json(text: str) -> dict:
     """The JSON object in a judge's reply (it may wrap it in a code fence)."""
     a, b = text.find("{"), text.rfind("}")
@@ -99,7 +94,7 @@ def break_blocks(drops: list[dict]) -> list[tuple[float, float, str, str]]:
 
 
 def draft(questions: list[dict], parts: dict[int, str], lines: list[list], drops: list[dict],
-          sponsors: list[dict], social_s: float | None, end_s: float) -> tuple[list[dict], str]:
+          sponsors: list[dict], social_s: float | None, end_s: float, tb: Timebase) -> tuple[list[dict], str]:
     """(markers, question list markdown) for one footage file. ``questions``: the episode section
     (start, line, story, title); ``lines``: the questions prompt's shown lines [id, start, end, text]."""
     order = [l[0] for l in lines]
@@ -128,9 +123,9 @@ def draft(questions: list[dict], parts: dict[int, str], lines: list[list], drops
         if s != story:
             md += ["", f"## S{s} {parts.get(s, '')}".rstrip(), ""]
             story = s
-        md.append(f"- **{s}.{n}** `{clock(a)}`–`{clock(b)}` ({(b - a) / 60:.1f} min) **{title}**  \n  {opening}")
+        md.append(f"- **{s}.{n}** `{timecode(a, tb)}`–`{timecode(b, tb)}` ({(b - a) / 60:.1f} min) **{title}**  \n  {opening}")
     md += ["", "## Breaks and sponsors", ""]
-    md += [f"- `{clock(a)}`–`{clock(b)}` **{name}** {why}" for a, b, name, why in sorted(extra)]
+    md += [f"- `{timecode(a, tb)}`–`{timecode(b, tb)}` **{name}** {why}" for a, b, name, why in sorted(extra)]
     return markers, "\n".join(md)
 
 
@@ -195,7 +190,7 @@ def run(folder: Path, markers: bool = True, model: str = JUDGE_MODEL) -> list[st
         dur = _duration(Path(path))
         durations.append(dur)
         mk, md = draft(f.get("questions", []), parts, shown[media]["lines"], f.get("drops", []),
-                       f.get("sponsors", []), tv[1] if tv else None, dur)
+                       f.get("sponsors", []), tv[1] if tv else None, dur, probe(path))
         all_markers += mk
         md_all += ([f"", f"# {media}"] if len(files) > 1 else []) + [md]
     (out / f"{day} questions.md").write_text("\n".join(md_all) + "\n", encoding="utf-8")
