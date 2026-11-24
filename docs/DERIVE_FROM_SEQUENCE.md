@@ -74,9 +74,10 @@ on clip edges, as `keep_words` or `cut_copy` leaves them). A pure planner turns 
 clone/lift steps that `build_sequence into` already runs (LIVE). It uses clone, never
 `createMoveAction` backward, which renders black (FACTS).
 
-Check: unit tests on the planner against `tests/fakes/premiere.cjs` (any permutation ends
-back-to-back, frame-exact, no hole). Then one live run on a scratch copy, read back with
-`timeline_transcript`.
+**Done, LIVE 2026-11-24** as `premiere_arrange {sequence, result_name, blocks}`. It makes the copy
+itself, so the source is never edited. The blocks must cover one stretch exactly, and it refuses
+any clip that crosses a block edge before it copies anything. Three pieces played 3, 1, 2 read
+back exact with the cover's Scale kept, frames pixel-identical to the source.
 
 ### 3. `paste_from`: one piece of another sequence into this one
 

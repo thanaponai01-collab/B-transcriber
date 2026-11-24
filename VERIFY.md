@@ -131,10 +131,12 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: failed
 - live (2026-11-22): an English F1 broadcast transcribed with `en` and `auto` (identical, English) vs the default (invented Thai); a Thai source with `auto` identical to `th`; through the helper, `auto` and `en` return their own cached jobs; `auto` held out on 10 unseen files, 10 right (docs/ENGINES.md).
 
-## Derive from a sequence: Make Subsequence and paste_from
-- test: `python -m pytest tests/test_cutdeck_driver_commands.py -k "paste or subsequence" -q -p no:cacheprovider` and `node --test tests/cutdeck_control.test.cjs`
+## Derive from a sequence: Make Subsequence, paste_from, arrange
+- test: `python -m pytest tests/test_cutdeck_driver_commands.py -k "paste or subsequence or arrange" -q -p no:cacheprovider` and `node --test tests/cutdeck_control.test.cjs`
 - fail-signal: failed
 - fail-proof (2026-11-24): dropping the landing correction in `_paste_from` (`v_up = v_offset` without `- shift`) turned `test_paste_from_corrects_where_the_paste_landed_and_honours_v_offset` red; restored, green.
+- arrange fail-proof (2026-11-24): dropping the lift of the old stretch from `arrange_steps` turned `test_arrange_plays_the_blocks_in_the_new_order_on_a_copy` red; restored, green.
+- arrange live (2026-11-24, run `20261124-131438-arrange`): three pieces played 3, 1, 2 on a copy, read back exact with the cover's Scale 50, frames pixel-identical to the source.
 - live (2026-11-24, runs `20261124-125650-subseq-probe`, `20261124-130315-paste-from`): Make Subsequence of 1-4 s kept every track, edges, Scale and Gaussian Blur, frame pixel-identical to its parent, one Undo removes it; `paste_from` put that range into another sequence at 3 s with `v_offset` 1, read back frame-exact with the blur and Scale, park cleaned, piece deleted. Design: docs/DERIVE_FROM_SEQUENCE.md.
 
 ## Timeline transcript and cut by words

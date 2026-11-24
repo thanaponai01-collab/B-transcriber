@@ -1305,6 +1305,71 @@ async def _paste_from(args: dict, premiere: Premiere) -> dict:
             "piece": piece if args["keep_piece"] else None}
 
 
+def _arrange_arguments(args: dict, jobs) -> dict:
+    for key in ("sequence", "result_name"):
+        if not isinstance(args.get(key), str) or not args[key].strip():
+            raise ValueError(f"{key} must be a sequence name")
+    if args["sequence"] == args["result_name"]:
+        raise ValueError("result_name must differ from sequence (the source is never edited)")
+    blocks = args.get("blocks")
+    if not isinstance(blocks, list) or len(blocks) < 2:
+        raise ValueError("blocks must list 2 or more {from_ticks, to_ticks} in the order they should play")
+    spans = [(int(_ticks(b.get("from_ticks"), "from_ticks")), int(_ticks(b.get("to_ticks"), "to_ticks")))
+             if isinstance(b, dict) else (0, 0) for b in blocks]
+    tiled = sorted(spans)
+    if any(t <= f for f, t in spans) or any(a[1] != b[0] for a, b in zip(tiled, tiled[1:])):
+        raise ValueError("blocks must cover one stretch exactly, each once, with no gap or overlap "
+                         "(drop pieces first with premiere_keep_words or premiere_cut_copy)")
+    return {"sequence": args["sequence"], "result_name": args["result_name"], "blocks": spans}
+
+
+def arrange_steps(blocks: list[tuple[int, int]], park: int) -> list[dict]:
+    """build_sequence `into` steps that play `blocks` back to back, in this order, from the start of
+    the stretch they tile: clone each to the park in its new order, lift the stretch, clone the park
+    back, lift the park. Clone, never move (PREMIERE_FACTS "createMoveAction of a block backward")."""
+    start = min(f for f, _ in blocks)
+    end = max(t for _, t in blocks)
+    steps, at = [], park
+    for f, t in blocks:
+        steps.append({"op": "clone", "from_ticks": str(f), "to_ticks": str(t), "dt_ticks": str(at - f)})
+        at += t - f
+    return steps + [{"op": "lift", "from_ticks": str(start), "to_ticks": str(end)},
+                    {"op": "clone", "from_ticks": str(park), "to_ticks": str(at), "dt_ticks": str(start - park)},
+                    {"op": "lift", "from_ticks": str(park), "to_ticks": str(at)}]
+
+
+def _arranged(clips: list[tuple], blocks: list[tuple[int, int]]) -> list[tuple]:
+    """Where every clip should sit once the blocks play in their new order."""
+    shift, at = {}, min(f for f, _ in blocks)
+    for f, t in blocks:
+        shift[(f, t)] = at - f
+        at += t - f
+    def moved(c):
+        k, n, s, e = c
+        block = next((b for b in blocks if b[0] <= s < b[1]), None)
+        return (k, n, s + shift[block], e + shift[block]) if block else c
+    return sorted(moved(c) for c in clips)
+
+
+async def _arrange(args: dict, premiere: Premiere) -> dict:
+    blocks = args["blocks"]
+    source = await premiere("read_timeline", {"sequence": args["sequence"]})
+    start, end = min(f for f, _ in blocks), max(t for _, t in blocks)
+    crossing = [c for c in _clips(source) if (c[2] < start < c[3]) or (c[2] < end < c[3])
+                or any(f <= c[2] < t < c[3] for f, t in blocks)]
+    if crossing:
+        raise ValueError(f"these clips cross a block edge; cut there first (Add Edit) or move the edge: {crossing[:10]}")
+    expected = _arranged(_clips(source), blocks)
+    await premiere("duplicate_sequence", {"sequence_name": args["sequence"], "result_name": args["result_name"]})
+    park = max(int(source["end_ticks"]), end) + PARK_GAP_TICKS
+    project = (await premiere("list_project", {"depth": 1}))["path"]
+    await premiere("build_sequence", {"project": project, "base": args["result_name"], "name": args["result_name"],
+                                      "items": [], "options": {"into": True, "steps": arrange_steps(blocks, park)}})
+    after = _clips(await premiere("read_timeline", {"sequence": args["result_name"]}))
+    return {"sequence": args["result_name"], "blocks": [[str(f), str(t)] for f, t in blocks],
+            "missing": sorted(set(expected) - set(after)), "unexpected": sorted(set(after) - set(expected))}
+
+
 HELPER_COMMANDS: dict[str, Command] = {
     "timeline_transcript": Command(
         300, _timeline_transcript_arguments, "read",
@@ -1383,6 +1448,18 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("source", str), ("in_ticks", str), ("out_ticks", str), ("target", str), ("at_ticks", str),
          ("v_offset", int, 0), ("keep_piece", bool, False)),
         run=_paste_from),
+    "arrange": Command(
+        900, _arrange_arguments, "write",
+        """
+        Reorder pieces of a sequence on a COPY named result_name (the source is never edited):
+        `blocks` [{from_ticks, to_ticks}] in the order they should play. Together they must cover
+        one stretch exactly (drop pieces first with premiere_keep_words or premiere_cut_copy), and
+        every clip must start and end inside one block (cut at the edges first). Every track,
+        effect and hand fix moves with its block; what lies outside the stretch stays put. Returns
+        `missing` and `unexpected` clips against the planned layout (both empty = exact).
+        """,
+        (("sequence", str), ("result_name", str), ("blocks", list[dict])),
+        run=_arrange),
     "keep_words": Command(
         1800, _keep_words_arguments, "write",
         """

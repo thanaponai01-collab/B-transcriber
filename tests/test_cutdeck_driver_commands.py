@@ -330,6 +330,8 @@ class _PasteHost:
                     seq[:] = [c for c in seq if not (c[:2] == new[:2] and c[2] < new[3] and c[3] > new[2])] + [new]
         elif command == "remove_piece":
             del self.seqs[args["name"]]
+        elif command == "duplicate_sequence":
+            self.seqs[args["result_name"]] = list(self.seqs[args["sequence_name"]])
         return {}
 
 
@@ -376,3 +378,51 @@ def test_paste_from_checks_its_arguments():
         pass
     else:
         raise AssertionError("remove_piece accepted a user sequence")
+
+
+def _arrange(host, blocks, sequence="Cut"):
+    args = driver_commands.COMMANDS["arrange"].prepare(
+        {"sequence": sequence, "result_name": "Cut v2",
+         "blocks": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in blocks]}, None)
+    return asyncio.run(driver_commands.COMMANDS["arrange"].run(args, host))
+
+
+def test_arrange_plays_the_blocks_in_the_new_order_on_a_copy():
+    S = _PasteHost.S
+    host = _PasteHost()
+    # A 2 s intro left alone, then three pieces A (2-4), B (4-7, with a V2 cover), C (7-8); an outro.
+    cut = [("V", 1, 0, 2 * S), ("V", 1, 2 * S, 4 * S), ("V", 1, 4 * S, 7 * S), ("V", 2, 5 * S, 6 * S),
+           ("V", 1, 7 * S, 8 * S), ("A", 1, 2 * S, 4 * S), ("A", 1, 4 * S, 7 * S), ("V", 1, 8 * S, 9 * S)]
+    host.seqs["Cut"] = list(cut)
+    out = _arrange(host, [(7 * S, 8 * S), (4 * S, 7 * S), (2 * S, 4 * S)])  # C, B, A
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert sorted(host.seqs["Cut v2"]) == sorted([
+        ("V", 1, 0, 2 * S), ("V", 1, 2 * S, 3 * S),                          # intro, C
+        ("V", 1, 3 * S, 6 * S), ("V", 2, 4 * S, 5 * S), ("A", 1, 3 * S, 6 * S),  # B with its cover
+        ("V", 1, 6 * S, 8 * S), ("A", 1, 6 * S, 8 * S),                      # A
+        ("V", 1, 8 * S, 9 * S)])                                            # outro untouched
+    assert sorted(host.seqs["Cut"]) == sorted(cut)  # the source is never edited
+
+
+def test_arrange_refuses_a_clip_across_a_block_edge_before_copying():
+    S = _PasteHost.S
+    host = _PasteHost()
+    host.seqs["Cut"] = [("V", 1, 0, 3 * S), ("V", 1, 3 * S, 4 * S)]
+    try:
+        _arrange(host, [(2 * S, 4 * S), (0, 2 * S)])
+    except ValueError as e:
+        assert "cross a block edge" in str(e)
+    else:
+        raise AssertionError("arranged across a clip")
+    assert "Cut v2" not in host.seqs
+
+
+def test_arrange_blocks_must_tile_one_stretch():
+    prep = driver_commands.COMMANDS["arrange"].prepare
+    for blocks in ([[0, 5]], [[0, 5], [6, 9]], [[0, 5], [4, 9]], [[0, 5], [0, 5]]):
+        try:
+            prep({"sequence": "a", "result_name": "b",
+                  "blocks": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in blocks]}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {blocks}")

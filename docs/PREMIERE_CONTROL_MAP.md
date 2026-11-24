@@ -60,6 +60,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Keep only these phrases on a copy, every track kept (a Short from a synced rough cut) | `premiere_keep_words` | helper + `cut_copy` | LIVE 2026-11-22 |
 | A range of a sequence as its own sequence, every track and effect (Make Subsequence) | `premiere_make_subsequence` | UXP | LIVE 2026-11-24 |
 | Take a range of one sequence (split, backup pool, YT cut) into another at a time, every track and effect kept, overwriting | `premiere_paste_from` | helper: `make_subsequence` + menu Copy/Paste + `build_sequence` into + `remove_piece` | LIVE 2026-11-24 |
+| Reorder pieces of a sequence on a copy, every track and effect kept (blocks in play order) | `premiere_arrange` | helper: `duplicate_sequence` + `build_sequence` into | LIVE 2026-11-24 |
 | Delete a piece sequence `paste_from` kept (name ends ` (CutDeck piece)`) | `premiere_remove_piece` | UXP | LIVE 2026-11-24 |
 | Active sequence summary | `premiere_read_sequence` | UXP | LIVE |
 | Open / switch sequence | `premiere_open_sequence` | UXP | LIVE 2026-11-21 |
