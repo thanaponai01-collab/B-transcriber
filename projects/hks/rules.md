@@ -115,8 +115,7 @@ First run, on the user's own 1123 cut: [study/20261123-checks.md](study/20261123
 ## Short versions and finishing (from the user's fixes, 2026-11-24)
 
 What the user changed in the agent's highlight, FB and 1-min builds of 20261124 (why: [principles.md](principles.md)
-HKS-28 to 31; numbers: [memory/yt-20261124-draft.md](memory/yt-20261124-draft.md)). Seen once each; ask before
-treating one as fixed.
+HKS-C23 to C26; numbers: [memory/yt-20261124-draft.md](memory/yt-20261124-draft.md)). Confirmed by the user on 2026-11-24.
 
 - **Music bed under the whole piece, never a gap** (already the rule in [workflow-log.md](workflow-log.md),
   "BGM under the whole show"; the agent's builds broke it twice). `[BGM]Where Everything Began.wav` looped:
@@ -126,14 +125,14 @@ treating one as fixed.
 - **A flash at every section change, including the start of the body** (hook → sting → body): glitch
   (`Glitch redblue.mov`) + an invert AL frame + a whoosh just before the cut. The user added one at the
   sting → body join that the agent left plain.
-- **Hook button = set-up + payoff** (HKS-28). Before picking a hook's last line, read the line before it in
+- **Hook button = set-up + payoff** (HKS-C23). Before picking a hook's last line, read the line before it in
   the source; if the payoff needs it, take both.
-- **Short body: no mid-body clip that's already in the hook** (HKS-29). Check the source ranges of every
+- **Short body: no mid-body clip that's already in the hook** (HKS-C24). Check the source ranges of every
   body piece against the hook's; only the ending may overlap, and then with more than the hook showed.
-- **Square reframe per shot** (HKS-30). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame
+- **Square reframe per shot** (HKS-C25). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame
   (the user: 263 → 333, 363, 368). Where the subject moves, razor the cover and re-position each part.
   Render a frame of each cover in the square before handover.
-- **The 1-min ends on a held face under the sting** (HKS-31), then the end card; target just under 60 s
+- **The 1-min ends on a held face under the sting** (HKS-C26), then the end card; target just under 60 s
   (the user's: 58.00).
 - **Tighten under a cover, and let a piece start early for its set-up.** In the FB the user cut one 18 s
   piece into seven under a new B-roll cover, and started pieces 1.5–6.7 s earlier or later than the agent
