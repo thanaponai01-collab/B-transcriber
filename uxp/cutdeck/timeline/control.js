@@ -604,6 +604,14 @@ async function importSequences(ppro, { path, sequence_ids }) {
   return { imported, sequences };
 }
 
+/* create_project: a new empty project at `path` (Project.createProject, premierepro.txt:490, static),
+   for a scratch project the user asked for. Says which project is active afterwards. */
+async function createProject(ppro, { path }) {
+  const created = await ppro.Project.createProject(path);
+  const active = await ppro.Project.getActiveProject();
+  return { created: !!created, path: created ? created.path : null, active: active ? active.path : null };
+}
+
 async function saveProject(ppro) {
   const project = await activeProject(ppro);
   return { saved: await project.save(), path: project.path };
@@ -662,6 +670,7 @@ function controlHandlers(ppro) {
     import_files: (args) => importFiles(ppro, args),
     import_sequences: (args) => importSequences(ppro, args),
     save_project: () => saveProject(ppro),
+    create_project: (args) => createProject(ppro, args),
     export_frame: (args) => exportFrame(ppro, args),
   };
 }

@@ -55,6 +55,15 @@ def _seconds_to_ticks(value, name: str) -> str:
     return str(round(value * PPRO_TICKS_PER_SECOND))
 
 
+def _create_project_arguments(args: dict, jobs) -> dict:
+    path = args.get("path")
+    if not isinstance(path, str) or not path.lower().endswith(".prproj") or not Path(path).is_absolute():
+        raise ValueError("path must be an absolute .prproj path")
+    if Path(path).exists():
+        raise ValueError(f"{path} already exists; create_project never replaces a project")
+    return {"path": path}
+
+
 def _no_arguments(args: dict, jobs) -> dict:
     return {}
 
@@ -938,6 +947,14 @@ CONTROL_COMMANDS: dict[str, Command] = {
         use. Returns the sequences that are new in the project.
         """,
         (("path", str), ("sequence_ids", list[str]))),
+    "create_project": Command(
+        120, _create_project_arguments, "write",
+        """
+        Create a new, empty Premiere project at `path` (an absolute path ending .prproj that does
+        not exist yet) for scratch work, and say which project is active afterwards. Use only when
+        the user asked for a project to be made; never on a path that holds one.
+        """,
+        (("path", str),)),
     "save_project": Command(
         120, _no_arguments, "write",
         """
