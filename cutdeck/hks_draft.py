@@ -47,7 +47,7 @@ def draft(folder: Path) -> dict:
     for media, keeps in judge_keeps(folder).items():
         f = ep["files"].get(media, {})
         path = str(folder / "1. FOOTAGE" / media)
-        k, covered, n = hks_tighten.tighten(keeps, hks_tighten.silences(path), f.get("layout", []),
+        k, covered, n = hks_tighten.tighten(keeps, hks_tighten.pauses(path),f.get("layout", []),
                                             f.get("cut_points", []))
         stories = hks_covers.story_spans(f.get("topics", []), f.get("duration", 1e9))
         # Every cut between keeps that is not on a legal point gets the best cover candidates;

@@ -9,8 +9,9 @@ A pause inside a keep becomes a cut when the cut can be hidden:
 Anywhere else the pause stays (studio picture with no camera change: a jump cut).
 
 Pauses come from the audio, not from word times: Whisper stretches words over pauses (90 % of the
-gaps between words on 20261120 are under 0.1 s). ``silences`` runs ffmpeg ``silencedetect`` once
-per footage file and caches it.
+gaps between words on 20261120 are under 0.1 s). ``pauses`` reads them from the shared level
+envelope (``timeline_transcript.quiet_runs``). ``silences`` (ffmpeg ``silencedetect``) stays for
+``hks_judge`` and ``--quiet ffmpeg``.
 
 ``--check`` isolates 4.1 from the content cut: it takes the user's own keeps with every gap under
 3 s closed (the story cut, without its tightening), tightens them, and scores the result with
@@ -56,6 +57,24 @@ def silences(path: str, cache: Path = CACHE) -> list[tuple[float, float]]:
     key.write_text(json.dumps(out))
     hks_cache.trim(cache.parent)
     return out
+
+
+FLOOR_PAUSE_DB = 18.0  # floor + this: the margin that matches silencedetect -35 dB on the 8 tuning days
+
+
+def pauses(path: str) -> list[tuple[float, float]]:
+    """The pauses tightening cuts: runs of the shared level envelope of ``timeline_transcript``
+    below its noise floor + FLOOR_PAUSE_DB (docs/SYSTEM_LAYERS.md). At the point-quiet margin
+    (+6 dB) it finds too few pauses (0.6-3 s recall 0.31 -> 0.13); at +18 dB it scores the same
+    as ffmpeg silencedetect -35 dB, which it replaced (``--check``, 2026-11-25)."""
+    from cutdeck.timeline_transcript import media_sha256, quiet_runs, source_levels
+    root = Path(__file__).resolve().parent.parent
+    levels = source_levels(path, root / "output" / "timeline_transcripts" / "levels"
+                           / f"{media_sha256(path, root / 'transcriber.db')}.npy")
+    return quiet_runs(levels, int(MIN_SILENCE * 1000), FLOOR_PAUSE_DB)
+
+
+QUIET = {"ffmpeg": silences, "floor": pauses}
 
 
 def kind_at(layout: list, t: float) -> str | None:
@@ -122,7 +141,7 @@ def untightened(keeps: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return [(a, b) for a, b in out]
 
 
-def check_day(folder: Path) -> dict:
+def check_day(folder: Path, quiet: str = "floor") -> dict:
     from cutdeck import hks_score
     from cutdeck.hks_episode import load
     from cutdeck.hks_gold import read_day
@@ -134,7 +153,7 @@ def check_day(folder: Path) -> dict:
         f = next((v for k, v in ep["files"].items() if k.lower() == media.lower()), {})
         base = untightened([(a / 1000, b / 1000) for a, b in gold.keeps[media]])
         path = str(folder / "1. FOOTAGE" / next(k for k in ep["files"] if k.lower() == media.lower()))
-        k, c, n = tighten(base, silences(path), f.get("layout", []), f.get("cut_points", []))
+        k, c, n = tighten(base, QUIET[quiet](path),f.get("layout", []), f.get("cut_points", []))
         keeps[media], covered[media] = [list(x) for x in k], [list(x) for x in c]
         counts = {x: counts.get(x, 0) + n[x] for x in n}
     proposal = hks_score.parse_proposal({"keeps": keeps, "covered": covered})
@@ -147,12 +166,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--all", required=True)
     p.add_argument("--check", action="store_true")
     p.add_argument("--holdout", action="store_true")
+    p.add_argument("--quiet", choices=sorted(QUIET), default="floor", help="where the pauses come from")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     tuning, holdout = day_folders(args.all)
     for group, folders in (("tuning", tuning), ("holdout", holdout if args.holdout else [])):
         for folder in folders:
-            r = check_day(folder)
+            r = check_day(folder, args.quiet)
             print(group, json.dumps(r, ensure_ascii=False, default=str)[:1500])
 
 

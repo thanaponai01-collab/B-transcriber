@@ -512,3 +512,14 @@ def test_the_offline_cli_prints_the_warnings(monkeypatch, capsys):
         "lines": [], "warnings": [note]})
     assert tt.main(["--prproj", "x.prproj", "--sequence", "S"]) == 0
     assert note in capsys.readouterr().out
+
+
+def test_quiet_runs_finds_long_quiet_stretches_only():
+    import numpy as np
+    from cutdeck.timeline_transcript import quiet_runs
+    lv = np.full(200, -20.0, dtype=np.float32)
+    lv[:20] = -60.0      # 200 ms quiet: too short at min 300 ms
+    lv[50:90] = -60.0    # 400 ms quiet
+    lv[150:190] = -50.0  # 400 ms at floor + 10 dB: quiet only with a wider margin
+    assert quiet_runs(lv, 300, 6.0) == [(0.5, 0.9)]
+    assert quiet_runs(lv, 300, 12.0) == [(0.5, 0.9), (1.5, 1.9)]
