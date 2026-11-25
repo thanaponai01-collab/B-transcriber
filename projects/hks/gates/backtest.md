@@ -141,6 +141,12 @@ transcripts, cut at the moment of each real handover. Policy: label.
 | 1120 non-HKS session (d40bb0c8) | 0 | allow |
 | This gate-building session (891d764d), after the hook went live | 0 | allow (before the fix it blocked 3 times on scripts that only named a build command) |
 
+**Scope.** The hook acts only in an HKS session: the user typed HKS or โหนกระแส (injected
+`<system-reminder>` text doesn't count), or a tool call named a โหนกระแส path. On the replay, the
+four HKS build sessions had both (typed 1–2 times, day project in 32–119 tool calls). The two
+1RaceClub sessions (aac39c86, a8168db8) had neither, and both now pass. Before this, the hook
+blocked the 1RaceClub Shorts session (aac39c86).
+
 A draft change counts only when the command sends it to Premiere: a CutDeck MCP tool, or Python
 calling `helper_protocol` / `ask({` / `cdv.py … call` with a build command. A handover counts only
 when `cutdeck.hks_handover` is run.

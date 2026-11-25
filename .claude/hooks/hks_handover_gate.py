@@ -23,13 +23,18 @@ RUNS = re.compile(r"(?<![\w./-])(python3?|py)(\.exe)?\s")  # Python run as a com
 SENDS = re.compile(r"helper_protocol|\bask\(\{|cdv\.py\b.*\bcall\b", re.S)
 # The handover command itself, run (not a file that merely has hks_handover in its name).
 HANDOVER = re.compile(r"-m\s+cutdeck\.hks_handover\b|\bhks_handover\.py\b")
+# The session is HKS work: the user typed HKS / โหนกระแส, or a tool call named the day project.
+# On 1123-1125 every HKS build session had both; the 1RaceClub sessions had neither.
+HKS_TYPED = re.compile(r"โหนกระแส|\bHKS\b", re.I)
+INJECTED = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 READ_ONLY = re.compile(r"\s*(cat|head|tail|sed|grep|rg|ls|git|less|type|Get-Content|Select-String)\b")
 REPO = Path(__file__).resolve().parents[2]
 LOG = REPO / "output" / "hks_gates" / "stop_hook.log"
 
 
 def events(transcript: Path):
-    """(kind, text) in order: 'mutate', 'handover' (its result text), 'say' (assistant text)."""
+    """(kind, text) in order: 'hks' (the session is HKS work), 'mutate', 'handover' (its result
+    text), 'say' (assistant text)."""
     pending = {}
     for line in transcript.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
@@ -37,11 +42,18 @@ def events(transcript: Path):
         except ValueError:
             continue
         content = (o.get("message") or {}).get("content")
+        if o.get("type") == "user" and not o.get("isMeta") and not o.get("isCompactSummary"):
+            typed = content if isinstance(content, str) else " ".join(
+                x.get("text", "") for x in content or [] if isinstance(x, dict) and x.get("type") == "text")
+            if HKS_TYPED.search(INJECTED.sub("", typed)):
+                yield "hks", "typed"
         if not isinstance(content, list):
             continue
         for x in content:
             if x.get("type") == "tool_use":
                 name = x.get("name", "")
+                if "โหนกระแส" in json.dumps(x.get("input"), ensure_ascii=False):
+                    yield "hks", "day project"
                 cmd = (x.get("input") or {}).get("command", "") if name in ("Bash", "PowerShell") else ""
                 # A draft change is a CutDeck tool, or Python that sends a build command to Premiere;
                 # a script or grep that only names one is not.
@@ -60,6 +72,8 @@ def events(transcript: Path):
 
 def verdict(evs: list[tuple[str, str]], policy: str) -> str | None:
     last = {k: max((i for i, (kind, _) in enumerate(evs) if kind == k), default=-1) for k in ("mutate", "handover", "say")}
+    if not any(kind == "hks" for kind, _ in evs):
+        return None  # not HKS work (1RaceClub and the rest have no handover gates)
     if last["mutate"] < 0:
         return None  # no draft touched in this session
     if last["mutate"] > last["handover"]:
