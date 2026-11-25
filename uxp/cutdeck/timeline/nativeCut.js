@@ -15,7 +15,7 @@ const { runTransaction, cloneSequence, openAndActivate, getOrCreateBin, asBinLik
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { addRemoveItemsAction } = require("../host/trackItems.js");
-const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode } = require("./cutPlanApply.js");
+const { cutsToTicks, planCutApply, verifyReadBack, createFastShiftFor, isInsideCut, overlapsCut, unsupportedReason, timecode, shiftFor } = require("./cutPlanApply.js");
 
 const CLONE_GAP = 2n * TICKS_PER_SECOND;
 const MOVE_BATCH = 3000;
@@ -325,6 +325,30 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   return steps;
 }
 
+/* The clone keeps the source's sequence markers at their old times. Each moves back by what was cut
+   before it (Markers.createMoveMarkerAction, premierepro.txt:423: an absolute time, PREMIERE_FACTS);
+   one inside a cut marked removed material and is removed (createRemoveMarkerAction :424, as
+   remove_markers). One undo step, none when nothing changes. */
+async function moveMarkers(ppro, project, seq, cuts) {
+  const owner = await ppro.Markers.getMarkers(seq);
+  const changes = [];
+  for (const marker of owner.getMarkers() || []) {
+    const t = toTicks(marker.getStart());
+    const inside = cuts.some(([a, b]) => a < t && t < b);
+    const by = shiftFor(t, cuts);
+    if (inside || by > 0n) changes.push({ marker, inside, to: t - by });
+  }
+  if (!changes.length) return 0;
+  runTransaction(project, "CutDeck: move markers", (compound) => {
+    for (const { marker, inside, to } of changes) {
+      const action = inside ? owner.createRemoveMarkerAction(marker)
+        : owner.createMoveMarkerAction(marker, ppro.TickTime.createWithTicks(to.toString()));
+      if (!compound.addAction(action)) throw new Error("addAction(marker) returned false");
+    }
+  });
+  return 1;
+}
+
 /* The whole Route A: copy, plan, apply, verify, open. Throws before any edit on a refusal. */
 async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
   if (cutsJson.source_sequence) {
@@ -386,6 +410,7 @@ async function applyNativeCut(ppro, project, source, cutsJson, resultName) {
     let steps, actual, problems;
     try {
       steps = await applyPlan(ppro, project, copy, items, cuts, toTicks(await copy.getTimebase()), timed);
+      steps += await timed("move markers", () => moveMarkers(ppro, project, copy, cuts));
       // Live 2026-10-27: right after the last close-gaps batch the read-back was short 370 clips, all
       // "missing" — the same short read close gaps retries. Only a read with nothing but missing
       // clips is retried; a misplaced or extra clip is a real mismatch.
