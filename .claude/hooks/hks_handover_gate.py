@@ -68,7 +68,8 @@ def verdict(evs: list[tuple[str, str]], policy: str) -> str | None:
     overridden = re.findall(r"OVERRIDDEN (\w+)", result)
     if failed and policy == "block":
         return f"hks_handover failed {failed}. Fix each one and run hks_handover again before handing over."
-    said = evs[last["say"]][1] if last["say"] > last["handover"] else ""
+    # A turn's message can come as several text blocks: read all of them after the handover run.
+    said = " ".join(text for kind, text in evs[last["handover"] + 1:] if kind == "say")
     missing = [g for g in failed + overridden if g not in said]
     if missing:
         return (f"hks_handover failed or overrode {failed + overridden}, and your last message doesn't name "
