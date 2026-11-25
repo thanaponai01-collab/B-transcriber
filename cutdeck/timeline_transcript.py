@@ -432,6 +432,16 @@ def noise_floor(levels) -> float:
     return float(np.clip(np.percentile(levels, 5), _FLOOR_MIN_DB, _FLOOR_MAX_DB)) if len(levels) else _FLOOR_MIN_DB
 
 
+def quiet_runs(levels, min_ms: int = 300, tail_db: float = TAIL_DB) -> list[tuple[float, float]]:
+    """(start s, end s) of every run of at least ``min_ms`` whose 10 ms windows are all quiet:
+    below the file's noise floor + ``tail_db``, the same rule ``tighten`` and ``word_cut`` use."""
+    import numpy as np
+    quiet = np.asarray(levels) < noise_floor(levels) + tail_db
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], quiet.astype(np.int8), [0]))))
+    return [(int(a) * ENVELOPE_MS / 1000, int(b) * ENVELOPE_MS / 1000)
+            for a, b in zip(edges[::2], edges[1::2]) if (b - a) * ENVELOPE_MS >= min_ms]
+
+
 REACH_MS = 400  # how far a word edge may grow into a pause to meet sound the engine left out
 
 
