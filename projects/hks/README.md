@@ -27,6 +27,7 @@ instead of cutting by hand ([build-plan.md](build-plan.md)).
 ## Code and tests
 - `cutdeck/hks_gold.py`, `hks_clock.py`, `hks_audit.py`, `hks_score.py`, `hks_build.py`, `hks_words.py`
   (`tests/test_hks_*.py`)
+- `cutdeck/hks_cut_check.py` — the agent's own cut mistakes in a saved draft: visible cuts in speech, same-frame cuts, unsafe J/L holds (`tests/test_hks_cut_check.py`; rules.md "My own mistakes")
 - `cutdeck/honekasae_export.py` — one-command export to Media Encoder (`tests/test_honekasae_export.py`)
 - `cutdeck/topic_layout.py`, `topic_speakers.py` (`tests/test_cutdeck_topic_*.py`)
 - `uxp/cutdeck/timeline/buildSequence.js`, `hksSpikeProbe.js`
