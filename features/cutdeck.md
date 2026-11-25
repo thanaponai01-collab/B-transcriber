@@ -121,6 +121,13 @@
 - verify: Timeline transcript and cut by words
 - status: live-proven 2026-11-22 on a 7-track scratch: every track kept, 0 cuts in sound
 
+## Derive a Short from a parent (MCP)
+- what: Pieces of a parent sequence (yt, a rough cut), in play order, into a copy of the 9:16 template: every track, effect and Graphic kept, a fixed number of edits whatever the piece count, temporaries removed, saved before and after. The template's own clips stay where the Short doesn't cover them. paste_from refuses a third paste into one target without per_piece_reason, so a Short can't fall back to piece by piece silently.
+- mcp: `premiere_derive_short(parent, template, result_name, pieces=[{from_ticks,to_ticks}], at_ticks=0)`
+- trace: `_derive_short` @ cutdeck/driver_commands.py > `make_subsequence`, `cut_copy`, `_arrange` (4 build_sequence steps, clone `ranges`), `_paste_from`, `remove_piece`; guard `_paste_from_guarded`
+- verify: Derive a Short at fixed cost (VERIFY.md)
+- status: live-proven 2026-11-26 on a scratch project: 40 pieces in 47.5 s, 0 missing / 0 unexpected; edges render identical to paste-per-piece
+
 ## Plan a Short by its words (MCP)
 - what: Give the phrases to keep, in order; each piece's In/Out is placed in the source file's own pauses around its words; returns items for premiere_build_sequence. Edits nothing.
 - mcp: `premiere_plan_pieces(keep, sequence?, track?, pad_ms=60, wordless_ms=0)`
