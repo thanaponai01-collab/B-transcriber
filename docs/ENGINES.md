@@ -207,7 +207,11 @@ Short trailing pieces hide (A) as well as 0 ms ones do: on gold Short2 at −1.2
 window ends on a 6.8 s vowel mark, then a 20 ms and a 0 ms piece, and 4 s of speech is never decoded
 (Short3 at +2.3 dB: 5.9 s, then 40 ms and 0 ms). A gain change under 2.5 dB is enough to tip the
 decoder into it, which moved the gold `cer_thai` from 0.053 to 0.093. Trailing pieces of 40 ms or
-less now count as collapsed (`_COLLAPSED_PIECE_MS`, 2026-11-25).
+less now count as collapsed (`_COLLAPSED_PIECE_MS`, 2026-11-25). At −12 dB the same stretch hides
+behind a longer piece (Short2: then a 1020 ms piece; Short3: then a 540 ms one), so a piece of 3 s or
+more among a window's last 6 is the suspect whatever follows it (`_GROSS_STRETCH_MS`). With both
+rules, the gold `cer_thai` stays at 0.050–0.062 across −18 to +6 dB (master: 0.053–0.094), and 0 dB
+is unchanged at 0.0530.
 
 **VAD thresholds.** This engine is whole-file, so `ingest.py`'s VAD never runs on its audio. Left
 alone, faster-whisper uses threshold 0.5 / min silence 2000 ms, which clips soft Thai sentence-final
