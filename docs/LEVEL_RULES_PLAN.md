@@ -127,6 +127,35 @@ Today's rule misses 585 of 2,268 edges. Spectrograms of a sample from 20261120 a
 
 `sound_runs` feeds ASR chunks, so its move goes through the `cer_thai` harness (PR 5).
 
+### 5. Beyond HKS: 54 sources, 7 shows
+
+`python tools/measure_audio_condition.py --json output/audio_condition/sources.json` (read-only) measured every transcribed source still on disk plus one file each from คชาภา EP33, พุธทอล์ค 234 and CFD 97: 54 sources. Per-day edge scores come from `measure_middle_layer.py --days <day> --reach 40`, saved in `output/audio_condition/edges_<day>.json`. Both ran before PR 2, on the same floor (clamped p5) and the ffmpeg −35 dB rule.
+
+**The −35 dB rule fails on the loud HKS days.** Edges called quiet at ±40 ms, per tuning day:
+
+| Day | Source LUFS | ffmpeg −35 dB | Clamped floor + 6 |
+|---|---|---|---|
+| 20261001 | −10.4 | **6 %** | 83 % |
+| 20261012 | −8.7 | **18 %** | 74 % |
+| The other six | −22 to −29 | 60 to 80 % | 62 to 95 % |
+
+On the YouTube-master days, `hks_judge` and `hks_draft` find almost no pauses. This is PR 3's case, measured per day.
+
+**Other shows have a much smaller range** (p95 − clamped floor):
+
+| Show | Floor | Range |
+|---|---|---|
+| HKS, โหน(หลัง)กระแส | −49 to −65 dB | 33 to 48 dB |
+| คชาภา (4 sources) | −36 to −41 dB | **19 to 30 dB** |
+| BeamOil (2) | −32 to −40 dB | **22 to 27 dB** |
+| CFD (1) | −47 dB | 26 dB |
+| 1RaceClub raw recordings (8 of 9; the ninth, 2026-11-21 10-55-45, has a floor of −43 dB and a range of 21 dB) | −77 to −85 dB unclamped | 40 to 49 dB |
+
+- `QUIET` and `PAUSE` were tuned on HKS's 37 to 44 dB range. On a 19 to 27 dB range, floor + 18 sits near speech. This meets the reopen condition for per-source parameters below, except for the edit gold. No คชาภา, BeamOil or CFD cut is in a form the harness reads yet.
+- **The clamp binds on 22 of 54.** It lifts 1RaceClub raw floors 12 to 20 dB above the room. On BeamOil the true floor (−31.7) sits above −35, and the clamp pulls it down. The clamp stays for now (see the status at the top).
+- **5.1 sources:** 4 of the 5 sources on 20261112 have 6 channels. `ingest._load_audio_av` averages all channels (`mean(axis=0)`), which dilutes centre-channel dialogue. 20261112 also has the highest rate of kept mid-words called quiet (26 % vs 9 to 18 %). This is a hypothesis and has not been tested.
+- **The same 8 1RaceClub raw recordings** have a loudness range of 9 to 19 LU (HKS: 5 to 12). Between 50 and 74 % of their windows sit below floor + 6.
+
 ## PRs
 
 Landing order: 1 → 2 → 3 → 5. PR 4 is independent and branches from trunk.
