@@ -793,6 +793,8 @@ of the imported `TT russell wall v5 (Claude)` (for the 9:16 settings and the use
   crop top at the seam). Kimi framed per scene; Max still on one default framing.
 - Route: `cut_copy`/`keep_words` failed on yt ("razor filler on audio track 0 is not one frame long"), so pieces went in
   with `paste_from` per piece. Premiere crashed on the ~19th paste_from in a row (unsaved work lost); after that, a
+  [correction 2026-11-26, from the helper's command log: Premiere died five times that evening, two of them 10 s after a
+  save, so saving only limited the loss; the route is now `derive_short`, PREMIERE_FACTS "Short built piece by piece"]
   `save_project` after every paste and no crash in 23 more.
 - **User feedback (same night):** "jerky between cuts" + "it's storytelling, not action; I don't understand it; use words
   to organize the story; Kimi needs context first (what, why)". Cause of the jerk: 16 one-frame flashes from other
