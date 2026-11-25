@@ -11,7 +11,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   // snapCloneIn: a clone's in-point is floored to a whole frame and its head grows by the same
   // amount, so it lands that much early (live 2026-11-02, 59.94 fps: a razor filler whose in-point
   // sat 1058400 ticks past a frame cloned to 1058400 ticks before its edge, one frame + 1058400 long).
-  // nullClipRead({ kind, track, moveCalls }): true makes that clip read return null entries (live 2026-10-25).
+  // nullClipRead({ kind, track, moveCalls, outPointCalls, trackReads }): true makes that clip read return null entries (live 2026-10-25).
   // rippleMode: what a ripple remove shifts. "track": later clips on that clip's own track;
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
   let guid = 0;
@@ -26,6 +26,8 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   let transactions = 0;
   let moveCalls = 0;
   let cloneCalls = 0;
+  let outPointCalls = 0;
+  let trackReads = 0; // getTrackItems calls: one per track per read
   const clones = [];
   let inTx = false;
   // Live run 2026-09-24: an action created outside executeTransaction's callback throws.
@@ -95,13 +97,13 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
       return act({ type: "move", raw: r, by: BigInt(t.ticks) });
     },
     createSetInPointAction: (t) => act({ type: "setIn", raw: r, t: BigInt(t.ticks) }),
-    createSetOutPointAction: (t) => act({ type: "setOut", raw: r, t: BigInt(t.ticks) }) };
+    createSetOutPointAction: (t) => { outPointCalls++; return act({ type: "setOut", raw: r, t: BigInt(t.ticks) }); } };
     return item;
   };
   const wrapTrack = (seq, kind, i) => ({ isMuted: async () => !!seq.tracks[kind][i].muted,
     getTrackItems: (type) => (type === 2
     ? transitions.filter((x) => seq === src && x.kind === kind && x.track === i).map((x) => (x.null ? null : { getStartTime: async () => ({ ticks: x.start.toString() }), getEndTime: async () => ({ ticks: x.end.toString() }) }))
-    : seq.tracks[kind][i].map((r) => (nullClipRead({ kind, track: i, moveCalls }) ? null : wrapItem(r)))) });
+    : (trackReads++, seq.tracks[kind][i].map((r) => (nullClipRead({ kind, track: i, moveCalls, outPointCalls, trackReads }) ? null : wrapItem(r))))) });
   const wrapSeq = (seq) => ({ get name() { return seq.name; }, guid: { toString: () => seq.id }, _seq: seq,
     getVideoTrackCount: async () => seq.tracks.video.length, getAudioTrackCount: async () => seq.tracks.audio.length,
     getVideoTrack: async (i) => wrapTrack(seq, "video", i), getAudioTrack: async (i) => wrapTrack(seq, "audio", i),
