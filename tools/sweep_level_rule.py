@@ -1,12 +1,14 @@
-"""Choose the point rule of transcribe/audio/levels.py from the user's own cuts.
+"""Choose a quiet rule of transcribe/audio/levels.py from the user's own cuts.
 
 Positives: the sound edges of the user's finished YouTube bodies (hks_gold). Negatives: as many
 mid-points of words the user kept (250 ms or longer). A point is quiet when the rule leaves a
-quiet 10 ms window within ``--collar`` ms of it. J = % of edges called quiet - % of kept
+quiet 10 ms window within ``--collar`` ms of it (``--need any``: hks_cut_check's question) or
+every window there quiet (``--need all``: word_cut's and timeline edges', collar 20). J = % of edges called quiet - % of kept
 mid-words called quiet. Rules are picked leave-one-day-out on the tuning days; the CI resamples
 days. A held-out day is scored once, with the rule frozen beforehand.
 
     python tools/sweep_level_rule.py                      # sweep the tuning days
+    python tools/sweep_level_rule.py --need all --collar 20
     python tools/sweep_level_rule.py --holdout 20261118 --rule 18,10,3
 """
 from __future__ import annotations
@@ -28,19 +30,20 @@ from transcribe.audio import levels as lv  # noqa: E402
 CACHE = ROOT / "output" / "level_rule" / "points.json"
 
 
-def quiet_near(quiet: np.ndarray, times_s, collar_ms: int) -> np.ndarray:
-    """Per time: is any window within ``collar_ms`` quiet?"""
+def quiet_near(quiet: np.ndarray, times_s, collar_ms: int, need: str = "any") -> np.ndarray:
+    """Per time: is any (``need`` "any") or every ("all") window within ``collar_ms`` quiet?"""
     r = collar_ms // lv.ENVELOPE_MS
     q = np.concatenate(([0], np.cumsum(quiet)))
     f = (np.asarray(times_s, dtype=float) * 1000 // lv.ENVELOPE_MS).astype(int)
     lo, hi = np.clip(f - r, 0, len(quiet)), np.clip(f + r + 1, 0, len(quiet))
-    return (q[hi] - q[lo]) > 0
+    n = q[hi] - q[lo]
+    return n > 0 if need == "any" else (n == hi - lo) & (hi > lo)
 
 
-def counts(levels, edges, mids, rule: lv.Rule, collar_ms: int) -> tuple[int, int, int, int, int]:
+def counts(levels, edges, mids, rule: lv.Rule, collar_ms: int, need: str = "any") -> tuple[int, int, int, int, int]:
     """(edges quiet, edges, mid-words quiet, mid-words, sound/quiet flips) for one source."""
     quiet = ~lv.sound(levels, rule)
-    e, m = quiet_near(quiet, edges, collar_ms), quiet_near(quiet, mids, collar_ms)
+    e, m = quiet_near(quiet, edges, collar_ms, need), quiet_near(quiet, mids, collar_ms, need)
     return int(e.sum()), len(e), int(m.sum()), len(m), int(np.count_nonzero(np.diff(quiet.astype(np.int8))))
 
 
@@ -98,7 +101,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=r"G:\Me\Works")
     ap.add_argument("--collar", type=int, default=40, help="ms; one frame at 25 fps")
-    ap.add_argument("--ref", default="18,10,3", help="seed,grow[,min_seed]: the rule CIs compare against")
+    ap.add_argument("--need", choices=("any", "all"), default="any", help="quiet windows needed in the collar")
+    ap.add_argument("--ref", default="6,6,1", help="seed,grow[,min_seed]: the rule CIs compare against")
     ap.add_argument("--holdout", help="score this held-out day once instead of sweeping")
     ap.add_argument("--rule", action="append", default=[], help="seed,grow[,min_seed] to score on --holdout")
     ap.add_argument("--cache", type=Path, default=CACHE)
@@ -112,7 +116,7 @@ def main(argv=None) -> int:
             raise SystemExit(f"{args.holdout} is a tuning day")
         data = build([args.holdout], Path(args.root), args.cache, args.db, args.levels)
         for rule in [ref] + [parse_rule(r) for r in args.rule]:
-            c = np.sum([counts(np.load(s["levels"]), s["edges"], s["mids"], rule, args.collar)
+            c = np.sum([counts(np.load(s["levels"]), s["edges"], s["mids"], rule, args.collar, args.need)
                         for s in data[args.holdout].values()], axis=0)
             print(f"{args.holdout} {rule}: J {j_score(c):.1f}, edges quiet {100 * c[0] / c[1]:.1f}%, "
                   f"mid-words quiet {100 * c[2] / c[3]:.1f}%, flips/min {c[4] / (sum(len(np.load(s['levels'])) for s in data[args.holdout].values()) / 6000):.0f}")
@@ -127,7 +131,7 @@ def main(argv=None) -> int:
         for s in data[d].values():
             lev = np.load(s["levels"])
             for rule in rules:
-                c = counts(lev, s["edges"], s["mids"], rule, args.collar) + (len(lev),)
+                c = counts(lev, s["edges"], s["mids"], rule, args.collar, args.need) + (len(lev),)
                 prev = table.get((rule, d), (0,) * 6)
                 table[(rule, d)] = tuple(a + b for a, b in zip(prev, c))
     pooled = lambda rule, ds: j_score(np.sum([table[(rule, d)] for d in ds], axis=0))  # noqa: E731

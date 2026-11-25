@@ -1,7 +1,7 @@
 """The shared sound/quiet rule on a 10 ms level envelope (docs/LEVEL_RULES_PLAN.md).
 
 A window is judged against the file's own noise floor, so a linear gain on the file changes no
-decision. A rule is hysteresis in ``ingest.sound_runs``' form: a run of windows at least
+decision unless the floor clamp binds (see ``FLOOR_CLAMP_DB``). A rule is hysteresis in ``ingest.sound_runs``' form: a run of windows at least
 ``grow_db`` over the floor is sound when it holds ``min_seed`` windows at least ``seed_db`` over
 it. ``grow_db`` sets which windows are quiet; ``seed_db`` stops room tone from flickering into
 sound. Each question has its own measured rule.
@@ -13,7 +13,11 @@ from dataclasses import dataclass
 import numpy as np
 
 ENVELOPE_MS = 10
-DIGITAL_DB = -100.0  # windows at or below this are digital silence, not the room
+# The floor is held inside these bounds. On sources with gated silence (20261112, floor -69 to
+# -74 dB) the 5th percentile sits under the room tone between words; without the clamp the
+# one-frame quiet check scores J 44 instead of 67 there (2026-11-25). It is the one absolute
+# piece left: replacing it with a gain-invariant floor needs its own sweep and a fresh holdout.
+FLOOR_CLAMP_DB = (-65.0, -35.0)
 
 
 @dataclass(frozen=True)
@@ -23,19 +27,19 @@ class Rule:
     min_seed: int = 1
 
 
-# "Is this point quiet?" for cuts snapped within one frame: chosen by tools/sweep_level_rule.py on
-# the 8 HKS tuning days, then scored once on held-out 20261109 and 20261118.
-POINT = Rule(18.0, 10.0, 3)
+# "Is this point quiet?" (timeline edges, word_cut, word edges, hks_cut_check). +10 and +12 won
+# the "any quiet window within 40 ms" sweep on the 8 HKS tuning days and on held-out 20261109 /
+# 20261118, but lost 5 J on held-out 20261002 (a YouTube master, floor -46 dB), and word_cut asks
+# a different question (all windows within 20 ms quiet). +6 stays until a margin wins both ways.
+QUIET = Rule(6.0, 6.0)
 # "Is this a pause long enough to cut?": hks_tighten --check, 8 tuning days.
 PAUSE = Rule(18.0, 18.0)
-# Word edges fitted to the sound (timeline_transcript.tighten). Not swept yet.
-WORD_EDGE = Rule(6.0, 6.0)
 
 
 def floor(levels) -> float:
-    """The noise floor: 5th percentile of the windows that are not digital silence."""
-    live = np.asarray(levels)[np.asarray(levels) > DIGITAL_DB]
-    return float(np.percentile(live, 5)) if len(live) else DIGITAL_DB
+    """The noise floor: the 5th percentile window level, held inside ``FLOOR_CLAMP_DB``."""
+    lo, hi = FLOOR_CLAMP_DB
+    return float(np.clip(np.percentile(levels, 5), lo, hi)) if len(levels) else lo
 
 
 def sound(levels, rule: Rule) -> np.ndarray:
