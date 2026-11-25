@@ -71,6 +71,17 @@ test("golden: native apply on the captured synced stack equals the XML route's r
     "the new sequence is shown only after it is cut (no redraw per edit)");
 });
 
+test("markers on the copy move back with the cuts; one inside a cut is removed; the source keeps its own", async () => {
+  // one clip 0-100 frames; cut 10-20 and 40-50
+  const h = fakeHost([["video", 0, 0, 100, 0], ["audio", 0, 0, 100, 0]],
+    { markers: [[5, "before"], [10, "at a cut start"], [15, "inside"], [20, "at a cut end"], [60, "after both"]] });
+  await applyNativeCut(h.ppro, h.project, h.source, { ticks_per_frame: TPF.toString(), cuts_frames: [[10, 20], [40, 50]] }, "Marked");
+  const at = (seq) => seq.markers.map((m) => [Number(m.start / TPF), m.name]).sort((a, b) => a[0] - b[0]);
+  assert.deepEqual(at(h.sequences.find((s) => s.name === "Marked")),
+    [[5, "before"], [10, "at a cut start"], [10, "at a cut end"], [40, "after both"]]);
+  assert.deepEqual(at(h.src), [[5, "before"], [10, "at a cut start"], [15, "inside"], [20, "at a cut end"], [60, "after both"]]);
+});
+
 test("refuses before any edit: a sped-up clip under a cut", async () => {
   const h = fakeHost(golden.before, { speedOf: (r) => (r.kind === "video" && r.track === 1 ? 2 : 1) });
   await assert.rejects(applyNativeCut(h.ppro, h.project, h.source, golden, "x"), /Cannot cut natively: .*200% speed/);
@@ -169,7 +180,7 @@ test("scale: 432 cuts across a 5-track synced clip — exact result, no long clo
   // Review 2026-09-24: this was 75,950 before (7 full reads, flags and paths on each). Middle
   // reads now skip paths, flags are read only under a cut, the copy is not pre-read.
   console.log(`scale test host reads: ${h.hostReads}`);
-  assert.deepEqual(Object.keys(r.timings).sort(), ["close gaps", "make razor fillers", "open copy", "read source",
+  assert.deepEqual(Object.keys(r.timings).sort(), ["close gaps", "make razor fillers", "move markers", "open copy", "read source",
     "read-back", "reads", "remove cut pieces", "save project", "split at cut edges", "trim razor fillers"]);
   // 2026-10-01: split and close-gaps run in 3,000-action batches, each from a fresh read (48,445 here).
   assert.ok(h.hostReads < 50000, `host reads ${h.hostReads}`);

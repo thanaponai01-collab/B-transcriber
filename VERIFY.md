@@ -160,7 +160,10 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof (2026-11-25): the no-pause guard in `cutdeck/speech_clean.py` `plan` switched off (1 red); the restart rule without its same-start check (2 red); adjacent findings not merged (1 red); each restored, green.
 - vs the owner (2026-11-25, offline): on the LV GP 2026 rough cut, of the findings whose neighbouring lines the owner kept in their final `yt`, they had cut 2 of 14 fillers and 2 of 13 restarts by hand. So restarts are marked by default (`cut_restarts` cuts them). Whether the kept ones were wanted or just too slow to cut by hand is not known.
 - offline (2026-11-25) on the saved `yt` with its audio levels: found 14 fillers, 10 restarts, 7 repeats, 2 near restarts; with every cut kind on, the audio guard left 14 cuts (8 fillers skipped and 9 findings turned into markers for having no pause), and no kept piece under 10 frames between cuts.
-- live (2026-11-25, `apply: false` only) on the open HKS `2 FACEBOOK D1 (agent v2)`: 1 restart found ("พ่อ / พ่อผมก็เสียไปแล้ว"), no pause to cut in, so marked. `apply: true` (copy + markers in Premiere) not yet run live.
+- live (2026-11-25, `apply: false` only) on the open HKS `2 FACEBOOK D1 (agent v2)`: 1 restart found ("พ่อ / พ่อผมก็เสียไปแล้ว"), no pause to cut in, so marked..
+- live (2026-11-26, `apply: true`, defaults) on the LV `yt`: 7 cuts (6 fillers, 1 repeat), 4.1 s removed on every track (V1-3, A1-6 all end at 1719.83 s, was 1723.93), 18 markers, 8 fillers skipped, `new_cuts_in_sound` empty. Each of the 18 markers read back on the copy's transcript lands on its own words. Copy: `yt clean speech (Claude)` in Rough Cuts. The copy's `end_ticks`/`out_ticks` keep the parent's value.
+
+- markers (2026-11-26): `cut_copy` (and every native cut) moves the copy's markers back with the cuts and removes one inside a cut. Test `markers on the copy move back with the cuts` in `tests/cutdeck_native_cut.test.cjs`; fail-proof: red before the fix (markers stayed put). Live: a scratch cut of `yt clean speech v2 (Claude)`, 8 of 8 markers at the expected times, the one in a cut removed; scratch copy deleted.
 
 ## CutDeck panel (UXP)
 - test: `node --test tests/*.cjs`

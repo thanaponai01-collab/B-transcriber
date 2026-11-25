@@ -6,7 +6,8 @@ const path = require("node:path");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneIn = false } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneIn = false, markers = [] } = {}) {
+  // markers: the source's sequence markers, [startFrame, name]; moved to an absolute time (probed live).
   // snapCloneIn: a clone's in-point is floored to a whole frame and its head grows by the same
   // amount, so it lands that much early (live 2026-11-02, 59.94 fps: a razor filler whose in-point
   // sat 1058400 ticks past a frame cloned to 1058400 ticks before its edge, one frame + 1058400 long).
@@ -15,9 +16,9 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
   let guid = 0;
   const sequences = [];
-  const makeSeq = (name, tracks) => { const s = { name, id: `g${guid++}`, tracks }; sequences.push(s); return s; };
+  const makeSeq = (name, tracks, marks = []) => { const s = { name, id: `g${guid++}`, tracks, markers: marks }; sequences.push(s); return s; };
   const blank = () => ({ video: [], audio: [] });
-  const src = makeSeq("Shoot", blank());
+  const src = makeSeq("Shoot", blank(), markers.map(([f, name]) => ({ start: BigInt(f) * TPF, name })));
   for (const [kind, track, s, e, i] of rows) {
     while (src.tracks[kind].length <= track) src.tracks[kind].push([]);
     src.tracks[kind][track].push({ kind, track, start: BigInt(s) * TPF, end: BigInt(e) * TPF, in: BigInt(i) * TPF, path: "D:/a.mp4" });
@@ -48,7 +49,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   const apply = (a) => {
     const r = a.raw;
     if (a.type === "cloneSeq") {
-      makeSeq(`${a.seq.name} Copy`, { video: a.seq.tracks.video.map((t) => t.map((x) => ({ ...x }))), audio: a.seq.tracks.audio.map((t) => t.map((x) => ({ ...x }))) });
+      makeSeq(`${a.seq.name} Copy`, { video: a.seq.tracks.video.map((t) => t.map((x) => ({ ...x }))), audio: a.seq.tracks.audio.map((t) => t.map((x) => ({ ...x }))) }, a.seq.markers.map((m) => ({ ...m })));
     } else if (a.type === "rename") a.seq.name = a.name;
     else if (a.type === "bin") a.into.items.push(makeBin(a.name));
     else if (a.type === "moveItem") {
@@ -74,7 +75,9 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
         const lanes = rippleMode === "all" ? [...a.seq.tracks.video, ...a.seq.tracks.audio] : [l];
         for (const lane of lanes) for (const o of lane) if (o.start >= x.end) { o.start -= x.end - x.start; o.end -= x.end - x.start; }
       }
-    } else throw new Error(`unknown action ${a.type}`);
+    } else if (a.type === "moveMarker") a.m.start = a.t;
+    else if (a.type === "removeMarker") a.seq.markers.splice(a.seq.markers.indexOf(a.m), 1);
+    else throw new Error(`unknown action ${a.type}`);
   };
   let hostReads = 0; // every per-clip read the panel makes
   const n = (v) => { hostReads++; return v; };
@@ -141,6 +144,10 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
     Constants: { TrackItemType: { CLIP: 1, TRANSITION: 2 }, MediaType: { ANY: 0, DATA: 1, VIDEO: 2, AUDIO: 3 } },
     TickTime: { createWithTicks: (s) => ({ ticks: s }) },
     TrackItemSelection: { createEmptySelection: (cb) => { const items = []; cb({ items, addItem: (it) => items.push(it._raw) }); return true; } },
+    Markers: { getMarkers: async (w) => { const seq = w._seq; return {
+      getMarkers: () => seq.markers.map((m) => ({ _m: m, getStart: () => ({ ticks: m.start.toString() }), getName: () => m.name })),
+      createMoveMarkerAction: (x, t) => act({ type: "moveMarker", m: x._m, t: BigInt(t.ticks) }),
+      createRemoveMarkerAction: (x) => act({ type: "removeMarker", seq, m: x._m }) }; } },
     SequenceEditor: { getEditor: (s) => ({
       createCloneTrackItemAction: (item, t) => {
         if (staleCloneCalls.has(++cloneCalls)) item._stale = true;
