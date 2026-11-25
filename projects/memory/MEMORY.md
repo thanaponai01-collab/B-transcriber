@@ -7,4 +7,4 @@ upkeep: [projects/README.md](../README.md#memory-files). Project-only facts go i
 Premiere and CutDeck facts already have homes: [docs/PREMIERE_FACTS.md](../../docs/PREMIERE_FACTS.md)
 and [docs/PREMIERE_CONTROL_MAP.md](../../docs/PREMIERE_CONTROL_MAP.md).
 
-- [Shared checkout](shared-checkout.md) — another agent session may be working in the same tree; check git first
+- [Shared checkout](shared-checkout.md) — another agent session may be working in the same tree; check git first, commit from a worktree, never switch branches there
