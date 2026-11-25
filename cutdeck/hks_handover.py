@@ -3,10 +3,10 @@
 1. Runs every code gate (``hks_gates``) with its line and kind from the registry.
 2. Copies the saved .prproj into ``CutDeck/Drafts`` next to it, so the next episode can diff the
    agent's draft against the user's final (Auto-Save rotates the draft out within hours).
-3. Appends a record to ``output/hks_gates/handover.jsonl``; the Stop hook
-   (``.claude/hooks/hks_handover_gate.py``) reads it.
-4. Prints the handover header: every failed control and warning, by gate id. The handover message
-   opens with it.
+3. Appends a record to ``output/hks_gates/handover.jsonl``.
+4. Prints the handover header: every failed or overridden control, every warning, and the lists to
+   look at, by gate id. The handover message opens with it. The Stop hook
+   (``.claude/hooks/hks_handover_gate.py``) reads this header from the session transcript.
 
 Exit 1 when a kept control fails and is not overridden. ``--override GATE="reason"`` records the
 override in ``projects/hks/gates/overrides.jsonl`` (who may override is the user's call).
@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prproj", type=Path, required=True)
     ap.add_argument("--sequence", required=True)
     ap.add_argument("--from", dest="body_from", type=float, default=0.0)
+    ap.add_argument("--to", dest="show_end", type=float, default=None, help="body end (s), when the end kit is on")
     ap.add_argument("--drafts", type=Path, default=None, help="snapshot folder (default: CutDeck/Drafts by the project)")
     ap.add_argument("--override", action="append", default=[], metavar='GATE="reason"')
     ap.add_argument("--by", default="agent", help="who overrides: recorded, not checked")
@@ -57,11 +58,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     found = hks_gates.run(project, seq, hks_gates.load_sources(seq, hks_gates.MAIN / "transcriber.db",
                                                                hks_gates.MAIN / "output/timeline_transcripts/levels"),
-                          a.body_from, None)
+                          a.body_from, a.show_end)
     overrides = dict(o.split("=", 1) for o in a.override)
     live = {g: r for g, r in found.items() if r["status"] != "retired"}
     failed = [g for g, r in live.items() if not r["passed"] and r["kind"] == "control" and g not in overrides]
-    warned = [g for g, r in live.items() if not r["passed"] and (r["kind"] == "warning" or g in overrides)]
+    warned = [g for g, r in live.items() if (not r["passed"] and r["kind"] == "warning")
+              or (g in overrides and not r["passed"])]
     snap = snapshot(a.prproj, a.sequence, a.drafts, now)
     record = {"time": now.isoformat(timespec="seconds"), "prproj": str(a.prproj),
               "prproj_mtime": a.prproj.stat().st_mtime, "sequence": a.sequence, "snapshot": str(snap),
@@ -83,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
         sign = "<=" if r["direction"] == "max" else ">="
         tag = "FAILED" if g in failed else ("OVERRIDDEN" if g in overrides else "WARNING")
         print(f"  {tag} {g}: {r['value']} (line {sign} {r['line']}) {r.get('detail', '')} at {r['items'][:8]}")
+    for g, r in live.items():
+        if r["line"] is None and r["value"]:
+            print(f"  LIST {g}: {r['value']} to look at: {r['items'][:6]}")
     if failed:
         print("Fix each failed gate, or open the handover message with each failed gate's id and value.")
     return 1 if failed else 0

@@ -118,22 +118,29 @@ def run(project: dict, seq: dict, sources: dict, body_from: float, show_end: flo
     reg = registry()["gates"]
     hi = show_end or 1e9
     cut = check(seq, sources, fps, body_from)
-    cut["same_frame_cuts"] = [t for t in cut["same_frame_cuts"] if t < hi]
-    clips = body_audio(seq, body_from, hi)
     cut_times = [t for t, _, _ in sound_cuts(seq["audio_tracks"][0]["clips"]) if body_from <= t <= hi]
+    # One body for every count: the same-frame share's numerator and denominator end at ``hi``.
+    cut["same_frame_cuts"] = [t for t in cut["same_frame_cuts"] if t <= hi]
+    cut["sound_cuts"] = len(cut_times)
+    clips = body_audio(seq, body_from, hi)
     found = {
         "same_frame_share": same_frame_share(cut),
         "near_miss_covers": near_miss_covers(seq, cut_times, fps),
         "source_repeats": source_repeats(clips),
         "draft_labels": draft_labels(clips),
         "day_setup": day_setup(project) if project else None,
+        "visible_cuts_in_speech": {"value": len(cut["visible_cuts_in_speech"]), "items": cut["visible_cuts_in_speech"]},
+        "unsafe_holds": {"value": len(cut["unsafe_holds"]), "items": cut["unsafe_holds"]},
     }
     out = {}
     for gid, f in found.items():
         if f is None:
             continue
         g = reg[gid]
-        ok = f["value"] <= g["line"] if g["direction"] == "max" else f["value"] >= g["line"]
+        if g["line"] is None:
+            ok = True  # a list to look at, never a pass line
+        else:
+            ok = f["value"] <= g["line"] if g["direction"] == "max" else f["value"] >= g["line"]
         out[gid] = {**f, "line": g["line"], "direction": g["direction"], "kind": g["kind"],
                     "status": g["status"], "passed": ok}
     return out

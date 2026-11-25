@@ -76,3 +76,31 @@ def test_hook_in_label_mode_wants_each_failed_gate_named():
 
 def test_hook_lets_a_session_with_no_draft_stop():
     assert _hook().verdict([("say", "hello")], "label") is None
+
+
+def test_hook_blocks_a_handover_that_did_not_finish():
+    evs = [("mutate", "build_sequence"), ("handover", "Traceback (most recent call last): ..."), ("say", "ready")]
+    assert "did not finish" in _hook().verdict(evs, "label")
+
+
+def test_hook_wants_an_overridden_gate_named_too():
+    evs = [("mutate", "build_sequence"), ("handover", "HANDOVER OK: x\n  OVERRIDDEN same_frame_share: 0.7"),
+           ("say", "Draft is ready.")]
+    assert "same_frame_share" in _hook().verdict(evs, "label")
+
+
+def test_hook_reads_a_build_and_handover_in_one_command_in_order(tmp_path):
+    import json as _json
+    t = tmp_path / "t.jsonl"
+    rows = [
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "a", "name": "Bash",
+            "input": {"command": "python build_sequence_x.py && python -m cutdeck.hks_handover --prproj p"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "a", "content": "HANDOVER OK: s"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "ready"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "b", "name": "Bash",
+            "input": {"command": "grep -n build_sequence cutdeck/*.py"}}]}},
+    ]
+    t.write_text("\n".join(_json.dumps(r) for r in rows), encoding="utf-8")
+    hook = _hook()
+    assert [k for k, _ in hook.events(t)] == ["mutate", "handover", "say"]
+    assert hook.verdict(list(hook.events(t)), "label") is None

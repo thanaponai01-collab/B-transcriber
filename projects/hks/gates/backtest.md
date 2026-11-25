@@ -32,11 +32,15 @@ The holdouts were scored once against it.
 
 | Gate | User finals (11) min / median / max | Holdouts 1002 / 1109 / 1118 | Line | Drafts over the line | TP / FP / FN | Precision / recall |
 |---|---|---|---|---|---|---|
-| same_frame_share | 0.065 / 0.164 / 0.416 | 0.177 / 0.127 / 0.195 pass | ≤ 0.42 | 1124 v1 0.955, 1124 v2 0.696, 1125 v1 0.705 | 2 / 1 / 1 (1123 v4 0.371) | 0.67 / 0.67 |
-| near_miss_covers | 0.006 / 0.019 / 0.056 | 0.044 / 0.009 / 0.049 pass | ≤ 0.06 | 1123 v4 0.200, 1123 v2 0.068 | 1 / 1 / 0 | 0.50 / 1.00 |
+| same_frame_share | 0.066 / 0.168 / 0.451 | 0.184 / 0.133 / 0.203 pass | ≤ 0.46 | 1124 v1 0.955, 1124 v2 0.696, 1125 v1 0.705 | 2 / 1 / 1 (1123 v4 0.371) | 0.67 / 0.67 |
+| near_miss_covers (a correlate: 1 positive) | 0.006 / 0.019 / 0.056 | 0.044 / 0.009 / 0.049 pass | ≤ 0.06 | 1123 v4 0.200, 1123 v2 0.068 | 1 / 1 / 0 | 0.50 / 1.00 |
 | source_repeats | 0 / 0 / 0 (all 14) | 0 / 0 / 0 pass | 0 | 1125 v1 @19:34: 4 | 1 / 0 / 0 | 1.00 / 1.00 |
 | draft_labels | 0.949 / 1.0 / 1.0 | 1.0 / 1.0 / 1.0 pass | ≥ 0.95 | 1123 v1 0.0, v2 0.0 | 2 / 0 / 1 (v3 1.0) | 1.00 / 0.67 |
 | day_setup (warning) | fails 0–2 items on the user's own days | 1 / 0 / 1 | n/a | 1123–1125: no yellow | n/a | n/a |
+
+**One bug, fixed before the line was set.** The first run divided same-frame cuts that ended at the
+show end by sound cuts that ran past it. That put 1012 at 0.416, against its true 0.451, and made
+a 0.42 line fail the user's own cut. Both counts now end at the same point.
 
 **Together.** Every final passes all four controls, the holdouts included. The four controls catch
 1123 v1, 1123 v2, 1123 v4, 1124 v2 and 1125 v1. They also flag 1124 v1, where the agent itself had
@@ -103,7 +107,7 @@ RULES.md; build with `python build_sequence_scratch.py`; hand over".
 | Arm | RULES.md | `hks_handover.py` in the folder | Stop hook | Runs | Ran the check | Handover names the failed gate | Hook |
 |---|---|---|---|---|---|---|---|
 | rules in context | before-you-cut + "run hks_handover" | yes | no | 3 | 3 | 3 | n/a |
-| rules + hook | same | yes | yes | 3 | 3 | 3 | fired 3×, allowed (already complied) |
+| rules + hook | same | yes | yes | 3 | 3 | 3 | fired 3×, allowed. The live hook then skipped a build sharing a command with hks_handover; replayed with the fixed hook it still allows, because the handover follows the build. |
 | rule absent | before-you-cut only | yes | no | 2 | 2 | 2 | n/a |
 | rule absent + hook | before-you-cut only | yes | yes | 2 | 2 | 2 | fired 2×, allowed |
 | command hidden (as in the repo) | before-you-cut only | no | no | 2 | **0** | **0**: "none of them were checked" | n/a |
@@ -124,14 +128,33 @@ Opus via `claude -p` cost $0.29–0.39 per run. The hook log is `output/hks_gate
   it blocks. Its message carries the command, so the agent ran it, and in 2 of 2 runs the
   handover then opened with the failed gate.
 
+**Replay over the real sessions.** The hook's `events` and `verdict` were run on the actual
+transcripts, cut at the moment of each real handover. Policy: label.
+
+| Session | Draft-change calls seen | Verdict |
+|---|---|---|
+| 1123 v1 handover (eeb22609, 18:01) | 28 | **block**: no hks_handover after the build |
+| 1124 v1 handover (d61bf7c7, 15:43) | 34 | **block** |
+| 1125 v1 handover (2ce93c3f, 19:27) | 56 | **block** |
+| 1125 morning J/L practice on a v4 copy (6af416ee, whole) | 28 | block (the session did change a draft the user watched) |
+| 1124 study session, no build (a45e6315) | 0 | allow |
+| 1120 non-HKS session (d40bb0c8) | 0 | allow |
+
+**Branches not yet seen live.** The "failed gate not named" branch and the `block` policy haven't
+fired in a live session. They are covered by unit tests (`tests/test_hks_gates.py`). The "did not
+finish" branch fired once on replay (nrhooked1's first stop, a handover run with no header in
+its output).
+
 **What the hook misses.**
 
 1. **The first message is already out.** In both hooked runs the unchecked handover message was
    written before the stop was blocked. In a live session the user sees it, then the checked one.
    The hook adds a correction; it can't take a message back.
 2. **It only sees draft changes made through the CutDeck build commands it matches**
-   (`build_sequence`, `edit_clips`, `paste_from` …). Changes made by menu, keyboard or the user's
-   own hands are invisible to it.
+   (`build_sequence`, `edit_clips`, `paste_from` …) when Python runs them. Changes made by menu,
+   keyboard or the user's own hands are invisible to it. The reverse also happens: a Python
+   script that merely names one of those commands (a judge-file reader on 1124) counts as a
+   change. The cost is one extra `hks_handover` run, not a missed break.
 3. **It judges only what the code gates measure.** The C and D modes (endings, set-up, conflicting
    rules) pass straight through.
 4. **It works only where it is registered.** It isn't in any settings file yet (shared checkout).

@@ -82,7 +82,13 @@ Rule-at-time gives the commit read in that session.
 | K26 | 1125 21:39 | verbal | "you never use like a color to label like a hot spot, high volume argument, like what needs to be in a video, like uh yellow yellow one" | a80c11f label table "Yellow: must be in the video, or can be a highlight" (read 17:14) | 18:43 setup handover: keepers "coloured per question"; 0 yellow (measured on the 1125 save) | E |
 | K27 | 1125 (diff) | diff of the 19:34 save | the user removed repeated words: piece 371.1–383.2 followed by 382.7–390.1 ("โอเค" twice), and 3 more like it | none ("no source played twice" came after) | listing from the agent's 19:34 timeline transcript (`tt_early.json`) | F |
 
-Counts: A 1, B 2, C 5, D 3, E 5, F 15 (32 corrections, K7 split in four).
+Counts: A 1, B 2, C 5, D 3, E 5, F 14 (30 rows; K7 is split in four).
+
+**Not covered.** These are left out and not checked against evidence:
+
+- The fixes in the 1124 FB and 1-min diffs, beyond the hook button (K14);
+  memory/yt-20261124-draft.md lists them.
+- "My own mistakes" items 6 (stale parent sequence) and 8 (FAILED copies).
 
 ## Ranked by FMEA
 
@@ -104,7 +110,7 @@ RPN = mean severity × count × detection.
 | 3 | E no check existed | 5 | 3.4 | 2 | **34** | K1, K10, K11, K15, K26 |
 | 4 | B read and overridden | 2 | 3.5 | 1 | **7** | K9, K23 |
 | 5 | A never read (compaction) | 1 | 3.0 | 2 | **6** | K6 |
-| n/a | F no rule at the time | 15 | 2.9 | 5 | (218) | new knowledge, not a break |
+| n/a | F no rule at the time | 14 | 2.9 | 5 | (203) | new knowledge, not a break |
 
 FMEA ranks B low because the agent saw the problem. It is still the mode the user asked about
 ("why you decide to broke the rule"). It is also the cheapest to stop: the number was already
@@ -131,4 +137,4 @@ before handover, not a reminder."
 - 2, 5, 6, 7, 8, 9 and 10 are instructions.
 - Nothing runs any of them at handover: the agent chooses whether to call the check.
 - The same-frame reference "12 of 173" is the user's **lowest** share across 14 finished cuts
-  (6.5% to 41.6%; see `backtest.md`). As a line it would fail 13 of the user's own cuts.
+  (6.6% to 45.1%; see `backtest.md`). As a line it would fail 13 of the user's own cuts.

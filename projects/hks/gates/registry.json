@@ -1,68 +1,100 @@
 {
  "about": "HKS handover gates. hks_gates and hks_handover read kind, direction, line and status from here. Evidence: projects/hks/gates/backtest.md; mistakes: failure-table.md. Rules for the lifecycle: README.md.",
  "late_draft_policy": "label",
- "late_draft_policy_options": {"label": "a failed control may reach the user only if the handover opens with its id and value", "block": "a failed control never reaches the user"},
+ "late_draft_policy_options": {
+  "label": "a failed control may reach the user only if the handover opens with its id and value",
+  "block": "a failed control never reaches the user"
+ },
  "overrides_log": "projects/hks/gates/overrides.jsonl",
  "gates": {
   "same_frame_share": {
    "mistake": "the cut shows: sound and picture cut on the same frame, no cover (K7a, K11, K23)",
-   "kind": "control", "direction": "max", "line": 0.42, "status": "kept",
-   "evidence": "user finals 0.065-0.416 (11 tuning days, median 0.164); holdouts 1002 0.177, 1109 0.127, 1118 0.195 pass; drafts caught 1124 v2 0.696, 1125 v1 0.705; flagged with no user verdict 1124 v1 0.955 (the agent itself called it 'has jump cuts'); missed 1123 v4 0.371 (near_miss_covers catches it)",
+   "kind": "control",
+   "direction": "max",
+   "line": 0.46,
+   "status": "kept",
+   "evidence": "user finals 0.066-0.451 (11 tuning days, median 0.168; numerator and denominator both end at the show end); holdouts 1002 0.184, 1109 0.133, 1118 0.203 pass; drafts caught 1124 v2 0.696, 1125 v1 0.705; flagged with no user verdict 1124 v1 0.955 (the agent itself called it 'has jump cuts'); missed 1123 v4 0.371 (near_miss_covers catches it)",
    "added": "2026-11-25"
   },
   "near_miss_covers": {
    "mistake": "a cover starts or ends 1-4 frames off the sound cut, so the jump flashes (K7a)",
-   "kind": "control", "direction": "max", "line": 0.06, "status": "kept",
-   "evidence": "user finals 0.006-0.056 (median 0.019); holdouts 0.044, 0.009, 0.049 pass; caught 1123 v4 0.20 (the red-marked jump cut; its fix v5 is 0.0); flagged 1123 v2 0.068 with no user verdict",
+   "kind": "control",
+   "direction": "max",
+   "line": 0.06,
+   "status": "kept",
+   "evidence": "user finals 0.006-0.056 (median 0.019); holdouts 0.044, 0.009, 0.049 pass; caught 1123 v4 0.20 (the red-marked jump cut; its fix v5 is 0.0); flagged 1123 v2 0.068 with no user verdict; a correlate with one positive: it excludes cuts where the picture also cuts on the sound cut, which is the 20:59 diagnosis of v4 (those count in same_frame_share)",
    "added": "2026-11-25"
   },
   "source_repeats": {
    "mistake": "two neighbouring pieces overlap in source, so words play twice (K27)",
-   "kind": "control", "direction": "max", "line": 0, "status": "kept",
+   "kind": "control",
+   "direction": "max",
+   "line": 0,
+   "status": "kept",
    "evidence": "0 on all 14 user finals; caught 1125 v1 as saved at 19:34: 4 overlaps (382.71, 731.93, 2348.35, 4288.43; data/20261125-v1-1934-a1.json); 0 on every other draft",
    "added": "2026-11-25"
   },
   "draft_labels": {
    "mistake": "draft pieces carry no label colour (K6)",
-   "kind": "control", "direction": "min", "line": 0.95, "status": "kept",
+   "kind": "control",
+   "direction": "min",
+   "line": 0.95,
+   "status": "kept",
    "evidence": "user finals 0.949-1.0; caught 1123 v1 and v2 (0.0); missed 1123 v3 (1.0 in the saved project now; the user may have labelled it after the correction)",
    "added": "2026-11-25"
   },
   "day_setup": {
    "mistake": "the day's set-up skipped: Editing not split or labelled, no yellow must-keep marks, Backup empty (K1, K9, K10, K26)",
-   "kind": "warning", "direction": "max", "line": 0, "status": "candidate",
+   "kind": "warning",
+   "direction": "max",
+   "line": 0,
+   "status": "candidate",
    "evidence": "fails the user's own days: Backup empty on 1001, 1002, 1012, 1118; no Editing on 1012, 1020; no yellow on 1117. Caught 1123-1125 'no yellow' (agent set-up). Not a control until the user says which parts are every day's.",
    "added": "2026-11-25"
   },
   "visible_cuts_in_speech": {
    "mistake": "a visible cut in running speech (hks_cut_check list)",
-   "kind": "warning", "direction": "max", "line": null, "status": "kept",
+   "kind": "warning",
+   "direction": "max",
+   "line": null,
+   "status": "kept",
    "evidence": "user finals list 4-27 each; a list to look at, never a line (rules.md mistake 5)",
-   "code": "cutdeck/hks_cut_check.py", "added": "2026-11-25"
+   "code": "cutdeck/hks_cut_check.py",
+   "added": "2026-11-25"
   },
   "unsafe_holds": {
    "mistake": "a J/L hold shows someone talking without their sound (hks_cut_check list)",
-   "kind": "warning", "direction": "max", "line": null, "status": "kept",
+   "kind": "warning",
+   "direction": "max",
+   "line": null,
+   "status": "kept",
    "evidence": "user finals list 1-16 each; look at the frames of each",
-   "code": "cutdeck/hks_cut_check.py", "added": "2026-11-25"
+   "code": "cutdeck/hks_cut_check.py",
+   "added": "2026-11-25"
   },
   "endings_reviewer": {
    "mistake": "a piece ends mid-thought (K15, K22)",
-   "kind": "control", "status": "retired",
+   "kind": "control",
+   "status": "retired",
    "evidence": "cold reviewer on piece-end text, blind. Cohen's kappa vs the user: 1125 v1 -0.15 (Sonnet), -0.06 (Opus), n=30; 1124 v4 0.13, 0.07, n=58; visible ends only 0.07, 0.04. Flags 22-60% of the user's own ends. Code proxy (continuation word) kappa -0.06/-0.01. Retired 2026-11-25: text without sound can't judge an ending the user judges by ear.",
-   "added": "2026-11-25", "retired": "2026-11-25"
+   "added": "2026-11-25",
+   "retired": "2026-11-25"
   },
   "setup_reviewer": {
    "mistake": "the story opens with no set-up for a first-time viewer (K21)",
-   "kind": "control", "status": "retired",
+   "kind": "control",
+   "status": "retired",
    "evidence": "cold reviewer on the first 3.5 min of transcript, blind, Sonnet: setup_ok false on all 14 user finals and all 11 drafts (HKS opens cold by design). Retired 2026-11-25.",
-   "added": "2026-11-25", "retired": "2026-11-25"
+   "added": "2026-11-25",
+   "retired": "2026-11-25"
   },
   "jump_cuts_framediff": {
    "mistake": "same-shot jump cut (K7a, K23)",
-   "kind": "control", "status": "retired",
+   "kind": "control",
+   "status": "retired",
    "evidence": "same-frame cuts with source frame difference < 20 at the same framing: user finals 0-4, so the line is 4; drafts 1123 v1 11, v3 9, 1124 v1 6 flagged with no verdict; missed 1123 v4 (2) and 1125 v1 (3). Precision 0, recall 0. Retired 2026-11-25.",
-   "added": "2026-11-25", "retired": "2026-11-25"
+   "added": "2026-11-25",
+   "retired": "2026-11-25"
   }
  }
 }
