@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Finished transcripts are cached by media sha256 + this version: bump it when a
 # code change alters decode output, or cached media keep the old transcript.
-PIPELINE_VERSION = "1.0.1"
+PIPELINE_VERSION = "1.0.2"
 
 _PHASE_RECONCILED = planning.PHASE_RECONCILED
 _PHASE_WRITTEN = planning.PHASE_WRITTEN

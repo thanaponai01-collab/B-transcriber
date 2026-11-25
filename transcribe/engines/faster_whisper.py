@@ -93,6 +93,15 @@ _TRUNCATION_TAIL_MS = 1500
 # a 1300 ms vowel mark before two 0 ms pieces dropped a clause). Over 4 real
 # files + gold audio this flagged only that window and a 6.5 s one.
 _TRUNCATION_COLLAPSED_TAIL_MS = 1000
+# Trailing pieces this short count as collapsed too, not only 0 ms ones: gold
+# Short2 at -1.2 dB ends its first long window on a 6.8 s vowel mark, then a
+# 20 ms and a 0 ms piece, and 4 s of speech went undecoded (2026-11-25).
+_COLLAPSED_PIECE_MS = 40
+# A piece this long near a window's end is the stretch even when a longer-than-
+# collapsed piece follows it: at -12 dB, Short2's 6.8 s mark is followed by a
+# 1020 ms piece, and Short3's 5.4 s one by a 540 ms piece (2026-11-25).
+_GROSS_STRETCH_MS = 3000
+_GROSS_STRETCH_SCAN_PIECES = 6
 _TRUNCATION_LOOKBACK_MS = 2500
 
 
@@ -289,8 +298,13 @@ class FasterWhisperEngine(Engine):
         in_range = [i for i, t in enumerate(tokens_before) if anchor_ms - t.end_ms <= lookback_ms]
         if len(in_range) < 2:
             return None
+        # Prefer cutting before a word start (leading space): a cut inside a Thai
+        # word starts the re-decode mid-word, and the decoder skips that word
+        # (real-file A/B 2026-11-25: "ไม|่มีเพื่อนครบ" lost).
+        cands = range(in_range[0], len(tokens_before) - 1)
+        word_starts = [i for i in cands if tokens_before[i + 1].text[:1].isspace()]
         best_i, best_gap = None, -1
-        for i in range(in_range[0], len(tokens_before) - 1):
+        for i in word_starts or cands:
             gap = tokens_before[i + 1].start_ms - tokens_before[i].end_ms
             if gap > best_gap:
                 best_i, best_gap = i, gap
@@ -328,11 +342,16 @@ class FasterWhisperEngine(Engine):
     def _plan_truncated_tail(self, tokens, sub_audio, *, require_speech=False):
         if not tokens and not require_speech:
             return None
-        # Zero-length pieces at the end mean Whisper ran out of timeline: the
-        # suspect is the last piece with a duration, and less stretch counts (#94).
+        # Collapsed pieces at the end mean Whisper ran out of timeline: the
+        # suspect is the last piece longer than that, and less stretch counts (#94).
         body = tokens
-        while body and body[-1].end_ms <= body[-1].start_ms:
+        while body and body[-1].end_ms - body[-1].start_ms <= _COLLAPSED_PIECE_MS:
             body = body[:-1]
+        real = [i for i, t in enumerate(tokens) if t.end_ms - t.start_ms > _COLLAPSED_PIECE_MS]
+        gross = [i for i in real[-_GROSS_STRETCH_SCAN_PIECES:]
+                 if tokens[i].end_ms - tokens[i].start_ms >= _GROSS_STRETCH_MS]
+        if gross and gross[-1] < len(body) - 1:
+            body = tokens[:gross[-1] + 1]
         stretch_ms = _TRUNCATION_TAIL_MS if body is tokens else _TRUNCATION_COLLAPSED_TAIL_MS
         suspect = body[-1] if body else None
         last = tokens[-1] if tokens else None
