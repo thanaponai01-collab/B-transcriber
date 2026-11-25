@@ -1,0 +1,255 @@
+{
+ "what": "set-up cold-reviewer test (retired gate setup_reviewer), Sonnet, one blind call per cut on its first 3.5 min",
+ "results": {
+  "20261001-final": {
+   "verdict": {
+    "who": "no",
+    "where": "partly",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The segment is a flood-management briefing (dams, water volumes, Nakhon Sawan, Ayutthaya, Bangkok) with no incident or interpersonal story, so no people or event are ever established, and the places are named only in passing without being tied to a story setting."
+   },
+   "cost_usd": 0.05452560000000001
+  },
+  "20261002-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "yes",
+    "setup_ok": false,
+    "why": "The flood hitting Siam Park (230 rai, the artificial sea, animals, damage) comes across clearly, but the opening never says who the host is or who the interviewee speaking as 'we' is, so lines like 'เรามีคนลงไปช่วย' and the insurance and damage talk come before the viewer knows who is speaking or in what role."
+   },
+   "cost_usd": 0.0603896
+  },
+  "20261003-final": {
+   "verdict": {
+    "who": "yes",
+    "where": "partly",
+    "what": "yes",
+    "setup_ok": false,
+    "why": "The opening starts with an unexplained cold-open of a kidnapping (a man grabbing 'mother', a van, being locked in a room), and only later does the viewer learn the speaker is a mother and businesswoman, with a son, a daughter and a daughter-in-law, and that the son brought two men to her house over a factory dispute on 21 Feb 2567. Who and what are well established by the end, but the early details (the van, the locked room, 'my son hired them to kill me') come before that context, and the place is only partly given: her home with a fence and the factory, but no location."
+   },
+   "cost_usd": 0.0547436
+  },
+  "20261012-final": {
+   "verdict": {
+    "who": "no",
+    "where": "partly",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts mid-argument about withdrawn money and a fake 'Luang Ta Sinsap' disciple, and only after minutes does it reveal that a stranger (Ferst) posed as the monk's student, set up a flood-relief kitchen, and took ~149,000 baht from the guest teacher. The viewer hears money details (30,000, 36,000, 9,000 baht) and names (Khwan, Ice, Ferst) before learning who they are, so the setup comes after the details that need it."
+   },
+   "cost_usd": 0.056443600000000003
+  },
+  "20261020-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts cold with a cold-open montage of skulls, fingers and amulets priced at 3,000 baht, then the host interviews a fortune-teller (หมอมิ้นต์) and her supplier chain (agent 'ลิฟท์' who sources from four ajarns), but it never states what the news story is or what the alleged wrongdoing is (apparently selling amulets made from real human remains), so the viewer meets details like 'is this real?' and 'who is lift?' before knowing the case's premise and how the people relate."
+   },
+   "cost_usd": 0.05498360000000001
+  },
+  "20261109-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening names Bum, Pu Nuum, David and Kot and hints at a betrayal, ghost-like deception and charges of fraud, money laundering and a foundation, but it never says who they are to each other or what Bum actually did, so many details land before the viewer has the context they need."
+   },
+   "cost_usd": 0.0546556
+  },
+  "20261110-final": {
+   "verdict": {
+    "who": "no",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The opening jumps straight into legal debate (the foundation law, penalties, a 45,000-baht salary, 14,000 foundations in Thailand) without ever naming the foundation or the people involved, saying how they relate, or stating what the alleged incident is, so the viewer cannot tell what the penalties and salary figures refer to."
+   },
+   "cost_usd": 0.682992
+  },
+  "20261112-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The opening starts with a cold-open teaser (a 300,000 baht withdrawal, a surrender, 'we won't leave anyone behind') with no context, then explains the Watchdog Thailand foundation, Kob (the founder, bankrupt, now the legal staff) and the interviewee Aom (president) and the roles of Jum and Napat, but never states what the news story or incident actually is, and the Chiang Mai office and shelter are only introduced as a line-item of expenses, so the viewer is still hearing money details (73,300 baht, ATM card, transfers) before knowing what wrongdoing is alleged."
+   },
+   "cost_usd": 0.684022
+  },
+  "20261117-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The viewer meets Boom (the victim, apparently a young man with a father), his ex-girlfriend, a new woman who may be a flight attendant, and a witness friend, but the opening never states clearly who is dead or injured or how these people relate. The incident is only hinted at: a fight at a door, a hiding spot on a balcony, a punch, and a night out at a bar on the 12th. The details about the room, the balcony, the 1:20 knock and the woman's testimony come before the viewer knows whose room it is, what the case is, or what happened to Boom."
+   },
+   "cost_usd": 0.685844
+  },
+  "20261118-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts with a teaser of an unexplained loan-app scheme (ID photo, instant money transfer, 6-day deadline, 20,000 vs 40,000 baht debt) before the viewer knows who these people are or what the scam is, and although a woman who took a loan app after informal loans at 10% a month is introduced and the app's permissions and process are then explained, the host and the teaser speaker are never identified and the actual incident of harm is not yet stated."
+   },
+   "cost_usd": 0.683236
+  },
+  "20261120-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The opening starts with a cold-open of slaps and punches and a man saying he nearly died, then moves to a backstory about meeting at a bar where the narrator, his wife, two crew members, Aor, Nam and others gathered, but it never states who the narrator is or what the fight was. It also never says who threw the blows, so the viewer sees the aftermath details (running away, being attacked) before knowing what the incident was."
+   },
+   "cost_usd": 0.684616
+  },
+  "20261123-agent-v1": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The viewer learns a woman selling goods with her child was grabbed by two masked men claiming a human-trafficking arrest warrant, and that 'Ida' was arrested earlier, but never hears who the speaker is, who Big, 'Nai Than' or the guard 'Phi Kaew' are or how they relate, nor the background of the case, and the location (RCA, Roots66, Soi Seri Thai 23-25) is mentioned without context, so many details land before the viewer has the setup to make sense of them."
+   },
+   "cost_usd": 0.0467865
+  },
+  "20261123-agent-v2": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "yes",
+    "setup_ok": false,
+    "why": "The viewer learns from the first-person account that a woman selling flowers with her daughter was seized by plainclothes men claiming a human-trafficking warrant, at the Roots66 shop near RCA, but the host never introduces her or the interview framing. 'Da' (her friend), 'Big' (the man in the blue shirt) and 'Nai Than' (the man who calls himself that) are named without any explanation of who they are, so key names come before their roles are clear."
+   },
+   "cost_usd": 0.0483025
+  },
+  "20261123-agent-v3": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "yes",
+    "setup_ok": false,
+    "why": "The viewer learns up front that a woman (Fah) selling flowers with her daughter at RCA in front of Roots66 was grabbed by two men claiming a trafficking warrant, but the other people (Big, Da, 'Nai Than', the host's role) are introduced only in passing or never explained, and the opening drops straight into in-the-moment details like 'Da got arrested' and 'Nai Than ran after' before the viewer knows who they are."
+   },
+   "cost_usd": 0.048272499999999996
+  },
+  "20261123-agent-v4": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The viewer gets the place (RCA, in front of Roots66) and the arrest of a flower-selling woman and her daughter on a human-trafficking warrant, but it opens mid-testimony with no introduction of the host or the woman, and names like Big, 'ไอ้ดา' and the police/guards appear without saying who they are or how they connect to the case."
+   },
+   "cost_usd": 0.0465805
+  },
+  "20261123-agent-v5": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The viewer learns the woman (a flower seller, 27) and her daughter were seized at 4:30am at the RCA Roots66 shop by two masked men claiming a human-trafficking warrant, but the opening starts mid-testimony with no host introduction of the case, and key figures (Big, 'ไอ้ดา' who was already arrested, the guard, the supposed police) are referenced before their identities or relationship to her and to each other are explained."
+   },
+   "cost_usd": 0.046870499999999995
+  },
+  "20261123-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "yes",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts mid-event ('แล้วระหว่างนั้น') with a flash-forward to a stabbing, and only then gives the place (a flower stall at RCA in front of Roots66) and the abduction in a van by men claiming a human-trafficking warrant, while the speaker's name (ฟ้า) and the people she mentions (Da, Big, นายท่าน, her siblings and boyfriend) are never introduced before details that depend on them."
+   },
+   "cost_usd": 0.054030499999999995
+  },
+  "20261124-agent-v1": {
+   "verdict": {
+    "who": "no",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The opening is a director talking about a film (his father's car-rental business, the 1983 flood, a hitman role played by 'พี่ตู่'), but it never says what the news story is or who the main people are, so the viewer cannot tell the case or the incident, and the director's name and the film's title are also missing."
+   },
+   "cost_usd": 0.0446745
+  },
+  "20261124-agent-v2": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The opening is a film director talking about making a crime movie inspired by his father's car-rental business and the 1983 flood, not about a news story. The viewer gets the guests (director, an actor playing a hitman) only loosely. There is no incident explained, and the case the host is meant to be covering never appears."
+   },
+   "cost_usd": 0.044538499999999995
+  },
+  "20261124-agent-v3": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The viewer learns the film's director (คุณโขม) and an actor (พี่ตู่, playing a hitman), but never who the guest-subject is or what the news story is, and the 1983 flood and rental-car anecdote is the director's childhood backstory, not a described incident. The opening jumps into the film's inspiration and casting without first establishing the case or its main people."
+   },
+   "cost_usd": 0.045314499999999994
+  },
+  "20261124-agent-v4": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The viewer learns the guest names and that Khom is the film's director whose father ran a car-rental business, but never learns who is being discussed or what the news story is. The talk drifts to the film's themes, and the incident itself is never introduced."
+   },
+   "cost_usd": 0.044942499999999996
+  },
+  "20261124-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "not needed",
+    "what": "no",
+    "setup_ok": false,
+    "why": "The viewer learns the host is talking with the film's director (พี่โขม) and cast members (พี่หนุ่ม, พี่ตู่, พี่เล็ก) about a gangster/hitman movie, but this is a film-promotion chat, not a news case. The 'incident' is never described: only a vague 1983 flood and grey-area car rentals, and the news story being discussed is never introduced."
+   },
+   "cost_usd": 0.0484825
+  },
+  "20261125-agent-v1": {
+   "verdict": {
+    "who": "partly",
+    "where": "no",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts in medias res with a stabbing aftermath (21 stitches, bone visible) and a disputed 'who stabbed whom' before the viewer knows who the two men are, so the speakers' roles (a motorcycle-shop owner vs. a neighbour who complained about night-time engine revving) only emerge piecemeal later. The shop, the old and new house, and the road are only explained after the injury and the earlier feud are referenced, and the 30 October incident itself is only just starting at the end, so the viewer is never given a clear setup before the details that depend on it."
+   },
+   "cost_usd": 0.0480845
+  },
+  "20261125-agent-v1@1934": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts in medias res with stitches ('21 stitches, bone visible') and a stabbing claim before the viewer knows who is who, and although the two neighbours, the motorcycle shop and the noise dispute are explained afterwards, the roles stay vague, the shop-versus-house layout is only implied, and the 30 October incident arrives last, so the early details come before the context they depend on."
+   },
+   "cost_usd": 0.0476505
+  },
+  "20261125-final": {
+   "verdict": {
+    "who": "partly",
+    "where": "partly",
+    "what": "partly",
+    "setup_ok": false,
+    "why": "The opening starts mid-fight with unexplained clips (charging, a woman, a hammer), and only later does a speaker (never clearly introduced) reveal he is a neighbor in a feud with a motorcycle-shop owner over noisy revving. The houses and shop layout is explained only after the incident details, and the 30 October incident is just beginning, so the viewer gets the people, place and cause after the details that depend on them."
+   },
+   "cost_usd": 0.0470285
+  }
+ }
+}
