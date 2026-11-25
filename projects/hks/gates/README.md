@@ -35,7 +35,8 @@ earlier as "each mistake has a gate". The transcripts show why
   - the last run failed and the final message doesn't name each failed gate. With
     `late_draft_policy: block` it blocks on any failure.
 
-  To turn it on, add it to `.claude/settings.local.json`; it is not on yet:
+  Registered on 2026-11-25 in the main checkout's `.claude/settings.local.json` (local only, not
+  committed). It runs only when the hook file is present on the checked-out branch:
   `{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "python .claude/hooks/hks_handover_gate.py"}]}]}}`
 - `python -m cutdeck.hks_gates_backtest` reruns the evidence for every line.
 
@@ -61,8 +62,9 @@ earlier as "each mistake has a gate". The transcripts show why
      the handover (`late_draft_policy` decides block or label).
    - **Warning:** it fails some user finals, or it is a list to look at. It is printed in the
      handover header and never blocks.
-5. **Override.** `--override GATE="reason" --by <who>` lets one failed control through. Each
-   override is a line in `overrides.jsonl`. Who may override is open: see "Your decisions" below.
+5. **Override.** `--override GATE="reason" --by <who>` lets one failed control through. The agent
+   or the user may override, always with a written reason; one without a reason is refused (user,
+   2026-11-25). Each override is a line in `overrides.jsonl`, and the hook makes the handover name it.
 6. **Retire** a gate when either of these happens:
    - It fails a user final after any line change.
    - It has 0 TP over 5 episodes in a row while it blocked or warned at least once (cost with no
@@ -112,11 +114,10 @@ The other 11 rule breaks have no working gate yet:
 
 ## Your decisions (no experiment settles these)
 
-1. **Late drafts:** while you're waiting, may a failed control block the draft, or only label it?
-   Today `late_draft_policy` is `label`, as before-you-cut says: "the handover opens with that
-   gate's name".
-2. **Overrides:** who may override a failed control (you only, or the agent with a reason), and
-   is the log in `overrides.jsonl` enough of a record?
+1. **Late drafts:** decided 2026-11-25, **label**. A failed control may reach you only with the
+   handover opening on its id and value.
+2. **Overrides:** decided 2026-11-25, **the agent with a written reason** (or you). Every
+   override is logged in `overrides.jsonl`.
 3. **Reviewer cost per draft:** both cold reviewers failed to agree with you, so none runs now.
    For a future one, the measured costs were $0.71 per 168 endings (Sonnet) against $1.47
    (Opus), and $0.18 per set-up read (Sonnet).

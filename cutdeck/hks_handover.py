@@ -8,8 +8,10 @@
    look at, by gate id. The handover message opens with it. The Stop hook
    (``.claude/hooks/hks_handover_gate.py``) reads this header from the session transcript.
 
-Exit 1 when a kept control fails and is not overridden. ``--override GATE="reason"`` records the
-override in ``projects/hks/gates/overrides.jsonl`` (who may override is the user's call).
+Exit 1 when a kept control fails and is not overridden. ``--override GATE="reason" --by <who>``
+waives one failed control: the agent or the user may, always with a written reason (user,
+2026-11-25). It is logged in ``projects/hks/gates/overrides.jsonl`` and the hook makes the
+handover name it.
 
     python -m cutdeck.hks_handover --prproj <day>.prproj --sequence "1 YOUTUBE agent v2" --from 26.76
 """
@@ -59,7 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     found = hks_gates.run(project, seq, hks_gates.load_sources(seq, hks_gates.MAIN / "transcriber.db",
                                                                hks_gates.MAIN / "output/timeline_transcripts/levels"),
                           a.body_from, a.show_end)
-    overrides = dict(o.split("=", 1) for o in a.override)
+    overrides = dict(o.split("=", 1) for o in a.override if "=" in o)
+    if len(overrides) != len(a.override) or not all(r.strip() for r in overrides.values()):
+        print('HANDOVER BLOCKED: every --override needs a written reason: --override GATE="reason"')
+        return 2
     live = {g: r for g, r in found.items() if r["status"] != "retired"}
     failed = [g for g, r in live.items() if not r["passed"] and r["kind"] == "control" and g not in overrides]
     warned = [g for g, r in live.items() if (not r["passed"] and r["kind"] == "warning")
