@@ -56,6 +56,7 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Read the timeline (tracks, clips, ids, marks, playhead, markers, effect chains, param values; filter by track and time span) | `premiere_read_timeline` | UXP | LIVE 2026-11-21 |
 | Hear the timeline: what is said where, cuts that land in sound, speech the engine dropped (from each source's one transcript, no re-listening) | `premiere_timeline_transcript` | UXP read + helper | LIVE 2026-11-22 |
 | Cut words out (each cut in the pause; read back) | `premiere_cut_words` | helper + `cut_copy` | LIVE 2026-11-22 |
+| Clean speech on a copy: cut fillers, repeats, restarts in their pauses; mark what needs a call (`apply: false` lists it all with context) | `premiere_clean_speech` | helper + `cut_copy` + `add_markers` | dry run LIVE 2026-11-25; apply FAKE |
 | Plan a Short by its words (piece edges in the source's pauses; items for build) | `premiere_plan_pieces` | helper | LIVE 2026-11-22 |
 | Keep only these phrases on a copy, every track kept (a Short from a synced rough cut) | `premiere_keep_words` | helper + `cut_copy` | LIVE 2026-11-22 |
 | A range of a sequence as its own sequence, every track and effect (Make Subsequence) | `premiere_make_subsequence` | UXP | LIVE 2026-11-24 |

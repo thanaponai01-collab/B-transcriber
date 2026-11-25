@@ -768,3 +768,15 @@ user does (slip the synced feed to the moment); files the agent makes belong nex
   Restored: V4 = `Las Vegas GP 2026 Race.mp4` for all six parts (radio part at 109%, In 6865.8 / 6866.6 / 6870.2);
   background hold on V5 237–387; radio boxes moved to V6 (237–333, 333–387, crops and safe-zone framing kept, glitch on
   V6 237). Rule: the source stays; holds and crops sit on tracks above it.
+
+### Agent's clean-up of the LV GP post-race rough cut (2026-11-24 23:30–00:00)
+User: "clean up cut to the point, no sponsor, start with ต่อหลังเรซ; if not sure don't cut, keep it and list it"; then
+"the things you spot or don't know, just mark it on the timeline you created". Source: `2026-11-24 21-10-00 (2)_Synced —
+CutDeck 288308f0` (55:42), untouched. Result: `LV GP 2026 Post-race YT clean v2 (Claude)` (49:47), via `cut_words`.
+- Cut (17): pre-show + sponsor (starts on the 2nd "มาต่อหลังเรซ", after the ขนมตรามือ read; the 1st one is in the pre-show
+  chat), chat replies (ไก่ย่าง, กินข้าว, ไลฟ์กี่ชั่วโมง, greetings), searching for pictures/clips, deciding what to talk about
+  next, words after the goodbye. No new cut lands in sound.
+- Not cut, marked (11 markers named CHECK/DECIDE): chat replies I couldn't place, a name slip with no pause to cut in, and the
+  whole post-race chat Q&A (6:46, incl. giveaway) — the user decides.
+- Lesson: three first-try joins landed in sound (a mid-phrase name fix, a cut starting inside "ละกัน"); start/end the range
+  one line wider at a real pause instead.

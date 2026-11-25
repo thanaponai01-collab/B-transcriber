@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from cutdeck import assistant, keys, menu, mogrt_text, premiere_ui, screenshot, srt_subtitles, timeline_transcript, word_cut
+from cutdeck import (assistant, keys, menu, mogrt_text, premiere_ui, screenshot, speech_clean, srt_subtitles,
+                     timeline_transcript, word_cut)
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -1159,6 +1160,82 @@ async def _cut_words(args: dict, premiere: Premiere) -> dict:
                                    if (e["edge_src_s"], e["word"]) not in old_edges], **_warnings(before)}
 
 
+def _clean_speech_arguments(args: dict, jobs) -> dict:
+    result = _timeline_transcript_arguments({k: args[k] for k in ("sequence", "track") if k in args}, jobs)
+    apply = args.get("apply", True)
+    if not isinstance(apply, bool):
+        raise ValueError("apply must be true (make the cleaned copy) or false (only list what it would do)")
+    name = args.get("result_name")
+    if apply and (not isinstance(name, str) or not name.strip()):
+        raise ValueError("result_name must name the new sequence")
+    kinds = args.get("kinds", list(speech_clean.KINDS))
+    if not isinstance(kinds, list) or not kinds or any(k not in speech_clean.KINDS for k in kinds):
+        raise ValueError(f"kinds must be a list of: {', '.join(speech_clean.KINDS)}")
+    keep_ms = args.get("keep_ms", word_cut.KEEP_MS)
+    if type(keep_ms) is not int or not 0 <= keep_ms <= 2000:
+        raise ValueError("keep_ms must be 0 to 2000")
+    cut_restarts = args.get("cut_restarts", False)
+    if not isinstance(cut_restarts, bool):
+        raise ValueError("cut_restarts must be true or false")
+    return {**result, "apply": apply, "kinds": kinds, "keep_ms": keep_ms, "cut_restarts": cut_restarts,
+            **({"result_name": name} if apply else {})}
+
+
+def _retake_markers() -> tuple[str, ...]:
+    import yaml
+    config = yaml.safe_load((Path(__file__).resolve().parent.parent / "transcribe/config.yaml").read_text(encoding="utf-8"))
+    return tuple((config.get("cut") or {}).get("retake_markers") or ())
+
+
+def _context(words, segs: list, at: int) -> str:
+    """The line before, the finding's line (in [brackets]) and the line after."""
+    k = next(n for n, (a, b) in enumerate(segs) if a <= at <= b)
+    show = lambda n: timeline_transcript.join_words(w.text for w in words[segs[n][0]:segs[n][1] + 1])  # noqa: E731
+    return " / ".join(f"[{show(n)}]" if n == k else show(n) for n in range(max(k - 1, 0), min(k + 2, len(segs))))
+
+
+async def _clean_speech(args: dict, premiere: Premiere) -> dict:
+    read = {"sequence": args["sequence"]} if "sequence" in args else {}
+    source = await premiere("read_timeline", read)
+    if args.get("result_name") == source["name"]:
+        raise ValueError("result_name must differ from the source sequence (it is never edited)")
+    build = lambda tl, track: timeline_transcript.build(  # noqa: E731
+        tl, track=track, limit=1, out_dir=_TRANSCRIPTS_DIR, keep_words=True)
+    before = await asyncio.to_thread(build, source, args.get("track"))
+    if before["missing"]:
+        raise ValueError(f"transcribe these sources first: {[m['media'] for m in before['missing']]}")
+    words, tpf = before["word_objects"], int(source["ticks_per_frame"])
+    found = speech_clean.find(words, _retake_markers(), tuple(args["kinds"]), args["cut_restarts"])
+    planned = await asyncio.to_thread(speech_clean.plan, words, found, tpf, int(source["end_ticks"]),
+                                      args["keep_ms"], before["level_at"])
+    segs = speech_clean.segments(words)
+    show = lambda f, at: {"kind": f["kind"], "text": f["text"], "why": f["why"], **at,  # noqa: E731
+                          "context": _context(words, segs, f["word_range"][0])}
+    counts = {kind: sum(f["kind"] == kind for f in planned["cut"]) for kind in speech_clean.KINDS}
+    report = {"cut_count": counts, "marked_count": len(planned["marked"]), "skipped_count": len(planned["skipped"]),
+              "marked": [show(f, {"at_s": f["at_s"]}) for f in planned["marked"]][:_MAX_CUTS_LISTED],
+              "skipped": [show(f, {"at_s": f["at_s"]}) for f in planned["skipped"]][:_MAX_CUTS_LISTED]}
+    if not args["apply"]:
+        return {"sequence": source["name"], **report,
+                "cut": [show(f, {"removed_s": f["removed_s"]}) for f in planned["cut"]][:_MAX_CUTS_LISTED],
+                **_warnings(before)}
+    if not planned["cuts_frames"] and not planned["marked"]:
+        raise ValueError("nothing to clean on this timeline")
+    copy = await premiere("cut_copy", {"sequence_name": source["name"], "result_name": args["result_name"],
+                                       "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": planned["cuts_frames"]}})
+    await premiere("open_sequence", {"sequence": args["result_name"]})
+    marks = speech_clean.markers(planned["marked"], planned["cuts_frames"], tpf)
+    if marks:
+        await premiere("add_markers", {"markers": marks})
+    after = await asyncio.to_thread(build, await premiere("read_timeline", {"sequence": args["result_name"]}),
+                                    before["track"])
+    old_edges = {(e["edge_src_s"], e["word"]) for e in before["cuts_in_sound"]}
+    return {"sequence": args["result_name"], "cut_copy": copy, "cuts_frames": planned["cuts_frames"], **report,
+            "markers_added": len(marks),
+            "new_cuts_in_sound": [e for e in after["cuts_in_sound"] if (e["edge_src_s"], e["word"]) not in old_edges],
+            **_warnings(before)}
+
+
 def _warnings(built: dict) -> dict:
     """The transcript's warnings (a transcript in another language, a later audio stream), for
     the tools that act on it, so an agent sees them before trusting the words."""
@@ -1429,6 +1506,27 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("result_name", str), ("remove", list[dict]), ("sequence", str | None, None),
          ("track", str | None, None), ("keep_ms", int, 250)),
         run=_cut_words),
+    "clean_speech": Command(
+        1800, _clean_speech_arguments, "write",
+        """
+        Clean the speech of a sequence (default the active one; never edited) on a COPY: cut
+        hesitation fillers (เอ่อ, อืม, อ่า...) and a line said twice in a row, each cut in the pause
+        around it. What needs an editor's call is not cut but marked on the copy (markers named
+        "CHECK <kind>"): a restart (a short line, then the same words said again in full; cut too
+        with cut_restarts true), a short word said twice (stutter or on purpose?), a near restart
+        (which take makes the whole sentence?), a retake phrase, and any cut with no quiet frame to
+        land on. Words said three
+        times or more, and Thai doubling (ช้าช้า), are left alone. apply false makes nothing and
+        lists every cut and marker with its context (the line before and after), so an agent can
+        judge the marked ones and remove them with premiere_cut_words. kinds narrows it to some of
+        filler, repeat, restart, near_restart, retake. Returns counts, the marked and skipped
+        findings, and `new_cuts_in_sound` read back from the copy (empty is the goal). The copy
+        becomes the open sequence. Needs the CutDeck panel open and the sources transcribed.
+        """,
+        (("result_name", str | None, None), ("apply", bool, True), ("kinds", list[str] | None, None),
+         ("cut_restarts", bool, False), ("sequence", str | None, None), ("track", str | None, None),
+         ("keep_ms", int, 250)),
+        run=_clean_speech),
     "plan_pieces": Command(
         300, _plan_pieces_arguments, "read",
         """
