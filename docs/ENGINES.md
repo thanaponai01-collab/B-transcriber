@@ -211,7 +211,10 @@ less now count as collapsed (`_COLLAPSED_PIECE_MS`, 2026-11-25). At −12 dB the
 behind a longer piece (Short2: then a 1020 ms piece; Short3: then a 540 ms one), so a piece of 3 s or
 more among a window's last 6 non-collapsed pieces is the suspect whatever follows it (`_GROSS_STRETCH_MS`). With both
 rules, the gold `cer_thai` stays at 0.050–0.062 across −18 to +6 dB (master: 0.053–0.094), and 0 dB
-is unchanged at 0.0530.
+is unchanged at 0.0530. The cut before the redecoded tail prefers a gap before a word start (a piece
+with a leading space), falling back to the largest gap only when none is in range: a cut inside a
+word (ไม | ่มี) starts the redecode mid-word and the decoder skips that word. On real files this
+brought back "ไม่มีเพื่อนครบ", "อื่นไป" and "ว่า" (2026-11-25).
 
 **VAD thresholds.** This engine is whole-file, so `ingest.py`'s VAD never runs on its audio. Left
 alone, faster-whisper uses threshold 0.5 / min silence 2000 ms, which clips soft Thai sentence-final
