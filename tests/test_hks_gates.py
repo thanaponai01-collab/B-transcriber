@@ -107,7 +107,6 @@ def test_hook_reads_a_build_and_handover_in_one_command_in_order(tmp_path):
 
 
 def test_hook_reads_every_text_block_after_the_handover():
-    evs = [("mutate", "build_sequence"), ("handover", "HANDOVER BLOCKED: x
-  FAILED same_frame_share: 0.7"),
+    evs = [("mutate", "build_sequence"), ("handover", "HANDOVER BLOCKED: x\n  FAILED same_frame_share: 0.7"),
            ("say", "same_frame_share FAILED at 0.705."), ("say", "Other notes.")]
     assert _hook().verdict(evs, "label") is None
