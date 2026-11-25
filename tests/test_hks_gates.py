@@ -94,11 +94,17 @@ def test_hook_reads_a_build_and_handover_in_one_command_in_order(tmp_path):
     t = tmp_path / "t.jsonl"
     rows = [
         {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "a", "name": "Bash",
-            "input": {"command": "python build_sequence_x.py && python -m cutdeck.hks_handover --prproj p"}}]}},
+            "input": {"command": "python -c 'from cutdeck.helper_protocol import ask; ask({\"command\": \"build_sequence\"})'"
+                                 " && python -m cutdeck.hks_handover --prproj p"}}]}},
         {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "a", "content": "HANDOVER OK: s"}]}},
         {"type": "assistant", "message": {"content": [{"type": "text", "text": "ready"}]}},
+        # Neither of these touches a draft or runs the handover: a grep, and a script that only
+        # names a build command and a file called hks_handover_gate.py.
         {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "b", "name": "Bash",
             "input": {"command": "grep -n build_sequence cutdeck/*.py"}}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "c", "name": "Bash",
+            "input": {"command": "cd x && python -c \"print('build_sequence')\"; git show HEAD:.claude/hooks/hks_handover_gate.py"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "c", "content": "build_sequence"}]}},
     ]
     t.write_text("\n".join(_json.dumps(r) for r in rows), encoding="utf-8")
     hook = _hook()

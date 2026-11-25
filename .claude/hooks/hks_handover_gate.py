@@ -19,6 +19,10 @@ from pathlib import Path
 MUTATES = re.compile(r"build_sequence|apply_cuts|cut_copy|edit_clips|remove_piece|keep_words|paste_from"
                      r"|premiere_arrange|place_media|duplicate_sequence")
 RUNS = re.compile(r"(?<![\w./-])(python3?|py)(\.exe)?\s")  # Python run as a command: CutDeck is reached from it
+# The command really goes to Premiere: the helper client, a cdv.py call, or a CutDeck MCP tool.
+SENDS = re.compile(r"helper_protocol|\bask\(\{|cdv\.py\b.*\bcall\b", re.S)
+# The handover command itself, run (not a file that merely has hks_handover in its name).
+HANDOVER = re.compile(r"-m\s+cutdeck\.hks_handover\b|\bhks_handover\.py\b")
 READ_ONLY = re.compile(r"\s*(cat|head|tail|sed|grep|rg|ls|git|less|type|Get-Content|Select-String)\b")
 REPO = Path(__file__).resolve().parents[2]
 LOG = REPO / "output" / "hks_gates" / "stop_hook.log"
@@ -39,12 +43,13 @@ def events(transcript: Path):
             if x.get("type") == "tool_use":
                 name = x.get("name", "")
                 cmd = (x.get("input") or {}).get("command", "") if name in ("Bash", "PowerShell") else ""
-                # A draft change is a CutDeck tool, or Python run with a CutDeck build command in the
-                # call; reading or grepping a file that names one is not.
+                # A draft change is a CutDeck tool, or Python that sends a build command to Premiere;
+                # a script or grep that only names one is not.
                 if (name.startswith("mcp__") and MUTATES.search(name)) or (
-                        cmd and MUTATES.search(cmd) and RUNS.search(cmd) and not READ_ONLY.match(cmd)):
+                        cmd and MUTATES.search(cmd) and SENDS.search(cmd) and RUNS.search(cmd)
+                        and not READ_ONLY.match(cmd)):
                     yield "mutate", (name + " " + cmd)[:200]
-                if "hks_handover" in cmd and not READ_ONLY.match(cmd):
+                if HANDOVER.search(cmd) and RUNS.search(cmd) and not READ_ONLY.match(cmd):
                     pending[x["id"]] = "handover"  # after the build when both share one command
             elif x.get("type") == "tool_result" and pending.get(x.get("tool_use_id")) == "handover":
                 c = x.get("content")
