@@ -17,6 +17,7 @@ from pathlib import Path
 
 from cutdeck import timeline_transcript as tt, word_cut
 from cutdeck.prproj_reader import read_project
+from transcribe.audio import levels as lv
 from transcribe.db import store
 
 TPF = 8467200000  # 30 fps; the cuts measured were all 30 fps
@@ -40,8 +41,8 @@ def main() -> None:
                               if args.media in (c.get("media_path") or "") for e in (c["source_in"], c["source_out"])})
     job, words, levels = tt.source_words(media, store.resolve_db_path({"store": {"path": "transcriber.db"}}),
                                             Path("output/timeline_transcripts/levels"))[:3]
-    thr = tt.noise_floor(levels) + tt.TAIL_DB
-    lvl = lambda m, t: float(levels[max(int(t / T // 10) - 2, 0):int(t / T // 10) + 2].max()) - thr  # noqa: E731
+    over = lv.over(levels, lv.QUIET)
+    lvl = lambda m, t: float(over[max(int(t / T // 10) - 2, 0):int(t / T // 10) + 2].max())  # noqa: E731
     src = [tt.TimelineWord(w.text, w.start_ms * T, w.end_ms * T, "S", media, w.start_ms, w.end_ms, w.cue, None) for w in words]
     near_rough = lambda ms: any(abs(ms - e) <= 34 for e in rough_edges)  # noqa: E731
     rows = []

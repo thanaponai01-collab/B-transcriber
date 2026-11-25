@@ -10,7 +10,7 @@ Anywhere else the pause stays (studio picture with no camera change: a jump cut)
 
 Pauses come from the audio, not from word times: Whisper stretches words over pauses (90 % of the
 gaps between words on 20261120 are under 0.1 s). ``pauses`` reads them from the shared level
-envelope (``timeline_transcript.quiet_runs``). ``silences`` (ffmpeg ``silencedetect``) stays for
+envelope (``transcribe.audio.levels.quiet_runs``). ``silences`` (ffmpeg ``silencedetect``) stays for
 ``hks_judge`` and ``--quiet ffmpeg``.
 
 ``--check`` isolates 4.1 from the content cut: it takes the user's own keeps with every gap under
@@ -59,19 +59,17 @@ def silences(path: str, cache: Path = CACHE) -> list[tuple[float, float]]:
     return out
 
 
-FLOOR_PAUSE_DB = 18.0  # floor + this: the margin that matches silencedetect -35 dB on the 8 tuning days
-
-
 def pauses(path: str) -> list[tuple[float, float]]:
-    """The pauses tightening cuts: runs of the shared level envelope of ``timeline_transcript``
-    below its noise floor + FLOOR_PAUSE_DB (docs/SYSTEM_LAYERS.md). At the point-quiet margin
-    (+6 dB) it finds too few pauses (0.6-3 s recall 0.31 -> 0.13); at +18 dB it scores the same
-    as ffmpeg silencedetect -35 dB, which it replaced (``--check``, 2026-11-25)."""
-    from cutdeck.timeline_transcript import media_sha256, quiet_runs, source_levels
+    """The pauses tightening cuts: quiet runs of the shared level envelope under the pause rule
+    (``levels.PAUSE``, docs/LEVEL_RULES_PLAN.md). At the point-quiet margin (+6 dB) it finds
+    too few pauses (0.6-3 s recall 0.31 -> 0.13); at +18 dB it scores the same as ffmpeg
+    silencedetect -35 dB, which it replaced (``--check``, 2026-11-25)."""
+    from cutdeck.timeline_transcript import media_sha256, source_levels
+    from transcribe.audio import levels as lv
     root = Path(__file__).resolve().parent.parent
     levels = source_levels(path, root / "output" / "timeline_transcripts" / "levels"
                            / f"{media_sha256(path, root / 'transcriber.db')}.npy")
-    return quiet_runs(levels, int(MIN_SILENCE * 1000), FLOOR_PAUSE_DB)
+    return lv.quiet_runs(levels, int(MIN_SILENCE * 1000), lv.PAUSE)
 
 
 QUIET = {"ffmpeg": silences, "floor": pauses}

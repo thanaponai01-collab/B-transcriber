@@ -35,20 +35,22 @@ from cutdeck import hks_tighten  # noqa: E402
 from cutdeck.hks_cut_check import in_word_gap  # noqa: E402
 from cutdeck.hks_gold import TUNING, body, day_folders, read_day  # noqa: E402
 from cutdeck.speech_clean import FILLER  # noqa: E402
-from cutdeck.timeline_transcript import ENVELOPE_MS, TAIL_DB, media_sha256, noise_floor, source_words  # noqa: E402
+from cutdeck.timeline_transcript import ENVELOPE_MS, media_sha256, source_words  # noqa: E402
+from transcribe.audio import levels as lv  # noqa: E402
 from transcribe.db import store  # noqa: E402
 
 RULES = "ABCDE"
 
 
-def quiet_rules(t: float, reach_ms: int, sil, vad_gaps, lev, floor_c: float, words) -> dict[str, bool]:
+def quiet_rules(t: float, reach_ms: int, sil, vad_gaps, lev, over_c, words) -> dict[str, bool]:
     lo, hi = t - reach_ms / 1000, t + reach_ms / 1000
     f = int(t * 1000 // ENVELOPE_MS)
     r = reach_ms // ENVELOPE_MS
     win = lev[max(f - r, 0):f + r + 1]
     a = any(s < hi and e > lo for s, e in sil)
     b = any(s < hi and e > lo for s, e in vad_gaps)
-    c = bool(len(win)) and float(win.min()) < floor_c
+    win_c = over_c[max(f - r, 0):f + r + 1]
+    c = bool(len(win_c)) and float(win_c.min()) < 0
     ctx = lev[max(0, f - 50):f + 50]
     live = ctx[ctx > -120.0]
     floor_d = float(live.min() if len(live) else (ctx.min() if len(ctx) else 0.0))
@@ -122,7 +124,7 @@ def main(argv=None) -> int:
                 prev = max(prev, e)
             gaps.append((prev, float("inf")))
             sil = hks_tighten.silences(str(path))
-            sources[media] = (words, lev, noise_floor(lev) + TAIL_DB, gaps, sil)
+            sources[media] = (words, lev, lv.over(lev, lv.QUIET), gaps, sil)
             print(f"{folder.name} {path.name}: {len(words)} words, {len(spans)} speech spans, {len(sil)} silences",
                   file=sys.stderr)
         day_edges = [(m, t) for m, t in edges(keeps) if m in sources]
@@ -151,9 +153,9 @@ def main(argv=None) -> int:
         mids = rng.sample(kept_words, min(len(kept_words), max(len(day_edges), 1)))
         for kind, pts in (("edge", day_edges), ("mid_word", mids)):
             for media, t in pts:
-                words, lev, floor_c, gaps, sil = sources[media]
+                words, lev, over_c, gaps, sil = sources[media]
                 points.append((kind, folder.name[:8], media, t,
-                               {r: quiet_rules(t, r, sil, gaps, lev, floor_c, words) for r in args.reach}))
+                               {r: quiet_rules(t, r, sil, gaps, lev, over_c, words) for r in args.reach}))
 
     report = {"days": sorted({p[1] for p in points}), "skipped": skipped, "reach": {}}
     for r in args.reach:

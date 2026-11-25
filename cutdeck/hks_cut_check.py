@@ -32,8 +32,8 @@ import re
 import sys
 from pathlib import Path
 
-from cutdeck.timeline_transcript import (ENVELOPE_MS, TAIL_DB, noise_floor, source_levels,
-                                         source_words, media_sha256)
+from cutdeck.timeline_transcript import ENVELOPE_MS, media_sha256, source_levels, source_words
+from transcribe.audio import levels as lv
 
 FOOTAGE = re.compile(r"\.(mp4|mov|mxf|m4v|avi|png|jpe?g|tif{1,2}|psd)$", re.I)
 QUIET_REACH_MS = 120   # a cut within this of a quiet 10 ms window sits in a pause
@@ -78,11 +78,12 @@ def sound_cuts(audio: list[dict]) -> list[tuple[float, dict | None, dict]]:
     return cuts
 
 
-def quiet_near(levels, threshold: float, src_s: float) -> bool:
+def quiet_near(over, src_s: float) -> bool:
+    """Is a 10 ms window within QUIET_REACH_MS quiet? ``over``: ``levels.over(…, QUIET)``."""
     i = int(src_s * 1000 // ENVELOPE_MS)
     reach = QUIET_REACH_MS // ENVELOPE_MS
-    window = levels[max(i - reach, 0):i + reach + 1]
-    return bool(len(window)) and float(window.min()) < threshold
+    window = over[max(i - reach, 0):i + reach + 1]
+    return bool(len(window)) and float(window.min()) < 0
 
 
 def in_word_gap(words, src_s: float) -> bool:
@@ -111,6 +112,7 @@ def check(sequence: dict, sources: dict, fps: float = 25.0, body_from: float = 0
     vtracks = sequence["video_tracks"]
     audio = sequence["audio_tracks"][0]["clips"]
     in_speech, same_frame, n_cuts = [], [], 0
+    overs = {m: lv.over(levels, lv.QUIET) for m, (_, levels) in sources.items() if levels is not None}
     for t, out_clip, in_clip in sound_cuts(audio):
         if t < body_from:
             continue
@@ -121,9 +123,10 @@ def check(sequence: dict, sources: dict, fps: float = 25.0, body_from: float = 0
         for side, clip, pic in (("out", out_clip, before), ("in", in_clip, after)):
             if clip is None or not in_sync(pic, clip, t + (frame / 2 if side == "in" else -frame / 2), frame):
                 continue  # the viewer doesn't see this side's speaker: the cut is hidden
-            words, levels = sources.get(clip.get("media_path"), ([], None))
+            words, _ = sources.get(clip.get("media_path"), ([], None))
+            over = overs.get(clip.get("media_path"))
             edge = clip["source_in"] if side == "in" else clip["source_out"]
-            if levels is not None and quiet_near(levels, noise_floor(levels) + TAIL_DB, edge):
+            if over is not None and quiet_near(over, edge):
                 continue
             if in_word_gap(words, edge):
                 continue
