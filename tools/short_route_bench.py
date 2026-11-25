@@ -126,8 +126,11 @@ def plan(parent: dict, pieces: list[tuple[int, int]], at: int) -> list[list]:
 def route_d(call, parent, template, short, pieces, at):
     call("duplicate_sequence", {"sequence_name": template, "result_name": short}, "template")
     for j, (a, b) in enumerate(pieces):
-        call("paste_from", {"source": parent, "in_ticks": str(a), "out_ticks": str(b), "target": short,
-                            "at_ticks": str(at)}, f"piece {j + 1}")
+        out = call("paste_from", {"source": parent, "in_ticks": str(a), "out_ticks": str(b), "target": short,
+                                  "at_ticks": str(at), "per_piece_reason": "route D baseline (short_route_bench)"},
+                   f"piece {j + 1}")
+        if j >= 2 and out.get("fallback") != "route D baseline (short_route_bench)":
+            raise RuntimeError("paste_from did not report the per-piece fallback")
         at += b - a
 
 
@@ -196,9 +199,11 @@ def main(argv=None) -> int:
     if error is None:
         template = ask({"type": "premiere", "command": "read_timeline", "args": {"sequence": a.template}})["result"]
         got = ask({"type": "premiere", "command": "read_timeline", "args": {"sequence": short}})["result"]
-        own = {tuple(c) for c in clips(template)}
+        own = clips(template)
         want = plan(parent, pieces, a.at)
-        have = [c for c in clips(got) if tuple(c) not in own]
+        # a template clip the paste overwrote leaves a piece of itself: the template's, not the Short's
+        have = [c for c in clips(got) if not any(o[:2] == c[:2] and o[2] <= c[2] and c[3] <= o[3]
+                                                 and c[4] - o[4] == c[2] - o[2] for o in own)]
         result.update({"missing": [c for c in want if c not in have][:20], "unexpected": [c for c in have if c not in want][:20],
                        "exact": want == have, "planned_clips": len(want)})
     bench.row(result)

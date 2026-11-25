@@ -1517,6 +1517,12 @@ def _derive_short_arguments(args: dict, jobs) -> dict:
     return {**result, "pieces": spans, "at_ticks": _ticks(args.get("at_ticks", "0"), "at_ticks")}
 
 
+def _with_in(timeline: dict) -> list[tuple[str, int, int, int, int]]:
+    """(V|A, track number, start, end, source in) of every clip."""
+    return sorted((t["id"][0], int(t["id"][1:]), int(c["start_ticks"]), int(c["end_ticks"]), int(c.get("in_ticks", 0)))
+                  for t in timeline["tracks"] for c in t["clips"])
+
+
 async def _derive_short(args: dict, premiere: Premiere) -> dict:
     """Fixed cost whatever the piece count: make_subsequence of the span, cut_copy to the pieces,
     arrange into play order (four steps), one paste_from of the whole into a copy of the template;
@@ -1561,7 +1567,7 @@ async def _derive_short(args: dict, premiere: Premiere) -> dict:
             if arranged["missing"] or arranged["unexpected"]:
                 raise ValueError(f"the reorder did not land: missing {arranged['missing'][:5]}, unexpected {arranged['unexpected'][:5]}")
         await premiere("duplicate_sequence", {"sequence_name": template, "result_name": name})
-        own = set(_clips(await premiere("read_timeline", {"sequence": name})))
+        own = _with_in(await premiere("read_timeline", {"sequence": name}))
         pasted = await _paste_from({"source": whole, "target": name, "in_ticks": "0", "out_ticks": str(end),
                                     "at_ticks": str(at), "v_offset": 0, "keep_piece": False}, premiere)
         if pasted["missing"] or pasted["left_at_park"]:
@@ -1577,7 +1583,9 @@ async def _derive_short(args: dict, premiere: Premiere) -> dict:
     for f, t in pieces:
         plan += [(k, n, max(s, f) - f + shift, min(e, t) - f + shift) for k, n, s, e in inside if s < t and e > f]
         shift += t - f
-    built = [c for c in _clips(await premiere("read_timeline", {"sequence": name})) if c not in own]
+    # What is left of a template clip the paste overwrote is the template's, not the Short's.
+    built = [c[:4] for c in _with_in(await premiere("read_timeline", {"sequence": name}))
+             if not any(o[:2] == c[:2] and o[2] <= c[2] and c[3] <= o[3] and c[4] - o[4] == c[2] - o[2] for o in own)]
     await premiere("save_project", {})
     return {"sequence": name, "pieces": len(pieces), "length_ticks": str(end),
             "missing": sorted(set(plan) - set(built))[:50], "unexpected": sorted(set(built) - set(plan))[:50],
