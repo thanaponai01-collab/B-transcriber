@@ -802,3 +802,32 @@ of the imported `TT russell wall v5 (Claude)` (for the 9:16 settings and the use
   result (T16, no battery) → Mercedes didn't tell him; Max 90–172 s = the plan (ยื่นพาน) → where the battery charges →
   plate 1 → plate 2 → mind game. Chapter words are copies of the user's title Graphic, each ending on a cut
   (ก่อนหน้านั้น, ทำไม, ผลลัพธ์, แบตชาร์จตรงไหน, พานที่ 1, พานที่ 2, มายด์เกม; agent's wording, to confirm).
+- **User re-edit of v2 Kimi (seen 23:2x):** cut to 53.6 s: hook → spot-the-difference, dropped "ร่วงไปที่สี่", the lap 49
+  "last try" part and the Kimi chapter words; title 0–5.23. Then asked: hook picture = Kimi's car, not Max on the podium;
+  add the lap 45 part (Kimi tries something, Max notices). Done on v2: everything from 4.667 s moved +21.3 s (clone to a
+  park + lift, read back exact), lap 45 (yt 1384.17–1391.87 + 1394.37–1408.03) pasted in, title trimmed to the new cut
+  (4.667), CutDeck hold of Kimi's Mercedes (from the lap 45 board) on V5 0–6.067. Lesson: a restyle by clip start hit
+  the user's own first clip after the insert; read the user's values first, restore from them.
+- **User round 3 (2026-11-25 late):** "it's lap 44, I fixed it" (the user replaced my lap 45 insert with lap 44 at
+  2.97–11.93, cam off and unframed); "frame it, reframe it again, like the block… readjust the video below my face so
+  it's seeing the action, not just stay there"; Max: "the 3 benefits Max gets". Done on v2:
+  - Kimi: the lap 44 block got the standard layout (V4 clone framed on the cars, cam on). Every V4 clip now has a
+    keyframed push or pan (Motion scale / anchor / crop top at clip start and end, `set_param` with `at_ticks` =
+    media time), so the panel follows what is being said instead of holding one framing. Frames kept off the board
+    toolbar (source y ≤ ~905) and the F1 / F1 TV logos. 0.4 s of zoomed-out board canvas at 11.93 covered by a hold.
+  - Max: inserted the user's own three-bonus recap (yt 1032.933–1050.667, "อีกหนึ่งโบนัสที่แม็กได้ก็คือ … ได้ชาร์จแบต …
+    ได้สตรีม … โอเวอร์เทคโหมด ได้แบตเพิ่มมาศูนย์จุดห้าเมกะโจ") at 204.67, between "เราจะได้โอเวอร์เทคโหมดมาใช้" and
+    "ต่อมาพานที่สอง"; everything after moved +532 frames (clone to a park + lift, every track read back exact; V4
+    keyframes survive a clone). Labels copied from the user's "พานที่ 1" Graphic, each ending on a cut: "3 โบนัสของแม็ก"
+    (agent wording), "1 ชาร์จแบต", "2 สลิปสตรีม", "3 Overtake Mode". All Max shots reframed and keyframed the same way;
+    where the user's board pans or zooms inside a shot (Sector 3 map at 176 s and 189 s, Russell circle at 191.6 s, the
+    zoom at the old "พานที่ 2" cut), a hold of the shot's framed first frame sits on V5 instead.
+  - Miss on the way: I first labelled the lines already in the cut and called the request done. The user meant the
+    recap passage they remembered saying, which wasn't in the cut. Search the source for what the user describes
+    before deciding it's already there.
+  - Lessons: when the source board itself pans inside a clip, an animated frame lands on black. Use a hold there.
+    `place_media` of a still overwrites with its default length, so it wipes the next V5 clip: place from the last
+    gap backwards, or re-read V5 after each place. The panel disconnects during long `set_param` runs (about 300
+    calls); retry each call and don't redo the whole run.
+  - The user was editing the Kimi hook live during this round (V5 clips at 0–2.97 and 2.97–4.5); left untouched.
+    Open: Max 142.2–144.1 ("planning" on a black canvas) and the 12.5 s gap at 149.87–162.37 are left as the user cut them.
