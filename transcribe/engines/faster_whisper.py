@@ -93,6 +93,10 @@ _TRUNCATION_TAIL_MS = 1500
 # a 1300 ms vowel mark before two 0 ms pieces dropped a clause). Over 4 real
 # files + gold audio this flagged only that window and a 6.5 s one.
 _TRUNCATION_COLLAPSED_TAIL_MS = 1000
+# Trailing pieces this short count as collapsed too, not only 0 ms ones: gold
+# Short2 at -1.2 dB ends its first long window on a 6.8 s vowel mark, then a
+# 20 ms and a 0 ms piece, and 4 s of speech went undecoded (2026-11-25).
+_COLLAPSED_PIECE_MS = 40
 _TRUNCATION_LOOKBACK_MS = 2500
 
 
@@ -328,10 +332,10 @@ class FasterWhisperEngine(Engine):
     def _plan_truncated_tail(self, tokens, sub_audio, *, require_speech=False):
         if not tokens and not require_speech:
             return None
-        # Zero-length pieces at the end mean Whisper ran out of timeline: the
-        # suspect is the last piece with a duration, and less stretch counts (#94).
+        # Collapsed pieces at the end mean Whisper ran out of timeline: the
+        # suspect is the last piece longer than that, and less stretch counts (#94).
         body = tokens
-        while body and body[-1].end_ms <= body[-1].start_ms:
+        while body and body[-1].end_ms - body[-1].start_ms <= _COLLAPSED_PIECE_MS:
             body = body[:-1]
         stretch_ms = _TRUNCATION_TAIL_MS if body is tokens else _TRUNCATION_COLLAPSED_TAIL_MS
         suspect = body[-1] if body else None

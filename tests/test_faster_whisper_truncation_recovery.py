@@ -246,6 +246,35 @@ def test_job_59_shape_is_recovered():
     assert [t.text for t in merged] == ["เดิม", "มันก็จะเฉือนเราไปเรื่อยเรื่อย"]
 
 
+def test_gold_short2_shape_stretched_piece_behind_a_20_ms_piece_is_recovered():
+    # Gold Short2 at -1.2 dB, first long window (0-25 s): a 6.8 s vowel mark, then 20 ms and
+    # 0 ms pieces. 17.1-21.3 s of speech was never decoded (2026-11-25).
+    eng = FasterWhisperEngine()
+    tokens = [_tok("ทั้งนั้น", 15240, 15740), _tok("อย่าให้เขารู้ส", 16340, 17080),
+              _tok("ึ", 17080, 23900), _tok("ก", 23900, 23920), _tok("ต", 23920, 23920)]
+    eng._decode = _redecode_to("อย่าให้เขารู้สึกตัวเอง")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(25 * _SR), {}, 8)
+    assert [t.text for t in merged] == ["ทั้งนั้น", "อย่าให้เขารู้สึกตัวเอง"]
+    assert merged[-1].start_ms == 16340
+
+
+def test_gold_short3_shape_stretched_piece_behind_a_40_ms_piece_is_recovered():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("ใจ", 17000, 17300), _tok("ของ", 18000, 19040),
+              _tok("ภ", 19040, 24940), _tok("ร", 24940, 24980), _tok("ร", 24980, 24980)]
+    eng._decode = _redecode_to("ของภรรยาเรา")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(25 * _SR), {}, 8)
+    assert [t.text for t in merged] == ["ใจ", "ของภรรยาเรา"]
+
+
+def test_normal_piece_before_a_short_piece_is_not_redecoded():
+    eng = FasterWhisperEngine()
+    tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2200), _tok("นะ", 2200, 2240)]
+    eng._decode = _no_redecode
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(int(2.4 * _SR)), {}, 8)
+    assert merged is tokens
+
+
 def test_normal_piece_before_a_zero_length_piece_is_not_redecoded():
     eng = FasterWhisperEngine()
     tokens = [_tok("มา", 0, 300), _tok("เขา", 2000, 2200), _tok("นะ", 2200, 2200)]
