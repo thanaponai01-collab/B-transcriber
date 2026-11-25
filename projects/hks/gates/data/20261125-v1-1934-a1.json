@@ -1,0 +1,438 @@
+{
+ "what": "A1 of '1 YOUTUBE agent v1' in the 19:34 auto-save of 20261125 (~5 min into the user's edit), one entry per clip, word-level bounds",
+ "source": "read_timeline transcript saved by session 2ce93c3f (scratchpad hks1125/tt_early.json); the .prproj rotated out of Auto-Save",
+ "pieces": [
+  {
+   "start": 0.01,
+   "end": 6.56,
+   "source_in": 1211.17,
+   "source_out": 1218.282,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ใครถูกเย็บ",
+   "last": "เห็นกระดูกเห็น"
+  },
+  {
+   "start": 6.6,
+   "end": 10.36,
+   "source_in": 1734.44,
+   "source_out": 1738.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "พอเขาแย่งได้ก็เลยแทงกลับมาหาพี่",
+   "last": "พอเขาแย่งได้ก็เลยแทงกลับมาหาพี่"
+  },
+  {
+   "start": 10.59,
+   "end": 23.94,
+   "source_in": 3331.43,
+   "source_out": 3344.78,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "อันนั้นผมไม่รู้เขาอันนั้นเขาก่อเสียมของ",
+   "last": "แยกออกเขายังไม่ไม่ยอมเลย"
+  },
+  {
+   "start": 27.34,
+   "end": 33.04,
+   "source_in": 119.14,
+   "source_out": 124.92,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ก็มีร้านมอเตอร์ไซค์ที่เพิ่งจะมาอยู่",
+   "last": "ใหม่ครับได้ประมาณ 3 ปีกว่า"
+  },
+  {
+   "start": 33.12,
+   "end": 41.61,
+   "source_in": 131.72,
+   "source_out": 140.21,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ก็อยู่เฝ้ามอเตอร์ไซค์เบิ้ล",
+   "last": "ผมก็ไปตักเตือนเขาเรื่องการเบิ้ลรถ"
+  },
+  {
+   "start": 43.02,
+   "end": 66.11,
+   "source_in": 141.62,
+   "source_out": 164.71,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ครือรถพิกอัพเบอร์รถเบอร์รถฟันท่วมอะไรอย่าง",
+   "last": "กูก็ได้นะ"
+  },
+  {
+   "start": 66.25,
+   "end": 76.56,
+   "source_in": 269.89,
+   "source_out": 281.11,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วคราวนี้เค้าก็เอารถถอยรถออก",
+   "last": "ปุ๊บแล้วก็กระจกหลังเค้าแตก"
+  },
+  {
+   "start": 76.56,
+   "end": 77.71,
+   "source_in": 288.879,
+   "source_out": 290.07,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ไม่",
+   "last": "ได้พี่ถืออะไรอยู่ในมือนะ"
+  },
+  {
+   "start": 77.72,
+   "end": 122.39,
+   "source_in": 299.912,
+   "source_out": 344.99,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "เพื่อความเป็นธรรมเหรอเล็ก",
+   "last": "จบแค่นี้ได้ไหม"
+  },
+  {
+   "start": 122.61,
+   "end": 134.76,
+   "source_in": 371.05,
+   "source_out": 383.23,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "จบกันโอเคจบจบก็จบ",
+   "last": "ผมก็โอเค"
+  },
+  {
+   "start": 134.76,
+   "end": 141.52,
+   "source_in": 382.712,
+   "source_out": 390.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "โอเค",
+   "last": "ครับพี่โดนอีก"
+  },
+  {
+   "start": 141.57,
+   "end": 153.92,
+   "source_in": 406.61,
+   "source_out": 418.96,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "จากที่บ้านผมเคยอยู่เนี่ย",
+   "last": "ผมก็เลยย้ายมาปลูกบ้านใหม่"
+  },
+  {
+   "start": 154.09,
+   "end": 156.17,
+   "source_in": 610.97,
+   "source_out": 613.05,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "โอ้ก็แก้ปัญหาแล้วนี่",
+   "last": "โอ้ก็แก้ปัญหาแล้วนี่"
+  },
+  {
+   "start": 156.54,
+   "end": 246.55,
+   "source_in": 613.42,
+   "source_out": 703.43,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วยังไง",
+   "last": "แล้วมันเบิ้ลได้ไหม"
+  },
+  {
+   "start": 247.05,
+   "end": 257.16,
+   "source_in": 722.21,
+   "source_out": 732.69,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ครับ",
+   "last": "อะครับก็"
+  },
+  {
+   "start": 257.16,
+   "end": 351.44,
+   "source_in": 731.93,
+   "source_out": 826.86,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ก็ไปตาม",
+   "last": "พี่ไม่ต้องออกฟังเสียงตั้งแต่แรกเลย"
+  },
+  {
+   "start": 351.44,
+   "end": 411.32,
+   "source_in": 1028.219,
+   "source_out": 1092.07,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แบบว่าเห็นพ่อลงไปนอนอยู่กับพื้นใช่ไหมคะเหมือนแบบว่าพ่อไม่มีแรง",
+   "last": "ค่ะกระทืบหนูด้วยเหรอ"
+  },
+  {
+   "start": 411.88,
+   "end": 440.4,
+   "source_in": 1152.4,
+   "source_out": 1180.99,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "น้องก็เลยโดนหินตำ",
+   "last": "ๆน้องไปโรงเรียนไม่ได้"
+  },
+  {
+   "start": 440.41,
+   "end": 451.39,
+   "source_in": 1211.17,
+   "source_out": 1222.15,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ใครถูกเย็บ",
+   "last": "ครับต้องตัดชินเนื้อออกไปด้วยส่วนหนึ่งค่ะ"
+  },
+  {
+   "start": 451.85,
+   "end": 473.25,
+   "source_in": 1540.77,
+   "source_out": 1562.17,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ก็เป็น",
+   "last": "กูก็จะเบิ้ลเขผมยอมรับ"
+  },
+  {
+   "start": 475.54,
+   "end": 489.15,
+   "source_in": 1760.02,
+   "source_out": 1773.63,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วตัวน้องเอง",
+   "last": "ตำรวจตั้งข้อหาหนูด้วยว่าสมัครใจทะเลาะวิวาท"
+  },
+  {
+   "start": 489.36,
+   "end": 501.12,
+   "source_in": 1809.08,
+   "source_out": 1820.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ตำรวจก็ตั้งข้อหาว่าฝั่งนู้นเนี่ยร่วมกันทำร้ายร่างกายครับ",
+   "last": "พี่ก็ไปแจ้งความถูกต้องแล้วครับ"
+  },
+  {
+   "start": 501.36,
+   "end": 503.68,
+   "source_in": 2345.28,
+   "source_out": 2348.486,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ถูกต้องครับถูกไหม",
+   "last": "คือ"
+  },
+  {
+   "start": 503.68,
+   "end": 537.63,
+   "source_in": 2348.35,
+   "source_out": 2382.35,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "คืออย่างนี้ครับ",
+   "last": "ทำร้ายร่างกายมีโทษตั้งแต่ 6 เดือนถึง 10 ปี"
+  },
+  {
+   "start": 537.73,
+   "end": 564.04,
+   "source_in": 2411.49,
+   "source_out": 2437.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ทาง",
+   "last": "และหลังจากนั้นก็ผมก็ประสานผู้กำกับเข้าไปเจอกัน"
+  },
+  {
+   "start": 564.57,
+   "end": 596.2,
+   "source_in": 2643.25,
+   "source_out": 2674.88,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ค่ะ",
+   "last": "เลยโดนแจ้งความเท็จนะ"
+  },
+  {
+   "start": 596.32,
+   "end": 625.34,
+   "source_in": 2867.31,
+   "source_out": 2896.62,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "อ๋อ",
+   "last": "กูจัดซะ"
+  },
+  {
+   "start": 625.41,
+   "end": 645.27,
+   "source_in": 2928.89,
+   "source_out": 2948.75,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วล่าสุดก็คือ",
+   "last": "ผมก็เลยไปร้องกับจ่าคิง"
+  },
+  {
+   "start": 645.38,
+   "end": 649.34,
+   "source_in": 2954.5,
+   "source_out": 2958.46,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "เดี๋ยวต่อสายหาออฟสิ",
+   "last": "ครูกรณีนะจะได้เคลียร์กันว่ายังไง"
+  },
+  {
+   "start": 649.43,
+   "end": 685.24,
+   "source_in": 3013.87,
+   "source_out": 3049.68,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ออฟเปิดร้าน",
+   "last": "ทีเนี้ย"
+  },
+  {
+   "start": 685.85,
+   "end": 718.57,
+   "source_in": 3050.29,
+   "source_out": 3083.01,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "เรื่องราวมันเกิดจากอะไรขในกลุ่มของ",
+   "last": "ครับนั่นคือครั้งแรกนะ"
+  },
+  {
+   "start": 718.65,
+   "end": 772.1,
+   "source_in": 3153.89,
+   "source_out": 3207.34,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วไอ้ล่าสุดที่เกิดเรื่องเกิดปรามมันคืออะไรฮะ",
+   "last": "ใส่พร้อมกันเลย"
+  },
+  {
+   "start": 772.22,
+   "end": 793.39,
+   "source_in": 3234.54,
+   "source_out": 3255.71,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ครับ",
+   "last": "ผมแย่งแต่แย่งไม่ได้ออกจากมือเขาหรอกครับ"
+  },
+  {
+   "start": 793.55,
+   "end": 869.25,
+   "source_in": 3271.23,
+   "source_out": 3346.93,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ใช่ครับพี่หนุ่มครับ",
+   "last": "ครับเพราะถ้าแยกไปนี่ยับเลยใช่ไหม"
+  },
+  {
+   "start": 869.32,
+   "end": 894.6,
+   "source_in": 3483.92,
+   "source_out": 3509.96,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "พี่เดี๋ยวหนูขอพูดในส่วนของหนูนะคะพี่เชิญครับ",
+   "last": "ผมหนูก็เลยเข้าไปเลยอะค่ะพี่"
+  },
+  {
+   "start": 894.72,
+   "end": 907.85,
+   "source_in": 3454.686,
+   "source_out": 3468.21,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ค่ะได้ถ่ายส่งไปแล้ว",
+   "last": "ใช่ค่ะ"
+  },
+  {
+   "start": 907.98,
+   "end": 971.22,
+   "source_in": 3512.98,
+   "source_out": 3576.22,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ถามจริงๆออฟ",
+   "last": "มันก็ต้องจะเขมือกัน"
+  },
+  {
+   "start": 971.38,
+   "end": 988.44,
+   "source_in": 3931.78,
+   "source_out": 3949.19,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แหมแล้วพี่มันจะอยู่กันยังไงดี",
+   "last": "ครับ"
+  },
+  {
+   "start": 988.51,
+   "end": 1024.32,
+   "source_in": 4008.39,
+   "source_out": 4044.36,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ครับอ่าแม่เป้าเชิญ",
+   "last": "พูดความจริงเลย"
+  },
+  {
+   "start": 1024.47,
+   "end": 1055.81,
+   "source_in": 4049.63,
+   "source_out": 4080.97,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "พูดถึงขนาดนี้",
+   "last": "ไม่มีไรครับ"
+  },
+  {
+   "start": 1055.95,
+   "end": 1057.48,
+   "source_in": 4286.91,
+   "source_out": 4288.554,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "เอาอย่างนี้แล้วกัน",
+   "last": "พี่"
+  },
+  {
+   "start": 1057.48,
+   "end": 1094.59,
+   "source_in": 4288.433,
+   "source_out": 4325.55,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "พี่แก้วเป็นคนกลาง",
+   "last": "อยากถ้าคุยกันความจริงเรื่องมันจบนานแล้วครับ"
+  },
+  {
+   "start": 1094.75,
+   "end": 1135.32,
+   "source_in": 4549.91,
+   "source_out": 4590.48,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ดีไหม",
+   "last": "ครอย่าไปเล่าประสาทเขา"
+  },
+  {
+   "start": 1135.48,
+   "end": 1178.24,
+   "source_in": 5012.68,
+   "source_out": 5055.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ส่วนคู่คณี",
+   "last": "เดี๋ยวสอบสวนให้ปรากฏอีกทีหนึ่งครับ"
+  },
+  {
+   "start": 1178.28,
+   "end": 1230.87,
+   "source_in": 5058.91,
+   "source_out": 5111.79,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แล้วตอนนี้",
+   "last": "ส่วนหนึ่ง"
+  },
+  {
+   "start": 1231.14,
+   "end": 1241.53,
+   "source_in": 5113.5,
+   "source_out": 5123.89,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "แต่ทีนี้ทางคุณแม่แกไม่สบายใจ",
+   "last": "อะไรอย่างนี้คือแกก็เลยกังวลใจตรงนี้ครับท่าน"
+  },
+  {
+   "start": 1242.13,
+   "end": 1272.61,
+   "source_in": 5172.09,
+   "source_out": 5202.57,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ในส่วนตำรวจเนี่ยจะพยายาม",
+   "last": "ครับเพราะฉะนั้นตำรวจค่อนข้างจะระวังตัว"
+  },
+  {
+   "start": 1272.76,
+   "end": 1295.93,
+   "source_in": 5308.24,
+   "source_out": 5331.41,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "first": "ในกรณีที่มันเกิดปัญหาอย่างนี้",
+   "last": "ผมก็ดำเนินคดีตรงไปตรงมาอย่างยุติธรรมครับ"
+  }
+ ]
+}
