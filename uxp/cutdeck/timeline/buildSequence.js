@@ -204,13 +204,17 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
         removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
         removeAll(ppro, project, editor, now.audio.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.AUDIO, `CutDeck build: lift audio ${span}`);
       } else if (st.op === "clone") {
-        const items = [...now.video, ...now.audio].filter(inRange);
-        runTransaction(project, `CutDeck build: clone ${span} by ${secs(dt)} s`, (c) => {
-          for (const { item, kind } of items) {
+        // `ranges` [{from_ticks, to_ticks, dt_ticks}] clone more ranges in this one transaction, from this one
+        // read (a reorder's every block to the park: one undo step whatever the block count).
+        const parts = [[from, to, dt], ...(st.ranges || []).map((r) => [BigInt(r.from_ticks), BigInt(r.to_ticks), BigInt(r.dt_ticks)])];
+        const moves = parts.flatMap(([lo, hi, by]) => [...now.video, ...now.audio]
+          .filter((c) => c.start >= lo && c.start < hi && onTracks(c)).map((c) => [c, by]));
+        runTransaction(project, `CutDeck build: clone ${span}${parts.length > 1 ? ` and ${parts.length - 1} more` : ""} by ${secs(dt)} s`, (c) => {
+          for (const [{ item, kind }, by] of moves) {
             // v_offset: copy video that many tracks up (premierepro.txt:615 videoTrackVerticalOffset), e.g. a pasted
             // title parked on V1 past the end onto the subtitle track.
             const vOff = kind === "video" ? (st.v_offset || 0) : 0;
-            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(dt), vOff, 0, false, false))) throw new Error("clone refused");
+            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(by), vOff, 0, false, false))) throw new Error("clone refused");
           }
         });
       } else if (st.op === "trim") {

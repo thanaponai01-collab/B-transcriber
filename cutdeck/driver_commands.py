@@ -158,9 +158,14 @@ def _build_arguments(args: dict, jobs) -> dict:
                 and (st.get("tracks") is None or (isinstance(st["tracks"], dict) and not set(st["tracks"]) - {"video", "audio"}
                      and all(isinstance(v, list) and all(isinstance(i, int) and i >= 0 for i in v) for v in st["tracks"].values())))
                 and (st.get("v_offset") is None or (st["op"] == "clone" and type(st["v_offset"]) is int))
+                and (st.get("ranges") is None or (st["op"] == "clone" and isinstance(st["ranges"], list) and all(
+                     isinstance(r, dict) and all(isinstance(r.get(k), str) and r[k].isdigit() for k in ("from_ticks", "to_ticks"))
+                     and int(r["to_ticks"]) > int(r["from_ticks"]) and isinstance(r.get("dt_ticks"), str)
+                     and r["dt_ticks"].lstrip("-").isdigit() for r in st["ranges"])))
                 for st in steps):
             raise ValueError("steps must be [{op: lift|clone|move|trim, from_ticks, to_ticks, dt_ticks (clone/move), end_ticks (trim), "
-                             "tracks? {video: [index], audio: [index]}, v_offset? (clone: video tracks up, negative = down)}]")
+                             "tracks? {video: [index], audio: [index]}, v_offset? (clone: video tracks up, negative = down), "
+                             "ranges? (clone: more [{from_ticks, to_ticks, dt_ticks}] in the same transaction)}]")
         result["steps"] = steps
         restyle = args.get("restyle", [])
         if not isinstance(restyle, list) or not all(isinstance(r, dict) and r.get("kind") in ("video", "audio")
@@ -1322,8 +1327,11 @@ def _paste_from_arguments(args: dict, jobs) -> dict:
     keep_piece = args.get("keep_piece", False)
     if not isinstance(keep_piece, bool):
         raise ValueError("keep_piece must be true or false")
+    reason = args.get("per_piece_reason")
+    if reason is not None and (not isinstance(reason, str) or not reason.strip()):
+        raise ValueError("per_piece_reason must say why this build goes piece by piece")
     return {**result, **_range_arguments(args), "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"),
-            "v_offset": v_offset, "keep_piece": keep_piece}
+            "v_offset": v_offset, "keep_piece": keep_piece, **({"per_piece_reason": reason} if reason else {})}
 
 
 def _clips(timeline: dict, since: int = 0) -> list[tuple[str, int, int, int]]:
@@ -1418,15 +1426,17 @@ def _arrange_arguments(args: dict, jobs) -> dict:
 
 def arrange_steps(blocks: list[tuple[int, int]], park: int) -> list[dict]:
     """build_sequence `into` steps that play `blocks` back to back, in this order, from the start of
-    the stretch they tile: clone each to the park in its new order, lift the stretch, clone the park
-    back, lift the park. Clone, never move (PREMIERE_FACTS "createMoveAction of a block backward")."""
+    the stretch they tile: clone every block to the park in its new order (one transaction), lift
+    the stretch, clone the park back, lift the park: four steps whatever the block count. Clone,
+    never move (PREMIERE_FACTS "createMoveAction of a block backward")."""
     start = min(f for f, _ in blocks)
     end = max(t for _, t in blocks)
-    steps, at = [], park
+    ranges, at = [], park
     for f, t in blocks:
-        steps.append({"op": "clone", "from_ticks": str(f), "to_ticks": str(t), "dt_ticks": str(at - f)})
+        ranges.append({"from_ticks": str(f), "to_ticks": str(t), "dt_ticks": str(at - f)})
         at += t - f
-    return steps + [{"op": "lift", "from_ticks": str(start), "to_ticks": str(end)},
+    return [{"op": "clone", **ranges[0], "ranges": ranges[1:]},
+            {"op": "lift", "from_ticks": str(start), "to_ticks": str(end)},
                     {"op": "clone", "from_ticks": str(park), "to_ticks": str(at), "dt_ticks": str(start - park)},
                     {"op": "lift", "from_ticks": str(park), "to_ticks": str(at)}]
 
@@ -1461,6 +1471,114 @@ async def _arrange(args: dict, premiere: Premiere) -> dict:
     after = _clips(await premiere("read_timeline", {"sequence": args["result_name"]}))
     return {"sequence": args["result_name"], "blocks": [[str(f), str(t)] for f, t in blocks],
             "missing": sorted(set(expected) - set(after)), "unexpected": sorted(set(after) - set(expected))}
+
+
+MAX_SHORT_PIECES = 500
+# paste_from calls into each target in this helper's life. A Short built piece by piece crashed
+# Premiere about every 20 pastes (PREMIERE_FACTS "Short built piece by piece"); past
+# PER_PIECE_FREE pastes into one target, paste_from wants a reason, and returns it as `fallback`.
+_PASTES_INTO: dict[str, int] = {}
+PER_PIECE_FREE = 2
+
+
+def _derive_short_arguments(args: dict, jobs) -> dict:
+    result = {}
+    for key in ("parent", "template", "result_name"):
+        if not isinstance(args.get(key), str) or not args[key].strip():
+            raise ValueError(f"{key} must be a sequence name")
+        result[key] = args[key]
+    if result["result_name"] in (result["parent"], result["template"]):
+        raise ValueError("result_name must be a new sequence (the parent and the template are never edited)")
+    pieces = args.get("pieces")
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= MAX_SHORT_PIECES:
+        raise ValueError(f"pieces must list 1 to {MAX_SHORT_PIECES} {{from_ticks, to_ticks}} of the parent, in play order")
+    spans = [(int(_ticks(p.get("from_ticks"), "from_ticks")), int(_ticks(p.get("to_ticks"), "to_ticks")))
+             if isinstance(p, dict) else (0, 0) for p in pieces]
+    ordered = sorted(spans)
+    if any(t <= f for f, t in spans) or any(a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
+        raise ValueError("pieces must not overlap, and each must end after it starts")
+    return {**result, "pieces": spans, "at_ticks": _ticks(args.get("at_ticks", "0"), "at_ticks")}
+
+
+async def _derive_short(args: dict, premiere: Premiere) -> dict:
+    """Fixed cost whatever the piece count: make_subsequence of the span, cut_copy to the pieces,
+    arrange into play order (four steps), one paste_from of the whole into a copy of the template;
+    every temporary sequence removed. Never falls back to a piece-by-piece route."""
+    parent, template, name, pieces = args["parent"], args["template"], args["result_name"], args["pieces"]
+    at = int(args["at_ticks"])
+    if any(s["name"] == name for s in (await premiere("list_project", {"depth": 1}))["sequences"]):
+        raise ValueError(f"{name!r} already exists; derive_short makes a new sequence")
+    a, b = min(f for f, _ in pieces), max(t for _, t in pieces)
+    source = await premiere("read_timeline", {"sequence": parent, "from_ticks": str(a), "to_ticks": str(b)})
+    tpf = int(source["ticks_per_frame"])
+    if any(x % tpf for p in pieces for x in p):
+        raise ValueError(f"every piece edge must sit on a frame of {parent!r} ({tpf} ticks)")
+    inside = [c for c in _clips(source) if c[2] < b and c[3] > a]
+    if not inside or min(c[2] for c in inside) > a:
+        raise ValueError(f"the first piece must start on a clip of {parent!r} (Make Subsequence drops a leading gap)")
+    await premiere("save_project", {})
+    temps: list[str] = []
+    try:
+        span = f"{name} span{PIECE_SUFFIX}"
+        await premiere("make_subsequence", {"sequence": parent, "in_ticks": str(a), "out_ticks": str(b), "result_name": span})
+        temps.append(span)
+        kept = sorted((f - a, t - a) for f, t in pieces)
+        edges = [0] + [x for k in kept for x in k] + [b - a]
+        cuts = [[f // tpf, t // tpf] for f, t in zip(edges[::2], edges[1::2]) if t > f]
+        cut = span
+        if cuts:
+            cut = f"{name} cut{PIECE_SUFFIX}"
+            await premiere("cut_copy", {"sequence_name": span, "result_name": cut,
+                                        "cuts": {"ticks_per_frame": str(tpf), "cuts_frames": cuts}})
+            temps.append(cut)
+        where, end = {}, 0
+        for f, t in kept:
+            where[(f, t)] = (end, end + t - f)
+            end += t - f
+        blocks = [where[(f - a, t - a)] for f, t in pieces]
+        whole = cut
+        if blocks != sorted(blocks):
+            whole = f"{name} order{PIECE_SUFFIX}"
+            temps.append(whole)
+            arranged = await _arrange({"sequence": cut, "result_name": whole, "blocks": blocks}, premiere)
+            if arranged["missing"] or arranged["unexpected"]:
+                raise ValueError(f"the reorder did not land: missing {arranged['missing'][:5]}, unexpected {arranged['unexpected'][:5]}")
+        await premiere("duplicate_sequence", {"sequence_name": template, "result_name": name})
+        own = set(_clips(await premiere("read_timeline", {"sequence": name})))
+        pasted = await _paste_from({"source": whole, "target": name, "in_ticks": "0", "out_ticks": str(end),
+                                    "at_ticks": str(at), "v_offset": 0, "keep_piece": False}, premiere)
+        if pasted["missing"] or pasted["left_at_park"]:
+            raise ValueError(f"the paste into {name!r} did not land: missing {pasted['missing'][:5]}, "
+                             f"left at the park {pasted['left_at_park'][:5]}")
+    finally:
+        for temp in temps:
+            try:
+                await premiere("remove_piece", {"name": temp})
+            except Exception:  # noqa: BLE001 - the build's own error is the one to report
+                pass
+    plan, shift = [], at
+    for f, t in pieces:
+        plan += [(k, n, max(s, f) - f + shift, min(e, t) - f + shift) for k, n, s, e in inside if s < t and e > f]
+        shift += t - f
+    built = [c for c in _clips(await premiere("read_timeline", {"sequence": name})) if c not in own]
+    await premiere("save_project", {})
+    return {"sequence": name, "pieces": len(pieces), "length_ticks": str(end),
+            "missing": sorted(set(plan) - set(built))[:50], "unexpected": sorted(set(built) - set(plan))[:50],
+            "temporaries_removed": temps}
+
+
+async def _paste_from_guarded(args: dict, premiere: Premiere) -> dict:
+    target = args["target"]
+    done = _PASTES_INTO.get(target, 0)
+    reason = args.get("per_piece_reason")
+    if done >= PER_PIECE_FREE and not reason:
+        raise ValueError(f"paste_from has already put {done} pieces into {target!r}. A Short is built with "
+                         "premiere_derive_short (a fixed number of edits whatever the piece count); piece by piece "
+                         "crashed Premiere about every 20 pastes. To go on piece by piece anyway, pass "
+                         "per_piece_reason: it is logged and returned as `fallback`.")
+    _PASTES_INTO[target] = done + 1
+    result = await _paste_from(args, premiere)
+    return {**result, "fallback": reason} if reason else result
 
 
 HELPER_COMMANDS: dict[str, Command] = {
@@ -1557,11 +1675,29 @@ HELPER_COMMANDS: dict[str, Command] = {
         then clone into place and lift the park; the temporary piece sequence is deleted unless
         keep_piece. Returns `missing` (expected clips not found at the place; empty = landed
         frame-exact) and `left_at_park` (should be empty). Needs the CutDeck panel open; takes
-        Premiere's focus briefly.
+        Premiere's focus briefly. For one insert, not a Short: build a Short with
+        premiere_derive_short. A third paste into the same target is refused unless
+        per_piece_reason says why; the reason comes back as `fallback`.
         """,
         (("source", str), ("in_ticks", str), ("out_ticks", str), ("target", str), ("at_ticks", str),
-         ("v_offset", int, 0), ("keep_piece", bool, False)),
-        run=_paste_from),
+         ("v_offset", int, 0), ("keep_piece", bool, False), ("per_piece_reason", str | None, None)),
+        run=_paste_from_guarded),
+    "derive_short": Command(
+        1800, _derive_short_arguments, "write",
+        """
+        Build a Short from a parent sequence (a synced split, a finished YT cut) as a NEW sequence
+        `result_name`: a copy of `template` (your 9:16 Short sequence, never edited) with the
+        parent's `pieces` [{from_ticks, to_ticks}] (parent ticks, on frames, no overlap) played
+        back to back in the order given from at_ticks (default 0). Every track, effect, keyframe
+        and Graphic of the parent is kept as real clips (no nest). Fixed cost whatever the piece
+        count: Make Subsequence of the span, cut_copy to the pieces, one reorder, one paste; the
+        temporary sequences are removed and the project is saved before and after. Returns
+        `missing` and `unexpected` clips against the plan (both empty = frame-exact). It never
+        falls back to pasting piece by piece: on any failure it stops and says where.
+        """,
+        (("parent", str), ("template", str), ("result_name", str), ("pieces", list[dict]),
+         ("at_ticks", str, "0")),
+        run=_derive_short),
     "arrange": Command(
         900, _arrange_arguments, "write",
         """

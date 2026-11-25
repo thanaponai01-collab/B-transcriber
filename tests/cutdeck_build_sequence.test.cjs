@@ -192,6 +192,28 @@ test("into clone with tracks copies only those tracks (one text layer onto a lat
   assert.deepEqual(at10.map((c) => [c.track, c.in / S]), [[1, 7n]]);
 });
 
+test("into clone with ranges clones every block to the park in one transaction (a reorder at fixed cost)", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 2n * S, in: 0n }, { media: SHOW, start: 2n * S, end: 3n * S, in: 10n * S },
+        { media: SHOW, start: 3n * S, end: 6n * S, in: 20n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 2n * S, in: 0n }, { media: SHOW, start: 2n * S, end: 3n * S, in: 10n * S },
+        { media: SHOW, start: 3n * S, end: 6n * S, in: 20n * S }]] }],
+  });
+  const before = h.undoSteps.length;
+  // Blocks C (3-6), A (0-2), B (2-3) to the park at 40 s, in that order, in one step.
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true, items: [],
+    steps: [{ op: "clone", from_ticks: t(3), to_ticks: t(6), dt_ticks: t(37),
+      ranges: [{ from_ticks: t(0), to_ticks: t(2), dt_ticks: t(43) }, { from_ticks: t(2), to_ticks: t(3), dt_ticks: t(43) }] }] });
+  const parked = (list) => list.filter((c) => c.start >= 40n * S).map((c) => [c.start / S, c.in / S]).sort((x, y) => Number(x[0] - y[0]));
+  const built = h.sequence("cut");
+  assert.deepEqual(parked(built.video), [[40n, 20n], [43n, 0n], [45n, 10n]]);
+  assert.deepEqual(parked(built.audio), [[40n, 20n], [43n, 0n], [45n, 10n]]);
+  assert.equal(h.undoSteps.slice(before).filter((u) => u.startsWith("CutDeck build: clone")).length, 1);
+});
+
 test("into clone with v_offset puts the video copy on a higher track (a pasted title onto the subtitle track)", async () => {
   const h = fake.createTimelineHost({
     path: PROJECT,
