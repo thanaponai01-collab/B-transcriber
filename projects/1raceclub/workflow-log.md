@@ -780,3 +780,25 @@ CutDeck 288308f0` (55:42), untouched. Result: `LV GP 2026 Post-race YT clean v2 
   whole post-race chat Q&A (6:46, incl. giveaway) — the user decides.
 - Lesson: three first-try joins landed in sound (a mid-phrase name fix, a cut starting inside "ละกัน"); start/end the range
   one line wider at a real pause instead.
+
+### LV GP post-race Shorts from `yt` (2026-11-25 evening, agent)
+User: "first video Kimi, how Kimi lost the position; second Max with the plate strategy (first plate, second plate);
+the state-of-charge bit goes in the Max video". Timeline `TT 20261124 Shorts (Claude)` in the 20261124 project: a copy
+of the imported `TT russell wall v5 (Claude)` (for the 9:16 settings and the user's title Graphic), cleared.
+- Kimi 0–44.07 s (9 pieces, hook "รอบสุดท้ายไปเผลอทำสิ่งผิดปกติ … ร่วงไปที่สี่", spot-the-difference, lift + brake,
+  340→286, battery reset, "ออกจากโค้ง 16 มาไม่มีแบตเตอรี่"); title "ANT ร่วงไปที่ 4" 0–3.1.
+- Max 60–137.5 s (14 pieces: hook "กูให้มึงแซง … เดี๋ยวกูแซงมึงรอบต่อไป", plate 1 with Russell, SoC (red = recharge,
+  super clip ~300 m), tow + super clip + overtake mode, plate 2 lap 13); title "VER ยื่นพาน" 60–63.37.
+- Layout: V2 cam rot 90 y 0.235 enabled; V4 = clone of V1 framed on the board (anchor on the evidence, scale = 1178/h,
+  crop top at the seam). Kimi framed per scene; Max still on one default framing.
+- Route: `cut_copy`/`keep_words` failed on yt ("razor filler on audio track 0 is not one frame long"), so pieces went in
+  with `paste_from` per piece. Premiere crashed on the ~19th paste_from in a row (unsaved work lost); after that, a
+  `save_project` after every paste and no crash in 23 more.
+- **User feedback (same night):** "jerky between cuts" + "it's storytelling, not action; I don't understand it; use words
+  to organize the story; Kimi needs context first (what, why)". Cause of the jerk: 16 one-frame flashes from other
+  moments, because the pause padding around each piece crossed one of yt's own cuts. Fix: padding stops at yt's clip
+  edges (0 one-frame clips after). Rebuilt on the copy `TT 20261124 Shorts v2 (Claude)` (user: "duplicate the
+  sequence"): Kimi 0–69.7 s = what happened → before that (lap 49 "last try") → why (lift + brake, battery reset) →
+  result (T16, no battery) → Mercedes didn't tell him; Max 90–172 s = the plan (ยื่นพาน) → where the battery charges →
+  plate 1 → plate 2 → mind game. Chapter words are copies of the user's title Graphic, each ending on a cut
+  (ก่อนหน้านั้น, ทำไม, ผลลัพธ์, แบตชาร์จตรงไหน, พานที่ 1, พานที่ 2, มายด์เกม; agent's wording, to confirm).
