@@ -209,7 +209,7 @@ window ends on a 6.8 s vowel mark, then a 20 ms and a 0 ms piece, and 4 s of spe
 decoder into it, which moved the gold `cer_thai` from 0.053 to 0.093. Trailing pieces of 40 ms or
 less now count as collapsed (`_COLLAPSED_PIECE_MS`, 2026-11-25). At −12 dB the same stretch hides
 behind a longer piece (Short2: then a 1020 ms piece; Short3: then a 540 ms one), so a piece of 3 s or
-more among a window's last 6 is the suspect whatever follows it (`_GROSS_STRETCH_MS`). With both
+more among a window's last 6 non-collapsed pieces is the suspect whatever follows it (`_GROSS_STRETCH_MS`). With both
 rules, the gold `cer_thai` stays at 0.050–0.062 across −18 to +6 dB (master: 0.053–0.094), and 0 dB
 is unchanged at 0.0530.
 

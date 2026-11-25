@@ -342,7 +342,8 @@ class FasterWhisperEngine(Engine):
         body = tokens
         while body and body[-1].end_ms - body[-1].start_ms <= _COLLAPSED_PIECE_MS:
             body = body[:-1]
-        gross = [i for i in range(max(0, len(tokens) - _GROSS_STRETCH_SCAN_PIECES), len(tokens))
+        real = [i for i, t in enumerate(tokens) if t.end_ms - t.start_ms > _COLLAPSED_PIECE_MS]
+        gross = [i for i in real[-_GROSS_STRETCH_SCAN_PIECES:]
                  if tokens[i].end_ms - tokens[i].start_ms >= _GROSS_STRETCH_MS]
         if gross and gross[-1] < len(body) - 1:
             body = tokens[:gross[-1] + 1]

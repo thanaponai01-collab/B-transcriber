@@ -287,6 +287,16 @@ def test_gold_short3_at_minus_12_db_gross_stretch_behind_a_540_ms_piece_is_recov
     assert [t.text for t in merged] == ["ใจ", "ของภรรยาเรา"]
 
 
+def test_gross_stretch_behind_many_zero_length_pieces_is_recovered():
+    # Collapsed pieces don't use up the scan: five 0 ms marks after the 540 ms piece.
+    eng = FasterWhisperEngine()
+    tokens = [_tok("ใจ", 17000, 17300), _tok("ของ", 18000, 19040), _tok("ภ", 19040, 24440),
+              _tok("ร", 24440, 24980)] + [_tok("ะ", 24980, 24980) for _ in range(5)]
+    eng._decode = _redecode_to("ของภรรยาเรา")
+    merged, _ = eng._recover_truncated_tail(tokens, np.zeros(25 * _SR), {}, 8)
+    assert [t.text for t in merged] == ["ใจ", "ของภรรยาเรา"]
+
+
 def test_2_s_piece_followed_by_normal_pieces_is_not_redecoded():
     eng = FasterWhisperEngine()
     tokens = [_tok("มา", 0, 300), _tok("ไป", 900, 1100), _tok("อ้า", 1100, 3100),
