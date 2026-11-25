@@ -133,12 +133,17 @@ transcripts, cut at the moment of each real handover. Policy: label.
 
 | Session | Draft-change calls seen | Verdict |
 |---|---|---|
-| 1123 v1 handover (eeb22609, 18:01) | 28 | **block**: no hks_handover after the build |
-| 1124 v1 handover (d61bf7c7, 15:43) | 34 | **block** |
-| 1125 v1 handover (2ce93c3f, 19:27) | 56 | **block** |
-| 1125 morning J/L practice on a v4 copy (6af416ee, whole) | 28 | block (the session did change a draft the user watched) |
+| 1123 v1 handover (eeb22609, 18:01) | 20 | **block**: no hks_handover after the build |
+| 1124 v1 handover (d61bf7c7, 15:43) | 7 | **block** |
+| 1125 v1 handover (2ce93c3f, 19:27) | 55 | **block** |
+| 1125 morning J/L practice on a v4 copy (6af416ee, whole) | 4 | block (the session did change a draft the user watched) |
 | 1124 study session, no build (a45e6315) | 0 | allow |
 | 1120 non-HKS session (d40bb0c8) | 0 | allow |
+| This gate-building session (891d764d), after the hook went live | 0 | allow (before the fix it blocked 3 times on scripts that only named a build command) |
+
+A draft change counts only when the command sends it to Premiere: a CutDeck MCP tool, or Python
+calling `helper_protocol` / `ask({` / `cdv.py … call` with a build command. A handover counts only
+when `cutdeck.hks_handover` is run.
 
 **Branches not yet seen live.** The "failed gate not named" branch and the `block` policy haven't
 fired in a live session. They are covered by unit tests (`tests/test_hks_gates.py`). The "did not
@@ -152,9 +157,8 @@ its output).
    The hook adds a correction; it can't take a message back.
 2. **It only sees draft changes made through the CutDeck build commands it matches**
    (`build_sequence`, `edit_clips`, `paste_from` …) when Python runs them. Changes made by menu,
-   keyboard or the user's own hands are invisible to it. The reverse also happens: a Python
-   script that merely names one of those commands (a judge-file reader on 1124) counts as a
-   change. The cost is one extra `hks_handover` run, not a missed break.
+   keyboard or the user's own hands are invisible to it. So is a build script that reaches
+   Premiere some other way than the three routes above.
 3. **It judges only what the code gates measure.** The C and D modes (endings, set-up, conflicting
    rules) pass straight through.
 4. **It works only where it is registered.** It isn't in any settings file yet (shared checkout).
