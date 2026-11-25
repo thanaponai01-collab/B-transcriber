@@ -57,6 +57,10 @@ frame")* *(guess: it applies wherever a picture is reframed, not only Shorts)*
 - **Keep the source untouched under every edit** (1RaceClub RC-15, 2026-11-22: "always keep the raw footage";
   holds and crops sit above the synced clip). Same idea as M-3 (never edit the user's work in place)? Does HKS want it?
 - **Use what's already in the project; keep agent-made files beside the .prproj** (1RaceClub RC-16). Everywhere?
+- **Test a check on the user's finished cut before trusting it** (agent, HKS 2026-11-25; guess). The
+  agent's "0 edges inside a word" was true by its own measure and false to the ear, and a pause rule it
+  proposed would have failed the user's own cut. A check is kept if it separates the user's cut from
+  the agent's; otherwise it's a list to look at, and the handover says so.
 
 ## Index: every project's principles and rules
 

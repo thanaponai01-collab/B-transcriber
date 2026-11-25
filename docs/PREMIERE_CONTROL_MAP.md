@@ -86,8 +86,17 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Link / unlink, group | `premiere_menu_command` "Clip > Link"/"Clip > Unlink", "Clip > Group" | Menu | LIVE 2026-11-21 (link/unlink; group not run) |
 | Ripple delete (selection) | `premiere_menu_command` "Edit > Ripple Delete" or `premiere_key_command` cmd.edit.rippledelete | Keys LIVE 2026-11-21 (Shift+Delete) | LIVE |
 | Lift / extract (In/Out) | `premiere_menu_command` "Sequence > Lift" / "Sequence > Extract" | Menu | LIVE 2026-11-21 (In/Out 1-2 s: Lift left a gap on V1+A1, Extract rippled both; one Undo each restored) |
-| Ripple trim to playhead, slip/slide by frames | `premiere_key_command` cmd.sequence.rippletrim*, cmd.timeline.slip.*, cmd.timeline.slide.* | Keys | ripple trim LIVE 2026-11-21 (W at 4 s cut V1+A1 to end at 4 s; Undo restored); slip/slide have no binding in the user's .kys |
-| Track targeting toggles | `premiere_key_command` cmd.tlnav.toggle.all.target.video/audio | Keys | not run yet; no UXP getter, so check it with `premiere_screenshot` |
+| Ripple trim to playhead, slip/slide by frames | `premiere_key_command` cmd.sequence.rippletrim*, cmd.timeline.slip.*, cmd.timeline.slide.* | Keys | ripple trim LIVE 2026-11-21 (W at 4 s cut V1+A1 to end at 4 s; Undo restored); slip (Ctrl+Alt+←/→) and slide (Alt+, / Alt+.) by frame on the selected clip LIVE 2026-11-25 |
+| Freeze a frame from the playhead (still person for a J/L hold) | `premiere_menu_command` "Clip > Video Options > Add Frame Hold" (clip selected with `premiere_select_clips`, playhead set) | Menu | LIVE 2026-11-25 (no ripple; Insert Frame Hold Segment ripples all tracks) |
+| Roll an edit by frames | `premiere_menu_command` "Sequence > Trim Edit" + `premiere_key_command` cmd.sequence.trimforward / trimbackward | Menu + Keys | LIVE 2026-11-25 (only tracks with an edit there; one Undo per frame) |
+| Slip, ripple extend, J/L split edit, audio fade | `premiere_edit_clips` trims/moves per clip; `premiere_set_param` Volume keyframes | UXP | LIVE 2026-11-25 (recipes in PREMIERE_FACTS) |
+| Extend/ripple an edit to the playhead | keys Shift+Q/W, Q/W | Keys | CATCH 2026-11-25: act on every targeted track, covers included; avoid on layered timelines |
+| Close Gap (menu) | none | Menu | did nothing 2026-11-25; use `premiere_edit_clips` |
+| Match Frame (source frame of the clip under the playhead) | `premiere_menu_command` "Sequence > Match Frame" | Menu | LIVE 2026-11-25 (Source monitor at the exact frame, clip range marked) |
+| Three-point overwrite / insert from the Source monitor | `premiere_key_command` cmd.clip.overlay (.) / cmd.clip.insert (,) | Keys | overwrite LIVE 2026-11-25 with the range Match Frame marked; setting source In/Out by key unproven |
+| Paste Insert, labels, range markers, Mark Clip, volume ±1 dB, next/prev edit | menu Edit > Paste Insert, Edit > Label > *, Markers > *, keys ] [ and Shift+↓/↑ | Menu + Keys | LIVE 2026-11-25 (PREMIERE_FACTS) |
+| Track lock | key cmd.timeline.togglelockvideotracks | Keys | CATCH 2026-11-25: the API ignores locks and can't read them |
+| Track targeting toggles | `premiere_key_command` cmd.tlnav.toggle.all.target.video/audio | Keys | LIVE 2026-11-25 (untargeted video: Add Edit cut A1 only); no UXP getter, check with `premiere_screenshot` |
 | Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo" (focus null) | Menu | LIVE 2026-11-21 (Ctrl+Z as keys did nothing) |
 | Speed / duration, reverse, ripple | `premiere_set_speed` | Premiere UI: fills the Clip > Speed/Duration... dialog | LIVE 2026-11-21 (200%, 50% + reverse, back to 100%; Undo restores) |
 | Nest a selection | `premiere_nest_clips` | Premiere UI: fills the Clip > Nest... dialog | LIVE 2026-11-21 (Thai name; Undo removes clip and sequence) |

@@ -145,6 +145,102 @@ HKS-C23 to C26; numbers: [memory/yt-20261124-draft.md](memory/yt-20261124-draft.
   same-named copy with content, queues all four in AME). The agent hand-rolled `export_sequence` calls on
   20261124 instead; use the command.
 
+## Trims and split edits (confirmed by the user 2026-11-25)
+
+From the user's fixes to the 20261124 YT body (why: [principles.md](principles.md) HKS-32, HKS-33).
+
+- **Each piece starts where a thought starts and ends where it ends.** Before building, read every edge
+  with 2 s of source on each side. An end must finish the sentence, including its closing particle
+  (ครับ / นะ / เลย). A piece that opens on a joining word (เพราะ / แล้วก็ / คือ / แต่) brings the line
+  before it, or moves. A Thai word can be split across engine words: the edge must be in a real pause,
+  not just between two engine words.
+- **Tighten inside a thought only under a cover**, and then as hard as needed (the user cut one 18 s piece
+  into seven). In studio picture, keep the take whole.
+- **Add a moment as its whole passage or not at all.** No 1–3 s bits joined mid-sentence to an approved cut.
+- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the
+  last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice
+  ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off the A1 cut;
+  `premiere_edit_clips` trims one clip without its partner; recipe in PREMIERE_FACTS, "split edit").
+- **The held picture must be safe** (user, 2026-11-25). In the extra 0.5–2 s of a J or L, the picture
+  plays source the viewer doesn't hear. Nobody in it may be talking, by sight (lips, gestures) or in the
+  source sound behind it. Only use it when the person has stopped talking or is still (a listening face,
+  a still wide shot). If the source there isn't safe, hold **B-roll or a still person shot** instead (on
+  V2+, from `Backup` or a listening face from elsewhere; or freeze a listening frame with Add Frame
+  Hold, see the playbook below), or leave that cut straight. Check both before
+  choosing the offset: the source words in the held span (none) and its frames (no mouth or hand
+  moving). Sound and picture cutting on the same frame
+  is the exception, kept for a real camera change or a section flash.
+- **Check** before handover: list every visible studio edge that sits in running speech (`python -m
+  cutdeck.timeline_transcript --prproj <day> --sequence <name> --track A1 --json`, `cuts_in_sound`, and
+  look at each one that isn't under a cover). Count the sound cuts that are also picture cuts on the same
+  frame; the user's 20261124 body had 30 of 180.
+
+## Timeline playbook: which move for which edit (agent, live 2026-11-25)
+
+What I tried on a study copy of v4 and how each behaved (rows in `docs/PREMIERE_FACTS.md`, run
+`20261125-120645-timeline-study`). On HKS's layered timeline (body V1/V2, covers V3+, sound A1), only
+use moves that touch the clips I name; playhead keys reach every targeted track, covers included.
+
+| Editor's move | When on HKS | How (proven) |
+|---|---|---|
+| J / L split | most speaker changes in studio | `edit_clips`: shrink one picture, then extend the other; sound untouched |
+| Still person for a J/L hold | the held source shows someone talking | Add Frame Hold on a listening frame (menu, clip selected, playhead set): freezes from the playhead, no ripple |
+| Roll an edit by frames | move a cut a few frames to a better word or face | Trim Edit + Ctrl+Right/Left (rolls only tracks with an edit there), or `edit_clips` trim pair |
+| Ripple trim by frames | an end or start a few frames off, the rest follows | Trim Edit + Ctrl+Shift+T (ripple) + Ctrl+Right/Left |
+| Slip | same length and place, different moment (better face, cleaner start) | select V+A, Ctrl+Alt+←/→ per frame (right = earlier source), or `edit_clips` trim_in +d, move −d, trim_out +d |
+| Slide | move a short insert a few frames without changing it, neighbours absorb it | select V+A, Alt+, / Alt+. per frame |
+| Find the source of a shot | where in the broadcast is this face / moment | Sequence > Match Frame (Source monitor at the exact frame) |
+| Cutaway from the source | a listening face or B-roll over the talk | Match Frame or open the source, then `.` (overwrite) with the timeline playhead set; target only the V track you want |
+| Insert a copied moment | put a set-up line in front of a punchline | Edit > Copy, playhead, Edit > Paste Insert (ripples every track) |
+| Cut only some tracks | razor sound but not picture (or the reverse) | untarget tracks (Ctrl+0 video / Ctrl+9 audio), Add Edit, retarget |
+| Ripple extend | an end that stops before the sentence ends ("มานานมาก \| นะ") | `edit_clips` move later clips +d, then trim_out +d; **also extend or split any cover spanning the edit** |
+| Audio fade at a cut | a click or a breath at a sound cut | `set_param` Volume keyframes, 2–3 frames |
+| Remove a stretch | tightening | `edit_clips` remove with ripple, V and A in one call |
+| Cut on a repeated word | a stutter ("เหรอ เหรอ", "อยู่แล้ว อยู่แล้ว") | end on the first copy, start on the second: the user's way to tighten in plain view (seen in D1, 2026-11-25) |
+| Fix an edge mid-word / mid-phrase | the check lists it | ripple-extend to the next gap of ≥ 0.2 s between words; pull back instead when the added words would be a dangling opener (แล้ว, ก็, คือ); skip when the added source already plays elsewhere |
+
+Don't: Shift+Q/W or Q/W on a layered timeline (they trimmed the cover), E (disabled the clip instead of
+extending), Insert Frame Hold Segment (ripples every track), Close Gap from the menu (did nothing). Mark
+Clip takes the topmost clip (the cover), not the body. Track locks don't stop API edits. Linked Selection
+on: a video-only selection + Clear does nothing.
+
+The toolbar's mouse tools and their routes here: Razor (C) = Add Edit; Ripple (B) / Roll (N) = Trim Edit
++ nudges; Rate Stretch (R) = `premiere_set_speed`; Slip (Y) / Slide (U) = their frame keys; Pen (P) =
+`set_param` keyframes; Track Select (A) = `select_clips` of every clip after a time; Type (T) =
+`place_text`. Hand / Zoom only move the view. Undo one step at a time with a read-back:
+a command that does nothing leaves no undo step, and a counted run of Undos goes too far.
+
+## My own mistakes, and what stops each one (agent, 2026-11-25)
+
+The user asked me to name my mistakes in my own words and build what prevents them. Each mistake has
+a gate that runs before handover, not a reminder.
+
+1. **I cut in the middle of a thought, sometimes in the middle of a word.** I checked edges against the
+   engine's word boundaries and called them clean, but the engine splits Thai words ("กลัวน้ำตา | ไหล").
+   v4 even opened on "เพราะ". *Gate:* `python -m cutdeck.hks_cut_check --prproj <day> --sequence <draft>
+   --from <body start>`. It reads the audio, not the word list, and lists every cut in speech the viewer
+   can see. I fix each one or say why it stays (a sentence end said without a pause, a repeated word).
+2. **I added moments as 1–3 s bits joined mid-sentence** to an approved cut (v4's fun pass). *Gate:* the
+   same list, plus "a moment goes in whole or not at all" (Trims and split edits).
+3. **I cut sound and picture on the same frame, so the cut shows.** *Gate:* the check's same-frame count.
+   Most cuts should be hidden under a cover or split as J/L; the user's 20261124 YT body has 12 of 173 on
+   the same frame.
+4. **A split edit can hold a picture of someone talking without their sound.** *Gate:* the check's
+   "unsafe holds". Then I look at the frames of each one; where someone talks, I hold B-roll or a still
+   person, or leave the cut straight.
+5. **I trusted my own measure before testing it on the user's cut.** Here I first proposed "every edge
+   in a pause", and the user's own finished cut would have failed it. *Gate:* any new check runs on the
+   user's finished cut first and on my draft second. It's kept only if it separates them, or it's kept
+   as a list to look at and said to be one (like hks_cut_check).
+6. **I read a sequence the user had since changed** (FB v1 cut the host's question mid-line). *Gate:* read
+   the parent sequence fresh (save + reader, or `read_timeline`) right before every derived build.
+7. **I forgot the day's setup** (split `Edit` first, fill `Backup`, keepers up to V2 and linked). The user
+   reminded me three times. *Gate:* "Draft workflow" step 1 plus `Backup`/`Edit` are done and listed in the
+   handover before any draft is built.
+8. **I left `(FAILED)` copies in the project when the panel crashed.** *Gate:* after a panel error, save,
+   `reload_panel`, read back, finish the remaining steps, and list any failed copy in the handover for
+   the user to delete. I never delete it myself.
+
 ## Clip label colours (user, 2026-11-23)
 
 The label colour of a clip says who speaks or what the piece is for. This replaces the

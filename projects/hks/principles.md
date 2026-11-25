@@ -107,6 +107,28 @@ forward, not as a description of past cuts. The checks are in [rules.md](rules.m
   the sting (0.5 s of source stretched over the 2.84 s sting, zoomed in 187 %), with glitch flashes and
   a whoosh, then the end card. The last thing the viewer sees is a reaction, not the logo.
 
+## From the user's fixes to the 20261124 YT body (2026-11-25; HKS-32, HKS-33 confirmed)
+
+The user's complaint (2026-11-25): "we cut the mid sentence or we cut early, it starts weird", and the agent
+doesn't know trims and J-cuts. Measured on agent v4 against the user's `1 YOUTUBE D1`; numbers in
+[memory/yt-20261124-draft.md](memory/yt-20261124-draft.md).
+
+- **HKS-32. A piece is a whole thought** (confirmed; user, 2026-11-25, on the practice copy with 18 edges fixed to whole phrases: "Sounds right"). 28 of v4's edges sat in running speech with no pause.
+  The user agreed with 1 and either played the sentence through (11) or dropped the passage (16). Some v4
+  edges split a Thai word the engine had split ("กลัวน้ำตา | ไหล", "มาดูแผงแค | ด"), and v4 opened on
+  "เพราะ | อยู่ในเรื่องนี้". Why (guess): a cut mid-thought is heard even when it can't be seen. The viewer
+  feels the sentence was taken away. Fun moments added as 1–3 s bits had the same problem; the user kept
+  them whole or not at all.
+- **HKS-33. Sound and picture cut at different times** (confirmed; user, 2026-11-25, on three J/L cuts: "feel way better", with the safe-hold condition). In the user's body 150 of 180 sound cuts
+  fall under a picture that keeps running, and 63 picture cuts fall on no sound cut. 38 are split edits:
+  the picture changes 0.5–2 s after the sound (18, J) or before it (20, L). In v4, 34 of 101 sound cuts
+  were also hard picture cuts, with 8 split edits. Why (guess): a cut where sound and picture jump on the
+  same frame is the one the eye notices; offset, each hides the other.
+  *Practice, 2026-11-25:* three split edits on a copy of v4 (J at 3:45, L at 11:27 and 14:57). The user:
+  "feel way better", with one condition. The held picture must be safe: nobody talking, seen or heard,
+  only a stopped or still person. Otherwise use B-roll or a still person shot (rules.md, "Trims and split
+  edits").
+
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
 Read from the user's finished YT cuts of 1001, 1003, 1012, 1020, 1110, 1112, 1117, 1120, 1123 and the
