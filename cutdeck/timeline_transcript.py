@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
+from transcribe.audio import levels as lv
 
 TICKS_PER_MS = PPRO_TICKS_PER_SECOND // 1000
 # A word cut by less than this at a clip edge is timing noise, not a cut through the word.
@@ -247,21 +248,22 @@ def lines(words: list[TimelineWord], ticks_per_frame: int) -> list[dict]:
     return out
 
 
-def _nearest_quiet_ms(levels, threshold: float, edge_ms: float, reach_ms: int = 400) -> int | None:
-    """Signed offset (ms, negative = earlier in the source) to the nearest quiet 10 ms window."""
+def _nearest_quiet_ms(over, edge_ms: float, reach_ms: int = 400) -> int | None:
+    """Signed offset (ms, negative = earlier in the source) to the nearest quiet 10 ms window
+    (``over``: dB over the sound line, ``levels.over``)."""
     i = int(edge_ms // ENVELOPE_MS)
     for step in range(reach_ms // ENVELOPE_MS + 1):
         for j in (i - step, i + step):
-            if 0 <= j < len(levels) and levels[j] < threshold:
+            if 0 <= j < len(over) and over[j] < 0:
                 return round((j + 0.5) * ENVELOPE_MS - edge_ms)
     return None
 
 
-def _audible_at(levels, threshold: float, at_ms: float) -> bool:
+def _audible_at(over, at_ms: float) -> bool:
     """Is any 10 ms window within 20 ms of ``at_ms`` sound?"""
     i = int(at_ms // ENVELOPE_MS)
-    near = levels[max(i - 2, 0):i + 2]
-    return bool(len(near)) and float(near.max()) >= threshold
+    near = over[max(i - 2, 0):i + 2]
+    return bool(len(near)) and float(near.max()) >= 0
 
 
 def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_per_frame: int,
@@ -277,7 +279,7 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
     out = []
     levels_by_media = levels_by_media or {}
     starts_by_media = {m: [w.start_ms for w in ws] for m, ws in words_by_media.items()}
-    thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
+    overs = {m: lv.over(levels, lv.QUIET) for m, levels in levels_by_media.items()}
     # A through-edit (the next clip goes on playing the same source from where this one stops)
     # cuts nothing: neither side of it is an edge.
     through = set()
@@ -287,13 +289,12 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
     for clip in clips:
         words = words_by_media.get(clip.media) or []
         starts = starts_by_media.get(clip.media) or []
-        levels = levels_by_media.get(clip.media)
-        threshold = thresholds.get(clip.media)
+        over = overs.get(clip.media)
         for side, edge_ticks, seq_ticks in (("in", clip.in_, clip.start), ("out", clip.out, clip.end)):
             if (clip.id, side) in through:
                 continue
             edge_ms = edge_ticks / TICKS_PER_MS
-            if levels is not None and not _audible_at(levels, threshold, edge_ms):
+            if over is not None and not _audible_at(over, edge_ms):
                 continue
             word = None
             # No engine word is 30 s long; start there instead of at the top of the file.
@@ -302,7 +303,7 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
                     break
                 if w.start_ms + tolerance_ms < edge_ms < w.end_ms - tolerance_ms:
                     word = w
-            if word is None and levels is None:
+            if word is None and over is None:
                 continue
             edge = {"clip": clip.id, "side": side, "tc": timecode(seq_ticks, ticks_per_frame),
                     "at_s": seconds(seq_ticks), "at_ticks": str(seq_ticks), "edge_src_s": round(edge_ms / 1000, 3),
@@ -310,8 +311,8 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
             if word:
                 edge["word_src_s"] = [word.start_ms / 1000, word.end_ms / 1000]
                 edge["cut_ms"] = round(edge_ms - word.start_ms if side == "in" else word.end_ms - edge_ms)
-            if levels is not None:
-                quiet = _nearest_quiet_ms(levels, threshold, edge_ms)
+            if over is not None:
+                quiet = _nearest_quiet_ms(over, edge_ms)
                 edge["nearest_quiet_ms"] = quiet
                 # "tail": quiet within one 10 ms window, the faint end of a fade; "sound": the cut
                 # is in it. Both are listed; only "sound" is clearly audible as a clip.
@@ -321,22 +322,22 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
 
 
 def level_at(clips: list[Clip], levels_by_media: dict, ticks: int,
-             thresholds: dict | None = None) -> float | None:
-    """The loudest 10 ms source level within 20 ms of a sequence position, and how far above
-    the source's floor it is, as dB over threshold (negative = quiet). None: no levels there;
-    a position no clip covers plays nothing, so it is quiet (-inf)."""
+             overs: dict | None = None) -> float | None:
+    """The loudest 10 ms source level within 20 ms of a sequence position, as dB over the
+    quiet rule's sound line (negative = quiet; ``overs`` caches ``levels.over`` per media).
+    None: no levels there; a position no clip covers plays nothing, so it is quiet (-inf)."""
     for clip in clips:
         if clip.start <= ticks < clip.end:
             levels = levels_by_media.get(clip.media)
             if levels is None:
                 return None
+            over = (overs or {}).get(clip.media)
+            if over is None:
+                over = lv.over(levels, lv.QUIET)
             src_ms = (clip.in_ + (ticks - clip.start) * clip.speed) / TICKS_PER_MS
             i = int(src_ms // ENVELOPE_MS)
-            near = levels[max(i - 2, 0):i + 2]
-            if not len(near):
-                return float("-inf")
-            threshold = (thresholds or {}).get(clip.media)
-            return float(near.max()) - (threshold if threshold is not None else noise_floor(levels) + TAIL_DB)
+            near = over[max(i - 2, 0):i + 2]
+            return float(near.max()) if len(near) else float("-inf")
     return float("-inf")
 
 
@@ -412,9 +413,7 @@ def find(words: list[TimelineWord], query: str, ticks_per_frame: int, limit: int
 # "inside" a word, and in 74 of them the part cut off was below -45 dB). Each word is tightened
 # to the audible sound inside it, judged as the Rough Cut's sound guard judges sound.
 
-ENVELOPE_MS = 10
-_FLOOR_MIN_DB, _FLOOR_MAX_DB = -65.0, -35.0  # as ingest.sound_runs: digital silence is not the floor
-TAIL_DB = 6.0  # a 10 ms window this far above the floor is sound (ingest.sound_runs' tail rule)
+ENVELOPE_MS = lv.ENVELOPE_MS
 TAIL_MS = 10   # a cut this close to quiet sits on the faint end of a fade
 
 
@@ -427,37 +426,22 @@ def level_db(audio, sample_rate: int):
     return (20.0 * np.log10(np.sqrt(np.mean(frames ** 2, axis=1)) + 1e-9)).astype(np.float32)
 
 
-def noise_floor(levels) -> float:
-    import numpy as np
-    return float(np.clip(np.percentile(levels, 5), _FLOOR_MIN_DB, _FLOOR_MAX_DB)) if len(levels) else _FLOOR_MIN_DB
-
-
-def quiet_runs(levels, min_ms: int = 300, tail_db: float = TAIL_DB) -> list[tuple[float, float]]:
-    """(start s, end s) of every run of at least ``min_ms`` whose 10 ms windows are all quiet:
-    below the file's noise floor + ``tail_db``, the same rule ``tighten`` and ``word_cut`` use."""
-    import numpy as np
-    quiet = np.asarray(levels) < noise_floor(levels) + tail_db
-    edges = np.flatnonzero(np.diff(np.concatenate(([0], quiet.astype(np.int8), [0]))))
-    return [(int(a) * ENVELOPE_MS / 1000, int(b) * ENVELOPE_MS / 1000)
-            for a, b in zip(edges[::2], edges[1::2]) if (b - a) * ENVELOPE_MS >= min_ms]
-
-
 REACH_MS = 400  # how far a word edge may grow into a pause to meet sound the engine left out
 
 
-def tighten(words: list[SourceWord], levels, tail_db: float = TAIL_DB) -> list[SourceWord]:
+def tighten(words: list[SourceWord], levels, rule: lv.Rule = lv.QUIET) -> list[SourceWord]:
     """Fit each word's edges to the sound. First pulled in to the first and last audible 10 ms
     window inside the engine's span; then an edge that borders a pause is grown out through
     continuous sound (at most ``REACH_MS``, never into a neighbouring word): on a 96-min
     source, a quarter of words after a pause started 100+ ms after their sound began, and as
     many ended early (2026-11-22). A word with no audible window keeps the engine's times."""
-    threshold = noise_floor(levels) + tail_db
+    sound = lv.sound(levels, rule)
     n = len(levels)
-    audible = lambda i: 0 <= i < n and levels[i] >= threshold  # noqa: E731
+    audible = lambda i: 0 <= i < n and sound[i]  # noqa: E731
     inner = []
     for w in words:
         i0, i1 = w.start_ms // ENVELOPE_MS, -(-w.end_ms // ENVELOPE_MS)
-        loud = [i for i in range(i0, min(i1, n)) if levels[i] >= threshold]
+        loud = [i for i in range(i0, min(i1, n)) if sound[i]]
         if w.end_ms <= w.start_ms or not loud:
             inner.append((w, False))
             continue
@@ -723,18 +707,18 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         result["full_path"] = str(path)
     if keep_words:  # for in-process callers (word_cut); not JSON
         result["word_objects"] = words
-        thresholds = {m: noise_floor(lv) + TAIL_DB for m, lv in levels_by_media.items()}
-        result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, thresholds)
+        overs = {m: lv.over(levels, lv.QUIET) for m, levels in levels_by_media.items()}
+        result["level_at"] = lambda ticks: level_at(clips, levels_by_media, ticks, overs)
         result["source_words"] = words_by_media
         result["clip_objects"] = clips
 
         def source_level(media, ticks):
-            levels = levels_by_media.get(media)
-            if levels is None:
+            over = overs.get(media)
+            if over is None:
                 return None
             i = int(ticks / TICKS_PER_MS // ENVELOPE_MS)
-            near = levels[max(i - 2, 0):i + 2]
-            return float(near.max()) - thresholds[media] if len(near) else float("-inf")
+            near = over[max(i - 2, 0):i + 2]
+            return float(near.max()) if len(near) else float("-inf")
         result["source_level"] = source_level
     return result
 

@@ -4,6 +4,29 @@ Written 2026-11-25. Goal: every cut and timing rule should mean the same thing o
 with its parameters taken from measurement instead of a preset name. This file records what the
 prototypes measured, then lists the PRs that are still worth doing.
 
+## Status after building PR 1 and PR 2 (2026-11-25)
+
+Building PR 2 turned up two facts that change the plan below. **PR 2 shipped as a consolidation
+with no behavior change.**
+
+| What the plan said | What the data said | What shipped |
+|---|---|---|
+| Remove the −65/−35 floor clamp | At the ±20 ms check `word_cut` uses, J falls from 67.1 to 44.3 on 20261112 and from 36.6 to 31.7 on 20261109. Those sources have gated silence near −74 dB, so an unclamped floor sits under the room tone between words. | Clamp kept (`levels.FLOOR_CLAMP_DB`), with this reason |
+| Point margin +10 (hysteresis 18/10/3) | It won on held-out 20261109 and 20261118 but lost 5 J on held-out 20261002, a YouTube master with a −46 dB floor. The sweep also asked "any quiet window within 40 ms", while `word_cut` and timeline edges ask "every window within 20 ms quiet". | +6 kept (`levels.QUIET`) |
+| `hks_cut_check` on the point rule | Its window is ±120 ms. At that collar +6 is best (J 59.0), and the seed changes nothing. | `levels.QUIET` |
+
+Proof that PR 2 changes nothing:
+
+- 0 of 6,678,430 windows and 0 of 6,012 cut and kept-word points change.
+- `hks_tighten --check` pooled edge P/R stays at 0.758 / 0.585.
+- `hks_cut_check` on the user's 20261124 D1 is unchanged: 182 cuts, 9 visible in speech, 13 same-frame, 6 holds.
+
+**Next experiment, not shipped:** `sweep_level_rule.py --need all --collar 20` asks `word_cut`'s
+own question. On the tuning days, grow +16 scores J 70.1 against +6 (ΔJ +25 to +40, CI from
+resampling days). All three held-out episodes have been looked at, so it needs a fresh one: an
+episode cut by the user alone, with no agent draft under it. The gain-invariant replacement for
+the clamp needs the same.
+
 The prototype scripts are throwaway and gitignored, in `output/level_rule_prototype/`:
 
 | Script | What it does |
