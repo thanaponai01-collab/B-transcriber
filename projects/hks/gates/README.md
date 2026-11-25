@@ -29,8 +29,10 @@ earlier as "each mistake has a gate". The transcripts show why
   4. Prints the header the handover opens with.
 
   It exits 1 if a kept control fails.
-- The Stop hook `.claude/hooks/hks_handover_gate.py` reads only the session transcript. It blocks
-  the end of a turn in two cases:
+- The Stop hook `.claude/hooks/hks_handover_gate.py` reads only the session transcript. It acts
+  only in an HKS session: the user typed HKS or โหนกระแส, or a tool call named a โหนกระแส path.
+  1RaceClub and other work passes through. In an HKS session it blocks the end of a turn in two
+  cases:
   - a draft was changed through CutDeck after the last `hks_handover`;
   - the last run failed and the final message doesn't name each failed gate. With
     `late_draft_policy: block` it blocks on any failure.
