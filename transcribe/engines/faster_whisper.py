@@ -298,8 +298,13 @@ class FasterWhisperEngine(Engine):
         in_range = [i for i, t in enumerate(tokens_before) if anchor_ms - t.end_ms <= lookback_ms]
         if len(in_range) < 2:
             return None
+        # Prefer cutting before a word start (leading space): a cut inside a Thai
+        # word starts the re-decode mid-word, and the decoder skips that word
+        # (real-file A/B 2026-11-25: "ไม|่มีเพื่อนครบ" lost).
+        cands = range(in_range[0], len(tokens_before) - 1)
+        word_starts = [i for i in cands if tokens_before[i + 1].text[:1].isspace()]
         best_i, best_gap = None, -1
-        for i in range(in_range[0], len(tokens_before) - 1):
+        for i in word_starts or cands:
             gap = tokens_before[i + 1].start_ms - tokens_before[i].end_ms
             if gap > best_gap:
                 best_i, best_gap = i, gap

@@ -66,6 +66,17 @@ def test_find_safe_cut_ignores_gaps_outside_lookback():
     assert idx == 1  # the b/c gap, not the huge a/b gap far outside lookback
 
 
+def test_find_safe_cut_prefers_word_start_over_bigger_mid_word_gap():
+    # Real shape (HKS 168, 1:25): the biggest gap sat inside "ไม่" (ไม | ่มี),
+    # and the re-decode from there dropped "ไม่มีเพื่อนครบ". A smaller gap before
+    # a space-led piece is a word start and must win.
+    tokens_before = [_tok(" แล้ว", 0, 300), _tok("เขาไม", 300, 600),
+                     _tok("่มี", 900, 1100), _tok("เพื่อน", 1100, 1400),
+                     _tok(" เพราะ", 1500, 1800), _tok("ว่า", 1800, 2000)]
+    idx = FasterWhisperEngine._find_safe_cut(tokens_before, anchor_ms=2000)
+    assert idx == 3  # cut before " เพราะ", not before "่มี"
+
+
 # ── _recover_truncated_tail ─────────────────────────────────────────────────
 
 def test_recovers_dropped_tail_and_cuts_at_real_gap():
