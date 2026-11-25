@@ -30,7 +30,22 @@ source media, and the transcript; hand it over unrendered and say so. *(confirme
 2026-11-21: "dont export your self that me to do it")* For HKS the user asked on 2026-11-20 for
 `python -m cutdeck.honekasae_export` to queue and start the export. *(guess: the rule is "no export
 unless the user asks for it"; ask which holds)* On 2026-11-24 the HKS user asked "all done export for me" after approving every cut, and the
-agent exported with BAS4 (seen: on HKS, the export follows the user's ask).
+agent exported with BAS4 (seen: on HKS, the export follows the user's ask). Again on 2026-11-25 ("export now i finished editing", then "export the D2"): exported
+only when asked, and only what had changed.
+
+**M-6. A correction isn't learned until it's a gate.** *(confirmed, HKS 2026-11-25: "I want to know why
+you broke them, even though you have the rules ... we can have rules for you to maybe read before doing it
+... adaptable, improvable, and scalable ... as memory principle as well")* On 20261125 the agent had the
+rules and broke them anyway: it let a passing check stand in for the rule, read "drop backstory" as "cut
+the context", and handed over a draft it knew failed a check because the user was waiting. So every
+correction from the user goes three places, the same day:
+1. **memory**: what happened, with numbers (the project's `memory/`);
+2. **principle**: the why (the project's `principles.md`, or here);
+3. **gate**: how it's checked before handover (the project's `before-you-cut.md` for HKS): a script check if
+   it can be counted, a question for a reviewer that doesn't share the agent's context if it needs
+   judgment, a step that must come first if it's about order.
+A failed gate is never handed over quietly: the handover opens with it. Time pressure is not a reason
+to skip a gate.
 
 ## Editing
 
@@ -55,7 +70,9 @@ frame")* *(guess: it applies wherever a picture is reframed, not only Shorts)*
   other sources' watermarks. One principle (rights), or two different reasons?
 - **Verify from the footage what each line is about** before cutting it (1RaceClub).
 - **Keep the source untouched under every edit** (1RaceClub RC-15, 2026-11-22: "always keep the raw footage";
-  holds and crops sit above the synced clip). Same idea as M-3 (never edit the user's work in place)? Does HKS want it?
+  holds and crops sit above the synced clip). Same idea as M-3 (never edit the user's work in place)? HKS: **yes**
+  (HKS-C30, 2026-11-25: J/L cuts on a duplicate above, raw below as backup). Confirmed in two projects;
+  ask the user before promoting it to M-7.
 - **Use what's already in the project; keep agent-made files beside the .prproj** (1RaceClub RC-16). Everywhere?
 - **Test a check on the user's finished cut before trusting it** (agent, HKS 2026-11-25; guess). The
   agent's "0 edges inside a word" was true by its own measure and false to the ear, and a pause rule it

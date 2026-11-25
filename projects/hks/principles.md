@@ -129,6 +129,34 @@ doesn't know trims and J-cuts. Measured on agent v4 against the user's `1 YOUTUB
   only a stopped or still person. Otherwise use B-roll or a still person shot (rules.md, "Trims and split
   edits").
 
+## From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)
+
+The user edited the agent's v1 into the episode they exported, then said what was wrong with it. Each line
+here is the user's own words, so each one is confirmed. Numbers (diff of the agent's build vs the user's
+final): [memory/yt-20261125-draft.md](memory/yt-20261125-draft.md). Gates: [before-you-cut.md](before-you-cut.md).
+
+- **HKS-C27. Tell the story to someone seeing it for the first time.** (user, 2026-11-25: "let's think about
+  like you're watching movie. You want to know like some of the context story first") Long form gives the
+  viewer the set-up (who, where, what happened) and a taste of the event before the speeches that need it.
+  The user put back where the houses and the shop are, and played the attack clip with its own sound as the
+  opening and again where the father reaches that moment. "Get in fast" (HKS-R1) means no warm-up. It does
+  not mean no context.
+- **HKS-C28. Nothing unfinished.** (user: "don't ever cut the things that is not finished") HKS-32 again:
+  the agent's v1 broke it with pieces ending in a pause but mid-thought ("...ก็", "...คือ"), and with
+  neighbouring pieces overlapping so words played twice.
+- **HKS-C29. A jump to another speech in the same scene is covered.** (user: "if you want to change another
+  scene, but it in the same scene, you have to have insert or b-roll to cover it, or static person")
+  HKS-R5 again: 31 of v1's 39 sound cuts were picture cuts on the same frame.
+- **HKS-C30. Every edit keeps the raw underneath.** (user: "for the J cut and L cut, I want you to always
+  duplicate that layer on top and use it ... Always have the backup ... the raw layer below") Same idea as
+  1RaceClub RC-15; now seen in both projects (see the main principles' candidate).
+- **HKS-C31. Hot spots are marked yellow first.** (user: "you never use like a color to label like a hot
+  spot, high volume argument, like what needs to be in a video ... yellow") The must-keep moments are
+  chosen and marked before the paper edit, so the cut is built around them.
+- Finishing, not editing: **build the effect the shot needs** (user: "just create your own adjustment
+  layer ... the ELLIPSE mask tool ... explore more on the tool Premiere has"). Blur = own adjustment layer +
+  mask. The agent copied the user's look layer, then faked a circle with crop effects.
+
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
 Read from the user's finished YT cuts of 1001, 1003, 1012, 1020, 1110, 1112, 1117, 1120, 1123 and the

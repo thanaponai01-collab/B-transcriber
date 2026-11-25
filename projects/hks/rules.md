@@ -3,6 +3,8 @@
 How the show is cut and finished today. Rules can change; the why behind them belongs in
 [principles.md](principles.md). Values are this episode's examples, not presets.
 
+**Before any draft, read [before-you-cut.md](before-you-cut.md)**: the gates I broke on 20261125, and why.
+
 **Status: under audit.** Every rule came from one episode (20261120). [rule-audit.md](rule-audit.md)
 checks them on all 11 day folders. The user answered its seven questions on 2026-11-23 (end of
 that file): rule 5 now allows inset camera changes and cuts under a still, and a punch-in needs
@@ -175,6 +177,28 @@ From the user's fixes to the 20261124 YT body (why: [principles.md](principles.m
   look at each one that isn't under a cover). Count the sound cuts that are also picture cuts on the same
   frame; the user's 20261124 body had 30 of 180.
 
+## Story first, then the speech (user, on YT agent v1, 2026-11-25)
+
+The user's verdict on `1 YOUTUBE agent v1`: the storyline lost the context, cuts jumped into speech the
+viewer had no set-up for, some cuts ended unfinished, and same-scene jumps showed.
+
+- **Tell it like a film to someone seeing it the first time.** This is long form: before the guest's
+  detail, give the viewer a taste of the context (who these people are, where, what happened between
+  them), then go into the story picked for it. Never open a story part on a line that only makes sense if
+  you already know the case. Rule 1's "get in fast" means no warm-up, not no context.
+- **Never cut a thing that isn't finished.** A thought, a sentence or an answer is in whole or out
+  (Trims and split edits). This held as a rule and still failed in v1: run the cut check and fix every edge
+  it lists before handover.
+- **A jump to another speech inside the same scene needs a cover.** Insert, B-roll or a still person
+  (`Backup`) over the join; never two takes of the same shot butted together in plain view (rule 5).
+- **J and L cuts are made on a copy.** Duplicate the clip, put the copy on the track above, and trim the
+  copy. The raw clip stays untouched underneath as the backup; never trim the raw layer itself.
+- **Blur: make the adjustment layer and draw the mask.** New adjustment layer, Gaussian Blur, then the
+  Ellipse (circle) or Rectangle mask tool in Effect Controls; feather the mask. Don't stop at copying the
+  user's layers or stack crops to fake a shape: learn how effects, adjustment layers and masks work and
+  build what the shot needs. Masks have no API (PREMIERE_FACTS), so the mask tools are a Premiere UI
+  route still to be proven here; explore Premiere's own tools before working around them.
+
 ## Timeline playbook: which move for which edit (agent, live 2026-11-25)
 
 What I tried on a study copy of v4 and how each behaved (rows in `docs/PREMIERE_FACTS.md`, run
@@ -240,6 +264,12 @@ a gate that runs before handover, not a reminder.
 8. **I left `(FAILED)` copies in the project when the panel crashed.** *Gate:* after a panel error, save,
    `reload_panel`, read back, finish the remaining steps, and list any failed copy in the handover for
    the user to delete. I never delete it myself.
+9. **I built the story as a list of picked speeches, with no context first** (20261125 v1). *Gate:* before
+   building, write the story's set-up in two lines (who, where, what happened) and check that the cut
+   gives the viewer those facts before the first detail that needs them.
+10. **I worked around Premiere instead of using it** (copied the user's layer, then faked a circle with
+   crops for the blood blur). *Gate:* when a picture fix needs a Premiere tool (mask, effect), find and try
+   that tool first; a workaround is the last way and gets named in the handover.
 
 ## Clip label colours (user, 2026-11-23)
 
@@ -253,7 +283,7 @@ boundaries, not these meanings.
 | Purple | second guest |
 | Blue | lawyer |
 | Green | host |
-| Yellow | must be in the video, or can be a highlight |
+| Yellow | must be in the video, or can be a highlight: hot spots such as a high-volume argument (user, 2026-11-25: the agent never used it) |
 | Orange | ending sentences |
 | Teal | caller phoned in |
 | Light green | insert and video, or things that can be B-roll or a static person (cover) |
@@ -275,6 +305,14 @@ Inserts, B-roll, clips and static people not talking on camera go into the `back
 (1920x1080). A split screen (clip in a box beside the studio) counts as an insert: zoom it so the
 clip fills the frame and **no edge of the split screen shows**. The user's own example: Scale 268,
 Position (0.844, 0.640) on a 1280x720 source.
+
+**Footage the broadcast already shows full screen is not zoomed** (user, 2026-11-25, red marker on the
+20261125 `Backup`): Scale 100, Position (0.5, 0.5), clock and logo included. **Every zoom is centred** on what
+it shows: the agent had shifted a full-screen insert to x 0.469 to hide the logo, and the user marked it.
+Centre on the **video inside the box**, not the box: a phone clip sits in the box between blurred side fills,
+often right of the box centre (20261125: video x 330–587 in a box x 28–821, centre 458 vs 424). Find the two
+hard pillar edges (median |dx| per column over several frames), centre them, and zoom up until the box edge
+can't show (Scale = 658 / the shorter distance from the video centre to a box side; 176–196 that day).
 
 The zoom depends on the layout, so measure the box each time. 268 fits the two-box studio split
 (box about x 32–804). The narrow three-box layout (box interior x 39–737, y 30–593) still showed

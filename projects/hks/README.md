@@ -11,6 +11,7 @@ instead of cutting by hand ([build-plan.md](build-plan.md)).
   study files `*-compilation.md`, `20261111-ep168-paper-edit.md`).
 
 ## Read order
+0. **[before-you-cut.md](before-you-cut.md): read before every draft.** Short gates; a failed one is named in the handover.
 1. [Main principles](../PRINCIPLES.md)
 2. [principles.md](principles.md): the show's why (`HKS-n`; none confirmed yet)
 3. [memory/MEMORY.md](memory/MEMORY.md): facts; open only what the task needs
