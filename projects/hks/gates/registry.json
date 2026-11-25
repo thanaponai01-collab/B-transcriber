@@ -5,6 +5,7 @@
   "label": "a failed control may reach the user only if the handover opens with its id and value",
   "block": "a failed control never reaches the user"
  },
+ "override_policy": "agent or user, each with a written reason (--override GATE=\"reason\" --by <who>); every override is a line in overrides.jsonl and must be named in the handover. Decided by the user 2026-11-25.",
  "overrides_log": "projects/hks/gates/overrides.jsonl",
  "gates": {
   "same_frame_share": {
@@ -96,5 +97,6 @@
    "added": "2026-11-25",
    "retired": "2026-11-25"
   }
- }
+ },
+ "late_draft_policy_decided": "label, by the user 2026-11-25"
 }
