@@ -10,9 +10,11 @@ then rerun with the answer:
 1. Conflicts. hks_rule_conflicts checks the words against every active registry rule (`llm` by
    default, `lexical` offline). Each flagged rule needs `--supersedes <id>` (the new rule replaces
    it) or `--keep <id>` (both stay).
-2. Gate or note? `--gate` names a gate in projects/hks/gates/registry.json that measures the rule;
-   `--note` is the do-confirm question the handover asks. A new rule needs one; `--rule` (an
-   existing rule broken again) takes one to change how that rule is enforced, or neither.
+2. Already a rule? The model names active rules that already state the lesson. If one does, this is
+   a repeat: rerun with `--rule <id>`; if none does, `--new`.
+3. Gate or note? `--gate` names a gate in projects/hks/gates/registry.json that measures the rule;
+   `--note` is the do-confirm question the handover asks. With `--rule` (a rule broken again) the
+   question is whether to escalate it; `--as-is` keeps it.
 
 Then it writes corrections/K<n>.json, the rule (a new HKS-X<n>, or the correction added to
 `--rule`), the judged pairs into conflicts.json, and regenerates the pages and skills
@@ -31,7 +33,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cutdeck import hks_registry  # noqa: E402
-from cutdeck.hks_rule_conflicts import lexical, llm  # noqa: E402
+from cutdeck.hks_rule_conflicts import _claude, _json_list, lexical, llm  # noqa: E402
 from hks_registry_build import write_all  # noqa: E402
 
 GATES = "projects/hks/gates/registry.json"
@@ -63,15 +65,30 @@ def flagged(words, rules, method, model):
     return sorted({f["b"] if f["a"] == "correction" else f["a"] for f in found}, key=hks_registry.id_key)
 
 
-def questions(args, rules, gates, flags):
+def restating(words, rules, method, model):
+    """Active rules whose text already states the lesson (the model matcher; precision and recall
+    0.78 on the 2026-11-26 matrix). The lexical method has no matcher and returns none."""
+    if method == "lexical":
+        return []
+    active = [r for r in rules if r["status"] == "active"]
+    book = "\n".join(f"{r['id']} {r['text']}" for r in active)
+    text, _ = _claude("A video editor's rule book is below, then a correction the editor's user gave. Name "
+                      "the rules whose text states the lesson, so that an editor following the rule would "
+                      f"not have made the mistake. Name none if no rule states it.\n\nRULE BOOK:\n{book}\n\n"
+                      f"CORRECTION: {words}\n\nReply with only a JSON array of rule ids, [] if none.", model)
+    ids = {r["id"] for r in active}
+    return [i for i in _json_list(text) if i in ids]
+
+
+def questions(args, rules, gates, flags, known):
     """What the user still has to answer, as lines; empty when the command may write."""
     out = []
     ids = {r["id"] for r in rules}
     for rid in [args.rule, *args.supersedes, *args.keep]:
         if rid and rid not in ids:
             out.append(f"{rid} is not a registry rule.")
-    known = {c["id"] for c in hks_registry.load_corrections(args.root)}
-    out += [f"--repeat-of {k} is not a correction." for k in args.repeat_of or [] if k not in known]
+    ledger = {c["id"] for c in hks_registry.load_corrections(args.root)}
+    out += [f"--repeat-of {k} is not a correction." for k in args.repeat_of or [] if k not in ledger]
     if args.rule and args.supersedes:
         out.append("--supersedes is for a new rule; with --rule the correction joins that rule.")
     if not args.rule and not (args.stage and args.title and args.text):
@@ -88,9 +105,14 @@ def questions(args, rules, gates, flags):
     elif args.gate and gates[args.gate]["status"] != "kept" and not args.note:
         out.append(f"Gate {args.gate} is {gates[args.gate]['status']}, not kept, so the handover still asks: "
                    "add --note \"<do-confirm question>\".")
-    if not args.rule and not (args.gate or args.note):
+    if known and not args.rule and not args.new:
+        out.append("These rules may already say this. If one does, the user is correcting it again: rerun "
+                   "with --rule <id>. If none does, add --new:")
+        out += [f"  {r['id']}: {r['text'][:160]}" for r in rules if r["id"] in known]
+    if not (args.gate or args.note or (args.rule and args.as_is)):
         out.append("Gate or note? Ask the user: should a code gate measure this (--gate <id from "
-                   f"{GATES}>), or is it a note the handover asks about (--note \"<do-confirm question>\")?")
+                   f"{GATES}>), or is it a note the handover asks about (--note \"<do-confirm question>\")?"
+                   + (" For a rule broken again, --as-is keeps it as it is." if args.rule else ""))
     return out
 
 
@@ -112,6 +134,8 @@ def main(argv=None):
     ap.add_argument("--session", help="first 8 characters of the session id")
     ap.add_argument("--memory", help="the memory file that tells the story (repo-relative)")
     ap.add_argument("--rule", help="an existing rule this correction enforces again")
+    ap.add_argument("--new", action="store_true", help="no rule says this yet (after the restating check)")
+    ap.add_argument("--as-is", action="store_true", help="with --rule: keep the rule's gate or note as it is")
     ap.add_argument("--stage", choices=["day_setup", "paper_edit", "build", "handover"])
     ap.add_argument("--title")
     ap.add_argument("--text")
@@ -133,7 +157,8 @@ def main(argv=None):
     corrections = hks_registry.load_corrections(root)
     gates = read_json(root, GATES)["gates"]
     flags = flagged(args.words, rules, args.method, args.model)
-    todo = questions(args, rules, gates, flags)
+    known = [] if args.rule or args.new else restating(args.words, rules, args.method, args.model)
+    todo = questions(args, rules, gates, flags, known)
     if todo:
         print("\n".join(todo))
         return 2

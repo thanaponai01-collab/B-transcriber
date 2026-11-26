@@ -86,6 +86,19 @@ def test_every_correction_is_valid_and_cited_by_a_rule():
     assert correction_problems(hks_registry.load_corrections(), hks_registry.load_rules()) == []
 
 
+def episodes_without_corrections(root):
+    """Episode memory files (yt-<YYYYMMDD>-*.md) whose episode has no correction in the ledger. Coarse:
+    it catches an episode whose corrections never reached the ledger, not one prose correction among
+    others."""
+    episodes = {c["episode"] for c in hks_registry.load_corrections(root)}
+    files = [p.name for p in (Path(root) / MEMORY).glob("yt-*.md")]
+    return [f for f in files if (m := re.match(r"yt-(\d{8})-", f)) and m.group(1) not in episodes]
+
+
+def test_every_episode_in_memory_has_its_corrections_in_the_ledger():
+    assert episodes_without_corrections(ROOT) == []
+
+
 def test_every_correction_memory_quotes_carries_a_k_id():
     assert untagged_memory_corrections(ROOT) == []
 
@@ -171,7 +184,10 @@ def test_intake_writes_the_correction_the_rule_and_the_skills(tmp_path):
 def test_intake_on_an_existing_rule_marks_the_repeat(tmp_path):
     root = copy_repo(tmp_path)
     earlier = load(hks_registry.rule_path("HKS-C28", root))["corrections"]
-    run = correct(root, "again a piece ends mid-thought", "--episode", "20261127", "--rule", "HKS-C28")
+    args = ["again a piece ends mid-thought", "--episode", "20261127", "--rule", "HKS-C28"]
+    run = correct(root, *args)
+    assert run.returncode == 2 and "Gate or note?" in run.stdout and "--as-is" in run.stdout
+    run = correct(root, *args, "--as-is")
     assert run.returncode == 0, run.stdout + run.stderr
     kid = re.match(r"(K\d+)", run.stdout).group(1)
     assert load(hks_registry.correction_path(kid, root))["repeat_of"] == earlier
@@ -262,6 +278,15 @@ def plant_rule_in_frozen_doc(root):
     p.write_text(p.read_text(encoding="utf-8") + "\n- **New rule:** never zoom the logo.\n", encoding="utf-8")
 
 
+def episode_check(root):
+    return episodes_without_corrections(root)
+
+
+def plant_new_episode_told_in_prose(root):
+    (root / MEMORY / "yt-20261127-draft.md").write_text(
+        "# YT 20261127\n\nThe user told me the logo must never sit over a face, so I moved it.\n", encoding="utf-8")
+
+
 def intake_check(root):
     return hand_written_rules(hks_registry.load_rules(root))
 
@@ -273,7 +298,8 @@ def plant_contradiction_in_other_words(root):
     hks_registry.write_rule(rule, root)
 
 
-PLANTS = [(plant_memory_only_correction, memory_check), (plant_ledger_only_correction, ledger_check),
+PLANTS = [(plant_memory_only_correction, memory_check), (plant_new_episode_told_in_prose, episode_check),
+          (plant_ledger_only_correction, ledger_check),
           (plant_hand_edited_skill, skills_check), (plant_contradicting_rule, conflicts_check),
           (plant_contradiction_in_other_words, intake_check), (plant_skipped_regenerate, skills_check),
           (plant_rule_without_stage, schema_check), (plant_rule_in_frozen_doc, frozen_check)]

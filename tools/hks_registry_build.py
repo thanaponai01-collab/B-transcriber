@@ -27,7 +27,8 @@ HANDOVER_TOOL = "premiere_hks_handover"
 GATES_CLI = "python -m cutdeck.hks_gates --prproj <saved .prproj> --sequence"
 # Stage -> what proves it done, for the entry skill.
 DONE = {
-    "day_setup": f"`{GATES_CLI} Editing` prints `PASS day_setup`",
+    "day_setup": f"`{GATES_CLI} Editing` (the day's split sequence by its exact name; `Edit` on some "
+                 "days) prints `PASS day_setup`",
     "paper_edit": "the user approves the paper edit in their own words (no code gate measures a story)",
     "build": f"`{GATES_CLI} \"<draft>\" --from <body start s>` exits 0: no control fails",
     "handover": f"`{HANDOVER_TOOL}` returns HANDOVER OK (it saves, runs every gate and stores the signed "

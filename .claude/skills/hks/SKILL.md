@@ -11,7 +11,7 @@ The stages run in this order. Load a stage's skill before you start the stage. *
 
 | Stage | Load | Done when | Gates its rules name |
 |---|---|---|---|
-| Day setup | `hks-day-setup` (14 rules) | `python -m cutdeck.hks_gates --prproj <saved .prproj> --sequence Editing` prints `PASS day_setup` | `day_setup` |
+| Day setup | `hks-day-setup` (14 rules) | `python -m cutdeck.hks_gates --prproj <saved .prproj> --sequence Editing` (the day's split sequence by its exact name; `Edit` on some days) prints `PASS day_setup` | `day_setup` |
 | Paper edit | `hks-paper-edit` (55 rules) | the user approves the paper edit in their own words (no code gate measures a story) | none |
 | Build | `hks-build` (81 rules) | `python -m cutdeck.hks_gates --prproj <saved .prproj> --sequence "<draft>" --from <body start s>` exits 0: no control fails | `draft_labels`, `near_miss_covers`, `same_frame_share`, `source_repeats`, `unsafe_holds`, `visible_cuts_in_speech` |
 | Handover | `hks-handover` (29 rules) | `premiere_hks_handover` returns HANDOVER OK (it saves, runs every gate and stores the signed record the panel shows) | `same_frame_share`, `source_repeats`, `visible_cuts_in_speech` |

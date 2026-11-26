@@ -99,10 +99,12 @@ def lexical(rules: list[dict], min_shared: int = 2, only: str | None = None) -> 
 
 
 def _claude(prompt: str, model: str) -> tuple[str, dict]:
-    """One ``claude -p`` call with no tools, from an empty folder (no repo, no CLAUDE.md)."""
+    """One ``claude -p`` call with no tools, from an empty folder (no repo, no CLAUDE.md, no user
+    settings: a user-level advisor setting once added $1.55 to one call)."""
     t0 = time.time()
     with tempfile.TemporaryDirectory() as cwd:
         p = subprocess.run(["claude", "-p", "--model", model, "--tools", "", "--strict-mcp-config",
+                            "--setting-sources", "project",
                             "--no-session-persistence", "--output-format", "json"],
                            input=prompt, capture_output=True, text=True, encoding="utf-8",
                            cwd=cwd, timeout=900)
