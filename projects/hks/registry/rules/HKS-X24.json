@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K44",
+  "K52"
+ ],
  "gate": null,
  "confirm": "Is there a glitch, invert frame and whoosh at every section change, including sting to body (timecodes)?",
  "probe": [

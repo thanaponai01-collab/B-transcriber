@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K4"
+  "K4",
+  "K36"
  ],
  "gate": null,
  "confirm": "For each insert with its own sound, is there no studio talk over it, and what span of it plays?",

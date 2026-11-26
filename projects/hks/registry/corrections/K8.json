@@ -1,0 +1,12 @@
+{
+ "id": "K8",
+ "date": "2026-11-23",
+ "time": "21:06",
+ "episode": "20261123",
+ "session": "eeb22609",
+ "source": "verbal",
+ "words": "\"can you just like duplicate the same draft then fix it?\"",
+ "way": "F",
+ "repeat_of": [],
+ "memory": "global:patch-drafts-not-rebuild.md"
+}

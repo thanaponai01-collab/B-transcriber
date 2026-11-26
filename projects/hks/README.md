@@ -11,11 +11,13 @@ instead of cutting by hand ([build-plan.md](build-plan.md)).
   study files `*-compilation.md`, `20261111-ep168-paper-edit.md`).
 
 ## Read order
-0. **[before-you-cut.md](before-you-cut.md): read before every draft.** Short gates; a failed one is named in the handover.
+0. **The `hks` skill (`.claude/skills/hks/`) first:** it names the stage skill to load, says no stage is
+   done until its gate passes, and sends every user correction through `tools/hks_correct.py`. The rules
+   live in [registry/](registry/README.md); [before-you-cut.md](before-you-cut.md) and the skills are generated.
 1. [Main principles](../PRINCIPLES.md)
-2. [principles.md](principles.md): the show's why (`HKS-n`; none confirmed yet)
+2. [principles.md](principles.md): the show's why (`HKS-n`), frozen on 2026-11-26
 3. [memory/MEMORY.md](memory/MEMORY.md): facts; open only what the task needs
-4. [rules.md](rules.md): how it's cut today (`HKS-Rn`, under audit)
+4. [rules.md](rules.md): how it was cut up to 2026-11-26 (`HKS-Rn`), frozen; the registry holds every rule
 5. [build-plan.md](build-plan.md) → [rule-audit.md](rule-audit.md): the automation plan and its checks
 6. [workflow-log.md](workflow-log.md): the evidence (episode 20261120, steps 0–8)
 7. [design-topic-cut.md](design-topic-cut.md): earlier topic-cut design; its findings still hold

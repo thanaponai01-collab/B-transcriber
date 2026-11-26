@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K47",
+  "K54"
+ ],
  "gate": null,
  "confirm": "In a rendered square frame of each cover, is each framed on its own subject (scale, position)?",
  "probe": [

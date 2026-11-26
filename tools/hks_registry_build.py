@@ -1,8 +1,9 @@
 """Generate the HKS rule pages from projects/hks/registry/, the single source.
 
 Writes projects/hks/before-you-cut.md (the entries that came from that page, in its old order and
-wording, plus every active code gate) and one skill per stage, .claude/skills/hks-<stage>/SKILL.md,
-with every active entry of that stage. Output depends on the registry alone, so a rerun writes the
+wording, plus every active code gate), one skill per stage, .claude/skills/hks-<stage>/SKILL.md,
+with every active entry of that stage, and the entry skill .claude/skills/hks/SKILL.md that routes
+to them. Output depends on the registry alone, so a rerun writes the
 same bytes.
 
     python tools/hks_registry_build.py           # write every generated file
@@ -23,6 +24,15 @@ PAGE_TITLE = "Before you cut (read this every time, before any HKS draft)"
 WHY = "memory/why-rules-broke-20261125.md"
 BANNER = f"GENERATED from {REGISTRY} by tools/hks_registry_build.py; do not edit."
 HANDOVER_TOOL = "premiere_hks_handover"
+GATES_CLI = "python -m cutdeck.hks_gates --prproj <saved .prproj> --sequence"
+# Stage -> what proves it done, for the entry skill.
+DONE = {
+    "day_setup": f"`{GATES_CLI} Editing` prints `PASS day_setup`",
+    "paper_edit": "the user approves the paper edit in their own words (no code gate measures a story)",
+    "build": f"`{GATES_CLI} \"<draft>\" --from <body start s>` exits 0: no control fails",
+    "handover": f"`{HANDOVER_TOOL}` returns HANDOVER OK (it saves, runs every gate and stores the signed "
+                "record the panel shows)",
+}
 
 # Stage -> (heading, when an agent loads its skill). Skill names allow only a-z, 0-9 and hyphens.
 STAGES = {
@@ -66,7 +76,7 @@ def render_before_you_cut(reg):
     intro = " ".join(r["text"] for r in sections.pop(PAGE_TITLE))
     skills = ", ".join(f"`{skill_name(s)}`" for s in reg["stages"])
     out = [BANNER, "", f"# {PAGE_TITLE}", "",
-           "Short on purpose. The full rules are in [rules.md](rules.md). This page exists because on "
+           "Short on purpose. Every rule is in [the registry](registry/README.md). This page exists because on "
            f"20261125 I had those rules and broke them anyway (the reasons are at the end). {intro}", "",
            f"Every active rule of a stage, with its do-confirm question, is in that stage's skill ({skills}, "
            "under `.claude/skills/`).", "",
@@ -113,12 +123,51 @@ def render_skill(reg, stage):
     return "\n".join(out) + "\n"
 
 
+def render_entry(reg):
+    stages = by_stage(reg)
+    description = ("HKS (โหนกระแส) entry point. Load first for any HKS editing work: it names the stage "
+                   "skill to load, says no stage is done until its gate passes, and takes every user "
+                   "correction through tools/hks_correct.py.")
+    out = ["---", "name: hks", f"description: {json.dumps(description, ensure_ascii=False)}", "---", "",
+           BANNER, "", "# HKS: start here", "",
+           "The stages run in this order. Load a stage's skill before you start the stage. **A stage is "
+           "not done until its gate passes.** Until then don't call it done, ready or finished, and don't "
+           "start the next stage.", "",
+           "| Stage | Load | Done when | Gates its rules name |", "|---|---|---|---|"]
+    for stage, rules in stages.items():
+        gates = sorted({r["gate"] for r in rules if r["gate"]})
+        out.append(f"| {STAGES[stage][0]} | `{skill_name(stage)}` ({len(rules)} rules) | {DONE[stage]} | "
+                   + (", ".join(f"`{g}`" for g in gates) or "none") + " |")
+    out += ["", "## When the user corrects you", "",
+            "1. Before anything else, run `python tools/hks_correct.py \"<the user's exact words>\" "
+            "--episode <YYYYMMDD> ...` (its `--help` lists the rest). It is the only way a correction "
+            "becomes a rule. Never write a rule by hand into rules.md, principles.md, a skill or a memory "
+            "file.",
+            "2. It exits 2 with questions (which rule wins a conflict; gate or note?). Ask the user each "
+            "one, then rerun with the answers.",
+            "3. Write the K id it prints next to the correction where memory tells the story. A test "
+            "fails on a correction quoted in memory with no K id, and on a K id no rule cites."]
+    return "\n".join(out) + "\n"
+
+
 def render(reg):
     """{repo-relative path: text} for every generated file."""
-    files = {PAGE: render_before_you_cut(reg)}
+    files = {PAGE: render_before_you_cut(reg), ".claude/skills/hks/SKILL.md": render_entry(reg)}
     for stage in reg["stages"]:
         files[f".claude/skills/{skill_name(stage)}/SKILL.md"] = render_skill(reg, stage)
     return files
+
+
+def write_all(root):
+    """Write every generated file under ``root``; returns their repo-relative paths."""
+    out = []
+    for rel, text in render(load(root)).items():
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        out.append(rel)
+    return out
 
 
 def stale(root):
@@ -145,11 +194,7 @@ def main():
         for rel in bad:
             print(f"differs from {REGISTRY}: {rel} (run python tools/hks_registry_build.py)")
         return 1 if bad else 0
-    for rel, text in render(load(args.root)).items():
-        path = os.path.join(args.root, rel)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
+    for rel in write_all(args.root):
         print(f"wrote {rel}")
     return 0
 

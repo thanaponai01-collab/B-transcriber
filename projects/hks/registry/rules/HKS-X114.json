@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X114",
+ "aliases": [],
+ "title": "A talking insert is not a body piece.",
+ "text": "An interview clip the broadcast inserts, where someone talks to camera (the DSI interview of 20261126), is not a body piece: the user dropped both places the agent used it (1:25:16, 1:27:48).",
+ "source": {
+  "file": "projects/hks/registry/corrections/K74.json",
+  "heading": "K74"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "backfill 2026-11-26, not yet confirmed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K74"
+ ],
+ "gate": null,
+ "confirm": "Is any body piece an inserted interview clip, and why does it stay?",
+ "probe": [
+  "คุณกัน's DSI interview insert dropped from the body (1:25:16"
+ ],
+ "commit": null,
+ "added": "2026-11-26"
+}

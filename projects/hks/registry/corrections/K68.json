@@ -1,0 +1,16 @@
+{
+ "id": "K68",
+ "date": "2026-11-26",
+ "time": null,
+ "episode": "20261126",
+ "session": null,
+ "source": "diff",
+ "words": "Tightened word by word: 176 cuts, 360 s out (58 pauses under 0.5 s, restarts, doubled words, fillers and tags, the host's calls to the crew, asides, one swear cut by sound). Sound clips 46 -> 272, median 21.9 s -> 1.9 s. Save: agent 46 clips, median 21.9 s, 1173.8 s source; user 272 clips in the show, median 1.92 s, 1101.7 s unique source (doc says 1107).",
+ "way": null,
+ "repeat_of": [
+  "K11",
+  "K46",
+  "K58"
+ ],
+ "memory": "projects/hks/memory/yt-20261126-draft.md"
+}

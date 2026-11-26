@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K71",
+  "K75"
+ ],
  "gate": null,
  "confirm": "Are the host's intro, recap and the show's process talk out?",
  "probe": [

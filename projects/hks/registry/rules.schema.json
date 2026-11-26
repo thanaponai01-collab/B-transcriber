@@ -15,6 +15,25 @@
       }
     },
     "stage": {"enum": ["day_setup", "paper_edit", "build", "handover"]},
+    "correction_id": {"type": "string", "pattern": "^K[0-9]+[a-z]?$"},
+    "correction": {
+      "$comment": "One corrections/<id>.json: a user correction in the user's words. Rules cite it in their corrections list; tests/test_hks_corrections.py fails on one no rule cites.",
+      "type": "object",
+      "required": ["id", "date", "time", "episode", "session", "source", "words", "way", "repeat_of", "memory"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/correction_id"},
+        "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "time": {"type": ["string", "null"], "pattern": "^[0-9]{2}:[0-9]{2}$"},
+        "episode": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "session": {"type": ["string", "null"], "pattern": "^[0-9a-f]{8}$"},
+        "source": {"enum": ["verbal", "red_marker", "diff"]},
+        "words": {"$ref": "#/$defs/text"},
+        "way": {"enum": ["A", "B", "C", "D", "E", "F", null]},
+        "repeat_of": {"type": "array", "items": {"$ref": "#/$defs/correction_id"}, "uniqueItems": true},
+        "memory": {"type": ["string", "null"]}
+      }
+    },
     "text": {"type": "string", "minLength": 1},
     "rule": {
       "type": "object",
@@ -39,11 +58,11 @@
         "kind": {"enum": ["code_gate", "do_confirm", "human_only"]},
         "kind_source": {"$ref": "#/$defs/text"},
         "stage": {"$ref": "#/$defs/stage"},
-        "corrections": {"type": "array", "items": {"type": "string", "pattern": "^K[0-9]+[a-z]?$"}},
+        "corrections": {"type": "array", "items": {"$ref": "#/$defs/correction_id"}},
         "gate": {"type": ["string", "null"]},
         "confirm": {"type": ["string", "null"]},
         "probe": {"type": "array", "items": {"$ref": "#/$defs/text"}, "minItems": 1},
-        "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7,40}$", "$comment": "null until committed; tools/hks_registry_extract.py fills it"},
         "added": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
       },
       "allOf": [

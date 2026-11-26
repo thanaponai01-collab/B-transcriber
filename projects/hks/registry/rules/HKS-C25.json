@@ -13,7 +13,11 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K41",
+  "K47",
+  "K54"
+ ],
  "gate": null,
  "confirm": "What scale and position does each shot have, and was each set from its own frame?",
  "probe": [

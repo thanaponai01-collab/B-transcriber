@@ -14,7 +14,11 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K23"
+  "K7a",
+  "K11",
+  "K23",
+  "K34",
+  "K64"
  ],
  "gate": "same_frame_share",
  "confirm": "List each same-scene speech jump and its cover.",

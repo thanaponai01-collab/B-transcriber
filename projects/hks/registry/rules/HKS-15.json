@@ -13,7 +13,9 @@
  "kind": "human_only",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K48"
+ ],
  "gate": null,
  "confirm": null,
  "probe": [

@@ -14,6 +14,7 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
+  "K15",
   "K22"
  ],
  "gate": "visible_cuts_in_speech",

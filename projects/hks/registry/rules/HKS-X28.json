@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K55"
+ ],
  "gate": null,
  "confirm": "Which face is held under the sting, and how long is the 1-min?",
  "probe": [

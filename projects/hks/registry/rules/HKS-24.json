@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K62"
+ ],
  "gate": null,
  "confirm": "Which working-out was dropped, and does each kept set-up have its payoff?",
  "probe": [

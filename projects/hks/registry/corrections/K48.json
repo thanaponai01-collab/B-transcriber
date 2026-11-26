@@ -1,0 +1,14 @@
+{
+ "id": "K48",
+ "date": "2026-11-24",
+ "time": null,
+ "episode": "20261124",
+ "session": null,
+ "source": "diff",
+ "words": "Ending gets the host's set-up 'ถ้า 500 ล้าน... เตรียมทรงไว้แล้ว' and ends on 'รอพี่หนุ่มไปเลยครับ' (src 3695.0, was 3699.0); length 179.96 -> 177.76 s.",
+ "way": null,
+ "repeat_of": [
+  "K14"
+ ],
+ "memory": "projects/hks/memory/yt-20261124-draft.md"
+}

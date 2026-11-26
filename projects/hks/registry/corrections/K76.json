@@ -1,0 +1,12 @@
+{
+ "id": "K76",
+ "date": "2026-11-26",
+ "time": null,
+ "episode": "20261126",
+ "session": null,
+ "source": "diff",
+ "words": "All 55 blocks in broadcast order; none of the agent's 3 moves kept. Save: agent v1 has 3 source back-jumps over 30 s (941.7->359.7, 2523.1->1529.9, 5912.5->5116.8), the user's body 0.",
+ "way": null,
+ "repeat_of": [],
+ "memory": "projects/hks/memory/yt-20261126-draft.md"
+}

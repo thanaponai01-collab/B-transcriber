@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K72"
+ ],
  "gate": null,
  "confirm": "Which guest question does each law passage answer, and where is it?",
  "probe": [

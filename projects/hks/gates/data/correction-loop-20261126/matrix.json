@@ -1,0 +1,1771 @@
+[
+ {
+  "id": "V1",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "question markers left the breaks and the sponsor unflagged",
+  "rules": [
+   "HKS-X76"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V2",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "labelled the V2 video pieces but not their audio",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "V3",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "V14"
+  ],
+  "rule_before": false,
+  "mistake": "moving pieces to V2 left video unlinked from its audio",
+  "rules": [
+   "HKS-X76",
+   "HKS-X69"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V4",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "K6",
+   "K26"
+  ],
+  "rule_before": false,
+  "mistake": "labelled topics with arbitrary cycling colours instead of the user's speaker/role scheme",
+  "rules": [
+   "HKS-X73"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V5",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "agent's topic colours had to be reset; light green marks insert/B-roll material",
+  "rules": [
+   "HKS-X73",
+   "HKS-X75"
+  ],
+  "gates": [
+   "HKS-X75"
+  ]
+ },
+ {
+  "id": "V6",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "(question answer) planned to split and colour at every speaker change; label per question instead",
+  "rules": [
+   "HKS-X74"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K1",
+  "ep": "20261123",
+  "src": "red_marker",
+  "mem": false,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "insert search missed one insert the user wanted in Backup",
+  "rules": [
+   "HKS-X77"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V7",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "K7a",
+   "K11",
+   "K23",
+   "V15"
+  ],
+  "rule_before": true,
+  "mistake": "(question answer) pre-draft reminder: no uncovered jump cuts",
+  "rules": [
+   "HKS-R5",
+   "HKS-R6",
+   "HKS-C1",
+   "HKS-X8",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-X94"
+  ],
+  "gates": [
+   "HKS-R5",
+   "HKS-C1",
+   "HKS-X8",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-X94"
+  ]
+ },
+ {
+  "id": "K2",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "K5",
+   "K7d",
+   "V18"
+  ],
+  "rule_before": true,
+  "mistake": "dropped a short B-roll clip on every cut instead of one long same-scene cover",
+  "rules": [
+   "HKS-X3",
+   "HKS-X4",
+   "HKS-R6",
+   "HKS-X106"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V8",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "K11",
+   "V17"
+  ],
+  "rule_before": true,
+  "mistake": "kept whole speeches instead of tightening with J/L cuts under the picture",
+  "rules": [
+   "HKS-X108",
+   "HKS-R2",
+   "HKS-X29"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K3",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "K21"
+  ],
+  "rule_before": true,
+  "mistake": "cut the host questions that set up a story",
+  "rules": [
+   "HKS-X5",
+   "HKS-C6",
+   "HKS-R1",
+   "HKS-R3"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V9",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "left out the insert clip (video/voice recording) the speaker refers to",
+  "rules": [
+   "HKS-X6",
+   "HKS-X90"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K4",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "played studio dialogue over an insert's own audio",
+  "rules": [
+   "HKS-X6"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K5",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "K16"
+  ],
+  "rule_before": false,
+  "mistake": "'static' listener covers showed people speaking out of sync",
+  "rules": [
+   "HKS-X4",
+   "HKS-X37"
+  ],
+  "gates": [
+   "HKS-X37"
+  ]
+ },
+ {
+  "id": "K6",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "K26"
+  ],
+  "rule_before": false,
+  "mistake": "drafts left unlabelled",
+  "rules": [
+   "HKS-X75"
+  ],
+  "gates": [
+   "HKS-X75"
+  ]
+ },
+ {
+  "id": "K7a",
+  "ep": "20261123",
+  "src": "red_marker",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "K11",
+   "K23",
+   "V15"
+  ],
+  "rule_before": true,
+  "mistake": "uncovered jump cut in the draft",
+  "rules": [
+   "HKS-X8",
+   "HKS-R5",
+   "HKS-C1",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-X94"
+  ],
+  "gates": [
+   "HKS-X8",
+   "HKS-R5",
+   "HKS-C1",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-X94"
+  ]
+ },
+ {
+  "id": "K7b",
+  "ep": "20261123",
+  "src": "red_marker",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "B-roll shown mid-dissolve instead of fully on",
+  "rules": [
+   "HKS-X8"
+  ],
+  "gates": [
+   "HKS-X8"
+  ]
+ },
+ {
+  "id": "K7c",
+  "ep": "20261123",
+  "src": "red_marker",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "K17",
+   "K18",
+   "V16"
+  ],
+  "rule_before": false,
+  "mistake": "sponsor tab left visible; hide with a small centred zoom (no 3HD logo, no clock)",
+  "rules": [
+   "HKS-X10"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K7d",
+  "ep": "20261123",
+  "src": "red_marker",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "shot held too briefly before the scene changes (snappy)",
+  "rules": [
+   "HKS-X11",
+   "HKS-C20",
+   "HKS-X22"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K8",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "V10"
+  ],
+  "rule_before": false,
+  "mistake": "rebuilt each draft from scratch instead of copying the last one and fixing it",
+  "rules": [
+   "HKS-X17"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V10",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "keeps redoing timeline work from the start instead of deriving from the existing sequence",
+  "rules": [
+   "HKS-X17"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V11",
+  "ep": "20261123",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "built sequences via FCP7 XML instead of editing the timeline the way the user does",
+  "rules": [
+   "HKS-X17"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K9",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "drafted without first splitting Edit at the sections",
+  "rules": [
+   "HKS-X13",
+   "HKS-16",
+   "HKS-X69"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K10",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": true,
+  "came_back": [
+   "V15"
+  ],
+  "rule_before": true,
+  "mistake": "skipped day setup: no inserts in Backup, picks not lifted to V2",
+  "rules": [
+   "HKS-X69",
+   "HKS-X76",
+   "HKS-X77"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K11",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "K23",
+   "V15",
+   "V17",
+   "D7",
+   "D18",
+   "D19",
+   "D23"
+  ],
+  "rule_before": true,
+  "mistake": "cuts left uncovered and story not tightened",
+  "rules": [
+   "HKS-R6",
+   "HKS-X29",
+   "HKS-X108",
+   "HKS-R5",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-X2"
+  ],
+  "gates": [
+   "HKS-R5",
+   "HKS-X41",
+   "HKS-C29"
+  ]
+ },
+ {
+  "id": "K12",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "cut read like a film ad, not fun",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "K13",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "over-corrected tone; keep v3 and add some fun",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "V12",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": false,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "highlight opened before the line the user wanted first",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "K15",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "K22"
+  ],
+  "rule_before": false,
+  "mistake": "pieces cut mid-sentence or too early",
+  "rules": [
+   "HKS-X33",
+   "HKS-32",
+   "HKS-X63",
+   "HKS-X40",
+   "HKS-C28",
+   "HKS-X92",
+   "HKS-X59"
+  ],
+  "gates": [
+   "HKS-X33",
+   "HKS-32",
+   "HKS-X63",
+   "HKS-X40",
+   "HKS-C28",
+   "HKS-X92"
+  ]
+ },
+ {
+  "id": "K16",
+  "ep": "20261124",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "J/L-cut held picture shows someone talking",
+  "rules": [
+   "HKS-X37",
+   "HKS-X66",
+   "HKS-33"
+  ],
+  "gates": [
+   "HKS-X37",
+   "HKS-X66",
+   "HKS-33"
+  ]
+ },
+ {
+  "id": "K17",
+  "ep": "20261125",
+  "src": "red_marker",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "K18",
+   "V16"
+  ],
+  "rule_before": false,
+  "mistake": "zoomed full-screen inserts; zooms not centred",
+  "rules": [
+   "HKS-X78"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K18",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "V16"
+  ],
+  "rule_before": false,
+  "mistake": "inserts still off-centre",
+  "rules": [
+   "HKS-X78"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V13",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "V16"
+  ],
+  "rule_before": false,
+  "mistake": "draft built at the 720p source size; inserts not fitted to 1920x1080",
+  "rules": [
+   "HKS-X105"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K19",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "K25"
+  ],
+  "rule_before": false,
+  "mistake": "copied the user's adjustment layer instead of masking the wound",
+  "rules": [
+   "HKS-X43",
+   "HKS-X96",
+   "HKS-X81",
+   "HKS-X101",
+   "HKS-X72"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K20",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "K25"
+  ],
+  "rule_before": false,
+  "mistake": "rectangle mask instead of an ellipse",
+  "rules": [
+   "HKS-X81",
+   "HKS-X43",
+   "HKS-X96"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K21",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "dropped the story context; opened cold",
+  "rules": [
+   "HKS-C27",
+   "HKS-X39",
+   "HKS-X71",
+   "HKS-X89",
+   "HKS-X90",
+   "HKS-X98"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K22",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "cut pieces before the thought finished",
+  "rules": [
+   "HKS-C28",
+   "HKS-X40",
+   "HKS-X92",
+   "HKS-X33",
+   "HKS-32",
+   "HKS-X63",
+   "HKS-X97"
+  ],
+  "gates": [
+   "HKS-C28",
+   "HKS-X40",
+   "HKS-X92",
+   "HKS-X33",
+   "HKS-32",
+   "HKS-X63"
+  ]
+ },
+ {
+  "id": "K23",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "V15"
+  ],
+  "rule_before": true,
+  "mistake": "uncovered jump cuts",
+  "rules": [
+   "HKS-C29",
+   "HKS-X41",
+   "HKS-X94",
+   "HKS-R5",
+   "HKS-C1",
+   "HKS-X8",
+   "HKS-X99"
+  ],
+  "gates": [
+   "HKS-C29",
+   "HKS-X41",
+   "HKS-X94",
+   "HKS-R5",
+   "HKS-C1",
+   "HKS-X8"
+  ]
+ },
+ {
+  "id": "K24",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "J/L cuts made on the raw layer instead of a duplicate on top",
+  "rules": [
+   "HKS-C30",
+   "HKS-X42",
+   "HKS-X95"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K25",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "did not build its own adjustment layer with a mask",
+  "rules": [
+   "HKS-X43",
+   "HKS-X81",
+   "HKS-X96",
+   "HKS-X72",
+   "HKS-X101"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K26",
+  "ep": "20261125",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "never labelled hot spots yellow",
+  "rules": [
+   "HKS-C31",
+   "HKS-X88",
+   "HKS-X73"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V14",
+  "ep": "20261126",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "split/lift on Editing left V2 video unlinked from A1 audio",
+  "rules": [
+   "HKS-X76",
+   "HKS-X69"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V15",
+  "ep": "20261126",
+  "src": "verbal",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "YT v1 body built with no covers from Backup",
+  "rules": [
+   "HKS-R6",
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-R5",
+   "HKS-X94"
+  ],
+  "gates": [
+   "HKS-X41",
+   "HKS-C29",
+   "HKS-R5",
+   "HKS-X94"
+  ]
+ },
+ {
+  "id": "V16",
+  "ep": "20261126",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Backup built at 720p; B-roll not scaled per the zoom rules",
+  "rules": [
+   "HKS-X105",
+   "HKS-X77"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V17",
+  "ep": "20261126",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "handed over a body above 20 min",
+  "rules": [
+   "HKS-X107",
+   "HKS-1"
+  ],
+  "gates": []
+ },
+ {
+  "id": "V18",
+  "ep": "20261126",
+  "src": "verbal",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "same insert reused as cover on every cut instead of one related to each cut",
+  "rules": [
+   "HKS-X106"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D1",
+  "ep": "20261123",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Kept broadcast order where a fact was needed earlier (note: on 20261126 the user did the opposite and kept broadcast order).",
+  "rules": [
+   "HKS-X1",
+   "HKS-5",
+   "HKS-X91"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K14",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D9"
+  ],
+  "rule_before": false,
+  "mistake": "Ended the hook on a punchline without its set-up (HKS-C23).",
+  "rules": [
+   "HKS-C23",
+   "HKS-X25"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D2",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D8"
+  ],
+  "rule_before": true,
+  "mistake": "One zoom preset for a whole set of shots instead of framing each shot (HKS-C25).",
+  "rules": [
+   "HKS-C25",
+   "M-1"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D3",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D11"
+  ],
+  "rule_before": false,
+  "mistake": "Hook music bed laid with no level set (rules.md 'Music bed under the whole piece').",
+  "rules": [
+   "HKS-X23"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D4",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D14"
+  ],
+  "rule_before": false,
+  "mistake": "Body started flat after a short sting instead of the voice pre-lapping under a full sting.",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "D5",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D13"
+  ],
+  "rule_before": false,
+  "mistake": "Left a section change (sting -> body) plain, with no flash.",
+  "rules": [
+   "HKS-X24"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D6",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Replayed a hook clip in the middle of the short's body (HKS-C24).",
+  "rules": [
+   "HKS-C24",
+   "HKS-X26"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D7",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "D23"
+  ],
+  "rule_before": false,
+  "mistake": "Left a long piece whole instead of tightening it under a cover.",
+  "rules": [
+   "HKS-X29",
+   "HKS-X108"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D8",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "D15"
+  ],
+  "rule_before": false,
+  "mistake": "Kept the 16:9 cover zoom and one position in the 1080x1080 frame instead of reframing each shot (HKS-C25).",
+  "rules": [
+   "HKS-X27",
+   "HKS-C25"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D9",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Ended the short on the bet's payoff without its set-up and ran past the button line.",
+  "rules": [
+   "HKS-C23",
+   "HKS-X25",
+   "HKS-15"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D10",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": false,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Piece starts missed their set-up line.",
+  "rules": [
+   "HKS-X29"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D11",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Left a gap in the music bed (existing workflow-log rule 'BGM under the whole show').",
+  "rules": [
+   "HKS-X23"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D12",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Left disabled YT clock-blur layers in the square instead of the square's own `Blur below logo` boxes.",
+  "rules": [
+   "HKS-X30"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D13",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Left the short's sting -> body join plain, with no flash.",
+  "rules": [
+   "HKS-X24"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D14",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Removed the voice under the sting and started the beat flat after it.",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "D15",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Kept one zoom and position for a moving subject in the square (HKS-C25).",
+  "rules": [
+   "HKS-C25",
+   "HKS-X27"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D16",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Ended the short on the sting and logo instead of a held face (HKS-C26).",
+  "rules": [
+   "HKS-C26",
+   "HKS-X28"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D17",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Added fun moments as 1-5 s fragments instead of whole or not at all.",
+  "rules": [
+   "HKS-X35",
+   "HKS-X64",
+   "HKS-32"
+  ],
+  "gates": [
+   "HKS-X64",
+   "HKS-32"
+  ]
+ },
+ {
+  "id": "D18",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "D24"
+  ],
+  "rule_before": false,
+  "mistake": "Cut sound and picture on the same frame, almost no J/L cuts (HKS-33).",
+  "rules": [
+   "HKS-33",
+   "HKS-X36",
+   "HKS-X65",
+   "HKS-X38"
+  ],
+  "gates": [
+   "HKS-33",
+   "HKS-X36",
+   "HKS-X65",
+   "HKS-X38"
+  ]
+ },
+ {
+  "id": "D19",
+  "ep": "20261124",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [
+   "D23"
+  ],
+  "rule_before": true,
+  "mistake": "Tightened little; did not use covers to cut tighter underneath.",
+  "rules": [
+   "HKS-X29",
+   "HKS-R6",
+   "HKS-X34",
+   "HKS-X108",
+   "HKS-X2"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D20",
+  "ep": "20261125",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Dropped the story's resolution.",
+  "rules": [
+   "HKS-10",
+   "HKS-C13"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D21",
+  "ep": "20261125",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Kept retellings and back-and-forth that repeat a point.",
+  "rules": [
+   "HKS-R2",
+   "HKS-X91",
+   "M-4",
+   "HKS-4"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D22",
+  "ep": "20261125",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [
+   "D27"
+  ],
+  "rule_before": true,
+  "mistake": "Kept each secondary speaker's lead-in before the point.",
+  "rules": [
+   "HKS-X7",
+   "HKS-24",
+   "HKS-R2"
+  ],
+  "gates": []
+ },
+ {
+  "id": "K27",
+  "ep": "20261125",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": true,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Ripple edge fixes made neighbouring pieces overlap, so words played twice.",
+  "rules": [
+   "HKS-X100",
+   "HKS-X93",
+   "HKS-C28"
+  ],
+  "gates": [
+   "HKS-X100",
+   "HKS-X93",
+   "HKS-C28"
+  ]
+ },
+ {
+  "id": "D23",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Kept long takes and tightened almost nothing (rule 5 read as 'keep the take whole'; HKS-X108).",
+  "rules": [
+   "HKS-X108"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D24",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Few, long covers; did not hide each tight cut with its own short cover or J/L copy.",
+  "rules": [
+   "HKS-X108",
+   "HKS-C9",
+   "HKS-X106"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D25",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Met the length line by dropping story passages instead of tightening (HKS-X109).",
+  "rules": [
+   "HKS-X109"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D26",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Kept the host's on-air intro as 'set-up' (breaks existing rule HKS-22/HKS-C4; no earlier diff correction of it found).",
+  "rules": [
+   "HKS-22",
+   "HKS-C4",
+   "HKS-R3"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D27",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": true,
+  "repeat_loose": true,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Kept an explainer's read-out instead of the point.",
+  "rules": [
+   "HKS-C8",
+   "HKS-X7",
+   "HKS-R2"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D28",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Kept side questions and corrections that do not move the story.",
+  "rules": [
+   "HKS-R2",
+   "HKS-R3"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D29",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": false,
+  "full": false,
+  "skill": false,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": false,
+  "mistake": "Used the talking DSI insert as body pieces.",
+  "rules": [],
+  "gates": []
+ },
+ {
+  "id": "D30",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Under-used the online-only part after the TV part (HKS-22 notes it is used heavily).",
+  "rules": [
+   "HKS-22"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D31",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": true,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Moved pieces out of broadcast order (HKS-5). Conflicts with 20261123, where the user moved material 3-4 times.",
+  "rules": [
+   "HKS-20",
+   "HKS-5"
+  ],
+  "gates": []
+ },
+ {
+  "id": "D32",
+  "ep": "20261126",
+  "src": "diff",
+  "mem": true,
+  "rule": true,
+  "full": false,
+  "skill": true,
+  "gate": false,
+  "repeat_strict": false,
+  "repeat_loose": false,
+  "came_back": [],
+  "rule_before": true,
+  "mistake": "Arguable: the user had said 'no hook', and the agent left the opening empty; the user's D1 still opens on a voice cold open under the cards.",
+  "rules": [
+   "HKS-19"
+  ],
+  "gates": []
+ }
+]

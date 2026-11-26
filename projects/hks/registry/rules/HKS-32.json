@@ -15,7 +15,8 @@
  "stage": "build",
  "corrections": [
   "K15",
-  "K22"
+  "K22",
+  "K56"
  ],
  "gate": "visible_cuts_in_speech",
  "confirm": "Does every piece start and end on a whole thought, read with its sound?",

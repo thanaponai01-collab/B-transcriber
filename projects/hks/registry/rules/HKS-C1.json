@@ -15,7 +15,8 @@
  "stage": "build",
  "corrections": [
   "K7a",
-  "K23"
+  "K23",
+  "K34"
  ],
  "gate": "same_frame_share",
  "confirm": "Is there any same-shot jump in plain studio view (timecodes)?",

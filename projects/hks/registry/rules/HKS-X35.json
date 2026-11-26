@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K56"
+ ],
  "gate": null,
  "confirm": "Which moments were added to the approved cut, and is each a whole passage (source range)?",
  "probe": [

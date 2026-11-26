@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X111",
+ "aliases": [],
+ "title": "A film-promo day feels fun, not like an ad.",
+ "text": "On a film-promo episode the long form feels fun, not like an advertisement for the film (user, 20261124: the v3 cut read like an ad). Not every part can be fun: keep the story that works and add the fun moments in, whole (the user, on the v4 fun paper edit).",
+ "source": {
+  "file": "projects/hks/registry/corrections/K12.json",
+  "heading": "K12"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "backfill 2026-11-26, not yet confirmed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K12",
+  "K13"
+ ],
+ "gate": null,
+ "confirm": "Which fun moments are in, and does any part read like an ad for the film?",
+ "probe": [
+  "first of i want this whole video to feel fun not boring ads "
+ ],
+ "commit": null,
+ "added": "2026-11-26"
+}

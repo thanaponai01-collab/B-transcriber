@@ -7,7 +7,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # HKS build: rules and do-confirm
 
-The 80 active `build` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
+The 81 active `build` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
 
 - **HKS-7** **Cut hard under a proving picture; elsewhere keep pieces long.** Cut hard under a picture that proves the words; elsewhere keep pieces long. Frame-checked: of 345 uncovered joins, 311 land on a camera change, 9 on a layout or inset change, 5 under a still; only 2 are real same-shot jumps. (study/joins.md checks only joins with the studio picture on both sides.)
 - **HKS-17** **Dress the cut from the template kit.** Every day uses the same nine pieces: the hook stack (dim 50, black tone + vignette, zoom, film damage, red-blue glitch, a 1-2 frame invert), the `SFX_โหนกระแส` sting, the BGM bed on its 56.48 s loop grid, the end stack and `CG_END LOGO`; headline cards are After Effects Linked Comps. Weakened: film damage is not a clean lifted-footage marker; the BGM bed is a daily-cut rule (EP.162/167 have none).
@@ -87,7 +87,8 @@ The 80 active `build` rules in [the registry](../../../projects/hks/registry/rul
 - **HKS-X100** **Ripple fixes can overlap neighbours.** My ripple fixes made neighbouring pieces overlap in source, and I didn't check for it. (gate `source_repeats`)
 - **HKS-X101** **No API does not mean impossible.** For the blur I read "masks have no API" as "masks can't be done", and copied your layer instead of building one.
 - **HKS-X106** ****A cover belongs to its cut, never one insert on every cut.**.** A cover belongs to its cut, never one insert repeated on every cut. Every cut is different: cover it only with the insert or B-roll the words at that cut point at, or what the broadcast showed at that moment; a cut on a camera change gets a J/L split instead, or stays straight. On 20261126 v1 I put a 4 s cover from the same few inserts on all 42 cuts, and the user said: "you spam a lot of like one insert ... every cut is not the same ... use the one that may be related to that cut ... not just spam it in every cut".
-- **HKS-X108** ****Tighten word by word, then hide every cut.**.** Inside every kept passage cut out the pauses, restarts and doubled words, fillers and tag questions, the host's calls to the crew and his asides about the show; hide each cut with a J/L copy, a short cover from the same moment or the broadcast's own camera change. Seen in the user's D1 of 20261126: 176 such cuts took out 360 s (median sound clip 1.9 s, the agent's v1 21.9 s), and only 21 of 226 sound cuts were in-sync jumps. Confirmed by the user 2026-11-26 ("Yes, confirm both").
+- **HKS-X108** ****Tighten word by word, then hide every cut.**.** Inside every kept passage cut out the pauses, restarts and doubled words, fillers and tag questions, the host's calls to the crew and his asides about the show; hide each cut with a J/L copy, a short cover from the same moment or the broadcast's own camera change. Pauses of about 0.15 s or more go; a swear word can go by sound instead of a bleep. A cover that hides a cut is short (the user's median 2.6 s), with film damage on a full-screen one (rules.md "Tighten word by word"). Seen in the user's D1 of 20261126: 176 such cuts took out 360 s (median sound clip 1.9 s, the agent's v1 21.9 s), and only 21 of 226 sound cuts were in-sync jumps. Confirmed by the user 2026-11-26 ("Yes, confirm both").
+- **HKS-X113** **The first voice pre-laps under a full sting.** After a sting the body never starts flat: the sting plays its full length and the body's first voice starts under it (the user's fixes of 20261124: the host's question pre-lapped 2.16 s under a 4.04 s sting, in the YT and the 1-min).
 - **M-3** **Never edit the user's working project in place.** Held candidate: never edit the user's working project in place. The HKS build plan says "nothing edits the user's day project" (agent-written).
 
 ## Do–confirm
@@ -165,4 +166,5 @@ Each question needs a written answer in the handover, keyed by its rule id.
 69. **HKS-X101** Where an API was missing, which UI route was tried?
 70. **HKS-X106** For each cover, which words at that cut point at it (timecode), and is any insert used on more than one unrelated cut?
 71. **HKS-X108** How many cuts inside kept passages, how many seconds they took out (pauses, restarts, fillers, crew talk), and how is each hidden (J/L copy, cover, camera change)?
-72. **M-3** Was every edit made in a copy, with the user's day project untouched?
+72. **HKS-X113** Where does each sting end, and does the first voice of the body start under it?
+73. **M-3** Was every edit made in a copy, with the user's day project untouched?

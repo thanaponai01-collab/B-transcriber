@@ -14,7 +14,9 @@
  "kind_source": "proposed",
  "stage": "day_setup",
  "corrections": [
-  "K26"
+  "K26",
+  "K31",
+  "K32"
  ],
  "gate": "day_setup",
  "confirm": "Which colours are on Editing, including yellow hot spots and orange endings?",

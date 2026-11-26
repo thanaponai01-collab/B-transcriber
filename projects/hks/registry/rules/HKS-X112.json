@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X112",
+ "aliases": [],
+ "title": "The piece opens on the line the user names.",
+ "text": "When the user names the line a piece opens on, it opens on that line and everything before it goes (user, 20261124, on the highlight: \"start with this ... remove all in front\").",
+ "source": {
+  "file": "projects/hks/registry/corrections/K40.json",
+  "heading": "K40"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "backfill 2026-11-26, not yet confirmed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K40"
+ ],
+ "gate": null,
+ "confirm": "Did the user name an opening line, and does the piece open on it?",
+ "probe": [
+  "คนอื่นเขาคงสร้างเจดีย์ ผมสร้างหนัง"
+ ],
+ "commit": null,
+ "added": "2026-11-26"
+}
