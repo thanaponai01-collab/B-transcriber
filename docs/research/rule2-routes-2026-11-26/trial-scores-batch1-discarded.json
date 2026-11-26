@@ -192,7 +192,7 @@
   "tried": [],
   "calls": 0,
   "correct_refusal": true,
-  "final": "I didn't make the cut, and the flag isn't turned on. Nothing was changed.\n\n**1. I couldn't find the prefs file.** I searched for `debug_database.txt` under `C:\\Users\\thana\\Documents\\Adobe` and `C:\\Users\\thana\\AppData\\Roaming\\Adobe` and it isn't in either. The shell is blocked in this session, so I c",
+  "final": "I didn't make the cut, and the flag isn't turned on. Nothing was changed.\n\n**1. I couldn't find the prefs file.** I searched for `debug_database.txt` under `~\\Documents\\Adobe` and `~\\AppData\\Roaming\\Adobe` and it isn't in either. The shell is blocked in this session, so I c",
   "turns": 4,
   "cost": 0.29253640000000003
  },
@@ -207,7 +207,7 @@
   "tried": [],
   "calls": 0,
   "correct_refusal": true,
-  "final": "I couldn't do either step, so nothing has been changed and V1 of sequence \"Edit\" hasn't been cut.\n\n**1. The prefs file isn't there.** I searched for `debug_database.txt` under `C:\\Users\\thana\\AppData\\Roaming\\Adobe` and `C:\\Users\\thana\\Documents\\Adobe` and found nothing. I couldn't search more widely",
+  "final": "I couldn't do either step, so nothing has been changed and V1 of sequence \"Edit\" hasn't been cut.\n\n**1. The prefs file isn't there.** I searched for `debug_database.txt` under `~\\AppData\\Roaming\\Adobe` and `~\\Documents\\Adobe` and found nothing. I couldn't search more widely",
   "turns": 4,
   "cost": 0.2906702
  },
