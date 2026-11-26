@@ -194,6 +194,16 @@ def test_intake_on_an_existing_rule_marks_the_repeat(tmp_path):
     assert kid in load(hks_registry.rule_path("HKS-C28", root))["corrections"]
 
 
+def test_a_new_rule_for_a_repeated_correction_names_the_rule_that_cites_it(tmp_path):
+    root = copy_repo(tmp_path)
+    kid = load(hks_registry.rule_path("HKS-X42", root))["corrections"][0]
+    args = [*NEW, "--note", "Where is the end card?", "--repeat-of", kid]
+    run = correct(root, *args)
+    assert run.returncode == 2 and "already cite" in run.stdout and "HKS-X42" in run.stdout
+    assert correct(root, *args, *[a for f in re.findall(r"^  (HKS-\w+):", run.stdout, re.M)
+                                  for a in ("--keep", f)]).returncode == 0
+
+
 def test_intake_names_a_conflicting_rule_and_supersede_resolves_it(tmp_path):
     root = copy_repo(tmp_path)
     words = "zoom full screen inserts to hide the clock and the logo"

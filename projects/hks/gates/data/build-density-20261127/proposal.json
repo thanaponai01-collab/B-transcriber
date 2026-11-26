@@ -1,0 +1,30 @@
+{
+ "about": "Overlay on projects/hks/registry for the build stage. Nothing here is applied to the registry. groups: absorbed rules would get superseded_by = canonical (a). gate_line: gated rules rendered as one line, no question (b). reference: rules moved to PLAYBOOK.md, no question (c). pause_points: the do-confirm split (c).",
+ "groups": [
+  {"canonical": "HKS-R5", "absorbs": ["HKS-C1", "HKS-C29", "HKS-X41"], "why": "C1 is R5's reason; C29 and X41 are R5's same-scene case. Same corrections (K7a K11 K23 K34 K64)."},
+  {"canonical": "HKS-X34", "absorbs": ["HKS-X2"], "why": "Same lesson (tighten only under a cover, studio takes whole); same corrections K11 K58. X2 is unconfirmed; its numbers become X34's evidence."},
+  {"canonical": "HKS-C17", "absorbs": ["HKS-X16"], "why": "Word for word the same; X16 cites C17."},
+  {"canonical": "HKS-X43", "absorbs": ["HKS-X81", "HKS-X96", "HKS-X101", "HKS-X72"], "why": "All five: blur is your own adjustment layer + mask; Premiere's tool before a workaround, workaround named. Same corrections K19 K20 K25."},
+  {"canonical": "HKS-X33", "absorbs": ["HKS-32", "HKS-C28", "HKS-X40", "HKS-X63"], "why": "All: every piece starts and ends on a whole thought, gate visible_cuts_in_speech. X33 is the precise one (2 s each side, closing particle, joining word, real pause)."},
+  {"canonical": "HKS-X11", "absorbs": ["HKS-C20"], "why": "C20 defines the sliver X11 fixes (K7d)."},
+  {"canonical": "HKS-C26", "absorbs": ["HKS-X28"], "why": "X28 is C26 for the 1-min (K55); its 'just under 60 s' joins C26."},
+  {"canonical": "HKS-X42", "absorbs": ["HKS-C30", "HKS-X95"], "why": "Three copies of 'J/L on a copy, raw untouched below' (K24)."},
+  {"canonical": "HKS-X35", "absorbs": ["HKS-X64"], "why": "X64 is the failure behind X35 (K56); X35 takes its gate."},
+  {"canonical": "HKS-X36", "absorbs": ["HKS-33", "HKS-X65"], "why": "33 is the reason for J/L, X65 the failure; all gate same_frame_share."},
+  {"canonical": "HKS-X37", "absorbs": ["HKS-X66"], "why": "X66 is the failure behind X37 (K16), gate unsafe_holds."},
+  {"canonical": "HKS-X10", "absorbs": ["HKS-C3"], "why": "C3 is X10's reason for the clock; X10 already cites C3."},
+  {"canonical": "HKS-C25", "absorbs": ["HKS-X27"], "why": "X27 is C25 in the square frame (K47 K54)."},
+  {"canonical": "HKS-R6", "absorbs": ["HKS-C9", "HKS-C10"], "why": "R6's text already contains C9 and C10 and cites both."}
+ ],
+ "conflicts_for_user": [
+  {"rules": ["HKS-X3", "HKS-X4", "HKS-X108"], "what": "X3: B-roll is one continuous scene, 20-46 s; X4: cutaways 8-16 s, not 2-3 s pops. X108 (confirmed 2026-11-26): a cover that hides a cut is short, the user's median 2.6 s."},
+  {"rules": ["HKS-X34", "HKS-X108"], "what": "X34: in studio picture keep the take whole, tighten only under a cover. X108: inside every kept passage cut pauses, restarts, fillers, and hide each cut with a J/L copy, a short cover or a camera change."}
+ ],
+ "reference": ["HKS-X45", "HKS-X46", "HKS-X47", "HKS-X48", "HKS-X49", "HKS-X50", "HKS-X51", "HKS-X52", "HKS-X53", "HKS-X54", "HKS-X55", "HKS-X56", "HKS-X57", "HKS-X58", "HKS-X59", "HKS-X60", "HKS-X61", "HKS-X62"],
+ "pause_points": [
+  {"name": "Before the first cut", "rules": ["HKS-X17", "HKS-X68", "M-3", "HKS-X44", "HKS-X42"]},
+  {"name": "After the body cut (sound)", "rules": ["HKS-7", "HKS-X34", "HKS-X29", "HKS-C17", "HKS-X108", "HKS-R7"]},
+  {"name": "After the covers and holds", "rules": ["HKS-R6", "HKS-X106", "HKS-X3", "HKS-X4", "HKS-X6", "HKS-X9", "HKS-20", "HKS-C2", "HKS-X11"]},
+  {"name": "After finishing", "rules": ["HKS-17", "HKS-X23", "HKS-X24", "HKS-X113", "HKS-C26", "HKS-C25", "HKS-X10", "HKS-X30", "HKS-X43", "HKS-X31"]}
+ ]
+}

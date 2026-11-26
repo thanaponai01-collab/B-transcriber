@@ -1,7 +1,7 @@
 {
  "id": "HKS-X108",
  "aliases": [],
- "title": "**Tighten word by word, then hide every cut.**",
+ "title": "Tighten word by word, then hide every cut.",
  "text": "Inside every kept passage cut out the pauses, restarts and doubled words, fillers and tag questions, the host's calls to the crew and his asides about the show; hide each cut with a J/L copy, a short cover from the same moment or the broadcast's own camera change. Pauses of about 0.15 s or more go; a swear word can go by sound instead of a bleep. A cover that hides a cut is short (the user's median 2.6 s), with film damage on a full-screen one (rules.md \"Tighten word by word\"). Seen in the user's D1 of 20261126: 176 such cuts took out 360 s (median sound clip 1.9 s, the agent's v1 21.9 s), and only 21 of 226 sound cuts were in-sync jumps. Confirmed by the user 2026-11-26 (\"Yes, confirm both\").",
  "source": {
   "file": "projects/hks/memory/yt-20261126-draft.md",

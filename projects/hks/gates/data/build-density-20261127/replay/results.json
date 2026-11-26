@@ -1,0 +1,129 @@
+{
+ "c_1": {
+  "caught": 7,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7",
+   "F8"
+  ],
+  "breaks": 16,
+  "answers": 30,
+  "cost": 1.012,
+  "out_tok": 33822
+ },
+ "c_2": {
+  "caught": 6,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7"
+  ],
+  "breaks": 18,
+  "answers": 30,
+  "cost": 0.856,
+  "out_tok": 26007
+ },
+ "c_3": {
+  "caught": 7,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7",
+   "F8"
+  ],
+  "breaks": 17,
+  "answers": 30,
+  "cost": 0.901,
+  "out_tok": 28280
+ },
+ "c_4": {
+  "caught": 7,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7",
+   "F8"
+  ],
+  "breaks": 20,
+  "answers": 30,
+  "cost": 0.82,
+  "out_tok": 24229
+ },
+ "current_1": {
+  "caught": 7,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F6",
+   "F7"
+  ],
+  "breaks": 20,
+  "answers": 73,
+  "cost": 1.17,
+  "out_tok": 39310
+ },
+ "current_2": {
+  "caught": 8,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F6",
+   "F7",
+   "F8"
+  ],
+  "breaks": 22,
+  "answers": 73,
+  "cost": 1.034,
+  "out_tok": 32536
+ },
+ "current_3": {
+  "caught": 6,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7"
+  ],
+  "breaks": 14,
+  "answers": 73,
+  "cost": 1.06,
+  "out_tok": 33810
+ },
+ "current_4": {
+  "caught": 7,
+  "hits": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5",
+   "F7",
+   "F8"
+  ],
+  "breaks": 19,
+  "answers": 73,
+  "cost": 1.173,
+  "out_tok": 39465
+ }
+}
