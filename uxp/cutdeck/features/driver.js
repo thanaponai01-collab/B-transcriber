@@ -21,7 +21,7 @@
 const workflow = require("../workflow.js");
 const { applyNativeCut } = require("../timeline/nativeCut.js");
 const { buildSequence } = require("../timeline/buildSequence.js");
-const { activeProjectAndSequence, activeProject, sequencesNamed, sequenceWithContent, emptySequenceNamed, cloneSequence, runTransaction } = require("../host/project.js");
+const { activeProjectAndSequence, activeProject, sequencesNamed, sequenceWithContent, emptySequenceNamed, runTransaction, withFreshHandles, allSequences } = require("../host/project.js");
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 const { PROBES, runProbe } = require("./probes.js");
 const { controlHandlers } = require("../timeline/control.js");
@@ -144,22 +144,34 @@ function createDriver({ ppro, ctl, align = null, measure = null, queueWaitMs = 3
   async function duplicateSequence({ sequence_name: sequenceName, result_name: resultName, empty = false }) {
     const project = await activeProject(ppro);
     if ((await sequencesNamed(project, resultName)).length) throw new Error(`A sequence named "${resultName}" already exists.`);
-    const source = empty ? await emptySequenceNamed(project, sequenceName) : await sequenceWithContent(project, sequenceName);
-    const created = await cloneSequence(project, source, `CutDeck: copy ${sequenceName}`);
+    // Only the copy's own transaction re-runs on a stale handle: a retry that also re-read after the
+    // commit would copy twice and leave a stray copy of the source.
+    const before = new Set((await allSequences(project)).map((s) => String(s.guid)));
+    let sourceId;
+    await withFreshHandles(async () => {
+      const source = empty ? await emptySequenceNamed(project, sequenceName) : await sequenceWithContent(project, sequenceName);
+      sourceId = String(source.guid);
+      runTransaction(project, `CutDeck: copy ${sequenceName}`, (compound) => {
+        if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
+      });
+    });
+    const created = await withFreshHandles(async () => (await allSequences(project)).filter((s) => !before.has(String(s.guid))));
     if (created.length !== 1) throw new Error(`Copying "${sequenceName}" gave ${created.length} new sequences.`);
     const id = String(created[0].guid);
-    const item = await created[0].getProjectItem();
-    runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
-      if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+    await withFreshHandles(async () => {
+      const item = await ((await allSequences(project)).find((s) => String(s.guid) === id) || created[0]).getProjectItem();
+      runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
+        if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+      });
     });
-    const copy = (await project.getSequences()).find((s) => String(s.guid) === id);
+    const copy = (await allSequences(project)).find((s) => String(s.guid) === id);
     if (!copy || copy.name !== resultName) throw new Error(`The copy of "${sequenceName}" did not take the name "${resultName}".`);
     const videoTracks = await copy.getVideoTrackCount(), audioTracks = await copy.getAudioTrackCount();
     let videoClips = 0, audioClips = 0;
     for (let i = 0; i < videoTracks; i++) videoClips += (await getTrackClipItems(await copy.getVideoTrack(i), ppro)).length;
     for (let i = 0; i < audioTracks; i++) audioClips += (await getTrackClipItems(await copy.getAudioTrack(i), ppro)).length;
     const size = await copy.getFrameSize();
-    return { name: copy.name, sequence_id: id, source_id: String(source.guid), width: size.width, height: size.height,
+    return { name: copy.name, sequence_id: id, source_id: sourceId, width: size.width, height: size.height,
       video_tracks: videoTracks, audio_tracks: audioTracks, video_clips: videoClips, audio_clips: audioClips,
       end_ticks: toTicks(await copy.getEndTime()).toString() };
   }

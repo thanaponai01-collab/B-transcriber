@@ -69,6 +69,29 @@ test("select_clips replaces the selection and read_timeline shows it", async () 
   assert.deepEqual((await run.select_clips({ clips: [] })).selected, []);
 });
 
+// Live 2026-11-26: about a second after make_subsequence, one read of a track came back without its
+// clips, and select_clips refused "A1@…: no clip starts at" a clip that was there (paste_pieces soak).
+test("select_clips reads again when a track read comes back without its clips", async () => {
+  const { h, run } = setup();
+  const project = await h.ppro.Project.getActiveProject();
+  const seq = await project.getActiveSequence();
+  const getAudioTrack = seq.getAudioTrack.bind(seq);
+  let bad = 1;
+  seq.getAudioTrack = async (i) => {
+    const t = await getAudioTrack(i);
+    return Object.assign(Object.create(t), {
+      getTrackItems: (...a) => (bad-- > 0 ? [] : t.getTrackItems(...a)),
+    });
+  };
+  const out = await run.select_clips({ clips: ["V1@0", "A1@0"] });
+  assert.deepEqual(out.selected, ["V1@0", "A1@0"]);
+});
+
+test("select_clips still refuses a clip that is missing from every read", async () => {
+  const { run } = setup();
+  await assert.rejects(run.select_clips({ clips: ["A1@7"] }), /no clip starts at 7 ticks on that track, in 4 reads/);
+});
+
 test("set_playhead and set_in_out read back what they set", async () => {
   const { h, run } = setup();
   assert.equal((await run.set_playhead({ ticks: String(3n * S) })).playhead_ticks, String(3n * S));
@@ -267,6 +290,43 @@ test("make_subsequence cuts the range to a new named sequence and puts the sourc
   assert.deepEqual(h.sequence("Edit").marks, { in: S, out: 2n * S });
   assert.equal(h.sequence("Edit").video.length, 2);
   await assert.rejects(run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" }), /already exists/);
+});
+
+// Premiere is shared by sessions, and the subsequence may become active: the marks go back on the
+// source the command started from, never on whatever is active by then.
+test("make_subsequence with no sequence named puts the marks back on its source when the active sequence changed", async () => {
+  const { h, run } = setup();
+  await run.set_in_out({ in_ticks: String(S), out_ticks: String(2n * S) });
+  const all = h.project.getSequences.bind(h.project), active = h.project.getActiveSequence.bind(h.project);
+  h.project.getActiveSequence = async () => (await all()).find((s) => s.name === "Q1 (CutDeck piece)" || s.name.startsWith("Edit_Sub_")) || active();
+  await run.make_subsequence({ in_ticks: String(5n * S), out_ticks: String(15n * S), result_name: "Q1 (CutDeck piece)" });
+  assert.deepEqual(h.sequence("Edit").marks, { in: S, out: 2n * S });
+});
+
+// A stale throw on the read after the remove committed must not run the remove again and report
+// a piece it removed as not removed.
+test("remove_piece reports a removal when the read after it went stale", async () => {
+  const { h, run } = setup();
+  await run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" });
+  const all = h.project.getSequences.bind(h.project);
+  let thrown = false;
+  h.project.getSequences = async () => {
+    if (!thrown && h.undoSteps.includes("CutDeck: remove piece")) { thrown = true; throw new Error(fake.SCRIPT_OBJECT_INVALID); }
+    return all();
+  };
+  assert.deepEqual(await run.remove_piece({ name: "Q1 (CutDeck piece)" }), { removed: true });
+});
+
+test("make_subsequence and remove_piece fetch fresh handles when one was stale, and refuse when every one is", async () => {
+  const { h, run } = setup();
+  fake.staleHandles(h);
+  assert.equal((await run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" })).name, "Q1 (CutDeck piece)");
+  fake.staleHandles(h);
+  assert.deepEqual(await run.remove_piece({ name: "Q1 (CutDeck piece)" }), { removed: true });
+  const again = setup();
+  fake.staleHandles(again.h, { persistent: true });
+  await assert.rejects(again.run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q2 (CutDeck piece)" }), /no longer valid/);
+  assert.equal(again.h.sequence("Q2 (CutDeck piece)"), undefined);
 });
 
 test("remove_piece deletes only a CutDeck piece", async () => {

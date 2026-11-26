@@ -61,6 +61,24 @@ function runTransaction(project, label, build) {
   if (!ok) throw thrown || new Error(`Could not complete "${label}".`);
 }
 
+/* Live 2026-11-26 (PREMIERE_FACTS "Panel writes right after another command's commits"): a sequence
+   or bin fetched about 150 ms after build_sequence committed threw "The script object is no longer
+   valid." making its action. Nothing was committed, and a later fetch went through. `attempt` fetches
+   its own handles and runs one transaction; on that error alone it runs again, later each time. */
+const STALE_RETRIES = 3;
+async function withFreshHandles(attempt) {
+  for (let n = 1; ; n++) {
+    try {
+      return await attempt();
+    } catch (e) {
+      if (!/no longer valid/.test(String(e && e.message))) throw e;
+      if (n > STALE_RETRIES) throw new Error(`${e.message} (in ${n} fresh fetches; nothing was changed by this step)`);
+      console.log(`CutDeck: a handle went stale (${e.message}); fresh fetch ${n} of ${STALE_RETRIES}`);
+      await new Promise((resolve) => setTimeout(resolve, 250 * n));
+    }
+  }
+}
+
 // Finds (or creates once via transaction) a named child bin directly under `parent`.
 async function getOrCreateChildBin(project, parent, name) {
   const parentBin = asBinLike(parent);
@@ -127,9 +145,22 @@ async function activeProject(ppro) {
   return project;
 }
 
-// Every sequence whose name is exactly `name` (Project.getSequences :503, Sequence.name :612).
+/* Every sequence of the project (Project.getSequences :503). Live 2026-11-26 a read held a null
+   entry, as getTrackItems reads do (PREMIERE_FACTS "getTrackItems(...) null entries"): such a read is
+   read again, and the last read's nulls are dropped. */
+async function allSequences(project) {
+  let list = [];
+  for (let read = 1; read <= STALE_RETRIES + 1; read++) {
+    if (read > 1) await new Promise((resolve) => setTimeout(resolve, 250 * (read - 1)));
+    list = await project.getSequences();
+    if (!list.includes(null)) return list;
+  }
+  return list.filter(Boolean);
+}
+
+// Every sequence whose name is exactly `name` (Sequence.name :612).
 async function sequencesNamed(project, name) {
-  return (await project.getSequences()).filter((s) => s.name === name);
+  return (await allSequences(project)).filter((s) => s.name === name);
 }
 
 // The one sequence named `name`; with no name, the active sequence (Project.getActiveSequence :497).
@@ -177,11 +208,11 @@ async function projectAndSequenceNamed(ppro, name) {
 // every sequence that was not there before, found by guid (Sequence.guid :610): the clone action
 // hands back no handle to the copy. The caller decides how many copies it accepts.
 async function cloneSequence(project, source, label) {
-  const before = new Set((await project.getSequences()).map((s) => s.guid.toString()));
+  const before = new Set((await allSequences(project)).map((s) => s.guid.toString()));
   runTransaction(project, label, (compound) => {
     if (!compound.addAction(source.createCloneAction())) throw new Error("addAction(copy sequence) returned false");
   });
-  return (await project.getSequences()).filter((s) => !before.has(s.guid.toString()));
+  return (await allSequences(project)).filter((s) => !before.has(s.guid.toString()));
 }
 
 // Opens `sequence` in the Timeline panel and makes it the active one (Project.openSequence :513,
@@ -199,6 +230,8 @@ module.exports = {
   asBinLike,
   asBinLike,
   runTransaction,
+  withFreshHandles,
+  allSequences,
   getOrCreateBin,
   activeProjectAndSequence,
   activeProject,

@@ -303,6 +303,60 @@ test("close gaps: clips missing on every fresh read still stop the cut, saying h
   assert.equal(error.copyCreated, true);
 });
 
+/* Live 2026-11-25 (yt, LV GP Shorts): cut_copy stopped with "razor filler on audio track 0 is not
+   one frame long", yet the 22:28 auto-save holds that failed copy with all nine fillers exactly one
+   frame at park. So the read before the razor was short, the same short read as above, one step
+   earlier. Here every audio track reads empty (null entries) on its first `times` reads after the
+   filler trim and before the moves. */
+function shortReadAfterTrim(times) {
+  const bad = new Map(); // track -> the trackReads values that read short
+  return ({ kind, track, outPointCalls, moveCalls, trackReads }) => {
+    if (kind !== "audio" || outPointCalls === 0 || moveCalls > 0) return false;
+    const reads = bad.get(track) || new Set();
+    if (!reads.has(trackReads) && reads.size < times) reads.add(trackReads);
+    bad.set(track, reads);
+    return reads.has(trackReads);
+  };
+}
+
+test("razor: a short read right after the filler trim is retried and the cut is exact", async () => {
+  const h = fakeHost(golden.before, { nullClipRead: shortReadAfterTrim(1) });
+  await applyNativeCut(h.ppro, h.project, h.source, golden, "razor-read-once");
+  assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "razor-read-once")),
+    golden.after.map((x) => JSON.stringify(x)).sort());
+});
+
+test("razor: a filler missing from every read stops the cut, saying it is missing (not its length)", async () => {
+  const h = fakeHost(golden.before, { nullClipRead: shortReadAfterTrim(Infinity) });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "razor-missing").then(() => null, (e) => e);
+  assert.match(error.message, /razor filler on audio track \d+ is missing from 4 reads/);
+  assert.equal(error.copyCreated, true);
+});
+
+/* The same live failure, read the other way: the read after the trim still shows a filler's old
+   length. Here audio clips read 5 frames long on the first `times` track reads after the trim. */
+function staleLengthAfterTrim(times) {
+  let first = null;
+  return ({ kind, outPointCalls, moveCalls, trackReads }) => {
+    if (kind !== "audio" || outPointCalls === 0 || moveCalls > 0) return 0n;
+    if (first === null) first = trackReads;
+    return trackReads - first < times ? 5n * BigInt(golden.ticks_per_frame) : 0n;
+  };
+}
+
+test("razor: a read showing a filler's old length right after the trim is retried and the cut is exact", async () => {
+  const h = fakeHost(golden.before, { staleEndRead: staleLengthAfterTrim(1) });
+  await applyNativeCut(h.ppro, h.project, h.source, golden, "razor-stale-length");
+  assert.deepEqual(h.rowsOf(h.sequences.find((s) => s.name === "razor-stale-length")),
+    golden.after.map((x) => JSON.stringify(x)).sort());
+});
+
+test("razor: a filler the wrong length in every read stops the cut, saying its length", async () => {
+  const h = fakeHost(golden.before, { staleEndRead: staleLengthAfterTrim(Infinity) });
+  const error = await applyNativeCut(h.ppro, h.project, h.source, golden, "razor-long").then(() => null, (e) => e);
+  assert.match(error.message, /razor filler on audio track \d+ is \d+ ticks long in 4 reads, not one frame/);
+});
+
 /* Live 2026-10-27: close gaps committed all 8,589 moves, then the read-back was short 370 clips
    ("missing" on audio track 2). Same short read as above, one step later: retried the same way. */
 test("read-back: a read missing clips is retried and the cut passes", async () => {

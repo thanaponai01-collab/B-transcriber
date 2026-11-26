@@ -35,7 +35,7 @@
    removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
    values (host/components.js). */
 
-const { runTransaction, asBinLike, activeProject, sequenceNamed, sequenceWithContent, projectAndSequenceNamed, openAndActivate, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, sequenceWithContent, projectAndSequenceNamed, openAndActivate, withFreshHandles, allSequences, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
@@ -59,14 +59,20 @@ const ticksOf = (t) => toTicks(t).toString();
 const track = (seq, kind, index) => (kind === "video" ? seq.getVideoTrack(index) : seq.getAudioTrack(index));
 const trackCount = (seq, kind) => (kind === "video" ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
 
-// The track item an id names, read fresh (references go stale across transactions).
+// The track item an id names, read fresh (references go stale across transactions). Right after a
+// structural edit a track read can come back without its clips (PREMIERE_FACTS "short read after
+// the filler trim"; live 2026-11-26 a second after make_subsequence), so a miss is read again.
+const CLIP_READS = 4;
 async function findClip(ppro, seq, id) {
   const ref = parseClipId(id);
   if (ref.track >= await trackCount(seq, ref.kind)) throw new Error(`${id}: the sequence has no track ${String(id).split("@")[0]}.`);
-  for (const item of await getTrackClipItems(await track(seq, ref.kind, ref.track), ppro)) {
-    if (ticksOf(await item.getStartTime()) === ref.start) return { ...ref, id: String(id), item };
+  for (let read = 1; read <= CLIP_READS; read++) {
+    if (read > 1) await new Promise((resolve) => setTimeout(resolve, 250 * (read - 1)));
+    for (const item of await getTrackClipItems(await track(seq, ref.kind, ref.track), ppro)) {
+      if (ticksOf(await item.getStartTime()) === ref.start) return { ...ref, id: String(id), item };
+    }
   }
-  throw new Error(`${id}: no clip starts at ${ref.start} ticks on that track.`);
+  throw new Error(`${id}: no clip starts at ${ref.start} ticks on that track, in ${CLIP_READS} reads.`);
 }
 
 // A MOGRT text control's start value is a MogrtText (premierepro.txt MogrtText.getText, 27.0;
@@ -179,7 +185,7 @@ async function binItems(item) {
 async function listProject(ppro, { depth = 8 } = {}) {
   const project = await activeProject(ppro);
   const active = await project.getActiveSequence();
-  const sequences = (await project.getSequences()).map((s) => ({ name: s.name, sequence_id: String(s.guid),
+  const sequences = (await allSequences(project)).map((s) => ({ name: s.name, sequence_id: String(s.guid),
     active: !!active && String(active.guid) === String(s.guid) }));
   const walk = async (children, level) => {
     const items = [];
@@ -256,29 +262,44 @@ async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null,
    step), then the source's own marks are put back and the new sequence renamed through its project
    item (ProjectItem.createSetNameAction: WORKS). The source's clips are not edited. */
 async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks, out_ticks: outTicks, result_name: resultName = null }) {
-  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
-  if (resultName && (await project.getSequences()).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
+  let { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  // Fresh handles are found by guid (Sequence.guid :610): with no name, a fetch by name takes
+  // whatever is active by then.
+  const sourceId = String(sequence.guid);
+  const fresh = async () => {
+    project = await activeProject(ppro);
+    sequence = (await allSequences(project)).find((s) => String(s.guid) === sourceId) || sequence;
+  };
+  if (resultName && (await allSequences(project)).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
   const oldIn = ticksOf(await sequence.getInPoint()), oldOut = ticksOf(await sequence.getOutPoint());
   const marks = (a, b, label) => runTransaction(project, label, (compound) => {
     if (!compound.addAction(sequence.createSetInPointAction(tick(ppro, a)))) throw new Error("addAction(In) returned false");
     if (!compound.addAction(sequence.createSetOutPointAction(tick(ppro, b)))) throw new Error("addAction(Out) returned false");
   });
-  marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
+  await withFreshHandles(async () => {
+    await fresh();
+    marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
+  });
   let sub;
   try {
     sub = await sequence.createSubsequence(true);
   } finally {
-    marks(oldIn, oldOut, "CutDeck: put the marks back");
-  }
-  if (!sub) throw new Error(`createSubsequence returned nothing for "${sequence.name}".`);
-  if (resultName) {
-    const item = await sub.getProjectItem();
-    runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
-      if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+    await withFreshHandles(async () => {
+      await fresh();
+      marks(oldIn, oldOut, "CutDeck: put the marks back");
     });
   }
+  if (!sub) throw new Error(`createSubsequence returned nothing for "${sequence.name}".`);
   const id = String(sub.guid);
-  const made = (await project.getSequences()).find((s) => String(s.guid) === id) || sub;
+  if (resultName) {
+    await withFreshHandles(async () => {
+      const item = await ((await allSequences(project)).find((s) => String(s.guid) === id) || sub).getProjectItem();
+      runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
+        if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+      });
+    });
+  }
+  const made = (await allSequences(project)).find((s) => String(s.guid) === id) || sub;
   let clips = 0;
   for (let i = 0; i < await made.getVideoTrackCount(); i++) clips += (await getTrackClipItems(await made.getVideoTrack(i), ppro)).length;
   for (let i = 0; i < await made.getAudioTrackCount(); i++) clips += (await getTrackClipItems(await made.getAudioTrack(i), ppro)).length;
@@ -291,17 +312,21 @@ async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks,
 const PIECE_SUFFIX = " (CutDeck piece)";
 async function removePiece(ppro, { name }) {
   if (!String(name).endsWith(PIECE_SUFFIX)) throw new Error(`"${name}" is not a CutDeck piece; nothing removed`);
-  const project = await activeProject(ppro);
-  const found = (await project.getSequences()).filter((s) => s.name === name);
-  if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
-  const active = await project.getActiveSequence();
-  if (active && String(active.guid) === String(found[0].guid)) throw new Error(`"${name}" is the active sequence; nothing removed`);
-  const item = await found[0].getProjectItem();
-  const bin = item.getParentBin();
-  runTransaction(project, "CutDeck: remove piece", (compound) => {
-    if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
+  // Only the remove itself re-runs on a stale handle; the read after it retries on its own, so a
+  // stale read never runs the remove again.
+  await withFreshHandles(async () => {
+    const project = await activeProject(ppro);
+    const found = (await allSequences(project)).filter((s) => s.name === name);
+    if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
+    const active = await project.getActiveSequence();
+    if (active && String(active.guid) === String(found[0].guid)) throw new Error(`"${name}" is the active sequence; nothing removed`);
+    const item = await found[0].getProjectItem();
+    const bin = item.getParentBin();
+    runTransaction(project, "CutDeck: remove piece", (compound) => {
+      if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
+    });
   });
-  return { removed: !(await project.getSequences()).some((s) => s.name === name) };
+  return withFreshHandles(async () => ({ removed: !(await allSequences(await activeProject(ppro))).some((s) => s.name === name) }));
 }
 
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */
@@ -604,6 +629,14 @@ async function importSequences(ppro, { path, sequence_ids }) {
   return { imported, sequences };
 }
 
+/* create_project: a new empty project at `path` (Project.createProject, premierepro.txt:490, static),
+   for a scratch project the user asked for. Says which project is active afterwards. */
+async function createProject(ppro, { path }) {
+  const created = await ppro.Project.createProject(path);
+  const active = await ppro.Project.getActiveProject();
+  return { created: !!created, path: created ? created.path : null, active: active ? active.path : null };
+}
+
 async function saveProject(ppro) {
   const project = await activeProject(ppro);
   return { saved: await project.save(), path: project.path };
@@ -662,6 +695,7 @@ function controlHandlers(ppro) {
     import_files: (args) => importFiles(ppro, args),
     import_sequences: (args) => importSequences(ppro, args),
     save_project: () => saveProject(ppro),
+    create_project: (args) => createProject(ppro, args),
     export_frame: (args) => exportFrame(ppro, args),
   };
 }

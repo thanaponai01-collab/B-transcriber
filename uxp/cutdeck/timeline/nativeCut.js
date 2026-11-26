@@ -232,13 +232,23 @@ async function applyPlan(ppro, project, copy, items, cuts, tpf, timed = (_, fn) 
   const cutAt = [];
   for (const [key, at] of edges) for (const p of at) cutAt.push([key, p]);
   seq = null;
+  // Live 2026-11-25: the read right after the filler trim was wrong on audio track 0 (the saved
+  // copy held every filler one frame long at park), so a filler missing from a read, or read at
+  // another length, is read again, as close gaps and the read-back do.
+  const badFiller = (s) => [...sourceOf.keys()].find((key) => { const f = fillerIn(s, key); return !f || f.end - f.start !== tpf; });
   for (let from = 0; from < cutAt.length;) {
     seq = await read({ inPoint: false });
+    for (let attempt = 1; attempt <= STALE_READ_RETRIES && badFiller(seq); attempt++) {
+      console.log(`CutDeck split at cut edges: razor filler on ${badFiller(seq).replace("|", " track ")} missing or not one frame in the read; fresh read ${attempt} of ${STALE_READ_RETRIES}`);
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      seq = await read({ inPoint: false });
+    }
     const fillers = new Map();
     const razor = cutAt.slice(from, from + SPLIT_BATCH).map(([key, p]) => {
       if (!fillers.has(key)) {
         const f = fillerIn(seq, key);
-        if (!f || f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is not one frame long`);
+        if (!f) throw new Error(`razor filler on ${key.replace("|", " track ")} is missing from ${STALE_READ_RETRIES + 1} reads`);
+        if (f.end - f.start !== tpf) throw new Error(`razor filler on ${key.replace("|", " track ")} is ${f.end - f.start} ticks long in ${STALE_READ_RETRIES + 1} reads, not one frame (${tpf})`);
         if (f.start % tpf !== 0n) throw new Error(`razor filler on ${key.replace("|", " track ")} sits ${f.start % tpf} ticks off a frame after aligning`);
         fillers.set(key, f);
       }
