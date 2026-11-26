@@ -7,7 +7,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # HKS paper edit: rules and do-confirm
 
-The 51 active `paper_edit` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
+The 52 active `paper_edit` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
 
 - **HKS-1** **One length, any story.** 17-20 min whatever the broadcast length; the budget decides how hard each episode is cut. Weakened: compilations differ (14:38-15:12).
 - **HKS-2** **The hook is a promise the body plays out.** 18-27 s; its lines come back in the body. Which lines the user picks is the least predictable part. 1109: 13 of 14 hook pieces play again in the body. Weakened: a 17.3 s hook on EP.162.
@@ -58,6 +58,7 @@ The 51 active `paper_edit` rules in [the registry](../../../projects/hks/registr
 - **HKS-X90** Give a taste of the event itself (the clip, its sound) before the people talk about it. If the broadcast plays footage of the incident, the body uses it where the story reaches that moment.
 - **HKS-X91** Story order, not the broadcast's order. Each story part answers "what happens next?" for someone who has never seen the case. Cut the back-and-forth and the repeats, but keep the set-up.
 - **HKS-X98** **Set-up is not backstory.** I read "get in fast" and "drop backstory" as "cut the context". The where and the incident clip are set-up, not backstory.
+- **HKS-X109** ****Tighten first, drop story last.**.** Meet the length by tightening before dropping any story passage; drop a passage only when the tightened cut is still long, and say what fact it loses. On 20261126 the agent dropped 7 passages (3.6 min) for the 20-min line; the user kept three of them (the ธรรมนัส clause, คุณกิ๊ก's own donation, the face-scan case) and made the time from 360 s of pauses and filler. Confirmed by the user 2026-11-26 ("Yes, confirm both").
 - **M-1** **Learn the why, not presets.** Every observed choice is recorded as the intent behind it (viewer effect, constraint, story role). Values (109%, -12 dB, Posterize 0.2) are today's example, not a setting to replay.
 - **M-4** Each point is told once (confirmed in both projects); HKS cut rule 2 holds the user's words.
 
@@ -110,5 +111,6 @@ Each question needs a written answer in the handover, keyed by its rule id.
 43. **HKS-X90** Where does the incident footage play, before the talk about it and where the story reaches it?
 44. **HKS-X91** What question does each story part answer next, in order?
 45. **HKS-X98** Which set-up (the where, the incident clip) is kept, separate from the backstory dropped?
-46. **M-1** Which values in the build were measured for this episode rather than reused from an earlier one?
-47. **M-4** Is any point told twice in the cut (timecodes)?
+46. **HKS-X109** How many seconds did tightening take out, and which story passages were still dropped for length (source timecodes, the fact each loses)?
+47. **M-1** Which values in the build were measured for this episode rather than reused from an earlier one?
+48. **M-4** Is any point told twice in the cut (timecodes)?

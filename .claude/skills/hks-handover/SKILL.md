@@ -7,7 +7,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # HKS handover: rules and do-confirm
 
-The 28 active `handover` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
+The 29 active `handover` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
 
 - **HKS-C13** **Every promise is kept.** Whatever the hook, a headline card or the host raises is answered in the cut, or left open on purpose. Why: an unanswered question reads as a mistake.
 - **HKS-C14** **The middle is re-hooked.** No stretch of about 3-4 min without a new picture, a host question or a turn. A turn said aloud counts; one picture held a long time is fine. Why: that is where viewers drop off.
@@ -34,6 +34,7 @@ The 28 active `handover` rules in [the registry](../../../projects/hks/registry/
 - **HKS-X102** Test a check on the user's finished cut before trusting it (agent, HKS 2026-11-25; guess). A check is kept if it separates the user's cut from the agent's; otherwise it's a list to look at, and the handover says so.
 - **HKS-X103** **Late draft policy: label.** A failed control may reach the user only if the handover opens with its id and value (late_draft_policy "label", decided by the user 2026-11-25).
 - **HKS-X104** **Override policy.** Agent or user may override a gate, each with a written reason (--override GATE="reason" --by <who>); every override is a line in overrides.jsonl and must be named in the handover (decided by the user 2026-11-25).
+- **HKS-X107** ****Check the length before handover; cut what the story can lose.**.** Check the long form's length before handover: over 20 min, cut the pieces least worth it in the story (asides, a point told twice, feelings that move nothing) until it is in 17-20 min. On 20261126 I handed over v1 at 23.2 min, and the user said: "check the length again. It's above 20 minutes. So cut something that you think is not worth in the story".
 - **M-2** **The user exports.** The agent never runs an export or queues Media Encoder unless asked. For HKS the user asked for `python -m cutdeck.honekasae_export` to queue and start the export (guess: the rule is "no export unless the user asks"); on 2026-11-24 and 2026-11-25 the agent exported only when asked, and only what had changed.
 - **M-5** **Check the frame before handing over.** For every piece, look at what the frame actually shows (a reframed 16:9 source loses its edges). A cut that's right on time can still show nothing. (Confirmed on 1RaceClub; applying it beyond Shorts is a guess.)
 - **M-6** **A correction isn't learned until it's a gate.** Every correction from the user goes three places the same day: memory (what happened, with numbers), principle (the why), gate (how it's checked before handover: a script if countable, a reviewer question if judgment, a first step if order). A failed gate is never handed over quietly: the handover opens with it. Time pressure is not a reason to skip a gate.
@@ -64,14 +65,15 @@ Each question needs a written answer in the handover, keyed by its rule id.
 20. **HKS-X102** For each check relied on, what did it give on the user's finished cut?
 21. **HKS-X103** Which controls failed, and does the handover open with each id and value?
 22. **HKS-X104** Which gates were overridden, by whom and why, and are they named in the handover?
-23. **M-2** Did the user ask for an export, and was only what changed exported?
-24. **M-5** Which rendered frames were looked at for each reframed piece?
-25. **M-6** For each correction this session, where are its memory, principle and gate entries?
+23. **HKS-X107** How long is the body, and which pieces were cut to bring it into 17-20 min (source timecodes, why each)?
+24. **M-2** Did the user ask for an export, and was only what changed exported?
+25. **M-5** Which rendered frames were looked at for each reframed piece?
+26. **M-6** For each correction this session, where are its memory, principle and gate entries?
 
 ## Sending the answers
 
 Send every answer to the helper's `premiere_hks_handover` tool as `{rule_id: answer}`, one written answer per active do-confirm rule. That is the list above plus the lists in the other stage skills:
 
 - `hks-day-setup`: HKS-16, HKS-C31, HKS-X13, HKS-X14, HKS-X69, HKS-X73, HKS-X74, HKS-X76, HKS-X77, HKS-X78, HKS-X79, HKS-X88, HKS-X105
-- `hks-paper-edit`: HKS-1, HKS-2, HKS-3, HKS-5, HKS-10, HKS-11, HKS-13, HKS-14, HKS-18, HKS-19, HKS-22, HKS-24, HKS-25, HKS-26, HKS-C4, HKS-C5, HKS-C6, HKS-C7, HKS-C8, HKS-C11, HKS-C12, HKS-C15, HKS-C16, HKS-C21, HKS-C22, HKS-C23, HKS-C24, HKS-C27, HKS-R1, HKS-R2, HKS-R3, HKS-R4, HKS-X1, HKS-X5, HKS-X7, HKS-X15, HKS-X25, HKS-X26, HKS-X39, HKS-X71, HKS-X80, HKS-X89, HKS-X90, HKS-X91, HKS-X98, M-1, M-4
-- `hks-build`: HKS-7, HKS-17, HKS-20, HKS-32, HKS-C1, HKS-C2, HKS-C3, HKS-C9, HKS-C10, HKS-C17, HKS-C20, HKS-C25, HKS-C26, HKS-C28, HKS-C29, HKS-C30, HKS-R5, HKS-R6, HKS-R7, HKS-X2, HKS-X3, HKS-X4, HKS-X6, HKS-X9, HKS-X10, HKS-X11, HKS-X16, HKS-X17, HKS-X23, HKS-X24, HKS-X27, HKS-X28, HKS-X29, HKS-X30, HKS-X31, HKS-X33, HKS-X34, HKS-X35, HKS-X36, HKS-X40, HKS-X41, HKS-X42, HKS-X43, HKS-X44, HKS-X45, HKS-X46, HKS-X47, HKS-X48, HKS-X49, HKS-X50, HKS-X51, HKS-X52, HKS-X53, HKS-X54, HKS-X55, HKS-X56, HKS-X57, HKS-X58, HKS-X59, HKS-X60, HKS-X61, HKS-X62, HKS-X64, HKS-X68, HKS-X72, HKS-X81, HKS-X95, HKS-X96, HKS-X101, M-3
+- `hks-paper-edit`: HKS-1, HKS-2, HKS-3, HKS-5, HKS-10, HKS-11, HKS-13, HKS-14, HKS-18, HKS-19, HKS-22, HKS-24, HKS-25, HKS-26, HKS-C4, HKS-C5, HKS-C6, HKS-C7, HKS-C8, HKS-C11, HKS-C12, HKS-C15, HKS-C16, HKS-C21, HKS-C22, HKS-C23, HKS-C24, HKS-C27, HKS-R1, HKS-R2, HKS-R3, HKS-R4, HKS-X1, HKS-X5, HKS-X7, HKS-X15, HKS-X25, HKS-X26, HKS-X39, HKS-X71, HKS-X80, HKS-X89, HKS-X90, HKS-X91, HKS-X98, HKS-X109, M-1, M-4
+- `hks-build`: HKS-7, HKS-17, HKS-20, HKS-32, HKS-C1, HKS-C2, HKS-C3, HKS-C9, HKS-C10, HKS-C17, HKS-C20, HKS-C25, HKS-C26, HKS-C28, HKS-C29, HKS-C30, HKS-R5, HKS-R6, HKS-R7, HKS-X2, HKS-X3, HKS-X4, HKS-X6, HKS-X9, HKS-X10, HKS-X11, HKS-X16, HKS-X17, HKS-X23, HKS-X24, HKS-X27, HKS-X28, HKS-X29, HKS-X30, HKS-X31, HKS-X33, HKS-X34, HKS-X35, HKS-X36, HKS-X40, HKS-X41, HKS-X42, HKS-X43, HKS-X44, HKS-X45, HKS-X46, HKS-X47, HKS-X48, HKS-X49, HKS-X50, HKS-X51, HKS-X52, HKS-X53, HKS-X54, HKS-X55, HKS-X56, HKS-X57, HKS-X58, HKS-X59, HKS-X60, HKS-X61, HKS-X62, HKS-X64, HKS-X68, HKS-X72, HKS-X81, HKS-X95, HKS-X96, HKS-X101, HKS-X106, HKS-X108, M-3

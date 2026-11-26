@@ -13,3 +13,4 @@ One line per memory file: `- [Title](file.md) — hook`. Format and upkeep: [pro
 - [YT 20261124 draft](yt-20261124-draft.md) — film-promo episode: drafts v1–v4, highlight, FB, 1-min, what the user changed after each build, and v4 vs D1 edges + split edits
 - [YT 20261125 draft](yt-20261125-draft.md) — neighbour-attack day: setup, Backup zooms, agent v1 route, the user's verdict + diff (374 s cut, 189 s set-up added), why the agent broke the rules, D1/D2 exports
 - [Overnight study 2026-11-23](overnight-study-2026-11-23.md) — 9 YT cuts + EP.167 studied; HKS-1..10 candidates; holdout test; v6 draft; blockers
+- [YT 20261126 draft](yt-20261126-draft.md) — คุณกัน at DSI: day setup, paper edit + cold read, v1 route, wrong same-named copy, Backup 1920x1080 correction, clock blur, diff vs the user's D1 (176 word-level cuts, length by tightening)
