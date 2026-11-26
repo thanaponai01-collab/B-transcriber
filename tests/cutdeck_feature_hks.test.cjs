@@ -217,3 +217,10 @@ test("before the first reply and after a failed one the section says so", () => 
   assert.equal(failed.get("hks-note").hidden, false);
   assert.equal(failed.rows.length, REPLY.sequences.length);
 });
+
+test("a long list of missing answers shows its count and the first eight ids", () => {
+  const ids = Array.from({ length: 154 }, (_, i) => `HKS-X${i + 1}`);
+  const { rows } = renderHks({ project: "p", error: null, sequences: [
+    { guid: "g", name: "Draft", status: "fail", failed: [], answers_missing: ids, overrides: {}, new: true }] });
+  assert.equal(rows[0].lines[0], "154 answers missing: HKS-X1, HKS-X2, HKS-X3, HKS-X4, HKS-X5, HKS-X6, HKS-X7, HKS-X8, …");
+});

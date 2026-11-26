@@ -263,7 +263,10 @@
     (row.failed || []).forEach((f) => lines.push(`${f.gate} ${hksValue(f.value)} vs ${hksValue(f.line)}`));
     (row.warned || []).forEach((w) => lines.push(`warning ${w.gate}: ${(w.items || []).map(hksValue).join("; ") || hksValue(w.value)}`));
     const missing = (row.answers_missing || []).length;
-    if (missing) lines.push(`${missing} answers missing: ${row.answers_missing.join(", ")}`);
+    if (missing) {
+      const shown = row.answers_missing.slice(0, 8).join(", ");
+      lines.push(`${missing} answers missing: ${shown}${missing > 8 ? ", …" : ""}`);
+    }
     const overrides = Object.keys(row.overrides || {});
     if (overrides.length) lines.push(`${overrides.length} overridden: ${overrides.join(", ")}`);
     if (row.why) lines.push(row.why);
