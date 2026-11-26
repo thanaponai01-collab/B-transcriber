@@ -59,14 +59,20 @@ const ticksOf = (t) => toTicks(t).toString();
 const track = (seq, kind, index) => (kind === "video" ? seq.getVideoTrack(index) : seq.getAudioTrack(index));
 const trackCount = (seq, kind) => (kind === "video" ? seq.getVideoTrackCount() : seq.getAudioTrackCount());
 
-// The track item an id names, read fresh (references go stale across transactions).
+// The track item an id names, read fresh (references go stale across transactions). Right after a
+// structural edit a track read can come back without its clips (PREMIERE_FACTS "short read after
+// the filler trim"; live 2026-11-26 a second after make_subsequence), so a miss is read again.
+const CLIP_READS = 4;
 async function findClip(ppro, seq, id) {
   const ref = parseClipId(id);
   if (ref.track >= await trackCount(seq, ref.kind)) throw new Error(`${id}: the sequence has no track ${String(id).split("@")[0]}.`);
-  for (const item of await getTrackClipItems(await track(seq, ref.kind, ref.track), ppro)) {
-    if (ticksOf(await item.getStartTime()) === ref.start) return { ...ref, id: String(id), item };
+  for (let read = 1; read <= CLIP_READS; read++) {
+    if (read > 1) await new Promise((resolve) => setTimeout(resolve, 250 * (read - 1)));
+    for (const item of await getTrackClipItems(await track(seq, ref.kind, ref.track), ppro)) {
+      if (ticksOf(await item.getStartTime()) === ref.start) return { ...ref, id: String(id), item };
+    }
   }
-  throw new Error(`${id}: no clip starts at ${ref.start} ticks on that track.`);
+  throw new Error(`${id}: no clip starts at ${ref.start} ticks on that track, in ${CLIP_READS} reads.`);
 }
 
 // A MOGRT text control's start value is a MogrtText (premierepro.txt MogrtText.getText, 27.0;

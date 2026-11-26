@@ -1581,8 +1581,20 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
         if pasted["missing"] or pasted["left_at_park"]:
             raise ValueError(f"the paste into {name!r} did not land: missing {pasted['missing'][:5]}, "
                              f"left at the park {pasted['left_at_park'][:5]}")
+    except Exception as exc:
+        if template:
+            raise ValueError(f"{exc} ({name!r} was made from the template and is only partly built: "
+                             "delete it before running again)") from exc
+        raise
     finally:
-        for temp in temps:
+        # Premiere won't remove the active sequence, and a failed paste leaves a piece active.
+        try:
+            await premiere("open_sequence", {"sequence": parent})
+            made = [s["name"] for s in (await premiere("list_project", {"depth": 1}))["sequences"]
+                    if s["name"].startswith(f"{name} ") and s["name"].endswith(PIECE_SUFFIX)]
+        except Exception:  # noqa: BLE001 - the build's own error is the one to report
+            made = []
+        for temp in dict.fromkeys(temps + made):
             try:
                 await premiere("remove_piece", {"name": temp})
             except Exception:  # noqa: BLE001 - the build's own error is the one to report

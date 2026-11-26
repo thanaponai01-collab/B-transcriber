@@ -301,6 +301,7 @@ class _PasteHost:
                      "YT": [("V", 1, 0, 10 * self.S), ("A", 1, 0, 10 * self.S)]}
         self.land_v, self.clipboard, self.playhead, self.calls = land_v, None, {}, []
         self.transactions = 0
+        self.active, self.fail_paste = None, False
 
     def timeline(self, name):
         tracks = {}
@@ -322,8 +323,11 @@ class _PasteHost:
         elif command == "set_playhead":
             self.playhead[args["sequence"]] = int(args["ticks"])
         elif command == "menu_command" and args["path"] == "Edit > Copy":
-            self.clipboard = list(self.seqs[args["sequence"]])
+            self.clipboard, self.active = list(self.seqs[args["sequence"]]), args["sequence"]
         elif command == "menu_command" and args["path"] == "Edit > Paste":
+            if self.fail_paste:
+                raise ValueError("A1@0: no clip starts at 0 ticks on that track, in 4 reads.")
+            self.active = args["sequence"]  # Paste happens in the focused target
             at = self.playhead[args["sequence"]] - min(s for _, _, s, _ in self.clipboard)  # earliest clip at the playhead
             self.seqs[args["sequence"]] += [(k, n + (self.land_v if k == "V" else 0), s + at, e + at) for k, n, s, e in self.clipboard]
         elif command == "list_project":
@@ -354,7 +358,11 @@ class _PasteHost:
                         out.append((k, n, lo - gone(lo), hi - gone(lo)))
             self.seqs[args["result_name"]] = out
         elif command == "remove_piece":
+            if args["name"] == self.active:
+                raise ValueError(f"{args['name']!r} is the active sequence; nothing removed")
             del self.seqs[args["name"]]
+        elif command == "open_sequence":
+            self.active = args["sequence"]
         elif command == "duplicate_sequence":
             self.seqs[args["result_name"]] = list(self.seqs[args["sequence_name"]])
         return {}
@@ -562,6 +570,20 @@ def test_paste_pieces_without_a_template_pastes_into_the_existing_target_in_plac
     assert ("V", 1, 0, 4 * S) in draft and ("V", 3, 30 * S, 32 * S) in draft  # what was there stays
     assert ("V", 2, 10 * S, 11 * S) in draft and ("A", 1, 11 * S, 12 * S) in draft  # both pieces, in play order
     assert set(host.seqs) == before  # no new sequence, every temporary removed
+
+
+def test_a_failed_paste_pieces_removes_its_temporaries_and_names_the_half_built_target():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_paste = True
+    before = set(host.seqs)
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "no clip starts at" in str(e) and "'Short' was made from the template" in str(e)
+    else:
+        raise AssertionError("a failed paste reported success")
+    assert set(host.seqs) - before == {"Short"}  # every temporary removed, even the active one
 
 
 def test_paste_pieces_without_a_template_needs_an_existing_target():

@@ -69,6 +69,29 @@ test("select_clips replaces the selection and read_timeline shows it", async () 
   assert.deepEqual((await run.select_clips({ clips: [] })).selected, []);
 });
 
+// Live 2026-11-26: about a second after make_subsequence, one read of a track came back without its
+// clips, and select_clips refused "A1@…: no clip starts at" a clip that was there (paste_pieces soak).
+test("select_clips reads again when a track read comes back without its clips", async () => {
+  const { h, run } = setup();
+  const project = await h.ppro.Project.getActiveProject();
+  const seq = await project.getActiveSequence();
+  const getAudioTrack = seq.getAudioTrack.bind(seq);
+  let bad = 1;
+  seq.getAudioTrack = async (i) => {
+    const t = await getAudioTrack(i);
+    return Object.assign(Object.create(t), {
+      getTrackItems: (...a) => (bad-- > 0 ? [] : t.getTrackItems(...a)),
+    });
+  };
+  const out = await run.select_clips({ clips: ["V1@0", "A1@0"] });
+  assert.deepEqual(out.selected, ["V1@0", "A1@0"]);
+});
+
+test("select_clips still refuses a clip that is missing from every read", async () => {
+  const { run } = setup();
+  await assert.rejects(run.select_clips({ clips: ["A1@7"] }), /no clip starts at 7 ticks on that track, in 4 reads/);
+});
+
 test("set_playhead and set_in_out read back what they set", async () => {
   const { h, run } = setup();
   assert.equal((await run.set_playhead({ ticks: String(3n * S) })).playhead_ticks, String(3n * S));
