@@ -407,6 +407,22 @@ test("duplicate_sequence reads the sequences again past a null entry and leaves 
   assert.deepEqual((await h.project.getSequences()).map((s) => s.name).filter((n) => n.endsWith(" Copy")), []);
 });
 
+// A stale throw on the read after the copy committed must not copy again: a stray copy of the
+// template would make the next lookup of it ambiguous.
+test("duplicate_sequence makes one copy when the read after the copy went stale", async () => {
+  const h = dayHost();
+  const all = h.project.getSequences.bind(h.project);
+  let thrown = false;
+  h.project.getSequences = async () => {
+    if (!thrown && h.undoSteps.includes("CutDeck: copy 2 FACEBOOK D1")) { thrown = true; throw new Error(fake.SCRIPT_OBJECT_INVALID); }
+    return all();
+  };
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "duplicate_sequence", args: { sequence_name: "2 FACEBOOK D1", result_name: "FB copy" } });
+  assert.equal(out.name, "FB copy");
+  assert.deepEqual(h.undoSteps, ["CutDeck: copy 2 FACEBOOK D1", "CutDeck: name FB copy"]);
+});
+
 test("duplicate_sequence with empty copies the template's blank sequence, not the user's", async () => {
   const h = dayHost();
   const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({

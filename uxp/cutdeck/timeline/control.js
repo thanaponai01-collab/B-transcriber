@@ -263,6 +263,13 @@ async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null,
    item (ProjectItem.createSetNameAction: WORKS). The source's clips are not edited. */
 async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks, out_ticks: outTicks, result_name: resultName = null }) {
   let { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  // Fresh handles are found by guid (Sequence.guid :610): with no name, a fetch by name takes
+  // whatever is active by then.
+  const sourceId = String(sequence.guid);
+  const fresh = async () => {
+    project = await activeProject(ppro);
+    sequence = (await allSequences(project)).find((s) => String(s.guid) === sourceId) || sequence;
+  };
   if (resultName && (await allSequences(project)).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
   const oldIn = ticksOf(await sequence.getInPoint()), oldOut = ticksOf(await sequence.getOutPoint());
   const marks = (a, b, label) => runTransaction(project, label, (compound) => {
@@ -270,7 +277,7 @@ async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks,
     if (!compound.addAction(sequence.createSetOutPointAction(tick(ppro, b)))) throw new Error("addAction(Out) returned false");
   });
   await withFreshHandles(async () => {
-    ({ project, sequence } = await projectAndSequenceNamed(ppro, name));
+    await fresh();
     marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
   });
   let sub;
@@ -278,7 +285,7 @@ async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks,
     sub = await sequence.createSubsequence(true);
   } finally {
     await withFreshHandles(async () => {
-      ({ project, sequence } = await projectAndSequenceNamed(ppro, name));
+      await fresh();
       marks(oldIn, oldOut, "CutDeck: put the marks back");
     });
   }
@@ -305,7 +312,9 @@ async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks,
 const PIECE_SUFFIX = " (CutDeck piece)";
 async function removePiece(ppro, { name }) {
   if (!String(name).endsWith(PIECE_SUFFIX)) throw new Error(`"${name}" is not a CutDeck piece; nothing removed`);
-  return withFreshHandles(async () => {
+  // Only the remove itself re-runs on a stale handle; the read after it retries on its own, so a
+  // stale read never runs the remove again.
+  await withFreshHandles(async () => {
     const project = await activeProject(ppro);
     const found = (await allSequences(project)).filter((s) => s.name === name);
     if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
@@ -316,8 +325,8 @@ async function removePiece(ppro, { name }) {
     runTransaction(project, "CutDeck: remove piece", (compound) => {
       if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
     });
-    return { removed: !(await allSequences(project)).some((s) => s.name === name) };
   });
+  return withFreshHandles(async () => ({ removed: !(await allSequences(await activeProject(ppro))).some((s) => s.name === name) }));
 }
 
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */
