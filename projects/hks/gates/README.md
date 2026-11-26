@@ -22,25 +22,20 @@ earlier as "each mistake has a gate". The transcripts show why
 
 ## How the gates run
 
-- `python -m cutdeck.hks_handover --prproj <day>.prproj --sequence "<draft>" --from <body start s>`
-  1. Runs every code gate on the saved project.
-  2. Copies the save into `CutDeck/Drafts`.
-  3. Appends a record to `output/hks_gates/handover.jsonl`.
-  4. Prints the header the handover opens with.
-
-  It exits 1 if a kept control fails.
-- The Stop hook `.claude/hooks/hks_handover_gate.py` reads only the session transcript. It acts
-  only in an HKS session: the user typed HKS or โหนกระแส, or a tool call named a โหนกระแส path.
-  1RaceClub and other work passes through. In an HKS session it blocks the end of a turn in two
-  cases:
-  - a draft was changed through CutDeck after the last `hks_handover`;
-  - the last run failed and the final message doesn't name each failed gate. With
-    `late_draft_policy: block` it blocks on any failure.
-
-  Registered on 2026-11-25 in the main checkout's `.claude/settings.local.json` (local only, not
-  committed). It runs only when the hook file is present on the checked-out branch:
-  `{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "python .claude/hooks/hks_handover_gate.py"}]}]}}`
+- In Premiere: the helper's `premiere_hks_handover` tool (`cutdeck/hks_enforce.py`).
+  1. Saves the project and reads the save.
+  2. Finds the draft by its GUID and runs every code gate.
+  3. Checks that every active do-confirm rule in `projects/hks/registry/` has a written answer.
+  4. Copies the save into `CutDeck/Drafts`.
+  5. Appends a record signed by the helper to `output/hks_gates/records.jsonl`, keyed by GUID and cut hash (`cutdeck/hks_gate_store.py`).
+- The CutDeck panel's HKS Gates section shows every sequence from those records only (`premiere_hks_status`):
+  - pass;
+  - fail, with each gate id and value;
+  - ungated, which covers never gated, changed after its last run, not saved, and a record not signed by the helper.
+- `hks_status` with `mark_baseline: true` at day set-up marks every later sequence `new`, whatever its name.
+- Offline, on a save on disk: `python -m cutdeck.hks_handover --prproj <day>.prproj --sequence "<draft>" --from <body start s>`.
 - `python -m cutdeck.hks_gates_backtest` reruns the evidence for every line.
+- The Stop hook that read session transcripts was removed on 2026-11-26, after the helper route was proven live (run `output/verify-cutdeck/runs/20261126-163421-hks-gates`). Its local registration in `.claude/settings.local.json` is a no-op without the file.
 
 ## Lifecycle of a gate
 
