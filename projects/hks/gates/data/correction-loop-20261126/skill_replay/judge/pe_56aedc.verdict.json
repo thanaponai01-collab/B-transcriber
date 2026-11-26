@@ -1,0 +1,62 @@
+[
+ {
+  "id": "A1",
+  "verdict": "BREAK",
+  "evidence": "L0194-L0196 are not in any body span. Of L0231-L0237, only L0231 is kept (1 of 7)."
+ },
+ {
+  "id": "A2",
+  "verdict": "BREAK",
+  "evidence": "No body span touches L0891-L0916. L0913-L0914 appear only in hook option 3, and hook pieces don't count as body."
+ },
+ {
+  "id": "A3",
+  "verdict": "OK",
+  "evidence": "Hook option 1 uses L0344-L0349, which fall inside L0332-L0349."
+ },
+ {
+  "id": "A4",
+  "verdict": "OK",
+  "evidence": "Span L0330-L0343 keeps L0332-L0343, 12 of the 18 lines."
+ },
+ {
+  "id": "A5",
+  "verdict": "BREAK",
+  "evidence": "Only about 14 of the 51 lines in L1431-L1481 are kept (L1448-L1453, L1458-L1461, L1468-L1471)."
+ },
+ {
+  "id": "A6",
+  "verdict": "BREAK",
+  "evidence": "L1060-L1066 plus L1072-L1084 is 20 of the 25 lines in the range."
+ },
+ {
+  "id": "A7",
+  "verdict": "BREAK",
+  "evidence": "L1157-L1162 plus L1166-L1169 is 10 of the 13 lines in the range."
+ },
+ {
+  "id": "A8",
+  "verdict": "BREAK",
+  "evidence": "Span L0786-L0793 keeps 8 of the 10 lines in L0784-L0793."
+ },
+ {
+  "id": "A9",
+  "verdict": "BREAK",
+  "evidence": "Span L0803-L0805 keeps 3 of the 6 lines in L0803-L0808, which is exactly half."
+ },
+ {
+  "id": "A10",
+  "verdict": "OK",
+  "evidence": "Only L1696-L1697 fall in L1693-L1697, which is 2 of 5 and under half."
+ },
+ {
+  "id": "A11",
+  "verdict": "BREAK",
+  "evidence": "Three spans end mid-thought: L0231 (unanswered 'แล้วจากนั้นคือยังไง'), L0245 (unanswered 'ทำไมล่ะ') and L1471 (ends on 'ก็')."
+ },
+ {
+  "id": "A12",
+  "verdict": "OK",
+  "evidence": "The body opens at L0018-L0041 with the location, the father's grocery shop and restaurant, and the new motorcycle shop. The viewer gets the context before the dispute."
+ }
+]

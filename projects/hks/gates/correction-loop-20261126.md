@@ -99,7 +99,27 @@ is not found (65 of 79 gold places are prose).
 **Recommendation (from these numbers):** ID tags as the test's link, written by the intake. The
 quote-form detector for memory. The model matcher as an optional audit, not a test.
 
-**2. Short vs full stage skill:** see "Skill replay" below.
+**2. Short vs full stage skill** (`data/.../skill_replay/`, throwaway).
+- Setup:
+  - Task: the paper edit of 1125 and 1126, replayed in one shot from the transcript.
+  - Arms: the full `hks-paper-edit` skill (52 rules), or the same rules cut to their titles.
+  - Model: Opus as the subject; blind Sonnet judges against per-episode rubrics built from your
+    corrections. The judges matched a scoring script on 82 of 82 line-range items.
+
+| Rule breaks | Full | Short |
+|---|---|---|
+| 1125 (12 items) | 8, 7 | 7, 7 |
+| 1126 (14 items) | 6 | 8 |
+| Cost per run | about $1.46 | about $1.52 |
+
+- **Not settled.** The gap between arms (0.5 on 1125) is no bigger than the spread within an arm,
+  and 1126 has one run per arm (spend capped at $15; $13.55 used).
+- The short skill saves about 3 % of input.
+- Both arms broke the same items in every run: context, resolution, moves out of order. The full
+  arm broke items its own text names. That points at how rules are applied, not at length.
+- Proxy limits: one shot versus a session, whole lines (it can't tighten word by word), and no
+  user brief.
+- To settle it: more episodes at $1.3–1.8 a run, scored by graded line shares.
 
 **3. Generated or frozen rules.md / principles.md.** Drift since the registry was born (93f4f87,
 16:08) to 21:32 the same day:
@@ -161,8 +181,8 @@ counts only gates that existed that day, so 1123–1125 read 0 there.
    - (b) merge rules that cite the same corrections (for example HKS-R6, X3 and X4 on covers);
    - (c) keep everything.
 2. **Item budget per stage.** Today: day setup 14 rules, paper edit 55, build 81, handover 29. The
-   skill files are 6.5k / 18.9k / 28.6k / 11.6k characters. The replay below is the only evidence
-   on whether fewer, shorter items get followed better.
+   skill files are 6.5k / 18.9k / 28.6k / 11.6k characters. The replay (Step 3.2) did not settle whether
+   shorter items get followed better.
 3. **Who judges the taste rules** (story, endings, fun: K12/K13, K21, K22). Options:
    - (a) you, at handover;
    - (b) a second model. The blind endings reviewer cost $0.30–1.47 per draft at kappa ≈ 0; the

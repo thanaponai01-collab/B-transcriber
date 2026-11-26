@@ -1,0 +1,62 @@
+[
+ {
+  "id": "A1",
+  "verdict": "BREAK",
+  "evidence": "No lines of L0194-L0196 or L0231-L0237 are in body spans. The body jumps from L0162-L0165 to L0241-L0245."
+ },
+ {
+  "id": "A2",
+  "verdict": "BREAK",
+  "evidence": "Only L0913-L0914 fall inside L0891-L0916, which is 2 of 26 lines."
+ },
+ {
+  "id": "A3",
+  "verdict": "OK",
+  "evidence": "Hook option 2 opens with L0341-L0343, which sit inside L0332-L0349."
+ },
+ {
+  "id": "A4",
+  "verdict": "OK",
+  "evidence": "Body span 21 (L0334-L0355) covers L0334-L0349, which is 16 of the 18 lines."
+ },
+ {
+  "id": "A5",
+  "verdict": "BREAK",
+  "evidence": "Spans L1446-L1453, L1458-L1465 and L1468-L1470 give 19 of the 51 lines in L1431-L1481, under half."
+ },
+ {
+  "id": "A6",
+  "verdict": "BREAK",
+  "evidence": "Spans L1060-L1071 and L1072-L1097 cover all 25 lines of L1060-L1084."
+ },
+ {
+  "id": "A7",
+  "verdict": "OK",
+  "evidence": "Only L1157-L1162 are in the body, which is 6 of 13 lines, under half."
+ },
+ {
+  "id": "A8",
+  "verdict": "BREAK",
+  "evidence": "Span L0784-L0793 covers all 10 lines."
+ },
+ {
+  "id": "A9",
+  "verdict": "BREAK",
+  "evidence": "Span L0803-L0805 covers 3 of the 6 lines in L0803-L0808, which is exactly half."
+ },
+ {
+  "id": "A10",
+  "verdict": "OK",
+  "evidence": "Only L1696-L1697 are in the body, which is 2 of 5 lines, under half."
+ },
+ {
+  "id": "A11",
+  "verdict": "BREAK",
+  "evidence": "Span 65 ends L1753 on 'แต่ส่วนของ', span 53 ends L1337 on a cut-off 'ถึงว่ารถ', and span 14 ends L0245 on the unanswered 'ทำไมล่ะ'. That is at least two spans ending mid-thought."
+ },
+ {
+  "id": "A12",
+  "verdict": "OK",
+  "evidence": "The body opens at L0018-L0029 with where they live, the father's job and how long they have lived there, which is basic set-up that needs no earlier facts."
+ }
+]

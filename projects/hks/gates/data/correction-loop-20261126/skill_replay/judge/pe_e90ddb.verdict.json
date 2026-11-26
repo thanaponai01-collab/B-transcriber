@@ -1,0 +1,72 @@
+[
+ {
+  "id": "B1",
+  "verdict": "BREAK",
+  "evidence": "Span 1 L0025-L0042 sits inside L0002-L0088 and is 30.1 s, over the 20 s limit."
+ },
+ {
+  "id": "B2",
+  "verdict": "BREAK",
+  "evidence": "The paper edit lists 5 moves out of broadcast order."
+ },
+ {
+  "id": "B3",
+  "verdict": "OK",
+  "evidence": "Body total is 1116.8 s, under 1200 s."
+ },
+ {
+  "id": "B4",
+  "verdict": "BREAK",
+  "evidence": "No body span covers L0094-L0104. The nearest span starts at L0111."
+ },
+ {
+  "id": "B5",
+  "verdict": "OK",
+  "evidence": "Span 23 L1859-L1864 keeps 6 of the 9 lines in L1859-L1867."
+ },
+ {
+  "id": "B6",
+  "verdict": "BREAK",
+  "evidence": "Span 25 L1945-L1953 keeps 9 of the 19 lines in L1944-L1962. That is fewer than half (9.5)."
+ },
+ {
+  "id": "B7",
+  "verdict": "OK",
+  "evidence": "Only L0323 is kept, which is 1 of the 13 lines in L0323-L0335."
+ },
+ {
+  "id": "B8",
+  "verdict": "OK",
+  "evidence": "No body span falls in L1283-L1297."
+ },
+ {
+  "id": "B9",
+  "verdict": "BREAK",
+  "evidence": "Span 11 L0916-L0966 covers L0942-L0966, which is 25 of the 32 lines in L0942-L0973."
+ },
+ {
+  "id": "B10",
+  "verdict": "OK",
+  "evidence": "No body span falls in L1631-L1657."
+ },
+ {
+  "id": "B11",
+  "verdict": "BREAK",
+  "evidence": "Span 32 L2043-L2058 keeps 16 of the 17 lines in L2043-L2059."
+ },
+ {
+  "id": "B12",
+  "verdict": "OK",
+  "evidence": "L2975 and L2984-L2986 give 4 of the 21 lines in L2970-L2990, which is under half."
+ },
+ {
+  "id": "B13",
+  "verdict": "BREAK",
+  "evidence": "Span 35 L2136-L2142 keeps 7 of the 36 lines in L2132-L2167."
+ },
+ {
+  "id": "B14",
+  "verdict": "BREAK",
+  "evidence": "Span 30 L2665-L2673 keeps 9 of the 19 lines in L2665-L2683. That is fewer than half (9.5)."
+ }
+]

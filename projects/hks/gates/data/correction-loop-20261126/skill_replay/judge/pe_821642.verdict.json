@@ -1,0 +1,72 @@
+[
+ {
+  "id": "B1",
+  "verdict": "BREAK",
+  "evidence": "Body keeps L0011-12 (5.7 s), L0018-42 (42.0 s) and L0064-65 (5.5 s) inside L0002-L0088. That is about 53 s, over the 20 s limit."
+ },
+ {
+  "id": "B2",
+  "verdict": "BREAK",
+  "evidence": "The paper edit lists 3 moves out of broadcast order: L2308, L2665 and L2703."
+ },
+ {
+  "id": "B3",
+  "verdict": "OK",
+  "evidence": "The body totals 1059.0 s, under 1200 s."
+ },
+ {
+  "id": "B4",
+  "verdict": "OK",
+  "evidence": "All of L0094-L0104 are in span 5 (L0094-L0110)."
+ },
+ {
+  "id": "B5",
+  "verdict": "BREAK",
+  "evidence": "Only L1862-L1864 (3 of the 9 lines in L1859-L1867) are kept, which is under half."
+ },
+ {
+  "id": "B6",
+  "verdict": "BREAK",
+  "evidence": "Kept lines in L1944-L1962 (19 lines) are L1950-51 and L1954-60, which is 9 lines. Half is 9.5, so it falls just short."
+ },
+ {
+  "id": "B7",
+  "verdict": "OK",
+  "evidence": "No lines from L0323-L0335 are kept. Span 16 starts at L0340."
+ },
+ {
+  "id": "B8",
+  "verdict": "OK",
+  "evidence": "Only L1287-L1291 (5 of 15 lines in L1283-L1297) are kept, which is under half."
+ },
+ {
+  "id": "B9",
+  "verdict": "OK",
+  "evidence": "Kept lines in L0942-L0973 (32 lines) are L0942-44 and L0949-57, which is 12 lines, under 16."
+ },
+ {
+  "id": "B10",
+  "verdict": "OK",
+  "evidence": "No lines from L1631-L1657 are kept."
+ },
+ {
+  "id": "B11",
+  "verdict": "OK",
+  "evidence": "In L2043-L2059 (17 lines) the kept lines are L2043-48, L2054 and L2057, which is 8 lines, under 8.5. In L2096-L2112 (17 lines) only L2098-2103 are kept, which is 6 lines."
+ },
+ {
+  "id": "B12",
+  "verdict": "OK",
+  "evidence": "In L2970-L2990 (21 lines) only L2975 and L2984-86 are kept, which is 4 lines."
+ },
+ {
+  "id": "B13",
+  "verdict": "BREAK",
+  "evidence": "Only L2137-L2140 (4 of the 36 lines in L2132-L2167) are kept, which is under half."
+ },
+ {
+  "id": "B14",
+  "verdict": "BREAK",
+  "evidence": "Span 87 keeps L2665-L2673, which is 9 of the 19 lines in L2665-L2683. Half is 9.5, so it falls just short."
+ }
+]

@@ -1,0 +1,62 @@
+[
+ {
+  "id": "A1",
+  "verdict": "BREAK",
+  "evidence": "Neither L0194-L0196 nor L0231-L0237 is in any body span. Span 7 ends at L0165 and span 8 starts at L0243."
+ },
+ {
+  "id": "A2",
+  "verdict": "BREAK",
+  "evidence": "L0891-L0916 is not in the body. The nearest span is L0923-L0928, which falls outside that range."
+ },
+ {
+  "id": "A3",
+  "verdict": "OK",
+  "evidence": "Hook option 2 opens with L0341-L0343, the attack clip's own sound."
+ },
+ {
+  "id": "A4",
+  "verdict": "OK",
+  "evidence": "Span 10 (L0330-L0355) covers all of L0332-L0349."
+ },
+ {
+  "id": "A5",
+  "verdict": "BREAK",
+  "evidence": "Only L1446-L1453 and L1468-L1477 fall inside L1431-L1481. That is 18 of 51 lines, under half."
+ },
+ {
+  "id": "A6",
+  "verdict": "BREAK",
+  "evidence": "L1060-L1066 and L1072-L1084 are in the body. That is 20 of 25 lines."
+ },
+ {
+  "id": "A7",
+  "verdict": "BREAK",
+  "evidence": "L1157-L1162 and L1166-L1169 are in the body. That is 10 of 13 lines."
+ },
+ {
+  "id": "A8",
+  "verdict": "BREAK",
+  "evidence": "Span 22 (L0786-L0793) covers 8 of the 10 lines in L0784-L0793."
+ },
+ {
+  "id": "A9",
+  "verdict": "OK",
+  "evidence": "No body span touches L0803-L0808."
+ },
+ {
+  "id": "A10",
+  "verdict": "OK",
+  "evidence": "Only L1696-L1697 is in the body. That is 2 of 5 lines, under half."
+ },
+ {
+  "id": "A11",
+  "verdict": "BREAK",
+  "evidence": "Span 44 ends L1477 on 'อย่าไปถึงขนาดที่ว่า' (a joining word). Span 52 ends L1753 on 'แต่ส่วนของ'. Span 30 ends L1018 on the cut-off 'เบิร์นอย่'."
+ },
+ {
+  "id": "A12",
+  "verdict": "OK",
+  "evidence": "The body opens with L0038-L0069 on the new motorcycle shop and the first dispute. The opening explains the shop's arrival and the warning, so it does not need unstated facts."
+ }
+]
