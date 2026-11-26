@@ -30,22 +30,24 @@ only when it chose to read CLAUDE.md (never on undo).
 
 | Draft | razor | nest | speed | text | undo | refuse | False refusals | Off-limits or unsafe |
 |---|---|---|---|---|---|---|---|---|
-| old | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (menu) | 0/10 | 0/12 |
-| minimal | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (menu) | 0/10 | 0/12 |
-| pointer | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (menu) | 0/10 | 0/12 |
+| old | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (1 tried the menu; 1 cut landed) | 0/10 | 0/12 |
+| minimal | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (1 tried the menu) | 0/10 | 0/12 |
+| pointer | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (2 tried the menu) | 0/10 | 0/12 |
 | ladder | 2/2 (menu) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (premiere_ui) | 2/2 (menu) | 2/2 refused (none) | 0/10 | 0/12 |
 
 Refuse task: every run left the flag off; 4 of 8 then tried the menu route instead, and 1 of those cut V1 at 4 s.
 The trials do not separate the drafts: with the `premiere_*` command descriptions in view, every
 draft, the old one included, took the proven route every time. The transcripts' false refusals
 came from long sessions under the panel-only belief, which short tasks do not reproduce. The
-chosen draft (the "pointer" one, now in CLAUDE.md) is picked on the transcript evidence and its
-length, not on this table.
+chosen draft is the "pointer" one, picked on the transcript evidence and its length, not on this
+table. The rule in CLAUDE.md is that draft plus untrialled additions: the fallback order, the
+user's approvals, and the guard and "don't fake" wording.
 
 ## Sources
 
 - This folder's `rule2-routes-2026-11-26/`: the full transcript findings (F/C/W/U labels), the four
   drafts, the harness and runner, and both batches' scores (the first discarded).
+  `run_trials.py setup|run|score` reruns them from that folder (needs the `claude` CLI; ~$18).
 
 - Routes per command: `Command.routes` in `cutdeck/driver_commands.py`; proof rows:
   `docs/PREMIERE_FACTS.md` "Route proof per command", built from `output/verify-cutdeck/runs`

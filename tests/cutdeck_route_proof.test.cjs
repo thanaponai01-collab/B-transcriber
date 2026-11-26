@@ -12,8 +12,10 @@ const root = path.join(__dirname, "..");
 const script = path.join(root, "tools", "adobe", "check_routes.py");
 
 function check(extraArgs = []) {
-  const run = spawnSync("python", [script, "--json", ...extraArgs], { cwd: root, encoding: "utf8" });
-  assert.ok(run.stdout, `check_routes.py printed nothing:\n${run.stderr}`);
+  // check_routes imports the helper's command table, so it needs the helper's Python (numpy, PIL).
+  const python = process.env.PYTHON || "python";
+  const run = spawnSync(python, [script, "--json", ...extraArgs], { cwd: root, encoding: "utf8" });
+  assert.ok(run.stdout, `${python} check_routes.py printed nothing (set PYTHON to the helper's Python):\n${run.stderr || run.error}`);
   return JSON.parse(run.stdout);
 }
 
@@ -54,13 +56,16 @@ test("a proof row that is not LIVE, has no Premiere version, or names other rout
     const text = fs.readFileSync(path.join(root, "docs", "PREMIERE_FACTS.md"), "utf8")
       .replace(/^\| `set_speed` \| [^|]+\| LIVE \|/m, "| `set_speed` | premiere_ui, menu, uxp | OPEN |")
       .replace(/^(\| `nest_clips` \| [^|]+\| LIVE \|) 27\.0\.0 \|/m, "$1 unknown |")
-      .replace(/^\| `menu_command` \| menu, uxp \|/m, "| `menu_command` | menu |");
+      .replace(/^\| `menu_command` \| menu, keys, uxp \|/m, "| `menu_command` | menu |")
+      .replace(/^(\| `paste_from` \|) uxp, menu \|/m, "$1 menu, uxp |") // order alone is not a difference
+      .replace(/^(\| `screenshot` \|.*)$/m, "$1\n$1");
     fs.writeFileSync(facts, text);
     const r = check([`--facts=${facts}`]);
     assert.deepEqual(r.problems, [
+      "screenshot: more than one row",
       "set_speed: status 'OPEN', not LIVE",
       "nest_clips: no Premiere version ('unknown')",
-      "menu_command: row says routes menu, command declares menu, uxp",
+      "menu_command: row says routes menu, command declares menu, keys, uxp",
     ]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

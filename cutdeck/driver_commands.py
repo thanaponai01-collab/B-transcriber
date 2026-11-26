@@ -1704,7 +1704,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         text. Takes the mouse and keyboard for a few seconds.
         """,
         (("clip", str), ("text", str), ("at_ticks", str | None, None), ("sequence", str | None, None)),
-        run=lambda args, premiere: premiere_ui.edit_text(premiere, args), routes=("premiere_ui", "menu", "uxp")),
+        run=lambda args, premiere: premiere_ui.edit_text(premiere, args), routes=("premiere_ui", "uxp")),
     "srt_subtitles": Command(
         300, _srt_subtitles_arguments, "destructive",
         """
@@ -1745,7 +1745,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         cli_target=("menu path", lambda target: {"path": target}),
         run=lambda args, premiere: keys.run_focused(premiere, args["focus"], args["sequence"],
                                                     lambda: menu.invoke(args["path"])),
-        routes=("menu", "uxp")),
+        routes=("menu", "keys", "uxp")),
     # Waits for Adobe's reply up to timeout_s (at most 600).
     "assistant_ask": Command(
         660, _assistant_arguments, "outside",

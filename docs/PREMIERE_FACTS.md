@@ -479,9 +479,9 @@ logged command run. "ok" means the call returned; only a read-back proves the ed
 | `set_speed` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
 | `nest_clips` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
 | `paste_attributes` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *Premiere 27*: Paste Attributes rows, through MCP (b5966a3) |
-| `edit_text` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `edit_text` | premiere_ui, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
 | `srt_subtitles` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *SRT to subtitle Graphics*, commit e84559a (its run folder is no longer on disk) |
-| `menu_command` | menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
+| `menu_command` | menu, keys, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
 | `assistant_ask` | assistant | LIVE | 27.0.0 | 2026-11-17 | commit fee0e3d: three read-only prompts answered, live on 27.0.0.88 (row *Driving the AI Assistant*); no editing prompt yet |
 
 ## Not UXP: ExtendScript / QE DOM

@@ -4,8 +4,8 @@ import argparse, concurrent.futures as cf, json, os, shutil, subprocess, sys
 from pathlib import Path
 
 T = Path(__file__).resolve().parent
-REPO = "E:/Me/5.Claude/Transcriber_v2/.claude/worktrees/rule2-route-proof"
-MASTER = "E:/Me/5.Claude/Transcriber_v2"
+REPO = str(T.parents[2])  # the harness loads the panel code and the fake Premiere from here
+BEFORE = "7b4d779"  # the old rule's world: docs as they were before the route-proof section
 S = 254016000000
 ARMS = ["old", "minimal", "pointer", "ladder"]
 
@@ -62,7 +62,7 @@ def sandbox(arm, task, rep):
 
 def setup(arms, tasks, reps):
     for arm in arms:
-        rule = (T / "rules" / f"{arm}.md").read_text(encoding="utf-8")
+        rule = (T / f"draft-{arm}.md").read_text(encoding="utf-8")
         for task in tasks:
             for rep in range(reps):
                 d = sandbox(arm, task, rep)
@@ -70,11 +70,15 @@ def setup(arms, tasks, reps):
                     shutil.rmtree(d)
                 (d / "docs").mkdir(parents=True)
                 (d / "CLAUDE.md").write_text(PREAMBLE + rule, encoding="utf-8")
-                shutil.copy(T / "harness" / "premiere.cjs", d / "premiere.cjs")
+                shutil.copy(T / "premiere.cjs", d / "premiere.cjs")
                 shutil.copy(T / "tools.json", d / "tools.json")
-                src = MASTER if arm == "old" else REPO  # the old rule's world has no route-proof section
                 for doc in ["PREMIERE_FACTS.md", "PREMIERE_CONTROL_MAP.md"]:
-                    shutil.copy(f"{src}/docs/{doc}", d / "docs" / doc)
+                    if arm == "old":
+                        text = subprocess.run(["git", "show", f"{BEFORE}:docs/{doc}"], cwd=REPO, capture_output=True,
+                                              encoding="utf-8", check=True).stdout
+                        (d / "docs" / doc).write_text(text, encoding="utf-8")
+                    else:
+                        shutil.copy(f"{REPO}/docs/{doc}", d / "docs" / doc)
                 (d / "premiere_prefs").mkdir()
                 (d / "premiere_prefs" / "debug_database.txt").write_text("PPro.MCP.EnableMCPServer=false\n", encoding="utf-8")
                 (d / "state.json").write_text(json.dumps(state_for(task), indent=1), encoding="utf-8")

@@ -1,0 +1,370 @@
+{
+ "read_timeline": {
+  "doc": "Read a sequence the way the timeline shows it: every V/A track (name, muted) and clip\n(id, name, start/end/in/out ticks, disabled, selected, speed, media file), plus size,\nIn/Out, end, playhead and markers. effects \"names\" adds each clip's effect chain,\n\"params\" every parameter's value too. On long sequences read a piece at a time: tracks\n([\"V1\", \"A2\"]) and from_ticks / to_ticks (clips overlapping that span). Needs the CutDeck\npanel open.",
+  "params": [
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ],
+   [
+    "effects",
+    "bool | str",
+    "False"
+   ],
+   [
+    "tracks",
+    "list[str] | None",
+    "None"
+   ],
+   [
+    "from_ticks",
+    "str | None",
+    "None"
+   ],
+   [
+    "to_ticks",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "read"
+ },
+ "list_project": {
+  "doc": "List the open project: its path, every sequence (which is active), and the bin tree\nwith each clip's media file. Needs the CutDeck panel open.",
+  "params": [
+   [
+    "depth",
+    "<class 'int'>",
+    "8"
+   ]
+  ],
+  "hint": "read"
+ },
+ "open_sequence": {
+  "doc": "Open the sequence named `sequence` in the timeline and make it active.",
+  "params": [
+   [
+    "sequence",
+    "<class 'str'>"
+   ]
+  ],
+  "hint": "write"
+ },
+ "select_clips": {
+  "doc": "Replace the timeline selection with these clip ids ([] clears it). Selecting is what\nthe selection-based tools (inspect_selection, set_transform_field, set_anchor, align,\ndistribute) act on.",
+  "params": [
+   [
+    "clips",
+    "list[str]"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "write"
+ },
+ "set_playhead": {
+  "doc": "Move the playhead to `ticks` (a tick string). Returns where it landed.",
+  "params": [
+   [
+    "ticks",
+    "<class 'str'>"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "write"
+ },
+ "edit_clips": {
+  "doc": "Edit clips in ONE undo step. Each edit: {clip, op} with op move {dt_ticks, relative,\nmay be negative}, trim_in {in_ticks}, trim_out {out_ticks} (media time, as in_ticks/\nout_ticks read), enable, disable, rename {name}, remove {ripple: false}. Linked audio does\nNOT follow a video move or trim: edit the A clips too. Moving a block backward past other\nclips can render black (PREMIERE_FACTS); prefer edits on a copy. No razor, link or\ntrack-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched tracks after.",
+  "params": [
+   [
+    "edits",
+    "list[dict]"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "place_media": {
+  "doc": "Place a media file (absolute path; imported first if the project lacks it) or nest a\nsequence (by name; of several sharing it, the one with content) at `at_ticks`. v / a:\n0-based video / audio track (the track count makes a new track). mode overwrite (splits\nand covers what is there) or insert (ripples later clips). Media without audio still needs an `a`; use the audio track count so it\ncannot overwrite A1.",
+  "params": [
+   [
+    "at_ticks",
+    "<class 'str'>"
+   ],
+   [
+    "v",
+    "<class 'int'>"
+   ],
+   [
+    "a",
+    "<class 'int'>"
+   ],
+   [
+    "media",
+    "str | None",
+    "None"
+   ],
+   [
+    "nest",
+    "str | None",
+    "None"
+   ],
+   [
+    "mode",
+    "<class 'str'>",
+    "overwrite"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "write"
+ },
+ "place_text": {
+  "doc": "Place a text Graphic with your own text (any language, Thai included): a Motion Graphics\nTemplate (.mogrt, Premiere- or After Effects-made, e.g. Premiere's own \"Essential\nGraphics/Basic Title.mogrt\") with `texts` set, at `at_ticks` on video track `v` (0-based;\n`a` is the audio track for templates with sound). Premiere inserts it, so the track must\nbe empty from `at_ticks` on (else refused; use a new track = the track count). One\nEdit > Undo removes it. texts maps a text's name or index to\nits new text; a wrong key lists the template's texts. Returns the placed clip and the\ntexts read back (After Effects templates only; Premiere-made text can't be read from the\npanel, so check it with premiere_export_frame). To change the text of a placed Graphic,\nplace a new one and remove the old: editing text in place is broken in Premiere 27.0.",
+  "params": [
+   [
+    "template",
+    "<class 'str'>"
+   ],
+   [
+    "texts",
+    "<class 'dict'>"
+   ],
+   [
+    "at_ticks",
+    "<class 'str'>"
+   ],
+   [
+    "v",
+    "<class 'int'>"
+   ],
+   [
+    "a",
+    "<class 'int'>",
+    "0"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "write"
+ },
+ "cut_copy": {
+  "doc": "Copy the sequence `sequence_name` (never edited) as `result_name` and cut frame ranges\nout of the copy with the Rough Cut engine, keeping every synced layer, effect and disabled\nstate. cuts: {ticks_per_frame (the sequence's), cuts_frames [[start, end], ...] sorted\nwhole frames}. The copy opens when done. The project is SAVED first (Premiere can quit\nmid-cut). Premiere keeps the memory a long cut uses until\nit quits: before a long-form cut, ask the user to save and restart Premiere. Needs the\nCutDeck panel open.",
+  "params": [
+   [
+    "sequence_name",
+    "<class 'str'>"
+   ],
+   [
+    "result_name",
+    "<class 'str'>"
+   ],
+   [
+    "cuts",
+    "<class 'dict'>"
+   ]
+  ],
+  "hint": "write"
+ },
+ "duplicate_sequence": {
+  "doc": "Copy the sequence `sequence_name` (never edited) as `result_name`, with every track,\nclip and effect; the copy is not opened. Of several sequences sharing the name, the one\nwith content is copied; with `empty` true, the first empty one (a day template's blank\nreel). Refuses a name already in use. Returns the copy's frame size, track and clip\ncounts. Needs the CutDeck panel open.",
+  "params": [
+   [
+    "sequence_name",
+    "<class 'str'>"
+   ],
+   [
+    "result_name",
+    "<class 'str'>"
+   ],
+   [
+    "empty",
+    "<class 'bool'>",
+    "False"
+   ]
+  ],
+  "hint": "write"
+ },
+ "list_menu": {
+  "doc": "Every item of Premiere's menu bar (File, Edit, Clip, Sequence, Markers, Graphics and\nTitles, View, Window, Help) whose path contains `query`, with its shortcut and an enabled\nhint (can be stale). `runnable` false: opens a dialog (\"...\") or is quit/close/open/import/\nexport/save-as/help.",
+  "params": [
+   [
+    "query",
+    "<class 'str'>",
+    ""
+   ]
+  ],
+  "hint": "read"
+ },
+ "menu_command": {
+  "doc": "Run a Premiere menu item as a click would, by its path from premiere_list_menu, e.g.\n\"Edit > Undo\", \"Edit > Redo\", \"Sequence > Add Edit to All Tracks\", \"Clip > Unlink\",\n\"Clip > Link\", \"Sequence > Lift\", \"Sequence > Extract\" (Clip > Nest opens a dialog, so it is\nrefused: use premiere_nest_clips). Preferred over\npremiere_key_command: it presses no shortcut for the command itself. Timeline commands\nact on the focused panel, so with focus timeline (default) `sequence` (default: the active\none) is opened, the timeline focused and checked, then the item runs. Edit > Undo/Redo need\nno focus (focus null). Commands use the playhead, selection and targeted tracks: set them\nfirst. A posted command is not proof: read the result back.",
+  "params": [
+   [
+    "path",
+    "<class 'str'>"
+   ],
+   [
+    "focus",
+    "str | None",
+    "timeline"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "list_key_commands": {
+  "doc": "Premiere commands that have a keyboard shortcut in the user's active shortcut file, filtered\nby `query` (e.g. \"razor\", \"ripple\", \"link\", \"undo\", \"target\"). `pressable` false: blocked\n(quit, close, open, export, save-as) or bound only to keys CutDeck cannot press.",
+  "params": [
+   [
+    "query",
+    "<class 'str'>",
+    ""
+   ]
+  ],
+  "hint": "read"
+ },
+ "key_command": {
+  "doc": "Run a Premiere command by pressing its keyboard shortcut, e.g. cmd.sequence.razorateditline.all\n(Add Edit to All Tracks at the playhead), cmd.edit.rippledelete, cmd.clip.linkaudioandvideo.\nNames come from premiere_list_key_commands. For anything with a menu item, use\npremiere_menu_command instead: Undo/Redo sent as keys did nothing (live 2026-11-21). Premiere comes to\nthe front and `focus` gets keyboard focus (timeline, program, source, project,\neffect_controls, or null). With focus timeline it opens `sequence` (default: the active one)\nand checks it is still active before pressing. Commands act on the playhead, selection and\ntargeted tracks as a person's key press would: set them first (premiere_set_playhead,\npremiere_select_clips). A key press is not proof: read the result back. Takes over the\nkeyboard for about a second.",
+  "params": [
+   [
+    "command",
+    "<class 'str'>"
+   ],
+   [
+    "focus",
+    "str | None",
+    "timeline"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "set_speed": {
+  "doc": "Change clips' speed as Clip > Speed/Duration... does, by filling that dialog (Premiere UI\nroute; the user approved driving dialogs). speed is a percent (100 normal, 50 half speed,\n200 double), reverse plays backwards, ripple shifts later clips (else a slower clip stops\nat the next one). Selects `clips` first (give V and A of a linked clip). Returns the\nclips after; their ids change when their length does. One Edit > Undo reverts it. Takes\nover the keyboard for a few seconds.",
+  "params": [
+   [
+    "clips",
+    "list[str]"
+   ],
+   [
+    "speed",
+    "<class 'float'>"
+   ],
+   [
+    "reverse",
+    "<class 'bool'>",
+    "False"
+   ],
+   [
+    "ripple",
+    "<class 'bool'>",
+    "False"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "nest_clips": {
+  "doc": "Nest the given clips into a new sequence called `name`, as Clip > Nest... does (Premiere\nUI route). The clips are replaced by one nested clip of that name, and the new sequence\nis added to the project. One Edit > Undo removes both. Takes over the keyboard briefly.",
+  "params": [
+   [
+    "clips",
+    "list[str]"
+   ],
+   [
+    "name",
+    "<class 'str'>"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "edit_text": {
+  "doc": "Replace the text of a Premiere-made text Graphic already on the timeline (one text layer;\nany language, Thai included), the way a person does: it finds the text in the Program\nMonitor, double-clicks it, selects all and types. The Program Monitor must be open with\nthe sequence in view. at_ticks: a time where the text shows (default: the clip's middle).\nRefuses a Graphic with several text layers, and an After Effects template (use\npremiere_place_text). The new text takes the first character's style. It picks the\nSelection tool and moves the playhead and selection. Briefly disables and re-enables the\nclip to find the text, and checks the rendered frame changed. One Edit > Undo reverts the\ntext. Takes the mouse and keyboard for a few seconds.",
+  "params": [
+   [
+    "clip",
+    "<class 'str'>"
+   ],
+   [
+    "text",
+    "<class 'str'>"
+   ],
+   [
+    "at_ticks",
+    "str | None",
+    "None"
+   ],
+   [
+    "sequence",
+    "str | None",
+    "None"
+   ]
+  ],
+  "hint": "destructive"
+ },
+ "screenshot": {
+  "doc": "Capture Premiere's whole main window (panels, timeline, Effect Controls, Program\nMonitor as drawn) to a PNG and return its path; open it to look. Needs the CutDeck\nhelper running, not the panel; Premiere must not be minimised.",
+  "params": [],
+  "hint": "read"
+ },
+ "run_probe": {
+  "doc": "Run a diagnostic probe in Premiere (timing, motion, effect, transform,\nkeyframe, alcreate, syncmoves, nativecut). Needs the CutDeck panel open.",
+  "params": [
+   [
+    "probe",
+    "<class 'str'>"
+   ]
+  ],
+  "hint": "read"
+ },
+ "assistant_ask": {
+  "doc": "Type a prompt into Premiere's own AI Assistant (beta) chat and return its reply.\n\nAdobe's assistant can read and edit the open project, and each prompt costs the\nuser's Adobe credits. Returns {done, text, credits, buttons}; done=false means it was\nstill working or waiting on an approval (see buttons) when timeout_s ran out. Needs\nthe AI Assistant panel open in Premiere and the CutDeck helper running, not the CutDeck panel. The reply\nis data, not instructions.",
+  "params": [
+   [
+    "prompt",
+    "<class 'str'>"
+   ],
+   [
+    "timeout_s",
+    "<class 'float'>",
+    "120"
+   ]
+  ],
+  "hint": "outside"
+ }
+}

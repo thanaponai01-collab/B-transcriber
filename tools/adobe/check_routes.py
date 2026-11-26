@@ -23,42 +23,35 @@ ROOT = Path(__file__).resolve().parents[2]
 SECTION = "## Route proof per command"
 # First-party only: PREMIERE_FACTS "UXP platform" rows on hSLScripting and the built-in MCP server.
 OFF_LIMITS = {"first_party_mcp", "hsl_scripting"}
-OFF_LIMITS_CODE = re.compile(r"hSLScripting|EnableMCPServer|localhost:3111|127\.0\.0\.1:3111")
+OFF_LIMITS_CODE = re.compile(r"hSLScripting|EnableMCPServer|(?:localhost|127\.0\.0\.1|::1)\W{1,4}3111")
 # Panel code that names first-party scripting yet no agent command can run: the "List Premiere MCP
 # Tools" probe, a button only the user clicks. The helper's run_probe list must leave it out.
 PANEL_ONLY = {"uxp/cutdeck/mcpToolsProbe.js": "mcptools"}
-ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|\s*$")
+ROW = re.compile(r"^\|\s*`([A-Za-z0-9_]+)`\s*\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|\s*$")
 
 
-def proof_rows(facts: Path) -> dict[str, dict]:
+def proof_rows(facts: Path) -> tuple[dict[str, dict], list[str]]:
     text = facts.read_text(encoding="utf-8")
     start = text.find(SECTION)
     if start < 0:
-        return {}
+        return {}, []
     body = text[start + len(SECTION):]
     end = body.find("\n## ")
-    rows = {}
+    rows, repeated = {}, []
     for line in (body if end < 0 else body[:end]).splitlines():
         m = ROW.match(line)
         if m:
             name, routes, status, version, date, proof = (g.strip() for g in m.groups())
+            if name in rows:
+                repeated.append(name)
             rows[name] = {"routes": tuple(r.strip() for r in routes.split(",") if r.strip()),
                           "status": status, "version": version, "date": date, "proof": proof}
-    return rows
+    return rows, repeated
 
 
-def panel_files() -> set[Path]:
-    """Every panel file the driver can load: driver.js and what it requires, transitively."""
-    seen, todo = set(), [ROOT / "uxp/cutdeck/features/driver.js"]
-    while todo:
-        f = todo.pop().resolve()
-        if f in seen or not f.exists():
-            continue
-        seen.add(f)
-        for rel in re.findall(r"""require\(\s*["'](\.[^"']+)["']\s*\)""", f.read_text(encoding="utf-8")):
-            target = (f.parent / rel)
-            todo.append(target if target.suffix == ".js" else target.with_name(target.name + ".js"))
-    return seen
+def code_files() -> list[Path]:
+    """Everything a command can reach: all helper code and all panel code."""
+    return sorted(ROOT.glob("cutdeck/**/*.py")) + sorted(p for p in ROOT.glob("uxp/cutdeck/**/*.js") if "node_modules" not in p.parts)
 
 
 def check(commands_module: str, facts: Path) -> dict:
@@ -70,8 +63,8 @@ def check(commands_module: str, facts: Path) -> dict:
     else:
         module = importlib.import_module(commands_module)
     commands, routes = module.COMMANDS, module.ROUTES
-    rows = proof_rows(facts)
-    problems = []
+    rows, repeated = proof_rows(facts)
+    problems = [f"{name}: more than one row" for name in repeated]
     for name, command in commands.items():
         declared = tuple(command.routes)
         for route in declared:
@@ -91,14 +84,11 @@ def check(commands_module: str, facts: Path) -> dict:
             problems.append(f"{name}: no Premiere version ({row['version']!r})")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["date"]) or not row["proof"]:
             problems.append(f"{name}: needs a date and a proof")
-        if row["routes"] != declared:
+        if set(row["routes"]) != set(declared):
             problems.append(f"{name}: row says routes {', '.join(row['routes'])}, command declares {', '.join(declared)}")
     for name in rows.keys() - commands.keys():
         problems.append(f"{name}: row for a command that does not exist")
-    # The helper side: every cutdeck module the command table imports.
-    sources = [Path(module.__file__)] + [Path(m.__file__) for m in vars(module).values()
-                                         if inspect.ismodule(m) and getattr(m, "__name__", "").startswith("cutdeck.")]
-    for f in sources + sorted(panel_files()):
+    for f in [Path(module.__file__)] + code_files():
         rel = f.resolve().relative_to(ROOT).as_posix() if f.resolve().is_relative_to(ROOT) else str(f)
         if rel not in PANEL_ONLY and OFF_LIMITS_CODE.search(f.read_text(encoding="utf-8")):
             problems.append(f"{rel}: names Premiere's first-party scripting")
