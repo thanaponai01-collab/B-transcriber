@@ -8,6 +8,7 @@ know to edit for that project.
 |---|---|---|
 | [1raceclub](1raceclub/README.md) | the user's F1 YouTube channel: live reaction videos and Shorts | [1raceclub/README.md](1raceclub/README.md) |
 | [hks](hks/README.md) | โหนกระแส (Honekasae) news-talk show: long form, FB, reels | [hks/README.md](hks/README.md) |
+| [cfd](cfd/README.md) | Club Friday (CFD) call-in advice show: long form with advice quotes, 3 vertical Shorts | [cfd/README.md](cfd/README.md) |
 
 ## Layers
 

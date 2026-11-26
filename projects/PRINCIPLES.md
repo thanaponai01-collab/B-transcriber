@@ -85,3 +85,4 @@ frame")* *(guess: it applies wherever a picture is reframed, not only Shorts)*
 |---|---|---|---|
 | 1RaceClub (F1 channel) | [1raceclub/principles.md](1raceclub/principles.md) `RC-n`; Shorts principles (incl. watch time) in [shorts-rules.md](1raceclub/shorts-rules.md) | [1raceclub/shorts-rules.md](1raceclub/shorts-rules.md) | [1raceclub/README.md](1raceclub/README.md) |
 | HKS / โหนกระแส | [hks/principles.md](hks/principles.md) `HKS-n` | [hks/rules.md](hks/rules.md) `HKS-Rn` | [hks/README.md](hks/README.md) |
+| Club Friday (CFD) | [cfd/principles.md](cfd/principles.md) `CFD-n` | [cfd/rules.md](cfd/rules.md) | [cfd/README.md](cfd/README.md) |
