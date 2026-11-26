@@ -201,7 +201,7 @@ viewer had no set-up for, some cuts ended unfinished, and same-scene jumps showe
   build what the shot needs. Masks have no API (PREMIERE_FACTS), so the mask tools are a Premiere UI
   route still to be proven here; explore Premiere's own tools before working around them.
 
-## Tighten word by word (from the user's D1, 20261126; seen, not confirmed)
+## Tighten word by word (from the user's D1, 20261126; confirmed by the user 2026-11-26)
 
 - **Cut out, inside every kept passage:** pauses of about 0.15 s or more, restarts and doubled words
   ("งบการเงิน งบการเงินและงบดุล"), fillers and tag questions (นะครับ, ใช่, ดู, อะ, เฮ้ย, "ถูกไหมครับ ถูกครับ"),

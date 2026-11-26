@@ -159,7 +159,7 @@ final): [memory/yt-20261125-draft.md](memory/yt-20261125-draft.md). Gates: [befo
   layer ... the ELLIPSE mask tool ... explore more on the tool Premiere has"). Blur = own adjustment layer +
   mask. The agent copied the user's look layer, then faked a circle with crop effects.
 
-## From the user's D1 vs the agent's v1 of 20261126 (seen, not confirmed)
+## From the user's D1 vs the agent's v1 of 20261126 (HKS-X108, X109 confirmed by the user 2026-11-26)
 
 Numbers: [memory/yt-20261126-draft.md](memory/yt-20261126-draft.md), "Diff against the user's D1".
 

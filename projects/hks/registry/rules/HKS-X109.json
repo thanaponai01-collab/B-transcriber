@@ -2,14 +2,14 @@
  "id": "HKS-X109",
  "aliases": [],
  "title": "**Tighten first, drop story last.**",
- "text": "Meet the length by tightening before dropping any story passage; drop a passage only when the tightened cut is still long, and say what fact it loses. On 20261126 the agent dropped 7 passages (3.6 min) for the 20-min line; the user kept three of them (the ธรรมนัส clause, คุณกิ๊ก's own donation, the face-scan case) and made the time from 360 s of pauses and filler.",
+ "text": "Meet the length by tightening before dropping any story passage; drop a passage only when the tightened cut is still long, and say what fact it loses. On 20261126 the agent dropped 7 passages (3.6 min) for the 20-min line; the user kept three of them (the ธรรมนัส clause, คุณกิ๊ก's own donation, the face-scan case) and made the time from 360 s of pauses and filler. Confirmed by the user 2026-11-26 (\"Yes, confirm both\").",
  "source": {
   "file": "projects/hks/memory/yt-20261126-draft.md",
   "heading": "Diff against the user's D1 (2026-11-26, after the D1 export)"
  },
  "status": "active",
  "superseded_by": null,
- "confirmed": false,
+ "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
