@@ -58,17 +58,20 @@ def records(store: Path = STORE) -> list[dict]:
 
 def status(project: dict, store: Path = STORE, key: Path | None = None) -> list[dict]:
     """One row per sequence in a saved project: its gate status from the signed records alone."""
-    latest = {(r["guid"], r["cut_hash"]): r for r in records(store)}
-    ran = {r["guid"] for r in latest.values()}
+    every = records(store)
+    signed = [r for r in every if hmac.compare_digest(str(r.get("sig", "")), _sign(r, key or KEY))]
+    latest = {(r["guid"], r["cut_hash"]): r for r in signed}
+    forged = {(r["guid"], r["cut_hash"]) for r in every} - set(latest)
+    ran = {r["guid"] for r in signed}
     rows = []
     for seq in project["sequences"]:
         h = cut_hash(seq)
         r = latest.get((seq.get("guid"), h))
         why = None
-        if r is None:
-            why = "changed after its last gate run" if seq.get("guid") in ran else "never gated"
-        elif not hmac.compare_digest(str(r.get("sig", "")), _sign(r, key or KEY)):
+        if r is None and (seq.get("guid"), h) in forged:
             why = "record not signed by the helper"
+        elif r is None:
+            why = "changed after its last gate run" if seq.get("guid") in ran else "never gated"
         if why:
             rows.append({"guid": seq.get("guid"), "name": seq["name"], "cut_hash": h, "status": "ungated", "why": why})
             continue
@@ -79,6 +82,6 @@ def status(project: dict, store: Path = STORE, key: Path | None = None) -> list[
                      "warned": [{"gate": g, "value": r["gates"][g]["value"], "items": r["gates"][g].get("items", [])[:6]}
                                 for g in r.get("warned", [])],
                      "answers_missing": r.get("answers_missing", []),
-                     "overrides": r.get("overrides", {}), "body_from": r.get("body_from"),
+                     "overrides": r.get("overrides", {}), "body_from": r.get("body_from"), "show_end": r.get("show_end"),
                      "checked": r["time"]})
     return rows

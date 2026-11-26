@@ -271,7 +271,8 @@
     if (overrides.length) lines.push(`${overrides.length} overridden: ${overrides.join(", ")}`);
     if (row.why) lines.push(row.why);
     if (row.checked) {
-      lines.push(`body from ${hksValue(row.body_from)} s · checked ${String(row.checked).replace("T", " ")}`);
+      const to = row.show_end === null || row.show_end === undefined ? "" : ` to ${hksValue(row.show_end)} s`;
+      lines.push(`body from ${hksValue(row.body_from)} s${to} · checked ${String(row.checked).replace("T", " ")}`);
     }
     return lines;
   }

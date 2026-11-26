@@ -1,0 +1,19 @@
+{
+ "n": 12,
+ "command": "select_clips",
+ "args": {
+  "clips": [
+   "A1@6929556480000"
+  ],
+  "sequence": "1 YOUTUBE agent v1"
+ },
+ "at": "2026-11-26T16:38:32.995271",
+ "result": {
+  "name": "1 YOUTUBE agent v1",
+  "set": true,
+  "selected": [
+   "A1@6929556480000"
+  ]
+ },
+ "ok": true
+}

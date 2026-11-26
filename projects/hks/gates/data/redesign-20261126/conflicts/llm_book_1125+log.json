@@ -1,0 +1,110 @@
+{
+ "run": "llm_book_1125+log",
+ "rules": 415,
+ "flags": 13,
+ "hits": {
+  "K17": [],
+  "K21": []
+ },
+ "stats": {
+  "raw": "[\n{\"a\":7,\"b\":12,\"reason\":\"Rule 7 cuts the host's recap, but rule 12 keeps the host's recap of what was paid at the end of a story part, and neither names the other.\"},\n{\"a\":16,\"b\":313,\"reason\":\"Rule 16 keeps the host's 'what happened next?' question to set up the next beat. The log's host-connector rule cuts 'then what?' questions by default and keeps them only to bridge pieces that don't join.\"},\n{\"a\":7,\"b\":16,\"reason\":\"Rule 7 cuts the host's clarifying questions and filler. Rule 16 keeps a host question that sets up the next beat, and that kind of question can look like a clarifying one.\"},\n{\"a\":14,\"b\":53,\"reason\":\"Rule 14 starts and ends B-roll on a sound cut. Rule 53 puts the picture change 0.5–2 s off the sound cut.\"},\n{\"a\":20,\"b\":53,\"reason\":\"Rule 20 says a cover must start on exactly the body's cut tick. Rule 53 puts picture changes (covers and holds on V2+) off the sound cut.\"},\n{\"a\":8,\"b\":312,\"reason\":\"Rule 8 keeps a viewer comment when it is the objection that a guest or the host then answers. The log says viewer comments read on air are always cut.\"},\n{\"a\":10,\"b\":349,\"reason\":\"Rule 10 limits film damage to B-roll zoomed to full screen. The log puts film damage on all B-roll, including fit-to-frame and small-window B-roll.\"},\n{\"a\":22,\"b\":340,\"reason\":\"Rule 22 says the clock is fine on studio frames. The log says anything showing the TV clock is always blurred.\"},\n{\"a\":7,\"b\":187,\"reason\":\"Rule 7 cuts most jokes and filler. The film-episode rule selects by laughs, teasing and banter, and the host's jokes are the same kind of material.\"},\n{\"a\":44,\"b\":131,\"reason\":\"Rule 44 ends the 1-min on a held reaction face under the sting. HKS-15 says the 1-min should end on the punch or the shocking number.\"},\n{\"a\":6,\"b\":50,\"reason\":\"Rule 6 says to shorten as much as possible and drop asides. Rule 50 says every piece must be a whole thought and brings back the line before a joining word.\"},\n{\"a\":7,\"b\":157,\"reason\":\"Rule 7 cuts the host's name checks. The check in 157 keeps extra seconds where the host names a person so the name is set up before later use.\"},\n{\"a\":43,\"b\":195,\"reason\":\"Rule 43 says a cover needs a bigger zoom in the square. The reframe note says zoomed covers keep their scale at the same centre.\"}\n]",
+  "cost_usd": 0.2207039,
+  "seconds": 37.2,
+  "input_tokens": 45002,
+  "output_tokens": 4678,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "rules.md:L24",
+   "b": "rules.md:L44",
+   "reason": "Rule 7 cuts the host's recap, but rule 12 keeps the host's recap of what was paid at the end of a story part, and neither names the other.",
+   "a_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto",
+   "b_text": "- *The story is the order, not the broadcast.* Material moves to where the viewer needs it: the \"why 500k\" answer right where the number comes up, the voice recording right after \"it was still 500,000\" as proof, the host's recap of what was paid at the end of a story part, the lawyer's legal framing"
+  },
+  {
+   "a": "rules.md:L59",
+   "b": "workflow-log.md:L258",
+   "reason": "Rule 16 keeps the host's 'what happened next?' question to set up the next beat. The log's host-connector rule cuts 'then what?' questions by default and keeps them only to bridge pieces that don't join.",
+   "a_text": "- *Ask, then tell* (user, 2026-11-23): keep the host question that sets up the next beat (\"and when you got home, what happened?\"); it keeps the viewer tracking what happens next.",
+   "b_text": "- **Host connectors** (\"แล้วยังไงต่อ\", \"then what?\"): cut by default. **Kept or added only when two guest pieces don't join smoothly**, as a bridge."
+  },
+  {
+   "a": "rules.md:L24",
+   "b": "rules.md:L59",
+   "reason": "Rule 7 cuts the host's clarifying questions and filler. Rule 16 keeps a host question that sets up the next beat, and that kind of question can look like a clarifying one.",
+   "a_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto",
+   "b_text": "- *Ask, then tell* (user, 2026-11-23): keep the host question that sets up the next beat (\"and when you got home, what happened?\"); it keeps the viewer tracking what happens next."
+  },
+  {
+   "a": "rules.md:L52",
+   "b": "rules.md:L160",
+   "reason": "Rule 14 starts and ends B-roll on a sound cut. Rule 53 puts the picture change 0.5–2 s off the sound cut.",
+   "a_text": "- *B-roll is one continuous scene, as long as the talk is about it* (20–46 s, reused when it fits), starting and ending on a sound cut so the change of picture hides that cut too.",
+   "b_text": "- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off th"
+  },
+  {
+   "a": "rules.md:L67",
+   "b": "rules.md:L160",
+   "reason": "Rule 20 says a cover must start on exactly the body's cut tick. Rule 53 puts picture changes (covers and holds on V2+) off the sound cut.",
+   "a_text": "- *Never a jump cut, not even one frame.* A cover must start on exactly the body's cut tick (v4's covers drifted 1–4 frames and flashed the jump). It must also open on a frame where the footage is fully on: v4's marker-1 cover started at a box insert's first second, which was still the studio. Rende",
+   "b_text": "- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off th"
+  },
+  {
+   "a": "rules.md:L28",
+   "b": "workflow-log.md:L257",
+   "reason": "Rule 8 keeps a viewer comment when it is the objection that a guest or the host then answers. The log says viewer comments read on air are always cut.",
+   "a_text": "4. Viewer comments read on air: cut, unless one is the objection a guest or the host then answers (HKS-C5, 2026-11-24). Sponsors: always cut.",
+   "b_text": "- **Viewer comments read on air:** **always cut.**"
+  },
+  {
+   "a": "rules.md:L32",
+   "b": "workflow-log.md:L366",
+   "reason": "Rule 10 limits film damage to B-roll zoomed to full screen. The log puts film damage on all B-roll, including fit-to-frame and small-window B-roll.",
+   "a_text": "6. Cover = B-roll from the same story (ideally the same moment, this episode only), else a static listener shot (`Backup`). Film damage on B-roll zoomed to full screen (HKS-C10). No fixed minimum length: a cover lasts as long as the words that point at it, on the footage at the moment the speaker ta",
+   "b_text": "- **Film damage goes on all B-roll.** (The ~18% without it in this save are gaps still to fill, or the static-person shots. _check on a future episode_)"
+  },
+  {
+   "a": "rules.md:L74",
+   "b": "workflow-log.md:L343",
+   "reason": "Rule 22 says the clock is fine on studio frames. The log says anything showing the TV clock is always blurred.",
+   "a_text": "- *No sponsor strip, no 3HD bug, no clock* on footage (on studio frames the bug and clock are fine, HKS-C3). The phone clip before the second break (src 2536.5–2584.6) carries the sponsor and credits strip (from y 521). Zoom it in, centred on the video: Scale 240, Position (0.475, 0.667), which keep",
+   "b_text": "- Anything showing the **TV clock (top-left) is always blurred.**"
+  },
+  {
+   "a": "rules.md:L24",
+   "b": "yt-20261124-draft.md:L62",
+   "reason": "Rule 7 cuts most jokes and filler. The film-episode rule selects by laughs, teasing and banter, and the host's jokes are the same kind of material.",
+   "a_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto",
+   "b_text": "**User, after v3 (2026-11-24): \"first of i want this whole video to feel fun not boring ads video for movie\".** **Why:** a film-promo episode only holds viewers if it plays as a fun hangout with the cast; pitch lines, plugs and trailer cards make it feel like an ad. **How to apply:** select by laugh"
+  },
+  {
+   "a": "rules.md:L135",
+   "b": "principles.md:L186",
+   "reason": "Rule 44 ends the 1-min on a held reaction face under the sting. HKS-15 says the 1-min should end on the punch or the shocking number.",
+   "a_text": "- **The 1-min ends on a held face under the sting** (HKS-C26), then the end card; target just under 60 s (the user's: 58.00).",
+   "b_text": "- **HKS-15. The shorter the cut, the harder the ending** (seen 12/12). The YT may end calm; the FB ends on a defiant line, an accusation or a verdict; the 1-min ends on the punch or the shocking number. Why: a feed viewer decides to share on the last line. The user's own labels show it ([study/label"
+  },
+  {
+   "a": "rules.md:L20",
+   "b": "rules.md:L152",
+   "reason": "Rule 6 says to shorten as much as possible and drop asides. Rule 50 says every piece must be a whole thought and brings back the line before a joining word.",
+   "a_text": "2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory and feelings that don't move events (shorten as much as possible). Law stays only as the answer to the guest's own case: right after the fact it explains, or as the verdict, often near the end once the story is told; never a",
+   "b_text": "- **Each piece starts where a thought starts and ends where it ends.** Before building, read every edge with 2 s of source on each side. An end must finish the sentence, including its closing particle (ครับ / นะ / เลย). A piece that opens on a joining word (เพราะ / แล้วก็ / คือ / แต่) brings the lin"
+  },
+  {
+   "a": "rules.md:L24",
+   "b": "principles.md:L286",
+   "reason": "Rule 7 cuts the host's name checks. The check in 157 keeps extra seconds where the host names a person so the name is set up before later use.",
+   "a_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto",
+   "b_text": "- **Every question the host asks has its trigger in the cut** (1003: \"บีมรู้เรื่องไหม\" at 526.7 has none), and every name in the last minute was set up earlier (1110 \"บางพลัด\", 1109 เดชา and เอ๋). The agent's own EP.168 v7 failed it (the accused \"คุณกล้า\" first named 28 s from the end); fixed in v7."
+  },
+  {
+   "a": "rules.md:L132",
+   "b": "yt-20261124-draft.md:L106",
+   "reason": "Rule 43 says a cover needs a bigger zoom in the square. The reframe note says zoomed covers keep their scale at the same centre.",
+   "a_text": "- **Square reframe per shot** (HKS-C25). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame (the user: 263 → 333, 363, 368). Where the subject moves, razor the cover and re-position each part. Render a frame of each cover in the square before handover.",
+   "b_text": "- Reframe: broadcast 150% → 84.375% fit; zoomed covers keep their scale with the same centre."
+  }
+ ]
+}

@@ -1,0 +1,56 @@
+{
+ "run": "llm_K17_1125",
+ "rules": 215,
+ "flags": 5,
+ "hits": {
+  "K17": [
+   2,
+   3
+  ]
+ },
+ "stats": {
+  "raw": "[\n{\"rule\":71,\"reason\":\"It tells the editor to zoom split-screen inserts to an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.\"},\n{\"rule\":72,\"reason\":\"It prescribes off-centre zoom positions, such as Scale 280 at (0.8675, 0.6244). That conflicts with the rule that all zoom-ins be centred.\"},\n{\"rule\":179,\"reason\":\"It lists off-centre zoom positions for the Backup inserts. It also zooms a full-frame film (152, 0.5/0.599) to drop the clock and bug, so a full-screen insert gets zoomed.\"},\n{\"rule\":22,\"reason\":\"It zooms the phone clip at Scale 240, Position (0.475, 0.667), which is off-centre in the frame. The user wants zoom-ins centred.\"},\n{\"rule\":43,\"reason\":\"It says to re-zoom covers and re-position each part to follow a moving subject. That means off-centre zooms, and the zooms apply to full-frame covers.\"}\n]",
+  "cost_usd": 0.12934589999999999,
+  "seconds": 10.7,
+  "input_tokens": 31155,
+  "output_tokens": 1081,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L274",
+   "reason": "It tells the editor to zoom split-screen inserts to an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "Inserts, B-roll, clips and static people not talking on camera go into the `backup` sequence (1920x1080). A split screen (clip in a box beside the studio) counts as an insert: zoom it so the clip fills the frame and **no edge of the split screen shows**. The user's own example: Scale 268, Position ("
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L279",
+   "reason": "It prescribes off-centre zoom positions, such as Scale 280 at (0.8675, 0.6244). That conflicts with the rule that all zoom-ins be centred.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "The zoom depends on the layout, so measure the box each time. 268 fits the two-box studio split (box about x 32–804). The narrow three-box layout (box interior x 39–737, y 30–593) still showed the studio strip at 268 and needed Scale 280, Position (0.8675, 0.6244). The user marked that miss red on 2"
+  },
+  {
+   "a": "correction",
+   "b": "yt-20261124-draft.md:L37",
+   "reason": "It lists off-centre zoom positions for the Backup inserts. It also zooms a full-frame film (152, 0.5/0.599) to drop the clock and bug, so a full-screen insert gets zoomed.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "**User, after v2: \"you also forgot to do the insert in backup, and the edit sq, like put things to V2\".** **Why:** these are part of the day's setup the user does by hand (rules.md \"Backup sequence = insert pool\" and \"Working layout\": keepers up to V2 with audio left on A1 and re-linked; drops stay "
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L74",
+   "reason": "It zooms the phone clip at Scale 240, Position (0.475, 0.667), which is off-centre in the frame. The user wants zoom-ins centred.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "- *No sponsor strip, no 3HD bug, no clock* on footage (on studio frames the bug and clock are fine, HKS-C3). The phone clip before the second break (src 2536.5–2584.6) carries the sponsor and credits strip (from y 521). Zoom it in, centred on the video: Scale 240, Position (0.475, 0.667), which keep"
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L132",
+   "reason": "It says to re-zoom covers and re-position each part to follow a moving subject. That means off-centre zooms, and the zooms apply to full-frame covers.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "- **Square reframe per shot** (HKS-C25). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame (the user: 263 → 333, 363, 368). Where the subject moves, razor the cover and re-position each part. Render a frame of each cover in the square before handover."
+  }
+ ]
+}

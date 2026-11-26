@@ -1,0 +1,27 @@
+{
+ "run": "llm_filter_1125+log",
+ "rules": 415,
+ "flags": 1,
+ "hits": {
+  "K17": [],
+  "K21": []
+ },
+ "stats": {
+  "raw": "[{\"pair\": 511, \"reason\": \"A makes the end sequence (goodbye → sting → CG_END LOGO) a fixed template for every episode, while B says there is never an end logo.\"}]",
+  "cost_usd": 0.6540879,
+  "seconds": 30.4,
+  "input_tokens": 155958,
+  "output_tokens": 3634,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "workflow-log.md:L295",
+   "b": "workflow-log.md:L438",
+   "shared": 2,
+   "reason": "A makes the end sequence (goodbye → sting → CG_END LOGO) a fixed template for every episode, while B says there is never an end logo.",
+   "a_text": "- **End: same every episode** (goodbye → sting → `CG_END LOGO`). Can be a fixed template.",
+   "b_text": "- **No end logo, always.**"
+  }
+ ]
+}

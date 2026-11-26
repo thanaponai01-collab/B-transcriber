@@ -1,0 +1,22 @@
+{
+ "n": 17,
+ "command": "duplicate_sequence",
+ "args": {
+  "sequence_name": "1 YOUTUBE agent v1",
+  "result_name": "1 YOUTUBE final"
+ },
+ "at": "2026-11-26T16:38:49.143932",
+ "result": {
+  "name": "1 YOUTUBE final",
+  "sequence_id": "e02b576b-8220-44e6-adc2-2e1ccaa1a6be",
+  "source_id": "b474e527-fc04-4952-83dc-d539e0d5371a",
+  "width": 1280,
+  "height": 720,
+  "video_tracks": 4,
+  "audio_tracks": 6,
+  "video_clips": 70,
+  "audio_clips": 54,
+  "end_ticks": "329570519040000"
+ },
+ "ok": true
+}

@@ -31,6 +31,11 @@ def test_a_body_start_past_the_hook_and_sting_fails():
     assert hks_enforce.judge(seq(end=6000.0), {}, 600.0, {}, {}, {})["failed"] == ["body_range"]
 
 
+def test_a_show_end_that_leaves_a_short_body_fails():
+    assert hks_enforce.judge(seq(), {}, 26.76, {}, {}, {}, show_end=1053.0)["failed"] == []
+    assert hks_enforce.judge(seq(), {}, 26.76, {}, {}, {}, show_end=36.76)["failed"] == ["body_range"]
+
+
 def test_a_name_two_sequences_share_is_refused_but_the_guid_finds_it():
     project = {"sequences": [seq("1 YOUTUBE D1", "a"), seq("1 YOUTUBE D1", "b")]}
     with pytest.raises(ValueError, match="2 sequences"):

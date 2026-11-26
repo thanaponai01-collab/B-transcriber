@@ -65,6 +65,8 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Take a range of one sequence (split, backup pool, YT cut) into another at a time, every track and effect kept, overwriting (a third paste into one target needs `per_piece_reason`) | `premiere_paste_from` | helper: `make_subsequence` + menu Copy/Paste + `build_sequence` into + `remove_piece` | LIVE 2026-11-24 |
 | Reorder pieces of a sequence on a copy, every track and effect kept (blocks in play order) | `premiere_arrange` | helper: `duplicate_sequence` + `build_sequence` into | LIVE 2026-11-24 |
 | Delete a piece sequence `paste_from` kept (name ends ` (CutDeck piece)`) | `premiere_remove_piece` | UXP | LIVE 2026-11-24 |
+| Hand over an HKS draft: save, gates on the save by GUID, do-confirm answers, Drafts copy, signed record | `premiere_hks_handover` | UXP `save_project` + helper (saved `.prproj`) | LIVE 2026-11-26 |
+| Every sequence's HKS gate status from the helper's records (pass, fail, ungated; `mark_baseline` at day set-up) | `premiere_hks_status` | UXP `list_project` + helper | LIVE 2026-11-26 |
 | Active sequence summary | `premiere_read_sequence` | UXP | LIVE |
 | Open / switch sequence | `premiere_open_sequence` | UXP | LIVE 2026-11-21 |
 | Delete rough-cut copies (CutDeck > Rough Cuts only, never the active one) | `premiere_remove_rough_cuts` | UXP `FolderItem.createRemoveItemAction` | LIVE 2026-11-22 |
@@ -113,6 +115,18 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Subtitles from an .srt as styled, editable Graphics (captions + Upgrade Caption to Graphic) | `premiere_srt_subtitles` | UXP import + Premiere UI drag and dialog + menu + UXP build | LIVE 2026-11-22 (4 cues in 13 s, frame-exact, the user's Style and place) |
 | Other caption editing | none | UI only | GAP |
 | Panels, workspaces, dialogs | none | Pixels + keys | GAP |
+
+## Routes that create, rename or label a draft (HKS gates)
+
+Each route is covered by the helper's record keyed by GUID and cut hash (`cutdeck/hks_gate_store.py`).
+
+| Action | Routes | How the gate status sees it |
+|---|---|---|
+| Create a sequence | `create_sequence`, `duplicate_sequence`, `cut_copy`, `build_sequence`, `make_subsequence`, `import_sequences`, `apply_cuts`, `arrange`, `keep_words`, `cut_words`, `clean_speech`, `paste_from`, `paste_pieces`, `nest_clips`, `srt_subtitles`; panel Rough Cut and Sync buttons; the user's right-click Duplicate, File > New; `menu_command` Sequence > Duplicate (not refused by `menu.py`) | A new GUID: ungated, and `new` after a day baseline, by any route |
+| Rename a sequence | No CutDeck command; the user's F2 or Project panel; the clone-then-rename inside `duplicate_sequence` / `make_subsequence` | No effect: the key is the GUID (live: UXP id equals the saved ObjectUID, 13 of 13) |
+| Label a clip | `menu_command` Edit > Label > *; panel code copying labels (`adjustmentLayer.js`, `nativeSync.js`); by hand | The label is in the cut hash: ungated until the next handover (live: label 1 to 8 on one clip) |
+| Label a sequence's project item | by hand (Project panel); `ProjectItem.createSetColorLabelAction` (no command) | No effect: identity is the GUID |
+| Add or remove a marker | `add_markers`, `remove_markers`, `clean_speech`, menu Markers > *, by hand | Not in the cut hash: markers change no gate value |
 
 ## Next steps, in order
 

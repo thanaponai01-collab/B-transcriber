@@ -108,3 +108,12 @@ def test_check_catches_a_hand_edit(tmp_path):
     result = run_build("--check", "--root", str(tmp_path))
     assert result.returncode == 1
     assert "projects/hks/before-you-cut.md" in result.stdout
+
+
+def test_every_rule_commit_still_matches_git():
+    import subprocess
+    import sys
+    root = Path(__file__).resolve().parent.parent
+    run = subprocess.run([sys.executable, str(root / "tools" / "hks_registry_extract.py"), "--check"],
+                         cwd=root, capture_output=True, text=True, encoding="utf-8")
+    assert run.returncode == 0, run.stdout + run.stderr

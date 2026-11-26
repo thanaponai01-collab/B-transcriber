@@ -1,0 +1,17 @@
+{
+ "run": "llm_K6_1125",
+ "rules": 215,
+ "flags": 0,
+ "hits": {
+  "K6": "control"
+ },
+ "stats": {
+  "raw": "[]",
+  "cost_usd": 0.12237590000000001,
+  "seconds": 5.8,
+  "input_tokens": 31130,
+  "output_tokens": 394,
+  "unknown_ids": 0
+ },
+ "pairs": []
+}

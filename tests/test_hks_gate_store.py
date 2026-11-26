@@ -44,8 +44,16 @@ def test_a_label_change_is_an_edit():
 def test_a_record_written_by_hand_is_not_trusted(tmp_path):
     path = tmp_path / "r.jsonl"
     draft = seq("g1", "1 YOUTUBE agent v1")
-    store.append(record(draft, failed=["same_frame_share"]), path)
     with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({**record(draft), "time": "later"}) + "\n")  # a forged pass
+        f.write(json.dumps({**record(draft), "time": "later"}) + "\n")  # a forged pass, never gated
     row = store.status({"sequences": [draft]}, path)[0]
     assert (row["status"], row["why"]) == ("ungated", "record not signed by the helper")
+
+
+def test_a_forged_pass_after_a_signed_fail_leaves_the_fail(tmp_path):
+    path = tmp_path / "r.jsonl"
+    draft = seq("g1", "1 YOUTUBE agent v1")
+    store.append(record(draft, failed=["same_frame_share"]), path)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({**record(draft), "sig": "x"}) + "\n")
+    assert store.status({"sequences": [draft]}, path)[0]["status"] == "fail"

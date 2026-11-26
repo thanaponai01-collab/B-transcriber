@@ -1,0 +1,101 @@
+{
+ "run": "llm_filter_keypairs_1125+log",
+ "key": [
+  [
+   "rules.md:L74",
+   "workflow-log.md:L344"
+  ],
+  [
+   "rules.md:L74",
+   "workflow-log.md:L359"
+  ],
+  [
+   "yt-20261124-draft.md:L37",
+   "workflow-log.md:L344"
+  ],
+  [
+   "yt-20261124-draft.md:L37",
+   "workflow-log.md:L359"
+  ],
+  [
+   "rules.md:L18",
+   "rules.md:L128"
+  ],
+  [
+   "rules.md:L18",
+   "rules.md:L137"
+  ],
+  [
+   "rules.md:L18",
+   "principles.md:L97"
+  ],
+  [
+   "rules.md:L20",
+   "rules.md:L128"
+  ],
+  [
+   "rules.md:L20",
+   "rules.md:L137"
+  ],
+  [
+   "rules.md:L20",
+   "principles.md:L97"
+  ]
+ ],
+ "noise": [
+  [
+   "rules.md:L32",
+   "principles.md:L77"
+  ],
+  [
+   "yt-20261124-draft.md:L69",
+   "yt-20261124-draft.md:L159"
+  ],
+  [
+   "principles.md:L40",
+   "principles.md:L160"
+  ],
+  [
+   "rules.md:L59",
+   "yt-20261124-draft.md:L20"
+  ],
+  [
+   "principles.md:L29",
+   "principles.md:L174"
+  ],
+  [
+   "rules.md:L6",
+   "yt-20261124-draft.md:L109"
+  ],
+  [
+   "rules.md:L32",
+   "workflow-log.md:L180"
+  ],
+  [
+   "principles.md:L160",
+   "workflow-log.md:L6"
+  ],
+  [
+   "rules.md:L173",
+   "rules.md:L180"
+  ],
+  [
+   "rules.md:L48",
+   "yt-20261124-draft.md:L55"
+  ]
+ ],
+ "flags": [
+  {
+   "a": "yt-20261124-draft.md:L37",
+   "b": "workflow-log.md:L359",
+   "reason": "Both set zoom for small-window inserts but give incompatible values. A uses Scale 174–215 (for example 214 for the two-box layout). B requires 271–405%."
+  }
+ ],
+ "stats": {
+  "cost_usd": 0.0505419,
+  "seconds": 11.2,
+  "input_tokens": 11194,
+  "output_tokens": 1185,
+  "unknown_ids": 0
+ }
+}

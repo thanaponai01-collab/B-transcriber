@@ -1,0 +1,872 @@
+[
+ {
+  "scenario": "s1a_add3_original_pos",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-HKS-X42",
+    "files": 1,
+    "lines": 26
+   },
+   {
+    "branch": "add-HKS-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "add-HKS-X96",
+    "files": 1,
+    "lines": 30
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-HKS-X42",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X96",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 2,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s1a_add3_original_pos",
+  "layout": "B",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-HKS-X42",
+    "files": 1,
+    "lines": 26
+   },
+   {
+    "branch": "add-HKS-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "add-HKS-X96",
+    "files": 1,
+    "lines": 30
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-HKS-X42",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X96",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s1a_add3_original_pos",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "add-HKS-X42",
+    "files": 1,
+    "lines": 26
+   },
+   {
+    "branch": "add-HKS-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "add-HKS-X96",
+    "files": 1,
+    "lines": 30
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-HKS-X42",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X96",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (JSONDecodeError: Expecting ',' delimiter: line 4207 column 5 (char 139345))"
+   }
+  ]
+ },
+ {
+  "scenario": "s1b_add3_append_end",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-HKS-X42",
+    "files": 1,
+    "lines": 26
+   },
+   {
+    "branch": "add-HKS-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "add-HKS-X96",
+    "files": 1,
+    "lines": 30
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-HKS-X42",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X95",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 2,
+    "false": true,
+    "result": "conflict"
+   },
+   {
+    "branch": "add-HKS-X96",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 2,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s1b_add3_append_end",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "add-HKS-X42",
+    "files": 1,
+    "lines": 26
+   },
+   {
+    "branch": "add-HKS-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "add-HKS-X96",
+    "files": 1,
+    "lines": 30
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-HKS-X42",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-HKS-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (JSONDecodeError: Expecting ',' delimiter: line 4532 column 4 (char 150040))"
+   },
+   {
+    "branch": "add-HKS-X96",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (JSONDecodeError: Expecting ',' delimiter: line 4553 column 5 (char 150691))"
+   }
+  ]
+ },
+ {
+  "scenario": "s2a_add_beside_supersede_prev",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s2a_add_beside_supersede_prev",
+  "layout": "B",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s2a_add_beside_supersede_prev",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s2b_add_end_supersede_last",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "supersede-X104",
+    "files": 1,
+    "lines": 6
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X104",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s2b_add_end_supersede_last",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   },
+   {
+    "branch": "supersede-X104",
+    "files": 1,
+    "lines": 6
+   }
+  ],
+  "merges": [
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X104",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s3_same_rule_two_edits",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "edit1",
+    "files": 1,
+    "lines": 2
+   },
+   {
+    "branch": "edit2",
+    "files": 1,
+    "lines": 2
+   }
+  ],
+  "merges": [
+   {
+    "branch": "edit1",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "edit2",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": false,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s3_same_rule_two_edits",
+  "layout": "B",
+  "union": false,
+  "branches": [
+   {
+    "branch": "edit1",
+    "files": 1,
+    "lines": 2
+   },
+   {
+    "branch": "edit2",
+    "files": 1,
+    "lines": 2
+   }
+  ],
+  "merges": [
+   {
+    "branch": "edit1",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "edit2",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": false,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s3_same_rule_two_edits",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "edit1",
+    "files": 1,
+    "lines": 2
+   },
+   {
+    "branch": "edit2",
+    "files": 1,
+    "lines": 2
+   }
+  ],
+  "merges": [
+   {
+    "branch": "edit1",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "edit2",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (ValueError: duplicate key text,text)"
+   }
+  ]
+ },
+ {
+  "scenario": "s4a_resort_vs_add",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "resort",
+    "files": 1,
+    "lines": 3962
+   },
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   }
+  ],
+  "merges": [
+   {
+    "branch": "resort",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s4a_resort_vs_add",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "resort",
+    "files": 1,
+    "lines": 3962
+   },
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   }
+  ],
+  "merges": [
+   {
+    "branch": "resort",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s4a2_resort_vs_add_M3",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "resort",
+    "files": 1,
+    "lines": 3942
+   },
+   {
+    "branch": "add-M-3",
+    "files": 1,
+    "lines": 24
+   }
+  ],
+  "merges": [
+   {
+    "branch": "resort",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-M-3",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s4a2_resort_vs_add_M3",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "resort",
+    "files": 1,
+    "lines": 3942
+   },
+   {
+    "branch": "add-M-3",
+    "files": 1,
+    "lines": 24
+   }
+  ],
+  "merges": [
+   {
+    "branch": "resort",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-M-3",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (ValueError: duplicate key id,id)"
+   }
+  ]
+ },
+ {
+  "scenario": "s4b_reformat_vs_add",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 1,
+    "lines": 9104
+   },
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-X95",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s4b_reformat_vs_add",
+  "layout": "B",
+  "union": false,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 181,
+    "lines": 8380
+   },
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   }
+  ]
+ },
+ {
+  "scenario": "s4b_reformat_vs_add",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 1,
+    "lines": 9104
+   },
+   {
+    "branch": "add-X95",
+    "files": 1,
+    "lines": 28
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "add-X95",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (JSONDecodeError: Expecting ',' delimiter: line 4554 column 2 (char 164529))"
+   }
+  ]
+ },
+ {
+  "scenario": "s4c_reformat_vs_edit",
+  "layout": "A",
+  "union": false,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 1,
+    "lines": 9160
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s4c_reformat_vs_edit",
+  "layout": "B",
+  "union": false,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 182,
+    "lines": 8432
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": true,
+    "files": 1,
+    "hunks": 1,
+    "false": true,
+    "result": "conflict"
+   }
+  ]
+ },
+ {
+  "scenario": "s4c_reformat_vs_edit",
+  "layout": "A",
+  "union": true,
+  "branches": [
+   {
+    "branch": "reformat",
+    "files": 1,
+    "lines": 9160
+   },
+   {
+    "branch": "supersede-X94",
+    "files": 1,
+    "lines": 4
+   }
+  ],
+  "merges": [
+   {
+    "branch": "reformat",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "correct"
+   },
+   {
+    "branch": "supersede-X94",
+    "conflicted": false,
+    "files": 0,
+    "hunks": 0,
+    "false": null,
+    "result": "CORRUPT (JSONDecodeError: Expecting ',' delimiter: line 4582 column 2 (char 165315))"
+   }
+  ]
+ }
+]

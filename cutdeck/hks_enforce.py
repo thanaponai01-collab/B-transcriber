@@ -6,9 +6,10 @@ copies the save into ``CutDeck/Drafts`` and stores a record keyed by GUID and cu
 (``hks_gate_store``). ``premiere_hks_status`` lists every sequence of the last save with its
 status from those records only: pass, fail (gate id and value) or ungated.
 
-The body start (``body_from``) is the one number the agent gives that changes gate values, so the
-record keeps it and the status shows it; a body that starts later than ``MAX_BODY_FROM`` seconds
-fails the ``body_range`` check (the user's finals start at 0-32 s: hook 18-27 s plus the sting).
+The body range (``body_from``, ``show_end``) is what the agent gives that changes gate values, so
+the record keeps it and the status shows it. ``body_range`` fails a body that starts after
+``MAX_BODY_FROM`` s or runs under ``MIN_BODY_S`` s (the user's 14 finals: start 18.6-32.0 s, body
+984 s or more; output of tools/hks_gates_mutate.py, 2026-11-26).
 A share of the sequence was tried first and never fired inside the show, because the YT
 sequence holds the reels' pool after the show end (mutation test, 2026-11-26).
 """
@@ -22,6 +23,7 @@ from cutdeck import hks_gate_store, hks_gates, hks_registry
 from cutdeck.hks_handover import OVERRIDES, snapshot
 
 MAX_BODY_FROM = 45.0
+MIN_BODY_S = 900.0
 
 
 def do_confirm_rules() -> dict[str, str]:
@@ -39,16 +41,16 @@ def find_sequence(project: dict, sequence: str) -> dict:
 
 
 def judge(seq: dict, found: dict, body_from: float, answers: dict, overrides: dict,
-          required: dict[str, str]) -> dict:
+          required: dict[str, str], show_end: float | None = None) -> dict:
     """The verdict on one gate run: failed controls, missing answers, the body range."""
     live = {g: r for g, r in found.items() if r["status"] != "retired"}
     failed = [g for g, r in live.items() if not r["passed"] and r["kind"] == "control" and g not in overrides]
-    if body_from > MAX_BODY_FROM:
+    if body_from > MAX_BODY_FROM or (show_end is not None and show_end - body_from < MIN_BODY_S):
         failed.append("body_range")
     missing = sorted(rid for rid in required if not str(answers.get(rid, "")).strip())
     return {"failed": failed, "answers_missing": missing,
             "warned": [g for g, r in live.items() if not r["passed"] and (r["kind"] == "warning" or g in overrides)],
-            "body_from": body_from}
+            "body_from": body_from, "show_end": show_end}
 
 
 def handover(prproj: Path, sequence: str, body_from: float, show_end: float | None, answers: dict,
@@ -64,7 +66,7 @@ def handover(prproj: Path, sequence: str, body_from: float, show_end: float | No
         sources = hks_gates.load_sources(seq, hks_gates.MAIN / "transcriber.db",
                                          hks_gates.MAIN / "output/timeline_transcripts/levels")
     found = hks_gates.run(project, seq, sources, body_from, show_end)
-    verdict = judge(seq, found, body_from, answers, overrides, do_confirm_rules())
+    verdict = judge(seq, found, body_from, answers, overrides, do_confirm_rules(), show_end)
     snap = snapshot(Path(prproj), seq["name"], None, now)
     record = {"time": now.isoformat(timespec="seconds"), "guid": seq["guid"], "name": seq["name"],
               "cut_hash": hks_gate_store.cut_hash(seq), "prproj": str(prproj), "snapshot": str(snap),
@@ -82,7 +84,7 @@ def handover(prproj: Path, sequence: str, body_from: float, show_end: float | No
                                ensure_ascii=False) + "\n")
     return {"status": "fail" if verdict["failed"] or verdict["answers_missing"] else "pass",
             **{k: record[k] for k in ("guid", "name", "cut_hash", "snapshot", "failed", "warned",
-                                      "answers_missing", "body_from", "overrides")},
+                                      "answers_missing", "body_from", "show_end", "overrides")},
             "values": {g: record["gates"][g]["value"] for g in record["failed"]}}
 
 

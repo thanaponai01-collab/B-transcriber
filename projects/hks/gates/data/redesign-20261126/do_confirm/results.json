@@ -1,0 +1,1044 @@
+{
+ "prefix_flagged": [
+  {
+   "at_s": 172.32,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 389.64,
+   "last_words": "ก็ ปัจจุบัน เนี่ย ครับ พี่ โดน",
+   "in_speech": true,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 382.0,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 826.36,
+   "last_words": "พี่ ไม่ต้อง ออก ฟัง เสียง ตั้งแต่แรก",
+   "in_speech": true,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 440.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1091.56,
+   "last_words": "แล้วก็ กระทืบ ค่ะ กระทืบ หนู ด้วย",
+   "in_speech": true,
+   "continuation": null,
+   "user": "changed: played through",
+   "user_detail": "user plays on to 1091.92"
+  },
+  {
+   "at_s": 470.0,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1181.0,
+   "last_words": "ๆ น้อง ไป โรงเรียน ไม่ ได้",
+   "in_speech": true,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 900.24,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3348.68,
+   "last_words": "ใช่ไหม ถ้า แยก ไป ก็ คือ",
+   "in_speech": true,
+   "continuation": "คือ",
+   "user": "changed: played through",
+   "user_detail": "user plays on to 3349.24"
+  },
+  {
+   "at_s": 1054.92,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4043.88,
+   "last_words": "ว่า มา ถูกต้อง พูด อย่างงี้ พูดความจริง",
+   "in_speech": true,
+   "continuation": null,
+   "user": "changed: ended earlier",
+   "user_detail": "user ends at 4042.56 (-1.32 s): พูด อย่างงี้ พูดความจริง เลย"
+  }
+ ],
+ "v1_rebuild_mismatches_vs_readback": {
+  "readback_pairs_missing_from_rebuild": [],
+  "readback_pairs_confirmed": 27,
+  "logged_cut_times_matched": 34,
+  "logged_body_cut_times": 34,
+  "rebuilt_ends_not_in_logged_cuts": [
+   1327.12
+  ]
+ },
+ "final_hook_end_s": 23.36,
+ "final_body_pieces": 99,
+ "v1_body_ends": [
+  {
+   "at_s": 75.32,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 164.92,
+   "last_words": "มึง จะ เอา กู ก็ได้ นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E281",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 266.8
+  },
+  {
+   "at_s": 153.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 345.04,
+   "last_words": "ผิด ทั้งคู่ จบ แค่นี้ ได้ ไหม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E213",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 370.88
+  },
+  {
+   "at_s": 172.64,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 389.96,
+   "last_words": "ปัจจุบัน เนี่ย ครับ พี่ โดน อีก",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 406.56
+  },
+  {
+   "at_s": 185.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 419.04,
+   "last_words": "เลย ย้าย มา ปลูก บ้าน ใหม่",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "user ends at 418.40 (-0.64 s), no word between: a trim in the pause",
+   "rater": {
+    "id": "E037",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 610.88
+  },
+  {
+   "at_s": 277.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 703.52,
+   "last_words": "รถตู้ แล้ว มัน เบิ้ล ได้ ไหม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 721.8
+  },
+  {
+   "at_s": 382.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 826.6,
+   "last_words": "ไม่ต้อง ออก ฟัง เสียง ตั้งแต่แรก เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 1032.04
+  },
+  {
+   "at_s": 442.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1091.92,
+   "last_words": "กระทืบ ค่ะ กระทืบ หนู ด้วย เหรอ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E072",
+    "backtest_verdict": "kept",
+    "sonnet": "U",
+    "opus": "F"
+   },
+   "v1_next_in": 1151.84
+  },
+  {
+   "at_s": 471.52,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1180.92,
+   "last_words": "ๆ น้อง ไป โรงเรียน ไม่ ได้",
+   "in_speech": true,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 1211.16
+  },
+  {
+   "at_s": 482.88,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1222.52,
+   "last_words": "เนื้อ ออก ไป ด้วย ส่วนหนึ่ง ค่ะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E080",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 1540.68
+  },
+  {
+   "at_s": 504.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1562.24,
+   "last_words": "ก็ จะ เบิ้ล เข ผม ยอมรับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 1757.8
+  },
+  {
+   "at_s": 520.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1773.8,
+   "last_words": "ตำรวจ ตั้งข้อหา หนู ด้วยว่า สมัครใจ ทะเลาะวิวาท",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 1809.04
+  },
+  {
+   "at_s": 532.48,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1821.08,
+   "last_words": "ก็ ไป แจ้ง ความถูกต้อง แล้ว ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "user ends at 1820.28 (-0.80 s), no word between: a trim in the pause",
+   "rater": {
+    "id": "E245",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 2346.08
+  },
+  {
+   "at_s": 568.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2382.44,
+   "last_words": "ตั้งแต่ 6 เดือน ถึง 10 ปี",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 2411.48
+  },
+  {
+   "at_s": 595.24,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2437.88,
+   "last_words": "ผม ก็ ประสาน ผู้กำกับ เข้าไป เจอกัน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 2642.8
+  },
+  {
+   "at_s": 627.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2675.0,
+   "last_words": "บอก เลย โดน แจ้งความ เท็จ นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E146",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 2867.6
+  },
+  {
+   "at_s": 656.52,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2896.68,
+   "last_words": "มึง โต แล้ว กู จัด ซะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 2928.88
+  },
+  {
+   "at_s": 676.48,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2948.84,
+   "last_words": "เลย ไป ร้อง กับ จ่า คิง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 2954.48
+  },
+  {
+   "at_s": 680.52,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2958.52,
+   "last_words": "จะ ได้ เคลียร์ กัน ว่า ยังไง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E406",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3013.84
+  },
+  {
+   "at_s": 749.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3083.08,
+   "last_words": "เลย ครับ นั่น คือ ครั้งแรก นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E273",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3153.88
+  },
+  {
+   "at_s": 803.28,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3207.4,
+   "last_words": "ใส่ เลย ครับผม ใส่ พร้อมกัน เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E057",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3234.48
+  },
+  {
+   "at_s": 824.6,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3255.8,
+   "last_words": "ได้ ออกจาก มือ เขา หรอก ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 3271.16
+  },
+  {
+   "at_s": 900.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3347.0,
+   "last_words": "แยก ไป นี่ ยับ เลย ใช่ไหม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: played through",
+   "user_detail": "user plays on to 3349.24; v1's next piece starts at 3484.68; words v1 never played: ถ้า แยก ไป ก็ คือ ย -",
+   "rater": {
+    "id": "E417",
+    "backtest_verdict": "changed",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3484.68
+  },
+  {
+   "at_s": 925.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3510.08,
+   "last_words": "เลย เข้าไป เลย อะ ค่ะ พี่",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E410",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3455.08
+  },
+  {
+   "at_s": 939.04,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3468.28,
+   "last_words": "โดน ใคร เลย นะคะ ใช่ ค่ะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E382",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 3512.92
+  },
+  {
+   "at_s": 1002.48,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3576.36,
+   "last_words": "ก็ ต้อง จะ เข มือ กัน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E329",
+    "backtest_verdict": "kept",
+    "sonnet": "U",
+    "opus": "F"
+   },
+   "v1_next_in": 3931.76
+  },
+  {
+   "at_s": 1019.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3948.84,
+   "last_words": "เสียง เนี้ยผม ไม่ เคย ยุ่ง เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": "",
+   "rater": null,
+   "v1_next_in": 4008.32
+  },
+  {
+   "at_s": 1055.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4044.2,
+   "last_words": "มา ถูกต้อง พูด อย่างงี้ พูดความจริง เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: ended earlier",
+   "user_detail": "user ends at 4042.56 (-1.64 s): พูด อย่างงี้ พูดความจริง เลย",
+   "rater": {
+    "id": "E422",
+    "backtest_verdict": "changed",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 4049.48
+  },
+  {
+   "at_s": 1087.0,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4081.04,
+   "last_words": "เงียบ ครับ ไม่ มี ไร ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E224",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 4286.84
+  },
+  {
+   "at_s": 1125.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4325.64,
+   "last_words": "เรื่อง มัน จบ นาน แล้ว ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E252",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 4549.84
+  },
+  {
+   "at_s": 1166.52,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4590.56,
+   "last_words": "คร อย่า ไป เล่า ประสาท เขา",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E343",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 5012.6
+  },
+  {
+   "at_s": 1209.4,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5055.48,
+   "last_words": "สอบสวน ให้ ปรากฏ อีกที หนึ่ง ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E141",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 5059.2
+  },
+  {
+   "at_s": 1262.2,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5112.0,
+   "last_words": "อาจจะ แยก พิจารณา กัน อีก ส่วนหนึ่ง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: played through",
+   "user_detail": "user plays on to 5124.36; v1's next piece starts at 5113.44; words v1 never played: ครับผม",
+   "rater": {
+    "id": "E363",
+    "backtest_verdict": "changed",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 5113.44
+  },
+  {
+   "at_s": 1273.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5124.36,
+   "last_words": "ก็ เลย กังวลใจ ตรงนี้ ครับ ท่าน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E291",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 5171.96
+  },
+  {
+   "at_s": 1303.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5202.64,
+   "last_words": "หมด ครับ เพราะฉะนั้น ตำรวจ ค่อนข้างจะ ระวังตัว",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E140",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": 5308.16
+  },
+  {
+   "at_s": 1327.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5331.48,
+   "last_words": "ก็ ดำเนินคดี ตรงไปตรงมา อย่าง ยุติธรรม ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "",
+   "rater": {
+    "id": "E425",
+    "backtest_verdict": "kept",
+    "sonnet": "F",
+    "opus": "F"
+   },
+   "v1_next_in": null
+  }
+ ],
+ "autosave_1946_body_ends": [
+  {
+   "at_s": 33.04,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 124.84,
+   "last_words": "ครับ ได้ ประมาณ 3 ปี กว่า",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 66.24,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 164.84,
+   "last_words": "มึง จะ เอา กู ก็ได้ นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 76.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 280.2,
+   "last_words": "มา พอดี ปุ๊บ แล้วก็ กระจกหลัง เค้า",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 77.72,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 290.08,
+   "last_words": "ถือ อะไร อยู่ ใน มือ นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 122.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 345.04,
+   "last_words": "ผิด ทั้งคู่ จบ แค่นี้ ได้ ไหม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 134.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 383.2,
+   "last_words": "นี้ นะ ครับ ผม ก็ โอเค",
+   "in_speech": true,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 136.2,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 408.0,
+   "last_words": "จาก ที่ บ้าน ผม เคย อยู่",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 146.48,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 418.4,
+   "last_words": "ก็ เลย ย้าย มา ปลูก บ้าน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 147.36,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 482.36,
+   "last_words": "อะไร อัน อ่า อันนี้ บ้าน พี่",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 154.6,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 489.84,
+   "last_words": "อู่ เขา ครับ อู่ ออฟ ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 171.32,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 597.92,
+   "last_words": "หันหลัง ให้ แม่ ง ซะ เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 232.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 676.68,
+   "last_words": "เอ็ง เบิ้ล เครื่อง ไฟ กู ทำไม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 248.08,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 700.8,
+   "last_words": "หงายท้อง ไป ติด ขับ ขวา บ้าน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 352.88,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 826.6,
+   "last_words": "ไม่ต้อง ออก ฟัง เสียง ตั้งแต่แรก เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 412.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1091.92,
+   "last_words": "กระทืบ ค่ะ กระทืบ หนู ด้วย เหรอ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 441.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1180.92,
+   "last_words": "ๆ น้อง ไป โรงเรียน ไม่ ได้",
+   "in_speech": true,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 453.2,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1222.52,
+   "last_words": "เนื้อ ออก ไป ด้วย ส่วนหนึ่ง ค่ะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 474.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1562.24,
+   "last_words": "ก็ จะ เบิ้ล เข ผม ยอมรับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 490.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1773.8,
+   "last_words": "ตำรวจ ตั้งข้อหา หนู ด้วยว่า สมัครใจ ทะเลาะวิวาท",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 502.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 1821.08,
+   "last_words": "ก็ ไป แจ้ง ความถูกต้อง แล้ว ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": "user ends at 1820.28 (-0.80 s), no word between: a trim in the pause"
+  },
+  {
+   "at_s": 539.16,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2382.44,
+   "last_words": "ตั้งแต่ 6 เดือน ถึง 10 ปี",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 565.56,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2437.88,
+   "last_words": "ผม ก็ ประสาน ผู้กำกับ เข้าไป เจอกัน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 597.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2675.0,
+   "last_words": "บอก เลย โดน แจ้งความ เท็จ นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 626.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2896.68,
+   "last_words": "มึง โต แล้ว กู จัด ซะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 646.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2948.84,
+   "last_words": "เลย ไป ร้อง กับ จ่า คิง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 650.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 2958.52,
+   "last_words": "จะ ได้ เคลียร์ กัน ว่า ยังไง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 720.08,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3083.08,
+   "last_words": "เลย ครับ นั่น คือ ครั้งแรก นะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 773.6,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3207.4,
+   "last_words": "ใส่ เลย ครับผม ใส่ พร้อมกัน เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 794.92,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3255.8,
+   "last_words": "ได้ ออกจาก มือ เขา หรอก ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 870.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3347.0,
+   "last_words": "แยก ไป นี่ ยับ เลย ใช่ไหม",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: played through",
+   "user_detail": "user plays on to 3349.24"
+  },
+  {
+   "at_s": 896.16,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3510.08,
+   "last_words": "เลย เข้าไป เลย อะ ค่ะ พี่",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 909.36,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3468.28,
+   "last_words": "โดน ใคร เลย นะคะ ใช่ ค่ะ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 972.8,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3576.36,
+   "last_words": "ก็ ต้อง จะ เข มือ กัน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 989.88,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 3948.84,
+   "last_words": "เสียง เนี้ยผม ไม่ เคย ยุ่ง เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "dropped",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1025.76,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4044.2,
+   "last_words": "มา ถูกต้อง พูด อย่างงี้ พูดความจริง เลย",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: ended earlier",
+   "user_detail": "user ends at 4042.56 (-1.64 s): พูด อย่างงี้ พูดความจริง เลย"
+  },
+  {
+   "at_s": 1057.32,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4081.04,
+   "last_words": "เงียบ ครับ ไม่ มี ไร ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1096.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4325.64,
+   "last_words": "เรื่อง มัน จบ นาน แล้ว ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1136.84,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 4590.56,
+   "last_words": "คร อย่า ไป เล่า ประสาท เขา",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1179.72,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5055.48,
+   "last_words": "สอบสวน ให้ ปรากฏ อีกที หนึ่ง ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1232.52,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5112.0,
+   "last_words": "อาจจะ แยก พิจารณา กัน อีก ส่วนหนึ่ง",
+   "in_speech": false,
+   "continuation": null,
+   "user": "changed: played through",
+   "user_detail": "user plays on to 5124.36"
+  },
+  {
+   "at_s": 1243.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5124.36,
+   "last_words": "ก็ เลย กังวลใจ ตรงนี้ ครับ ท่าน",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1274.12,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5202.64,
+   "last_words": "หมด ครับ เพราะฉะนั้น ตำรวจ ค่อนข้างจะ ระวังตัว",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  },
+  {
+   "at_s": 1297.44,
+   "media_path": "G:\\Me\\Works\\20261125 - โหนกระแส\\1. FOOTAGE\\HKS Facebook 251169 Full.mp4",
+   "src_s": 5331.48,
+   "last_words": "ก็ ดำเนินคดี ตรงไปตรงมา อย่าง ยุติธรรม ครับ",
+   "in_speech": false,
+   "continuation": null,
+   "user": "kept",
+   "user_detail": ""
+  }
+ ]
+}

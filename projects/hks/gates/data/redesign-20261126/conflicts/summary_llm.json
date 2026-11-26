@@ -1,0 +1,316 @@
+[
+ {
+  "run": "lexical_pairs_1123",
+  "rules": 26,
+  "flags": 4,
+  "hits": {},
+  "stats": null
+ },
+ {
+  "run": "llm_book_1123",
+  "rules": 26,
+  "flags": 4,
+  "hits": {},
+  "stats": {
+   "raw": "[\n{\"a\":6,\"b\":9,\"reason\":\"#6 says to shorten as much as possible by dropping retellings and asides. #9 allows studio cuts only at a thought end or camera change, or under a cover. Trimming mid-thought without a cover would force a jump cut.\"},\n{\"a\":5,\"b\":9,\"reason\":\"#5 says to jump straight to the guest's first story sentence. Cutting there can be a mid-thought studio cut with no cover, which #9 forbids.\"},\n{\"a\":6,\"b\":7,\"reason\":\"#7 says host reactions may be added for drama. #6 drops feelings that don't move events, and #7 also cuts host opinions. An editor who keeps a reaction for drama breaks the other two.\"},\n{\"a\":5,\"b\":7,\"reason\":\"#5 opens with the host's summary when the guest is slow. #7 cuts host clarifications and keeps a host connector only to bridge pieces that don't join. A host opening summary fits neither exception.\"}\n]",
+   "cost_usd": 0.0280499,
+   "seconds": 8.7,
+   "input_tokens": 6401,
+   "output_tokens": 853,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "llm_filter_1123",
+  "rules": 26,
+  "flags": 0,
+  "hits": {},
+  "stats": {
+   "raw": "[]",
+   "cost_usd": 0.016683899999999998,
+   "seconds": 2.7,
+   "input_tokens": 5682,
+   "output_tokens": 4,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_pairs_1125",
+  "rules": 214,
+  "flags": 374,
+  "hits": {
+   "K17": [],
+   "K21": []
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_book_1125",
+  "rules": 214,
+  "flags": 7,
+  "hits": {
+   "K17": [],
+   "K21": []
+  },
+  "stats": {
+   "raw": "[\n{\"a\":20,\"b\":53,\"reason\":\"20 says a cover must start exactly on the body's cut tick, and drift of 1–4 frames is a flaw. 53 says the picture clip on V2+ should start or end 0.5–2 s off the A1 cut. Following 53 fully would break 20 on a cover.\"},\n{\"a\":14,\"b\":53,\"reason\":\"14 has B-roll start and end on a sound cut so the picture change hides it. 53 has the upper-track picture start or end off the sound cut.\"},\n{\"a\":23,\"b\":53,\"reason\":\"23 treats a camera change within 1 s of a visible cut as a sliver to avoid. 53 offsets picture changes 0.5–2 s from the sound cut, so an offset under 1 s can create that sliver.\"},\n{\"a\":23,\"b\":36,\"reason\":\"23 bans a camera change within 1 s of a visible cut. 36 accepts 0.7–0.9 s shots at an edit point as fine, and the rule that allows it is not named.\"},\n{\"a\":7,\"b\":188,\"reason\":\"7 cuts the host's jokes and filler, and 6 drops asides. 188 has the editor add banter and fun moments back in on the film-promo episode, and neither side names the other as its exception.\"},\n{\"a\":35,\"b\":44,\"reason\":\"35 wants the last line to say an open story is open. 44 ends the short on a held face under the sting.\"},\n{\"a\":42,\"b\":118,\"reason\":\"42 bars a mid-body clip that is already in the hook. 118 says the hook's lines come back in the body.\"}\n]",
+   "cost_usd": 0.1657379,
+   "seconds": 37.4,
+   "input_tokens": 31068,
+   "output_tokens": 4755,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "llm_filter_1125",
+  "rules": 214,
+  "flags": 2,
+  "hits": {
+   "K17": [],
+   "K21": []
+  },
+  "stats": {
+   "raw": "[{\"pair\":41,\"reason\":\"A moves the host's recap of what was paid to the end of a story part and keeps it. C4 cuts the host's on-air recap because it repeats what the viewer just saw. An editor who keeps the recap breaks C4.\"},{\"pair\":148,\"reason\":\"A keeps and relocates the host's recap at the end of a story part. HKS-22 cuts the host's opening intro or recap. An editor who keeps the recap breaks HKS-22.\"}]",
+   "cost_usd": 0.4813539,
+   "seconds": 19.1,
+   "input_tokens": 117032,
+   "output_tokens": 1931,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_pairs_1125+log",
+  "rules": 415,
+  "flags": 515,
+  "hits": {
+   "K17": [
+    485
+   ],
+   "K21": []
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_book_1125+log",
+  "rules": 415,
+  "flags": 13,
+  "hits": {
+   "K17": [],
+   "K21": []
+  },
+  "stats": {
+   "raw": "[\n{\"a\":7,\"b\":12,\"reason\":\"Rule 7 cuts the host's recap, but rule 12 keeps the host's recap of what was paid at the end of a story part, and neither names the other.\"},\n{\"a\":16,\"b\":313,\"reason\":\"Rule 16 keeps the host's 'what happened next?' question to set up the next beat. The log's host-connector rule cuts 'then what?' questions by default and keeps them only to bridge pieces that don't join.\"},\n{\"a\":7,\"b\":16,\"reason\":\"Rule 7 cuts the host's clarifying questions and filler. Rule 16 keeps a host question that sets up the next beat, and that kind of question can look like a clarifying one.\"},\n{\"a\":14,\"b\":53,\"reason\":\"Rule 14 starts and ends B-roll on a sound cut. Rule 53 puts the picture change 0.5–2 s off the sound cut.\"},\n{\"a\":20,\"b\":53,\"reason\":\"Rule 20 says a cover must start on exactly the body's cut tick. Rule 53 puts picture changes (covers and holds on V2+) off the sound cut.\"},\n{\"a\":8,\"b\":312,\"reason\":\"Rule 8 keeps a viewer comment when it is the objection that a guest or the host then answers. The log says viewer comments read on air are always cut.\"},\n{\"a\":10,\"b\":349,\"reason\":\"Rule 10 limits film damage to B-roll zoomed to full screen. The log puts film damage on all B-roll, including fit-to-frame and small-window B-roll.\"},\n{\"a\":22,\"b\":340,\"reason\":\"Rule 22 says the clock is fine on studio frames. The log says anything showing the TV clock is always blurred.\"},\n{\"a\":7,\"b\":187,\"reason\":\"Rule 7 cuts most jokes and filler. The film-episode rule selects by laughs, teasing and banter, and the host's jokes are the same kind of material.\"},\n{\"a\":44,\"b\":131,\"reason\":\"Rule 44 ends the 1-min on a held reaction face under the sting. HKS-15 says the 1-min should end on the punch or the shocking number.\"},\n{\"a\":6,\"b\":50,\"reason\":\"Rule 6 says to shorten as much as possible and drop asides. Rule 50 says every piece must be a whole thought and brings back the line before a joining word.\"},\n{\"a\":7,\"b\":157,\"reason\":\"Rule 7 cuts the host's name checks. The check in 157 keeps extra seconds where the host names a person so the name is set up before later use.\"},\n{\"a\":43,\"b\":195,\"reason\":\"Rule 43 says a cover needs a bigger zoom in the square. The reframe note says zoomed covers keep their scale at the same centre.\"}\n]",
+   "cost_usd": 0.2207039,
+   "seconds": 37.2,
+   "input_tokens": 45002,
+   "output_tokens": 4678,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "llm_filter_1125+log",
+  "rules": 415,
+  "flags": 1,
+  "hits": {
+   "K17": [],
+   "K21": []
+  },
+  "stats": {
+   "raw": "[{\"pair\": 511, \"reason\": \"A makes the end sequence (goodbye → sting → CG_END LOGO) a fixed template for every episode, while B says there is never an end logo.\"}]",
+   "cost_usd": 0.6540879,
+   "seconds": 30.4,
+   "input_tokens": 155958,
+   "output_tokens": 3634,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K3_1123",
+  "rules": 27,
+  "flags": 0,
+  "hits": {
+   "K3": []
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K3_1123",
+  "rules": 27,
+  "flags": 1,
+  "hits": {
+   "K3": [
+    0
+   ]
+  },
+  "stats": {
+   "raw": "[{\"rule\": 7, \"reason\": \"Rule 3 says to cut host prompts and clarifications, but the user now says some host questions should be kept because the question has to be asked before the story is told.\"}]",
+   "cost_usd": 0.0205539,
+   "seconds": 2.8,
+   "input_tokens": 6497,
+   "output_tokens": 65,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K17_1125",
+  "rules": 215,
+  "flags": 4,
+  "hits": {
+   "K17": [
+    0
+   ]
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K17_1125",
+  "rules": 215,
+  "flags": 5,
+  "hits": {
+   "K17": [
+    2,
+    3
+   ]
+  },
+  "stats": {
+   "raw": "[\n{\"rule\":71,\"reason\":\"It tells the editor to zoom split-screen inserts to an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.\"},\n{\"rule\":72,\"reason\":\"It prescribes off-centre zoom positions, such as Scale 280 at (0.8675, 0.6244). That conflicts with the rule that all zoom-ins be centred.\"},\n{\"rule\":179,\"reason\":\"It lists off-centre zoom positions for the Backup inserts. It also zooms a full-frame film (152, 0.5/0.599) to drop the clock and bug, so a full-screen insert gets zoomed.\"},\n{\"rule\":22,\"reason\":\"It zooms the phone clip at Scale 240, Position (0.475, 0.667), which is off-centre in the frame. The user wants zoom-ins centred.\"},\n{\"rule\":43,\"reason\":\"It says to re-zoom covers and re-position each part to follow a moving subject. That means off-centre zooms, and the zooms apply to full-frame covers.\"}\n]",
+   "cost_usd": 0.12934589999999999,
+   "seconds": 10.7,
+   "input_tokens": 31155,
+   "output_tokens": 1081,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K21_1125",
+  "rules": 215,
+  "flags": 0,
+  "hits": {
+   "K21": []
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K21_1125",
+  "rules": 215,
+  "flags": 2,
+  "hits": {
+   "K21": [
+    0,
+    1
+   ]
+  },
+  "stats": {
+   "raw": "[{\"rule\":5,\"reason\":\"It says to get into each story fast, starting on the guest's first story sentence. The user now says that skips the context and wants a taste first.\"},{\"rule\":6,\"reason\":\"It drops backstory and anything that doesn't move events. The user says that cuts the context around the story.\"}]",
+   "cost_usd": 0.1233799,
+   "seconds": 6.3,
+   "input_tokens": 31161,
+   "output_tokens": 482,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K17_1125+log",
+  "rules": 416,
+  "flags": 6,
+  "hits": {
+   "K17": [
+    0
+   ]
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K17_1125+log",
+  "rules": 416,
+  "flags": 5,
+  "hits": {
+   "K17": [
+    4
+   ]
+  },
+  "stats": {
+   "raw": "[\n{\"rule\":71,\"reason\":\"Zooms split-screen inserts to fill the frame at an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.\"},\n{\"rule\":72,\"reason\":\"Fixes the zoom with an off-centre position (Scale 280, Position 0.8675, 0.6244) that follows the box, not the frame centre.\"},\n{\"rule\":43,\"reason\":\"Re-zooms each cover for the square and re-positions it to follow the subject, so the zoom is not centred.\"},\n{\"rule\":111,\"reason\":\"Frames every shot on its own by moving the zoom position (x 1.092 to 1.459), which means off-centre zooms.\"},\n{\"rule\":179,\"reason\":\"Zooms full-frame film to 152 at Position (0.5, 0.599) to drop the clock and bug. That zooms an insert that is already full screen, and the position is off-centre.\"}\n]",
+   "cost_usd": 0.18357990000000002,
+   "seconds": 9.6,
+   "input_tokens": 45081,
+   "output_tokens": 934,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K7a_1123",
+  "rules": 27,
+  "flags": 0,
+  "hits": {
+   "K7a": "control"
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K7a_1123",
+  "rules": 27,
+  "flags": 1,
+  "hits": {
+   "K7a": "control"
+  },
+  "stats": {
+   "raw": "[{\"rule\": 5, \"reason\": \"Rule 5 tells the editor to jump straight to the guest's first story sentence (or the host's summary). That opening cut is what the user now calls a jump cut they never want.\"}]",
+   "cost_usd": 0.0249879,
+   "seconds": 6.2,
+   "input_tokens": 6478,
+   "output_tokens": 516,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K6_1125",
+  "rules": 215,
+  "flags": 0,
+  "hits": {
+   "K6": "control"
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K6_1125",
+  "rules": 215,
+  "flags": 0,
+  "hits": {
+   "K6": "control"
+  },
+  "stats": {
+   "raw": "[]",
+   "cost_usd": 0.12237590000000001,
+   "seconds": 5.8,
+   "input_tokens": 31130,
+   "output_tokens": 394,
+   "unknown_ids": 0
+  }
+ },
+ {
+  "run": "lexical_K3_1125",
+  "rules": 215,
+  "flags": 2,
+  "hits": {
+   "K3": []
+  },
+  "stats": null
+ },
+ {
+  "run": "llm_K3_1125",
+  "rules": 215,
+  "flags": 2,
+  "hits": {
+   "K3": []
+  },
+  "stats": {
+   "raw": "[{\"rule\": 7, \"reason\": \"It cuts the host's clarifying questions. The user now says a question sometimes has to be asked before the story is told, so this rule removes questions the user wants kept.\"}, {\"rule\": 92, \"reason\": \"HKS-C7 repeats the same cut of the host's clarifying questions, and the user's correction says some of them must stay.\"}]",
+   "cost_usd": 0.1238039,
+   "seconds": 6.6,
+   "input_tokens": 31162,
+   "output_tokens": 524,
+   "unknown_ids": 0
+  }
+ }
+]

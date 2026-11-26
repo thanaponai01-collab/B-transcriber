@@ -3,6 +3,8 @@
 How the show is cut and finished today. Rules can change; the why behind them belongs in
 [principles.md](principles.md). Values are this episode's examples, not presets.
 
+**Source of truth: [registry/](registry/README.md).** Each rule is one file in `registry/rules/`; a new correction becomes a new rule file there (or a status change on an old one). This file is the narrative and history; the stage skills and before-you-cut.md are generated from the registry.
+
 **Before any draft, read [before-you-cut.md](before-you-cut.md)**: the gates I broke on 20261125, and why.
 
 **Status: under audit.** Every rule came from one episode (20261120). [rule-audit.md](rule-audit.md)

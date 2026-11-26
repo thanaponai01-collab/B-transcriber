@@ -1,0 +1,22 @@
+{
+ "n": 13,
+ "command": "menu_command",
+ "args": {
+  "path": "Edit > Label > Green",
+  "sequence": "1 YOUTUBE agent v1"
+ },
+ "at": "2026-11-26T16:38:33.091724",
+ "result": {
+  "menu": "Edit > Label > GREEN",
+  "id": 13132,
+  "keys": "Ctrl+Shift+4",
+  "enabled_hint": true,
+  "note": "A posted menu command is not proof: read the result back (premiere_read_timeline).",
+  "sequence": "1 YOUTUBE agent v1",
+  "focus": {
+   "focused": "timeline",
+   "via": "Window > Timelines > 1 YOUTUBE agent v1"
+  }
+ },
+ "ok": true
+}
