@@ -25,34 +25,26 @@ Applies to every write, review or refactor. For a trivial change, use judgment.
 
 The test: every changed line traces to the request.
 
-### 2. Prove an Adobe API exists before using it
+### 2. Prove the route; never write an Adobe API from memory
 
-Applies to anything in the UXP panel (`uxp/cutdeck/`) or any Premiere / UXP call. Never
-write an Adobe API from memory. All sources are pinned in the repo
-(`reference/adobe/README.md`); nothing needs downloading. Check them in this order:
+UXP is one route into Premiere, not the limit. Before saying an action can't be done, handing it
+to the user, or building a workaround, look it up in `docs/PREMIERE_CONTROL_MAP.md`: every route
+and the `premiere_*` command for each task. A command may use only routes with a LIVE row in
+`docs/PREMIERE_FACTS.md` "Route proof per command"; `tests/cutdeck_route_proof.test.cjs` fails
+on any other. When several routes reach an action, prefer UXP, then the menu, then keys, then
+the Premiere UI (measured success, same file), and read the result back. If a CutDeck guard
+blocks a task, name the guard; if you approximate, say so when you hand it over. A new route
+or command is proved live (verify-cutdeck) and recorded before agents use it. Premiere's
+built-in MCP server and `hSLScripting` are off limits: first-party only, never force them.
 
-1. **`docs/PREMIERE_FACTS.md`**: what each API actually did when run live (catches,
-   BROKEN, ABSENT, proven enum values). Add a row after every live run.
-2. **`reference/adobe/api/premierepro.txt`** and **`reference/adobe/api/uxp.txt`**: one
-   line per declared member (`grep "^SequenceEditor\." …`), generated from
-   `@adobe/premierepro@27.0.0` (the installed Premiere) and `@adobe/cc-ext-uxp-types`.
-   `NOT IN 26.2.1` marks members missing at the manifest's `minVersion` 26.2.0.
-3. **`reference/adobe/docs/`** (Adobe's `uxp-premiere-pro` docs) and
-   **`reference/adobe/samples/`** (Adobe's sample panels).
-4. **Live probe** for what typings can't tell you: numeric enum values and runtime
-   semantics (e.g. keyframe time units; `InterpolationMode` is LINEAR 0 / HOLD 4 /
-   BEZIER 5).
-
-Enforcement: `node tools/adobe/check-api.mjs` (also run by
-`tests/cutdeck_adobe_api.test.cjs`) fails on any member name no Adobe source explains.
-Its TypeScript tooling installs on the first test run, or by hand with
-`npm ci --prefix tools/adobe`. Test fakes build on `tests/fakes/premiere.cjs`, which
-enforces the proven rules and is itself checked against the typings.
-
-In the change, name the source that confirmed the API. **If UXP doesn't have the
-feature, don't fake or approximate it in the panel.** Build it in the CutDeck helper
-(`python -m cutdeck.helper`, `ws://127.0.0.1:7891`, exposed to agents by the MCP
-server `cutdeck/mcp_server.py`) and have the panel call it through `core/rpc.js`.
+For panel code (`uxp/cutdeck/`), never write an Adobe API from memory. Check, in order:
+`docs/PREMIERE_FACTS.md` (what each API did live); `reference/adobe/api/premierepro.txt` and
+`api/uxp.txt` (one line per member; `NOT IN 26.2.1` marks members missing at `minVersion`
+26.2.0); `reference/adobe/docs/` and `reference/adobe/samples/`; then a live probe for enum
+values and runtime semantics. Name the source in the change. `node tools/adobe/check-api.mjs`
+(in `tests/cutdeck_adobe_api.test.cjs`) fails on a member no Adobe source explains; its
+TypeScript installs on the first test run (`npm ci --prefix tools/adobe`). Test fakes build on
+`tests/fakes/premiere.cjs`, which enforces the proven rules.
 
 ## Commands
 
@@ -172,9 +164,9 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
 ## CutDeck (Premiere)
 
 - **Helper** `python -m cutdeck.helper` on `ws://127.0.0.1:7891` runs ASR jobs and
-  anything UXP can't do. Agents reach Premiere through the MCP server
+  the routes outside UXP (menu, keys, Premiere UI, AI Assistant). Agents reach Premiere through the MCP server
   `cutdeck/mcp_server.py`; every route in is listed in `docs/PREMIERE_CONTROL_MAP.md`.
-- **Panel** `uxp/cutdeck/` (UXP) calls the helper through `core/rpc.js`. Rule 2 applies.
+- **Panel** `uxp/cutdeck/` (UXP) calls the helper through `core/rpc.js`. Rule 2 applies to every route.
 - **Offline project reads**: `cutdeck/prproj_reader.py` reads a saved `.prproj`.
 - **HKS pipeline**: the `cutdeck/hks_*.py` modules build โหนกระแส episodes. The plan and
   its steps are in `projects/hks/build-plan.md`.

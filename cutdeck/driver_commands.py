@@ -30,6 +30,17 @@ MAX_MARKERS = 5000
 # `Backend().premiere` in a script.
 Premiere = Callable[[str, dict], Awaitable]
 
+# Every way a command reaches Premiere. A command may take a route only once docs/PREMIERE_FACTS.md
+# "Route proof per command" has a LIVE row for it (tests/cutdeck_route_proof.test.cjs).
+ROUTES = {
+    "uxp": "the CutDeck panel's UXP API",
+    "menu": "Premiere's Win32 menu bar, posted as WM_COMMAND",
+    "keys": "the user's keyboard shortcuts, sent with SendInput",
+    "premiere_ui": "Premiere's own dialogs, mouse and typing, gated on window pixels",
+    "pixels": "a capture of Premiere's window",
+    "assistant": "Premiere's AI Assistant chat, through UI Automation",
+}
+
 
 @dataclass(frozen=True)
 class Command:
@@ -47,6 +58,8 @@ class Command:
     # None: the CutDeck panel runs it. Else the helper runs it (Win32 routes: menu, keys, window
     # pixels, Adobe's AI Assistant), with `premiere` for any panel command it needs on the way.
     run: Callable[[dict, Premiere], Awaitable] | None = None
+    # The ROUTES this command takes, its own and those of the commands it runs on the way.
+    routes: tuple[str, ...] = ("uxp",)
 
 
 def _seconds_to_ticks(value, name: str) -> str:
@@ -1561,7 +1574,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("source", str), ("in_ticks", str), ("out_ticks", str), ("target", str), ("at_ticks", str),
          ("v_offset", int, 0), ("keep_piece", bool, False)),
-        run=_paste_from),
+        run=_paste_from, routes=("uxp", "menu")),
     "arrange": Command(
         900, _arrange_arguments, "write",
         """
@@ -1601,7 +1614,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         helper running, not the panel; Premiere must not be minimised.
         """,
         (),
-        run=lambda args, premiere: asyncio.to_thread(screenshot.capture)),
+        run=lambda args, premiere: asyncio.to_thread(screenshot.capture), routes=("pixels",)),
     "list_key_commands": Command(
         30, _query_arguments, "read",
         """
@@ -1611,7 +1624,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("query", str, ""),),
         cli_target=("query", lambda target: {"query": target}),
-        run=_list_key_commands),
+        run=_list_key_commands, routes=("keys",)),
     "key_command": Command(
         60, _key_command_arguments, "destructive",
         """
@@ -1628,7 +1641,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("command", str), ("focus", str | None, "timeline"), ("sequence", str | None, None)),
         cli_target=("command", lambda target: {"command": target}),
-        run=lambda args, premiere: keys.run_command(premiere, args["command"], args["focus"], args["sequence"])),
+        run=lambda args, premiere: keys.run_command(premiere, args["command"], args["focus"], args["sequence"]),
+        routes=("keys", "menu", "uxp")),
     "list_menu": Command(
         30, _query_arguments, "read",
         """
@@ -1639,7 +1653,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("query", str, ""),),
         cli_target=("query", lambda target: {"query": target}),
-        run=_list_menu),
+        run=_list_menu, routes=("menu",)),
     "set_speed": Command(
         90, _set_speed_arguments, "destructive",
         """
@@ -1651,7 +1665,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         over the keyboard for a few seconds.
         """,
         (("clips", list[str]), ("speed", float), ("reverse", bool, False), ("ripple", bool, False), ("sequence", str | None, None)),
-        run=lambda args, premiere: premiere_ui.set_speed(premiere, args)),
+        run=lambda args, premiere: premiere_ui.set_speed(premiere, args), routes=("premiere_ui", "menu", "uxp")),
     "nest_clips": Command(
         90, _nest_arguments, "destructive",
         """
@@ -1660,7 +1674,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         is added to the project. One Edit > Undo removes both. Takes over the keyboard briefly.
         """,
         (("clips", list[str]), ("name", str), ("sequence", str | None, None)),
-        run=lambda args, premiere: premiere_ui.nest_clips(premiere, args)),
+        run=lambda args, premiere: premiere_ui.nest_clips(premiere, args), routes=("premiere_ui", "menu", "uxp")),
     "paste_attributes": Command(
         300, _paste_attributes_arguments, "destructive",
         """
@@ -1674,7 +1688,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         reverts it. Takes over the keyboard briefly.
         """,
         (("source", str), ("clips", list[str]), ("sequence", str | None, None)),
-        run=lambda args, premiere: premiere_ui.paste_attributes(premiere, args)),
+        run=lambda args, premiere: premiere_ui.paste_attributes(premiere, args),
+        routes=("premiere_ui", "menu", "uxp")),
     "edit_text": Command(
         120, _edit_text_arguments, "destructive",
         """
@@ -1689,7 +1704,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         text. Takes the mouse and keyboard for a few seconds.
         """,
         (("clip", str), ("text", str), ("at_ticks", str | None, None), ("sequence", str | None, None)),
-        run=lambda args, premiere: premiere_ui.edit_text(premiere, args)),
+        run=lambda args, premiere: premiere_ui.edit_text(premiere, args), routes=("premiere_ui", "menu", "uxp")),
     "srt_subtitles": Command(
         300, _srt_subtitles_arguments, "destructive",
         """
@@ -1712,7 +1727,7 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("sequence", str), ("srt", str), ("track", int | None, None), ("style", int, 1),
          ("position", list[float] | None, None), ("scale", float | None, None)),
-        run=lambda args, premiere: srt_subtitles.run(premiere, args)),
+        run=lambda args, premiere: srt_subtitles.run(premiere, args), routes=("premiere_ui", "menu", "uxp")),
     "menu_command": Command(
         60, _menu_command_arguments, "destructive",
         """
@@ -1729,7 +1744,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         (("path", str), ("focus", str | None, "timeline"), ("sequence", str | None, None)),
         cli_target=("menu path", lambda target: {"path": target}),
         run=lambda args, premiere: keys.run_focused(premiere, args["focus"], args["sequence"],
-                                                    lambda: menu.invoke(args["path"]))),
+                                                    lambda: menu.invoke(args["path"])),
+        routes=("menu", "uxp")),
     # Waits for Adobe's reply up to timeout_s (at most 600).
     "assistant_ask": Command(
         660, _assistant_arguments, "outside",
@@ -1744,7 +1760,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("prompt", str), ("timeout_s", float, 120)),
         cli_target=("prompt", lambda target: {"prompt": target}),
-        run=lambda args, premiere: asyncio.to_thread(assistant.ask, args["prompt"], args["timeout_s"])),
+        run=lambda args, premiere: asyncio.to_thread(assistant.ask, args["prompt"], args["timeout_s"]),
+        routes=("assistant",)),
 }
 COMMANDS.update(HELPER_COMMANDS)
 PANEL_COMMANDS = [name for name, command in COMMANDS.items() if command.run is None]
