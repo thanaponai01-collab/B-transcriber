@@ -26,9 +26,9 @@ def test_an_override_waives_a_control_but_stays_listed():
     assert v["failed"] == [] and v["warned"] == ["same_frame_share"]
 
 
-def test_a_body_start_that_skips_most_of_the_sequence_fails():
-    v = hks_enforce.judge(seq(end=100.0), {}, 50.0, {}, {}, {})
-    assert v["failed"] == ["body_range"] and v["body_share"] == 0.5
+def test_a_body_start_past_the_hook_and_sting_fails():
+    assert hks_enforce.judge(seq(end=6000.0), {}, 32.0, {}, {}, {})["failed"] == []
+    assert hks_enforce.judge(seq(end=6000.0), {}, 600.0, {}, {}, {})["failed"] == ["body_range"]
 
 
 def test_a_name_two_sequences_share_is_refused_but_the_guid_finds_it():

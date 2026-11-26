@@ -7,8 +7,10 @@ copies the save into ``CutDeck/Drafts`` and stores a record keyed by GUID and cu
 status from those records only: pass, fail (gate id and value) or ungated.
 
 The body start (``body_from``) is the one number the agent gives that changes gate values, so the
-record keeps it and the status shows it; a body that covers less than ``MIN_BODY_SHARE`` of the
-sequence fails the ``body_range`` check.
+record keeps it and the status shows it; a body that starts later than ``MAX_BODY_FROM`` seconds
+fails the ``body_range`` check (the user's finals start at 0-32 s: hook 18-27 s plus the sting).
+A share of the sequence was tried first and never fired inside the show, because the YT
+sequence holds the reels' pool after the show end (mutation test, 2026-11-26).
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from pathlib import Path
 from cutdeck import hks_gate_store, hks_gates, hks_registry
 from cutdeck.hks_handover import OVERRIDES, snapshot
 
-MIN_BODY_SHARE = 0.8
+MAX_BODY_FROM = 45.0
 
 
 def do_confirm_rules() -> dict[str, str]:
@@ -41,13 +43,12 @@ def judge(seq: dict, found: dict, body_from: float, answers: dict, overrides: di
     """The verdict on one gate run: failed controls, missing answers, the body range."""
     live = {g: r for g, r in found.items() if r["status"] != "retired"}
     failed = [g for g, r in live.items() if not r["passed"] and r["kind"] == "control" and g not in overrides]
-    end = max((c["end"] for t in seq["audio_tracks"] for c in t["clips"]), default=0.0)
-    if end and (end - body_from) / end < MIN_BODY_SHARE:
+    if body_from > MAX_BODY_FROM:
         failed.append("body_range")
     missing = sorted(rid for rid in required if not str(answers.get(rid, "")).strip())
     return {"failed": failed, "answers_missing": missing,
             "warned": [g for g, r in live.items() if not r["passed"] and (r["kind"] == "warning" or g in overrides)],
-            "body_from": body_from, "body_share": round((end - body_from) / end, 3) if end else None}
+            "body_from": body_from}
 
 
 def handover(prproj: Path, sequence: str, body_from: float, show_end: float | None, answers: dict,
@@ -71,7 +72,7 @@ def handover(prproj: Path, sequence: str, body_from: float, show_end: float | No
               "answers": answers,
               "gates": {g: {**{k: r[k] for k in ("value", "line", "direction", "kind", "status", "passed")},
                             "items": r.get("items", [])[:20]} for g, r in found.items()}}
-    record["gates"]["body_range"] = {"value": verdict["body_share"], "line": MIN_BODY_SHARE, "direction": "min",
+    record["gates"]["body_range"] = {"value": body_from, "line": MAX_BODY_FROM, "direction": "max",
                                      "kind": "control", "status": "kept", "passed": "body_range" not in verdict["failed"]}
     hks_gate_store.append(record, store)
     with OVERRIDES.open("a", encoding="utf-8") as f:
