@@ -301,7 +301,7 @@ class _PasteHost:
                      "YT": [("V", 1, 0, 10 * self.S), ("A", 1, 0, 10 * self.S)]}
         self.land_v, self.clipboard, self.playhead, self.calls = land_v, None, {}, []
         self.transactions = 0
-        self.active, self.fail_paste = None, False
+        self.active, self.fail_paste, self.fail_on = None, False, set()
 
     def timeline(self, name):
         tracks = {}
@@ -313,6 +313,8 @@ class _PasteHost:
 
     async def __call__(self, command, args):
         self.calls.append(command)
+        if command in self.fail_on:
+            raise ValueError(f"{command} failed")
         if command == "make_subsequence":
             a, b = int(args["in_ticks"]), int(args["out_ticks"])
             cut = [(k, n, max(s, a), min(e, b)) for k, n, s, e in self.seqs[args["sequence"]] if s < b and e > a]
@@ -591,6 +593,86 @@ def test_a_failed_paste_pieces_removes_its_temporaries_and_names_the_half_built_
     assert set(host.seqs) - before == {"Short"}  # every temporary removed, even the active one
 
 
+def test_paste_pieces_plays_touching_pieces_that_still_follow_each_other_as_one_block():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    half = S // 2
+    out = _derive(host, [(10 * S, 11 * S + half), (11 * S + half, 13 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert ("V", 1, S, 2 * S) in host.seqs["Short"]  # the clip across the shared edge, whole
+
+
+def test_paste_pieces_refuses_touching_pieces_in_a_new_order_before_touching_premiere():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    half = S // 2
+    try:
+        _derive(host, [(3 * S + half, 5 * S), (2 * S, 3 * S + half)])
+    except ValueError as e:
+        assert "meet at" in str(e) and "leave a frame" in str(e) and "made from the template" not in str(e)
+    else:
+        raise AssertionError("reordered across a clip")
+    assert "make_subsequence" not in host.calls and "Short" not in host.seqs
+
+
+def test_paste_pieces_refuses_a_missing_template_before_any_cut():
+    host = _PasteHost()
+    S = _parent(host, 5)
+    try:
+        _derive(host, [(0, S)], template="Template ")
+    except ValueError as e:
+        assert "no template sequence 'Template '" in str(e)
+    else:
+        raise AssertionError("cut with no template to paste into")
+    assert "make_subsequence" not in host.calls
+
+
+def test_a_paste_pieces_failure_before_the_template_copy_does_not_name_a_target():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"cut_copy"}
+    before = set(host.seqs)
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "cut_copy failed" in str(e) and "made from the template" not in str(e)
+    else:
+        raise AssertionError("a failed cut reported success")
+    assert set(host.seqs) == before
+
+
+def test_paste_pieces_names_the_temporaries_it_could_not_remove():
+    # Live 2026-11-26: in a Premiere session a few minutes old every remove_piece threw "The script
+    # object is no longer valid." for a minute, and the temporaries stayed with nothing said.
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"remove_piece"}
+    out = _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert out["temporaries_left"] == ["Short span (CutDeck piece)", "Short cut (CutDeck piece)", "Short order (CutDeck piece)",
+                                       "Short order (CutDeck piece) 0.000-3.000s (CutDeck piece)"]
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"remove_piece", "cut_copy"}
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "cut_copy failed" in str(e) and "Short span (CutDeck piece)" in str(e) and "remove by hand" in str(e)
+    else:
+        raise AssertionError("a failed cut reported success")
+
+
+def test_paste_pieces_removes_only_its_own_pieces_and_leaves_the_short_open():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    kept = {"Short yt 1.000-3.000s (CutDeck piece)", "Short 2 span (CutDeck piece)"}  # a kept piece; another run's
+    for n in kept:
+        host.seqs[n] = []
+    out = _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert kept <= set(host.seqs) and host.active == "Short"
+
+
 def test_paste_pieces_refuses_to_start_when_memory_is_nearly_gone(monkeypatch):
     # Live 2026-11-26: 17 soak runs took Premiere to 41 GB private with 0.6 GB of commit left;
     # Premiere keeps what each cut used until it quits, so the next run would have crashed it.
@@ -631,6 +713,27 @@ def test_a_third_paste_into_one_target_needs_a_reason_and_reports_the_fallback()
         raise AssertionError("a third paste went through silently")
     out = _paste(host, per_piece_reason="one insert per user note")
     assert out["fallback"] == "one insert per user note"
+
+
+def test_a_failed_paste_does_not_count_toward_the_per_piece_guard():
+    host = _PasteHost()
+    host.fail_paste = True
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            _paste(host)
+    host.fail_paste, host.active = False, None
+    host.seqs = {n: c for n, c in host.seqs.items() if not n.endswith(driver_commands.PIECE_SUFFIX)}  # kept to look at
+    assert "fallback" not in _paste(host)
+
+
+def test_arrange_clones_a_long_reorder_in_batches_from_fresh_reads():
+    S = _PasteHost.S
+    n = 2 * driver_commands.CLONE_BATCH + 5
+    host = _PasteHost()
+    host.seqs["Cut"] = [(k, 1, i * S, (i + 1) * S) for i in range(n) for k in "VA"]
+    out = _arrange(host, [(i * S, (i + 1) * S) for i in range(n)][::-1])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert host.transactions == 3 + 3
 
 
 def test_arrange_is_four_steps_whatever_the_block_count():

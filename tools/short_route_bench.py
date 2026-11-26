@@ -11,7 +11,7 @@ Routes (see the PR for the numbers):
   D  paste_from per piece into a copy of the template (today's fallback)
   A  make_subsequence of the span, cut_copy to the pieces, arrange into story order, one
      paste_from of the whole result into a copy of the template, temporaries removed
-Never saves, never exports; the caller saves the scratch project when it wants a .prproj to read.
+Needs psutil (pip install psutil), which requirements.txt leaves out. Never saves, never exports; the caller saves the scratch project when it wants a .prproj to read.
 """
 from __future__ import annotations
 

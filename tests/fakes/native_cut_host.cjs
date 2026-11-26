@@ -6,12 +6,13 @@ const path = require("node:path");
 const golden = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "fixtures", "cutdeck_native_plan_golden.json"), "utf8"));
 const TPF = BigInt(golden.ticks_per_frame);
 
-function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, snapCloneIn = false, markers = [] } = {}) {
+function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = new Set(), staleCloneCalls = new Set(), rippleMode = "track", nullClipRead = () => false, staleEndRead = () => 0n, snapCloneIn = false, markers = [] } = {}) {
   // markers: the source's sequence markers, [startFrame, name]; moved to an absolute time (probed live).
   // snapCloneIn: a clone's in-point is floored to a whole frame and its head grows by the same
   // amount, so it lands that much early (live 2026-11-02, 59.94 fps: a razor filler whose in-point
   // sat 1058400 ticks past a frame cloned to 1058400 ticks before its edge, one frame + 1058400 long).
   // nullClipRead({ kind, track, moveCalls, outPointCalls, trackReads }): true makes that clip read return null entries (live 2026-10-25).
+  // staleEndRead (same argument): ticks added to the end a clip reads, as a read that still shows an old length.
   // rippleMode: what a ripple remove shifts. "track": later clips on that clip's own track;
   // "all": later clips on every track (sync lock on). Premiere's answer is unprobed.
   let guid = 0;
@@ -85,7 +86,7 @@ function fakeHost(rows, { speedOf = () => 1, transitions = [], staleMoveCalls = 
   const n = (v) => { hostReads++; return v; };
   const wrapItem = (r) => {
     const item = { _raw: r, _stale: false,
-    getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: r.end.toString() }),
+    getStartTime: async () => n({ ticks: r.start.toString() }), getEndTime: async () => n({ ticks: (r.end + staleEndRead({ kind: r.kind, track: r.track, moveCalls, outPointCalls, trackReads })).toString() }),
     getInPoint: async () => n({ ticks: r.in.toString() }),
     getOutPoint: async () => n({ ticks: (r.in + r.end - r.start).toString() }),
     isDisabled: async () => !!r.disabled,

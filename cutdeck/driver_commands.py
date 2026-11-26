@@ -1358,6 +1358,10 @@ def _clips(timeline: dict, since: int = 0) -> list[tuple[str, int, int, int]]:
                   for t in timeline["tracks"] for c in t["clips"] if int(c["start_ticks"]) >= since)
 
 
+def _piece_name(source: str, a: int, b: int) -> str:
+    return f"{source} {a / PPRO_TICKS_PER_SECOND:.3f}-{b / PPRO_TICKS_PER_SECOND:.3f}s{PIECE_SUFFIX}"
+
+
 async def _paste_from(args: dict, premiere: Premiere) -> dict:
     """make_subsequence of the source range → Edit > Copy → Edit > Paste parked past the target's
     end → build_sequence into: clone to at_ticks, lift the park → read back → remove the piece."""
@@ -1365,8 +1369,7 @@ async def _paste_from(args: dict, premiere: Premiere) -> dict:
     a, b = int(args["in_ticks"]), int(args["out_ticks"])
     if source == target:
         raise ValueError("source and target must be different sequences")
-    piece = (f"{source} {a / PPRO_TICKS_PER_SECOND:.3f}-{b / PPRO_TICKS_PER_SECOND:.3f}s"
-             f"{PIECE_SUFFIX}")
+    piece = _piece_name(source, a, b)
     # Make Subsequence drops a range's empty lead-in (live 2026-11-24: 0.5-3 s with the first clip
     # at 1 s gave a piece starting at 0), so measure it here and add it back when placing.
     starts = [max(s, a) for _, _, s, e in _clips(await premiere("read_timeline", {"sequence": source})) if s < b and e > a]
@@ -1442,10 +1445,13 @@ def _arrange_arguments(args: dict, jobs) -> dict:
     return {"sequence": args["sequence"], "result_name": args["result_name"], "blocks": spans}
 
 
+CLONE_BATCH = 40  # blocks per clone transaction: a 40-piece Short reordered in one (live 2026-11-26)
+
+
 def arrange_steps(blocks: list[tuple[int, int]], park: int) -> list[dict]:
     """build_sequence `into` steps that play `blocks` back to back, in this order, from the start of
-    the stretch they tile: clone every block to the park in its new order (one transaction), lift
-    the stretch, clone the park back, lift the park: four steps whatever the block count. Clone,
+    the stretch they tile: clone every block to the park in its new order (one transaction per CLONE_BATCH blocks), lift
+    the stretch, clone the park back, lift the park: four steps up to CLONE_BATCH blocks, one more per CLONE_BATCH after that. Clone,
     never move (PREMIERE_FACTS "createMoveAction of a block backward")."""
     start = min(f for f, _ in blocks)
     end = max(t for _, t in blocks)
@@ -1453,10 +1459,14 @@ def arrange_steps(blocks: list[tuple[int, int]], park: int) -> list[dict]:
     for f, t in blocks:
         ranges.append({"from_ticks": str(f), "to_ticks": str(t), "dt_ticks": str(at - f)})
         at += t - f
-    return [{"op": "clone", **ranges[0], "ranges": ranges[1:]},
+    # Handles can go stale partway through a big transaction (PREMIERE_FACTS "mid-batch"), so past
+    # CLONE_BATCH blocks the park clone is split, each step from a fresh read; 40 blocks were live-proven.
+    clones = [{"op": "clone", **chunk[0], "ranges": chunk[1:]}
+              for chunk in (ranges[i:i + CLONE_BATCH] for i in range(0, len(ranges), CLONE_BATCH))]
+    return [*clones,
             {"op": "lift", "from_ticks": str(start), "to_ticks": str(end)},
-                    {"op": "clone", "from_ticks": str(park), "to_ticks": str(at), "dt_ticks": str(start - park)},
-                    {"op": "lift", "from_ticks": str(park), "to_ticks": str(at)}]
+            {"op": "clone", "from_ticks": str(park), "to_ticks": str(at), "dt_ticks": str(start - park)},
+            {"op": "lift", "from_ticks": str(park), "to_ticks": str(at)}]
 
 
 def _arranged(clips: list[tuple], blocks: list[tuple[int, int]]) -> list[tuple]:
@@ -1548,9 +1558,28 @@ def _with_in(timeline: dict) -> list[tuple[str, int, int, int, int]]:
                   for t in timeline["tracks"] for c in t["clips"])
 
 
+async def _remove_temporaries(premiere: Premiere, show: str, temps: list[str]) -> list[str]:
+    """Remove this run's temporaries and the pieces paste_from cut from them; return what is left.
+    Premiere won't remove the active sequence (a failed paste leaves a piece active), so `show` is
+    opened first."""
+    try:
+        await premiere("open_sequence", {"sequence": show})
+        made = [s["name"] for s in (await premiere("list_project", {"depth": 1}))["sequences"]
+                if s["name"].endswith(PIECE_SUFFIX) and any(s["name"].startswith(f"{t} ") for t in temps)]
+    except Exception:  # noqa: BLE001 - the build's own error is the one to report
+        made = []
+    left = []
+    for temp in dict.fromkeys(temps + made):
+        try:
+            await premiere("remove_piece", {"name": temp})
+        except Exception:  # noqa: BLE001 - reported as left, below the build's own result
+            left.append(temp)
+    return left
+
+
 async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     """Fixed cost whatever the piece count: make_subsequence of the span, cut_copy to the pieces,
-    arrange into play order (four steps), one paste_from of the whole into the target (a new copy
+    arrange into play order (four steps up to CLONE_BATCH pieces), one paste_from of the whole into the target (a new copy
     of the template when one is given); every temporary sequence removed. Never falls back to a
     piece-by-piece route."""
     parent, template, name, pieces = args["source"], args["template"], args["target"], args["pieces"]
@@ -1559,7 +1588,10 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     if free is not None and free < MIN_COMMIT_FREE_GB:
         raise ValueError(f"only {free:.1f} GB of memory left to commit; Premiere keeps what every cut used until it "
                          "quits, and a build now could crash it. Save, restart Premiere, then run again.")
-    exists = any(s["name"] == name for s in (await premiere("list_project", {"depth": 1}))["sequences"])
+    names = {s["name"] for s in (await premiere("list_project", {"depth": 1}))["sequences"]}
+    exists = name in names
+    if template and template not in names:
+        raise ValueError(f"no template sequence {template!r}")
     if template and exists:
         raise ValueError(f"{name!r} already exists; with a template, paste_pieces makes target as a new copy of it")
     if not template and not exists:
@@ -1572,13 +1604,26 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     inside = [c for c in _clips(source) if c[2] < b and c[3] > a]
     if not inside or min(c[2] for c in inside) > a:
         raise ValueError(f"the first piece must start on a clip of {parent!r} (Make Subsequence drops a leading gap)")
+    # cut_copy splits clips only where it cuts, so a clip across an edge two pieces share stays whole,
+    # and arrange can't reorder across it. Pieces that still follow each other play as one.
+    runs: list[tuple[int, int]] = []
+    for f, t in pieces:
+        if runs and runs[-1][1] == f:
+            runs[-1] = (runs[-1][0], t)
+        else:
+            runs.append((f, t))
+    across = sorted(x for x in {t for _, t in runs} & {f for f, _ in runs} if any(c[2] < x < c[3] for c in inside))
+    if across:
+        raise ValueError(f"two pieces meet at {across[0]} ticks, inside a clip of {parent!r}, and play in a new order: "
+                         "leave a frame between them, or cut the clip there first (Add Edit)")
     await premiere("save_project", {})
     temps: list[str] = []
+    made_target = False
     try:
         span = f"{name} span{PIECE_SUFFIX}"
         await premiere("make_subsequence", {"sequence": parent, "in_ticks": str(a), "out_ticks": str(b), "result_name": span})
         temps.append(span)
-        kept = sorted((f - a, t - a) for f, t in pieces)
+        kept = sorted((f - a, t - a) for f, t in runs)
         edges = [0] + [x for k in kept for x in k] + [b - a]
         cuts = [[f // tpf, t // tpf] for f, t in zip(edges[::2], edges[1::2]) if t > f]
         cut = span
@@ -1591,7 +1636,7 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
         for f, t in kept:
             where[(f, t)] = (end, end + t - f)
             end += t - f
-        blocks = [where[(f - a, t - a)] for f, t in pieces]
+        blocks = [where[(f - a, t - a)] for f, t in runs]
         whole = cut
         if blocks != sorted(blocks):
             whole = f"{name} order{PIECE_SUFFIX}"
@@ -1601,32 +1646,23 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
                 raise ValueError(f"the reorder did not land: missing {arranged['missing'][:5]}, unexpected {arranged['unexpected'][:5]}")
         if template:
             await premiere("duplicate_sequence", {"sequence_name": template, "result_name": name})
+            made_target = True
         own = _with_in(await premiere("read_timeline", {"sequence": name}))
+        temps.append(_piece_name(whole, 0, end))  # paste_from keeps it; removed below with the rest
         pasted = await _paste_from({"source": whole, "target": name, "in_ticks": "0", "out_ticks": str(end),
-                                    "at_ticks": str(at), "v_offset": 0, "keep_piece": False}, premiere)
+                                    "at_ticks": str(at), "v_offset": 0, "keep_piece": True}, premiere)
         if pasted["missing"] or pasted["left_at_park"]:
             raise ValueError(f"the paste into {name!r} did not land: missing {pasted['missing'][:5]}, "
                              f"left at the park {pasted['left_at_park'][:5]}")
     except Exception as exc:
-        if template:
-            raise ValueError(f"{exc} ({name!r} was made from the template and is only partly built: "
-                             "delete it before running again)") from exc
-        raise
-    finally:
-        # Premiere won't remove the active sequence, and a failed paste leaves a piece active.
-        try:
-            await premiere("open_sequence", {"sequence": parent})
-            made = [s["name"] for s in (await premiere("list_project", {"depth": 1}))["sequences"]
-                    if s["name"].startswith(f"{name} ") and s["name"].endswith(PIECE_SUFFIX)]
-        except Exception:  # noqa: BLE001 - the build's own error is the one to report
-            made = []
-        for temp in dict.fromkeys(temps + made):
-            try:
-                await premiere("remove_piece", {"name": temp})
-            except Exception:  # noqa: BLE001 - the build's own error is the one to report
-                pass
+        left = await _remove_temporaries(premiere, parent, temps)
+        note = f" ({name!r} was made from the template and is only partly built: delete it before running again)" if made_target else ""
+        if left:
+            note += f" (left in the project, remove by hand: {left})"
+        raise ValueError(f"{exc}{note}") from exc
+    left = await _remove_temporaries(premiere, name, temps)
     plan, shift = [], at
-    for f, t in pieces:
+    for f, t in runs:
         plan += [(k, n, max(s, f) - f + shift, min(e, t) - f + shift) for k, n, s, e in inside if s < t and e > f]
         shift += t - f
     # What is left of a target clip the paste overwrote is the target's own, not a pasted one.
@@ -1635,7 +1671,7 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     await premiere("save_project", {})
     return {"sequence": name, "pieces": len(pieces), "length_ticks": str(end),
             "missing": sorted(set(plan) - set(built))[:50], "unexpected": sorted(set(built) - set(plan))[:50],
-            "temporaries_removed": temps}
+            "temporaries_removed": [t for t in temps if t not in left], "temporaries_left": left}
 
 
 async def _paste_from_guarded(args: dict, premiere: Premiere) -> dict:
@@ -1647,8 +1683,8 @@ async def _paste_from_guarded(args: dict, premiere: Premiere) -> dict:
                          "premiere_paste_pieces (a fixed number of edits whatever the piece count); piece by piece "
                          "crashed Premiere about every 20 pastes. To go on piece by piece anyway, pass "
                          "per_piece_reason: it is logged and returned as `fallback`.")
-    _PASTES_INTO[target] = done + 1
     result = await _paste_from(args, premiere)
+    _PASTES_INTO[target] = done + 1  # only a paste that went in counts
     return {**result, "fallback": reason} if reason else result
 
 
