@@ -13,7 +13,11 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K2",
+  "K67",
+  "K69"
+ ],
  "gate": null,
  "confirm": "For each cover, which words at that cut point at it (timecode), and is any insert used on more than one unrelated cut?",
  "probe": [

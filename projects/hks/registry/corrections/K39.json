@@ -1,0 +1,12 @@
+{
+ "id": "K39",
+ "date": "2026-11-23",
+ "time": null,
+ "episode": "20261123",
+ "session": null,
+ "source": "diff",
+ "words": "Material moved out of broadcast order to where the viewer needs it: the 'why 500k' answer at the demand, the voice clip as proof after 'still 500,000', the host recap at the end of a part, the lawyer's law (S3.2) after the events (S3.3). Save: back-jumps over 30 s in source: v2 1, v3 2, D1 4; only 1102.2->878.6 is shared with v2.",
+ "way": null,
+ "repeat_of": [],
+ "memory": "projects/hks/memory/yt-20261123-lessons.md"
+}

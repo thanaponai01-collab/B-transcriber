@@ -158,3 +158,4 @@ after a crash: `output/hks_study/premiere_recover.py` (menu route proven, restar
 Boost dB = 150·v − 100; PREMIERE_FACTS). Ran the name / question checks on v7: the accused was named only in the
 last 30 s; `EP168 agent v7.1 (dressed)` keeps the host naming him at 686.7 (patch on a copy, listening-checked).
 **Loop 8:** measured the 2022 compilations offline (media gone, timings kept): kept share 23 % as in 2026; pieces 1.5–6.4 s vs 8–10 s now. Logged in study/README and principles.
+ (not a correction)

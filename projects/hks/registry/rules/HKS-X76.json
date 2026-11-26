@@ -14,7 +14,10 @@
  "kind_source": "proposed",
  "stage": "day_setup",
  "corrections": [
-  "K10"
+  "K10",
+  "K28",
+  "K30",
+  "K63"
  ],
  "gate": "day_setup",
  "confirm": "Are the keepers on V2 with audio on A1 re-linked, and the drops left on V1?",

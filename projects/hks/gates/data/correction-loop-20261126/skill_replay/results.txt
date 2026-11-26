@@ -1,0 +1,28 @@
+1125_full_1 {'name': 'pe_56aedc', 'judge': 8, 'judge_noleak': 7, 'det': 7, 'len_s': 1170, 'breaks': ['A1', 'A11', 'A2', 'A5', 'A6', 'A7', 'A8', 'A9'], 'disagree': [], 'cost': 1.3935258, 'judge_cost': 0.1670159, 'in_tok': 98067, 'out_tok': 30703, 'models': ['claude-opus-5-5']}
+1125_full_2 {'name': 'pe_968876', 'judge': 7, 'judge_noleak': 6, 'det': 6, 'len_s': 1181, 'breaks': ['A1', 'A11', 'A2', 'A5', 'A6', 'A8', 'A9'], 'disagree': [], 'cost': 1.3304738, 'judge_cost': 0.16991989999999998, 'in_tok': 98073, 'out_tok': 27548, 'models': ['claude-opus-5-5']}
+1125_short_1 {'name': 'pe_8290ba', 'judge': 7, 'judge_noleak': 6, 'det': 6, 'len_s': 1168, 'breaks': ['A1', 'A11', 'A2', 'A5', 'A6', 'A7', 'A8'], 'disagree': [], 'cost': 1.3028418, 'judge_cost': 0.1669639, 'in_tok': 94644, 'out_tok': 27538, 'models': ['claude-opus-5-5']}
+1125_short_2 {'name': 'pe_7fec58', 'judge': 7, 'judge_noleak': 6, 'det': 6, 'len_s': 1173, 'breaks': ['A1', 'A11', 'A2', 'A5', 'A6', 'A7', 'A9'], 'disagree': [], 'cost': 1.4596418, 'judge_cost': 0.1685959, 'in_tok': 94644, 'out_tok': 35378, 'models': ['claude-opus-5-5']}
+1126_full_1 {'name': 'pe_821642', 'judge': 6, 'judge_noleak': 4, 'det': 6, 'len_s': 1059, 'breaks': ['B1', 'B13', 'B14', 'B2', 'B5', 'B6'], 'disagree': [], 'cost': 1.6468658, 'judge_cost': 0.15729790000000002, 'in_tok': 133767, 'out_tok': 29090, 'models': ['claude-opus-5-5']}
+1126_short_1 {'name': 'pe_e90ddb', 'judge': 8, 'judge_noleak': 6, 'det': 8, 'len_s': 1117, 'breaks': ['B1', 'B11', 'B13', 'B14', 'B2', 'B4', 'B6', 'B9'], 'disagree': [], 'cost': 1.7903897999999998, 'judge_cost': 0.15369190000000002, 'in_tok': 130340, 'out_tok': 37637, 'models': ['claude-opus-5-5']}
+1126_short_adv {'name': 'pe_9c5cee', 'judge': 8, 'judge_noleak': 5, 'det': 8, 'len_s': 1111, 'breaks': ['B1', 'B11', 'B13', 'B14', 'B2', 'B4', 'B5', 'B6'], 'disagree': [], 'cost': 3.2812956, 'judge_cost': 0.15429990000000002, 'in_tok': 285666, 'out_tok': 27521, 'models': ['claude-fable-5-2', 'claude-opus-5-5']}
+
+judge vs deterministic agreement on line-range items: 82/82
+
+episode 1125 (12 items, 3 leaked)
+  full  judge        [8, 7] mean 7.5 range 1
+  full  judge_noleak [7, 6] mean 6.5 range 1
+  full  det          [7, 6] mean 6.5 range 1
+  short judge        [7, 7] mean 7.0 range 0
+  short judge_noleak [6, 6] mean 6.0 range 0
+  short det          [6, 6] mean 6.0 range 0
+
+episode 1126 (14 items, 3 leaked)
+  full  judge        [6] mean 6.0 range 0
+  full  judge_noleak [4] mean 4.0 range 0
+  full  det          [6] mean 6.0 range 0
+  short judge        [8] mean 8.0 range 0
+  short judge_noleak [6] mean 6.0 range 0
+  short det          [8] mean 8.0 range 0
+full: runs 3 cost 4.37 in_tok 329907 out_tok 87341
+short: runs 3 cost 4.55 in_tok 319628 out_tok 100553
+judge cost 1.14

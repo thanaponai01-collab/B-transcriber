@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "handover",
  "corrections": [
-  "K15"
+  "K15",
+  "K57"
  ],
  "gate": "visible_cuts_in_speech",
  "confirm": null,

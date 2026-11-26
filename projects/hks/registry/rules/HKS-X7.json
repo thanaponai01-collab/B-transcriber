@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K62",
+  "K72"
+ ],
  "gate": null,
  "confirm": "How many seconds of law or expert talk are in the cut and where, and how long do the last topics run?",
  "probe": [

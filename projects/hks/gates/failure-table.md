@@ -84,6 +84,9 @@ Rule-at-time gives the commit read in that session.
 
 Counts: A 1, B 2, C 5, D 3, E 5, F 14 (30 rows; K7 is split in four).
 
+The rows are also `registry/corrections/K<n>.json` (2026-11-26), which add K28–K77: the corrections
+this table missed and the ones from diffs and 1126 ([correction-loop-20261126.md](correction-loop-20261126.md)).
+
 **Not covered.** These are left out and not checked against evidence:
 
 - The fixes in the 1124 FB and 1-min diffs, beyond the hook button (K14);

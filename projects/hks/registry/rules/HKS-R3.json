@@ -17,7 +17,9 @@
  "kind_source": "proposed",
  "stage": "paper_edit",
  "corrections": [
-  "K3"
+  "K3",
+  "K71",
+  "K73"
  ],
  "gate": null,
  "confirm": "For each kept host line, which role does it play (chapter question, challenge, summary, verdict, legal cover, connector)?",

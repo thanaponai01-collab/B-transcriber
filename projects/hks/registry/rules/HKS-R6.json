@@ -19,7 +19,10 @@
  "corrections": [
   "K2",
   "K5",
-  "K11"
+  "K11",
+  "K34",
+  "K58",
+  "K64"
  ],
  "gate": null,
  "confirm": "For each cover, what footage is it (source timecode), and do the words under it point at it?",

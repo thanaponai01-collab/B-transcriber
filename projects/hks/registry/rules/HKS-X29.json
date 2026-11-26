@@ -13,7 +13,13 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K11",
+  "K35",
+  "K46",
+  "K49",
+  "K58"
+ ],
  "gate": null,
  "confirm": "Which pieces start earlier to catch their set-up line, and which tightening sits under a cover?",
  "probe": [

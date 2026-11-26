@@ -14,7 +14,10 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K7a"
+  "K7a",
+  "K7b",
+  "K23",
+  "K34"
  ],
  "gate": "near_miss_covers",
  "confirm": null,

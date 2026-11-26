@@ -5,6 +5,8 @@ departs from them, this file wins for HKS.
 
 **Source of truth: [registry/](registry/README.md)**, one file per rule or principle; a new one goes there first. This file keeps the why in prose.
 
+**Frozen on 2026-11-26.** No rule is written here any more: a correction goes through `python tools/hks_correct.py` into the registry, and a test fails on any edit to this file (`registry/frozen.json`). Where this file and the registry differ, the registry wins.
+
 **IDs:** `HKS-<n>`. Rules ([rules.md](rules.md)) and code cite these IDs.
 
 ## Principles

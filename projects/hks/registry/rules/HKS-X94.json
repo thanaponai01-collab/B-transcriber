@@ -16,7 +16,10 @@
  "kind_source": "proposed",
  "stage": "handover",
  "corrections": [
-  "K23"
+  "K7a",
+  "K23",
+  "K34",
+  "K64"
  ],
  "gate": "same_frame_share",
  "confirm": null,

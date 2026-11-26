@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K57"
+ ],
  "gate": "same_frame_share",
  "confirm": "How many sound cuts are split as J or L, and are they built on V2+ with A1 untouched?",
  "probe": [

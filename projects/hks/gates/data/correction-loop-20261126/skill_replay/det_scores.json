@@ -1,0 +1,127 @@
+{
+ "1125_full_1": [
+  {
+   "A1": true,
+   "A2": true,
+   "A3": false,
+   "A4": false,
+   "A5": true,
+   "A6": true,
+   "A7": true,
+   "A8": true,
+   "A9": true,
+   "A10": false,
+   "A11": null,
+   "A12": null
+  },
+  1170.3640000000005
+ ],
+ "1125_full_2": [
+  {
+   "A1": true,
+   "A2": true,
+   "A3": false,
+   "A4": false,
+   "A5": true,
+   "A6": true,
+   "A7": false,
+   "A8": true,
+   "A9": true,
+   "A10": false,
+   "A11": null,
+   "A12": null
+  },
+  1181.3440000000005
+ ],
+ "1125_short_1": [
+  {
+   "A1": true,
+   "A2": true,
+   "A3": false,
+   "A4": false,
+   "A5": true,
+   "A6": true,
+   "A7": true,
+   "A8": true,
+   "A9": false,
+   "A10": false,
+   "A11": null,
+   "A12": null
+  },
+  1168.1840000000016
+ ],
+ "1125_short_2": [
+  {
+   "A1": true,
+   "A2": true,
+   "A3": false,
+   "A4": false,
+   "A5": true,
+   "A6": true,
+   "A7": true,
+   "A8": false,
+   "A9": true,
+   "A10": false,
+   "A11": null,
+   "A12": null
+  },
+  1172.8179999999995
+ ],
+ "1126_full_1": [
+  {
+   "B1": true,
+   "B2": true,
+   "B3": false,
+   "B4": false,
+   "B5": true,
+   "B6": true,
+   "B7": false,
+   "B8": false,
+   "B9": false,
+   "B10": false,
+   "B11": false,
+   "B12": false,
+   "B13": true,
+   "B14": true
+  },
+  1059.010000000003
+ ],
+ "1126_short_1": [
+  {
+   "B1": true,
+   "B2": true,
+   "B3": false,
+   "B4": true,
+   "B5": false,
+   "B6": true,
+   "B7": false,
+   "B8": false,
+   "B9": true,
+   "B10": false,
+   "B11": true,
+   "B12": false,
+   "B13": true,
+   "B14": true
+  },
+  1116.8110000000024
+ ],
+ "1126_short_adv": [
+  {
+   "B1": true,
+   "B2": true,
+   "B3": false,
+   "B4": true,
+   "B5": true,
+   "B6": true,
+   "B7": false,
+   "B8": false,
+   "B9": false,
+   "B10": false,
+   "B11": true,
+   "B12": false,
+   "B13": true,
+   "B14": true
+  },
+  1111.249000000006
+ ]
+}

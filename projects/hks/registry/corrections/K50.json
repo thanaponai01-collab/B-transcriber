@@ -1,0 +1,14 @@
+{
+ "id": "K50",
+ "date": "2026-11-24",
+ "time": null,
+ "episode": "20261124",
+ "session": null,
+ "source": "diff",
+ "words": "BGM made continuous on A7-A9; the agent's FB had no music from 59 to 162 s.",
+ "way": null,
+ "repeat_of": [
+  "K42"
+ ],
+ "memory": "projects/hks/memory/yt-20261124-draft.md"
+}

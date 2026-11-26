@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K11"
+  "K11",
+  "K58"
  ],
  "gate": null,
  "confirm": "List every cut inside a thought and the cover over it.",

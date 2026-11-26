@@ -1,0 +1,1253 @@
+{
+ "about": "Rule pairs the lexical check (cutdeck/hks_rule_conflicts.py) flags among active rules. open: flagged on 2026-11-26, not yet judged by the user; kept: the user judged both stay; cleared: the conflict check run by tools/hks_correct.py did not flag it. tests/test_hks_corrections.py fails on a flagged pair not listed here.",
+ "pairs": [
+  {
+   "pair": [
+    "HKS-4",
+    "HKS-R1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-C7"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-C14"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-C18"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-C25"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-R2"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-R3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-X86"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-5",
+    "HKS-X107"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-13",
+    "HKS-X6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-17",
+    "HKS-X17"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-17",
+    "HKS-X23"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-22",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-24",
+    "HKS-X29"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-33",
+    "HKS-X11"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-33",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C2",
+    "HKS-R5"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C2",
+    "HKS-X36"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C2",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C3",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C4",
+    "HKS-C7"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C4",
+    "HKS-C18"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C4",
+    "HKS-R3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C4",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C5",
+    "HKS-C7"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C5",
+    "HKS-C18"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C5",
+    "HKS-R1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C5",
+    "HKS-R3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C5",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-C15"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-R3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-R5"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-X63"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-X80"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "HKS-X108"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C7",
+    "M-4"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C8",
+    "HKS-C25"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C8",
+    "HKS-X18"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C8",
+    "HKS-X111"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C9",
+    "HKS-C17"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C10",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C12",
+    "HKS-X107"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C14",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C15",
+    "HKS-R3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C15",
+    "HKS-X102"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C15",
+    "HKS-X107"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-C18"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-R5"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-R6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-X2"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-X22"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-X41"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-X45"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C17",
+    "HKS-X55"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C18",
+    "HKS-X63"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C19",
+    "HKS-X2"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C19",
+    "HKS-X26"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C19",
+    "HKS-X29"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C19",
+    "M-2"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C20",
+    "HKS-X3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C20",
+    "HKS-X4"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C21",
+    "HKS-R6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C22",
+    "HKS-X65"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C25",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C27",
+    "HKS-X7"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C28",
+    "HKS-R5"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C28",
+    "HKS-X80"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C28",
+    "HKS-X92"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C28",
+    "HKS-X102"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C30",
+    "HKS-X17"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-C31",
+    "HKS-X80"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R2",
+    "HKS-X1"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R2",
+    "HKS-X107"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R3",
+    "HKS-X20"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R3",
+    "HKS-X108"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X2"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X11"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X29"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X34"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X85"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "HKS-X114"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R5",
+    "M-4"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-R6",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X1",
+    "HKS-X6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X1",
+    "HKS-X86"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X1",
+    "HKS-X107"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X11"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X34"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X86"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X2",
+    "HKS-X114"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X3",
+    "HKS-X4"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X3",
+    "HKS-X29"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X4",
+    "HKS-X45"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X5",
+    "HKS-X108"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X6",
+    "HKS-X46"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X8",
+    "HKS-X24"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X8",
+    "HKS-X27"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X8",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X8",
+    "HKS-X41"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X8",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X11",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X11",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X11",
+    "HKS-X108"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X13",
+    "HKS-X102"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X16",
+    "HKS-X45"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X29"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X53"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X68"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X70"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X110"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "HKS-X114"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X17",
+    "M-6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X18",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X22",
+    "HKS-X26"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X24",
+    "HKS-X37"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X24",
+    "HKS-X63"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X24",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X29",
+    "HKS-X41"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X37",
+    "HKS-X38"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X37",
+    "HKS-X65"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X37",
+    "HKS-X94"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X37",
+    "HKS-X99"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X37",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X41",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X42",
+    "HKS-X60"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X45",
+    "HKS-X57"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X46",
+    "HKS-X65"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X46",
+    "HKS-X114"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X54",
+    "HKS-X80"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X57",
+    "HKS-X60"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X60",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X63",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X67",
+    "HKS-X102"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X75",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X75",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X77",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X78",
+    "HKS-X80"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X78",
+    "HKS-X105"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X82",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X83",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X94",
+    "HKS-X106"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X102",
+    "HKS-X108"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X102",
+    "HKS-X114"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X108",
+    "HKS-X109"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X108",
+    "HKS-X113"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X110",
+    "HKS-X111"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X110",
+    "M-3"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "HKS-X113",
+    "M-6"
+   ],
+   "status": "open",
+   "by": null
+  },
+  {
+   "pair": [
+    "M-3",
+    "M-6"
+   ],
+   "status": "open",
+   "by": null
+  }
+ ]
+}

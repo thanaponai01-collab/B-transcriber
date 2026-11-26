@@ -1,0 +1,436 @@
+[
+ {
+  "k": "K5",
+  "episode": "20261123",
+  "draft": "agent `YT draft v3` (= the user's edited v2 + agent additions) vs the user's `1 YOUTUBE D1` (saved 19:13)",
+  "change": "Short listener pops replaced: the user's cutaways are nearby-scene shots of 8-16 s, about 15 studio pieces sit on V2 played whole (10-76 s), and B-roll runs 20-46 s across many sound cuts. Save: footage clips under 4 s on the upper tracks after 20 s: v2 25, v3 31, user D1 3.",
+  "mistake": "Covered cuts with short listener pops chosen by voice label, never checked by eye (talking, out-of-sync faces).",
+  "memory": "projects/hks/memory/yt-20261123-lessons.md (bullets 'Upper tracks' / 'The agent's drafts'; why: rules.md rule 6 'Lessons from the user's finished 20261123 YT cut')",
+  "repeat_of": [
+   "K2"
+  ],
+  "verified_on_save": true
+ },
+ {
+  "k": null,
+  "episode": "20261123",
+  "draft": "agent `YT draft v3` vs the user's `1 YOUTUBE D1` (saved 19:13)",
+  "change": "Material moved out of broadcast order to where the viewer needs it: the 'why 500k' answer at the demand, the voice clip as proof after 'still 500,000', the host recap at the end of a part, the lawyer's law (S3.2) after the events (S3.3). Save: back-jumps over 30 s in source: v2 1, v3 2, D1 4; only 1102.2->878.6 is shared with v2.",
+  "mistake": "Kept broadcast order where a fact was needed earlier (note: on 20261126 the user did the opposite and kept broadcast order).",
+  "memory": "projects/hks/memory/yt-20261123-lessons.md, bullet 'Out of broadcast order 4 times'; why: rules.md rule 6 'The story is the order, not the broadcast'",
+  "repeat_of": [],
+  "verified_on_save": true
+ },
+ {
+  "k": "K14",
+  "episode": "20261124",
+  "draft": "agent's hook built in the user's `1 YOUTUBE D1` (auto-save 19:12) vs the user's 19:24 auto-save",
+  "change": "Hook button changed from the payoff alone (src 3690.00-3693.20 'ผมโกนรอเลยพี่') to set-up + payoff (3672.96-3674.60 '500 ล้านพี่หนุ่มเปิดผมตาม' + 3691.36-3694.24); hook ends 24.76 (was 24.48).",
+  "mistake": "Ended the hook on a punchline without its set-up (HKS-C23).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'YT hook'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "agent's hook built in the user's `1 YOUTUBE D1` (auto-save 19:12) vs the user's 19:24 auto-save",
+  "change": "Trailer shots re-zoomed one by one: 263 -> 289, 280; the MV cutaway 263 -> 338, x 0.154 -> 0.067.",
+  "mistake": "One zoom preset for a whole set of shots instead of framing each shot (HKS-C25).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'YT hook'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "agent's hook built in the user's `1 YOUTUBE D1` (auto-save 19:12) vs the user's 19:24 auto-save",
+  "change": "BGM moved to A8 at -33 dB under the whole hook, later -24 dB.",
+  "mistake": "Hook music bed laid with no level set (rules.md 'Music bed under the whole piece').",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'YT hook'; rules.md 'Short versions and finishing'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "agent's hook built in the user's `1 YOUTUBE D1` (auto-save 19:12) vs the user's 19:24 auto-save",
+  "change": "Sting SFX lengthened to 4.04 s and the host's first question (src 129.76) pre-laps under the sting at 25.80.",
+  "mistake": "Body started flat after a short sting instead of the voice pre-lapping under a full sting.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'YT hook'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "agent's hook built in the user's `1 YOUTUBE D1` (auto-save 19:12) vs the user's 19:24 auto-save",
+  "change": "Glitch + invert + whoosh added at the sting -> body join (27.96).",
+  "mistake": "Left a section change (sting -> body) plain, with no flash.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'YT hook'; rules.md 'A flash at every section change'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "The MV jab (src 2479.92-2485.12 + 2521.28-2527.92, already in the hook) replaced by the My Way piece (src 1727.56-1743.64).",
+  "mistake": "Replayed a hook clip in the middle of the short's body (HKS-C24).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "Boy's-bottom piece (about 18 s) cut into seven under a new B-roll cover (V7 src 2544.96, Scale 252).",
+  "mistake": "Left a long piece whole instead of tightening it under a cover.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'; rules.md 'Tighten under a cover'",
+  "repeat_of": [
+   "K11"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "A cover split in two and re-positioned for the square (Scale 333, x 1.092 -> 1.459), plus a new two-part cover at 52.72-58.12.",
+  "mistake": "Kept the 16:9 cover zoom and one position in the 1080x1080 frame instead of reframing each shot (HKS-C25).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'",
+  "repeat_of": [
+   "20261124: One zoom preset for a whole set of shots instead of framing each shot (HKS-C25). (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "Ending gets the host's set-up 'ถ้า 500 ล้าน... เตรียมทรงไว้แล้ว' and ends on 'รอพี่หนุ่มไปเลยครับ' (src 3695.0, was 3699.0); length 179.96 -> 177.76 s.",
+  "mistake": "Ended the short on the bet's payoff without its set-up and ran past the button line.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'",
+  "repeat_of": [
+   "K14 (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "Pieces started 1.5-6.7 s earlier or later than the agent's to catch the line that sets each one up.",
+  "mistake": "Piece starts missed their set-up line.",
+  "memory": "projects/hks/rules.md 'Short versions and finishing', bullet 'Tighten under a cover, and let a piece start early for its set-up' (numbers not in the memory note)",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "BGM made continuous on A7-A9; the agent's FB had no music from 59 to 162 s.",
+  "mistake": "Left a gap in the music bed (existing workflow-log rule 'BGM under the whole show').",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'; rules.md 'Music bed under the whole piece'",
+  "repeat_of": [
+   "20261124: Hook music bed laid with no level set (rules.md 'Music bed under the whole piece'). (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "The agent's disabled V13 blur ALs deleted; the `Blur below logo` boxes enabled, one per span.",
+  "mistake": "Left disabled YT clock-blur layers in the square instead of the square's own `Blur below logo` boxes.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'; rules.md 'Clock blur in squares'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`2 FACEBOOK D1 (agent v2)` (auto-save 19:46) vs the user's final `2 FACEBOOK D1`",
+  "change": "Glitch + invert added at 27.96 (the sting -> body join) in the FB.",
+  "mistake": "Left the short's sting -> body join plain, with no flash.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet 'FB'",
+  "repeat_of": [
+   "20261124: Left a section change (sting -> body) plain, with no flash. (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`3 SQUARE SELECT D1 (agent v2)` (auto-save 20:04) vs the user's final",
+  "change": "The Khom piece starts 2.16 s earlier, under the sting, with the host's picture (src 129.76) over it on V2; whoosh lengthened to 2.36 s.",
+  "mistake": "Removed the voice under the sting and started the beat flat after it.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet '1-min'",
+  "repeat_of": [
+   "20261124: Body started flat after a short sting instead of the voice pre-lapping under a full sting. (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`3 SQUARE SELECT D1 (agent v2)` (auto-save 20:04) vs the user's final",
+  "change": "Cover re-zoomed 252 -> 363 and split into two positions.",
+  "mistake": "Kept one zoom and position for a moving subject in the square (HKS-C25).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet '1-min'",
+  "repeat_of": [
+   "20261124: Kept the 16:9 cover zoom and one position in the 1080x1080 frame instead of reframing each shot (HKS-C25). (same day, diff unread)"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`3 SQUARE SELECT D1 (agent v2)` (auto-save 20:04) vs the user's final",
+  "change": "Ending is Weir's last face (src 1550.04-1550.52) held over the sting at Scale 187 with glitch flashes and a flapping whoosh, then the end card (56.04); length 59.96 -> 58.00 s.",
+  "mistake": "Ended the short on the sting and logo instead of a held face (HKS-C26).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## What the user changed after each agent build (read 2026-11-24 from the day's auto-saves), bullet '1-min'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": "K15",
+  "episode": "20261124",
+  "draft": "`1 YOUTUBE agent v4` (19:38) vs the user's `1 YOUTUBE D1` body",
+  "change": "Piece ends in running speech (<150 ms word gap): v4 20% (20 of 97), user 6%; starts v4 25%, user 19%. Of v4's 28 visible in-speech edges the user cut within 0.3 s at 1 and played the sentence through at 11.",
+  "mistake": "Cut mid-sentence or early (HKS-32).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## Edges and split edits: agent v4 vs the user's `1 YOUTUBE D1` (measured 2026-11-25)",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`1 YOUTUBE agent v4` (19:38) vs the user's `1 YOUTUBE D1` body",
+  "change": "Of v4's 28 in-speech edges, 16 fell in passages the user dropped, mostly v4's fun additions (src 586-742, 913, 1017, 1212); 472-515 was 8 bits of 1-5 s in v4, one run in D1.",
+  "mistake": "Added fun moments as 1-5 s fragments instead of whole or not at all.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## Edges and split edits: agent v4 vs the user's `1 YOUTUBE D1` (measured 2026-11-25)",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`1 YOUTUBE agent v4` (19:38) vs the user's `1 YOUTUBE D1` body",
+  "change": "Split edits: D1 150 of 180 sound cuts under a running picture, 18 J + 20 L (0.5-2 s offset); v4 67 of 101, 1 J + 7 L; 34 of v4's sound cuts were also hard picture cuts.",
+  "mistake": "Cut sound and picture on the same frame, almost no J/L cuts (HKS-33).",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## Edges and split edits: agent v4 vs the user's `1 YOUTUBE D1` (measured 2026-11-25)",
+  "repeat_of": [
+   "K11"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261124",
+  "draft": "`1 YOUTUBE agent v4` (19:38) vs the user's `1 YOUTUBE D1` body",
+  "change": "The user cut into sound far more (cuts_in_sound 207 vs v4 88), with the tight cuts under covers.",
+  "mistake": "Tightened little; did not use covers to cut tighter underneath.",
+  "memory": "projects/hks/memory/yt-20261124-draft.md ## Edges and split edits: agent v4 vs the user's `1 YOUTUBE D1` (measured 2026-11-25)",
+  "repeat_of": [
+   "K11"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": "K21",
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "(Totals: 48 pieces / 1293 s -> 126 pieces / 1043 s; the user removed 374 s and added 189 s.) Talking-head question hook removed; the attack clip with its own sound (src 939-971) opens the show and plays again in the body where the father reaches that moment.",
+  "mistake": "Built the hook from talking heads with no clip of the event.",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": "K21",
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "Context and set-up added: where the house and Off's shop are (src 480-489), the rebuilt house facing away (580-597), the Loy Krathong night (2810-2867).",
+  "mistake": "Cut the context a first-time viewer needs ('get in fast' read as 'drop context', HKS-C27).",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "The practical resolution added: shop licence, working until 17:00-18:00 (src 4331-4467).",
+  "mistake": "Dropped the story's resolution.",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "Back-and-forth in the confrontation and retellings removed (676-826 partly, 3234-3306, 3524-3562).",
+  "mistake": "Kept retellings and back-and-forth that repeat a point.",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "Lead-ins removed: the lawyer's article 68 lead-in and penalty line (2345-2382), จ่าคิง's intake (2411-2437), the police's first part (5012-5032).",
+  "mistake": "Kept each secondary speaker's lead-in before the point.",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": "K23",
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "Same-frame sound cuts: agent v1 31 of 39, user's final 23 of 99; the user added covers (e.g. V3 134.76).",
+  "mistake": "Jumped between speeches in the same scene with no cover (HKS-C29).",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [
+   "K7a",
+   "K11",
+   "20261124: Cut sound and picture on the same frame, almost no J/L cuts (HKS-33)."
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": "K22",
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "The diff lists agent v1 pieces that end in a pause but mid-thought ('...ก็', '...คือ', '...แล้วกันพี่'); the user's final does not end there.",
+  "mistake": "Ended pieces on a pause that is not the end of the thought (HKS-C28).",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [
+   "K15"
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": "K27",
+  "episode": "20261125",
+  "draft": "`1 YOUTUBE agent v1` (19:34 auto-save, ~5 min into the user's edit) vs the user's final of the same sequence",
+  "change": "Repeated words removed where the agent's ripple fixes overlapped neighbouring pieces in source: 382.7/383.2, 731.9/732.7, 2348.3/2348.5, 4288.4/4288.6.",
+  "mistake": "Ripple edge fixes made neighbouring pieces overlap, so words played twice.",
+  "memory": "projects/hks/memory/yt-20261125-draft.md, paragraph 'Diff, agent v1 vs the user's final (2026-11-25 ...)'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "Tightened word by word: 176 cuts, 360 s out (58 pauses under 0.5 s, restarts, doubled words, fillers and tags, the host's calls to the crew, asides, one swear cut by sound). Sound clips 46 -> 272, median 21.9 s -> 1.9 s. Save: agent 46 clips, median 21.9 s, 1173.8 s source; user 272 clips in the show, median 1.92 s, 1101.7 s unique source (doc says 1107).",
+  "mistake": "Kept long takes and tightened almost nothing (rule 5 read as 'keep the take whole'; HKS-X108).",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'Word by word'",
+  "repeat_of": [
+   "K11",
+   "20261124: Left a long piece whole instead of tightening it under a cover.",
+   "20261124: Tightened little; did not use covers to cut tighter underneath."
+  ],
+  "verified_on_save": true
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "Each cut hidden one by one: 49 covers (median 2.6 s) mostly from within 30 s of the sound in source, plus 55 J/L copies on V2; agent 18 covers on V4 (median 15 s) and 11 J/L copies on V3. Sound cuts in sync on both sides: agent 6 of 38, user 21 of 226.",
+  "mistake": "Few, long covers; did not hide each tight cut with its own short cover or J/L copy.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), table and 'Word by word'",
+  "repeat_of": [
+   "20261124: Cut sound and picture on the same frame, almost no J/L cuts (HKS-33)."
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "Kept the ธรรมนัส clause (4:32), คุณกิ๊ก's own donation (1:16:46) and the host's face-scan case (1:21:06), all dropped by the agent to reach 20 min; the time came from the 360 s of pauses and filler.",
+  "mistake": "Met the length line by dropping story passages instead of tightening (HKS-X109).",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'Length came from tightening, not from dropping story'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "The host's on-air opening dropped (why today 0:50, DSI called him 1:41, guest intro 3:10); the body opens on the host's challenge to the accuser (4:17). Save: agent body starts at src 50.7, user's body at src 257.1.",
+  "mistake": "Kept the host's on-air intro as 'set-up' (breaks existing rule HKS-22/HKS-C4; no earlier diff correction of it found).",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What the user dropped that I kept' / 'What they added'",
+  "repeat_of": [],
+  "verified_on_save": true
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "The legal explainer's read-outs dropped: 14:49 (what DSI will ask) and 53:15 (the innocent reading).",
+  "mistake": "Kept an explainer's read-out instead of the point.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What the user dropped that I kept'",
+  "repeat_of": [
+   "20261125: Kept each secondary speaker's lead-in before the point."
+  ],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "Side passages dropped: the host's 'why no police report' (41:14), คุณพุทธ's phone correction (1:06-1:07), the verdict (2:05:10).",
+  "mistake": "Kept side questions and corrections that do not move the story.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What the user dropped that I kept'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "คุณกัน's DSI interview insert dropped from the body (1:25:16, 1:27:48).",
+  "mistake": "Used the talking DSI insert as body pieces.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What the user dropped that I kept'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "Far more of the online part added: คุณกัน's 103 s message to พี่หนุ่ม (1:30:04), ดิน at DSI, the แหม่ม clip at its first airing with the host's reaction.",
+  "mistake": "Under-used the online-only part after the TV part (HKS-22 notes it is used heavily).",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What they added'",
+  "repeat_of": [],
+  "verified_on_save": false
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "All 55 blocks in broadcast order; none of the agent's 3 moves kept. Save: agent v1 has 3 source back-jumps over 30 s (941.7->359.7, 2523.1->1529.9, 5912.5->5116.8), the user's body 0.",
+  "mistake": "Moved pieces out of broadcast order (HKS-5). Conflicts with 20261123, where the user moved material 3-4 times.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'Order'",
+  "repeat_of": [],
+  "verified_on_save": true
+ },
+ {
+  "k": null,
+  "episode": "20261126",
+  "draft": "`1 YOUTUBE agent v1` (after the length and cover corrections, 19.56 min) vs the user's own `1 YOUTUBE D1` (the user did not edit agent v1; main save 21:05)",
+  "change": "A 25 s cold open added under the 4 AE cards (คุณกัน 1:30:39 'ผมไม่รู้ว่าพี่ไม่สบายใจอะไร' + the host quoting him, 25:43).",
+  "mistake": "Arguable: the user had said 'no hook', and the agent left the opening empty; the user's D1 still opens on a voice cold open under the cards.",
+  "memory": "projects/hks/memory/yt-20261126-draft.md ## Diff against the user's D1 (2026-11-26, after the D1 export), 'What they added'",
+  "repeat_of": [],
+  "verified_on_save": false
+ }
+]

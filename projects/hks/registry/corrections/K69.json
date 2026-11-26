@@ -1,0 +1,14 @@
+{
+ "id": "K69",
+ "date": "2026-11-26",
+ "time": null,
+ "episode": "20261126",
+ "session": null,
+ "source": "diff",
+ "words": "Each cut hidden one by one: 49 covers (median 2.6 s) mostly from within 30 s of the sound in source, plus 55 J/L copies on V2; agent 18 covers on V4 (median 15 s) and 11 J/L copies on V3. Sound cuts in sync on both sides: agent 6 of 38, user 21 of 226.",
+ "way": null,
+ "repeat_of": [
+  "K57"
+ ],
+ "memory": "projects/hks/memory/yt-20261126-draft.md"
+}

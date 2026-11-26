@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K41"
+ ],
  "gate": null,
  "confirm": "Which values in the build were measured for this episode rather than reused from an earlier one?",
  "probe": [

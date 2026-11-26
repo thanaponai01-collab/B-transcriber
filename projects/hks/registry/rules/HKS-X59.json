@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K15"
+ ],
  "gate": null,
  "confirm": "Where a 'Fix an edge mid-word / mid-phrase' edit was made, which route was used and was the result read back?",
  "probe": [

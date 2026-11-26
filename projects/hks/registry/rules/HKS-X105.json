@@ -15,7 +15,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "day_setup",
- "corrections": [],
+ "corrections": [
+  "K59",
+  "K65"
+ ],
  "gate": null,
  "confirm": "What frame size is Backup, what is each insert's scale and position, and which rendered frames did you look at?",
  "probe": [

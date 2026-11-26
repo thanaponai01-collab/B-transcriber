@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K39"
+ ],
  "gate": null,
  "confirm": "Which pieces were moved out of broadcast order, and why does the viewer need each where it now sits?",
  "probe": [

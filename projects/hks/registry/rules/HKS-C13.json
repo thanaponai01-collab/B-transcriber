@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "handover",
- "corrections": [],
+ "corrections": [
+  "K60"
+ ],
  "gate": null,
  "confirm": "List each promise and where it is answered (timecode) or left open on purpose.",
  "probe": [

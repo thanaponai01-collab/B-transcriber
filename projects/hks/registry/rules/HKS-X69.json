@@ -17,7 +17,9 @@
  "stage": "day_setup",
  "corrections": [
   "K9",
-  "K10"
+  "K10",
+  "K30",
+  "K63"
  ],
  "gate": "day_setup",
  "confirm": "Are Edit split, Backup filled and keepers on V2 linked, and are they listed in the handover?",

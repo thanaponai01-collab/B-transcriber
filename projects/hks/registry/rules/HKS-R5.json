@@ -18,7 +18,10 @@
  "stage": "build",
  "corrections": [
   "K7a",
-  "K23"
+  "K11",
+  "K23",
+  "K34",
+  "K64"
  ],
  "gate": "same_frame_share",
  "confirm": "List every visible studio cut that is not at a camera change or a thought end; what covers each?",

@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "day_setup",
- "corrections": [],
+ "corrections": [
+  "K33"
+ ],
  "gate": null,
  "confirm": "Does each question piece on Editing carry one colour, for the person being asked?",
  "probe": [

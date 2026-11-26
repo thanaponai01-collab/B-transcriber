@@ -16,7 +16,9 @@
  "kind_source": "proposed",
  "stage": "paper_edit",
  "corrections": [
-  "K21"
+  "K21",
+  "K39",
+  "K61"
  ],
  "gate": null,
  "confirm": "What question does each story part answer next, in order?",

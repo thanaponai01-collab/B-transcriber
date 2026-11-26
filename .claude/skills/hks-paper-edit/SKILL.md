@@ -7,7 +7,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # HKS paper edit: rules and do-confirm
 
-The 52 active `paper_edit` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
+The 55 active `paper_edit` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
 
 - **HKS-1** **One length, any story.** 17-20 min whatever the broadcast length; the budget decides how hard each episode is cut. Weakened: compilations differ (14:38-15:12).
 - **HKS-2** **The hook is a promise the body plays out.** 18-27 s; its lines come back in the body. Which lines the user picks is the least predictable part. 1109: 13 of 14 hook pieces play again in the body. Weakened: a 17.3 s hook on EP.162.
@@ -59,6 +59,9 @@ The 52 active `paper_edit` rules in [the registry](../../../projects/hks/registr
 - **HKS-X91** Story order, not the broadcast's order. Each story part answers "what happens next?" for someone who has never seen the case. Cut the back-and-forth and the repeats, but keep the set-up.
 - **HKS-X98** **Set-up is not backstory.** I read "get in fast" and "drop backstory" as "cut the context". The where and the incident clip are set-up, not backstory.
 - **HKS-X109** ****Tighten first, drop story last.**.** Meet the length by tightening before dropping any story passage; drop a passage only when the tightened cut is still long, and say what fact it loses. On 20261126 the agent dropped 7 passages (3.6 min) for the 20-min line; the user kept three of them (the ธรรมนัส clause, คุณกิ๊ก's own donation, the face-scan case) and made the time from 360 s of pauses and filler. Confirmed by the user 2026-11-26 ("Yes, confirm both").
+- **HKS-X111** **A film-promo day feels fun, not like an ad.** On a film-promo episode the long form feels fun, not like an advertisement for the film (user, 20261124: the v3 cut read like an ad). Not every part can be fun: keep the story that works and add the fun moments in, whole (the user, on the v4 fun paper edit).
+- **HKS-X112** **The piece opens on the line the user names.** When the user names the line a piece opens on, it opens on that line and everything before it goes (user, 20261124, on the highlight: "start with this ... remove all in front").
+- **HKS-X114** **A talking insert is not a body piece.** An interview clip the broadcast inserts, where someone talks to camera (the DSI interview of 20261126), is not a body piece: the user dropped both places the agent used it (1:25:16, 1:27:48).
 - **M-1** **Learn the why, not presets.** Every observed choice is recorded as the intent behind it (viewer effect, constraint, story role). Values (109%, -12 dB, Posterize 0.2) are today's example, not a setting to replay.
 - **M-4** Each point is told once (confirmed in both projects); HKS cut rule 2 holds the user's words.
 
@@ -112,5 +115,8 @@ Each question needs a written answer in the handover, keyed by its rule id.
 44. **HKS-X91** What question does each story part answer next, in order?
 45. **HKS-X98** Which set-up (the where, the incident clip) is kept, separate from the backstory dropped?
 46. **HKS-X109** How many seconds did tightening take out, and which story passages were still dropped for length (source timecodes, the fact each loses)?
-47. **M-1** Which values in the build were measured for this episode rather than reused from an earlier one?
-48. **M-4** Is any point told twice in the cut (timecodes)?
+47. **HKS-X111** Which fun moments are in, and does any part read like an ad for the film?
+48. **HKS-X112** Did the user name an opening line, and does the piece open on it?
+49. **HKS-X114** Is any body piece an inserted interview clip, and why does it stay?
+50. **M-1** Which values in the build were measured for this episode rather than reused from an earlier one?
+51. **M-4** Is any point told twice in the cut (timecodes)?

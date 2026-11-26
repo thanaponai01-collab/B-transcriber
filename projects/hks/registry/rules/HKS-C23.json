@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "paper_edit",
  "corrections": [
-  "K14"
+  "K14",
+  "K48"
  ],
  "gate": null,
  "confirm": "For each punchline, is its set-up line in front of it?",

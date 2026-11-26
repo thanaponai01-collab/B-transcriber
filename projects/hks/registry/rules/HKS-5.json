@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K39",
+  "K76"
+ ],
  "gate": null,
  "confirm": "Which moves were made, and why does the viewer need each?",
  "probe": [

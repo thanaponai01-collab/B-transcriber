@@ -21,10 +21,10 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from cutdeck.hks_registry import load, write_rule  # noqa: E402
+from cutdeck.hks_registry import load, load_corrections, write_rule  # noqa: E402
 
 GATES = "projects/hks/gates/registry.json"
-FAILURES = "projects/hks/gates/failure-table.md"
+CORRECTIONS = "projects/hks/registry/corrections"
 # Files whose ids the registry must keep (ids cited anywhere in them).
 ID_SOURCES = ["projects/hks/rules.md", "projects/hks/principles.md",
               "projects/hks/before-you-cut.md", "projects/PRINCIPLES.md"]
@@ -115,7 +115,7 @@ def validate(reg, gates, kcodes, problems):
             problems.append(f"{rid}: confirm must be set exactly for an active do_confirm")
         for k in r["corrections"]:
             if k not in kcodes:
-                problems.append(f"{rid}: correction {k} not in {FAILURES}")
+                problems.append(f"{rid}: correction {k} not in {CORRECTIONS}")
     cited = set()
     for path in ID_SOURCES:
         cited |= set(ID_RE.findall(read(path)))
@@ -140,7 +140,7 @@ def main():
 
     reg = load()
     gates = json.loads(read(GATES))["gates"]
-    kcodes = set(re.findall(r"^\| (K\d+[a-d]?) \|", read(FAILURES), re.M))
+    kcodes = {c["id"] for c in load_corrections()}
     problems = []
 
     changed = []

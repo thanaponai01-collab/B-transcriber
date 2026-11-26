@@ -1,0 +1,966 @@
+[
+ {
+  "id": "0930 12:31",
+  "k": null,
+  "when": "0930 12:31",
+  "session": "e5c69065",
+  "episode": "20260929",
+  "source": "teaching",
+  "words": "what i want to cut is avoid jump cut, i want it to cut where the video or live cut to different scenes",
+  "mistake": "(teaching) avoid jump cuts; cut only where the broadcast itself changes scene",
+  "repeat_of": [],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:09",
+  "k": null,
+  "when": "1120 16:09",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "the 7:40 part is sponsor, i always cut it, 13:45 cut the sponsor as well",
+  "mistake": "(teaching) sponsor segments are always cut",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:09#2",
+  "k": null,
+  "when": "1120 16:09",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "the backup sequence is for insert, on the main footage, like i see the part where, i can use later like footage of the scene, or person doing nothing,",
+  "mistake": "(teaching) Backup sequence holds the inserts: scene footage and people doing nothing",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:23",
+  "k": null,
+  "when": "1120 16:23",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "when i lift to V2 that means i pick that part to cutting, yes i go into order following the flow of story",
+  "mistake": "(teaching) picked pieces go up to V2, ordered by the story's flow",
+  "repeat_of": [
+   "1120 16:09#2"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:23#2",
+  "k": null,
+  "when": "1120 16:23",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "i try to cut to the topic as quick as i can not much of a background story",
+  "mistake": "(teaching) get into the topic fast, little background story",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:34",
+  "k": null,
+  "when": "1120 16:34",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "at first host clarifying, sometime i keep it, sometime i cut it out go straight to story, when i use host is when the story at first too long and not get into the story, i would summary by host",
+  "mistake": "(teaching) host set-up kept only when it summarises a slow start",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:38",
+  "k": null,
+  "when": "1120 16:38",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "this video we dont use jumpt cut, but we can cut it agreesive when there is b roll cover it, or create another scene for it like the scene where someone static, and talker talks",
+  "mistake": "(teaching) no jump cuts; cut hard only under B-roll or a static-listener shot",
+  "repeat_of": [
+   "0930 12:31"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:38#2",
+  "k": null,
+  "when": "1120 16:38",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "overall clip stay within 15-20 mins can be above a bit",
+  "mistake": "(teaching) YT long form length 15-20 min",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:45",
+  "k": null,
+  "when": "1120 16:45",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "its the clip in the same story, sometime same moment as they talk, only footage in the actual footage we have, sometime there is no b roll, we can find like scene static perom",
+  "mistake": "(teaching) cover B-roll comes from the same story and moment; else a static person",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 16:45#2",
+  "k": null,
+  "when": "1120 16:45",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "i try to make it talking in one time, like no repeat story, to keep it concise",
+  "mistake": "(teaching) each story told once, concise",
+  "repeat_of": [
+   "1120 16:38#2"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:05",
+  "k": null,
+  "when": "1120 18:05",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "sometime like host reaction i add it in to add drama, but opinion in the story no, viewer i always cut",
+  "mistake": "(teaching) host reactions may stay for drama; host opinion and viewer comments are cut",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:16",
+  "k": null,
+  "when": "1120 18:16",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "swear words mainly bleep them, the end same as every episode",
+  "mistake": "(teaching) bleep swear words; same ending every episode",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:35",
+  "k": null,
+  "when": "1120 18:35",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "if there is the most violent part or emotinal moment, if not i may pick things like something the climax, lead into climax, like what!, things that bad, always the same music",
+  "mistake": "(teaching) hook = most violent/emotional moment or the climax, same music",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:36",
+  "k": null,
+  "when": "1120 18:36",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "things that have the time on the top left i always blur them, and insert or b roll always full with to banner if its already run in full that fine, if its in the small window needed to be zommed in",
+  "mistake": "(teaching) blur the TV clock; full-frame inserts stay as is, small-window inserts get zoomed",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:38",
+  "k": null,
+  "when": "1120 18:38",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "film damage on all b roll, v9 blur is the clip logo and credit of video that get cut",
+  "mistake": "(teaching) film damage on all B-roll; blur clip logos and credits",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 18:40",
+  "k": null,
+  "when": "1120 18:40",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "the music is around -33db and Highlight is -24db, in the end -12 db",
+  "mistake": "(teaching) audio levels: music -33 dB, highlight -24 dB, end -12 dB",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 19:30",
+  "k": null,
+  "when": "1120 19:30",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "yes 1080x1080, fb always 2:59:24 mins or not above or equal 3 mins, main story only, scale, the b roll need to be filled full page, or if that broll is standalone with banner keep it fit to frame, ending no end logo always",
+  "mistake": "(teaching) FB cut: 1080x1080, under 3:00, main story only, B-roll fills frame, no end logo",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 19:35",
+  "k": null,
+  "when": "1120 19:35",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "fb hook always same as youtube,  choosing is the climax of the story",
+  "mistake": "(teaching) FB hook is the YT hook, the climax",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 19:35#2",
+  "k": null,
+  "when": "1120 19:35",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "the footage in this fb d1 comes from yt d1 mainly that i already edit, it the exact same things i just copy here and trim or re oganize to fit the 3 mins",
+  "mistake": "(teaching) FB is derived from YT D1 by copy and trim, not rebuilt",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 19:42",
+  "k": null,
+  "when": "1120 19:42",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "its the same as fb d1 but trim to 1 min, and its in the 4 reel with frame,",
+  "mistake": "(teaching) 1-min square derived from FB D1, trimmed to 1 min, in the 4-reel frame",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1120 19:44",
+  "k": null,
+  "when": "1120 19:44",
+  "session": "c661e379",
+  "episode": "20261120",
+  "source": "teaching",
+  "words": "is the dupplicate of fb d1, i just dupplicate there and remove the logo then put it in 5 reel,",
+  "mistake": "(teaching) 5-reel cut derived from FB D1, logo removed",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 16:24",
+  "k": null,
+  "when": "1123 16:24",
+  "session": "d6cbb4b9",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "and what you didnt do is flag the break, sponsore",
+  "mistake": "question markers left the breaks and the sponsor unflagged",
+  "repeat_of": [
+   "1120 16:09"
+  ],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 16:49",
+  "k": null,
+  "when": "1123 16:49",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "the color audio as well need to be the same",
+  "mistake": "labelled the V2 video pieces but not their audio",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 16:52",
+  "k": null,
+  "when": "1123 16:52",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "link the video and audio back together",
+  "mistake": "moving pieces to V2 left video unlinked from its audio",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 16:52#2",
+  "k": null,
+  "when": "1123 16:52",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "this is how i color, pink first mainly guest, then purple sencond guess, blue lawyer , green host, yellow is the things need to be in video or can be highlight, orange is ending sentences, teal caller phone in",
+  "mistake": "labelled topics with arbitrary cycling colours instead of the user's speaker/role scheme",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 16:54",
+  "k": null,
+  "when": "1123 16:54",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "and light green in insert and video, or things can be b roll , or static person, reset them",
+  "mistake": "agent's topic colours had to be reset; light green marks insert/B-roll material",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1123 17:04",
+  "k": null,
+  "when": "1123 17:04",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "just simple, like host asking guest 1 thats it color one dont use a lot of color like split, i mainly relate to question",
+  "mistake": "(question answer) planned to split and colour at every speaker change; label per question instead",
+  "repeat_of": [],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K1",
+  "k": "K1",
+  "when": "1123 17:32",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "red_marker",
+  "words": "i mark red you miss one in the sq",
+  "mistake": "insert search missed one insert the user wanted in Backup",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1123 17:49",
+  "k": null,
+  "when": "1123 17:49",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "remember the rule as well no jump cut only can when b roll above, the trick is if they talk to some story if that has b roll, you can put it on top and aggressive cut",
+  "mistake": "(question answer) pre-draft reminder: no uncovered jump cuts",
+  "repeat_of": [
+   "0930 12:31",
+   "1120 16:38"
+  ],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K2",
+  "k": "K2",
+  "when": "1123 18:07",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "In each cut, I saw you put some clip, like B-roll, clip there. That's not good. … if it's the same scene, don't keep it short like that. It feels weird.",
+  "mistake": "dropped a short B-roll clip on every cut instead of one long same-scene cover",
+  "repeat_of": [
+   "1120 16:45"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1123 18:07",
+  "k": null,
+  "when": "1123 18:07",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "right now you just put the like whole of speech in. Yeah, I want to be. I want it to be like concise and clear.",
+  "mistake": "kept whole speeches instead of tightening with J/L cuts under the picture",
+  "repeat_of": [
+   "1120 16:38#2",
+   "1120 16:45#2"
+  ],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K3",
+  "k": "K3",
+  "when": "1123 18:29",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "You miss some question asking. Yeah, sometimes it needs to be asked before tell the story. … asking is the s- is okay to do.",
+  "mistake": "cut the host questions that set up a story",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1123 18:29",
+  "k": null,
+  "when": "1123 18:29",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "in the insert, like there sometime would say like there is a video audio, show it. You have to show it. Sometimes there's a audio, you have to put also audio in it.",
+  "mistake": "left out the insert clip (video/voice recording) the speaker refers to",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "K4",
+  "k": "K4",
+  "when": "1123 18:29",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "when the audio play, that's where you keep dialogue out. Don't overlap them, just show the clip.",
+  "mistake": "played studio dialogue over an insert's own audio",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K5",
+  "k": "K5",
+  "when": "1123 19:16",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "Some have some static frame. It's not actually static, and they're speaking and it not sync to the audio.",
+  "mistake": "'static' listener covers showed people speaking out of sync",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K6",
+  "k": "K6",
+  "when": "1123 20:18",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "one thing you forget on all your draft is the color label",
+  "mistake": "drafts left unlabelled",
+  "repeat_of": [
+   "1123 16:52#2"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K7a",
+  "k": "K7a",
+  "when": "1123 20:40",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "red_marker",
+  "words": "the first RAID mark is like a jump cut. … I don't want that ever.",
+  "mistake": "uncovered jump cut in the draft",
+  "repeat_of": [
+   "0930 12:31",
+   "1120 16:38",
+   "1123 17:49"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K7b",
+  "k": "K7b",
+  "when": "1123 20:40",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "red_marker",
+  "words": "Show the fully on. Don't show the resolve.",
+  "mistake": "B-roll shown mid-dissolve instead of fully on",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K7c",
+  "k": "K7c",
+  "when": "1123 20:40",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "red_marker",
+  "words": "the second red is the sponsor … I just don't want the tab",
+  "mistake": "sponsor tab left visible; hide with a small centred zoom (no 3HD logo, no clock)",
+  "repeat_of": [
+   "1120 18:36"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K7d",
+  "k": "K7d",
+  "when": "1123 20:40",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "red_marker",
+  "words": "It changed the scene too short, so it's so snappy.",
+  "mistake": "shot held too briefly before the scene changes (snappy)",
+  "repeat_of": [
+   "K2"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K8",
+  "k": "K8",
+  "when": "1123 21:06",
+  "session": "eeb22609",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "can you just like duplicate the same draft then fix it?",
+  "mistake": "rebuilt each draft from scratch instead of copying the last one and fixing it",
+  "repeat_of": [
+   "1120 19:35#2"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1124 12:44",
+  "k": null,
+  "when": "1124 12:44",
+  "session": "14c7aa8b",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "right now i feel like when you want to do things, you do it all over again, but for me, i do things in 1 sq",
+  "mistake": "keeps redoing timeline work from the start instead of deriving from the existing sequence",
+  "repeat_of": [
+   "1120 19:35#2",
+   "K8"
+  ],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "1124 12:44#2",
+  "k": null,
+  "when": "1124 12:44",
+  "session": "14c7aa8b",
+  "episode": "20261123",
+  "source": "verbal",
+  "words": "on the last night run, i saw the xml fc7 things come back again, i just want you to do the timeline like i edit",
+  "mistake": "built sequences via FCP7 XML instead of editing the timeline the way the user does",
+  "repeat_of": [],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K9",
+  "k": "K9",
+  "when": "1124 15:43",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "trim it, and dont forget that you have to split the edit frist to show the section",
+  "mistake": "drafted without first splitting Edit at the sections",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K10",
+  "k": "K10",
+  "when": "1124 15:50",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "you also forgot to do the insert in backup, and the edit sq, like put things to V2",
+  "mistake": "skipped day setup: no inserts in Backup, picks not lifted to V2",
+  "repeat_of": [
+   "1120 16:09#2",
+   "1120 16:23"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K11",
+  "k": "K11",
+  "when": "1124 16:09",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "cover v2 with insert, and cut i can save more time , and tighening the story",
+  "mistake": "cuts left uncovered and story not tightened",
+  "repeat_of": [
+   "0930 12:31",
+   "1120 16:38",
+   "1120 16:38#2",
+   "1120 16:45#2",
+   "1123 17:49",
+   "1123 18:07",
+   "K7a"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K12",
+  "k": "K12",
+  "when": "1124 16:37",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "first of i want this whole video to feel fun not boring ads video for movie",
+  "mistake": "cut read like a film ad, not fun",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K13",
+  "k": "K13",
+  "when": "1124 16:45",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "i know it cant be fun in all part, but keep things like v3 but add some fun in",
+  "mistake": "over-corrected tone; keep v3 and add some fun",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1124 19:02",
+  "k": null,
+  "when": "1124 19:02",
+  "session": "d61bf7c7",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "start with this [\"คนอื่นเขาคงสร้างเจดีย์ ผมสร้างหนัง\"] remove all in front,",
+  "mistake": "highlight opened before the line the user wanted first",
+  "repeat_of": [],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K15",
+  "k": "K15",
+  "when": "1125 10:33",
+  "session": "6af416ee",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "we cut the mid sentence or we cut early, it starts weird, and  i feel like you still dont know how to use timeline in premiere",
+  "mistake": "pieces cut mid-sentence or too early",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K16",
+  "k": "K16",
+  "when": "1125 11:19",
+  "session": "6af416ee",
+  "episode": "20261124",
+  "source": "verbal",
+  "words": "avoid when see or heard someone talking while J cut … it needs to be safe interm of frame",
+  "mistake": "J/L-cut held picture shows someone talking",
+  "repeat_of": [
+   "K5"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K17",
+  "k": "K17",
+  "when": "1125 19:29",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "red_marker",
+  "words": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+  "mistake": "zoomed full-screen inserts; zooms not centred",
+  "repeat_of": [
+   "1120 18:36",
+   "K7c"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K18",
+  "k": "K18",
+  "when": "1125 19:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "some insert still not center of the frame",
+  "mistake": "inserts still off-centre",
+  "repeat_of": [
+   "1120 18:36",
+   "K7c",
+   "K17"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1125 20:44",
+  "k": null,
+  "when": "1125 20:44",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "i changed the timeline to 1920x1080 fit them all insert as well",
+  "mistake": "draft built at the 720p source size; inserts not fitted to 1920x1080",
+  "repeat_of": [],
+  "confidence": "low",
+  "acceptance": "new"
+ },
+ {
+  "id": "K19",
+  "k": "K19",
+  "when": "1125 21:01",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "you just copy paste the adj, the lemetri dont even black and blur the blood and wound",
+  "mistake": "copied the user's adjustment layer instead of masking the wound",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K20",
+  "k": "K20",
+  "when": "1125 21:09",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "use the circle, it looks bad on rectanhle",
+  "mistake": "rectangle mask instead of an ellipse",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K21",
+  "k": "K21",
+  "when": "1125 21:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "I feel like you forgot like the context around like the story. … Maybe you can give it some taste first, then just go to that story that you pick",
+  "mistake": "dropped the story context; opened cold",
+  "repeat_of": [
+   "K3"
+  ],
+  "confidence": "low",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K22",
+  "k": "K22",
+  "when": "1125 21:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "don't ever cut the things that is not finished. Like I saw some cut from you, like it feels like yeah, that's bad.",
+  "mistake": "cut pieces before the thought finished",
+  "repeat_of": [
+   "K15"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K23",
+  "k": "K23",
+  "when": "1125 21:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "I can see like jump cut. If you want to change another scene, but it in the same scene, you have to have insert or b-roll to cover it",
+  "mistake": "uncovered jump cuts",
+  "repeat_of": [
+   "0930 12:31",
+   "1120 16:38",
+   "1123 17:49",
+   "K7a",
+   "K11"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K24",
+  "k": "K24",
+  "when": "1125 21:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "for the J cut and L cut, I want you to always duplicate that layer on top and use it. Don't use the law one.",
+  "mistake": "J/L cuts made on the raw layer instead of a duplicate on top",
+  "repeat_of": [],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K25",
+  "k": "K25",
+  "when": "1125 21:31",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "I want you to brave enough to create something … ELLIPSE mask tool",
+  "mistake": "did not build its own adjustment layer with a mask",
+  "repeat_of": [
+   "K19",
+   "K20"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "K26",
+  "k": "K26",
+  "when": "1125 21:39",
+  "session": "2ce93c3f",
+  "episode": "20261125",
+  "source": "verbal",
+  "words": "you never use like a color to label like a hot spot, high volume argument, like what needs to be in a video, like uh yellow yellow one",
+  "mistake": "never labelled hot spots yellow",
+  "repeat_of": [
+   "1123 16:52#2",
+   "K6"
+  ],
+  "confidence": "high",
+  "acceptance": "k_match"
+ },
+ {
+  "id": "1126 17:20",
+  "k": null,
+  "when": "1126 17:20",
+  "session": "cece435c",
+  "episode": "20261126",
+  "source": "verbal",
+  "words": "can u relink the layer on editing,",
+  "mistake": "split/lift on Editing left V2 video unlinked from A1 audio",
+  "repeat_of": [
+   "1123 16:52"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1126 17:24",
+  "k": null,
+  "when": "1126 17:24",
+  "session": "cece435c",
+  "episode": "20261126",
+  "source": "verbal",
+  "words": "dont forget my insert, backup sq",
+  "mistake": "YT v1 body built with no covers from Backup",
+  "repeat_of": [
+   "0930 12:31",
+   "1120 16:09#2",
+   "1120 16:23",
+   "1120 16:38",
+   "1123 17:49",
+   "K7a",
+   "K10",
+   "K11",
+   "K23"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1126 17:33",
+  "k": null,
+  "when": "1126 17:33",
+  "session": "cece435c",
+  "episode": "20261126",
+  "source": "verbal",
+  "words": "make sure the backup is 1920x1080 and all broll scale up and fit the rules",
+  "mistake": "Backup built at 720p; B-roll not scaled per the zoom rules",
+  "repeat_of": [
+   "1120 18:36",
+   "K7c",
+   "K17",
+   "K18",
+   "1125 20:44"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1126 18:57",
+  "k": null,
+  "when": "1126 18:57",
+  "session": "cece435c",
+  "episode": "20261126",
+  "source": "verbal",
+  "words": "First off, I want you to check the length again. It's above 20 minutes. So cut something that you think is not worth in the story.",
+  "mistake": "handed over a body above 20 min",
+  "repeat_of": [
+   "1120 16:38#2",
+   "1120 16:45#2",
+   "1123 18:07",
+   "K11"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ },
+ {
+  "id": "1126 18:57#2",
+  "k": null,
+  "when": "1126 18:57",
+  "session": "cece435c",
+  "episode": "20261126",
+  "source": "verbal",
+  "words": "you spam a lot of like one insert. Don't do that. Like you spam it on every cut. Don't do that because every cut is not the same.",
+  "mistake": "same insert reused as cover on every cut instead of one related to each cut",
+  "repeat_of": [
+   "1120 16:45",
+   "K2"
+  ],
+  "confidence": "high",
+  "acceptance": "new"
+ }
+]

@@ -1,0 +1,62 @@
+[
+ {
+  "id": "A1",
+  "verdict": "BREAK",
+  "evidence": "Neither L0194-L0196 nor L0231-L0237 has any line in body spans. The body jumps from L0162-L0165 to L0243."
+ },
+ {
+  "id": "A2",
+  "verdict": "BREAK",
+  "evidence": "No body span covers L0891-L0916. The nearby spans are L0865-L0875 and L0923-L0929."
+ },
+ {
+  "id": "A3",
+  "verdict": "OK",
+  "evidence": "Hook option 1 uses L0341-L0343, which fall inside L0332-L0349."
+ },
+ {
+  "id": "A4",
+  "verdict": "OK",
+  "evidence": "Body span 10 (L0326-L0356) covers all of L0332-L0349."
+ },
+ {
+  "id": "A5",
+  "verdict": "BREAK",
+  "evidence": "Only L1446-L1453 (8 lines) of the roughly 51 lines in L1431-L1481 are in body spans, which is under half."
+ },
+ {
+  "id": "A6",
+  "verdict": "BREAK",
+  "evidence": "L1060-L1066 (7 lines) and L1072-L1084 (13 lines) are kept. That is 20 of 25 lines, so half or more."
+ },
+ {
+  "id": "A7",
+  "verdict": "BREAK",
+  "evidence": "L1157-L1162 (6 lines) and L1166-L1169 (4 lines) are kept. That is 10 of 13 lines, so half or more."
+ },
+ {
+  "id": "A8",
+  "verdict": "OK",
+  "evidence": "Only L0786-L0789 (4 of 10 lines) is kept, which is under half."
+ },
+ {
+  "id": "A9",
+  "verdict": "BREAK",
+  "evidence": "L0803-L0805 (3 of 6 lines) is kept, which is exactly half."
+ },
+ {
+  "id": "A10",
+  "verdict": "OK",
+  "evidence": "Only L1696-L1697 (2 of 5 lines) is kept, which is under half."
+ },
+ {
+  "id": "A11",
+  "verdict": "BREAK",
+  "evidence": "At least two spans end mid-thought. Span 5 ends on the unanswered question at L0131 ('จบแค่นี้ได้ไหม'). Span 18 ends on the open question at L0589. Span 34 ends cut off at L1127 ('พี่โด'), and span 24 ends mid-sentence at L0875."
+ },
+ {
+  "id": "A12",
+  "verdict": "OK",
+  "evidence": "The body opens at L0038-L0057 with the host's question and Off explaining the new motorcycle shop and the noise complaint, so the viewer gets the set-up."
+ }
+]

@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "handover",
- "corrections": [],
+ "corrections": [
+  "K7d"
+ ],
  "gate": null,
  "confirm": "Where would you hook harder, what runs long, and which cuts are snappy (sliver_check list, frames looked at)?",
  "probe": [

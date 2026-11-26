@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "paper_edit",
- "corrections": [],
+ "corrections": [
+  "K70"
+ ],
  "gate": null,
  "confirm": "How many seconds did tightening take out, and which story passages were still dropped for length (source timecodes, the fact each loses)?",
  "probe": [

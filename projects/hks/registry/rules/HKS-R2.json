@@ -17,7 +17,12 @@
  "kind_source": "proposed",
  "stage": "paper_edit",
  "corrections": [
-  "K21"
+  "K21",
+  "K35",
+  "K61",
+  "K62",
+  "K72",
+  "K73"
  ],
  "gate": null,
  "confirm": "Which retellings, asides and backstory were dropped, and where (timecode) does law appear as the answer to a guest's own case?",

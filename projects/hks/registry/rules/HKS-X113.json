@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X113",
+ "aliases": [],
+ "title": "The first voice pre-laps under a full sting.",
+ "text": "After a sting the body never starts flat: the sting plays its full length and the body's first voice starts under it (the user's fixes of 20261124: the host's question pre-lapped 2.16 s under a 4.04 s sting, in the YT and the 1-min).",
+ "source": {
+  "file": "projects/hks/registry/corrections/K43.json",
+  "heading": "K43"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "backfill 2026-11-26, confirmed by the user 2026-11-26 (\"confirm X110 to X114\")",
+ "stage": "build",
+ "corrections": [
+  "K43",
+  "K53"
+ ],
+ "gate": null,
+ "confirm": "Where does each sting end, and does the first voice of the body start under it?",
+ "probe": [
+  "Sting SFX lengthened to 4.04 s and the host's first question"
+ ],
+ "commit": "9844eb7",
+ "added": "2026-11-26"
+}

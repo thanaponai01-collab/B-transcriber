@@ -15,7 +15,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K56"
+ ],
  "gate": "visible_cuts_in_speech",
  "confirm": "Which moments were added, and is each a whole passage with no mid-sentence join?",
  "probe": [

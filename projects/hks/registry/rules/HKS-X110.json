@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X110",
+ "aliases": [],
+ "title": "A piece's audio carries its video's label colour.",
+ "text": "A piece's audio carries the same label colour as its video, on `Editing` and in every draft (user, 20261123: the agent coloured the V2 pictures and left their audio unlabelled).",
+ "source": {
+  "file": "projects/hks/registry/corrections/K29.json",
+  "heading": "K29"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "backfill 2026-11-26, confirmed by the user 2026-11-26 (\"confirm X110 to X114\")",
+ "stage": "day_setup",
+ "corrections": [
+  "K29"
+ ],
+ "gate": null,
+ "confirm": "Do the audio pieces carry the same label colours as their video?",
+ "probe": [
+  "the color audio as well need to be the same"
+ ],
+ "commit": "9844eb7",
+ "added": "2026-11-26"
+}

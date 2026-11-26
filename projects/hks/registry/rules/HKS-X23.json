@@ -13,7 +13,10 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
- "corrections": [],
+ "corrections": [
+  "K42",
+  "K50"
+ ],
  "gate": null,
  "confirm": "Does every second of the short sit under one BGM clip at the level for what plays there?",
  "probe": [

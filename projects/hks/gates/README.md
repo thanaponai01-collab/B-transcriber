@@ -75,6 +75,11 @@ earlier as "each mistake has a gate". The transcripts show why
 
 ## The success metric
 
+Since 2026-11-26 every correction is a file in [../registry/corrections/](../registry/corrections/) and
+`python tools/hks_corrections_report.py` counts, per episode, corrections, repeats of an earlier
+correction (the repeat-correction rate, 0.39 over 1123–1126) and the count below. Tracking table:
+[correction-loop-20261126.md](correction-loop-20261126.md).
+
 **Corrections per episode that a kept gate should have caught.** The 1123–1125 baseline under
 today's gates:
 

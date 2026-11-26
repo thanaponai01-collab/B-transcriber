@@ -1,0 +1,1833 @@
+[
+ {
+  "id": "V1",
+  "memory": [
+   {
+    "file": "projects/hks/memory/marker-draft.md",
+    "line": 16,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X76",
+    "fit": "partial"
+   }
+  ],
+  "note": "No rule says the marker draft flags breaks and sponsors; X76 only keeps them on V1 as drops."
+ },
+ {
+  "id": "V2",
+  "memory": [],
+  "rules": [],
+  "note": "X73-X75 set label colours but never say the audio carries the same colour."
+ },
+ {
+  "id": "V3",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X76",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X69",
+    "fit": "full"
+   }
+  ],
+  "note": "Memory has the relink only for 1124 (K10) and 1126; not this 1123 correction."
+ },
+ {
+  "id": "V4",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X73",
+    "fit": "full"
+   }
+  ],
+  "note": "Scheme lives only in the rule; drafts in memory apply it without recording the correction."
+ },
+ {
+  "id": "V5",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X73",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X75",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "V6",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X74",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K1",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X77",
+    "fit": "partial"
+   }
+  ],
+  "note": "X77 says inserts go in Backup but no rule asks for a complete insert search."
+ },
+ {
+  "id": "V7",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-R5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R6",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C1",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X8",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X41",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X94",
+    "fit": "partial"
+   }
+  ],
+  "note": "Jump-cut group (V7/K7a/K11/K23/V15) shares R5,C1,X8,X41,C29,X94; R6 holds the 'B-roll on top, cut aggressively' trick."
+ },
+ {
+  "id": "K2",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 20,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X3",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X4",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R6",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X106",
+    "fit": "partial"
+   }
+  ],
+  "note": "Memory: 'v1 2-s cover pops (rejected)'. Pulls against D24 (user's 1126 covers median 2.6 s)."
+ },
+ {
+  "id": "V8",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X108",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R2",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X29",
+    "fit": "partial"
+   }
+  ],
+  "note": "X34 ('in studio keep the take whole') works against this lesson."
+ },
+ {
+  "id": "K3",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C6",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R1",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-R3",
+    "fit": "partial"
+   }
+  ],
+  "note": "Strict bar: y23 line 21 lists '+ 10 host questions' in v3 but does not tie it to the correction."
+ },
+ {
+  "id": "V9",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X6",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X90",
+    "fit": "partial"
+   }
+  ],
+  "note": "Strict bar: y23 line 21 lists the voice clip in v3 without tying it to the correction. X6 says how to play an insert, not that the referred-to clip must be in."
+ },
+ {
+  "id": "K4",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X6",
+    "fit": "full"
+   }
+  ],
+  "note": "Strict bar: y23 line 21 (voice clip with its own sound) not tied to the correction."
+ },
+ {
+  "id": "K5",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 21,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 17,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X4",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X37",
+    "fit": "partial"
+   }
+  ],
+  "note": "Memory: 'user saw talking, out-of-sync faces in the listener pops' (starts end of line 21)."
+ },
+ {
+  "id": "K6",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X75",
+    "fit": "full"
+   }
+  ],
+  "note": "Strict bar: y23 lines 27/32 say labels applied / read back by colour on v4-v5, not tied to the correction."
+ },
+ {
+  "id": "K7a",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 30,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X8",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C1",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X41",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X94",
+    "fit": "partial"
+   }
+  ],
+  "note": "Memory: 1-frame jump flash at 624.4."
+ },
+ {
+  "id": "K7b",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X8",
+    "fit": "full"
+   }
+  ],
+  "note": "Strict bar: y23 line 30 ('cover ... opening on the studio') is the jump flash, not clearly the dissolve. X9 reads the same words ('show the full one') as full-frame vs box crop."
+ },
+ {
+  "id": "K7c",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 31,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 33,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X10",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K7d",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 31,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X11",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C20",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X22",
+    "fit": "partial"
+   }
+  ],
+  "note": "Memory: 0.16 s sliver at 969.7."
+ },
+ {
+  "id": "K8",
+  "memory": [
+   {
+    "file": "global:patch-drafts-not-rebuild.md",
+    "line": 13,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X17",
+    "fit": "full"
+   }
+  ],
+  "note": "Global memory quotes 'doing things all over again' dated 2026-11-23 (V10's words); counted as account for K8."
+ },
+ {
+  "id": "V10",
+  "memory": [
+   {
+    "file": "global:patch-drafts-not-rebuild.md",
+    "line": 13,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X17",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "V11",
+  "memory": [
+   {
+    "file": "global:patch-drafts-not-rebuild.md",
+    "line": 13,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X17",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K9",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 25,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X13",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-16",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X69",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K10",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 37,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X69",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X76",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X77",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K11",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 51,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-R6",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X108",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X41",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-C29",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X2",
+    "fit": "partial"
+   }
+  ],
+  "note": "Jump-cut half shares the group set; the tightening half is R6/X29/X108."
+ },
+ {
+  "id": "K12",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 62,
+    "kind": "quote"
+   }
+  ],
+  "rules": [],
+  "note": "Film-promo tone lesson lives only in memory; no registry rule."
+ },
+ {
+  "id": "K13",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 69,
+    "kind": "quote"
+   }
+  ],
+  "rules": [],
+  "note": "No rule; X17 (start from the parent) is only adjacent."
+ },
+ {
+  "id": "V12",
+  "memory": [],
+  "rules": [],
+  "note": "One-off hook start the user dictated; no memory, no general rule (X15 lets the user pick a hook)."
+ },
+ {
+  "id": "K15",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 154,
+    "kind": "quote"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 158,
+    "kind": "account"
+   },
+   {
+    "file": "global:test-checks-on-user-cut.md",
+    "line": 11,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X33",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-32",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X63",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X40",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C28",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X92",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X59",
+    "fit": "partial"
+   }
+  ],
+  "note": "Unfinished-thought group with K22."
+ },
+ {
+  "id": "K16",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 173,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X37",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X66",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-33",
+    "fit": "partial"
+   }
+  ],
+  "note": "Memory paraphrases the user's condition, not a verbatim quote."
+ },
+ {
+  "id": "K17",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 21,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X78",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K18",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 22,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X78",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "V13",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 28,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X105",
+    "fit": "partial"
+   }
+  ],
+  "note": "X105 sets Backup at the YT frame size; no rule states the YT draft itself is 1920x1080 with inserts fitted."
+ },
+ {
+  "id": "K19",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 40,
+    "kind": "quote"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 15,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 24,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X43",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X96",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X81",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X101",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X72",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K20",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 42,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X81",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X43",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X96",
+    "fit": "partial"
+   }
+  ],
+  "note": "X43/X96 allow 'Ellipse or Rectangle', which the user rejected; only X81 names the ellipse alone."
+ },
+ {
+  "id": "K21",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 56,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 66,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 10,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 19,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C27",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X39",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X71",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X89",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X90",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X98",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K22",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 58,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 72,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 8,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 16,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C28",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X40",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X92",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X33",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-32",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X63",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X97",
+    "fit": "partial"
+   }
+  ],
+  "note": "Unfinished-thought group with K15."
+ },
+ {
+  "id": "K23",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 58,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 71,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 12,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 21,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X41",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X94",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C1",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X8",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X99",
+    "fit": "partial"
+   }
+  ],
+  "note": "Jump-cut group."
+ },
+ {
+  "id": "K24",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 58,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C30",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X42",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X95",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K25",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 59,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 88,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 15,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 24,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X43",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X81",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X96",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X72",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X101",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "K26",
+  "memory": [
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 23,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C31",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X88",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X73",
+    "fit": "partial"
+   }
+  ],
+  "note": "Only global memory records it; y26 line 15 (28 yellow hot spots) applies it without recording the correction."
+ },
+ {
+  "id": "V14",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X76",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X69",
+    "fit": "full"
+   }
+  ],
+  "note": "Strict bar: y26 line 14 describes the 1126 relink pair by pair but doesn't record that the user asked."
+ },
+ {
+  "id": "V15",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-R6",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X41",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R5",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X94",
+    "fit": "partial"
+   }
+  ],
+  "note": "Strict bar: y26 line 25 records the 42 covers from Backup, not the correction. Jump-cut group."
+ },
+ {
+  "id": "V16",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 28,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X105",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X77",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "V17",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 51,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X107",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-1",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "V18",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 57,
+    "kind": "quote"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X106",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D1",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261123-lessons.md",
+    "line": 15,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X1",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-5",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X91",
+    "fit": "full"
+   }
+  ],
+  "note": "Conflicts with D31 (user kept broadcast order on 1126)."
+ },
+ {
+  "id": "K14",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 129,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C23",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X25",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D2",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 131,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C25",
+    "fit": "full"
+   },
+   {
+    "id": "M-1",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D3",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 132,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X23",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D4",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 132,
+    "kind": "account"
+   }
+  ],
+  "rules": [],
+  "note": "No rule says the body's first voice pre-laps under a full-length sting."
+ },
+ {
+  "id": "D5",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 133,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X24",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D6",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 136,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 114,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C24",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X26",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D7",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 137,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X108",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D8",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 138,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X27",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C25",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D9",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 139,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 114,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C23",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X25",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-15",
+    "fit": "partial"
+   }
+  ],
+  "note": "C23 covers the missing set-up; no rule covers running past the button line."
+ },
+ {
+  "id": "D10",
+  "memory": [],
+  "rules": [
+   {
+    "id": "HKS-X29",
+    "fit": "full"
+   }
+  ],
+  "note": "The 1.5-6.7 s numbers are only in the rule text; no memory file records this change."
+ },
+ {
+  "id": "D11",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 140,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X23",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D12",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 141,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 114,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X30",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D13",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 142,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X24",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D14",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 143,
+    "kind": "account"
+   }
+  ],
+  "rules": [],
+  "note": "Same gap as D4: no voice-under-sting rule."
+ },
+ {
+  "id": "D15",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 144,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C25",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X27",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D16",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 145,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C26",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X28",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D17",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 159,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 161,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X35",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X64",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-32",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D18",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 165,
+    "kind": "account"
+   },
+   {
+    "file": "global:test-checks-on-user-cut.md",
+    "line": 11,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-33",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X36",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X65",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X38",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D19",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261124-draft.md",
+    "line": 163,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X29",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R6",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X34",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X108",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X2",
+    "fit": "partial"
+   }
+  ],
+  "note": "X34 partial: 'as hard as needed' under covers, but 'keep the take whole' in studio."
+ },
+ {
+  "id": "D20",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 68,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-10",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-C13",
+    "fit": "partial"
+   }
+  ],
+  "note": "No rule says to keep the story's practical resolution; HKS-10 is the nearest."
+ },
+ {
+  "id": "D21",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 69,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-R2",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X91",
+    "fit": "full"
+   },
+   {
+    "id": "M-4",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-4",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D22",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 70,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X7",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-24",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-R2",
+    "fit": "partial"
+   }
+  ],
+  "note": "No rule names a secondary speaker's lead-in."
+ },
+ {
+  "id": "K27",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261125-draft.md",
+    "line": 73,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/why-rules-broke-20261125.md",
+    "line": 14,
+    "kind": "account"
+   },
+   {
+    "file": "global:rules-into-gates.md",
+    "line": 17,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X100",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-X93",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C28",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D23",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 79,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X108",
+    "fit": "full"
+   }
+  ],
+  "note": "X34 ('in studio keep the take whole') is the rule the agent followed into this mistake."
+ },
+ {
+  "id": "D24",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 77,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 79,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X108",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C9",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X106",
+    "fit": "partial"
+   }
+  ],
+  "note": "Pulls against X3 (B-roll 20-46 s continuous) and K2."
+ },
+ {
+  "id": "D25",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 88,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-X109",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D26",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 93,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 98,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-22",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-C4",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R3",
+    "fit": "full"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D27",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 94,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-C8",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-X7",
+    "fit": "partial"
+   },
+   {
+    "id": "HKS-R2",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D28",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 95,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-R2",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-R3",
+    "fit": "partial"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "D29",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 96,
+    "kind": "account"
+   }
+  ],
+  "rules": [],
+  "note": "y26 line 33 says the talking DSI interview is never a cover, but no rule bars a talking insert as body."
+ },
+ {
+  "id": "D30",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 99,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-22",
+    "fit": "partial"
+   }
+  ],
+  "note": "HKS-22 only notes the online part 'is used heavily'."
+ },
+ {
+  "id": "D31",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 102,
+    "kind": "account"
+   },
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 76,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-20",
+    "fit": "full"
+   },
+   {
+    "id": "HKS-5",
+    "fit": "partial"
+   }
+  ],
+  "note": "HKS-20: words stay in order. HKS-5 allows 0-4 moves; X1/X91 push the other way (see D1)."
+ },
+ {
+  "id": "D32",
+  "memory": [
+   {
+    "file": "projects/hks/memory/yt-20261126-draft.md",
+    "line": 97,
+    "kind": "account"
+   }
+  ],
+  "rules": [
+   {
+    "id": "HKS-19",
+    "fit": "partial"
+   }
+  ],
+  "note": "Arguable: user said no hook; HKS-19's 'voice under the cards' is the nearest."
+ }
+]

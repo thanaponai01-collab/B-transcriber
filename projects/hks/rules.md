@@ -5,6 +5,8 @@ How the show is cut and finished today. Rules can change; the why behind them be
 
 **Source of truth: [registry/](registry/README.md).** Each rule is one file in `registry/rules/`; a new correction becomes a new rule file there (or a status change on an old one). This file is the narrative and history; the stage skills and before-you-cut.md are generated from the registry.
 
+**Frozen on 2026-11-26.** No rule is written here any more: a correction goes through `python tools/hks_correct.py` into the registry, and a test fails on any edit to this file (`registry/frozen.json`). Where this file and the registry differ, the registry wins.
+
 **Before any draft, read [before-you-cut.md](before-you-cut.md)**: the gates I broke on 20261125, and why.
 
 **Status: under audit.** Every rule came from one episode (20261120). [rule-audit.md](rule-audit.md)

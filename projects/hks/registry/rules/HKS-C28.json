@@ -14,7 +14,9 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K22"
+  "K15",
+  "K22",
+  "K27"
  ],
  "gate": "visible_cuts_in_speech",
  "confirm": "Which piece ends were read as unfinished, and how was each fixed?",

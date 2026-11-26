@@ -2,7 +2,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # Before you cut (read this every time, before any HKS draft)
 
-Short on purpose. The full rules are in [rules.md](rules.md). This page exists because on 20261125 I had those rules and broke them anyway (the reasons are at the end). Each line is a gate. If a gate fails, fix it. If I can't fix it, the handover opens with that gate's name and what's still broken. A failed gate is never handed over quietly, and lack of time is not a reason to skip one.
+Short on purpose. Every rule is in [the registry](registry/README.md). This page exists because on 20261125 I had those rules and broke them anyway (the reasons are at the end). Each line is a gate. If a gate fails, fix it. If I can't fix it, the handover opens with that gate's name and what's still broken. A failed gate is never handed over quietly, and lack of time is not a reason to skip one.
 
 Every active rule of a stage, with its do-confirm question, is in that stage's skill (`hks-day-setup`, `hks-paper-edit`, `hks-build`, `hks-handover`, under `.claude/skills/`).
 

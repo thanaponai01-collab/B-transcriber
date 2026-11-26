@@ -1,0 +1,12 @@
+{
+ "id": "K56",
+ "date": "2026-11-24",
+ "time": null,
+ "episode": "20261124",
+ "session": null,
+ "source": "diff",
+ "words": "Of v4's 28 in-speech edges, 16 fell in passages the user dropped, mostly v4's fun additions (src 586-742, 913, 1017, 1212); 472-515 was 8 bits of 1-5 s in v4, one run in D1.",
+ "way": null,
+ "repeat_of": [],
+ "memory": "projects/hks/memory/yt-20261124-draft.md"
+}

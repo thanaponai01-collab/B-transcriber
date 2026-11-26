@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K11"
+  "K11",
+  "K58"
  ],
  "gate": null,
  "confirm": "Where are the tight cuts (timecodes), and is each under B-roll or at a broadcast camera change?",

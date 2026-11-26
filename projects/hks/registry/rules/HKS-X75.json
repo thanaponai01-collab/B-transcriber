@@ -14,7 +14,8 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K6"
+  "K6",
+  "K32"
  ],
  "gate": "draft_labels",
  "confirm": null,

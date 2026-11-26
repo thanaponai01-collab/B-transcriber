@@ -15,7 +15,8 @@
  "stage": "day_setup",
  "corrections": [
   "K1",
-  "K10"
+  "K10",
+  "K65"
  ],
  "gate": "day_setup",
  "confirm": "How many items are in Backup, and does any zoomed split screen show an edge in a rendered frame?",

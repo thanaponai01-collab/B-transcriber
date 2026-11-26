@@ -13,7 +13,9 @@
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "handover",
- "corrections": [],
+ "corrections": [
+  "K66"
+ ],
  "gate": null,
  "confirm": "How long is the body, and which pieces were cut to bring it into 17-20 min (source timecodes, why each)?",
  "probe": [
