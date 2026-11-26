@@ -16,7 +16,8 @@ Seen on CFD 98, sequence `Editing`, quote at 6:05 (365.4–370.2 s) ([frame](hos
 - Each graphic is on screen **about 3–5 s**; a longer quote is split into 2–4 graphics back to back
   (e.g. 2211.0 → 2214.6 → 2218.3 → 2220.9 s).
 - Quotes mostly sit **near the end of each clip**, where the advice comes. 26 graphics across 8 clips.
-- Font name: not read yet (`cutdeck/prproj_reader.py` on the saved project, or Essential Graphics).
+- Font **DBEEStrokeX**; host fill (32, 110, 143), stroke (177, 225, 250); caller pink fill (255, 55, 243).
+  Every quote on CFD 98, word for word: [cfd98-quotes.md](cfd98-quotes.md).
 
 **How to apply:** reuse the user's own graphic (copy it and change the text), don't rebuild the style.
 How to place it by command is still to prove: `premiere_place_text` needs a .mogrt; `edit_text`

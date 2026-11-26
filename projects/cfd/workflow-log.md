@@ -33,3 +33,4 @@ Each step: **Do** / **Input → output** / **Decisions** (the rule) / **Time** /
 - Template holds cold open / intro / banners / transitions; agent does the mechanics only for now.
 - Not every clip has two advices: one is fine; sometimes only encouragement or information, no advice (CFD-3).
 - No advice in a clip (only encouragement or information) → no text (user: "No text then").
+- Recorded every text graphic on the CFD 98 long form: [memory/cfd98-quotes.md](memory/cfd98-quotes.md).
