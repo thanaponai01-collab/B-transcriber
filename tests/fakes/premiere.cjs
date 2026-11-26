@@ -366,7 +366,43 @@ const FAKE_SHAPE = [
   { adobe: "Constants", side: "enums", fake: Constants },
 ];
 
+/* Live 2026-11-26 (PREMIERE_FACTS "Panel writes right after another command's commits"): a sequence
+   fetched about 150 ms after build_sequence committed threw "The script object is no longer valid."
+   making an action, and its bin did the same; nothing was committed, and a later fetch went through.
+   Every sequence getSequences hands out is stale until one of them throws (`persistent`: always). */
+function staleHandles(h, { persistent = false } = {}) {
+  let stale = true;
+  const fail = () => { if (!persistent) stale = false; throw new Error(SCRIPT_OBJECT_INVALID); };
+  const staleOf = (s) => (!s || !stale ? s : new Proxy(s, { get(target, key) {
+    if (/^create\w*Action$/.test(String(key))) return fail;
+    if (key === "getProjectItem") {
+      return async () => {
+        const item = await target.getProjectItem();
+        return { ...item, getParentBin: () => ({ createRemoveItemAction: fail }) };
+      };
+    }
+    const v = target[key];
+    return typeof v === "function" ? v.bind(target) : v;
+  } }));
+  const all = h.project.getSequences.bind(h.project);
+  const active = h.project.getActiveSequence.bind(h.project);
+  h.project.getSequences = async () => (await all()).map(staleOf);
+  h.project.getActiveSequence = async () => staleOf(await active());
+}
+
+/* Live 2026-11-26: a getSequences read held a null entry (duplicate_sequence then failed reading its
+   guid, after the copy was made). The next `reads` reads get a null among the sequences. */
+function nullSequenceReads(h, reads = 1) {
+  const all = h.project.getSequences.bind(h.project);
+  h.project.getSequences = async () => {
+    const list = await all();
+    return reads-- > 0 ? [...list, null] : list;
+  };
+}
+
 module.exports = {
+  staleHandles,
+  nullSequenceReads,
   TICKS_PER_SECOND,
   SCRIPT_OBJECT_INVALID,
   tickTime,

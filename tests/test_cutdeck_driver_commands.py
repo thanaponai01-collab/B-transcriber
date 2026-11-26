@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from cutdeck import driver_commands
 from cutdeck.ai_backend import Backend
 from cutdeck.mcp_server import create_server
@@ -281,6 +283,13 @@ def test_word_tools_pass_on_the_transcript_warnings(monkeypatch):
     assert result["warnings"] == [note]
 
 
+@pytest.fixture(autouse=True)
+def _fresh_paste_counts():
+    driver_commands._PASTES_INTO.clear()  # the guard counts per helper life; each test is a new one
+    yield
+    driver_commands._PASTES_INTO.clear()
+
+
 class _PasteHost:
     """Just enough Premiere for paste_from, following PREMIERE_FACTS: Make Subsequence cuts a range
     to a new sequence; Edit > Paste lands at the playhead on the lowest targeted tracks (here
@@ -291,16 +300,21 @@ class _PasteHost:
         self.seqs = {"Split": [("V", 1, 0, 6 * self.S), ("V", 2, 2 * self.S, 8 * self.S), ("A", 1, 0, 6 * self.S)],
                      "YT": [("V", 1, 0, 10 * self.S), ("A", 1, 0, 10 * self.S)]}
         self.land_v, self.clipboard, self.playhead, self.calls = land_v, None, {}, []
+        self.transactions = 0
+        self.active, self.fail_paste, self.fail_on = None, False, set()
 
     def timeline(self, name):
         tracks = {}
         for k, n, s, e in self.seqs[name]:
             tracks.setdefault(f"{k}{n}", []).append({"id": f"{k}{n}@{s}", "start_ticks": str(s), "end_ticks": str(e)})
         end = max((e for *_, e in self.seqs[name]), default=0)
-        return {"name": name, "end_ticks": str(end), "tracks": [{"id": i, "clips": c} for i, c in tracks.items()]}
+        return {"name": name, "end_ticks": str(end), "ticks_per_frame": str(self.S // 30),
+                "tracks": [{"id": i, "clips": c} for i, c in tracks.items()]}
 
     async def __call__(self, command, args):
         self.calls.append(command)
+        if command in self.fail_on:
+            raise ValueError(f"{command} failed")
         if command == "make_subsequence":
             a, b = int(args["in_ticks"]), int(args["out_ticks"])
             cut = [(k, n, max(s, a), min(e, b)) for k, n, s, e in self.seqs[args["sequence"]] if s < b and e > a]
@@ -311,8 +325,11 @@ class _PasteHost:
         elif command == "set_playhead":
             self.playhead[args["sequence"]] = int(args["ticks"])
         elif command == "menu_command" and args["path"] == "Edit > Copy":
-            self.clipboard = list(self.seqs[args["sequence"]])
+            self.clipboard, self.active = list(self.seqs[args["sequence"]]), args["sequence"]
         elif command == "menu_command" and args["path"] == "Edit > Paste":
+            if self.fail_paste:
+                raise ValueError("A1@0: no clip starts at 0 ticks on that track, in 4 reads.")
+            self.active = args["sequence"]  # Paste happens in the focused target
             at = self.playhead[args["sequence"]] - min(s for _, _, s, _ in self.clipboard)  # earliest clip at the playhead
             self.seqs[args["sequence"]] += [(k, n + (self.land_v if k == "V" else 0), s + at, e + at) for k, n, s, e in self.clipboard]
         elif command == "list_project":
@@ -320,17 +337,34 @@ class _PasteHost:
         elif command == "build_sequence":
             seq = self.seqs[args["base"]]
             for st in args["options"]["steps"]:
+                self.transactions += 1
                 lo, hi = int(st["from_ticks"]), int(st["to_ticks"])
-                moving = [c for c in seq if lo <= c[2] < hi]
                 if st["op"] == "lift":
-                    seq[:] = [c for c in seq if c not in moving]
+                    seq[:] = [c for c in seq if not lo <= c[2] < hi]
                     continue
-                dt, up = int(st["dt_ticks"]), st.get("v_offset", 0)
-                for k, n, s, e in moving:
+                up = st.get("v_offset", 0)
+                parts = [st] + st.get("ranges", [])  # one read, one transaction
+                moving = [(c, int(r["dt_ticks"])) for r in parts for c in seq if int(r["from_ticks"]) <= c[2] < int(r["to_ticks"])]
+                for (k, n, s, e), dt in moving:
                     new = (k, n + (up if k == "V" else 0), s + dt, e + dt)
                     seq[:] = [c for c in seq if not (c[:2] == new[:2] and c[2] < new[3] and c[3] > new[2])] + [new]
+        elif command == "cut_copy":  # keep what lies outside the cuts, gaps closed (applyNativeCut)
+            tpf = int(args["cuts"]["ticks_per_frame"])
+            cuts = [(f * tpf, t * tpf) for f, t in args["cuts"]["cuts_frames"]]
+            gone = lambda x: sum(min(x, t) - f for f, t in cuts if f < x)  # noqa: E731
+            edges = sorted({x for c in cuts for x in c})
+            out = []
+            for k, n, s, e in self.seqs[args["sequence_name"]]:
+                for lo, hi in zip([s] + [x for x in edges if s < x < e], [x for x in edges if s < x < e] + [e]):
+                    if not any(f <= lo and hi <= t for f, t in cuts):
+                        out.append((k, n, lo - gone(lo), hi - gone(lo)))
+            self.seqs[args["result_name"]] = out
         elif command == "remove_piece":
+            if args["name"] == self.active:
+                raise ValueError(f"{args['name']!r} is the active sequence; nothing removed")
             del self.seqs[args["name"]]
+        elif command == "open_sequence":
+            self.active = args["sequence"]
         elif command == "duplicate_sequence":
             self.seqs[args["result_name"]] = list(self.seqs[args["sequence_name"]])
         return {}
@@ -458,3 +492,255 @@ def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
     host.seqs[stale] = [("V", 1, 0, S)]
     assert _paste(host)["missing"] == []
     assert stale not in host.seqs and ("V", 1, 5 * S, 8 * S) in host.seqs["YT"]
+
+
+@pytest.fixture(autouse=True)
+def _plenty_of_memory(monkeypatch):
+    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 64.0)
+
+
+def _derive(host, pieces, **extra):
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "template": "Template", "target": "Short",
+         "pieces": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in pieces], **extra}, None)
+    return asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
+
+
+def _parent(host, seconds):
+    S = _PasteHost.S
+    # One clip per second on V1, V2 (a cover) and A1, so every piece edge falls between clips or inside one.
+    host.seqs["Parent"] = [(k, n, i * S, (i + 1) * S) for i in range(seconds) for k, n in (("V", 1), ("V", 2), ("A", 1))]
+    host.seqs["Template"] = [("V", 6, 0, 3 * S)]  # the user's title Graphic
+    return S
+
+
+def test_paste_pieces_plays_the_pieces_in_order_on_a_template_copy_and_cleans_up():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    half = S // 2
+    out = _derive(host, [(10 * S, 12 * S + half), (2 * S, 3 * S), (15 * S + half, 17 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    short = sorted(host.seqs["Short"])
+    assert ("V", 6, 0, 3 * S) in short  # the template's title stays
+    assert ("A", 1, 0, S) in short and ("A", 1, 2 * S, 2 * S + half) in short  # piece 1 at 0
+    assert ("V", 2, 2 * S + half, 3 * S + half) in short  # piece 2 right after piece 1
+    assert ("V", 1, 3 * S + half, 4 * S) in short and ("V", 1, 4 * S, 5 * S) in short  # piece 3
+    assert not any(n.endswith(driver_commands.PIECE_SUFFIX) for n in host.seqs)  # every temporary removed
+    assert host.seqs["Template"] == [("V", 6, 0, 3 * S)] and len(host.seqs["Parent"]) == 60  # never edited
+    assert host.calls.count("save_project") == 2
+
+
+def test_paste_pieces_costs_the_same_whatever_the_piece_count():
+    costs = []
+    for n in (3, 12):
+        host = _PasteHost()
+        S = _parent(host, 40)
+        pieces = [(i * 3 * S, i * 3 * S + 2 * S) for i in range(n)][::-1]  # play order reversed
+        out = _derive(host, pieces)
+        assert out["missing"] == [] and out["unexpected"] == []
+        costs.append((len(host.calls), host.transactions, host.calls.count("make_subsequence"), host.calls.count("menu_command")))
+    assert costs[0] == costs[1], costs
+    assert costs[0][2] == 2 and costs[0][3] == 2  # the span, and one piece for the one paste: one Copy, one Paste
+
+
+def test_paste_pieces_refuses_overlapping_pieces_and_an_existing_name():
+    prep = driver_commands.COMMANDS["paste_pieces"].prepare
+    base = {"source": "P", "template": "T", "target": "S"}
+    for pieces in ([], [[0, 5], [4, 9]], [[5, 5]]):
+        try:
+            prep({**base, "pieces": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in pieces]}, None)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {pieces}")
+    host = _PasteHost()
+    S = _parent(host, 5)
+    host.seqs["Short"] = []
+    try:
+        _derive(host, [(0, S)])
+    except ValueError as e:
+        assert "already exists" in str(e)
+    else:
+        raise AssertionError("overwrote an existing sequence")
+
+
+def test_paste_pieces_without_a_template_pastes_into_the_existing_target_in_place():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.seqs["Draft"] = [("V", 1, 0, 4 * S), ("V", 3, 30 * S, 32 * S)]  # the draft's own edit
+    before = set(host.seqs)
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "target": "Draft", "at_ticks": str(10 * S),
+         "pieces": [{"from_ticks": str(6 * S), "to_ticks": str(7 * S)}, {"from_ticks": str(2 * S), "to_ticks": str(3 * S)}]}, None)
+    out = asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
+    assert out["missing"] == [] and out["unexpected"] == []
+    draft = host.seqs["Draft"]
+    assert ("V", 1, 0, 4 * S) in draft and ("V", 3, 30 * S, 32 * S) in draft  # what was there stays
+    assert ("V", 2, 10 * S, 11 * S) in draft and ("A", 1, 11 * S, 12 * S) in draft  # both pieces, in play order
+    assert set(host.seqs) == before  # no new sequence, every temporary removed
+
+
+def test_a_failed_paste_pieces_removes_its_temporaries_and_names_the_half_built_target():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_paste = True
+    before = set(host.seqs)
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "no clip starts at" in str(e) and "'Short' was made from the template" in str(e)
+    else:
+        raise AssertionError("a failed paste reported success")
+    assert set(host.seqs) - before == {"Short"}  # every temporary removed, even the active one
+
+
+def test_paste_pieces_plays_touching_pieces_that_still_follow_each_other_as_one_block():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    half = S // 2
+    out = _derive(host, [(10 * S, 11 * S + half), (11 * S + half, 13 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert ("V", 1, S, 2 * S) in host.seqs["Short"]  # the clip across the shared edge, whole
+
+
+def test_paste_pieces_refuses_touching_pieces_in_a_new_order_before_touching_premiere():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    half = S // 2
+    try:
+        _derive(host, [(3 * S + half, 5 * S), (2 * S, 3 * S + half)])
+    except ValueError as e:
+        assert "meet at" in str(e) and "leave a frame" in str(e) and "made from the template" not in str(e)
+    else:
+        raise AssertionError("reordered across a clip")
+    assert "make_subsequence" not in host.calls and "Short" not in host.seqs
+
+
+def test_paste_pieces_refuses_a_missing_template_before_any_cut():
+    host = _PasteHost()
+    S = _parent(host, 5)
+    try:
+        _derive(host, [(0, S)], template="Template ")
+    except ValueError as e:
+        assert "no template sequence 'Template '" in str(e)
+    else:
+        raise AssertionError("cut with no template to paste into")
+    assert "make_subsequence" not in host.calls
+
+
+def test_a_paste_pieces_failure_before_the_template_copy_does_not_name_a_target():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"cut_copy"}
+    before = set(host.seqs)
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "cut_copy failed" in str(e) and "made from the template" not in str(e)
+    else:
+        raise AssertionError("a failed cut reported success")
+    assert set(host.seqs) == before
+
+
+def test_paste_pieces_names_the_temporaries_it_could_not_remove():
+    # Live 2026-11-26: in a Premiere session a few minutes old every remove_piece threw "The script
+    # object is no longer valid." for a minute, and the temporaries stayed with nothing said.
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"remove_piece"}
+    out = _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert out["temporaries_left"] == ["Short span (CutDeck piece)", "Short cut (CutDeck piece)", "Short order (CutDeck piece)",
+                                       "Short order (CutDeck piece) 0.000-3.000s (CutDeck piece)"]
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.fail_on = {"remove_piece", "cut_copy"}
+    try:
+        _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    except ValueError as e:
+        assert "cut_copy failed" in str(e) and "Short span (CutDeck piece)" in str(e) and "remove by hand" in str(e)
+    else:
+        raise AssertionError("a failed cut reported success")
+
+
+def test_paste_pieces_removes_only_its_own_pieces_and_leaves_the_short_open():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    kept = {"Short yt 1.000-3.000s (CutDeck piece)", "Short 2 span (CutDeck piece)"}  # a kept piece; another run's
+    for n in kept:
+        host.seqs[n] = []
+    out = _derive(host, [(10 * S, 12 * S), (2 * S, 3 * S)])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert kept <= set(host.seqs) and host.active == "Short"
+
+
+def test_paste_pieces_refuses_to_start_when_memory_is_nearly_gone(monkeypatch):
+    # Live 2026-11-26: 17 soak runs took Premiere to 41 GB private with 0.6 GB of commit left;
+    # Premiere keeps what each cut used until it quits, so the next run would have crashed it.
+    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 2.0)
+    host = _PasteHost()
+    S = _parent(host, 5)
+    try:
+        _derive(host, [(0, S)])
+    except ValueError as e:
+        assert "restart Premiere" in str(e) and "2.0 GB" in str(e)
+    else:
+        raise AssertionError("started a build with no memory left")
+    assert host.calls == []  # refused before touching Premiere
+
+
+def test_paste_pieces_without_a_template_needs_an_existing_target():
+    host = _PasteHost()
+    S = _parent(host, 5)
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "target": "Nope", "pieces": [{"from_ticks": "0", "to_ticks": str(S)}]}, None)
+    try:
+        asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
+    except ValueError as e:
+        assert "no sequence 'Nope'" in str(e)
+    else:
+        raise AssertionError("pasted into a sequence that does not exist")
+
+
+def test_a_third_paste_into_one_target_needs_a_reason_and_reports_the_fallback():
+    host = _PasteHost()
+    _paste(host)
+    _paste(host)
+    try:
+        _paste(host)
+    except ValueError as e:
+        assert "paste_pieces" in str(e) and "per_piece_reason" in str(e)
+    else:
+        raise AssertionError("a third paste went through silently")
+    out = _paste(host, per_piece_reason="one insert per user note")
+    assert out["fallback"] == "one insert per user note"
+
+
+def test_a_failed_paste_does_not_count_toward_the_per_piece_guard():
+    host = _PasteHost()
+    host.fail_paste = True
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            _paste(host)
+    host.fail_paste, host.active = False, None
+    host.seqs = {n: c for n, c in host.seqs.items() if not n.endswith(driver_commands.PIECE_SUFFIX)}  # kept to look at
+    assert "fallback" not in _paste(host)
+
+
+def test_arrange_clones_a_long_reorder_in_batches_from_fresh_reads():
+    S = _PasteHost.S
+    n = 2 * driver_commands.CLONE_BATCH + 5
+    host = _PasteHost()
+    host.seqs["Cut"] = [(k, 1, i * S, (i + 1) * S) for i in range(n) for k in "VA"]
+    out = _arrange(host, [(i * S, (i + 1) * S) for i in range(n)][::-1])
+    assert out["missing"] == [] and out["unexpected"] == []
+    assert host.transactions == 3 + 3
+
+
+def test_arrange_is_four_steps_whatever_the_block_count():
+    S = _PasteHost.S
+    for n in (3, 9):
+        host = _PasteHost()
+        host.seqs["Cut"] = [(k, 1, i * S, (i + 1) * S) for i in range(n) for k in "VA"]
+        out = _arrange(host, [(i * S, (i + 1) * S) for i in range(n)][::-1])
+        assert out["missing"] == [] and out["unexpected"] == []
+        assert host.transactions == 4
