@@ -27,7 +27,8 @@ def test_donor_changes_one_scale_the_name_and_the_guid_only(tmp_path):
     after, before = _seq(dst, "Donor & co"), _seq(SRC, "Sequence 04")
     assert _motion(after, 2)["scale"] == {"value": 137.25}
     _motion(after, 2)["scale"]["value"] = _motion(before, 2)["scale"]["value"]
-    assert {**after, "name": "Sequence 04"} == before
+    assert after["guid"] != before["guid"]
+    assert {**after, "name": "Sequence 04", "guid": before["guid"]} == before
     assert [s["name"] for s in read_project(dst)["sequences"]] == ["Sequence 01", "Sequence 02", "Sequence 03", "Donor & co"]
     src_text = gzip.decompress(SRC.read_bytes()).decode("utf-8")
     text = gzip.decompress(dst.read_bytes()).decode("utf-8")
@@ -37,7 +38,8 @@ def test_donor_changes_one_scale_the_name_and_the_guid_only(tmp_path):
 def test_donor_without_a_param_only_renames(tmp_path):
     dst = tmp_path / "plain.prproj"
     write_donor(SRC, dst, sequence="Sequence 04", name="plain")
-    assert {**_seq(dst, "plain"), "name": "Sequence 04"} == _seq(SRC, "Sequence 04")
+    original = _seq(SRC, "Sequence 04")
+    assert {**_seq(dst, "plain"), "name": "Sequence 04", "guid": original["guid"]} == original
 
 
 @pytest.mark.parametrize("kwargs", [

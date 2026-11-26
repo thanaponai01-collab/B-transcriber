@@ -1176,3 +1176,42 @@
     margin-left: auto;
     color: var(--fg-3);
   }
+
+  /* HKS gates (Cut tab): one row per sequence, its status from the helper */
+  .section-divider .icon-btn { padding: 2px; }
+  .section-divider .icon-btn svg { width: 11px; height: 11px; margin-left: 0; }
+  .hks-note { font-size: 10px; color: var(--fg-3); }
+  .hks-list { display: flex; flex-direction: column; gap: 3px; }
+  .hks-row {
+    padding: 4px 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-1);
+    border-radius: 4px;
+  }
+  .hks-row.hks-hidden { display: none; }
+  .hks-list.show-never .hks-row.hks-hidden { display: block; }
+  .hks-row-head { display: flex; align-items: center; gap: 6px; }
+  .hks-badge {
+    flex-shrink: 0;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid var(--line-2);
+    color: var(--fg-2);
+  }
+  .hks-pass .hks-badge { color: var(--fg-0); border-color: var(--fg-2); }
+  .hks-fail .hks-badge { color: var(--bg-1); background: var(--fg-0); border-color: var(--fg-0); }
+  .hks-name {
+    color: var(--fg-0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .hks-ungated .hks-name { color: var(--fg-2); }
+  .hks-detail { font-size: 10px; color: var(--fg-2); padding-left: 2px; }
+  .hks-fail .hks-detail { color: var(--fg-1); }
+  .hks-never { margin-top: 4px; font-size: 10px; color: var(--fg-3); cursor: pointer; }
+  .hks-never:hover { color: var(--fg-1); }

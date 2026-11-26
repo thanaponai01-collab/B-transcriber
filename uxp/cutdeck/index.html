@@ -246,6 +246,19 @@
       </svg>
       Thai Transcript
     </div>
+
+    <!-- HKS gates: each sequence's status from the helper's records (features/hks.js) -->
+    <div class="section-divider">
+      <div class="section-line"></div>
+      <span class="section-tag">HKS Gates</span>
+      <div class="section-line"></div>
+      <div id="hks-refresh" class="icon-btn" role="button" data-act="hks-refresh" title="Refresh HKS gate status from the helper">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 21v-5h-5"/></svg>
+      </div>
+    </div>
+    <div id="hks-note" class="hks-note">Not checked yet.</div>
+    <div id="hks-list" class="hks-list"></div>
+    <div id="hks-never" class="hks-never" role="button" hidden><span id="hks-never-arrow">▸</span> <span id="hks-never-count"></span></div>
   </div>
 
   <!-- FX TAB -->

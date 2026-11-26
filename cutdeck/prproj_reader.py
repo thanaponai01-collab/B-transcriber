@@ -455,7 +455,7 @@ _GROUP_KIND = {"VideoTrackGroup": "video", "AudioTrackGroup": "audio"}
 
 
 def _sequence(objs: _Objects, seq: ET.Element) -> dict:
-    out: dict = {"name": _text(seq, "Name"), "video_tracks": [], "audio_tracks": []}
+    out: dict = {"name": _text(seq, "Name"), "guid": seq.get("ObjectUID"), "video_tracks": [], "audio_tracks": []}
     for group_ref in seq.findall("TrackGroups/TrackGroup/Second"):
         group = objs.ref(group_ref)
         kind = _GROUP_KIND.get(group.tag) if group is not None else None
