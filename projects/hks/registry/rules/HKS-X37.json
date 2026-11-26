@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X37",
+ "aliases": [],
+ "title": "The held picture must be safe",
+ "text": "In the extra 0.5-2 s of a J or L, nobody in the held picture may be talking, by sight (lips, gestures) or in the source sound behind it. Otherwise hold B-roll or a still person shot (from `Backup`, a listening face, or Add Frame Hold), or leave that cut straight. Check the source words in the held span (none) and its frames. Sound and picture cutting on the same frame is the exception, kept for a real camera change or a section flash.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K16"
+ ],
+ "gate": "unsafe_holds",
+ "confirm": null,
+ "probe": [
+  "**The held picture must be safe** (user, 2026-11-25)"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

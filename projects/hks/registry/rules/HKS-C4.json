@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C4",
+ "aliases": [],
+ "title": "Host's on-air intro and recap are cut",
+ "text": "The host's on-air intro and recap are cut (HKS-22) because the hook does the intro's job and a recap repeats what the viewer just saw, and for length.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Are the host's on-air intro and recap out of the cut?",
+ "probe": [
+  "**HKS-C4. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

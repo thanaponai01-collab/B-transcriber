@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X70",
+ "aliases": [
+  "my mistakes 8"
+ ],
+ "title": "I left (FAILED) copies",
+ "text": "After a panel error, save, `reload_panel`, read back, finish the remaining steps, and list any failed copy in the handover for the user to delete. Never delete it myself.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Did any panel error occur, and which (FAILED) copies does the handover list?",
+ "probe": [
+  "8. **I left `(FAILED)` copies"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

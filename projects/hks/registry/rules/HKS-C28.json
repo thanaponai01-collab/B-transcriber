@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C28",
+ "aliases": [],
+ "title": "Nothing unfinished",
+ "text": "Don't ever cut the things that are not finished (HKS-32 again): no piece ending mid-thought (\"...ก็\", \"...คือ\"), no neighbouring pieces overlapping so words play twice.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "Which piece ends were read as unfinished, and how was each fixed?",
+ "probe": [
+  "**HKS-C28. "
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X29",
+ "aliases": [],
+ "title": "Tighten under a cover; start early for set-up",
+ "text": "Tighten under a cover, and let a piece start early for its set-up (the user cut one 18 s piece into seven under a new B-roll cover, and moved piece starts 1.5-6.7 s to catch the line that sets them up).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which pieces start earlier to catch their set-up line, and which tightening sits under a cover?",
+ "probe": [
+  "**Tighten under a cover, and let a piece start early for its set-up.**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

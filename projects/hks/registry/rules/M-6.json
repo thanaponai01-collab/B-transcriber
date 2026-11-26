@@ -1,0 +1,24 @@
+{
+ "id": "M-6",
+ "aliases": [],
+ "title": "A correction isn't learned until it's a gate",
+ "text": "Every correction from the user goes three places the same day: memory (what happened, with numbers), principle (the why), gate (how it's checked before handover: a script if countable, a reviewer question if judgment, a first step if order). A failed gate is never handed over quietly: the handover opens with it. Time pressure is not a reason to skip a gate.",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Working with the user"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each correction this session, where are its memory, principle and gate entries?",
+ "probe": [
+  "**M-6. A correction isn't learned until it's a gate.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-12",
+ "aliases": [],
+ "title": "An expert answers a case, never lectures",
+ "text": "Law or expert talk stays only as the answer to a question about a guest's own case, even when long. HKS-12 overrides HKS-4 (1118). Unasked advice to a guest is cut. Confirmed as HKS-C8.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C8",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-12. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

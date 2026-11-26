@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X75",
+ "aliases": [],
+ "title": "Every draft is labelled",
+ "text": "Every draft the agent builds is labelled too: each body piece takes the colour of the question piece its source comes from, and every cover on the upper tracks (B-roll, cutaway, zoomed insert) is light green.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Clip label colours (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K6"
+ ],
+ "gate": "draft_labels",
+ "confirm": null,
+ "probe": [
+  "Every draft the agent builds is labelled too"
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

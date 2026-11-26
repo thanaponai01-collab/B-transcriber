@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X92",
+ "aliases": [
+  "before-you-cut 4"
+ ],
+ "title": "Read the last words of every piece out loud",
+ "text": "Read the last words of every piece out loud. Each one is a finished sentence that lands, not just a pause: no \"...คือ\", \"...ก็\", \"...แล้วกันพี่\", no question left hanging. `hks_cut_check` finds pauses, not finished thoughts. A clean result there doesn't mean the endings are finished.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Every edge (after building, before handover)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "What are the last words of every piece, and does each land as a finished sentence?",
+ "probe": [
+  "4. **Read the last words of every piece out loud.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

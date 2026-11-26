@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C7",
+ "aliases": [],
+ "title": "The host stays when he carries the story",
+ "text": "The host stays when he carries the story (HKS-8 confirmed, rule 3 rewritten): the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler and most jokes.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K3"
+ ],
+ "gate": null,
+ "confirm": "For each kept host line, which carrying role does it play?",
+ "probe": [
+  "**HKS-C7. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

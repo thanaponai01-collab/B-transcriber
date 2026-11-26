@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X71",
+ "aliases": [
+  "my mistakes 9"
+ ],
+ "title": "I built the story with no context first",
+ "text": "Before building, write the story's set-up in two lines (who, where, what happened) and check that the cut gives the viewer those facts before the first detail that needs them.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "What is the two-line set-up, and where does the cut give each fact before the detail that needs it?",
+ "probe": [
+  "9. **I built the story as a list of picked speeches"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

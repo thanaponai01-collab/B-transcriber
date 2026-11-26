@@ -1,0 +1,24 @@
+{
+ "id": "HKS-24",
+ "aliases": [],
+ "title": "Keep the result, drop the working-out",
+ "text": "A live test or the host's arithmetic goes; its conclusion stays. A set-up stays only when a later line pays it off.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which working-out was dropped, and does each kept set-up have its payoff?",
+ "probe": [
+  "**HKS-24. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

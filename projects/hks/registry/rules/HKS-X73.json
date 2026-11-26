@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X73",
+ "aliases": [],
+ "title": "Label colours and what each means",
+ "text": "The label colour of a clip says who speaks or what the piece is for: Pink first guest; Purple second guest; Blue lawyer; Green host; Yellow must be in the video or can be a highlight (hot spots such as a high-volume argument); Orange ending sentences; Teal caller; Light green insert/video or cover material. Replaces the 2026-11-20 log note \"the colours themselves mean nothing\".",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Clip label colours (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K26"
+ ],
+ "gate": "day_setup",
+ "confirm": "Which colours are on Editing, including yellow hot spots and orange endings?",
+ "probe": [
+  "The label colour of a clip says who speaks or what the piece is for."
+ ],
+ "commit": "a80c11f",
+ "added": "2026-11-23"
+}

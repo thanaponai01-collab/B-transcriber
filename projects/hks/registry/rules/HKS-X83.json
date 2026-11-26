@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X83",
+ "aliases": [],
+ "title": "Every host question has its trigger; every late name is set up",
+ "text": "Every question the host asks has its trigger in the cut, and every name in the last minute was set up earlier. Run this check on the pieces before dressing.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does each host question have its trigger in the cut, and is every name in the last minute set up earlier?",
+ "probe": [
+  "**Every question the host asks has its trigger in the cut**"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

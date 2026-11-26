@@ -1,0 +1,24 @@
+{
+ "id": "HKS-2",
+ "aliases": [],
+ "title": "The hook is a promise the body plays out",
+ "text": "18-27 s; its lines come back in the body. Which lines the user picks is the least predictable part. 1109: 13 of 14 hook pieces play again in the body. Weakened: a 17.3 s hook on EP.162.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where does each hook line come back in the body?",
+ "probe": [
+  "**HKS-2. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

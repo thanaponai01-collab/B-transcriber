@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X79",
+ "aliases": [],
+ "title": "Measure the box each time",
+ "text": "The zoom depends on the layout, so measure the box each time (268 fits the two-box split; the narrow three-box layout needed Scale 280, Position (0.8675, 0.6244)). Check the left and right edges of every zoomed item in a rendered frame.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Backup sequence = insert pool (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K1"
+ ],
+ "gate": null,
+ "confirm": "In a rendered frame of every zoomed item, do both side edges show no split-screen border?",
+ "probe": [
+  "The zoom depends on the layout, so measure the box each time."
+ ],
+ "commit": "a80c11f",
+ "added": "2026-11-23"
+}

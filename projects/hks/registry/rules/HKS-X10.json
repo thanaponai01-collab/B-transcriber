@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X10",
+ "aliases": [],
+ "title": "No sponsor strip, bug or clock on footage",
+ "text": "No sponsor strip, no 3HD bug, no clock on footage (on studio frames the bug and clock are fine, HKS-C3). Zoom a clip that carries the sponsor strip in, centred on the video.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7c"
+ ],
+ "gate": null,
+ "confirm": "In a rendered frame of each footage cover, does any show a sponsor strip, the 3HD bug or the clock?",
+ "probe": [
+  "*No sponsor strip, no 3HD bug, no clock"
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

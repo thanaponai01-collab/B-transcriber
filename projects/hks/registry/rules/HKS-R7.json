@@ -1,0 +1,27 @@
+{
+ "id": "HKS-R7",
+ "aliases": [
+  "rule 7",
+  "cut rule 7"
+ ],
+ "title": "Swear words bleeped; same ending",
+ "text": "Swear words bleeped. Same ending every episode.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Are all swear words bleeped (timecodes), and is the standard ending in place?",
+ "probe": [
+  "7. Swear words bleeped."
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

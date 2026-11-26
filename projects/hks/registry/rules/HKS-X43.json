@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X43",
+ "aliases": [],
+ "title": "Blur: adjustment layer and mask",
+ "text": "New adjustment layer, Gaussian Blur, then the Ellipse or Rectangle mask tool in Effect Controls; feather the mask. Don't copy the user's layers or stack crops to fake a shape. Masks have no API, so the mask tools are a Premiere UI route still to be proven; explore Premiere's own tools before working around them.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K19",
+  "K20",
+  "K25"
+ ],
+ "gate": null,
+ "confirm": "For each blur, is it your own adjustment layer with Gaussian Blur and a feathered mask?",
+ "probe": [
+  "**Blur: make the adjustment layer and draw the mask.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

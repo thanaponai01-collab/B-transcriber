@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C2",
+ "aliases": [],
+ "title": "Cover only with the episode's own footage",
+ "text": "Cover only with footage from the episode itself (rule 6): it keeps the story honest (the picture is this case's real evidence) and avoids copyright claims.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is every cover from this episode's footage (sources listed)?",
+ "probe": [
+  "**HKS-C2. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

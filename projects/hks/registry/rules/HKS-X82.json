@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X82",
+ "aliases": [],
+ "title": "Every headline card is paid off in a guest's voice",
+ "text": "Every headline card is paid off in a guest's own voice in the body (unpaid: 1002 card 2, 1109 card 2, 1118 card 4).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each headline card, which guest line in the body pays it off (timecode)?",
+ "probe": [
+  "**Every headline card is paid off in a guest's own voice in the body.**"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

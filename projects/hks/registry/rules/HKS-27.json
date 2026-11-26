@@ -1,0 +1,24 @@
+{
+ "id": "HKS-27",
+ "aliases": [],
+ "title": "Tighten at speaker changes",
+ "text": "The broadcast cuts to whoever speaks, so dropping another speaker's restatement lands on a camera change and needs no cover. Confirmed as HKS-C17.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C17",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-27 (agent, EP.168 v6)"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

@@ -1,0 +1,30 @@
+{
+ "id": "HKS-X96",
+ "aliases": [
+  "before-you-cut 8"
+ ],
+ "title": "Use Premiere's own tool first",
+ "text": "Use Premiere's own tool first: blur = my own adjustment layer + Gaussian Blur + an Ellipse or Rectangle mask, feathered. \"No API\" means: try the UI route. It doesn't mean impossible. A workaround is the last way, and the handover names it.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Building"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K19",
+  "K20",
+  "K25"
+ ],
+ "gate": null,
+ "confirm": "Which Premiere tool did each picture fix use, and is any workaround named?",
+ "probe": [
+  "8. **Use Premiere's own tool first:**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,9 @@
+{
+ "schema": 1,
+ "stages": [
+  "day_setup",
+  "paper_edit",
+  "build",
+  "handover"
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C14",
+ "aliases": [],
+ "title": "The middle is re-hooked",
+ "text": "No stretch of about 3-4 min without a new picture, a host question or a turn. A turn said aloud counts; one picture held a long time is fine. Why: that is where viewers drop off.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What is the longest stretch without a new picture, host question or turn?",
+ "probe": [
+  "**HKS-C14. "
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

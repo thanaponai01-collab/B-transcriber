@@ -1,0 +1,29 @@
+{
+ "id": "HKS-R4",
+ "aliases": [
+  "rule 4",
+  "cut rule 4"
+ ],
+ "title": "Viewer comments and sponsors cut",
+ "text": "Viewer comments read on air: cut, unless one is the objection a guest or the host then answers (HKS-C5, 2026-11-24). Sponsors: always cut.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K7c"
+ ],
+ "gate": null,
+ "confirm": "Is any viewer comment or sponsor left in the cut, and for each kept comment, which answer follows it?",
+ "probe": [
+  "4. Viewer comments read on air:"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

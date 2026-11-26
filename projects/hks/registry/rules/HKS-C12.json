@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C12",
+ "aliases": [],
+ "title": "A compilation plays its cases in source order",
+ "text": "A compilation plays its cases in source order: by the number the user gave each downloaded file; with no number, by the YouTube posting date. A story told across several videos stays in its own order.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "In what order do the cases play, and does it match the file numbers or posting dates?",
+ "probe": [
+  "**HKS-C12. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

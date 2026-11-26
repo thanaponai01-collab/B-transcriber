@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X87",
+ "aliases": [],
+ "title": "A failed gate opens the handover",
+ "text": "Each line is a gate. If a gate fails, fix it. If I can't fix it, the handover opens with that gate's name and what's still broken. A failed gate is never handed over quietly, and lack of time is not a reason to skip one.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Before you cut (read this every time, before any HKS draft)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which gates failed, and does the handover open with each one's name and what is still broken?",
+ "probe": [
+  "gate is never handed over quietly, and lack of time is not a reason to skip one."
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

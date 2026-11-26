@@ -1,0 +1,30 @@
+{
+ "id": "HKS-R5",
+ "aliases": [
+  "rule 5",
+  "cut rule 5"
+ ],
+ "title": "No jump cuts",
+ "text": "No jump cuts: in studio picture cut only at a thought end or a camera change. Cut hard (stumbles, pauses, repeats) only under a cover. (Status note, user 2026-11-23: rule 5 now allows inset camera changes and cuts under a still, and a punch-in needs a cover.)",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7a",
+  "K23"
+ ],
+ "gate": "same_frame_share",
+ "confirm": "List every visible studio cut that is not at a camera change or a thought end; what covers each?",
+ "probe": [
+  "5. No jump cuts: in studio picture cut only at a thought end"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

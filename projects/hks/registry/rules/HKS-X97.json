@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X97",
+ "aliases": [],
+ "title": "A passing check is not the rule",
+ "text": "I treated a passing check as the rule. The cut check passed on pauses, so I called the endings finished without reading them.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K22"
+ ],
+ "gate": null,
+ "confirm": "For each check that passed, what did you read or look at to judge the goal itself?",
+ "probe": [
+  "I treated a passing check as the rule."
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

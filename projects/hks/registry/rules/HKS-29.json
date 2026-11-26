@@ -1,0 +1,24 @@
+{
+ "id": "HKS-29",
+ "aliases": [],
+ "title": "The body doesn't replay a hook clip in the middle",
+ "text": "The body doesn't replay a hook clip in the middle. Confirmed by the user on 2026-11-24 and moved up: HKS-29 -> C24.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C24",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-29. The body"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

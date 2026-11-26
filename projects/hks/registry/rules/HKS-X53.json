@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X53",
+ "aliases": [],
+ "title": "Playbook: Insert a copied moment",
+ "text": "Put a set-up line in front of a punchline: Edit > Copy, playhead, Edit > Paste Insert (ripples every track).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Insert a copied moment' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Insert a copied moment |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C6",
+ "aliases": [],
+ "title": "Ask, then tell is an allowed opening",
+ "text": "Ask, then tell is an allowed opening (1110, 1117): the story may open on the host question that sets up the guest's first story sentence.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K3"
+ ],
+ "gate": null,
+ "confirm": "Where a story opens on a host question, does the guest's first story sentence follow it?",
+ "probe": [
+  "**HKS-C6. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

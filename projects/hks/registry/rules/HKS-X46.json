@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X46",
+ "aliases": [],
+ "title": "Playbook: Still person for a J/L hold",
+ "text": "The held source shows someone talking: Add Frame Hold on a listening frame (menu, clip selected, playhead set); freezes from the playhead, no ripple.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Still person for a J/L hold' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Still person for a J/L hold |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

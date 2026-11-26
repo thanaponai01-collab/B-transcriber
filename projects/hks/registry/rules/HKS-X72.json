@@ -1,0 +1,29 @@
+{
+ "id": "HKS-X72",
+ "aliases": [
+  "my mistakes 10"
+ ],
+ "title": "I worked around Premiere",
+ "text": "When a picture fix needs a Premiere tool (mask, effect), find and try that tool first; a workaround is the last way and gets named in the handover.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K19",
+  "K25"
+ ],
+ "gate": null,
+ "confirm": "For each picture fix, which Premiere tool was tried first, and is any workaround named?",
+ "probe": [
+  "10. **I worked around Premiere"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

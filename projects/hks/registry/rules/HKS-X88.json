@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X88",
+ "aliases": [
+  "before-you-cut 0"
+ ],
+ "title": "Mark the hot spots yellow on `Editing`",
+ "text": "Mark the hot spots yellow on `Editing`, not just the question colours: the loud arguments (raised voices, people talking over each other), the clash, the admissions, the lines the story can't lose. Mark the closing lines orange. Yellow is the must-keep list for the YT and the pool for the hook and highlight. Use the audio level to find the loud stretches, then listen to each one. On 20261125 I coloured only per question and marked no yellow at all.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Day setup (before the paper edit)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K26"
+ ],
+ "gate": "day_setup",
+ "confirm": "Which stretches are yellow and orange on Editing, and how were the loud ones found?",
+ "probe": [
+  "0. **Mark the hot spots yellow on `Editing`**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "projects/hks/registry/rules.schema.json",
+  "title": "HKS rule registry entry",
+  "description": "Shape of one rules/<id>.json file; $defs.registry is the shape of registry.json. Referential checks (file name is the id, superseded_by names an id, gate is in gates/registry.json, ids unique) live in tests/test_hks_registry.py.",
+  "$ref": "#/$defs/rule",
+  "$defs": {
+    "registry": {
+      "type": "object",
+      "required": ["schema", "stages"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": {"const": 1},
+        "stages": {"type": "array", "items": {"$ref": "#/$defs/stage"}, "uniqueItems": true}
+      }
+    },
+    "stage": {"enum": ["day_setup", "paper_edit", "build", "handover"]},
+    "text": {"type": "string", "minLength": 1},
+    "rule": {
+      "type": "object",
+      "required": ["id", "aliases", "title", "text", "source", "status", "superseded_by", "confirmed",
+                   "kind", "kind_source", "stage", "corrections", "gate", "confirm", "probe", "commit",
+                   "added"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^(HKS-[RCX]?[0-9]+|M-[0-9]+)$"},
+        "aliases": {"type": "array", "items": {"$ref": "#/$defs/text"}, "uniqueItems": true},
+        "title": {"$ref": "#/$defs/text"},
+        "text": {"$ref": "#/$defs/text"},
+        "source": {
+          "type": "object",
+          "required": ["file", "heading"],
+          "additionalProperties": false,
+          "properties": {"file": {"$ref": "#/$defs/text"}, "heading": {"$ref": "#/$defs/text"}}
+        },
+        "status": {"enum": ["active", "superseded", "retired"]},
+        "superseded_by": {"type": ["string", "null"]},
+        "confirmed": {"type": "boolean"},
+        "kind": {"enum": ["code_gate", "do_confirm", "human_only"]},
+        "kind_source": {"$ref": "#/$defs/text"},
+        "stage": {"$ref": "#/$defs/stage"},
+        "corrections": {"type": "array", "items": {"type": "string", "pattern": "^K[0-9]+[a-z]?$"}},
+        "gate": {"type": ["string", "null"]},
+        "confirm": {"type": ["string", "null"]},
+        "probe": {"type": "array", "items": {"$ref": "#/$defs/text"}, "minItems": 1},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "added": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      },
+      "allOf": [
+        {
+          "$comment": "superseded requires superseded_by; any other status has none",
+          "if": {"properties": {"status": {"const": "superseded"}}},
+          "then": {"properties": {"superseded_by": {"$ref": "#/$defs/text"}}},
+          "else": {"properties": {"superseded_by": {"type": "null"}}}
+        },
+        {
+          "$comment": "an active do_confirm requires confirm; superseded and retired ones keep null, as do other kinds",
+          "if": {"properties": {"kind": {"const": "do_confirm"}, "status": {"const": "active"}}},
+          "then": {"properties": {"confirm": {"$ref": "#/$defs/text"}}},
+          "else": {"properties": {"confirm": {"type": "null"}}}
+        },
+        {
+          "$comment": "a code_gate names the gate that measures it",
+          "if": {"properties": {"kind": {"const": "code_gate"}}},
+          "then": {"properties": {"gate": {"$ref": "#/$defs/text"}}}
+        }
+      ]
+    }
+  }
+}

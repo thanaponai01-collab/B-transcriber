@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X42",
+ "aliases": [],
+ "title": "J and L cuts are made on a copy",
+ "text": "Duplicate the clip, put the copy on the track above, and trim the copy. The raw clip stays untouched underneath as the backup; never trim the raw layer itself.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K24"
+ ],
+ "gate": null,
+ "confirm": "For each J or L, is the raw clip untouched below the trimmed copy?",
+ "probe": [
+  "**J and L cuts are made on a copy.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

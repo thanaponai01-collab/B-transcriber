@@ -1,0 +1,24 @@
+{
+ "id": "HKS-5",
+ "aliases": [],
+ "title": "Broadcast order unless the viewer needs it elsewhere",
+ "text": "Broadcast order unless the viewer needs it elsewhere (0-4 moves per cut): a fact answered where it's asked, evidence before a denial, a scattered thread gathered.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which moves were made, and why does the viewer need each?",
+ "probe": [
+  "**HKS-5. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

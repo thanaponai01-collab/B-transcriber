@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X47",
+ "aliases": [],
+ "title": "Playbook: Roll an edit by frames",
+ "text": "Move a cut a few frames to a better word or face: Trim Edit + Ctrl+Right/Left (rolls only tracks with an edit there), or `edit_clips` trim pair.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Roll an edit by frames' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Roll an edit by frames |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

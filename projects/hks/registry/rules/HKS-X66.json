@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X66",
+ "aliases": [
+  "my mistakes 4"
+ ],
+ "title": "A split edit can hold a talking picture",
+ "text": "A split edit can hold a picture of someone talking without their sound. Gate: the check's \"unsafe holds\"; look at the frames of each; where someone talks, hold B-roll or a still person, or leave the cut straight.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K16"
+ ],
+ "gate": "unsafe_holds",
+ "confirm": null,
+ "probe": [
+  "4. **A split edit can hold a picture"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

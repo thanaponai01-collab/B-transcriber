@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X33",
+ "aliases": [],
+ "title": "Each piece starts and ends on a thought",
+ "text": "Each piece starts where a thought starts and ends where it ends. Read every edge with 2 s of source on each side. An end must finish the sentence, including its closing particle (ครับ / นะ / เลย). A piece that opens on a joining word (เพราะ / แล้วก็ / คือ / แต่) brings the line before it, or moves. The edge must be in a real pause, not just between two engine words.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K15",
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "With 2 s of source each side, does every end finish its sentence and no piece open on a joining word?",
+ "probe": [
+  "**Each piece starts where a thought starts and ends where it ends.**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

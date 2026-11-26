@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X68",
+ "aliases": [
+  "my mistakes 6"
+ ],
+ "title": "I read a stale parent sequence",
+ "text": "Read the parent sequence fresh (save + reader, or `read_timeline`) right before every derived build.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "When was the parent sequence read, relative to the derived build?",
+ "probe": [
+  "6. **I read a sequence the user had since changed**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

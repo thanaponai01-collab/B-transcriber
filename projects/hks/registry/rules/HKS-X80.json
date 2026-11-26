@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X80",
+ "aliases": [],
+ "title": "Two programs",
+ "text": "โหนกระแส is the main show, cut from the raw broadcast. โหนหลังกระแส is a compilation of usually 4 already-edited โหนกระแส long videos, cut down again. Rules read from the dailies are about cutting a broadcast; rules from EP.162/167 (HKS-18 on) are about re-cutting finished cuts (the longer-pieces reason is an inference, not yet asked).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Principles"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is this a daily or a compilation, and which rule set does the cut follow?",
+ "probe": [
+  "**Two programs (the user's word, 2026-11-24).**"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

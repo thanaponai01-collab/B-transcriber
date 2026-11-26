@@ -1,0 +1,24 @@
+{
+ "id": "HKS-11",
+ "aliases": [],
+ "title": "The day's type sets the shape",
+ "text": "Story day: one spine. Issue day: a briefing (the damage, each voice's best beat, the takeaways, the threat). Panel: every guest, thinned. Advice day: broadcast order with one move, experts trimmed word by word, the key tip repeated on purpose (M-4 does not apply), the hook is the most counter-intuitive tip, the end is the human cost.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which day type is this, and which shape does the cut follow?",
+ "probe": [
+  "**HKS-11. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X7",
+ "aliases": [],
+ "title": "Keep the law short and late; end fast",
+ "text": "Keep the law short and late: the lawyer stays where it explains what happened, not as a separate lecture. End fast: the last three topics take 31 s.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "How many seconds of law or expert talk are in the cut and where, and how long do the last topics run?",
+ "probe": [
+  "*Keep the law short and late:*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

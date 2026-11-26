@@ -1,0 +1,24 @@
+{
+ "id": "HKS-28",
+ "aliases": [],
+ "title": "A punchline needs its set-up",
+ "text": "A punchline needs its set-up. Confirmed by the user on 2026-11-24 and moved up: HKS-28 -> C23.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C23",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-28. A punchline"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

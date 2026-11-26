@@ -1,0 +1,24 @@
+{
+ "id": "HKS-7",
+ "aliases": [],
+ "title": "Cut hard under a proving picture; elsewhere keep pieces long",
+ "text": "Cut hard under a picture that proves the words; elsewhere keep pieces long. Frame-checked: of 345 uncovered joins, 311 land on a camera change, 9 on a layout or inset change, 5 under a still; only 2 are real same-shot jumps. (study/joins.md checks only joins with the studio picture on both sides.)",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where are the hard cuts, and does a proving picture sit over each?",
+ "probe": [
+  "**HKS-7. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

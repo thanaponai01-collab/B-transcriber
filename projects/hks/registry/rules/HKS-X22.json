@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X22",
+ "aliases": [],
+ "title": "Check: challenge notes",
+ "text": "Challenge notes (HKS-C19): where the hook could hit harder, where an explanation or B-roll runs long, where a cut is snappy or clips a word at a camera switch. Snappy cuts: `output/hks_study/sliver_check.py` lists every shot under 0.4 s at an edit point; look at the frames before calling one.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where would you hook harder, what runs long, and which cuts are snappy (sliver_check list, frames looked at)?",
+ "probe": [
+  "**Challenge notes** (HKS-C19)"
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

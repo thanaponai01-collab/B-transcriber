@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X104",
+ "aliases": [],
+ "title": "Override policy",
+ "text": "Agent or user may override a gate, each with a written reason (--override GATE=\"reason\" --by <who>); every override is a line in overrides.jsonl and must be named in the handover (decided by the user 2026-11-25).",
+ "source": {
+  "file": "projects/hks/gates/registry.json",
+  "heading": "override_policy"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which gates were overridden, by whom and why, and are they named in the handover?",
+ "probe": [
+  "agent or user, each with a written reason"
+ ],
+ "commit": "27cd553",
+ "added": "2026-11-25"
+}

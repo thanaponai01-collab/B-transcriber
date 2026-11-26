@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X58",
+ "aliases": [],
+ "title": "Playbook: Cut on a repeated word",
+ "text": "A stutter (\"เหรอ เหรอ\", \"อยู่แล้ว อยู่แล้ว\"): end on the first copy, start on the second; the user's way to tighten in plain view (seen in D1, 2026-11-25).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Cut on a repeated word' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Cut on a repeated word |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

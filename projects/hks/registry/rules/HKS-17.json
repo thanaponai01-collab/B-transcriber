@@ -1,0 +1,24 @@
+{
+ "id": "HKS-17",
+ "aliases": [],
+ "title": "Dress the cut from the template kit",
+ "text": "Every day uses the same nine pieces: the hook stack (dim 50, black tone + vignette, zoom, film damage, red-blue glitch, a 1-2 frame invert), the `SFX_โหนกระแส` sting, the BGM bed on its 56.48 s loop grid, the end stack and `CG_END LOGO`; headline cards are After Effects Linked Comps. Weakened: film damage is not a clean lifted-footage marker; the BGM bed is a daily-cut rule (EP.162/167 have none).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which template-kit pieces are in the cut, and is any made by hand?",
+ "probe": [
+  "**HKS-17. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

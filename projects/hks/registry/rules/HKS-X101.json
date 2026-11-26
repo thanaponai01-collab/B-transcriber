@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X101",
+ "aliases": [],
+ "title": "No API does not mean impossible",
+ "text": "For the blur I read \"masks have no API\" as \"masks can't be done\", and copied your layer instead of building one.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K19"
+ ],
+ "gate": null,
+ "confirm": "Where an API was missing, which UI route was tried?",
+ "probe": [
+  "For the blur I read \"masks have no API\""
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X17",
+ "aliases": [],
+ "title": "Route order",
+ "text": "Route order (user, 2026-11-24: XML stays, as the last way): (1) copy the parent sequence in Premiere and pick from it (several pieces: `paste_pieces`, never `paste_from` in a loop; one insert: `paste_from`; `arrange`, `keep_words`, `cut_copy`, `duplicate_sequence`); (2) build from the footage only when no sequence holds the material yet; (3) an FCP7 XML only when Premiere can't be driven live, saying in the handover why 1 and 2 failed.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K8"
+ ],
+ "gate": null,
+ "confirm": "Which route built the draft, and if not route 1, why did the earlier routes fail?",
+ "probe": [
+  "**Route order** (user, 2026-11-24: XML stays, as the last way)"
+ ],
+ "commit": "1b77c3a",
+ "added": "2026-11-24"
+}

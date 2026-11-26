@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X49",
+ "aliases": [],
+ "title": "Playbook: Slip",
+ "text": "Same length and place, different moment: select V+A, Ctrl+Alt+Left/Right per frame (right = earlier source), or `edit_clips` trim_in +d, move -d, trim_out +d.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Slip' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Slip |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

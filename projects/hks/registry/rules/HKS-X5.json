@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X5",
+ "aliases": [],
+ "title": "Ask, then tell",
+ "text": "Keep the host question that sets up the next beat (\"and when you got home, what happened?\"); it keeps the viewer tracking what happens next.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K3"
+ ],
+ "gate": null,
+ "confirm": "Which host set-up questions were kept before their beats (timecodes)?",
+ "probe": [
+  "*Ask, then tell* (user, 2026-11-23)"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

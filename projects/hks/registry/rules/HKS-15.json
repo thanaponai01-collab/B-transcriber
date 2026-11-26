@@ -1,0 +1,24 @@
+{
+ "id": "HKS-15",
+ "aliases": [],
+ "title": "The shorter the cut, the harder the ending",
+ "text": "The YT may end calm; the FB ends on a defiant line, an accusation or a verdict; the 1-min ends on the punch or the shocking number. Every day that uses ORANGE ends the YT on it; YELLOW makes up more of the 1-min than of the YT.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "human_only",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-15. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

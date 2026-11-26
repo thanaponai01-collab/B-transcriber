@@ -1,0 +1,30 @@
+{
+ "id": "HKS-X65",
+ "aliases": [
+  "my mistakes 3"
+ ],
+ "title": "I cut sound and picture on the same frame",
+ "text": "I cut sound and picture on the same frame, so the cut shows. Gate: the check's same-frame count. Most cuts should be hidden under a cover or split as J/L; the user's 20261124 YT body has 12 of 173 on the same frame.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7a",
+  "K11",
+  "K23"
+ ],
+ "gate": "same_frame_share",
+ "confirm": null,
+ "probe": [
+  "3. **I cut sound and picture on the same frame"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

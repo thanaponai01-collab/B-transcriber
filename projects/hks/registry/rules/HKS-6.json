@@ -1,0 +1,24 @@
+{
+ "id": "HKS-6",
+ "aliases": [],
+ "title": "The accused gets to answer, at length",
+ "text": "The accused gets to answer, at length (seen 1003, 1020, 1120, 167). Why: fairness, and legal safety. Weakened: the accused's answer is often short or missing (1003, 1112, EP.162). Narrowed to a rule by HKS-C21.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C21",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-6. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

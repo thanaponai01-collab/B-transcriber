@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C21",
+ "aliases": [],
+ "title": "The other side's rebuttal stays",
+ "text": "When a guest accuses, the other side's rebuttal stays if the broadcast has it. Narrows HKS-6 to a rule.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each accusation, is the other side's rebuttal in (timecode), or does the broadcast lack one?",
+ "probe": [
+  "**HKS-C21. "
+ ],
+ "commit": "b7ada2e",
+ "added": "2026-11-24"
+}

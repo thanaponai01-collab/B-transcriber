@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X45",
+ "aliases": [],
+ "title": "Playbook: J / L split",
+ "text": "Most speaker changes in studio: `edit_clips`, shrink one picture, then extend the other; sound untouched.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'J / L split' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| J / L split |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

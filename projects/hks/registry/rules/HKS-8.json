@@ -1,0 +1,24 @@
+{
+ "id": "HKS-8",
+ "aliases": [],
+ "title": "The host stays as the questioner",
+ "text": "The host stays as the questioner, narrowing rule 3. Confirmed as HKS-C7 (2026-11-24), verdict included.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C7",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-8. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X77",
+ "aliases": [],
+ "title": "Backup sequence = insert pool",
+ "text": "Inserts, B-roll, clips and static people not talking on camera go into the `backup` sequence (1920x1080). A split screen counts as an insert: zoom it so the clip fills the frame and no edge of the split screen shows (example: Scale 268, Position (0.844, 0.640) on a 1280x720 source).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Backup sequence = insert pool (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K1",
+  "K10"
+ ],
+ "gate": "day_setup",
+ "confirm": "How many items are in Backup, and does any zoomed split screen show an edge in a rendered frame?",
+ "probe": [
+  "Inserts, B-roll, clips and static people not talking on camera go into the `backup` sequence"
+ ],
+ "commit": "a80c11f",
+ "added": "2026-11-23"
+}

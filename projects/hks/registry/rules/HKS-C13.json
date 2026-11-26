@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C13",
+ "aliases": [],
+ "title": "Every promise is kept",
+ "text": "Whatever the hook, a headline card or the host raises is answered in the cut, or left open on purpose. Why: an unanswered question reads as a mistake.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "List each promise and where it is answered (timecode) or left open on purpose.",
+ "probe": [
+  "**HKS-C13. "
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

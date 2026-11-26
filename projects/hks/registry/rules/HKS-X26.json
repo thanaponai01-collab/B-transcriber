@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X26",
+ "aliases": [],
+ "title": "Short body: no mid-body hook clip",
+ "text": "Short body: no mid-body clip that's already in the hook (HKS-C24). Check the source ranges of every body piece against the hook's; only the ending may overlap, and then with more than the hook showed.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does any body piece's source range overlap the hook's, other than the ending?",
+ "probe": [
+  "**Short body: no mid-body clip that's already in the hook**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

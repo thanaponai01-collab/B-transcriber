@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X9",
+ "aliases": [],
+ "title": "Full-frame footage, not the soft box crop",
+ "text": "Full-frame footage, not the soft box crop, wherever the show also aired that footage full screen (the user: \"show the full one\"), and B-roll that matches the words.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7b"
+ ],
+ "gate": null,
+ "confirm": "For each boxed insert, did the show also air it full screen, and which version is in the cut?",
+ "probe": [
+  "*Full-frame footage, not the soft box crop,*"
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

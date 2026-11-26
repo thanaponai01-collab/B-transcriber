@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C31",
+ "aliases": [],
+ "title": "Hot spots are marked yellow first",
+ "text": "The must-keep moments (hot spots, high-volume arguments, what needs to be in the video) are chosen and marked yellow before the paper edit, so the cut is built around them.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K26"
+ ],
+ "gate": "day_setup",
+ "confirm": "Which stretches are marked yellow on Editing, and how were they found?",
+ "probe": [
+  "**HKS-C31. "
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

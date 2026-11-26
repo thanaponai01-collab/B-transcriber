@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X76",
+ "aliases": [],
+ "title": "Working layout: keepers to V2",
+ "text": "The story is split at the topic marks; keepers go up to V2 with their audio left on A1 and re-linked; drops (opening, breaks, sponsor, credits) stay on V1.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Clip label colours (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K10"
+ ],
+ "gate": "day_setup",
+ "confirm": "Are the keepers on V2 with audio on A1 re-linked, and the drops left on V1?",
+ "probe": [
+  "Working layout seen the same day"
+ ],
+ "commit": "a80c11f",
+ "added": "2026-11-23"
+}

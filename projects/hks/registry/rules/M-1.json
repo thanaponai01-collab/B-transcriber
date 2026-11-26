@@ -1,0 +1,24 @@
+{
+ "id": "M-1",
+ "aliases": [],
+ "title": "Learn the why, not presets",
+ "text": "Every observed choice is recorded as the intent behind it (viewer effect, constraint, story role). Values (109%, -12 dB, Posterize 0.2) are today's example, not a setting to replay.",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Working with the user"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which values in the build were measured for this episode rather than reused from an earlier one?",
+ "probe": [
+  "**M-1. Learn the why, not presets.**"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

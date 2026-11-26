@@ -1,0 +1,24 @@
+{
+ "id": "HKS-4",
+ "aliases": [],
+ "title": "The first clear telling wins",
+ "text": "The first clear telling wins; a recap keeps only what's new; a host one-liner can replace a guest's slow version. Weakened: the better telling wins, not always the first (1001 T7, 1120, 1117). HKS-12 overrides HKS-4 (1118).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "human_only",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-4. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

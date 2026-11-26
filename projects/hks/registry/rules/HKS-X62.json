@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X62",
+ "aliases": [],
+ "title": "Undo one step at a time with a read-back",
+ "text": "Undo one step at a time with a read-back: a command that does nothing leaves no undo step, and a counted run of Undos goes too far.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Was each Undo followed by a read-back of the timeline?",
+ "probe": [
+  "Undo one step at a time with a read-back"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

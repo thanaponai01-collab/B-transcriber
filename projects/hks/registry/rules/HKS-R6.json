@@ -1,0 +1,31 @@
+{
+ "id": "HKS-R6",
+ "aliases": [
+  "rule 6",
+  "cut rule 6"
+ ],
+ "title": "Cover = B-roll from the same story",
+ "text": "Cover = B-roll from the same story (ideally the same moment, this episode only), else a static listener shot (`Backup`). Film damage on B-roll zoomed to full screen (HKS-C10). No fixed minimum length: a cover lasts as long as the words that point at it, on the footage at the moment the speaker talks about it. The broadcast's split screens are where the evidence and B-roll are: use that footage to cover a cut when it is on the topic or the broadcast was showing it then (HKS-C9, 2026-11-24). The trick (user, 2026-11-23): where the guest talks about something that has B-roll, put the B-roll on top and cut aggressively underneath.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K2",
+  "K5",
+  "K11"
+ ],
+ "gate": null,
+ "confirm": "For each cover, what footage is it (source timecode), and do the words under it point at it?",
+ "probe": [
+  "6. Cover = B-roll from the same story"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

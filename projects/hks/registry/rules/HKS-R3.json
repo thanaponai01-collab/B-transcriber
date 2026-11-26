@@ -1,0 +1,29 @@
+{
+ "id": "HKS-R3",
+ "aliases": [
+  "rule 3",
+  "cut rule 3"
+ ],
+ "title": "Keep the host when he carries the story",
+ "text": "Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connector to bridge pieces that don't join. Host reactions may be added for drama.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K3"
+ ],
+ "gate": null,
+ "confirm": "For each kept host line, which role does it play (chapter question, challenge, summary, verdict, legal cover, connector)?",
+ "probe": [
+  "Host reactions may be added for drama."
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

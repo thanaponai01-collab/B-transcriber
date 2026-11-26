@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X30",
+ "aliases": [],
+ "title": "Clock blur in squares",
+ "text": "Clock blur in squares: the user's `Blur below logo` boxes, enabled, one per span. Disabled YT blur ALs are deleted, not kept switched off.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is there one enabled Blur below logo box per span, and no disabled YT blur layer left?",
+ "probe": [
+  "**Clock blur in squares:"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

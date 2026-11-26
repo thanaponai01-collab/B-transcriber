@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C30",
+ "aliases": [],
+ "title": "Every edit keeps the raw underneath",
+ "text": "For J and L cuts, always duplicate the layer on top and edit the copy; the raw layer stays below as backup (same idea as 1RaceClub RC-15).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K24"
+ ],
+ "gate": null,
+ "confirm": "Is the raw layer untouched under every trimmed copy?",
+ "probe": [
+  "**HKS-C30. "
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

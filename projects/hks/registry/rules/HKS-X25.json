@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X25",
+ "aliases": [],
+ "title": "Hook button = set-up + payoff",
+ "text": "Hook button = set-up + payoff (HKS-C23). Before picking a hook's last line, read the line before it in the source; if the payoff needs it, take both.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K14"
+ ],
+ "gate": null,
+ "confirm": "What is the hook's last line, and does it need the line before it in the source?",
+ "probe": [
+  "**Hook button = set-up + payoff**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-26",
+ "aliases": [],
+ "title": "The hook's voice depends on the day type",
+ "text": "On issue and explainer days the host or official carries the hook with a warning or tip; on story days, the victim or the clash. Hook lines often come from late in the broadcast.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Whose voice carries the hook, and does it fit the day type?",
+ "probe": [
+  "**HKS-26. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

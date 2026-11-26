@@ -1,0 +1,24 @@
+{
+ "id": "HKS-21",
+ "aliases": [],
+ "title": "The outgoing shot holds over the sound cut",
+ "text": "A 0.6-4.6 s patch of the shot before the join, or of the seconds around it, covers the jump. Covers under 4 s are normal. Confirmed via HKS-C9.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C9",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-21. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "M-2",
+ "aliases": [],
+ "title": "The user exports",
+ "text": "The agent never runs an export or queues Media Encoder unless asked. For HKS the user asked for `python -m cutdeck.honekasae_export` to queue and start the export (guess: the rule is \"no export unless the user asks\"); on 2026-11-24 and 2026-11-25 the agent exported only when asked, and only what had changed.",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Working with the user"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Did the user ask for an export, and was only what changed exported?",
+ "probe": [
+  "**M-2. The user exports.**"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

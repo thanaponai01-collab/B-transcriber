@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X6",
+ "aliases": [],
+ "title": "Play an insert with its own sound",
+ "text": "Play an insert with its own sound (a voice clip, a video the host plays): no studio talk over it, cut to its main point.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K4"
+ ],
+ "gate": null,
+ "confirm": "For each insert with its own sound, is there no studio talk over it, and what span of it plays?",
+ "probe": [
+  "*Play an insert with its own sound*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}
