@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X91",
+ "aliases": [
+  "before-you-cut 3"
+ ],
+ "title": "Story order, not the broadcast's order",
+ "text": "Story order, not the broadcast's order. Each story part answers \"what happens next?\" for someone who has never seen the case. Cut the back-and-forth and the repeats, but keep the set-up.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Story (before building)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "What question does each story part answer next, in order?",
+ "probe": [
+  "3. **Story order, not the broadcast's order.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

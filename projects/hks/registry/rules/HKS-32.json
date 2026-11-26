@@ -1,0 +1,27 @@
+{
+ "id": "HKS-32",
+ "aliases": [],
+ "title": "A piece is a whole thought",
+ "text": "A piece is a whole thought (confirmed 2026-11-25: \"Sounds right\"). 28 of v4's edges sat in running speech with no pause; some split a Thai word the engine had split (\"กลัวน้ำตา | ไหล\"), and v4 opened on \"เพราะ | อยู่ในเรื่องนี้\". Fun moments added as 1-3 s bits had the same problem; the user kept them whole or not at all.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the 20261124 YT body (2026-11-25; HKS-32, HKS-33 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K15",
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "Does every piece start and end on a whole thought, read with its sound?",
+ "probe": [
+  "**HKS-32. A piece is a whole thought**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

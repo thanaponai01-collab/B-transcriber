@@ -1,0 +1,24 @@
+{
+ "id": "HKS-23",
+ "aliases": [],
+ "title": "Feelings stay only if they move events",
+ "text": "Grief, pity and regret are cut unless they explain an action. A guest's own damaging admissions stay.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "human_only",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-23. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

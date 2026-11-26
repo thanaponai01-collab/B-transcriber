@@ -1,0 +1,68 @@
+{
+ "run": "llm_book_1125",
+ "rules": 214,
+ "flags": 7,
+ "hits": {
+  "K17": [],
+  "K21": []
+ },
+ "stats": {
+  "raw": "[\n{\"a\":20,\"b\":53,\"reason\":\"20 says a cover must start exactly on the body's cut tick, and drift of 1–4 frames is a flaw. 53 says the picture clip on V2+ should start or end 0.5–2 s off the A1 cut. Following 53 fully would break 20 on a cover.\"},\n{\"a\":14,\"b\":53,\"reason\":\"14 has B-roll start and end on a sound cut so the picture change hides it. 53 has the upper-track picture start or end off the sound cut.\"},\n{\"a\":23,\"b\":53,\"reason\":\"23 treats a camera change within 1 s of a visible cut as a sliver to avoid. 53 offsets picture changes 0.5–2 s from the sound cut, so an offset under 1 s can create that sliver.\"},\n{\"a\":23,\"b\":36,\"reason\":\"23 bans a camera change within 1 s of a visible cut. 36 accepts 0.7–0.9 s shots at an edit point as fine, and the rule that allows it is not named.\"},\n{\"a\":7,\"b\":188,\"reason\":\"7 cuts the host's jokes and filler, and 6 drops asides. 188 has the editor add banter and fun moments back in on the film-promo episode, and neither side names the other as its exception.\"},\n{\"a\":35,\"b\":44,\"reason\":\"35 wants the last line to say an open story is open. 44 ends the short on a held face under the sting.\"},\n{\"a\":42,\"b\":118,\"reason\":\"42 bars a mid-body clip that is already in the hook. 118 says the hook's lines come back in the body.\"}\n]",
+  "cost_usd": 0.1657379,
+  "seconds": 37.4,
+  "input_tokens": 31068,
+  "output_tokens": 4755,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "rules.md:L67",
+   "b": "rules.md:L160",
+   "reason": "20 says a cover must start exactly on the body's cut tick, and drift of 1–4 frames is a flaw. 53 says the picture clip on V2+ should start or end 0.5–2 s off the A1 cut. Following 53 fully would break 20 on a cover.",
+   "a_text": "- *Never a jump cut, not even one frame.* A cover must start on exactly the body's cut tick (v4's covers drifted 1–4 frames and flashed the jump). It must also open on a frame where the footage is fully on: v4's marker-1 cover started at a box insert's first second, which was still the studio. Rende",
+   "b_text": "- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off th"
+  },
+  {
+   "a": "rules.md:L52",
+   "b": "rules.md:L160",
+   "reason": "14 has B-roll start and end on a sound cut so the picture change hides it. 53 has the upper-track picture start or end off the sound cut.",
+   "a_text": "- *B-roll is one continuous scene, as long as the talk is about it* (20–46 s, reused when it fits), starting and ending on a sound cut so the change of picture hides that cut too.",
+   "b_text": "- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off th"
+  },
+  {
+   "a": "rules.md:L78",
+   "b": "rules.md:L160",
+   "reason": "23 treats a camera change within 1 s of a visible cut as a sliver to avoid. 53 offsets picture changes 0.5–2 s from the sound cut, so an offset under 1 s can create that sliver.",
+   "a_text": "- *No snappy scene changes.* A camera change within 1 s of a visible cut leaves a sliver shot (marker 3: 0.16 s). Don't trim speech to fix it; hold the picture on V2 instead (keep the outgoing shot to the change, or bring the incoming shot in at it). The hold must show a masked face or a wide shot, ",
+   "b_text": "- **Split the cut.** Put the picture change 0.5–2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (the picture clip on V2+ starts or ends off th"
+  },
+  {
+   "a": "rules.md:L78",
+   "b": "rules.md:L108",
+   "reason": "23 bans a camera change within 1 s of a visible cut. 36 accepts 0.7–0.9 s shots at an edit point as fine, and the rule that allows it is not named.",
+   "a_text": "- *No snappy scene changes.* A camera change within 1 s of a visible cut leaves a sliver shot (marker 3: 0.16 s). Don't trim speech to fix it; hold the picture on V2 instead (keep the outgoing shot to the change, or bring the incoming shot in at it). The hold must show a masked face or a wide shot, ",
+   "b_text": "- **Challenge notes** (HKS-C19): where the hook could hit harder, where an explanation or B-roll runs long, where a cut is snappy or clips a word at a camera switch. Snappy cuts: `output/hks_study/sliver_check.py <export or render> <pieces>` lists every shot under 0.4 s at an edit point (a flicker; "
+  },
+  {
+   "a": "rules.md:L24",
+   "b": "yt-20261124-draft.md:L69",
+   "reason": "7 cuts the host's jokes and filler, and 6 drops asides. 188 has the editor add banter and fun moments back in on the film-promo episode, and neither side names the other as its exception.",
+   "a_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto",
+   "b_text": "**User, on the v4 fun paper edit: \"i know it cant be fun in all part, but keep things like v3 but add some fun in\".** **Why:** the story and heart of v3 stay; fun is seasoning, not a replacement. **How to apply:** start from the last approved cut and add the fun moments it lacks, rather than rebuild"
+  },
+  {
+   "a": "rules.md:L107",
+   "b": "rules.md:L135",
+   "reason": "35 wants the last line to say an open story is open. 44 ends the short on a held face under the sting.",
+   "a_text": "- **Ending:** if the story is open, the last line says so (HKS-C16).",
+   "b_text": "- **The 1-min ends on a held face under the sting** (HKS-C26), then the end card; target just under 60 s (the user's: 58.00)."
+  },
+  {
+   "a": "rules.md:L130",
+   "b": "principles.md:L141",
+   "reason": "42 bars a mid-body clip that is already in the hook. 118 says the hook's lines come back in the body.",
+   "a_text": "- **Short body: no mid-body clip that's already in the hook** (HKS-C24). Check the source ranges of every body piece against the hook's; only the ending may overlap, and then with more than the hook showed.",
+   "b_text": "- **HKS-2. The hook is a promise the body plays out** (seen in all 9; held). 18–27 s; its lines come back in the body (1003, 1112, 1117, 1123). Which lines the user picks is the least predictable part (holdouts: 1–2 of 5 right). *1109:* 13 of 14 hook pieces play again in the body; the one that does "
+  }
+ ]
+}

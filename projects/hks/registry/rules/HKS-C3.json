@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C3",
+ "aliases": [],
+ "title": "The TV clock is blurred to hide the re-cut",
+ "text": "The TV clock is blurred to hide that it is a re-cut: a clock that jumps between pieces shows the edit. The clock and the 3HD bug are fine on studio frames; cover them where they would show the cut.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where would a jumping clock show a cut, and is it covered there?",
+ "probe": [
+  "**HKS-C3. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

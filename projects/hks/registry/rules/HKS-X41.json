@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X41",
+ "aliases": [],
+ "title": "Same-scene speech jump needs a cover",
+ "text": "A jump to another speech inside the same scene needs a cover: insert, B-roll or a still person (`Backup`) over the join; never two takes of the same shot butted together in plain view (rule 5).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K23"
+ ],
+ "gate": "same_frame_share",
+ "confirm": "List each jump to another speech in the same scene and the cover over it.",
+ "probe": [
+  "**A jump to another speech inside the same scene needs a cover.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

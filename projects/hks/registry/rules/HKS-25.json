@@ -1,0 +1,24 @@
+{
+ "id": "HKS-25",
+ "aliases": [],
+ "title": "A verdict waits until the evidence is in",
+ "text": "The host's interpretation is moved after the facts.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does each verdict come after the evidence it rests on (timecodes)?",
+ "probe": [
+  "**HKS-25. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

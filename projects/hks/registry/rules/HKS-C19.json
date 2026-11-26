@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C19",
+ "aliases": [],
+ "title": "Challenge the user's cuts",
+ "text": "In every draft, say where the agent would hook harder, where an explanation or a B-roll piece runs long, and where a cut lands snappy or clips a word at a camera switch.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where would you hook harder, what runs long, and which cuts are snappy or clip a word?",
+ "probe": [
+  "**HKS-C19. "
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

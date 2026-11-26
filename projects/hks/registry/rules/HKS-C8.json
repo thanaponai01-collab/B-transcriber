@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C8",
+ "aliases": [],
+ "title": "Law answers the guest's own case",
+ "text": "Law answers the guest's own case, never lectures (HKS-12 confirmed, rule 2 rewritten): right after the fact it explains, or as the verdict. The user: \"sometimes it could be somewhere at around ending like every story tells, then law answers\".",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which guest question does each law passage answer, and where is it?",
+ "probe": [
+  "**HKS-C8. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

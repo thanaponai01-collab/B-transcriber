@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X31",
+ "aliases": [],
+ "title": "Reels built per workflow-log steps 7-8",
+ "text": "Reels: `4 REEL SIZE D1` and `5 REEL 1-3 SIZE D1` as workflow-log steps 7-8 say (nest the square, `1.png` frame on top; the 3-min nests a logo-less FB copy).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Are both reels nested as steps 7-8 say (square nested, 1.png on top, 3-min from a logo-less FB copy)?",
+ "probe": [
+  "**Reels:** the user built"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

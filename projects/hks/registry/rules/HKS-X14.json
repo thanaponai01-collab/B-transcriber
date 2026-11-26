@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X14",
+ "aliases": [
+  "draft workflow 2"
+ ],
+ "title": "Split-screen index",
+ "text": "List every stretch where the broadcast shows a split screen (evidence, B-roll). That is the cover pool (HKS-C9).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K10"
+ ],
+ "gate": null,
+ "confirm": "Where is the list of every split-screen stretch (timecodes) used as the cover pool?",
+ "probe": [
+  "**Split-screen index:**"
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

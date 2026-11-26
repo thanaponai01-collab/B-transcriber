@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X50",
+ "aliases": [],
+ "title": "Playbook: Slide",
+ "text": "Move a short insert a few frames, neighbours absorb it: select V+A, Alt+, / Alt+. per frame.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Slide' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Slide |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

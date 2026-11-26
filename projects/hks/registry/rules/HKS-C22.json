@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C22",
+ "aliases": [],
+ "title": "A fact the picture shows need not be said",
+ "text": "A fact the picture shows need not be said; the check is then that the picture really shows it (in 1123 the graphic marks the boss \"ออกหมายจับ\", not \"จับแล้ว\").",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each fact left unsaid, which picture shows it (timecode), and does it say exactly that?",
+ "probe": [
+  "**HKS-C22. "
+ ],
+ "commit": "b7ada2e",
+ "added": "2026-11-24"
+}

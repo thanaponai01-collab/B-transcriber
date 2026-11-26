@@ -1,0 +1,24 @@
+{
+ "id": "HKS-20",
+ "aliases": [],
+ "title": "The picture moves; the words stay in order",
+ "text": "A proof picture is taken from anywhere in the broadcast and laid under the claim it proves, even 100+ minutes away. This is why HKS-5's word moves are rare.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Pass 2: cross-checks of every study (agent, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each proof picture, which claim does it sit under, and where is it from?",
+ "probe": [
+  "**HKS-20. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

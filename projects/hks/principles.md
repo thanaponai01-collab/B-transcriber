@@ -3,6 +3,8 @@
 The show's own principles. Read [the main principles](../PRINCIPLES.md) first; where this file
 departs from them, this file wins for HKS.
 
+**Source of truth: [registry/](registry/README.md)**, one file per rule or principle; a new one goes there first. This file keeps the why in prose.
+
 **IDs:** `HKS-<n>`. Rules ([rules.md](rules.md)) and code cite these IDs.
 
 ## Principles

@@ -1,0 +1,55 @@
+{
+ "run": "llm_K17_1125+log",
+ "rules": 416,
+ "flags": 5,
+ "hits": {
+  "K17": [
+   4
+  ]
+ },
+ "stats": {
+  "raw": "[\n{\"rule\":71,\"reason\":\"Zooms split-screen inserts to fill the frame at an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.\"},\n{\"rule\":72,\"reason\":\"Fixes the zoom with an off-centre position (Scale 280, Position 0.8675, 0.6244) that follows the box, not the frame centre.\"},\n{\"rule\":43,\"reason\":\"Re-zooms each cover for the square and re-positions it to follow the subject, so the zoom is not centred.\"},\n{\"rule\":111,\"reason\":\"Frames every shot on its own by moving the zoom position (x 1.092 to 1.459), which means off-centre zooms.\"},\n{\"rule\":179,\"reason\":\"Zooms full-frame film to 152 at Position (0.5, 0.599) to drop the clock and bug. That zooms an insert that is already full screen, and the position is off-centre.\"}\n]",
+  "cost_usd": 0.18357990000000002,
+  "seconds": 9.6,
+  "input_tokens": 45081,
+  "output_tokens": 934,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L274",
+   "reason": "Zooms split-screen inserts to fill the frame at an off-centre position (Scale 268, Position 0.844, 0.640). The user now wants every zoom-in centred.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "Inserts, B-roll, clips and static people not talking on camera go into the `backup` sequence (1920x1080). A split screen (clip in a box beside the studio) counts as an insert: zoom it so the clip fills the frame and **no edge of the split screen shows**. The user's own example: Scale 268, Position ("
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L279",
+   "reason": "Fixes the zoom with an off-centre position (Scale 280, Position 0.8675, 0.6244) that follows the box, not the frame centre.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "The zoom depends on the layout, so measure the box each time. 268 fits the two-box studio split (box about x 32–804). The narrow three-box layout (box interior x 39–737, y 30–593) still showed the studio strip at 268 and needed Scale 280, Position (0.8675, 0.6244). The user marked that miss red on 2"
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L132",
+   "reason": "Re-zooms each cover for the square and re-positions it to follow the subject, so the zoom is not centred.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "- **Square reframe per shot** (HKS-C25). A cover zoomed for 16:9 needs a bigger zoom in the 1080² frame (the user: 263 → 333, 363, 368). Where the subject moves, razor the cover and re-position each part. Render a frame of each cover in the square before handover."
+  },
+  {
+   "a": "correction",
+   "b": "principles.md:L103",
+   "reason": "Frames every shot on its own by moving the zoom position (x 1.092 to 1.459), which means off-centre zooms.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "- **HKS-C25. Every shot is framed on its own.** (HKS-30 confirmed; user, 2026-11-24: \"all confirmed\") The user re-zoomed the agent's trailer shots one by one (263 → 280–296, the MV cutaway 263 → 338) and, in the square, cut a wide cover in two and moved the second half to follow the subject. One zoo"
+  },
+  {
+   "a": "correction",
+   "b": "yt-20261124-draft.md:L37",
+   "reason": "Zooms full-frame film to 152 at Position (0.5, 0.599) to drop the clock and bug. That zooms an insert that is already full screen, and the position is off-centre.",
+   "a_text": "this kind of insert that already full screen dont zoom in, and all the zoom in need to be centered",
+   "b_text": "**User, after v2: \"you also forgot to do the insert in backup, and the edit sq, like put things to V2\".** **Why:** these are part of the day's setup the user does by hand (rules.md \"Backup sequence = insert pool\" and \"Working layout\": keepers up to V2 with audio left on A1 and re-linked; drops stay "
+  }
+ ]
+}

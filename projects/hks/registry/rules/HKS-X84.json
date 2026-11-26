@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X84",
+ "aliases": [],
+ "title": "The stakes are said aloud within 60 s",
+ "text": "The stakes are said aloud within about 60 s of the body. Refuted by measurement (hks_story_checks.py): 4 of 15 user cuts take over 60 s. Not a rule of the user's.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "retired",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "The stakes are said aloud within about 60 s of the body"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

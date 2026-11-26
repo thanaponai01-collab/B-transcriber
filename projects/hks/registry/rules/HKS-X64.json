@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X64",
+ "aliases": [
+  "my mistakes 2"
+ ],
+ "title": "I added moments as 1-3 s bits",
+ "text": "I added moments as 1-3 s bits joined mid-sentence to an approved cut. Gate: the same list, plus \"a moment goes in whole or not at all\".",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "Which moments were added, and is each a whole passage with no mid-sentence join?",
+ "probe": [
+  "2. **I added moments as 1"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

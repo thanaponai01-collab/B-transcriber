@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X90",
+ "aliases": [
+  "before-you-cut 2"
+ ],
+ "title": "Give a taste of the event itself",
+ "text": "Give a taste of the event itself (the clip, its sound) before the people talk about it. If the broadcast plays footage of the incident, the body uses it where the story reaches that moment.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Story (before building)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "Where does the incident footage play, before the talk about it and where the story reaches it?",
+ "probe": [
+  "2. **Give a taste of the event itself**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

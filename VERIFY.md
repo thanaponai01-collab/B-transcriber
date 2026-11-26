@@ -199,6 +199,13 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: AssertionError
 - fail-proof: in cutdeck/hks_judge.py kept_runs, made a run join across hidden content (`if False:`), test_kept_lines_join_unless_hidden_content_lies_between went red; in cutdeck/hks_bleep.py dropped the `(?!ว)` guards, test_compounds_are_not_swears went red; reverted, `git diff` empty
 
+## HKS handover gates and rule registry
+- path: cutdeck/hks_enforce.py, cutdeck/hks_gate_store.py, cutdeck/hks_registry.py, uxp/cutdeck/features/hks.js, projects/hks/registry/
+- oracle: projects/hks/gates/redesign-20261126.md
+- test: `python -m pytest tests/test_hks_enforce.py tests/test_hks_gate_store.py tests/test_hks_registry.py tests/test_hks_gates.py tests/test_hks_gates_mutate.py -q -p no:cacheprovider` and `node --test tests/cutdeck_feature_hks.test.cjs`
+- fail-signal: AssertionError
+- live: `cdv.py call hks_handover '{"sequence":"<guid>","body_from":<s>}'` then `cdv.py call hks_status '{}'` on a copied day project (run 20261126-163421-hks-gates)
+
 ## SubtitleDesk quote workspace
 - path: subtitle_desk/
 - oracle: subtitle_desk/README.md, tests/conftest.py

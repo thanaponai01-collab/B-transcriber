@@ -1,0 +1,29 @@
+{
+ "id": "HKS-R2",
+ "aliases": [
+  "rule 2",
+  "cut rule 2"
+ ],
+ "title": "Each point told once",
+ "text": "(M-4) Each point told once. Drop retellings, off-topic asides, backstory and feelings that don't move events (shorten as much as possible). Law stays only as the answer to the guest's own case: right after the fact it explains, or as the verdict, often near the end once the story is told; never a lecture (HKS-C8, 2026-11-24).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "Which retellings, asides and backstory were dropped, and where (timecode) does law appear as the answer to a guest's own case?",
+ "probe": [
+  "(M-4) Each point told once."
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

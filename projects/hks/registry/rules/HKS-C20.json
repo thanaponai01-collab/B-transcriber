@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C20",
+ "aliases": [],
+ "title": "A flicker is a jump; a short shot is not",
+ "text": "The \"no snappy scene changes\" rule is about a shot too short to read (v4: 0.16 s), not any shot under 1 s (1123's 0.7-0.9 s shots are fine).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7d"
+ ],
+ "gate": null,
+ "confirm": "Which shots under 0.4 s sit at an edit point, and how was each fixed?",
+ "probe": [
+  "**HKS-C20. "
+ ],
+ "commit": "b7ada2e",
+ "added": "2026-11-24"
+}

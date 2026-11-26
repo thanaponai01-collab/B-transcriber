@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X103",
+ "aliases": [],
+ "title": "Late draft policy: label",
+ "text": "A failed control may reach the user only if the handover opens with its id and value (late_draft_policy \"label\", decided by the user 2026-11-25).",
+ "source": {
+  "file": "projects/hks/gates/registry.json",
+  "heading": "late_draft_policy"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which controls failed, and does the handover open with each id and value?",
+ "probe": [
+  "a failed control may reach the user only if the handover opens with its id and value"
+ ],
+ "commit": "37905b9",
+ "added": "2026-11-25"
+}

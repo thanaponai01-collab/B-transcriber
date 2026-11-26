@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X39",
+ "aliases": [],
+ "title": "Tell it like a film",
+ "text": "Tell it like a film to someone seeing it the first time. Before the guest's detail, give the viewer a taste of the context (who these people are, where, what happened between them), then go into the story. Never open a story part on a line that only makes sense if you already know the case. Rule 1's \"get in fast\" means no warm-up, not no context.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "Write the set-up (who, where, what happened) and the timecode where the cut gives each fact.",
+ "probe": [
+  "**Tell it like a film to someone seeing it the first time.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

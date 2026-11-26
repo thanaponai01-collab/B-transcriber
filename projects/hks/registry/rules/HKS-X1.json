@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X1",
+ "aliases": [],
+ "title": "The story is the order, not the broadcast",
+ "text": "Material moves to where the viewer needs it: the \"why 500k\" answer right where the number comes up, the voice recording right after \"it was still 500,000\" as proof, the host's recap of what was paid at the end of a story part, the lawyer's legal framing after the events it explains (events first, law second).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which pieces were moved out of broadcast order, and why does the viewer need each where it now sits?",
+ "probe": [
+  "*The story is the order, not the broadcast.*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

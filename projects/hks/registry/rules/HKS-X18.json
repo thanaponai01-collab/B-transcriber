@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X18",
+ "aliases": [],
+ "title": "Check: promises",
+ "text": "Every question from the hook, the cards and the host is answered, or open on purpose (HKS-C13). Listed in the handover with timecodes.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "List each question the hook, cards and host raise, and where each is answered (timecode) or left open on purpose.",
+ "probe": [
+  "**Promises:** every question from the hook"
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

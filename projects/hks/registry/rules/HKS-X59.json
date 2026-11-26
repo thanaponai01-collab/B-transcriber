@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X59",
+ "aliases": [],
+ "title": "Playbook: Fix an edge mid-word / mid-phrase",
+ "text": "The check lists it: ripple-extend to the next gap of >= 0.2 s between words; pull back instead when the added words would be a dangling opener (แล้ว, ก็, คือ); skip when the added source already plays elsewhere.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Fix an edge mid-word / mid-phrase' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Fix an edge mid-word / mid-phrase |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

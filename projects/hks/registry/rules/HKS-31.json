@@ -1,0 +1,24 @@
+{
+ "id": "HKS-31",
+ "aliases": [],
+ "title": "A short ends on a held face",
+ "text": "A short ends on a held face. Confirmed by the user on 2026-11-24 and moved up: HKS-31 -> C26.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-C26",
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-31. A short"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

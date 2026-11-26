@@ -1,0 +1,35 @@
+{
+ "run": "llm_filter_1125",
+ "rules": 214,
+ "flags": 2,
+ "hits": {
+  "K17": [],
+  "K21": []
+ },
+ "stats": {
+  "raw": "[{\"pair\":41,\"reason\":\"A moves the host's recap of what was paid to the end of a story part and keeps it. C4 cuts the host's on-air recap because it repeats what the viewer just saw. An editor who keeps the recap breaks C4.\"},{\"pair\":148,\"reason\":\"A keeps and relocates the host's recap at the end of a story part. HKS-22 cuts the host's opening intro or recap. An editor who keeps the recap breaks HKS-22.\"}]",
+  "cost_usd": 0.4813539,
+  "seconds": 19.1,
+  "input_tokens": 117032,
+  "output_tokens": 1931,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "rules.md:L44",
+   "b": "principles.md:L34",
+   "shared": 3,
+   "reason": "A moves the host's recap of what was paid to the end of a story part and keeps it. C4 cuts the host's on-air recap because it repeats what the viewer just saw. An editor who keeps the recap breaks C4.",
+   "a_text": "- *The story is the order, not the broadcast.* Material moves to where the viewer needs it: the \"why 500k\" answer right where the number comes up, the voice recording right after \"it was still 500,000\" as proof, the host's recap of what was paid at the end of a story part, the lawyer's legal framing",
+   "b_text": "- **HKS-C4. The host's on-air intro and recap are cut** (HKS-22) because the hook does the intro's job and a recap repeats what the viewer just saw, **and** for length."
+  },
+  {
+   "a": "rules.md:L44",
+   "b": "principles.md:L243",
+   "shared": 2,
+   "reason": "A keeps and relocates the host's recap at the end of a story part. HKS-22 cuts the host's opening intro or recap. An editor who keeps the recap breaks HKS-22.",
+   "a_text": "- *The story is the order, not the broadcast.* Material moves to where the viewer needs it: the \"why 500k\" answer right where the number comes up, the voice recording right after \"it was still 500,000\" as proof, the host's recap of what was paid at the end of a story part, the lawyer's legal framing",
+   "b_text": "- **HKS-22. The host's opening intro or recap is cut** (seen 1112, 1117, 1120, 1123; 1118 keeps 1 s of 192). The show's own process goes too: crew talk, break housekeeping, calls that never connect, \"tomorrow\" (1001, 1002, 1003). The online-only part after the TV part is used heavily (1001 ~620 s, 1"
+  }
+ ]
+}

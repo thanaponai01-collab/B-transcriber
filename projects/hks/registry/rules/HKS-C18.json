@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C18",
+ "aliases": [],
+ "title": "Watch time counts, but partly",
+ "text": "Each second is judged by whether it keeps the viewer watching, after honesty and fairness: the accused's answer (HKS-6), legal cover and the facts that keep the story true stay even when slow.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "human_only",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "**HKS-C18. "
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

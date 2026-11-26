@@ -1,0 +1,24 @@
+{
+ "id": "HKS-13",
+ "aliases": [],
+ "title": "A party is cleared by evidence, never his own pleading",
+ "text": "A party is cleared by evidence and other voices, never by his own pleading (1109). Other voices stay when they explain the host's motive or the law, not when they vouch; about a person in custody, keep feelings and hedged readings, cut verdicts.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a party is cleared, by which evidence or voice, and is any self-pleading left?",
+ "probe": [
+  "**HKS-13. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

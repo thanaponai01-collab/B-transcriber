@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X44",
+ "aliases": [],
+ "title": "Only moves that touch the named clips",
+ "text": "On HKS's layered timeline (body V1/V2, covers V3+, sound A1), only use moves that touch the clips I name; playhead keys reach every targeted track, covers included.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Did every edit touch only the clips named, with covers on V3+ read back unchanged?",
+ "probe": [
+  "use moves that touch the clips I name"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

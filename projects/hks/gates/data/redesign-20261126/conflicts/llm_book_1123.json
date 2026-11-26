@@ -1,0 +1,44 @@
+{
+ "run": "llm_book_1123",
+ "rules": 26,
+ "flags": 4,
+ "hits": {},
+ "stats": {
+  "raw": "[\n{\"a\":6,\"b\":9,\"reason\":\"#6 says to shorten as much as possible by dropping retellings and asides. #9 allows studio cuts only at a thought end or camera change, or under a cover. Trimming mid-thought without a cover would force a jump cut.\"},\n{\"a\":5,\"b\":9,\"reason\":\"#5 says to jump straight to the guest's first story sentence. Cutting there can be a mid-thought studio cut with no cover, which #9 forbids.\"},\n{\"a\":6,\"b\":7,\"reason\":\"#7 says host reactions may be added for drama. #6 drops feelings that don't move events, and #7 also cuts host opinions. An editor who keeps a reaction for drama breaks the other two.\"},\n{\"a\":5,\"b\":7,\"reason\":\"#5 opens with the host's summary when the guest is slow. #7 cuts host clarifications and keeps a host connector only to bridge pieces that don't join. A host opening summary fits neither exception.\"}\n]",
+  "cost_usd": 0.0280499,
+  "seconds": 8.7,
+  "input_tokens": 6401,
+  "output_tokens": 853,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "rules.md:L20",
+   "b": "rules.md:L25",
+   "reason": "#6 says to shorten as much as possible by dropping retellings and asides. #9 allows studio cuts only at a thought end or camera change, or under a cover. Trimming mid-thought without a cover would force a jump cut.",
+   "a_text": "2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory, legal analysis and feelings that don't move events (shorten as much as possible).",
+   "b_text": "5. No jump cuts: in studio picture cut only at a thought end or a camera change. Cut hard (stumbles, pauses, repeats) only under a cover."
+  },
+  {
+   "a": "rules.md:L18",
+   "b": "rules.md:L25",
+   "reason": "#5 says to jump straight to the guest's first story sentence. Cutting there can be a mid-thought studio cut with no cover, which #9 forbids.",
+   "a_text": "1. Get into each story fast: the guest's first story sentence, or the host's summary if the guest is slow.",
+   "b_text": "5. No jump cuts: in studio picture cut only at a thought end or a camera change. Cut hard (stumbles, pauses, repeats) only under a cover."
+  },
+  {
+   "a": "rules.md:L20",
+   "b": "rules.md:L22",
+   "reason": "#7 says host reactions may be added for drama. #6 drops feelings that don't move events, and #7 also cuts host opinions. An editor who keeps a reaction for drama breaks the other two.",
+   "a_text": "2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory, legal analysis and feelings that don't move events (shorten as much as possible).",
+   "b_text": "3. Cut host prompts, clarifications and opinions. Keep a host connector only to bridge pieces that don't join. Host reactions may be added for drama."
+  },
+  {
+   "a": "rules.md:L18",
+   "b": "rules.md:L22",
+   "reason": "#5 opens with the host's summary when the guest is slow. #7 cuts host clarifications and keeps a host connector only to bridge pieces that don't join. A host opening summary fits neither exception.",
+   "a_text": "1. Get into each story fast: the guest's first story sentence, or the host's summary if the guest is slow.",
+   "b_text": "3. Cut host prompts, clarifications and opinions. Keep a host connector only to bridge pieces that don't join. Host reactions may be added for drama."
+  }
+ ]
+}

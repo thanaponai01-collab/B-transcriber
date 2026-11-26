@@ -1,0 +1,30 @@
+{
+ "id": "HKS-R1",
+ "aliases": [
+  "rule 1",
+  "cut rule 1"
+ ],
+ "title": "Get into each story fast",
+ "text": "Get into each story fast: the guest's first story sentence, or the host's summary if the guest is slow, or the host question that sets it up (ask, then tell; HKS-C6, 2026-11-24).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K3",
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "What does each story part open on (timecode and first line), and is it the guest's first story sentence, the host's summary or the set-up question?",
+ "probe": [
+  "1. Get into each story fast"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

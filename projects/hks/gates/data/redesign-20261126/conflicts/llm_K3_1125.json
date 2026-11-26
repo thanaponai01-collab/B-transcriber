@@ -1,0 +1,32 @@
+{
+ "run": "llm_K3_1125",
+ "rules": 215,
+ "flags": 2,
+ "hits": {
+  "K3": []
+ },
+ "stats": {
+  "raw": "[{\"rule\": 7, \"reason\": \"It cuts the host's clarifying questions. The user now says a question sometimes has to be asked before the story is told, so this rule removes questions the user wants kept.\"}, {\"rule\": 92, \"reason\": \"HKS-C7 repeats the same cut of the host's clarifying questions, and the user's correction says some of them must stay.\"}]",
+  "cost_usd": 0.1238039,
+  "seconds": 6.6,
+  "input_tokens": 31162,
+  "output_tokens": 524,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L24",
+   "reason": "It cuts the host's clarifying questions. The user now says a question sometimes has to be asked before the story is told, so this rule removes questions the user wants kept.",
+   "a_text": "You miss some question asking. Yeah, sometimes it needs to be asked before tell the story. … asking is the s- is okay to do.",
+   "b_text": "3. Keep the host when he carries the story: the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler, most jokes and his on-air intro and recap (HKS-C4, C7, 2026-11-24). Keep a host connecto"
+  },
+  {
+   "a": "correction",
+   "b": "principles.md:L40",
+   "reason": "HKS-C7 repeats the same cut of the host's clarifying questions, and the user's correction says some of them must stay.",
+   "a_text": "You miss some question asking. Yeah, sometimes it needs to be asked before tell the story. … asking is the s- is okay to do.",
+   "b_text": "- **HKS-C7. The host stays when he carries the story** (HKS-8 confirmed, rule 3 rewritten): the chapter question, the challenge the viewer wants asked, the clearest summary, the verdict, legal cover. Cut his warm-up, clarifying questions, name checks, filler and most jokes."
+  }
+ ]
+}

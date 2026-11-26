@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X99",
+ "aliases": [],
+ "title": "A known failure is not handed over",
+ "text": "I saw the check say 79% same-frame cuts and handed over anyway. You were waiting, so I chose speed and didn't say so plainly. That was cutting a corner.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K23"
+ ],
+ "gate": null,
+ "confirm": "Does any check fail at handover, and does the handover open with it?",
+ "probe": [
+  "I saw the check say 79% same-frame cuts and handed over anyway."
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

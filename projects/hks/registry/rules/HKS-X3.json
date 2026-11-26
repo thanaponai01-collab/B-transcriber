@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X3",
+ "aliases": [],
+ "title": "B-roll is one continuous scene",
+ "text": "B-roll is one continuous scene, as long as the talk is about it (20-46 s, reused when it fits), starting and ending on a sound cut so the change of picture hides that cut too.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K2"
+ ],
+ "gate": null,
+ "confirm": "How long is each B-roll scene, and does each start and end on a sound cut?",
+ "probe": [
+  "*B-roll is one continuous scene, as long as the talk is about it*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

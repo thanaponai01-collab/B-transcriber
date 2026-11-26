@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X24",
+ "aliases": [],
+ "title": "A flash at every section change",
+ "text": "A flash at every section change, including the start of the body (hook -> sting -> body): glitch (`Glitch redblue.mov`) + an invert AL frame + a whoosh just before the cut.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is there a glitch, invert frame and whoosh at every section change, including sting to body (timecodes)?",
+ "probe": [
+  "**A flash at every section change, including the start of the body**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

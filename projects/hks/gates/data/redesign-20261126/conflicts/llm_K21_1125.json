@@ -1,0 +1,35 @@
+{
+ "run": "llm_K21_1125",
+ "rules": 215,
+ "flags": 2,
+ "hits": {
+  "K21": [
+   0,
+   1
+  ]
+ },
+ "stats": {
+  "raw": "[{\"rule\":5,\"reason\":\"It says to get into each story fast, starting on the guest's first story sentence. The user now says that skips the context and wants a taste first.\"},{\"rule\":6,\"reason\":\"It drops backstory and anything that doesn't move events. The user says that cuts the context around the story.\"}]",
+  "cost_usd": 0.1233799,
+  "seconds": 6.3,
+  "input_tokens": 31161,
+  "output_tokens": 482,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L18",
+   "reason": "It says to get into each story fast, starting on the guest's first story sentence. The user now says that skips the context and wants a taste first.",
+   "a_text": "I feel like you forgot like the context around like the story. … Maybe you can give it some taste first, then just go to that story that you pick",
+   "b_text": "1. Get into each story fast: the guest's first story sentence, or the host's summary if the guest is slow, or the host question that sets it up (ask, then tell; HKS-C6, 2026-11-24)."
+  },
+  {
+   "a": "correction",
+   "b": "rules.md:L20",
+   "reason": "It drops backstory and anything that doesn't move events. The user says that cuts the context around the story.",
+   "a_text": "I feel like you forgot like the context around like the story. … Maybe you can give it some taste first, then just go to that story that you pick",
+   "b_text": "2. (M-4) Each point told once. Drop retellings, off-topic asides, backstory and feelings that don't move events (shorten as much as possible). Law stays only as the answer to the guest's own case: right after the fact it explains, or as the verdict, often near the end once the story is told; never a"
+  }
+ ]
+}

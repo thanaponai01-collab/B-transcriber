@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X12",
+ "aliases": [],
+ "title": "Covers last at least 4 s",
+ "text": "Covers last at least 4 s. (Struck through; replaced by rule 6's \"no fixed minimum\", user 2026-11-24.)",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
+ },
+ "status": "superseded",
+ "superseded_by": "HKS-R6",
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": null,
+ "probe": [
+  "Covers last at least 4 s."
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

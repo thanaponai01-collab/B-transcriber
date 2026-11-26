@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X11",
+ "aliases": [],
+ "title": "No snappy scene changes",
+ "text": "A camera change within 1 s of a visible cut leaves a sliver shot. Don't trim speech to fix it; hold the picture on V2 instead (keep the outgoing shot to the change, or bring the incoming shot in at it). The hold must show a masked face or a wide shot, never a talking host.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7d"
+ ],
+ "gate": null,
+ "confirm": "Which slivers did sliver_check list, and how was each held (track, shot)?",
+ "probe": [
+  "*No snappy scene changes.*"
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

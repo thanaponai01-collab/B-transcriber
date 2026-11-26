@@ -1,0 +1,27 @@
+{
+ "id": "HKS-C1",
+ "aliases": [],
+ "title": "No jump cuts in the studio picture",
+ "text": "No jump cuts in the studio picture (rule 5): viewers notice them and the show should look like the broadcast. Both reasons.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7a",
+  "K23"
+ ],
+ "gate": "same_frame_share",
+ "confirm": "Is there any same-shot jump in plain studio view (timecodes)?",
+ "probe": [
+  "**HKS-C1. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

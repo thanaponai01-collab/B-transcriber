@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C9",
+ "aliases": [],
+ "title": "A cover has no fixed minimum length",
+ "text": "A cover has no fixed minimum length (replaces \"covers >= 4 s\"; HKS-21 confirmed): it lasts as long as the words that point at it, and sits on the footage at the moment the speaker talks about it. Look for the broadcast's split screens first; that footage may cover a cut when it is on the topic, or when the broadcast was showing it at that moment.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each cover, which words point at it, and is it on the topic or what the broadcast showed then?",
+ "probe": [
+  "**HKS-C9. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

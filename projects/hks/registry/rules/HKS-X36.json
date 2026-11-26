@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X36",
+ "aliases": [],
+ "title": "Split the cut (J/L)",
+ "text": "Split the cut. Put the picture change 0.5-2 s off the sound cut. J: the next voice starts under the last picture or cover, then the picture cuts to the speaker. L: the picture changes first and the voice ends under it. Build it on the upper tracks (`premiere_edit_clips` trims one clip without its partner).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": "same_frame_share",
+ "confirm": "How many sound cuts are split as J or L, and are they built on V2+ with A1 untouched?",
+ "probe": [
+  "**Split the cut.**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X38",
+ "aliases": [],
+ "title": "Check visible studio edges in speech",
+ "text": "Before handover, list every visible studio edge that sits in running speech (`python -m cutdeck.timeline_transcript ... --json`, `cuts_in_sound`) and look at each one not under a cover. Count the sound cuts that are also picture cuts on the same frame. The user's 20261124 body had 30 of 180.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K15"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": null,
+ "probe": [
+  "**Check** before handover: list every visible studio edge"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

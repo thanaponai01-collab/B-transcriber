@@ -1,0 +1,156 @@
+{
+ "n": 19,
+ "command": "hks_status",
+ "args": {},
+ "at": "2026-11-26T16:38:49.557990",
+ "result": {
+  "project": "\\\\?\\E:\\Me\\5.Claude\\Transcriber_v2\\output\\hks_rules\\live\\hks-1125-v1-verify.prproj",
+  "sequences": [
+   {
+    "guid": "e02b576b-8220-44e6-adc2-2e1ccaa1a6be",
+    "name": "1 YOUTUBE final",
+    "cut_hash": "e939498046ba4bf4",
+    "status": "ungated",
+    "why": "never gated",
+    "new": true
+   },
+   {
+    "guid": "3ad3b035-08c0-4dc6-9be1-7f7e2f21f4c0",
+    "name": "Editing",
+    "cut_hash": "93932204b5ad5896",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "d412fcc6-fd30-4f55-9909-1a5271ebf8a2",
+    "name": "Footage",
+    "cut_hash": "65b6060c58098383",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "e0f056fb-83ff-40cf-aa3e-a69a979ea375",
+    "name": "Backup",
+    "cut_hash": "ef2fcda34c73d6a2",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "461baf0b-db5b-4f7e-a8ff-508569d5eaf5",
+    "name": "1 YOUTUBE D1",
+    "cut_hash": "bb4384352d7b68d6",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "1fc0db5c-8c60-4c86-a936-cdc58a5a78e4",
+    "name": "2 FACEBOOK D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "7dc63e8d-25ba-45e5-84e3-0e54e8cad22e",
+    "name": "3 SQUARE SELECT D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "5fb11a0e-cde9-4d9e-a90b-ac5a507c4a4e",
+    "name": "4 REEL SIZE D1",
+    "cut_hash": "453a39b98df63598",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "b12640b9-edc0-4978-9d47-1ee114153ab5",
+    "name": "5 REEL 1-3 SIZE D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "b474e527-fc04-4952-83dc-d539e0d5371a",
+    "name": "1 YOUTUBE agent v1",
+    "cut_hash": "e939498046ba4bf4",
+    "status": "ungated",
+    "why": "changed after its last gate run",
+    "new": false
+   },
+   {
+    "guid": "06c26d57-12af-4a5f-960e-bef324278343",
+    "name": "Plattern_FB SIZE",
+    "cut_hash": "3217f3b62d64052f",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "281f3731-c27b-44ba-bb5a-ab34aa813725",
+    "name": "4 REEL SIZE D1",
+    "cut_hash": "453a39b98df63598",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "7846d1b9-ea69-4c2d-8577-17688300d3f1",
+    "name": "2 FACEBOOK D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "a12fc438-1fb8-4117-bfbb-95fdfa6e03db",
+    "name": "3 SQUARE SELECT D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "fd1d4b70-abfc-49f8-979c-6808f147a00f",
+    "name": "1 YOUTUBE D1",
+    "cut_hash": "75194d3e2ab088c5",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "88392f6a-ba48-4d49-96da-9600930ffef8",
+    "name": "Plattern_YT SIZE",
+    "cut_hash": "22ac8c6bd291255c",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "4e488e0c-a96a-4bc0-8eee-a6e4ad261755",
+    "name": "5 REEL 1-3 SIZE D1",
+    "cut_hash": "be7b36e0c0ab9edb",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   },
+   {
+    "guid": "0ab42e5a-0406-42b4-bde6-e15822a1a682",
+    "name": "Nested Sequence 50",
+    "cut_hash": "e45d43eeac278e52",
+    "status": "ungated",
+    "why": "never gated",
+    "new": false
+   }
+  ]
+ },
+ "ok": true
+}

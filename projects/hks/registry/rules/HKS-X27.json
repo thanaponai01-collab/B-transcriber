@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X27",
+ "aliases": [],
+ "title": "Square reframe per shot",
+ "text": "Square reframe per shot (HKS-C25). A cover zoomed for 16:9 needs a bigger zoom in the 1080 square frame. Where the subject moves, razor the cover and re-position each part. Render a frame of each cover in the square before handover.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "In a rendered square frame of each cover, is each framed on its own subject (scale, position)?",
+ "probe": [
+  "**Square reframe per shot**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

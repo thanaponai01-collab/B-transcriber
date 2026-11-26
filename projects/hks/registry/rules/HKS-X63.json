@@ -1,0 +1,29 @@
+{
+ "id": "HKS-X63",
+ "aliases": [
+  "my mistakes 1"
+ ],
+ "title": "I cut in the middle of a thought",
+ "text": "I cut in the middle of a thought, sometimes in the middle of a word (the engine splits Thai words). Gate: `python -m cutdeck.hks_cut_check --prproj <day> --sequence <draft> --from <body start>` reads the audio and lists every cut in speech the viewer can see; fix each one or say why it stays.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K15",
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": null,
+ "probe": [
+  "1. **I cut in the middle of a thought"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

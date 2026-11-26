@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X93",
+ "aliases": [
+  "before-you-cut 5"
+ ],
+ "title": "No source played twice",
+ "text": "No source played twice. Two pieces next to each other must not overlap in source (repeated words).",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Every edge (after building, before handover)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K27"
+ ],
+ "gate": "source_repeats",
+ "confirm": null,
+ "probe": [
+  "5. **No source played twice.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

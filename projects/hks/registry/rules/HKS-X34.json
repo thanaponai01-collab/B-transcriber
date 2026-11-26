@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X34",
+ "aliases": [],
+ "title": "Tighten inside a thought only under a cover",
+ "text": "Tighten inside a thought only under a cover, and then as hard as needed. In studio picture, keep the take whole.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K11"
+ ],
+ "gate": null,
+ "confirm": "List every cut inside a thought and the cover over it.",
+ "probe": [
+  "**Tighten inside a thought only under a cover**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

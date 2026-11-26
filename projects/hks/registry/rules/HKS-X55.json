@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X55",
+ "aliases": [],
+ "title": "Playbook: Ripple extend",
+ "text": "An end that stops before the sentence ends: `edit_clips` move later clips +d, then trim_out +d; also extend or split any cover spanning the edit.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Ripple extend' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Ripple extend |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

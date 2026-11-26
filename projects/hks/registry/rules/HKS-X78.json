@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X78",
+ "aliases": [],
+ "title": "Full-screen footage not zoomed; every zoom centred",
+ "text": "Footage the broadcast already shows full screen is not zoomed: Scale 100, Position (0.5, 0.5), clock and logo included. Every zoom is centred on what it shows: centre on the video inside the box, not the box (find the two hard pillar edges, centre them, zoom until the box edge can't show).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Backup sequence = insert pool (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K17",
+  "K18"
+ ],
+ "gate": null,
+ "confirm": "Are full-screen items at Scale 100, and is every zoomed item centred on the video inside its box (values)?",
+ "probe": [
+  "**Footage the broadcast already shows full screen is not zoomed**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

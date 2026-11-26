@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X98",
+ "aliases": [],
+ "title": "Set-up is not backstory",
+ "text": "I read \"get in fast\" and \"drop backstory\" as \"cut the context\". The where and the incident clip are set-up, not backstory.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "Which set-up (the where, the incident clip) is kept, separate from the backstory dropped?",
+ "probe": [
+  "I read \"get in fast\" and \"drop backstory\" as \"cut the context\"."
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

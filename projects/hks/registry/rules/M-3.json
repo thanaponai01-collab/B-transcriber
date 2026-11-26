@@ -1,0 +1,24 @@
+{
+ "id": "M-3",
+ "aliases": [],
+ "title": "Never edit the user's working project in place",
+ "text": "Held candidate: never edit the user's working project in place. The HKS build plan says \"nothing edits the user's day project\" (agent-written).",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Candidates (seen in one project, ask before promoting)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Was every edit made in a copy, with the user's day project untouched?",
+ "probe": [
+  "**M-3 (held): never edit the user's working project in place.**"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

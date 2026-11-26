@@ -1,0 +1,25 @@
+{
+ "run": "llm_K7a_1123",
+ "rules": 27,
+ "flags": 1,
+ "hits": {
+  "K7a": "control"
+ },
+ "stats": {
+  "raw": "[{\"rule\": 5, \"reason\": \"Rule 5 tells the editor to jump straight to the guest's first story sentence (or the host's summary). That opening cut is what the user now calls a jump cut they never want.\"}]",
+  "cost_usd": 0.0249879,
+  "seconds": 6.2,
+  "input_tokens": 6478,
+  "output_tokens": 516,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L18",
+   "reason": "Rule 5 tells the editor to jump straight to the guest's first story sentence (or the host's summary). That opening cut is what the user now calls a jump cut they never want.",
+   "a_text": "the first RAID mark is like a jump cut. … I don't want that ever.",
+   "b_text": "1. Get into each story fast: the guest's first story sentence, or the host's summary if the guest is slow."
+  }
+ ]
+}

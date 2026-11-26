@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C23",
+ "aliases": [],
+ "title": "A punchline needs its set-up",
+ "text": "A punchline needs its set-up (HKS-28 confirmed). The user put the bet's condition (\"500 ล้านพี่หนุ่มเปิดผมตาม\") in front of the payoff (\"ผมโกนรอเลยพี่\"). Same idea as ask-then-tell (HKS-C6).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K14"
+ ],
+ "gate": null,
+ "confirm": "For each punchline, is its set-up line in front of it?",
+ "probe": [
+  "**HKS-C23. "
+ ],
+ "commit": "180b6d4",
+ "added": "2026-11-24"
+}

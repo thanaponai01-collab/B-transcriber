@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X94",
+ "aliases": [
+  "before-you-cut 6"
+ ],
+ "title": "Same-frame sound and picture cuts: few",
+ "text": "Same-frame sound and picture cuts: few. `hks_cut_check` gives the count. Your 20261124 YT body: 12 of 173. My 20261125 v1: 31 of 39. Every jump to another speech in the same studio scene gets a cover: insert, B-roll or a still person from `Backup`.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Every edge (after building, before handover)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [
+  "K23"
+ ],
+ "gate": "same_frame_share",
+ "confirm": null,
+ "probe": [
+  "6. **Same-frame sound and picture cuts: few.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

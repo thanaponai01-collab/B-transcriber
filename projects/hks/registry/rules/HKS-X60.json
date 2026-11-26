@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X60",
+ "aliases": [],
+ "title": "Timeline moves not to use",
+ "text": "Don't: Shift+Q/W or Q/W on a layered timeline (they trimmed the cover), E (disabled the clip instead of extending), Insert Frame Hold Segment (ripples every track), Close Gap from the menu (did nothing). Mark Clip takes the topmost clip (the cover), not the body. Track locks don't stop API edits. Linked Selection on: a video-only selection + Clear does nothing.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Did the build use any move on the don't list (Q/W, E, Insert Frame Hold Segment, Close Gap)?",
+ "probe": [
+  "Don't: Shift+Q/W or Q/W on a layered timeline"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

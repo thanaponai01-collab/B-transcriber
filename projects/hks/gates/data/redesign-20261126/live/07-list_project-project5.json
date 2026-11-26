@@ -1,0 +1,136 @@
+{
+ "n": 7,
+ "command": "list_project",
+ "args": {
+  "depth": 1
+ },
+ "at": "2026-11-26T16:36:22.622262",
+ "result": {
+  "name": "hks-1125-v1-verify.prproj",
+  "path": "E:\\Me\\5.Claude\\Transcriber_v2\\output\\hks_rules\\live\\hks-1125-v1-verify.prproj",
+  "sequences": [
+   {
+    "name": "Plattern_FB SIZE",
+    "sequence_id": "06c26d57-12af-4a5f-960e-bef324278343",
+    "active": false
+   },
+   {
+    "name": "Nested Sequence 50",
+    "sequence_id": "0ab42e5a-0406-42b4-bde6-e15822a1a682",
+    "active": false
+   },
+   {
+    "name": "2 FACEBOOK D1",
+    "sequence_id": "1fc0db5c-8c60-4c86-a936-cdc58a5a78e4",
+    "active": false
+   },
+   {
+    "name": "4 REEL SIZE D1",
+    "sequence_id": "281f3731-c27b-44ba-bb5a-ab34aa813725",
+    "active": false
+   },
+   {
+    "name": "Editing",
+    "sequence_id": "3ad3b035-08c0-4dc6-9be1-7f7e2f21f4c0",
+    "active": false
+   },
+   {
+    "name": "1 YOUTUBE D1",
+    "sequence_id": "461baf0b-db5b-4f7e-a8ff-508569d5eaf5",
+    "active": false
+   },
+   {
+    "name": "5 REEL 1-3 SIZE D1",
+    "sequence_id": "4e488e0c-a96a-4bc0-8eee-a6e4ad261755",
+    "active": false
+   },
+   {
+    "name": "4 REEL SIZE D1",
+    "sequence_id": "5fb11a0e-cde9-4d9e-a90b-ac5a507c4a4e",
+    "active": false
+   },
+   {
+    "name": "2 FACEBOOK D1",
+    "sequence_id": "7846d1b9-ea69-4c2d-8577-17688300d3f1",
+    "active": false
+   },
+   {
+    "name": "3 SQUARE SELECT D1",
+    "sequence_id": "7dc63e8d-25ba-45e5-84e3-0e54e8cad22e",
+    "active": false
+   },
+   {
+    "name": "Plattern_YT SIZE",
+    "sequence_id": "88392f6a-ba48-4d49-96da-9600930ffef8",
+    "active": false
+   },
+   {
+    "name": "3 SQUARE SELECT D1",
+    "sequence_id": "a12fc438-1fb8-4117-bfbb-95fdfa6e03db",
+    "active": false
+   },
+   {
+    "name": "5 REEL 1-3 SIZE D1",
+    "sequence_id": "b12640b9-edc0-4978-9d47-1ee114153ab5",
+    "active": false
+   },
+   {
+    "name": "1 YOUTUBE agent v1",
+    "sequence_id": "b474e527-fc04-4952-83dc-d539e0d5371a",
+    "active": true
+   },
+   {
+    "name": "Footage",
+    "sequence_id": "d412fcc6-fd30-4f55-9909-1a5271ebf8a2",
+    "active": false
+   },
+   {
+    "name": "Backup",
+    "sequence_id": "e0f056fb-83ff-40cf-aa3e-a69a979ea375",
+    "active": false
+   },
+   {
+    "name": "1 YOUTUBE D1",
+    "sequence_id": "fd1d4b70-abfc-49f8-979c-6808f147a00f",
+    "active": false
+   }
+  ],
+  "items": [
+   {
+    "name": "01. Footage"
+   },
+   {
+    "name": "02. Audio"
+   },
+   {
+    "name": "03. Sequences"
+   },
+   {
+    "name": "04. Nest"
+   },
+   {
+    "name": "05. Assets"
+   },
+   {
+    "name": "06. Photos"
+   },
+   {
+    "name": "07. Adjustment Layer"
+   },
+   {
+    "name": "08. Dynamic Links"
+   },
+   {
+    "name": "Adjustment Layer",
+    "media": "1112293707"
+   },
+   {
+    "name": "Animation Composer"
+   },
+   {
+    "name": "CutDeck"
+   }
+  ]
+ },
+ "ok": true
+}

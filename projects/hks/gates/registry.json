@@ -39,9 +39,9 @@
    "mistake": "draft pieces carry no label colour (K6)",
    "kind": "control",
    "direction": "min",
-   "line": 0.95,
+   "line": 0.949,
    "status": "kept",
-   "evidence": "user finals 0.949-1.0; caught 1123 v1 and v2 (0.0); missed 1123 v3 (1.0 in the saved project now; the user may have labelled it after the correction)",
+   "evidence": "user finals 0.949-1.0; caught 1123 v1 and v2 (0.0); missed 1123 v3 (1.0 in the saved project now; the user may have labelled it after the correction); line 0.95 -> 0.949 on 2026-11-26: the 1110 final measures 0.949 and failed 0.95 (mutation test, output/hks_rules/mutation)",
    "added": "2026-11-25"
   },
   "day_setup": {

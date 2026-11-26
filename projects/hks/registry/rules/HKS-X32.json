@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X32",
+ "aliases": [],
+ "title": "Export when asked, with the command",
+ "text": "Export when asked: `python -m cutdeck.honekasae_export \"<day folder>\"` (one command; picks the same-named copy with content, queues all four in AME). Not hand-rolled `export_sequence` calls.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Did the user ask for the export, and was honekasae_export the command used?",
+ "probe": [
+  "**Export when asked:**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

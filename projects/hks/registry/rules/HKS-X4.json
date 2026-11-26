@@ -1,0 +1,27 @@
+{
+ "id": "HKS-X4",
+ "aliases": [],
+ "title": "A cutaway must be genuinely silent",
+ "text": "The user's studio cutaways are longer shots of the same scene from nearby (8-16 s, 15-26 s away), not 2-3 s pops. Listener shots picked by voice labels showed people talking out of sync. Check every cutaway frame by eye before using it; a masked speaker's own continuous picture can carry tightened sound.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K2",
+  "K5"
+ ],
+ "gate": null,
+ "confirm": "Which cutaways did you look at frame by frame (timecodes), and is nobody in any of them talking?",
+ "probe": [
+  "*A cutaway must be genuinely silent.*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

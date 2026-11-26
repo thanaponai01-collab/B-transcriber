@@ -1,0 +1,27 @@
+{
+ "run": "llm_K3_1123",
+ "rules": 27,
+ "flags": 1,
+ "hits": {
+  "K3": [
+   0
+  ]
+ },
+ "stats": {
+  "raw": "[{\"rule\": 7, \"reason\": \"Rule 3 says to cut host prompts and clarifications, but the user now says some host questions should be kept because the question has to be asked before the story is told.\"}]",
+  "cost_usd": 0.0205539,
+  "seconds": 2.8,
+  "input_tokens": 6497,
+  "output_tokens": 65,
+  "unknown_ids": 0
+ },
+ "pairs": [
+  {
+   "a": "correction",
+   "b": "rules.md:L22",
+   "reason": "Rule 3 says to cut host prompts and clarifications, but the user now says some host questions should be kept because the question has to be asked before the story is told.",
+   "a_text": "You miss some question asking. Yeah, sometimes it needs to be asked before tell the story. … asking is the s- is okay to do.",
+   "b_text": "3. Cut host prompts, clarifications and opinions. Keep a host connector only to bridge pieces that don't join. Host reactions may be added for drama."
+  }
+ ]
+}

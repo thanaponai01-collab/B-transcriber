@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C27",
+ "aliases": [],
+ "title": "Tell the story to a first-time viewer",
+ "text": "Long form gives the viewer the set-up (who, where, what happened) and a taste of the event before the speeches that need it. \"Get in fast\" (HKS-R1) means no warm-up. It does not mean no context.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "What set-up facts and event clip does the viewer get before the first speech that needs them?",
+ "probe": [
+  "**HKS-C27. "
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

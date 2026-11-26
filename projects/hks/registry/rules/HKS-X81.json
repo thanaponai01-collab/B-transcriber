@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X81",
+ "aliases": [],
+ "title": "Build the effect the shot needs",
+ "text": "Finishing, not editing: build the effect the shot needs. Blur = own adjustment layer + mask (ELLIPSE mask tool); explore the tools Premiere has. The agent copied the user's look layer, then faked a circle with crop effects.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K19",
+  "K20",
+  "K25"
+ ],
+ "gate": null,
+ "confirm": "Which effects did the shots need, and was each built with Premiere's own tool?",
+ "probe": [
+  "Finishing, not editing: **build the effect the shot needs**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

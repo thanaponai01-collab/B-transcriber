@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X8",
+ "aliases": [],
+ "title": "Never a jump cut, not even one frame",
+ "text": "Never a jump cut, not even one frame. A cover must start on exactly the body's cut tick (v4's covers drifted 1-4 frames and flashed the jump). It must also open on a frame where the footage is fully on. Render each cover's first and last frame before building.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K7a"
+ ],
+ "gate": "near_miss_covers",
+ "confirm": null,
+ "probe": [
+  "*Never a jump cut, not even one frame.*"
+ ],
+ "commit": "1ea8169",
+ "added": "2026-11-23"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "M-5",
+ "aliases": [],
+ "title": "Check the frame before handing over",
+ "text": "For every piece, look at what the frame actually shows (a reframed 16:9 source loses its edges). A cut that's right on time can still show nothing. (Confirmed on 1RaceClub; applying it beyond Shorts is a guess.)",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Editing"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which rendered frames were looked at for each reframed piece?",
+ "probe": [
+  "**M-5. Check the frame before handing over.**"
+ ],
+ "commit": "0d67094",
+ "added": "2026-11-22"
+}

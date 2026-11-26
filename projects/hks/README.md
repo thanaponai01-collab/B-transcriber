@@ -29,7 +29,7 @@ instead of cutting by hand ([build-plan.md](build-plan.md)).
 - `cutdeck/hks_gold.py`, `hks_clock.py`, `hks_audit.py`, `hks_score.py`, `hks_build.py`, `hks_words.py`
   (`tests/test_hks_*.py`)
 - `cutdeck/hks_cut_check.py` — the agent's own cut mistakes in a saved draft: visible cuts in speech, same-frame cuts, unsafe J/L holds (`tests/test_hks_cut_check.py`; rules.md "My own mistakes")
-- `cutdeck/hks_handover.py` — run before every draft handover: the gates in [gates/registry.json](gates/registry.json) (lines set on the user's finals), a Drafts snapshot, the handover header. Why and evidence: [gates/](gates/README.md)
+- `premiere_hks_handover` (helper, `cutdeck/hks_enforce.py`): run before every draft handover. The helper saves, runs the gates in [gates/registry.json](gates/registry.json) and checks a written answer for every do-confirm rule in [registry/](registry/), then stores a signed record; the CutDeck panel shows each draft as pass, fail or ungated from those records. Offline: `python -m cutdeck.hks_handover`. Rules: [registry/](registry/) (generated: [before-you-cut.md](before-you-cut.md), `.claude/skills/hks-*`). Why and evidence: [gates/](gates/README.md)
 - `cutdeck/honekasae_export.py` — one-command export to Media Encoder (`tests/test_honekasae_export.py`)
 - `cutdeck/topic_layout.py`, `topic_speakers.py` (`tests/test_cutdeck_topic_*.py`)
 - `uxp/cutdeck/timeline/buildSequence.js`, `hksSpikeProbe.js`

@@ -252,6 +252,75 @@
     setText($("btn-preset-folder"), info.path ? "Change…" : "Choose folder…");
   }
 
+  // HKS gates (features/hks.js): the helper's hks_status rows, printed as given. Sequences new
+  // since the day's baseline come first; a never-gated sequence that is not new hides behind the
+  // "N never gated" toggle, a panel-local class flip like the probes menu.
+  function hksValue(v) {
+    return v === null || v === undefined ? "none" : typeof v === "object" ? JSON.stringify(v) : String(v);
+  }
+  function hksLines(row) {
+    const lines = [];
+    (row.failed || []).forEach((f) => lines.push(`${f.gate} ${hksValue(f.value)} vs ${hksValue(f.line)}`));
+    (row.warned || []).forEach((w) => lines.push(`warning ${w.gate}: ${(w.items || []).map(hksValue).join("; ") || hksValue(w.value)}`));
+    const missing = (row.answers_missing || []).length;
+    if (missing) {
+      const shown = row.answers_missing.slice(0, 8).join(", ");
+      lines.push(`${missing} answers missing: ${shown}${missing > 8 ? ", …" : ""}`);
+    }
+    const overrides = Object.keys(row.overrides || {});
+    if (overrides.length) lines.push(`${overrides.length} overridden: ${overrides.join(", ")}`);
+    if (row.why) lines.push(row.why);
+    if (row.checked) {
+      const to = row.show_end === null || row.show_end === undefined ? "" : ` to ${hksValue(row.show_end)} s`;
+      lines.push(`body from ${hksValue(row.body_from)} s${to} · checked ${String(row.checked).replace("T", " ")}`);
+    }
+    return lines;
+  }
+  let hksKey = null;
+  function renderHks(hks) {
+    const list = $("hks-list");
+    if (!list) return;
+    const info = hks || {};
+    const rows = info.sequences || [];
+    const ordered = rows.filter((r) => r.new === true).concat(rows.filter((r) => r.new !== true));
+    const hidden = (r) => r.status === "ungated" && r.why === "never gated" && r.new !== true;
+    const hiddenCount = ordered.filter(hidden).length;
+
+    setText($("hks-note"), info.error ? `Not updated: ${info.error}`
+      : !info.sequences ? "Not checked yet." : rows.length ? "" : "No sequences in the last save.");
+    setHidden($("hks-note"), !info.error && !!info.sequences && rows.length > 0);
+    setText($("hks-never-count"), `${hiddenCount} never gated`);
+    setHidden($("hks-never"), hiddenCount === 0);
+
+    const key = JSON.stringify(ordered);
+    if (key === hksKey) return;
+    hksKey = key;
+    list.innerHTML = "";
+    ordered.forEach((row) => {
+      const el = document.createElement("div");
+      el.className = `hks-row hks-${row.status}` + (hidden(row) ? " hks-hidden" : "");
+      el.setAttribute("title", row.guid || "");
+      const head = document.createElement("div");
+      head.className = "hks-row-head";
+      const badge = document.createElement("span");
+      badge.className = "hks-badge";
+      badge.textContent = row.status;
+      const name = document.createElement("span");
+      name.className = "hks-name";
+      name.textContent = row.new === true ? `${row.name} · new` : row.name;
+      head.appendChild(badge);
+      head.appendChild(name);
+      el.appendChild(head);
+      hksLines(row).forEach((text) => {
+        const line = document.createElement("div");
+        line.className = "hks-detail";
+        line.textContent = text;
+        el.appendChild(line);
+      });
+      list.appendChild(el);
+    });
+  }
+
   function renderBusy(busy) {
     const off = !!busy;
     document.querySelectorAll("[data-act]").forEach((el) => {
@@ -284,6 +353,7 @@
     renderPresetManageList(state.customPresets);
     renderPresetFile(state.presetFile);
     renderJobBanner(state.job);
+    renderHks(state.hks);
     renderBusy(state.showBusy !== undefined ? state.showBusy : state.busy);
     renderTabBusy(!!state.busy, state.tab);
   }
@@ -323,6 +393,19 @@
     if (sync) sync.addEventListener("click", () => intents.onSync());
     const transcript = $("transcript");
     if (transcript) transcript.addEventListener("click", () => intents.onImportTranscript());
+  }
+
+  function bindHks(intents) {
+    const refresh = $("hks-refresh");
+    if (refresh) refresh.addEventListener("click", () => intents.onHksRefresh());
+    const never = $("hks-never");
+    const list = $("hks-list");
+    if (never && list) {
+      never.addEventListener("click", () => {
+        const open = list.classList.toggle("show-never");
+        setText($("hks-never-arrow"), open ? "▾" : "▸");
+      });
+    }
   }
 
   function bindJobRecovery(intents) {
@@ -559,6 +642,7 @@
     bindAudioSelect(intents);
     bindPrimaryActions(intents);
     bindJobRecovery(intents);
+    bindHks(intents);
     bindOverflowMenuAndSettings(intents);
     bindMiniPills(intents);
     bindFrameStepper(intents);

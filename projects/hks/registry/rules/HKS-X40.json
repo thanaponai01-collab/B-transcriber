@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X40",
+ "aliases": [],
+ "title": "Never cut a thing that isn't finished",
+ "text": "A thought, a sentence or an answer is in whole or out. Run the cut check and fix every edge it lists before handover.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K22"
+ ],
+ "gate": "visible_cuts_in_speech",
+ "confirm": "Reading every piece end, which end unfinished, and how was each fixed?",
+ "probe": [
+  "**Never cut a thing that isn't finished.**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

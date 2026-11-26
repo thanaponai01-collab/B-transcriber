@@ -68,3 +68,6 @@ rapidfuzz>=3.0.0   # C Levenshtein for eval metrics (~100× the pure-Python fall
 # ctranslate2, already a transitive dep of faster-whisper above.
 peft>=0.19.0
 datasets>=5.0.0
+
+# Tests: tests/test_hks_registry.py validates projects/hks/registry/ (draft 2020-12)
+jsonschema>=4.18

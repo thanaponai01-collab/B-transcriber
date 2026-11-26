@@ -1,0 +1,24 @@
+{
+ "id": "HKS-14",
+ "aliases": [],
+ "title": "The long form is the master; shorts are selections",
+ "text": "FB = the same hook + a digest of the whole YT in its order, ending on the hardest line; 1-min = the same hook + one beat. Narrowed: the FB groups one place's material together. Weakened: compilations have no YT long form (the FB D1 is the master).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is every short piece taken from the long form, in its order?",
+ "probe": [
+  "**HKS-14. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

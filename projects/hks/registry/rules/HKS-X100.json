@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X100",
+ "aliases": [],
+ "title": "Ripple fixes can overlap neighbours",
+ "text": "My ripple fixes made neighbouring pieces overlap in source, and I didn't check for it.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "code_gate",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K27"
+ ],
+ "gate": "source_repeats",
+ "confirm": null,
+ "probe": [
+  "My ripple fixes made neighbouring pieces overlap in source"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

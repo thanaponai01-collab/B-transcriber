@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X67",
+ "aliases": [
+  "my mistakes 5"
+ ],
+ "title": "I trusted my own measure first",
+ "text": "Any new check runs on the user's finished cut first and on my draft second. It's kept only if it separates them, or it's kept as a list to look at and said to be one (like hks_cut_check).",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each new check used, what did it give on the user's finished cut and on the draft?",
+ "probe": [
+  "5. **I trusted my own measure"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

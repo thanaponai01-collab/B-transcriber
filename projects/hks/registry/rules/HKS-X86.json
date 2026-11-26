@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X86",
+ "aliases": [],
+ "title": "A long stretch with no new picture",
+ "text": "A long stretch with no new picture (5+ min) is where viewers are likely to drop off.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What is the longest stretch with no new picture (timecodes)?",
+ "probe": [
+  "**A long stretch with no new picture** (5+ min)"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

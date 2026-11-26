@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X74",
+ "aliases": [],
+ "title": "Label per question, not per turn",
+ "text": "Each question piece gets ONE colour, for the person the host is asking. Don't split at every speaker change; both halves of a question cut by a break share its colour. A host-only piece (intro, reading the news) is green.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Clip label colours (user, 2026-11-23)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does each question piece on Editing carry one colour, for the person being asked?",
+ "probe": [
+  "**Label per question, not per turn**"
+ ],
+ "commit": "a80c11f",
+ "added": "2026-11-23"
+}

@@ -1,0 +1,29 @@
+{
+ "id": "HKS-X69",
+ "aliases": [
+  "my mistakes 7"
+ ],
+ "title": "I forgot the day's setup",
+ "text": "Split `Edit` first, fill `Backup`, keepers up to V2 and linked. Gate: \"Draft workflow\" step 1 plus `Backup`/`Edit` are done and listed in the handover before any draft is built.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [
+  "K9",
+  "K10"
+ ],
+ "gate": "day_setup",
+ "confirm": "Are Edit split, Backup filled and keepers on V2 linked, and are they listed in the handover?",
+ "probe": [
+  "7. **I forgot the day's setup**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

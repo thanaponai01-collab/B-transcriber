@@ -199,3 +199,12 @@
 - trace: `request` @ cutdeck/hks_assemble.py > `draft` @ cutdeck/hks_draft.py > `kept_runs` @ cutdeck/hks_judge.py
 - verify: HKS episode pipeline (projects/hks/build-plan.md)
 - status: offline only (2026-11-23), on 8 tuning days with the holdout run once where a step allows it; no live build of a draft yet (it needs a copied project the user opens)
+
+## HKS handover gates (MCP + panel)
+- what: The helper saves, reads the save, runs every HKS gate on a draft by its GUID, checks a written answer for every active do-confirm rule in projects/hks/registry/, copies the save into CutDeck/Drafts and stores a signed record keyed by GUID and cut hash. The panel's HKS Gates section shows every sequence as pass, fail (gate id and value) or ungated from those records only.
+- mcp: `premiere_hks_handover(sequence, body_from=0, show_end?, answers?, overrides?, by="agent")`, `premiere_hks_status(mark_baseline=false)`
+- cli: `python -m cutdeck.hks_handover --prproj <file> --sequence <guid|name> --from <s> [--answers <json>]` @ cutdeck/hks_handover.py (a saved project, no Premiere)
+- trace: `_hks_handover` @ cutdeck/driver_commands.py > `save_project` (panel) > `handover` @ cutdeck/hks_enforce.py > `run` @ cutdeck/hks_gates.py > `append` @ cutdeck/hks_gate_store.py; panel `features/hks.js` > `hks_status` > `status` @ cutdeck/hks_enforce.py
+- verify: HKS handover gates (VERIFY.md)
+- status: live-proven 2026-11-26 on a copy of the 1125 save (run 20261126-163421-hks-gates): 1125 v1 red in the panel; menu label and duplicate show as ungated
+

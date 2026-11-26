@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X2",
+ "aliases": [],
+ "title": "Cut hard only where nobody can see the cut",
+ "text": "Under B-roll the sound is cut tight (18 cuts under one 46 s CCTV piece). Where the live studio picture already changes camera, long stretches stay whole (10-76 s, no cut): the broadcast director's cuts already give the picture pace. Pace is uneven on purpose.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K11"
+ ],
+ "gate": null,
+ "confirm": "Where are the tight cuts (timecodes), and is each under B-roll or at a broadcast camera change?",
+ "probe": [
+  "*Cut hard only where nobody can see the cut.*"
+ ],
+ "commit": "d9154e0",
+ "added": "2026-11-23"
+}

@@ -1,0 +1,24 @@
+{
+ "id": "HKS-10",
+ "aliases": [],
+ "title": "The ending closes the lead thread",
+ "text": "The ending closes the lead thread (narrowed: the hook-echo ending is seen only in 1112 and 1117). The mood varies. Weakened: several cuts end open (1002, 1003, 1012, 1110).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which thread does the ending close, or is it open on purpose?",
+ "probe": [
+  "**HKS-10. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

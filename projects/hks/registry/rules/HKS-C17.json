@@ -1,0 +1,26 @@
+{
+ "id": "HKS-C17",
+ "aliases": [],
+ "title": "Tighten at speaker changes first",
+ "text": "Tighten at speaker changes first (HKS-27 confirmed). Dropping another speaker's restatement lands on the broadcast's own camera switch, so no cover is needed; tighten inside one speaker's run only under split-screen cover (HKS-C9).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K11"
+ ],
+ "gate": null,
+ "confirm": "Which tightenings fall inside one speaker's run, and what covers each?",
+ "probe": [
+  "**HKS-C17. "
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

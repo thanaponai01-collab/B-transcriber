@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X35",
+ "aliases": [],
+ "title": "Add a moment whole or not at all",
+ "text": "Add a moment as its whole passage or not at all. No 1-3 s bits joined mid-sentence to an approved cut.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Trims and split edits (confirmed by the user 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which moments were added to the approved cut, and is each a whole passage (source range)?",
+ "probe": [
+  "**Add a moment as its whole passage or not at all.**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

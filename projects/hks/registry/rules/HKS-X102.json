@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X102",
+ "aliases": [],
+ "title": "Test a check on the user's finished cut",
+ "text": "Test a check on the user's finished cut before trusting it (agent, HKS 2026-11-25; guess). A check is kept if it separates the user's cut from the agent's; otherwise it's a list to look at, and the handover says so.",
+ "source": {
+  "file": "projects/PRINCIPLES.md",
+  "heading": "Candidates (seen in one project, ask before promoting)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each check relied on, what did it give on the user's finished cut?",
+ "probe": [
+  "**Test a check on the user's finished cut before trusting it**"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

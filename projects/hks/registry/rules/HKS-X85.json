@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X85",
+ "aliases": [],
+ "title": "Piece length is measurable",
+ "text": "Median piece 1.8-5.6 s on the 13 dailies, 8.1-10.1 s on the 2026 compilations; target for a compilation draft a median near 8-10 s. A compilation keeps about 19-23 % of its sources. Match the year's style the user is cutting in now.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "From the user's fixes to the agent's 20261124 builds"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What is the draft's median piece length and kept share, against the target for this kind of cut?",
+ "probe": [
+  "**Piece length is measurable and the agent's drafts miss it**"
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

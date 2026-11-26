@@ -1,0 +1,24 @@
+{
+ "id": "HKS-19",
+ "aliases": [],
+ "title": "Three or four headline cards tell the whole arc",
+ "text": "Two lines each, a punch then the fact; setup -> escalation -> the worst detail or the turn -> the climax or the twist; a number wherever the story has one; the other side's words in quotes. The voice under them plays only the emotional peak. Narrowed/weakened: some days carry no number; cards run 2-3 lines; on advice and issue days the voice plays a practical threat.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "How many cards, and what arc does each step tell?",
+ "probe": [
+  "**HKS-19. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

@@ -19,6 +19,7 @@ const { createAdjustFeature, loadSettings } = require("./features/adjust.js");
 const { createPresetsFeature, loadCustomPresets } = require("./features/presets.js");
 const { createAlignFeature } = require("./features/align.js");
 const { createProbesFeature } = require("./features/probes.js");
+const { createHksFeature } = require("./features/hks.js");
 const { createDriver, keepRegistered } = require("./features/driver.js");
 
 const storage = typeof localStorage !== "undefined" ? localStorage : null;
@@ -90,6 +91,8 @@ async function ensureHelper() {
 const roughCut = createRoughCutFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, storage, progressText });
 const sync = createSyncFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, lastJob: roughCut.lastJob });
 const transcript = createTranscriptFeature({ ppro, ctl: mainCtl, rpc, ensureHelper, lastJob: roughCut.lastJob });
+// HKS gate status: the quiet connection, so a helper that is down never reaches the status dot.
+const hks = createHksFeature({ ctl: mainCtl, rpc: quietRpc });
 const adjust = createAdjustFeature({ ppro, ctl: mainCtl, storage });
 const presets = createPresetsFeature({ ppro, ctl: mainCtl, presetStore, storage });
 const probes = createProbesFeature({
@@ -134,6 +137,9 @@ function teardown() {
     }
   } catch (_) {}
   try {
+    hks.stopPolling();
+  } catch (_) {}
+  try {
     if (align && typeof align.stopPolling === "function") {
       align.stopPolling();
     }
@@ -168,6 +174,7 @@ panel.bind({
   onImportTranscript: transcript.onImportTranscript,
   onResumeJob: roughCut.onResumeJob,
   onDismissJob: roughCut.onDismissJob,
+  onHksRefresh: hks.onRefresh,
   onTab: (name) => {
     mainCtl.state.tab = name;
     saveTab(name);
@@ -235,7 +242,9 @@ if (isToolsTab(mainCtl.state.tab)) {
   align.refresh().catch((error) => alignCtl.setStatus(error.message || String(error), "error"));
 }
 restartHelperOnStart();
-helperRestart.finally(() => driverRegistration.start());
+// HKS status reads the project through the driver, so its first refresh waits for the registration.
+helperRestart.finally(() => driverRegistration.start()).then(() => hks.refresh());
+hks.startPolling();
 
 setTimeout(async () => {
   await presets.loadPresets();
@@ -249,6 +258,7 @@ setTimeout(async () => {
   try {
     sequenceActivatedListener = () => {
       roughCut.refresh().catch(() => { /* no sequence — the refresh icon retries */ });
+      hks.refresh();
     };
     ppro.EventManager.addGlobalEventListener(ppro.Constants.SequenceEvent.ACTIVATED, sequenceActivatedListener);
   } catch (error) {

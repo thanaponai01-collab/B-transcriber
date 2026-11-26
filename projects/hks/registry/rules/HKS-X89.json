@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X89",
+ "aliases": [
+  "before-you-cut 1"
+ ],
+ "title": "Set-up in two lines",
+ "text": "Set-up in two lines: who these people are, where (the houses, the shop), what happened between them. The cut gives a first-time viewer these facts before the first detail that needs them.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Story (before building)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [
+  "K21"
+ ],
+ "gate": null,
+ "confirm": "What are the two set-up lines, and where does the cut give each fact?",
+ "probe": [
+  "1. **Set-up in two lines:**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}

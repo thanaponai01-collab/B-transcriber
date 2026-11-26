@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C24",
+ "aliases": [],
+ "title": "The body doesn't replay a hook clip mid-body",
+ "text": "The body doesn't replay a hook clip in the middle; the ending may, as the payoff (HKS-29 confirmed). The hook promises; the ending pays.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does any mid-body piece replay a hook clip?",
+ "probe": [
+  "**HKS-C24. "
+ ],
+ "commit": "180b6d4",
+ "added": "2026-11-24"
+}

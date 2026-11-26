@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X15",
+ "aliases": [
+  "draft workflow 3"
+ ],
+ "title": "2-3 hook options",
+ "text": "2-3 hook options, each built a different way (the clash, the shocking fact, the question). The user picks; record the pick and the user's reason in `memory/`.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Which hooks were offered and how is each built; which did the user pick, and where is the reason recorded?",
+ "probe": [
+  "hook options**, each built a different way"
+ ],
+ "commit": "987740d",
+ "added": "2026-11-24"
+}

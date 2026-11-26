@@ -1,0 +1,24 @@
+{
+ "id": "HKS-3",
+ "aliases": [],
+ "title": "Story days have one proven spine",
+ "text": "Story days have one proven spine (narrowed: issue days and panels keep every voice, thinned; see HKS-11). Why: a thread with proof can't be argued away.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What is the spine, and which proof holds it?",
+ "probe": [
+  "**HKS-3. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

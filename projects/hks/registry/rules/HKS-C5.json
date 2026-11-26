@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C5",
+ "aliases": [],
+ "title": "Viewer comments and host warm-up opinions are cut",
+ "text": "Viewer comments and the host's warm-up opinions are cut because they slow the story and for neutrality. Exception: a viewer comment that is the objection a guest or the host then answers.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Is any viewer comment or host warm-up opinion left, and if so which answer follows it?",
+ "probe": [
+  "**HKS-C5. "
+ ],
+ "commit": "24d24fb",
+ "added": "2026-11-24"
+}

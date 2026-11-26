@@ -1,0 +1,24 @@
+{
+ "id": "HKS-C25",
+ "aliases": [],
+ "title": "Every shot is framed on its own",
+ "text": "Every shot is framed on its own (HKS-30 confirmed). One zoom for a whole set of shots is a preset (M-1), not framing; where the subject moves, cut the cover and re-position.",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What scale and position does each shot have, and was each set from its own frame?",
+ "probe": [
+  "**HKS-C25. "
+ ],
+ "commit": "180b6d4",
+ "added": "2026-11-24"
+}

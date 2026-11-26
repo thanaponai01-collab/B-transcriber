@@ -1,0 +1,24 @@
+{
+ "id": "HKS-18",
+ "aliases": [],
+ "title": "A compilation is one theme, four equal cases",
+ "text": "The title card names the theme; each case gets about the same time (19-24 % of its source); the hook is the single strongest confrontation; each case opens on its premise and ends on a button; cases in source order (HKS-C12); 2-5 s of source under the case card. Footage fitted to the width with blur boxes on logos; glitch + Invert at every edge; quieter sources (> ~5 LU) raised +3 dB, capped at -1 dBTP (agent, EP.168).",
+ "source": {
+  "file": "projects/hks/principles.md",
+  "heading": "Candidates from the overnight study (2026-11-23, none confirmed)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "paper_edit",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What share of its source does each case keep, and does each open on its premise and end on a button?",
+ "probe": [
+  "**HKS-18. "
+ ],
+ "commit": "46c3c04",
+ "added": "2026-11-24"
+}

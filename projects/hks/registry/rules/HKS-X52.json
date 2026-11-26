@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X52",
+ "aliases": [],
+ "title": "Playbook: Cutaway from the source",
+ "text": "A listening face or B-roll over the talk: Match Frame or open the source, then `.` (overwrite) with the timeline playhead set; target only the V track you want.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Timeline playbook: which move for which edit (agent, live 2026-11-25)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Where a 'Cutaway from the source' edit was made, which route was used and was the result read back?",
+ "probe": [
+  "| Cutaway from the source |"
+ ],
+ "commit": "90e0e80",
+ "added": "2026-11-25"
+}

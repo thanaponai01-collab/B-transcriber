@@ -1,0 +1,11 @@
+{
+ "n": 18,
+ "command": "save_project",
+ "args": {},
+ "at": "2026-11-26T16:38:49.267289",
+ "result": {
+  "saved": true,
+  "path": "\\\\?\\E:\\Me\\5.Claude\\Transcriber_v2\\output\\hks_rules\\live\\hks-1125-v1-verify.prproj"
+ },
+ "ok": true
+}

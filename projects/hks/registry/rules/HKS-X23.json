@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X23",
+ "aliases": [],
+ "title": "Music bed under the whole piece",
+ "text": "Music bed under the whole piece, never a gap. `[BGM]Where Everything Began.wav` looped: -24 dB under the hook, -33 dB under talk, -12 dB under the end sting (levels 0.0112 / 0.00398 / 0.0447). Check: every second of a short sits under one BGM clip, at the level for what plays there.",
+ "source": {
+  "file": "projects/hks/rules.md",
+  "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "Does every second of the short sit under one BGM clip at the level for what plays there?",
+ "probe": [
+  "**Music bed under the whole piece, never a gap**"
+ ],
+ "commit": "29f890d",
+ "added": "2026-11-24"
+}

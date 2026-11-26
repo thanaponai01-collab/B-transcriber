@@ -1,0 +1,28 @@
+{
+ "id": "HKS-X95",
+ "aliases": [
+  "before-you-cut 7"
+ ],
+ "title": "J/L on a copy",
+ "text": "J/L on a copy: duplicate the clip onto the track above and trim the copy. The raw clip stays below, untouched, as the backup.",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Building"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": false,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [
+  "K24"
+ ],
+ "gate": null,
+ "confirm": "Is every J/L made on a copy with the raw clip untouched below?",
+ "probe": [
+  "7. **J/L on a copy:**"
+ ],
+ "commit": "12dfd13",
+ "added": "2026-11-25"
+}
