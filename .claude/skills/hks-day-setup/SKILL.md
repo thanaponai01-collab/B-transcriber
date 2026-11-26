@@ -7,7 +7,7 @@ GENERATED from projects/hks/registry by tools/hks_registry_build.py; do not edit
 
 # HKS day setup: rules and do-confirm
 
-The 12 active `day_setup` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
+The 13 active `day_setup` rules in [the registry](../../../projects/hks/registry/rules/). A gate id names the `hks_gates` check that measures the rule.
 
 - **HKS-16** **Select by labelled topics before cutting.** The whole broadcast is razored at every topic change and each topic gets a colour; then the cut is trimmed from the kept topics (n = 1; "no colour = drop" is not general). For drafts: produce this pass first; it is the user's own review format.
 - **HKS-C31** **Hot spots are marked yellow first.** The must-keep moments (hot spots, high-volume arguments, what needs to be in the video) are chosen and marked yellow before the paper edit, so the cut is built around them. (gate `day_setup`)
@@ -21,6 +21,7 @@ The 12 active `day_setup` rules in [the registry](../../../projects/hks/registry
 - **HKS-X78** **Full-screen footage not zoomed; every zoom centred.** Footage the broadcast already shows full screen is not zoomed: Scale 100, Position (0.5, 0.5), clock and logo included. Every zoom is centred on what it shows: centre on the video inside the box, not the box (find the two hard pillar edges, centre them, zoom until the box edge can't show).
 - **HKS-X79** **Measure the box each time.** The zoom depends on the layout, so measure the box each time (268 fits the two-box split; the narrow three-box layout needed Scale 280, Position (0.8675, 0.6244)). Check the left and right edges of every zoomed item in a rendered frame.
 - **HKS-X88** Mark the hot spots yellow on `Editing`, not just the question colours: the loud arguments (raised voices, people talking over each other), the clash, the admissions, the lines the story can't lose. Mark the closing lines orange. Yellow is the must-keep list for the YT and the pool for the hook and highlight. Use the audio level to find the loud stretches, then listen to each one. On 20261125 I coloured only per question and marked no yellow at all. (gate `day_setup`)
+- **HKS-X105** `Backup` is 1920x1080, built at the YT frame size, never from `Editing` (720p). Every insert is scaled to fill it: full-screen footage Scale 150 centred; a boxed split screen zoomed to its box, centred, about 8 % past the box edge; no studio shot of the host or a guest, no edge of the show frame. Render the frames and look before using any as a cover. On 20261126 I built it at 1280x720 from `Editing`, unzoomed, and the user had to tell me ("make sure the backup is 1920x1080 and all broll scale up and fit the rules").
 
 ## Do–confirm
 
@@ -38,3 +39,4 @@ Each question needs a written answer in the handover, keyed by its rule id.
 10. **HKS-X78** Are full-screen items at Scale 100, and is every zoomed item centred on the video inside its box (values)?
 11. **HKS-X79** In a rendered frame of every zoomed item, do both side edges show no split-screen border?
 12. **HKS-X88** Which stretches are yellow and orange on Editing, and how were the loud ones found?
+13. **HKS-X105** What frame size is Backup, what is each insert's scale and position, and which rendered frames did you look at?

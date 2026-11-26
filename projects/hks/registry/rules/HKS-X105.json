@@ -1,0 +1,26 @@
+{
+ "id": "HKS-X105",
+ "aliases": [
+  "before-you-cut 0b"
+ ],
+ "title": "`Backup` is 1920x1080, built at the YT frame size, never from `Editing` (720p).",
+ "text": "`Backup` is 1920x1080, built at the YT frame size, never from `Editing` (720p). Every insert is scaled to fill it: full-screen footage Scale 150 centred; a boxed split screen zoomed to its box, centred, about 8 % past the box edge; no studio shot of the host or a guest, no edge of the show frame. Render the frames and look before using any as a cover. On 20261126 I built it at 1280x720 from `Editing`, unzoomed, and the user had to tell me (\"make sure the backup is 1920x1080 and all broll scale up and fit the rules\").",
+ "source": {
+  "file": "projects/hks/before-you-cut.md",
+  "heading": "Day setup (before the paper edit)"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "day_setup",
+ "corrections": [],
+ "gate": null,
+ "confirm": "What frame size is Backup, what is each insert's scale and position, and which rendered frames did you look at?",
+ "probe": [
+  "0b. **`Backup` is 1920x1080"
+ ],
+ "commit": "",
+ "added": "2026-11-26"
+}
