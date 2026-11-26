@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X107",
+ "aliases": [],
+ "title": "**Check the length before handover; cut what the story can lose.**",
+ "text": "Check the long form's length before handover: over 20 min, cut the pieces least worth it in the story (asides, a point told twice, feelings that move nothing) until it is in 17-20 min. On 20261126 I handed over v1 at 23.2 min, and the user said: \"check the length again. It's above 20 minutes. So cut something that you think is not worth in the story\".",
+ "source": {
+  "file": "projects/hks/memory/yt-20261126-draft.md",
+  "heading": "User corrections"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "handover",
+ "corrections": [],
+ "gate": null,
+ "confirm": "How long is the body, and which pieces were cut to bring it into 17-20 min (source timecodes, why each)?",
+ "probe": [
+  "check the length again"
+ ],
+ "commit": "12964f4",
+ "added": "2026-11-26"
+}

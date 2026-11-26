@@ -1,0 +1,24 @@
+{
+ "id": "HKS-X106",
+ "aliases": [],
+ "title": "**A cover belongs to its cut, never one insert on every cut.**",
+ "text": "A cover belongs to its cut, never one insert repeated on every cut. Every cut is different: cover it only with the insert or B-roll the words at that cut point at, or what the broadcast showed at that moment; a cut on a camera change gets a J/L split instead, or stays straight. On 20261126 v1 I put a 4 s cover from the same few inserts on all 42 cuts, and the user said: \"you spam a lot of like one insert ... every cut is not the same ... use the one that may be related to that cut ... not just spam it in every cut\".",
+ "source": {
+  "file": "projects/hks/memory/yt-20261126-draft.md",
+  "heading": "User corrections"
+ },
+ "status": "active",
+ "superseded_by": null,
+ "confirmed": true,
+ "kind": "do_confirm",
+ "kind_source": "proposed",
+ "stage": "build",
+ "corrections": [],
+ "gate": null,
+ "confirm": "For each cover, which words at that cut point at it (timecode), and is any insert used on more than one unrelated cut?",
+ "probe": [
+  "you spam a lot of like one insert"
+ ],
+ "commit": "12964f4",
+ "added": "2026-11-26"
+}
