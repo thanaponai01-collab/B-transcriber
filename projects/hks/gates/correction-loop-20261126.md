@@ -87,7 +87,7 @@ corrections with no gate. That part is in "Yours to decide".
 
 Backfill:
 - All 80 corrections are linked to the rules the gold map names.
-- 5 proposed rules, unconfirmed, cover the 7 corrections that had none: HKS-X110 (audio carries
+- 5 rules, confirmed by the user on 2026-11-26, cover the 7 corrections that had none: HKS-X110 (audio carries
   its video's label colour), X111 (a film-promo day feels fun, K12+K13), X112 (open on the line
   the user names), X113 (the first voice pre-laps under a full sting, K43+K53) and X114 (an
   inserted interview is not a body piece).
@@ -202,8 +202,8 @@ paths are arguments; the cost per episode is not measured).
 ## Yours to decide (options and evidence; I decided none)
 
 1. **Which rules may be merged, retired or dropped from what gets loaded.** 179 active rules (164
-   do-confirm, so the handover asks 164 answers); 84 unconfirmed, including the 5 backfill rules
-   X110–X114. 156 rule pairs flagged and not judged.
+   do-confirm, so the handover asks 164 answers); 79 unconfirmed (X110–X114 were confirmed on
+   2026-11-26). 156 rule pairs flagged and not judged.
    Options:
    - (a) drop unconfirmed rules from the skills;
    - (b) merge rules that cite the same corrections (for example HKS-R6, X3 and X4 on covers);

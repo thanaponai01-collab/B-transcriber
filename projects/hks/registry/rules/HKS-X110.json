@@ -9,9 +9,9 @@
  },
  "status": "active",
  "superseded_by": null,
- "confirmed": false,
+ "confirmed": true,
  "kind": "do_confirm",
- "kind_source": "backfill 2026-11-26, not yet confirmed",
+ "kind_source": "backfill 2026-11-26, confirmed by the user 2026-11-26 (\"confirm X110 to X114\")",
  "stage": "day_setup",
  "corrections": [
   "K29"
