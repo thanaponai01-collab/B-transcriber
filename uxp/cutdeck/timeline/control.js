@@ -35,7 +35,7 @@
    removing a selection (host/trackItems.js), media file paths (host/sequenceRead.js), PointF
    values (host/components.js). */
 
-const { runTransaction, asBinLike, activeProject, sequenceNamed, sequenceWithContent, projectAndSequenceNamed, openAndActivate, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
+const { runTransaction, asBinLike, activeProject, sequenceNamed, sequenceWithContent, projectAndSequenceNamed, openAndActivate, withFreshHandles, allSequences, CUTDECK_BIN_NAME, ROUGH_CUTS_BIN_NAME } = require("../host/project.js");
 const { getTrackClipItems, isTrackItemSelected, trackItemName, addRemoveItemsAction } = require("../host/trackItems.js");
 const { unwrapKeyframeValue, toParamValue } = require("../host/components.js");
 const { toTicks } = require("../host/ticks.js");
@@ -185,7 +185,7 @@ async function binItems(item) {
 async function listProject(ppro, { depth = 8 } = {}) {
   const project = await activeProject(ppro);
   const active = await project.getActiveSequence();
-  const sequences = (await project.getSequences()).map((s) => ({ name: s.name, sequence_id: String(s.guid),
+  const sequences = (await allSequences(project)).map((s) => ({ name: s.name, sequence_id: String(s.guid),
     active: !!active && String(active.guid) === String(s.guid) }));
   const walk = async (children, level) => {
     const items = [];
@@ -262,29 +262,37 @@ async function setInOut(ppro, { sequence: name = null, in_ticks: inTicks = null,
    step), then the source's own marks are put back and the new sequence renamed through its project
    item (ProjectItem.createSetNameAction: WORKS). The source's clips are not edited. */
 async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks, out_ticks: outTicks, result_name: resultName = null }) {
-  const { project, sequence } = await projectAndSequenceNamed(ppro, name);
-  if (resultName && (await project.getSequences()).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
+  let { project, sequence } = await projectAndSequenceNamed(ppro, name);
+  if (resultName && (await allSequences(project)).some((s) => s.name === resultName)) throw new Error(`A sequence named "${resultName}" already exists.`);
   const oldIn = ticksOf(await sequence.getInPoint()), oldOut = ticksOf(await sequence.getOutPoint());
   const marks = (a, b, label) => runTransaction(project, label, (compound) => {
     if (!compound.addAction(sequence.createSetInPointAction(tick(ppro, a)))) throw new Error("addAction(In) returned false");
     if (!compound.addAction(sequence.createSetOutPointAction(tick(ppro, b)))) throw new Error("addAction(Out) returned false");
   });
-  marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
+  await withFreshHandles(async () => {
+    ({ project, sequence } = await projectAndSequenceNamed(ppro, name));
+    marks(inTicks, outTicks, "CutDeck: mark the subsequence range");
+  });
   let sub;
   try {
     sub = await sequence.createSubsequence(true);
   } finally {
-    marks(oldIn, oldOut, "CutDeck: put the marks back");
-  }
-  if (!sub) throw new Error(`createSubsequence returned nothing for "${sequence.name}".`);
-  if (resultName) {
-    const item = await sub.getProjectItem();
-    runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
-      if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+    await withFreshHandles(async () => {
+      ({ project, sequence } = await projectAndSequenceNamed(ppro, name));
+      marks(oldIn, oldOut, "CutDeck: put the marks back");
     });
   }
+  if (!sub) throw new Error(`createSubsequence returned nothing for "${sequence.name}".`);
   const id = String(sub.guid);
-  const made = (await project.getSequences()).find((s) => String(s.guid) === id) || sub;
+  if (resultName) {
+    await withFreshHandles(async () => {
+      const item = await ((await allSequences(project)).find((s) => String(s.guid) === id) || sub).getProjectItem();
+      runTransaction(project, `CutDeck: name ${resultName}`, (compound) => {
+        if (!compound.addAction(item.createSetNameAction(resultName))) throw new Error("addAction(rename) returned false");
+      });
+    });
+  }
+  const made = (await allSequences(project)).find((s) => String(s.guid) === id) || sub;
   let clips = 0;
   for (let i = 0; i < await made.getVideoTrackCount(); i++) clips += (await getTrackClipItems(await made.getVideoTrack(i), ppro)).length;
   for (let i = 0; i < await made.getAudioTrackCount(); i++) clips += (await getTrackClipItems(await made.getAudioTrack(i), ppro)).length;
@@ -297,17 +305,19 @@ async function makeSubsequence(ppro, { sequence: name = null, in_ticks: inTicks,
 const PIECE_SUFFIX = " (CutDeck piece)";
 async function removePiece(ppro, { name }) {
   if (!String(name).endsWith(PIECE_SUFFIX)) throw new Error(`"${name}" is not a CutDeck piece; nothing removed`);
-  const project = await activeProject(ppro);
-  const found = (await project.getSequences()).filter((s) => s.name === name);
-  if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
-  const active = await project.getActiveSequence();
-  if (active && String(active.guid) === String(found[0].guid)) throw new Error(`"${name}" is the active sequence; nothing removed`);
-  const item = await found[0].getProjectItem();
-  const bin = item.getParentBin();
-  runTransaction(project, "CutDeck: remove piece", (compound) => {
-    if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
+  return withFreshHandles(async () => {
+    const project = await activeProject(ppro);
+    const found = (await allSequences(project)).filter((s) => s.name === name);
+    if (found.length !== 1) throw new Error(`"${name}" is ${found.length} sequences, not one; nothing removed`);
+    const active = await project.getActiveSequence();
+    if (active && String(active.guid) === String(found[0].guid)) throw new Error(`"${name}" is the active sequence; nothing removed`);
+    const item = await found[0].getProjectItem();
+    const bin = item.getParentBin();
+    runTransaction(project, "CutDeck: remove piece", (compound) => {
+      if (!compound.addAction(bin.createRemoveItemAction(item))) throw new Error("addAction(remove piece) returned false");
+    });
+    return { removed: !(await allSequences(project)).some((s) => s.name === name) };
   });
-  return { removed: !(await project.getSequences()).some((s) => s.name === name) };
 }
 
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */

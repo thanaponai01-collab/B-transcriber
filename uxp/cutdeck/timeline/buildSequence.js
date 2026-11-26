@@ -57,7 +57,7 @@
    + VideoComponentChain.createAppendComponentAction (re-fetch after commit), ComponentParam
    createKeyframe / createSetValueAction. */
 
-const { runTransaction, sequencesNamed, cloneSequence } = require("../host/project.js");
+const { runTransaction, sequencesNamed, cloneSequence, withFreshHandles, allSequences } = require("../host/project.js");
 const { readSequence } = require("../host/sequenceRead.js");
 const { addRemoveItemsAction } = require("../host/trackItems.js");
 const { toTicks, TICKS_PER_SECOND } = require("../host/ticks.js");
@@ -193,50 +193,57 @@ async function buildSequenceInner(ppro, { project: projectPath, base, name, item
       });
     }
     lap("settings");
+    const baseId = String(baseSeq.guid);
     for (const st of steps) {
-      const from = BigInt(st.from_ticks), to = BigInt(st.to_ticks), dt = BigInt(st.dt_ticks || "0");
-      const now = await readSequence(ppro, seq, { paths: false });
-      // tracks (optional) {video: [index], audio: [index]}: only clips on those tracks (e.g. one text layer).
-      const onTracks = (c) => !st.tracks || ((c.kind === "video" ? st.tracks.video : st.tracks.audio) || []).includes(c.track);
-      const inRange = (c) => c.start >= from && c.start < to && onTracks(c);
-      const span = `${secs(from)}-${secs(to)} s`;
-      if (st.op === "lift") {
-        removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
-        removeAll(ppro, project, editor, now.audio.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.AUDIO, `CutDeck build: lift audio ${span}`);
-      } else if (st.op === "clone") {
-        // `ranges` [{from_ticks, to_ticks, dt_ticks}] clone more ranges in this one transaction, from this one
-        // read (a reorder's every block to the park: one undo step whatever the block count).
-        const parts = [[from, to, dt], ...(st.ranges || []).map((r) => [BigInt(r.from_ticks), BigInt(r.to_ticks), BigInt(r.dt_ticks)])];
-        const moves = parts.flatMap(([lo, hi, by]) => [...now.video, ...now.audio]
-          .filter((c) => c.start >= lo && c.start < hi && onTracks(c)).map((c) => [c, by]));
-        runTransaction(project, `CutDeck build: clone ${span}${parts.length > 1 ? ` and ${parts.length - 1} more` : ""} by ${secs(dt)} s`, (c) => {
-          for (const [{ item, kind }, by] of moves) {
-            // v_offset: copy video that many tracks up (premierepro.txt:615 videoTrackVerticalOffset), e.g. a pasted
-            // title parked on V1 past the end onto the subtitle track.
-            const vOff = kind === "video" ? (st.v_offset || 0) : 0;
-            if (!c.addAction(editor.createCloneTrackItemAction(item, tick(by), vOff, 0, false, false))) throw new Error("clone refused");
-          }
-        });
-      } else if (st.op === "trim") {
-        // Tail trim to end at end_ticks: createSetOutPointAction (PREMIERE_FACTS "createSetOutPointAction(t)":
-        // WORKS; createSetEndAction is BROKEN). Out point is in the item's own time: inPoint + new length.
-        const end = BigInt(st.end_ticks);
-        const items = [...now.video, ...now.audio].filter(inRange);
-        runTransaction(project, `CutDeck build: trim ${span} to end at ${secs(end)} s`, (c) => {
-          for (const it of items) {
-            if (end <= it.start) throw new Error(`trim end ${secs(end)} s is not after the clip start ${secs(it.start)} s`);
-            if (!c.addAction(it.item.createSetOutPointAction(tick(it.inPoint + end - it.start)))) throw new Error("trim refused");
-          }
-        });
-      } else if (st.op === "move") {
-        const moving = [...now.video, ...now.audio].filter(inRange)
-          .sort((a, b) => (dt > 0n ? (b.start > a.start ? 1 : -1) : (a.start > b.start ? 1 : -1)));
-        runTransaction(project, `CutDeck build: move ${span} by ${secs(dt)} s`, (c) => {
-          for (const { item } of moving) if (!c.addAction(item.createMoveAction(tick(dt)))) throw new Error("move refused");
-        });
-      } else {
-        throw new Error(`Unknown step ${st.op}`);
-      }
+      // Each step reads afresh and runs its own transactions, so a stale handle (PREMIERE_FACTS "Panel writes
+      // right after another command's commits") runs it again on the sequence fetched anew by its guid.
+      await withFreshHandles(async () => {
+        seq = (await allSequences(project)).find((s) => String(s.guid) === baseId) || seq;
+        editor = ppro.SequenceEditor.getEditor(seq);
+        const from = BigInt(st.from_ticks), to = BigInt(st.to_ticks), dt = BigInt(st.dt_ticks || "0");
+        const now = await readSequence(ppro, seq, { paths: false });
+        // tracks (optional) {video: [index], audio: [index]}: only clips on those tracks (e.g. one text layer).
+        const onTracks = (c) => !st.tracks || ((c.kind === "video" ? st.tracks.video : st.tracks.audio) || []).includes(c.track);
+        const inRange = (c) => c.start >= from && c.start < to && onTracks(c);
+        const span = `${secs(from)}-${secs(to)} s`;
+        if (st.op === "lift") {
+          removeAll(ppro, project, editor, now.video.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.VIDEO, `CutDeck build: lift video ${span}`);
+          removeAll(ppro, project, editor, now.audio.filter(inRange).map((c) => c.item), ppro.Constants.MediaType.AUDIO, `CutDeck build: lift audio ${span}`);
+        } else if (st.op === "clone") {
+          // `ranges` [{from_ticks, to_ticks, dt_ticks}] clone more ranges in this one transaction, from this one
+          // read (a reorder's every block to the park: one undo step whatever the block count).
+          const parts = [[from, to, dt], ...(st.ranges || []).map((r) => [BigInt(r.from_ticks), BigInt(r.to_ticks), BigInt(r.dt_ticks)])];
+          const moves = parts.flatMap(([lo, hi, by]) => [...now.video, ...now.audio]
+            .filter((c) => c.start >= lo && c.start < hi && onTracks(c)).map((c) => [c, by]));
+          runTransaction(project, `CutDeck build: clone ${span}${parts.length > 1 ? ` and ${parts.length - 1} more` : ""} by ${secs(dt)} s`, (c) => {
+            for (const [{ item, kind }, by] of moves) {
+              // v_offset: copy video that many tracks up (premierepro.txt:615 videoTrackVerticalOffset), e.g. a pasted
+              // title parked on V1 past the end onto the subtitle track.
+              const vOff = kind === "video" ? (st.v_offset || 0) : 0;
+              if (!c.addAction(editor.createCloneTrackItemAction(item, tick(by), vOff, 0, false, false))) throw new Error("clone refused");
+            }
+          });
+        } else if (st.op === "trim") {
+          // Tail trim to end at end_ticks: createSetOutPointAction (PREMIERE_FACTS "createSetOutPointAction(t)":
+          // WORKS; createSetEndAction is BROKEN). Out point is in the item's own time: inPoint + new length.
+          const end = BigInt(st.end_ticks);
+          const items = [...now.video, ...now.audio].filter(inRange);
+          runTransaction(project, `CutDeck build: trim ${span} to end at ${secs(end)} s`, (c) => {
+            for (const it of items) {
+              if (end <= it.start) throw new Error(`trim end ${secs(end)} s is not after the clip start ${secs(it.start)} s`);
+              if (!c.addAction(it.item.createSetOutPointAction(tick(it.inPoint + end - it.start)))) throw new Error("trim refused");
+            }
+          });
+        } else if (st.op === "move") {
+          const moving = [...now.video, ...now.audio].filter(inRange)
+            .sort((a, b) => (dt > 0n ? (b.start > a.start ? 1 : -1) : (a.start > b.start ? 1 : -1)));
+          runTransaction(project, `CutDeck build: move ${span} by ${secs(dt)} s`, (c) => {
+            for (const { item } of moving) if (!c.addAction(item.createMoveAction(tick(dt)))) throw new Error("move refused");
+          });
+        } else {
+          throw new Error(`Unknown step ${st.op}`);
+        }
+      });
       state.stepsDone += 1;
     }
     lap("steps");

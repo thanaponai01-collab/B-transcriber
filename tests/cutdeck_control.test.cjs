@@ -292,6 +292,18 @@ test("make_subsequence cuts the range to a new named sequence and puts the sourc
   await assert.rejects(run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" }), /already exists/);
 });
 
+test("make_subsequence and remove_piece fetch fresh handles when one was stale, and refuse when every one is", async () => {
+  const { h, run } = setup();
+  fake.staleHandles(h);
+  assert.equal((await run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" })).name, "Q1 (CutDeck piece)");
+  fake.staleHandles(h);
+  assert.deepEqual(await run.remove_piece({ name: "Q1 (CutDeck piece)" }), { removed: true });
+  const again = setup();
+  fake.staleHandles(again.h, { persistent: true });
+  await assert.rejects(again.run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q2 (CutDeck piece)" }), /no longer valid/);
+  assert.equal(again.h.sequence("Q2 (CutDeck piece)"), undefined);
+});
+
 test("remove_piece deletes only a CutDeck piece", async () => {
   const { h, run } = setup();
   await run.make_subsequence({ in_ticks: "0", out_ticks: String(S), result_name: "Q1 (CutDeck piece)" });

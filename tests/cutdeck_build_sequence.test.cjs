@@ -176,6 +176,29 @@ test("into clone + lift brings a later block forward without moving it past othe
   assert.ok(h.undoSteps.some((s) => s.startsWith("CutDeck build: clone")));
 });
 
+test("an into step whose editor went stale reads afresh and runs once (live 2026-11-26, moving a paste into place)", async () => {
+  const h = fake.createTimelineHost({
+    path: PROJECT,
+    media: [{ path: SHOW, video: true, audio: true, duration: 600n * S }],
+    sequences: [{ name: "cut",
+      video: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]],
+      audio: [[{ media: SHOW, start: 0n, end: 1n * S, in: 0n }, { media: SHOW, start: 3n * S, end: 4n * S, in: 50n * S }]] }],
+  });
+  const getEditor = h.ppro.SequenceEditor.getEditor;
+  let stale = 1;
+  h.ppro.SequenceEditor.getEditor = (seq) => {
+    const ed = getEditor(seq);
+    if (stale-- <= 0) return ed;
+    return { ...ed, createCloneTrackItemAction: () => { throw new Error(fake.SCRIPT_OBJECT_INVALID); } };
+  };
+  await buildSequence(h.ppro, { project: PROJECT, base: "cut", name: "cut", into: true,
+    steps: [{ op: "clone", from_ticks: t(3), to_ticks: t(4), dt_ticks: String(-2n * S) }],
+    items: [{ id: "x", media: SHOW, in_ticks: t(100), out_ticks: t(101), at_ticks: t(5), v: 0, a: 0 }] });
+  const at1 = h.sequence("cut").video.filter((c) => c.start === 1n * S);
+  assert.deepEqual(at1.map((c) => c.in / S), [50n]);
+  assert.equal(h.undoSteps.filter((s) => s.startsWith("CutDeck build: clone")).length, 1);
+});
+
 test("into clone with tracks copies only those tracks (one text layer onto a later Short)", async () => {
   const h = fake.createTimelineHost({
     path: PROJECT,

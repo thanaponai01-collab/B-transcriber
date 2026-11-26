@@ -389,6 +389,24 @@ test("duplicate_sequence copies the same-named sequence with content, names the 
   assert.deepEqual(h.undoSteps, ["CutDeck: copy 2 FACEBOOK D1", "CutDeck: name FB copy"]);
 });
 
+test("duplicate_sequence fetches fresh handles when one was stale", async () => {
+  const h = dayHost();
+  fake.staleHandles(h);
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "duplicate_sequence", args: { sequence_name: "2 FACEBOOK D1", result_name: "FB copy" } });
+  assert.equal(out.name, "FB copy");
+  assert.deepEqual(h.undoSteps, ["CutDeck: copy 2 FACEBOOK D1", "CutDeck: name FB copy"]);
+});
+
+test("duplicate_sequence reads the sequences again past a null entry and leaves no stray copy", async () => {
+  const h = dayHost();
+  fake.nullSequenceReads(h, 3);
+  const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
+    command: "duplicate_sequence", args: { sequence_name: "2 FACEBOOK D1", result_name: "FB copy" } });
+  assert.equal(out.name, "FB copy");
+  assert.deepEqual((await h.project.getSequences()).map((s) => s.name).filter((n) => n.endsWith(" Copy")), []);
+});
+
 test("duplicate_sequence with empty copies the template's blank sequence, not the user's", async () => {
   const h = dayHost();
   const out = await createDriver({ ppro: h.ppro, ctl: controller() }).handle({
