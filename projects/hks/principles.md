@@ -159,6 +159,24 @@ final): [memory/yt-20261125-draft.md](memory/yt-20261125-draft.md). Gates: [befo
   layer ... the ELLIPSE mask tool ... explore more on the tool Premiere has"). Blur = own adjustment layer +
   mask. The agent copied the user's look layer, then faked a circle with crop effects.
 
+## From the user's D1 vs the agent's v1 of 20261126 (seen, not confirmed)
+
+Numbers: [memory/yt-20261126-draft.md](memory/yt-20261126-draft.md), "Diff against the user's D1".
+
+- **HKS-X108. The time goes to story, not to air.** The user cut the kept passages word by word: pauses,
+  restarts, doubled words, fillers, the host's calls to the crew and his asides (176 cuts, 360 s out of 19
+  min). A broadcast talks slowly because it is live; the long form keeps what was said and drops how long
+  it took to say it. The cuts can be this many because each one is hidden (J/L copy, a short cover from
+  the same moment, the broadcast's own camera change), so rule 5 ("no jump cuts") and hard tightening are
+  one rule, not two.
+- **HKS-X109. Tighten first, drop story last.** The 20-min line was met by the tightening above, so the
+  user kept three passages the agent had dropped for length (the ธรรมนัส clause, คุณกิ๊ก's own donation, the
+  face-scan case). A dropped passage loses a fact; a dropped pause loses nothing.
+- Already in the rules and broken again: the host's on-air opening is cut (HKS-22, HKS-C4). The user's
+  set-up came from the host's challenge to the accuser, so the viewer learns who he is through the clash
+  (HKS-X98: set-up is not the host's intro either). The order stayed the broadcast's (HKS-5): none of the
+  agent's three moves were kept.
+
 ## Candidates from the overnight study (2026-11-23, none confirmed)
 
 Read from the user's finished YT cuts of 1001, 1003, 1012, 1020, 1110, 1112, 1117, 1120, 1123 and the

@@ -201,6 +201,18 @@ viewer had no set-up for, some cuts ended unfinished, and same-scene jumps showe
   build what the shot needs. Masks have no API (PREMIERE_FACTS), so the mask tools are a Premiere UI
   route still to be proven here; explore Premiere's own tools before working around them.
 
+## Tighten word by word (from the user's D1, 20261126; seen, not confirmed)
+
+- **Cut out, inside every kept passage:** pauses of about 0.15 s or more, restarts and doubled words
+  ("งบการเงิน งบการเงินและงบดุล"), fillers and tag questions (นะครับ, ใช่, ดู, อะ, เฮ้ย, "ถูกไหมครับ ถูกครับ"),
+  the host's calls to the crew ("ทีมงานเอา...ขึ้นมา", "เอาอีกหน้ามาดิ"), asides that are about the show
+  ("ผมขออนุญาตเบลอไว้"). A swear word can go by sound instead of a bleep. The user's D1 of 20261126: 176
+  such cuts, 360 s, median sound clip 1.9 s.
+- **Hide each one:** the J/L copy on V2, a short cover from the same moment (median 2.6 s, film damage on
+  a full-screen one), or the broadcast's own camera change. Same-frame jumps in sync stay few (the user: 21
+  of 226).
+- **Length:** tighten first; only then drop a passage, and only one the story can lose (HKS-X107, X109).
+
 ## Timeline playbook: which move for which edit (agent, live 2026-11-25)
 
 What I tried on a study copy of v4 and how each behaved (rows in `docs/PREMIERE_FACTS.md`, run
