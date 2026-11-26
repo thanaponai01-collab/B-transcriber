@@ -32,10 +32,13 @@ to the user, or building a workaround, look it up in `docs/PREMIERE_CONTROL_MAP.
 and the `premiere_*` command for each task. A command may use only routes with a LIVE row in
 `docs/PREMIERE_FACTS.md` "Route proof per command"; `tests/cutdeck_route_proof.test.cjs` fails
 on any other. When several routes reach an action, prefer UXP, then the menu, then keys, then
-the Premiere UI (measured success, same file), and read the result back. If a CutDeck guard
-blocks a task, name the guard; if you approximate, say so when you hand it over. A new route
-or command is proved live (verify-cutdeck) and recorded before agents use it. Premiere's
-built-in MCP server and `hSLScripting` are off limits: first-party only, never force them.
+the Premiere UI (measured success, same file), and read the result back. Keys and the
+Premiere UI take the user's mouse and keyboard, and the AI Assistant spends their Adobe
+credits: use them only as far as the user has approved. Don't fake or approximate a feature;
+if a CutDeck guard blocks a task, name the guard, not "Premiere can't". A new route or command
+is built in the helper (`cutdeck/driver_commands.py`), proved live (verify-cutdeck) and recorded
+before agents use it. Premiere's built-in MCP server and `hSLScripting` are off limits:
+first-party only, never force them.
 
 For panel code (`uxp/cutdeck/`), never write an Adobe API from memory. Check, in order:
 `docs/PREMIERE_FACTS.md` (what each API did live); `reference/adobe/api/premierepro.txt` and

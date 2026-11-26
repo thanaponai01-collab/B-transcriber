@@ -409,8 +409,10 @@ HKS overnight study (`projects/hks/study/`); scratch: the open 20261123 project.
 
 CLAUDE.md rule 2: a command in `cutdeck/driver_commands.py` may take a route only after a live
 run proved it. One row per command, with the routes it declares (`Command.routes`, names in
-`ROUTES`), the Premiere version and date of its first successful live run, and where that run
-is recorded. `tests/cutdeck_route_proof.test.cjs` fails on a command with no LIVE row, on a row
+`ROUTES`) and the Premiere version, date and record of the live run that proves it: the first
+successful call in the helper command log or `output/verify-cutdeck/runs` where one exists, else
+the recorded run named in the row (`read_audio_range`, `apply_cuts`, `distribute_clips`,
+`create_sequence`, `paste_attributes`, `srt_subtitles`, `assistant_ask`). `tests/cutdeck_route_proof.test.cjs` fails on a command with no LIVE row, on a row
 whose routes differ from the command's, and on any off-limits route (first-party MCP,
 `hSLScripting`). A new command adds its row after its first live run (verify-cutdeck), not before.
 Rows on 26.5 were not re-run on 27.0.
@@ -478,9 +480,9 @@ logged command run. "ok" means the call returned; only a read-back proves the ed
 | `nest_clips` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
 | `paste_attributes` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *Premiere 27*: Paste Attributes rows, through MCP (b5966a3) |
 | `edit_text` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
-| `srt_subtitles` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *SRT to subtitle Graphics*: `output/verify-cutdeck/runs/20261122-222610-srt-captions` |
+| `srt_subtitles` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *SRT to subtitle Graphics*, commit e84559a (its run folder is no longer on disk) |
 | `menu_command` | menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
-| `assistant_ask` | assistant | LIVE | 27.0.0 | 2026-11-17 | this file, *UXP platform*: AI Assistant chat via UI Automation (fee0e3d) |
+| `assistant_ask` | assistant | LIVE | 27.0.0 | 2026-11-17 | commit fee0e3d: three read-only prompts answered, live on 27.0.0.88 (row *Driving the AI Assistant*); no editing prompt yet |
 
 ## Not UXP: ExtendScript / QE DOM
 

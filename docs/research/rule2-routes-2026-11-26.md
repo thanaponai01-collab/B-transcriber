@@ -10,9 +10,9 @@ if a proven route existed that day.
 
 | Label | Count | Example (file, time) |
 |---|---|---|
-| False refusal, route proven that day | 2 | F4 `8d21723d…`, 2026-11-21T08:19Z: "The panel can't disable clips when it builds." |
-| Worse workaround, route proven | 1 | W3 `2ce93c3f…`, 2026-11-25T14:36Z: "I treated "no API" as impossible." (mask donor route LIVE 2026-11-23) |
-| Refusal from the panel-only framing, route built within 2 days | 5 | F6 `8d21723d…`, 2026-11-21T09:14Z: "Everything I change in Premiere goes through the CutDeck panel." |
+| False refusal, route proven that day | 2 | F4 `8d21723dâ€¦`, 2026-11-21T08:19Z: "The panel can't disable clips when it builds." |
+| Worse workaround, route proven | 1 | W3 `2ce93c3fâ€¦`, 2026-11-25T14:36Z: "I treated "no API" as impossible." (mask donor route LIVE 2026-11-23) |
+| Refusal from the panel-only framing: route built within 2 days (4) or call in the typings, unused (2) | 6 | F6 `8d21723dâ€¦`, 2026-11-21T09:14Z: "Everything I change in Premiere goes through the CutDeck panel." |
 | Correct refusal | 13 | C11, 2026-09-28: the only quote of "don't fake" itself |
 
 The quotes above were re-read in the raw jsonl. Rule 2's own text was quoted twice, both
@@ -43,6 +43,9 @@ chosen draft (the "pointer" one, now in CLAUDE.md) is picked on the transcript e
 length, not on this table.
 
 ## Sources
+
+- This folder's `rule2-routes-2026-11-26/`: the full transcript findings (F/C/W/U labels), the four
+  drafts, the harness and runner, and both batches' scores (the first discarded).
 
 - Routes per command: `Command.routes` in `cutdeck/driver_commands.py`; proof rows:
   `docs/PREMIERE_FACTS.md` "Route proof per command", built from `output/verify-cutdeck/runs`
