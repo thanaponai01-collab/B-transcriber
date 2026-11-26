@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -1520,6 +1521,27 @@ def _paste_pieces_arguments(args: dict, jobs) -> dict:
     return {**result, "template": template, "pieces": spans, "at_ticks": _ticks(args.get("at_ticks", "0"), "at_ticks")}
 
 
+# Premiere keeps what each cut used until it quits (PREMIERE_FACTS "memory held after the cut"):
+# a 40-piece paste_pieces took up to 3.1 GB, and 17 in one session left 0.6 GB of commit (live
+# 2026-11-26). Below this much free commit a build is refused instead of crashing Premiere.
+MIN_COMMIT_FREE_GB = 8.0
+
+
+def _commit_free_gb() -> float | None:
+    """Commit memory Windows can still hand out (GlobalMemoryStatusEx ullAvailPageFile); None off Windows."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    class Status(ctypes.Structure):
+        _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [
+            (n, ctypes.c_ulonglong) for n in ("phys", "phys_free", "commit", "commit_free", "virtual", "virtual_free", "ext")]
+
+    status = Status(length=ctypes.sizeof(Status))
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+    return status.commit_free / 2**30
+
+
 def _with_in(timeline: dict) -> list[tuple[str, int, int, int, int]]:
     """(V|A, track number, start, end, source in) of every clip."""
     return sorted((t["id"][0], int(t["id"][1:]), int(c["start_ticks"]), int(c["end_ticks"]), int(c.get("in_ticks", 0)))
@@ -1533,6 +1555,10 @@ async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     piece-by-piece route."""
     parent, template, name, pieces = args["source"], args["template"], args["target"], args["pieces"]
     at = int(args["at_ticks"])
+    free = _commit_free_gb()
+    if free is not None and free < MIN_COMMIT_FREE_GB:
+        raise ValueError(f"only {free:.1f} GB of memory left to commit; Premiere keeps what every cut used until it "
+                         "quits, and a build now could crash it. Save, restart Premiere, then run again.")
     exists = any(s["name"] == name for s in (await premiere("list_project", {"depth": 1}))["sequences"])
     if template and exists:
         raise ValueError(f"{name!r} already exists; with a template, paste_pieces makes target as a new copy of it")

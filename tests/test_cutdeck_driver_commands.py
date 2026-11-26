@@ -492,6 +492,11 @@ def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
     assert stale not in host.seqs and ("V", 1, 5 * S, 8 * S) in host.seqs["YT"]
 
 
+@pytest.fixture(autouse=True)
+def _plenty_of_memory(monkeypatch):
+    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 64.0)
+
+
 def _derive(host, pieces, **extra):
     args = driver_commands.COMMANDS["paste_pieces"].prepare(
         {"source": "Parent", "template": "Template", "target": "Short",
@@ -584,6 +589,21 @@ def test_a_failed_paste_pieces_removes_its_temporaries_and_names_the_half_built_
     else:
         raise AssertionError("a failed paste reported success")
     assert set(host.seqs) - before == {"Short"}  # every temporary removed, even the active one
+
+
+def test_paste_pieces_refuses_to_start_when_memory_is_nearly_gone(monkeypatch):
+    # Live 2026-11-26: 17 soak runs took Premiere to 41 GB private with 0.6 GB of commit left;
+    # Premiere keeps what each cut used until it quits, so the next run would have crashed it.
+    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 2.0)
+    host = _PasteHost()
+    S = _parent(host, 5)
+    try:
+        _derive(host, [(0, S)])
+    except ValueError as e:
+        assert "restart Premiere" in str(e) and "2.0 GB" in str(e)
+    else:
+        raise AssertionError("started a build with no memory left")
+    assert host.calls == []  # refused before touching Premiere
 
 
 def test_paste_pieces_without_a_template_needs_an_existing_target():
