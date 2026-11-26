@@ -413,6 +413,87 @@ HKS overnight study (`projects/hks/study/`); scratch: the open 20261123 project.
 | `edit_clips` batch of ~350 moves across many tracks | CATCH | Refused mid-list with "no clip starts at … on that track" for a clip that exists; nothing applied. The same moves one track per call all succeeded. | same |
 | `duplicate_sequence` to rename; `remove_rough_cuts` | CATCH | No driver command renames a sequence (the UXP `ProjectItem.createSetNameAction` above can; CutDeck does not expose it); `remove_rough_cuts` deletes only from its own bin ("No bin CutDeck"). A study copy was renamed by duplicating and emptying the old one (edit_clips `remove`). | same |
 
+## Route proof per command
+
+CLAUDE.md rule 2: a command in `cutdeck/driver_commands.py` may take a route only after a live
+run proved it. One row per command, with the routes it declares (`Command.routes`, names in
+`ROUTES`) and the Premiere version, date and record of the live run that proves it: the first
+successful call in the helper command log or `output/verify-cutdeck/runs` where one exists, else
+the recorded run named in the row (`read_audio_range`, `apply_cuts`, `distribute_clips`,
+`create_sequence`, `paste_attributes`, `srt_subtitles`, `assistant_ask`). `tests/cutdeck_route_proof.test.cjs` fails on a command with no LIVE row, on a row
+whose routes differ from the command's, and on any off-limits route (first-party MCP,
+`hSLScripting`). A new command adds its row after its first live run (verify-cutdeck), not before.
+Rows on 26.5 were not re-run on 27.0.
+
+Fallback order when several routes reach an action, by measured success (helper command log
+2026-11-25..26 plus every `output/verify-cutdeck/runs` call; deliberate refusals and caller
+errors left out; measured 2026-11-26): **UXP** 10,493 of 10,532 calls ok (99.6%) · **menu** 919
+of 919 posted, but a posted item can do nothing (Close Gap, this file) · **keys** 16 of 16 sent,
+yet Ctrl+Z and a Ctrl+Alt binding did nothing live (*Menu and keyboard routes*) · **Premiere UI**
+53 of 58 (91%; the 5 are `edit_text` not finding or opening the text) · **AI Assistant** no
+logged command run. "ok" means the call returned; only a read-back proves the edit.
+
+| Command | Routes | Status | Premiere | Date | Proof |
+|---|---|---|---|---|---|
+| `read_sequence` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `read_audio_range` | uxp | LIVE | 26.5 | 2026-10-06 | this file, *Sequences*: SubtitleDesk `read_audio_range`, helper job `965a35b4` |
+| `apply_cuts` | uxp | LIVE | 26.5 | 2026-09-24 | `docs/arch-design-helper-v2.md` step 6: job `e8b96443`, 420 cuts, read-back clean |
+| `add_markers` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `run_probe` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-230511-mogrttext` |
+| `inspect_selection` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `set_transform_field` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `set_anchor` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `align_clips` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `distribute_clips` | uxp | LIVE | 26.5 | 2026-09-26 | this file, *Effects*: panel align + distribute, `test_projects/p6_*.prproj` |
+| `build_sequence` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-004515-timeline-listen` |
+| `reload_panel` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-213003-edit-max-interview` |
+| `cut_copy` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `create_sequence` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/premiere-re/live/scratch_log.jsonl` (general control pass) |
+| `create_project` | uxp | LIVE | 27.0.0 | 2026-11-26 | `output/premiere/premiere_commands.jsonl` call `a72e01b6`; this file, *Track items*: `Project.createProject` row |
+| `duplicate_sequence` | uxp | LIVE | 27.0.0 | 2026-11-23 | `output/verify-cutdeck/runs/20261123-223331-issue130-cross-seq-paste` |
+| `export_sequence` | uxp | LIVE | 27.0.0 | 2026-11-25 | `output/premiere/premiere_commands.jsonl` call `9e9e6bf2` |
+| `read_timeline` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
+| `list_project` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `open_sequence` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-004515-timeline-listen` |
+| `remove_rough_cuts` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-165442-rough-cut-clean-memory` |
+| `set_playhead` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
+| `set_in_out` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-232401-place-text-busy` |
+| `make_subsequence` | uxp | LIVE | 27.0.0 | 2026-11-24 | `output/verify-cutdeck/runs/20261124-133117-paste-gap` |
+| `remove_piece` | uxp | LIVE | 27.0.0 | 2026-11-24 | `output/verify-cutdeck/runs/20261124-130315-paste-from` |
+| `select_clips` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-230511-mogrttext` |
+| `edit_clips` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
+| `place_media` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-013033-timeline-listen-final` |
+| `place_text` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-230511-mogrttext` |
+| `list_effects` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `add_effect` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `set_param` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `add_transition` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `set_track_mute` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `remove_markers` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `import_files` | uxp | LIVE | 27.0.0 | 2026-11-25 | `output/premiere/premiere_commands.jsonl` call `6bf5b3c7` |
+| `import_sequences` | uxp | LIVE | 27.0.0 | 2026-11-23 | `output/verify-cutdeck/runs/20261123-221826-issue130-import-sequences` |
+| `save_project` | uxp | LIVE | 27.0.0 | 2026-11-23 | `output/verify-cutdeck/runs/20261123-223331-issue130-cross-seq-paste` |
+| `export_frame` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-213003-edit-max-interview` |
+| `timeline_transcript` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-004515-timeline-listen` |
+| `cut_words` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-004515-timeline-listen` |
+| `clean_speech` | uxp | LIVE | 27.0.0 | 2026-11-26 | `output/premiere/premiere_commands.jsonl` call `a83d8c86` |
+| `plan_pieces` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-015758-short-placed` |
+| `paste_from` | uxp, menu | LIVE | 27.0.0 | 2026-11-24 | `output/verify-cutdeck/runs/20261124-130315-paste-from` |
+| `paste_pieces` | uxp, menu | LIVE | 27.0.0 | 2026-11-26 | `output/premiere/premiere_commands.jsonl` call `c0b32b04`; this file, *Track items*: paste_pieces soak |
+| `arrange` | uxp | LIVE | 27.0.0 | 2026-11-24 | `output/verify-cutdeck/runs/20261124-131438-arrange` |
+| `keep_words` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-020524-real-sequences` |
+| `screenshot` | pixels | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
+| `list_key_commands` | keys | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-232401-place-text-busy` |
+| `key_command` | keys, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-232401-place-text-busy` |
+| `list_menu` | menu | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224649-launch-path` |
+| `set_speed` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `nest_clips` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `paste_attributes` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *Premiere 27*: Paste Attributes rows, through MCP (b5966a3) |
+| `edit_text` | premiere_ui, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
+| `srt_subtitles` | premiere_ui, menu, uxp | LIVE | 27.0.0 | 2026-11-22 | this file, *SRT to subtitle Graphics*, commit e84559a (its run folder is no longer on disk) |
+| `menu_command` | menu, keys, uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-224619-prove` |
+| `assistant_ask` | assistant | LIVE | 27.0.0 | 2026-11-17 | commit fee0e3d: three read-only prompts answered, live on 27.0.0.88 (row *Driving the AI Assistant*); no editing prompt yet |
+
 ## Not UXP: ExtendScript / QE DOM
 
 Retired. Premiere 26.3 silently ignores QE `razor`/`ripple_delete` on some installs, and the File > Scripts
