@@ -97,7 +97,8 @@ real `backup` (the menu rows in FACTS carry masks and Lumetri), keyframes cut mi
 
 **Superseded for Shorts, 2026-11-26:** piece by piece cost 19 panel calls and 1 temporary
 sequence per piece, and Premiere died five times on the 2026-11-25 evening run. A Short is now
-`premiere_derive_short`: one subsequence of the span, one `cut_copy` to the pieces, one 4-step
+`premiere_paste_pieces` (the default for any several pieces of one sequence into another, with a
+`template` for a Short): one subsequence of the span, one `cut_copy` to the pieces, one 4-step
 `arrange`, one paste of the whole. 40 pieces: 35 s and 8 calls instead of 411 s and 41 (route
 table in VERIFY.md and PREMIERE_FACTS). `paste_from` stays for single inserts and refuses a third
 paste into one target without `per_piece_reason`.

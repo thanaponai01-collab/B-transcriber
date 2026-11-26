@@ -1490,7 +1490,7 @@ async def _arrange(args: dict, premiere: Premiere) -> dict:
             "missing": sorted(set(expected) - set(after)), "unexpected": sorted(set(after) - set(expected))}
 
 
-MAX_SHORT_PIECES = 500
+MAX_PIECES = 500
 # paste_from calls into each target in this helper's life. A Short built piece by piece crashed
 # Premiere about every 20 pastes (PREMIERE_FACTS "Short built piece by piece"); past
 # PER_PIECE_FREE pastes into one target, paste_from wants a reason, and returns it as `fallback`.
@@ -1498,23 +1498,26 @@ _PASTES_INTO: dict[str, int] = {}
 PER_PIECE_FREE = 2
 
 
-def _derive_short_arguments(args: dict, jobs) -> dict:
+def _paste_pieces_arguments(args: dict, jobs) -> dict:
     result = {}
-    for key in ("parent", "template", "result_name"):
+    for key in ("source", "target"):
         if not isinstance(args.get(key), str) or not args[key].strip():
             raise ValueError(f"{key} must be a sequence name")
         result[key] = args[key]
-    if result["result_name"] in (result["parent"], result["template"]):
-        raise ValueError("result_name must be a new sequence (the parent and the template are never edited)")
+    template = args.get("template") or ""
+    if not isinstance(template, str):
+        raise ValueError("template must be a sequence name, or left out to paste into target as it is")
+    if result["target"] in (result["source"], template):
+        raise ValueError("target must differ from source and template (those are never edited)")
     pieces = args.get("pieces")
-    if not isinstance(pieces, list) or not 1 <= len(pieces) <= MAX_SHORT_PIECES:
-        raise ValueError(f"pieces must list 1 to {MAX_SHORT_PIECES} {{from_ticks, to_ticks}} of the parent, in play order")
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= MAX_PIECES:
+        raise ValueError(f"pieces must list 1 to {MAX_PIECES} {{from_ticks, to_ticks}} of the source, in play order")
     spans = [(int(_ticks(p.get("from_ticks"), "from_ticks")), int(_ticks(p.get("to_ticks"), "to_ticks")))
              if isinstance(p, dict) else (0, 0) for p in pieces]
     ordered = sorted(spans)
     if any(t <= f for f, t in spans) or any(a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
         raise ValueError("pieces must not overlap, and each must end after it starts")
-    return {**result, "pieces": spans, "at_ticks": _ticks(args.get("at_ticks", "0"), "at_ticks")}
+    return {**result, "template": template, "pieces": spans, "at_ticks": _ticks(args.get("at_ticks", "0"), "at_ticks")}
 
 
 def _with_in(timeline: dict) -> list[tuple[str, int, int, int, int]]:
@@ -1523,14 +1526,18 @@ def _with_in(timeline: dict) -> list[tuple[str, int, int, int, int]]:
                   for t in timeline["tracks"] for c in t["clips"])
 
 
-async def _derive_short(args: dict, premiere: Premiere) -> dict:
+async def _paste_pieces(args: dict, premiere: Premiere) -> dict:
     """Fixed cost whatever the piece count: make_subsequence of the span, cut_copy to the pieces,
-    arrange into play order (four steps), one paste_from of the whole into a copy of the template;
-    every temporary sequence removed. Never falls back to a piece-by-piece route."""
-    parent, template, name, pieces = args["parent"], args["template"], args["result_name"], args["pieces"]
+    arrange into play order (four steps), one paste_from of the whole into the target (a new copy
+    of the template when one is given); every temporary sequence removed. Never falls back to a
+    piece-by-piece route."""
+    parent, template, name, pieces = args["source"], args["template"], args["target"], args["pieces"]
     at = int(args["at_ticks"])
-    if any(s["name"] == name for s in (await premiere("list_project", {"depth": 1}))["sequences"]):
-        raise ValueError(f"{name!r} already exists; derive_short makes a new sequence")
+    exists = any(s["name"] == name for s in (await premiere("list_project", {"depth": 1}))["sequences"])
+    if template and exists:
+        raise ValueError(f"{name!r} already exists; with a template, paste_pieces makes target as a new copy of it")
+    if not template and not exists:
+        raise ValueError(f"no sequence {name!r}; name an existing target, or give a template to copy")
     a, b = min(f for f, _ in pieces), max(t for _, t in pieces)
     source = await premiere("read_timeline", {"sequence": parent, "from_ticks": str(a), "to_ticks": str(b)})
     tpf = int(source["ticks_per_frame"])
@@ -1566,7 +1573,8 @@ async def _derive_short(args: dict, premiere: Premiere) -> dict:
             arranged = await _arrange({"sequence": cut, "result_name": whole, "blocks": blocks}, premiere)
             if arranged["missing"] or arranged["unexpected"]:
                 raise ValueError(f"the reorder did not land: missing {arranged['missing'][:5]}, unexpected {arranged['unexpected'][:5]}")
-        await premiere("duplicate_sequence", {"sequence_name": template, "result_name": name})
+        if template:
+            await premiere("duplicate_sequence", {"sequence_name": template, "result_name": name})
         own = _with_in(await premiere("read_timeline", {"sequence": name}))
         pasted = await _paste_from({"source": whole, "target": name, "in_ticks": "0", "out_ticks": str(end),
                                     "at_ticks": str(at), "v_offset": 0, "keep_piece": False}, premiere)
@@ -1583,7 +1591,7 @@ async def _derive_short(args: dict, premiere: Premiere) -> dict:
     for f, t in pieces:
         plan += [(k, n, max(s, f) - f + shift, min(e, t) - f + shift) for k, n, s, e in inside if s < t and e > f]
         shift += t - f
-    # What is left of a template clip the paste overwrote is the template's, not the Short's.
+    # What is left of a target clip the paste overwrote is the target's own, not a pasted one.
     built = [c[:4] for c in _with_in(await premiere("read_timeline", {"sequence": name}))
              if not any(o[:2] == c[:2] and o[2] <= c[2] and c[3] <= o[3] and c[4] - o[4] == c[2] - o[2] for o in own)]
     await premiere("save_project", {})
@@ -1597,8 +1605,8 @@ async def _paste_from_guarded(args: dict, premiere: Premiere) -> dict:
     done = _PASTES_INTO.get(target, 0)
     reason = args.get("per_piece_reason")
     if done >= PER_PIECE_FREE and not reason:
-        raise ValueError(f"paste_from has already put {done} pieces into {target!r}. A Short is built with "
-                         "premiere_derive_short (a fixed number of edits whatever the piece count); piece by piece "
+        raise ValueError(f"paste_from has already put {done} pieces into {target!r}. Several pieces go in with "
+                         "premiere_paste_pieces (a fixed number of edits whatever the piece count); piece by piece "
                          "crashed Premiere about every 20 pastes. To go on piece by piece anyway, pass "
                          "per_piece_reason: it is logged and returned as `fallback`.")
     _PASTES_INTO[target] = done + 1
@@ -1700,29 +1708,31 @@ HELPER_COMMANDS: dict[str, Command] = {
         then clone into place and lift the park; the temporary piece sequence is deleted unless
         keep_piece. Returns `missing` (expected clips not found at the place; empty = landed
         frame-exact) and `left_at_park` (should be empty). Needs the CutDeck panel open; takes
-        Premiere's focus briefly. For one insert, not a Short: build a Short with
-        premiere_derive_short. A third paste into the same target is refused unless
+        Premiere's focus briefly. For one insert: several pieces go in with
+        premiere_paste_pieces. A third paste into the same target is refused unless
         per_piece_reason says why; the reason comes back as `fallback`.
         """,
         (("source", str), ("in_ticks", str), ("out_ticks", str), ("target", str), ("at_ticks", str),
          ("v_offset", int, 0), ("keep_piece", bool, False), ("per_piece_reason", str | None, None)),
         run=_paste_from_guarded),
-    "derive_short": Command(
-        1800, _derive_short_arguments, "write",
+    "paste_pieces": Command(
+        1800, _paste_pieces_arguments, "write",
         """
-        Build a Short from a parent sequence (a synced split, a finished YT cut) as a NEW sequence
-        `result_name`: a copy of `template` (your 9:16 Short sequence, never edited) with the
-        parent's `pieces` [{from_ticks, to_ticks}] (parent ticks, on frames, no overlap) played
-        back to back in the order given from at_ticks (default 0). Every track, effect, keyframe
-        and Graphic of the parent is kept as real clips (no nest). Fixed cost whatever the piece
-        count: Make Subsequence of the span, cut_copy to the pieces, one reorder, one paste; the
-        temporary sequences are removed and the project is saved before and after. Returns
-        `missing` and `unexpected` clips against the plan (both empty = frame-exact). It never
-        falls back to pasting piece by piece: on any failure it stops and says where.
+        The default way to copy several pieces of one sequence into another (a Short from yt, hook
+        pieces into a draft, a pool from a split): the `source` pieces [{from_ticks, to_ticks}]
+        (source ticks, on frames, no overlap) play back to back in the order given in `target`
+        from at_ticks (default 0), overwriting what is there. With `template` (a Short's 9:16
+        sequence) target is made as a NEW copy of it; without, target must exist and is edited in
+        place. Every track, effect, keyframe and Graphic of the source is kept as real clips (no
+        nest). Fixed cost whatever the piece count: Make Subsequence of the span, cut_copy to the
+        pieces, one reorder, one paste; the temporary sequences are removed and the project is
+        saved before and after. Returns `missing` and `unexpected` clips against the plan (both
+        empty = frame-exact). It never falls back to pasting piece by piece: on any failure it
+        stops and says where. For one piece, premiere_paste_from.
         """,
-        (("parent", str), ("template", str), ("result_name", str), ("pieces", list[dict]),
+        (("source", str), ("target", str), ("pieces", list[dict]), ("template", str, ""),
          ("at_ticks", str, "0")),
-        run=_derive_short),
+        run=_paste_pieces),
     "arrange": Command(
         900, _arrange_arguments, "write",
         """

@@ -132,10 +132,10 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-signal: failed
 - live (2026-11-22): an English F1 broadcast transcribed with `en` and `auto` (identical, English) vs the default (invented Thai); a Thai source with `auto` identical to `th`; through the helper, `auto` and `en` return their own cached jobs; `auto` held out on 10 unseen files, 10 right (docs/ENGINES.md).
 
-## Derive a Short at fixed cost: derive_short, the paste_from guard, the razor re-read
+## Several pieces at fixed cost: paste_pieces, the paste_from guard, the razor re-read
 - test: `python -m pytest tests/test_cutdeck_driver_commands.py -k "derive or paste or arrange" -q -p no:cacheprovider`, `node --test tests/cutdeck_build_sequence.test.cjs tests/cutdeck_native_cut.test.cjs`
 - fail-proof (2026-11-26): the two `razor:` tests fail on master with the live message "razor filler on audio track 0 is not one frame long"; the `ranges` clone test fails on the old `buildSequence.js`.
-- live (2026-11-26, scratch `output/short-bench/short-bench.prproj`, `python tools/short_route_bench.py --route A|D --n 5|20|40 ...`, log `output/short-bench/bench.jsonl`): route A (derive) 19.6 / 24.0 / 35.0 s and 6-8 top-level calls at N 5 / 20 / 40, route D (paste per piece) 43 / 172 / 411 s and 1+N calls; both exact against the plan; A and D render pixel-identical at all 80 piece edges (`output/short-bench/frames/edges.json`); `derive_short` itself 40 pieces in 47.5 s, 0 missing, temporaries removed; a third `paste_from` into one target refused live.
+- live (2026-11-26, scratch `output/short-bench/short-bench.prproj`, `python tools/short_route_bench.py --route A|D --n 5|20|40 ...`, log `output/short-bench/bench.jsonl`): route A (derive) 19.6 / 24.0 / 35.0 s and 6-8 top-level calls at N 5 / 20 / 40, route D (paste per piece) 43 / 172 / 411 s and 1+N calls; both exact against the plan; A and D render pixel-identical at all 80 piece edges (`output/short-bench/frames/edges.json`); `paste_pieces` (then `derive_short`) 40 pieces in 47.5 s, 0 missing, temporaries removed; a third `paste_from` into one target refused live.
 
 ## Derive from a sequence: Make Subsequence, paste_from, arrange
 - test: `python -m pytest tests/test_cutdeck_driver_commands.py -k "paste or subsequence or arrange" -q -p no:cacheprovider` and `node --test tests/cutdeck_control.test.cjs`

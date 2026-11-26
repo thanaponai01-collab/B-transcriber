@@ -485,10 +485,10 @@ def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
 
 
 def _derive(host, pieces, **extra):
-    args = driver_commands.COMMANDS["derive_short"].prepare(
-        {"parent": "Parent", "template": "Template", "result_name": "Short",
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "template": "Template", "target": "Short",
          "pieces": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in pieces], **extra}, None)
-    return asyncio.run(driver_commands.COMMANDS["derive_short"].run(args, host))
+    return asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
 
 
 def _parent(host, seconds):
@@ -499,7 +499,7 @@ def _parent(host, seconds):
     return S
 
 
-def test_derive_short_plays_the_pieces_in_order_on_a_template_copy_and_cleans_up():
+def test_paste_pieces_plays_the_pieces_in_order_on_a_template_copy_and_cleans_up():
     host = _PasteHost()
     S = _parent(host, 20)
     half = S // 2
@@ -515,7 +515,7 @@ def test_derive_short_plays_the_pieces_in_order_on_a_template_copy_and_cleans_up
     assert host.calls.count("save_project") == 2
 
 
-def test_derive_short_costs_the_same_whatever_the_piece_count():
+def test_paste_pieces_costs_the_same_whatever_the_piece_count():
     costs = []
     for n in (3, 12):
         host = _PasteHost()
@@ -528,9 +528,9 @@ def test_derive_short_costs_the_same_whatever_the_piece_count():
     assert costs[0][2] == 2 and costs[0][3] == 2  # the span, and one piece for the one paste: one Copy, one Paste
 
 
-def test_derive_short_refuses_overlapping_pieces_and_an_existing_name():
-    prep = driver_commands.COMMANDS["derive_short"].prepare
-    base = {"parent": "P", "template": "T", "result_name": "S"}
+def test_paste_pieces_refuses_overlapping_pieces_and_an_existing_name():
+    prep = driver_commands.COMMANDS["paste_pieces"].prepare
+    base = {"source": "P", "template": "T", "target": "S"}
     for pieces in ([], [[0, 5], [4, 9]], [[5, 5]]):
         try:
             prep({**base, "pieces": [{"from_ticks": str(f), "to_ticks": str(t)} for f, t in pieces]}, None)
@@ -548,6 +548,35 @@ def test_derive_short_refuses_overlapping_pieces_and_an_existing_name():
         raise AssertionError("overwrote an existing sequence")
 
 
+def test_paste_pieces_without_a_template_pastes_into_the_existing_target_in_place():
+    host = _PasteHost()
+    S = _parent(host, 20)
+    host.seqs["Draft"] = [("V", 1, 0, 4 * S), ("V", 3, 30 * S, 32 * S)]  # the draft's own edit
+    before = set(host.seqs)
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "target": "Draft", "at_ticks": str(10 * S),
+         "pieces": [{"from_ticks": str(6 * S), "to_ticks": str(7 * S)}, {"from_ticks": str(2 * S), "to_ticks": str(3 * S)}]}, None)
+    out = asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
+    assert out["missing"] == [] and out["unexpected"] == []
+    draft = host.seqs["Draft"]
+    assert ("V", 1, 0, 4 * S) in draft and ("V", 3, 30 * S, 32 * S) in draft  # what was there stays
+    assert ("V", 2, 10 * S, 11 * S) in draft and ("A", 1, 11 * S, 12 * S) in draft  # both pieces, in play order
+    assert set(host.seqs) == before  # no new sequence, every temporary removed
+
+
+def test_paste_pieces_without_a_template_needs_an_existing_target():
+    host = _PasteHost()
+    S = _parent(host, 5)
+    args = driver_commands.COMMANDS["paste_pieces"].prepare(
+        {"source": "Parent", "target": "Nope", "pieces": [{"from_ticks": "0", "to_ticks": str(S)}]}, None)
+    try:
+        asyncio.run(driver_commands.COMMANDS["paste_pieces"].run(args, host))
+    except ValueError as e:
+        assert "no sequence 'Nope'" in str(e)
+    else:
+        raise AssertionError("pasted into a sequence that does not exist")
+
+
 def test_a_third_paste_into_one_target_needs_a_reason_and_reports_the_fallback():
     host = _PasteHost()
     _paste(host)
@@ -555,7 +584,7 @@ def test_a_third_paste_into_one_target_needs_a_reason_and_reports_the_fallback()
     try:
         _paste(host)
     except ValueError as e:
-        assert "derive_short" in str(e) and "per_piece_reason" in str(e)
+        assert "paste_pieces" in str(e) and "per_piece_reason" in str(e)
     else:
         raise AssertionError("a third paste went through silently")
     out = _paste(host, per_piece_reason="one insert per user note")
