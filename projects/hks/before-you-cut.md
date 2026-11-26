@@ -21,6 +21,7 @@ Every active rule of a stage, with its do-confirm question, is in that stage's s
 
 ## Day setup (before the paper edit)
 0. **Mark the hot spots yellow on `Editing`**, not just the question colours: the loud arguments (raised voices, people talking over each other), the clash, the admissions, the lines the story can't lose. Mark the closing lines orange. Yellow is the must-keep list for the YT and the pool for the hook and highlight. Use the audio level to find the loud stretches, then listen to each one. On 20261125 I coloured only per question and marked no yellow at all.
+0b. **`Backup` is 1920x1080, built at the YT frame size, never from `Editing` (720p).** Every insert is scaled to fill it: full-screen footage Scale 150 centred; a boxed split screen zoomed to its box, centred, about 8 % past the box edge; no studio shot of the host or a guest, no edge of the show frame. Render the frames and look before using any as a cover. On 20261126 I built it at 1280x720 from `Editing`, unzoomed, and the user had to tell me ("make sure the backup is 1920x1080 and all broll scale up and fit the rules").
 
 ## Story (before building)
 1. **Set-up in two lines:** who these people are, where (the houses, the shop), what happened between them. The cut gives a first-time viewer these facts before the first detail that needs them.
