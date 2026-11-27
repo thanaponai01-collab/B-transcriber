@@ -29,23 +29,27 @@ the allow-list only rules a member out where FACTS has a live row. Name collisio
 ## Matrix
 
 "Live 11-27" is this run; other results cite their FACTS rows. MATCH means same read, and one Undo for
-each route.
+each route. Every 11-27 run used one V1+A1 track pair, no cover clip, and one direction per verb, so
+the "Use" column holds for that layout. On a layered timeline list every track's clips in the call,
+covers included (FACTS: a cover spanning an edit changes what W/Q and a ripple do). Nest, three-point
+and frame hold were not prototyped live: their tier-1 candidates need two or more transactions by
+existing FACTS rows, so they cannot pass the one-Undo check.
 
 | Verb | Tier 1 (UXP by clip id) | Tier 2 (menu / Control Surface) | Tier 3 (keys / dialogs) | Live result | Use |
 |---|---|---|---|---|---|
 | Place | `createOverwriteItemAction`, `createInsertProjectItemAction`, `insertMogrtFromPath` (`place_media`, `place_text`) | Clip > Insert / Overwrite (needs a Source monitor clip) | `,` `.` | LIVE 11-21 (tier 1) | **1** |
-| Move | `createMoveAction` (`edit_clips` move; move V and A) | none | Alt+←/→ nudge (`cmd.timeline.nudge.*`) | LIVE 11-21 | **1** |
+| Move | `createMoveAction` (`edit_clips` move; move V and A) | Control Surface `cmd.timeline.nudge.*` | Alt+←/→ nudge (`cmd.timeline.nudge.*`) | LIVE 11-21 | **1** |
 | Ripple delete | `createRemoveItemsAction(sel, true, ANY)` (`edit_clips` remove `ripple: true` on V and A) | Edit > Ripple Delete | Shift+Delete | Live 11-27: MATCH with the key; the menu did nothing 1 run of 2 | **1** |
 | Ripple trim | composite: `trim_out` + `move` every later clip, one call | Trim Edit + toggle trim type + nudges | W / Q | Live 11-27: MATCH with W (after the key fix) | **1** |
 | Roll | composite: shrink one side, then extend the other, one call | Sequence > Trim Edit + Ctrl+←/→ | N tool, Shift+W/Q | Live 11-27: MATCH | **1** |
-| Slip | composite: `trim_out`, `move`, `trim_in` on V and A, one call | none | Ctrl+Alt+←/→ | Live 11-27: MATCH (needed the guard lift below) | **1** |
-| Slide | composite: next `trim_in`, clip `move`, previous `trim_out`, one call | none | Alt+, / Alt+. | Live 11-27: MATCH | **1** |
+| Slip | composite: `trim_out`, `move`, `trim_in` on V and A, one call | Control Surface `cmd.timeline.slip.*` | Ctrl+Alt+←/→ | Live 11-27: MATCH (needed the guard lift below) | **1** |
+| Slide | composite: next `trim_in`, clip `move`, previous `trim_out`, one call | Control Surface `cmd.timeline.slide.*` | Alt+, / Alt+. | Live 11-27: MATCH | **1** |
 | Razor | none on 27.0. The composite is `place_media` over the clip + `edit_clips` fix-up: same read, **2 Undos**, a new right piece without the original's effects, and it overwrites one media length after the cut. `cut_copy` razors a **copy** only. | Sequence > Add Edit (to All Tracks); Control Surface `cmd.sequence.razorateditline(.all)` (one live run, 26.5.2) | Ctrl+K / Ctrl+Shift+K | Live 11-27: composite fails the Undo check | **2** (menu) until 27.1's `createRazorTrackAction` |
 | Lift (In/Out) | composite: `trim_out` / `trim_in` / `remove` on each clip in range, one call | Sequence > Lift | `;` | Live 11-27: MATCH for a range that crosses an edit. A range inside one clip needs a razor | **1** across edits, **2** inside a clip |
 | Extract (In/Out) | composite: the lift ops + `move` everything later, one call | Sequence > Extract | `'` | Live 11-27: MATCH (range across an edit) | **1** across edits, **2** inside a clip |
 | Link / unlink | none (no getter or setter in typings or allow-list) | Clip > Link / Unlink; Control Surface `cmd.clip.linkaudioandvideo` | Ctrl+L | LIVE 11-21 (menu; the item's label is the read-back) | **2** |
-| Group | none | Clip > Group / Ungroup | Ctrl+G | UNPROVEN 11-25: no read-back in UXP | **2**, mouse selection only |
-| Targeting | none (no getter or setter; `createSubsequence(ignoreTrackTargeting)` only reads it) | Control Surface `cmd.tlnav.toggle.target.*` (unbound) | Ctrl+0 / Ctrl+9 toggle all | LIVE 11-25 (key); not readable | **3**, and avoided: tier-1 edits name each clip, so targeting does not matter to them |
+| Group | none | Clip > Group / Ungroup | Ctrl+G | UNPROVEN: the 11-25 run pressed Ctrl+Shift+G (Shift bug), so no group was made | **2** (menu), effect unknown |
+| Targeting | none (no getter or setter; `createSubsequence(ignoreTrackTargeting)` only reads it) | Control Surface only: per-track `cmd.tlnav.toggle.target.video.1`-`.8` / `.audio.1`-`.8` (no menu item, no binding) | Ctrl+0 / Ctrl+9 toggle all | LIVE 11-25 (key); not readable | **3**, and avoided: tier-1 edits name each clip, so targeting does not matter to them |
 | 3-point overwrite / insert | composite: `createSetInOutPointsAction` on the project item, commit, then overwrite / insert (FACTS: two transactions) | Clip > Overwrite / Insert after Match Frame | `.` `,` | overwrite LIVE 11-25 (key). Tier 1 not run here: it is two transactions by FACTS, so 2+ Undos | **1** for placing a source range by id (`place_media`); **3** when the Source monitor's marks are the input |
 | Speed / reverse | none (`getSpeed`, `isSpeedReversed` only; no setter) | none (Speed/Duration opens a dialog) | Ctrl+R dialog (`set_speed`) | LIVE 11-21 (dialog) | **3** |
 | Nest | none for a selection. `createSubsequence` + lift + place of the sequence is several steps | Make Subsequence (menu) | Clip > Nest... dialog (`nest_clips`) | LIVE 11-21 (dialog) | **3** for Nest; **1** for `make_subsequence` (a range) |
@@ -56,7 +60,9 @@ each route.
 
 ## Composite recipes (one `edit_clips` call, one Undo)
 
-Times are relative. `d` is the change in ticks and must be a whole frame. List the V and the A clip
+Times are relative. `d` is the change in ticks and must be a whole frame. Run live: the +d direction of
+each, and lift/extract over a range that crosses one edit. The −d direction and a `remove` inside a lift
+are the same ops, not yet run. List the V and the A clip
 for every op, because linked audio does not follow. Put a shrinking op before an extending one, so no
 clip ever overlaps a neighbour.
 
@@ -80,7 +86,7 @@ a clip by name when it must be followed through a series of edits.
 - `cutdeck/keys.py` sent every bare letter with Shift. W went out as Shift+W, which rolled the edit
   instead of ripple-trimming it. This also explains the old rows where Ctrl+Z did nothing (it went out
   as Ctrl+Shift+Z, Redo), Ctrl+Alt+Z failed, Q rolled, E disabled a clip, and I/O did not set marks.
-  Those rows are flagged; they were not re-run.
+  So do the Ctrl+G group, Ctrl+Alt+T lock and V tool-key rows. Those rows are flagged; they were not re-run.
 - `edit_clips` refused a clip that appeared twice in one call. The guard had no live basis, and it
   blocked slip and extract as one Undo. It is gone; several ops on one clip apply in list order.
 
@@ -90,9 +96,14 @@ binding in both.
 
 ## Left to the user
 
-- Installing the native Control Surface plugin (admin rights and a Premiere restart). It would add
-  no verb above. Every Control Surface command for these verbs is also a menu item or a key, and
-  razor reaches UXP in 27.1.
+- Installing the native Control Surface plugin (admin rights and a Premiere restart). For these
+  verbs, the catalog (26.5.2) has commands with no menu item and no binding in either .kys:
+  per-track targeting (`cmd.tlnav.toggle.target.video.1`-`.8`, `.audio.1`-`.8`), moving all targets
+  up or down (`cmd.tlnav.move.all.target.*`), `cmd.sequence.splitclip`, the edit-point selections
+  (`cmd.timeline.editpoint.rolledit`, `.rippletrimin/out`, `cmd.tlnav.select.nearest.edit.as.*`),
+  `cmd.timeline.trackitem.linkmedia` / `unlinkmedia`, `cmd.clip.deleteeffects` and
+  `cmd.effectcontrols.keyframes.clearall`. Per-track targeting is the only one a verb above lacks. A
+  binding the user adds to the .kys would also reach these, without the plugin. Razor reaches UXP in 27.1.
 - Whether tier-2 and tier-3 commands may bring Premiere to the front while the user works in it.
-  `key_command`, and `menu_command` with a `focus`, do (code read). With the composites, only
+  `key_command`, and `menu_command` with a `focus`, do (code read: `keys.run_focused` brings the window to the front before it focuses a panel; Undo/Redo with focus null only post). With the composites, only
   razor, link/unlink, frame hold, speed, nest and text editing still need such a route.
