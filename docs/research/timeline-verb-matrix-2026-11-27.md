@@ -104,6 +104,6 @@ binding in both.
   `cmd.timeline.trackitem.linkmedia` / `unlinkmedia`, `cmd.clip.deleteeffects` and
   `cmd.effectcontrols.keyframes.clearall`. Per-track targeting is the only one a verb above lacks. A
   binding the user adds to the .kys would also reach these, without the plugin. Razor reaches UXP in 27.1.
-- Whether tier-2 and tier-3 commands may bring Premiere to the front while the user works in it.
+- **Decided 2026-11-27 (user): tier-2 and tier-3 commands may bring Premiere to the front while the user works in it.**
   `key_command`, and `menu_command` with a `focus`, do (code read: `keys.run_focused` brings the window to the front before it focuses a panel; Undo/Redo with focus null only post). With the composites, only
   razor, link/unlink, frame hold, speed, nest and text editing still need such a route.
