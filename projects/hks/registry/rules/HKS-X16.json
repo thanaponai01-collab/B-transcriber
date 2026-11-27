@@ -9,8 +9,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Draft workflow and checks before handover (user agreed, 2026-11-24)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-C17",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -19,7 +19,7 @@
   "K11"
  ],
  "gate": null,
- "confirm": "Where was a speaker's run tightened inside, and what covers each such cut?",
+ "confirm": null,
  "probe": [
   "**Cut:** tighten at speaker changes first"
  ],

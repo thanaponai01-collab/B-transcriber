@@ -17,12 +17,13 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K2",
-  "K5",
   "K11",
+  "K2",
   "K34",
+  "K5",
   "K58",
-  "K64"
+  "K64",
+  "K69"
  ],
  "gate": null,
  "confirm": "For each cover, what footage is it (source timecode), and do the words under it point at it?",

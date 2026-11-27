@@ -7,8 +7,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-R5",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -21,7 +21,7 @@
   "K64"
  ],
  "gate": "same_frame_share",
- "confirm": "List each jump to another speech in the same scene and the cover over it.",
+ "confirm": null,
  "probe": [
   "**A jump to another speech inside the same scene needs a cover.**"
  ],

@@ -9,8 +9,8 @@
   "file": "projects/hks/rules.md",
   "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X43",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -20,7 +20,7 @@
   "K25"
  ],
  "gate": null,
- "confirm": "For each picture fix, which Premiere tool was tried first, and is any workaround named?",
+ "confirm": null,
  "probe": [
   "10. **I worked around Premiere"
  ],

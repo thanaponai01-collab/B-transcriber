@@ -7,8 +7,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Cut rules for the long form (step 3) / Lessons from the user's finished 20261123 YT cut"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X34",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -18,7 +18,7 @@
   "K58"
  ],
  "gate": null,
- "confirm": "Where are the tight cuts (timecodes), and is each under B-roll or at a broadcast camera change?",
+ "confirm": null,
  "probe": [
   "*Cut hard only where nobody can see the cut.*"
  ],

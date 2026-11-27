@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "From the user's fixes to the 20261124 YT body (2026-11-25; HKS-32, HKS-33 confirmed)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X36",
  "confirmed": true,
  "kind": "code_gate",
  "kind_source": "proposed",

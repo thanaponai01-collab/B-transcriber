@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-R6",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -17,7 +17,7 @@
   "K69"
  ],
  "gate": null,
- "confirm": "For each cover, which words point at it, and is it on the topic or what the broadcast showed then?",
+ "confirm": null,
  "probe": [
   "**HKS-C9. "
  ],

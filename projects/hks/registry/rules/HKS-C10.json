@@ -7,15 +7,15 @@
   "file": "projects/hks/principles.md",
   "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-R6",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [],
  "gate": null,
- "confirm": "Does every B-roll zoomed to full screen carry film damage, and nothing else?",
+ "confirm": null,
  "probe": [
   "**HKS-C10. "
  ],

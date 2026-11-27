@@ -1248,6 +1248,14 @@
    ],
    "status": "open",
    "by": null
+  },
+  {
+   "pair": [
+    "HKS-X10",
+    "HKS-X78"
+   ],
+   "status": "open",
+   "by": null
   }
  ]
 }

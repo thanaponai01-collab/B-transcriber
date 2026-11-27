@@ -138,3 +138,15 @@ HKS-X106, X107, X108 and X109 carried markdown bold inside their `title` field, 
 3. **What the handover asks:** keep one answer per rule (164), or drop questions for gated rules and for
    playbook recipes (a schema and `hks_enforce` change).
 4. **Whether the playbook stays inside the skill you read**, or moves to a file loaded on demand.
+
+## Applied (2026-11-27)
+
+You asked for all 14 merges, with C3's question carried into X10. `apply.py` wrote them into the
+registry:
+- 25 rules superseded;
+- 56 active build rules and 52 build questions;
+- 143 do-confirm answers at handover (was 164).
+
+X10 now carries C3's clock reason and asks "where would a jumping clock show a cut, and is it blurred
+there?". The open lexical pair C3–X78 moved to X10–X78 and is still open. The two contradictions, the
+handover contract and where the playbook lives are unchanged.

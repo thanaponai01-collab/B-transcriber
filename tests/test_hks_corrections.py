@@ -183,15 +183,15 @@ def test_intake_writes_the_correction_the_rule_and_the_skills(tmp_path):
 
 def test_intake_on_an_existing_rule_marks_the_repeat(tmp_path):
     root = copy_repo(tmp_path)
-    earlier = load(hks_registry.rule_path("HKS-C28", root))["corrections"]
-    args = ["again a piece ends mid-thought", "--episode", "20261127", "--rule", "HKS-C28"]
+    earlier = load(hks_registry.rule_path("HKS-X33", root))["corrections"]
+    args = ["again a piece ends mid-thought", "--episode", "20261127", "--rule", "HKS-X33"]
     run = correct(root, *args)
     assert run.returncode == 2 and "Gate or note?" in run.stdout and "--as-is" in run.stdout
     run = correct(root, *args, "--as-is")
     assert run.returncode == 0, run.stdout + run.stderr
     kid = re.match(r"(K\d+)", run.stdout).group(1)
     assert load(hks_registry.correction_path(kid, root))["repeat_of"] == earlier
-    assert kid in load(hks_registry.rule_path("HKS-C28", root))["corrections"]
+    assert kid in load(hks_registry.rule_path("HKS-X33", root))["corrections"]
 
 
 def test_a_new_rule_for_a_repeated_correction_names_the_rule_that_cites_it(tmp_path):

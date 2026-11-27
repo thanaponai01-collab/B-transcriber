@@ -15,7 +15,9 @@
  "stage": "build",
  "corrections": [
   "K15",
-  "K22"
+  "K22",
+  "K27",
+  "K56"
  ],
  "gate": "visible_cuts_in_speech",
  "confirm": "With 2 s of source each side, does every end finish its sentence and no piece open on a joining word?",

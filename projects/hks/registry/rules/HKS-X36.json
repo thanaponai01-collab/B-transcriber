@@ -14,7 +14,11 @@
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [
-  "K57"
+  "K11",
+  "K16",
+  "K23",
+  "K57",
+  "K7a"
  ],
  "gate": "same_frame_share",
  "confirm": "How many sound cuts are split as J or L, and are they built on V2+ with A1 untouched?",
