@@ -37,11 +37,11 @@ When several routes reach the same action, agents use this one:
 | Action | Use | Not |
 |---|---|---|
 | Razor / Add Edit at the playhead | `premiere_menu_command` "Sequence > Add Edit" (or "... to All Tracks") | the shortcut key, the native plugin |
-| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo", focus null | the shortcut key (did nothing live) |
+| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo", focus null | the shortcut key (did nothing live, but was sent as Ctrl+Shift+Z: not re-run) |
 | Ripple delete of a selection | `premiere_edit_clips` remove `ripple: true` by clip id | the menu or key, which act on whatever is selected |
 | Mute a track | `premiere_set_track_mute` | the M / eye button through keys |
 | Cut frame ranges out of a sequence | `premiere_cut_copy` (Rough Cut engine: copy, then trim per item, no playhead or focus) | a run of Add Edits |
-| Ripple trim, roll, slip, slide; lift / extract of a range that crosses an edit | one `premiere_edit_clips` call (recipes in [research/timeline-verb-matrix-2026-11-27.md](research/timeline-verb-matrix-2026-11-27.md); same read and one Undo as the key or menu, live 2026-11-27, on one V+A track pair; on a layered timeline list every track's clips, covers too) | W/Q, Trim Edit nudges, slip/slide keys, Sequence > Lift / Extract |
+| Ripple trim, roll, slip, slide; lift / extract of a range that crosses an edit | one `premiere_edit_clips` call (an extract with a whole clip inside the range: two calls, the remove first) (recipes in [research/timeline-verb-matrix-2026-11-27.md](research/timeline-verb-matrix-2026-11-27.md); same read and one Undo as the key or menu, live 2026-11-27, on one V+A track pair; on a layered timeline list every track's clips, covers too) | W/Q, Trim Edit nudges, slip/slide keys, Sequence > Lift / Extract |
 
 ## What Premiere 27.0 lets a third-party panel call
 
@@ -96,14 +96,14 @@ A static read of the 27.0.0 executable found its stored third-party allow-list (
 | Freeze a frame from the playhead (still person for a J/L hold) | `premiere_menu_command` "Clip > Video Options > Add Frame Hold" (clip selected with `premiere_select_clips`, playhead set) | Menu | LIVE 2026-11-25 (no ripple; Insert Frame Hold Segment ripples all tracks) |
 | Roll an edit by frames | `premiere_menu_command` "Sequence > Trim Edit" + `premiere_key_command` cmd.sequence.trimforward / trimbackward | Menu + Keys | LIVE 2026-11-25 (only tracks with an edit there; one Undo per frame) |
 | Slip, slide, roll, ripple trim, ripple extend, lift/extract across an edit, J/L split edit, audio fade | `premiere_edit_clips` (several ops per clip in one call, one Undo); `premiere_set_param` Volume keyframes | UXP | LIVE 2026-11-25; one-call composites matched the key/menu routes 2026-11-27 ([matrix](research/timeline-verb-matrix-2026-11-27.md)) |
-| Extend/ripple an edit to the playhead | keys Shift+Q/W, Q/W | Keys | CATCH 2026-11-25: act on every targeted track, covers included; avoid on layered timelines |
+| Extend/ripple an edit to the playhead | keys Shift+Q/W, Q/W | Keys | CATCH 2026-11-25: act on every targeted track, covers included; avoid on layered timelines (bare Q/W went out as Shift+Q/W until 2026-11-27, so the Q/W half is not re-run; W unshifted ripple-trimmed live 2026-11-27) |
 | Close Gap (menu) | none | Menu | did nothing 2026-11-25; use `premiere_edit_clips` |
 | Match Frame (source frame of the clip under the playhead) | `premiere_menu_command` "Sequence > Match Frame" | Menu | LIVE 2026-11-25 (Source monitor at the exact frame, clip range marked) |
 | Three-point overwrite / insert from the Source monitor | `premiere_key_command` cmd.clip.overlay (.) / cmd.clip.insert (,) | Keys | overwrite LIVE 2026-11-25 with the range Match Frame marked; setting source In/Out by key unproven |
 | Paste Insert, labels, range markers, Mark Clip, volume ±1 dB, next/prev edit | menu Edit > Paste Insert, Edit > Label > *, Markers > *, keys ] [ and Shift+↓/↑ | Menu + Keys | LIVE 2026-11-25 (PREMIERE_FACTS) |
 | Track lock | key cmd.timeline.togglelockvideotracks | Keys | CATCH 2026-11-25: the API ignores locks and can't read them (the key went out with Shift until 2026-11-27, so the lock may never have engaged: unproven) |
 | Track targeting toggles | `premiere_key_command` cmd.tlnav.toggle.all.target.video/audio | Keys | LIVE 2026-11-25 (untargeted video: Add Edit cut A1 only); no UXP getter, check with `premiere_screenshot` |
-| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo" (focus null) | Menu | LIVE 2026-11-21 (Ctrl+Z as keys did nothing) |
+| Undo / redo | `premiere_menu_command` "Edit > Undo" / "Edit > Redo" (focus null) | Menu | LIVE 2026-11-21 (Ctrl+Z as keys did nothing: it went out as Ctrl+Shift+Z until 2026-11-27, not re-run) |
 | Speed / duration, reverse, ripple | `premiere_set_speed` | Premiere UI: fills the Clip > Speed/Duration... dialog | LIVE 2026-11-21 (200%, 50% + reverse, back to 100%; Undo restores) |
 | Nest a selection | `premiere_nest_clips` | Premiere UI: fills the Clip > Nest... dialog | LIVE 2026-11-21 (Thai name; Undo removes clip and sequence) |
 | Copy one clip's effects onto many (Paste Attributes) | `premiere_paste_attributes` | Premiere UI: Edit > Copy, then fills Edit > Paste Attributes... | LIVE 2026-11-22, also through MCP (744 clips in 24 s; one Undo reverts; a clip that already has the effect gets it twice) |

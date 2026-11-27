@@ -72,6 +72,9 @@ clip ever overlaps a neighbour.
 - **Slide** clip B right by d: next clip `trim_in` +d, B `move` +d, previous clip `trim_out` +d.
 - **Lift** [i, o): a clip that ends in the range `trim_out` to i, one that starts in it `trim_in` to o, one inside it `remove`.
 - **Extract** [i, o): the lift ops, then every clip that starts at or after o `move` −(o − i), on every track.
+  CutDeck runs every `remove` after the other ops, so with a whole clip inside the range the moves
+  would land on it before it is removed: lift that clip in a first call, then trim and move in a
+  second (two Undos). Not run live.
 
 ## Clip ids
 
@@ -88,11 +91,11 @@ a clip by name when it must be followed through a series of edits.
   as Ctrl+Shift+Z, Redo), Ctrl+Alt+Z failed, Q rolled, E disabled a clip, and I/O did not set marks.
   So do the Ctrl+G group, Ctrl+Alt+T lock and V tool-key rows. Those rows are flagged; they were not re-run.
 - `edit_clips` refused a clip that appeared twice in one call. The guard had no live basis, and it
-  blocked slip and extract as one Undo. It is gone; several ops on one clip apply in list order.
+  blocked slip and extract as one Undo. It is gone; several ops on one clip apply in list order. Removes still run after every other op, so a removed clip takes no other op (the helper refuses it).
 
-Not fixed: `keys.active_kys()` reads `~\Documents`, but this PC's Documents folder is under OneDrive, so
-CutDeck reads Defaults.kys instead of the user's set. Every verb key in the matrix has the same
-binding in both.
+- `keys.active_kys()` read only `~\Documents`, but this PC's Documents folder is under OneDrive, so
+  CutDeck read Defaults.kys instead of the user's set. It now looks in both. Every verb key in the
+  matrix has the same binding in both files.
 
 ## Left to the user
 

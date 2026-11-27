@@ -238,6 +238,8 @@ def test_control_commands_check_ids_ticks_and_ops(tmp_path):
         ("edit_clips", {"edits": [{"clip": "V0@0", "op": "move", "dt_ticks": "1"}]}),       # track 0
         ("edit_clips", {"edits": [{"clip": "V1@0", "op": "razor"}]}),                       # not an op
         ("edit_clips", {"edits": [{"clip": "V1@0", "op": "trim_in", "in_ticks": 5}]}),      # ticks not a string
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "remove"}, {"clip": "V1@0", "op": "remove", "ripple": True}]}),
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "trim_in", "in_ticks": "1"}, {"clip": "V1@0", "op": "remove"}]}),
         ("set_in_out", {"in_ticks": "9", "out_ticks": "3"}),
         ("set_in_out", {}),
         ("set_param", {"clip": "V1@0", "component": 1, "param": 0, "value": {"x": 1}}),

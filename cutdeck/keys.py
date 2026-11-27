@@ -15,7 +15,8 @@ Live rules (Premiere 27.0, 2026-11-21, docs/PREMIERE_FACTS.md "Keyboard route"):
 - `Project.openSequence` from the panel takes focus away from the timeline.
 - A Ctrl+Alt binding (the user's Ctrl+Alt+Z for Add Edit to All Tracks) did nothing when sent,
   while the same command's Ctrl+Shift+K cut exactly at the playhead. Ctrl+Alt bindings are
-  picked last.
+  picked last. Unproven since 2026-11-27: that press went out with Shift (the letter bug), so
+  re-run it before relying on the rule.
 
 .kys key codes (inferred from Premiere 27.0's defaults, 2026-11-21): a value with bit 31 set is a
 character (`0x8000004B` = "K"); smaller values are Premiere's own codes for special keys
@@ -35,7 +36,9 @@ import xml.etree.ElementTree as ET
 from cutdeck import screenshot
 
 DEFAULTS = Path(r"C:\Program Files\Adobe\Adobe Premiere Pro 2027\Keyboard Shortcuts\en\Adobe Premiere Pro Defaults.kys")
-PROFILE_ROOT = Path(os.path.expanduser(r"~\Documents\Adobe\Premiere Pro"))
+# Documents may live under OneDrive (it does on the user's PC, 2026-11-27): look in both.
+PROFILE_ROOTS = [Path(os.path.expanduser(r"~\OneDrive\Documents\Adobe\Premiere Pro")),
+                 Path(os.path.expanduser(r"~\Documents\Adobe\Premiere Pro"))]
 
 # Premiere special-key code -> Windows virtual key. Each inferred from a well-known default binding.
 KEY_CODES = {
@@ -88,7 +91,10 @@ def key_name(code: int) -> str:
 
 def active_kys() -> Path:
     """The user's newest .kys in the newest Premiere profile, else Premiere's defaults."""
-    found = sorted(PROFILE_ROOT.glob("*/Profile-*/Win/*.kys"), key=lambda p: (p.parts[-4], p.stat().st_mtime))
+    def version(p: Path) -> tuple:
+        return tuple(int(x) if x.isdigit() else 0 for x in p.parts[-4].split("."))
+    found = sorted((p for root in PROFILE_ROOTS for p in root.glob("*/Profile-*/Win/*.kys")),
+                   key=lambda p: (version(p), p.stat().st_mtime))
     return found[-1] if found else DEFAULTS
 
 
@@ -122,7 +128,7 @@ def pick(table: dict[str, list[Shortcut]], command: str) -> Shortcut:
         bound = table.get(command)
         raise ValueError(f"{command} has no shortcut in {active_kys().name}" if not bound
                          else f"{command} is bound only to keys CutDeck cannot press yet ({', '.join(s.keys() for s in bound)})")
-    # Global context first; Ctrl+Alt bindings last (one did nothing live); then fewer modifiers.
+    # Global context first; Ctrl+Alt bindings last (one did nothing live, but sent with Shift: unproven); then fewer modifiers.
     return sorted(options, key=lambda s: (s.context != "global", s.ctrl and s.alt, s.ctrl + s.shift + s.alt))[0]
 
 

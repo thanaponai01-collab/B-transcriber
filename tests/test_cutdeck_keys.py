@@ -125,3 +125,14 @@ def test_a_bare_letter_is_sent_without_shift(monkeypatch):
     keys.press(keys.Shortcut("cmd.sequence.extendnextedittoplayhead", "global", False, True, False, 0x80000057))
     keys.press(keys.Shortcut("cmd.sequence.razorateditline", "global", True, False, False, 0x8000004B))
     assert sent == [[0x57], [0x10, 0x57], [0x11, 0x4B]]
+
+
+def test_the_users_kys_is_found_under_onedrive_newest_version_first(tmp_path, monkeypatch):
+    # This PC keeps Documents under OneDrive; only ~\Documents was searched, so Defaults.kys was read.
+    one, docs = tmp_path / "OneDrive", tmp_path / "Documents"
+    for root, version in ((one, "27.0"), (one, "9.0"), (docs, "26.0")):
+        folder = root / version / "Profile-u" / "Win"
+        folder.mkdir(parents=True)
+        (folder / "mine.kys").write_text(KYS, encoding="utf-8")
+    monkeypatch.setattr(keys, "PROFILE_ROOTS", [one, docs])
+    assert keys.active_kys() == one / "27.0" / "Profile-u" / "Win" / "mine.kys"

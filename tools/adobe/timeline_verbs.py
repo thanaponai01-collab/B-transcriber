@@ -21,7 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXE = Path(r"C:\Program Files\Adobe\Adobe Premiere Pro 2027\Adobe Premiere Pro.exe")
 CATALOG = ROOT / "output/native-cutter-spike/live/commands-35300-29954531-1.json"
-USER_KYS = Path.home() / r"OneDrive\Documents\Adobe\Premiere Pro\27.0\Profile-thana\Win\Thanapon Bas shortcuts 9.kys"
+USER_KYS = max((p for root in (Path.home() / "OneDrive/Documents", Path.home() / "Documents")
+                for p in (root / "Adobe/Premiere Pro").glob("*/Profile-*/Win/*.kys")),
+               key=lambda p: (p.parts[-4], p.stat().st_mtime), default=None)
 
 # verb: (premierepro.txt member regex, allow-list "Class.member" regex, command-id regex, menu path regex)
 VERBS: dict[str, tuple[str, str, str, str]] = {
@@ -69,8 +71,11 @@ def allow_list(exe: Path) -> list[str]:
         at = m.find(b'"SequenceEditor": [')
         if at < 0:
             raise SystemExit(f"no allow-list in {exe}")
-        start, end = m.rfind(b'"apis"', 0, at), m.find(b"]\n}", at)
-        blob = m[start - 64 if start > 64 else 0:end + 64 if end > 0 else at + 200000].decode("utf-8", "replace")
+        start = m.rfind(b'"apis"', 0, at)
+        end = m.find(b"}\x00", at)  # the JSON ends `"version": "...", }` then a NUL (27.0.0)
+        if start < 0 or end < 0:
+            raise SystemExit(f'the allow-list in {exe} has no "apis" start or no end')
+        blob = m[max(start - 64, 0):end + 64].decode("utf-8", "replace")
     found = re.findall(r'\{\s*"(\w+)":\s*\[(.*?)\],\s*"hash"', blob, re.S)
     return [f"{cls}.{name}" for cls, body in found for name in re.findall(r'"(\w+)"', body)]
 
@@ -87,6 +92,8 @@ def main() -> None:
     ap.add_argument("--catalog", type=Path, default=CATALOG)
     ap.add_argument("--kys", type=Path, default=USER_KYS)
     a = ap.parse_args()
+    if a.kys is None:
+        raise SystemExit(r"no .kys found under Documents or OneDrive\Documents; pass --kys")
     uxp, allow, cs = uxp_members(), allow_list(a.exe), catalog(a.catalog)
     user, dflt = keys.load(a.kys), keys.load(keys.DEFAULTS)
     menu_items = menu.list_items()
