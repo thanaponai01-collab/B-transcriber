@@ -25,6 +25,17 @@ the repo and are scored once, at the milestone.
 
 (none yet)
 
+## Prepared candidates (built, off, not yet scored: the reference is not marked yet)
+
+| Candidate | Switch | Mechanism check (no timing score) |
+|---|---|---|
+| Cue windows padded into neighbours (1 ms words) | `word_align.pad_into_neighbours: false` | 1 ms words on tune+heldout clips 254 → 82 of 5296; the 82 left are words Whisper gave zero length (85 before) |
+| Spectral-flux onset with backtracking | `word_align.snap_method: flux` | built (`flux_onsets`, `snap_to_flux`, same pause gate as the loudness snap) |
+| Second Thai CTC checkpoint | `word_align.model: models/wav2vec2-th-ctc-airesearch.pt` | airesearch/wav2vec2-large-xlsr-53-th exported (72-symbol vocab) |
+| High-pass before Whisper | Engine A cache tag `.hpf` | not built (needs a Whisper re-run per clip) |
+| Loudness normalisation before VAD and snap | | not built |
+| Optuna over VAD, snap, tail_db, beam | | not built |
+
 ## Trials
 
 (none yet)
