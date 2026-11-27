@@ -138,3 +138,17 @@ Times are on the trimmed `Editing` (63:46).
   (68.00 / 60.20 / 63.82 s, 1080x1920 50 fps). The first try with forward-slash paths exported nothing yet reported ok.
 - Learned → memory: [shorts-layout](memory/shorts-layout.md), [shorts-reframe](memory/shorts-reframe.md),
   [shorts-captions](memory/shorts-captions.md), [shorts-export](memory/shorts-export.md); rules R7, R8, R10, R11.
+
+## 2026-11-27 — CFD 99 done (user: "the project is done")
+
+Delivered: long form D1 with host quotes; cold-open caller titles; Shorts 1–3 (reframed by the user, captions,
+template ending) exported as D1. What CFD 99 taught, now in memory:
+- Subtitles stay **captions**; one line ≤19 chars inside the guide; never touch caption tracks the user has edited
+  ([shorts-captions](memory/shorts-captions.md)).
+- Reframe = **cut V2 copies, never keyframes**, faces centred ([shorts-reframe](memory/shorts-reframe.md)).
+- The user edits the sequence live: re-read and diff before every write (auto-memory `user-edits-live`).
+- Cold-open titles by speaker colour ([cold-open-titles](memory/cold-open-titles.md)); wording cross-checked and
+  doubts named ([wording-check](memory/wording-check.md)).
+- Export with BAS7 and backslash paths, only when asked ([shorts-export](memory/shorts-export.md)).
+- Still open for the next episode: a proven route to move a caption track's position (two-line cues), and a
+  route that razors V2 only, so the agent can cut the reframe instead of handing over a cut list.

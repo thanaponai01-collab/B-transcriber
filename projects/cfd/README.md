@@ -21,11 +21,11 @@ Steps and the why: [rules.md](rules.md), [principles.md](principles.md).
 5. [workflow-log.md](workflow-log.md): the evidence
 
 ## Where things live
-Episode folders: `G:\Me\Works\YYYYMMDD - CFD <ep>` (template tree `1. FOOTAGE` … `8. THUMBNAIL`).
+Episode folders: `<drive>:\Me\Works\YYYYMMDD - CFD <ep>` (drive differs by machine) (template tree `1. FOOTAGE` … `8. THUMBNAIL`).
 Details and past episodes: [memory/episode-folders.md](memory/episode-folders.md).
 
 ## Code and tests
 - No CFD-specific code. The work uses the shared CutDeck routes
   ([docs/PREMIERE_CONTROL_MAP.md](../../docs/PREMIERE_CONTROL_MAP.md)): timeline transcript to find
   the opening/ending and the advice, text placement for the quotes, and
-  [SubtitleDesk](../../subtitle_desk/) for Shorts subtitles.
+  `srt_subtitles` (`upgrade: false`) for Shorts subtitles as captions.
