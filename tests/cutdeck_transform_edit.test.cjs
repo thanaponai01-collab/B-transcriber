@@ -147,7 +147,10 @@ function motionClip(name, o = {}) {
       motionParam((o.textAnchors || [])[i] || [0, 0], { point: true })];
     return { getMatchName: () => Promise.resolve("AE.ADBE Text"), getParam: (j) => tp[j] || null, position: tp[2], anchor: tp[8], scale: tp[3], rotation: tp[6], opacity: tp[7] };
   });
-  const extra = o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : [];
+  const extra = [
+    ...(o.shapeLayer ? [{ getMatchName: () => Promise.resolve("AE.ADBE Shape") }] : []),
+    ...(o.effect ? [{ getMatchName: () => Promise.resolve(o.effect) }] : []),
+  ];
   const chain = [opacity, ...(o.graphic ? (o.noVectorMotion ? [motion, ...texts, ...extra] : [motion, vm, ...texts, ...extra]) : [motion])];
   return {
     name,
@@ -1046,6 +1049,26 @@ test("Slice 4 B1: readAlignTransform and setField on Graphic with shapeLayer tar
   await setField(ppro, "position-x", "500");
   close(g.params[0].value[0] * 1920, 500, "Motion position X was written");
   close(g.texts[0].value[0] * 1920, 384, "Text position was untouched (0.2 * 1920 = 384)");
+});
+
+test("a Graphic carrying Wiggle still edits its text layers; any other added effect falls back to Motion", async () => {
+  for (const [effect, textEdited] of [["AE.Impact_Wiggle_FX", true], ["AE.ADBE Gaussian Blur 2", false]]) {
+    const g = motionClip("GraphicWithEffect", {
+      graphic: true,
+      texts: [[0.2, 0.3]],
+      effect,
+      vectorMotion: { scale: 100, scaleWidth: 100, uniformScale: true, rotation: 0 },
+    });
+    const { ppro } = host([g]);
+    await setField(ppro, "position-x", "500");
+    if (textEdited) {
+      close(g.texts[0].value[0] * 1920, 500, `${effect}: text position written`);
+      close(g.params[0].value[0] * 1920, 960, `${effect}: Motion untouched`);
+    } else {
+      close(g.params[0].value[0] * 1920, 500, `${effect}: Motion written`);
+      close(g.texts[0].value[0] * 1920, 384, `${effect}: text untouched`);
+    }
+  }
 });
 
 test("Slice 4 B2: setField with layerTarget selects specific text layer or all", async () => {
