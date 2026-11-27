@@ -1,0 +1,1407 @@
+[
+ {
+  "id": "HKS-R6",
+  "title": "Cover = B-roll from the same story",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-22",
+  "corrections": [
+   "K2",
+   "K5",
+   "K11",
+   "K34",
+   "K58",
+   "K64"
+  ],
+  "repeats_after_added": [
+   "K11",
+   "K16",
+   "K23",
+   "K46",
+   "K5",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K67",
+   "K68",
+   "K7a",
+   "K7d"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "rule 6",
+   "cut rule 6"
+  ],
+  "chars": 726
+ },
+ {
+  "id": "HKS-R5",
+  "title": "No jump cuts",
+  "kind": "do_confirm",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-22",
+  "corrections": [
+   "K7a",
+   "K11",
+   "K23",
+   "K34",
+   "K64"
+  ],
+  "repeats_after_added": [
+   "K11",
+   "K23",
+   "K46",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K68",
+   "K7a"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "rule 5",
+   "cut rule 5"
+  ],
+  "chars": 355
+ },
+ {
+  "id": "HKS-X29",
+  "title": "Tighten under a cover; start early for set-up",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K11",
+   "K35",
+   "K46",
+   "K49",
+   "K58"
+  ],
+  "repeats_after_added": [
+   "K11",
+   "K23",
+   "K46",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 297
+ },
+ {
+  "id": "HKS-X2",
+  "title": "Cut hard only where nobody can see the cut",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-23",
+  "corrections": [
+   "K11",
+   "K58"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K46",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 354
+ },
+ {
+  "id": "HKS-C17",
+  "title": "Tighten at speaker changes first",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K11"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K46",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 301
+ },
+ {
+  "id": "HKS-X16",
+  "title": "Cut: tighten at speaker changes first",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K11"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K46",
+   "K57",
+   "K58",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "draft workflow 4"
+  ],
+  "chars": 160
+ },
+ {
+  "id": "HKS-X65",
+  "title": "I cut sound and picture on the same frame",
+  "kind": "code_gate",
+  "gate": "same_frame_share",
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K7a",
+   "K11",
+   "K23",
+   "K57"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K64",
+   "K66",
+   "K68",
+   "K69"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 3"
+  ],
+  "chars": 215
+ },
+ {
+  "id": "HKS-C29",
+  "title": "A same-scene speech jump is covered",
+  "kind": "do_confirm",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K7a",
+   "K11",
+   "K23",
+   "K34",
+   "K64"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 158
+ },
+ {
+  "id": "HKS-X41",
+  "title": "Same-scene speech jump needs a cover",
+  "kind": "do_confirm",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K7a",
+   "K11",
+   "K23",
+   "K34",
+   "K64"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 266
+ },
+ {
+  "id": "HKS-X8",
+  "title": "Never a jump cut, not even one frame",
+  "kind": "code_gate",
+  "gate": "near_miss_covers",
+  "confirmed": true,
+  "added": "2026-11-23",
+  "corrections": [
+   "K7a",
+   "K7b",
+   "K23",
+   "K34"
+  ],
+  "repeats_after_added": [
+   "K11",
+   "K23",
+   "K64",
+   "K7a"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 260
+ },
+ {
+  "id": "HKS-X34",
+  "title": "Tighten inside a thought only under a cover",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K11",
+   "K58"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 166
+ },
+ {
+  "id": "HKS-X4",
+  "title": "A cutaway must be genuinely silent",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-23",
+  "corrections": [
+   "K2",
+   "K5"
+  ],
+  "repeats_after_added": [
+   "K16",
+   "K5",
+   "K67",
+   "K7d"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 401
+ },
+ {
+  "id": "HKS-X108",
+  "title": "**Tighten word by word, then hide every cut.**",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-26",
+  "corrections": [
+   "K11",
+   "K35",
+   "K46",
+   "K58",
+   "K68",
+   "K69"
+  ],
+  "repeats_after_added": [
+   "K64",
+   "K66",
+   "K68"
+  ],
+  "source": "projects/hks/memory/yt-20261126-draft.md",
+  "aliases": [],
+  "chars": 865
+ },
+ {
+  "id": "HKS-33",
+  "title": "Sound and picture cut at different times",
+  "kind": "code_gate",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K7a",
+   "K16",
+   "K23",
+   "K57"
+  ],
+  "repeats_after_added": [
+   "K23",
+   "K64",
+   "K69"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 255
+ },
+ {
+  "id": "HKS-C1",
+  "title": "No jump cuts in the studio picture",
+  "kind": "do_confirm",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K7a",
+   "K23",
+   "K34"
+  ],
+  "repeats_after_added": [
+   "K11",
+   "K23",
+   "K64"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 184
+ },
+ {
+  "id": "HKS-X10",
+  "title": "No sponsor strip, bug or clock on footage",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-23",
+  "corrections": [
+   "K7c"
+  ],
+  "repeats_after_added": [
+   "K17",
+   "K18",
+   "K65"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 272
+ },
+ {
+  "id": "HKS-X3",
+  "title": "B-roll is one continuous scene",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-23",
+  "corrections": [
+   "K2"
+  ],
+  "repeats_after_added": [
+   "K5",
+   "K67",
+   "K7d"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 249
+ },
+ {
+  "id": "HKS-C25",
+  "title": "Every shot is framed on its own",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K41",
+   "K47",
+   "K54"
+  ],
+  "repeats_after_added": [
+   "K47",
+   "K54"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 254
+ },
+ {
+  "id": "HKS-32",
+  "title": "A piece is a whole thought",
+  "kind": "do_confirm",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15",
+   "K22",
+   "K56"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 394
+ },
+ {
+  "id": "HKS-C28",
+  "title": "Nothing unfinished",
+  "kind": "do_confirm",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15",
+   "K22",
+   "K27"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 233
+ },
+ {
+  "id": "HKS-X106",
+  "title": "**A cover belongs to its cut, never one insert on every cut.**",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-26",
+  "corrections": [
+   "K2",
+   "K67",
+   "K69"
+  ],
+  "repeats_after_added": [
+   "K67"
+  ],
+  "source": "projects/hks/memory/yt-20261126-draft.md",
+  "aliases": [],
+  "chars": 639
+ },
+ {
+  "id": "HKS-X17",
+  "title": "Route order",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K8",
+   "K37",
+   "K38"
+  ],
+  "repeats_after_added": [
+   "K37"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 520
+ },
+ {
+  "id": "HKS-X43",
+  "title": "Blur: adjustment layer and mask",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K19",
+   "K20",
+   "K25"
+  ],
+  "repeats_after_added": [
+   "K25"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 400
+ },
+ {
+  "id": "HKS-X81",
+  "title": "Build the effect the shot needs",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K19",
+   "K20",
+   "K25"
+  ],
+  "repeats_after_added": [
+   "K25"
+  ],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 301
+ },
+ {
+  "id": "HKS-X96",
+  "title": "Use Premiere's own tool first",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K19",
+   "K20",
+   "K25"
+  ],
+  "repeats_after_added": [
+   "K25"
+  ],
+  "source": "projects/hks/before-you-cut.md",
+  "aliases": [
+   "before-you-cut 8"
+  ],
+  "chars": 313
+ },
+ {
+  "id": "HKS-X101",
+  "title": "No API does not mean impossible",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K19",
+   "K25"
+  ],
+  "repeats_after_added": [
+   "K25"
+  ],
+  "source": "projects/hks/before-you-cut.md",
+  "aliases": [],
+  "chars": 163
+ },
+ {
+  "id": "HKS-X23",
+  "title": "Music bed under the whole piece",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K42",
+   "K50"
+  ],
+  "repeats_after_added": [
+   "K50"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 371
+ },
+ {
+  "id": "HKS-X24",
+  "title": "A flash at every section change",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K44",
+   "K52"
+  ],
+  "repeats_after_added": [
+   "K52"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 276
+ },
+ {
+  "id": "HKS-X27",
+  "title": "Square reframe per shot",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K47",
+   "K54"
+  ],
+  "repeats_after_added": [
+   "K54"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 326
+ },
+ {
+  "id": "HKS-X33",
+  "title": "Each piece starts and ends on a thought",
+  "kind": "do_confirm",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15",
+   "K22"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 469
+ },
+ {
+  "id": "HKS-X37",
+  "title": "The held picture must be safe",
+  "kind": "code_gate",
+  "gate": "unsafe_holds",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K5",
+   "K16"
+  ],
+  "repeats_after_added": [
+   "K16"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 438
+ },
+ {
+  "id": "HKS-X40",
+  "title": "Never cut a thing that isn't finished",
+  "kind": "do_confirm",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15",
+   "K22"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 187
+ },
+ {
+  "id": "HKS-X63",
+  "title": "I cut in the middle of a thought",
+  "kind": "code_gate",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15",
+   "K22"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 1"
+  ],
+  "chars": 293
+ },
+ {
+  "id": "HKS-X72",
+  "title": "I worked around Premiere",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K19",
+   "K25"
+  ],
+  "repeats_after_added": [
+   "K25"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 10"
+  ],
+  "chars": 234
+ },
+ {
+  "id": "HKS-X75",
+  "title": "Every draft is labelled",
+  "kind": "code_gate",
+  "gate": "draft_labels",
+  "confirmed": true,
+  "added": "2026-11-23",
+  "corrections": [
+   "K6",
+   "K32"
+  ],
+  "repeats_after_added": [
+   "K26"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 208
+ },
+ {
+  "id": "HKS-X36",
+  "title": "Split the cut (J/L)",
+  "kind": "do_confirm",
+  "gate": "same_frame_share",
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K57"
+  ],
+  "repeats_after_added": [
+   "K69"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 392
+ },
+ {
+  "id": "HKS-X59",
+  "title": "Playbook: Fix an edge mid-word / mid-phrase",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K15"
+  ],
+  "repeats_after_added": [
+   "K22"
+  ],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 320
+ },
+ {
+  "id": "HKS-X113",
+  "title": "The first voice pre-laps under a full sting.",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-26",
+  "corrections": [
+   "K43",
+   "K53"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/registry/corrections/K43.json",
+  "aliases": [],
+  "chars": 312
+ },
+ {
+  "id": "HKS-X6",
+  "title": "Play an insert with its own sound",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-23",
+  "corrections": [
+   "K4",
+   "K36"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 215
+ },
+ {
+  "id": "HKS-20",
+  "title": "The picture moves; the words stay in order",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-24",
+  "corrections": [
+   "K76"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 232
+ },
+ {
+  "id": "HKS-C20",
+  "title": "A flicker is a jump; a short shot is not",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K7d"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 209
+ },
+ {
+  "id": "HKS-C26",
+  "title": "A short ends on a held face",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K55"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 261
+ },
+ {
+  "id": "HKS-C30",
+  "title": "Every edit keeps the raw underneath",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K24"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 190
+ },
+ {
+  "id": "HKS-C9",
+  "title": "A cover has no fixed minimum length",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K69"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 446
+ },
+ {
+  "id": "HKS-X100",
+  "title": "Ripple fixes can overlap neighbours",
+  "kind": "code_gate",
+  "gate": "source_repeats",
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K27"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/before-you-cut.md",
+  "aliases": [],
+  "chars": 86
+ },
+ {
+  "id": "HKS-X11",
+  "title": "No snappy scene changes",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-23",
+  "corrections": [
+   "K7d"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 346
+ },
+ {
+  "id": "HKS-X28",
+  "title": "The 1-min ends on a held face",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K55"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 161
+ },
+ {
+  "id": "HKS-X30",
+  "title": "Clock blur in squares",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [
+   "K51"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 224
+ },
+ {
+  "id": "HKS-X35",
+  "title": "Add a moment whole or not at all",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K56"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 191
+ },
+ {
+  "id": "HKS-X42",
+  "title": "J and L cuts are made on a copy",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-25",
+  "corrections": [
+   "K24"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 225
+ },
+ {
+  "id": "HKS-X64",
+  "title": "I added moments as 1-3 s bits",
+  "kind": "do_confirm",
+  "gate": "visible_cuts_in_speech",
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K56"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 2"
+  ],
+  "chars": 215
+ },
+ {
+  "id": "HKS-X66",
+  "title": "A split edit can hold a talking picture",
+  "kind": "code_gate",
+  "gate": "unsafe_holds",
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K16"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 4"
+  ],
+  "chars": 212
+ },
+ {
+  "id": "HKS-X9",
+  "title": "Full-frame footage, not the soft box crop",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-23",
+  "corrections": [
+   "K7b"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 257
+ },
+ {
+  "id": "HKS-X95",
+  "title": "J/L on a copy",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [
+   "K24"
+  ],
+  "repeats_after_added": [],
+  "source": "projects/hks/before-you-cut.md",
+  "aliases": [
+   "before-you-cut 7"
+  ],
+  "chars": 187
+ },
+ {
+  "id": "HKS-17",
+  "title": "Dress the cut from the template kit",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 466
+ },
+ {
+  "id": "HKS-7",
+  "title": "Cut hard under a proving picture; elsewhere keep pieces long",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 364
+ },
+ {
+  "id": "HKS-C10",
+  "title": "Film damage on B-roll zoomed to full screen",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 241
+ },
+ {
+  "id": "HKS-C2",
+  "title": "Cover only with the episode's own footage",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 215
+ },
+ {
+  "id": "HKS-C3",
+  "title": "The TV clock is blurred to hide the re-cut",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/principles.md",
+  "aliases": [],
+  "chars": 261
+ },
+ {
+  "id": "HKS-R7",
+  "title": "Swear words bleeped; same ending",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-22",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "rule 7",
+   "cut rule 7"
+  ],
+  "chars": 124
+ },
+ {
+  "id": "HKS-X31",
+  "title": "Reels built per workflow-log steps 7-8",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": true,
+  "added": "2026-11-24",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 257
+ },
+ {
+  "id": "HKS-X44",
+  "title": "Only moves that touch the named clips",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 246
+ },
+ {
+  "id": "HKS-X45",
+  "title": "Playbook: J / L split",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 192
+ },
+ {
+  "id": "HKS-X46",
+  "title": "Playbook: Still person for a J/L hold",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 252
+ },
+ {
+  "id": "HKS-X47",
+  "title": "Playbook: Roll an edit by frames",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 242
+ },
+ {
+  "id": "HKS-X48",
+  "title": "Playbook: Ripple trim by frames",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 183
+ },
+ {
+  "id": "HKS-X49",
+  "title": "Playbook: Slip",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 238
+ },
+ {
+  "id": "HKS-X50",
+  "title": "Playbook: Slide",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 173
+ },
+ {
+  "id": "HKS-X51",
+  "title": "Playbook: Find the source of a shot",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 160
+ },
+ {
+  "id": "HKS-X52",
+  "title": "Playbook: Cutaway from the source",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 259
+ },
+ {
+  "id": "HKS-X53",
+  "title": "Playbook: Insert a copied moment",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 206
+ },
+ {
+  "id": "HKS-X54",
+  "title": "Playbook: Cut only some tracks",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 208
+ },
+ {
+  "id": "HKS-X55",
+  "title": "Playbook: Ripple extend",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 234
+ },
+ {
+  "id": "HKS-X56",
+  "title": "Playbook: Audio fade at a cut",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 172
+ },
+ {
+  "id": "HKS-X57",
+  "title": "Playbook: Remove a stretch",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 157
+ },
+ {
+  "id": "HKS-X58",
+  "title": "Playbook: Cut on a repeated word",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 253
+ },
+ {
+  "id": "HKS-X60",
+  "title": "Timeline moves not to use",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 455
+ },
+ {
+  "id": "HKS-X61",
+  "title": "Toolbar tools and their routes",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 359
+ },
+ {
+  "id": "HKS-X62",
+  "title": "Undo one step at a time with a read-back",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [],
+  "chars": 185
+ },
+ {
+  "id": "HKS-X68",
+  "title": "I read a stale parent sequence",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-25",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/hks/rules.md",
+  "aliases": [
+   "my mistakes 6"
+  ],
+  "chars": 165
+ },
+ {
+  "id": "M-3",
+  "title": "Never edit the user's working project in place",
+  "kind": "do_confirm",
+  "gate": null,
+  "confirmed": false,
+  "added": "2026-11-22",
+  "corrections": [],
+  "repeats_after_added": [],
+  "source": "projects/PRINCIPLES.md",
+  "aliases": [],
+  "chars": 212
+ }
+]

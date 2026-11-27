@@ -105,6 +105,15 @@ def questions(args, rules, gates, flags, known):
     elif args.gate and gates[args.gate]["status"] != "kept" and not args.note:
         out.append(f"Gate {args.gate} is {gates[args.gate]['status']}, not kept, so the handover still asks: "
                    "add --note \"<do-confirm question>\".")
+    # a new rule for a repeated mistake: the rule that already cites the earlier correction is the
+    # likely home, so it is named whatever --method found (the model check is off offline)
+    holders = [r for r in rules if r["status"] == "active" and set(r["corrections"]) & set(args.repeat_of or [])
+               and r["id"] not in args.supersedes and r["id"] not in args.keep]
+    if holders and not args.rule:
+        out.append("This repeats a correction these active rules already cite. Ask the user: is it the same "
+                   "rule broken again (rerun with --rule <id>), does the new rule replace it (--supersedes "
+                   "<id>), or do both stay (--keep <id>)?")
+        out += [f"  {r['id']}: {r['text'][:160]}" for r in holders]
     if known and not args.rule and not args.new:
         out.append("These rules may already say this. If one does, the user is correcting it again: rerun "
                    "with --rule <id>. If none does, add --new:")
