@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from cutdeck import (assistant, keys, menu, mogrt_text, premiere_ui, screenshot, speech_clean, srt_subtitles,
-                     timeline_transcript, word_cut)
+                     text_document, timeline_transcript, word_cut)
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
 MAX_MARKERS = 5000
@@ -645,6 +645,13 @@ def _remove_piece_arguments(args: dict, jobs) -> dict:
     return {"name": name}
 
 
+def _remove_style_bin_arguments(args: dict, jobs) -> dict:
+    name = args.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"CutDeck restyle [^\\/]+\.prtextstyle", name):
+        raise ValueError('name must be a bin premiere_restyle_text imported ("CutDeck restyle <id>.prtextstyle")')
+    return {"name": name}
+
+
 def _select_clips_arguments(args: dict, jobs) -> dict:
     return {**_sequence(args), "clips": _clip_ids(args.get("clips"), allow_empty=True)}
 
@@ -701,10 +708,13 @@ def _place_text_arguments(args: dict, jobs) -> dict:
         raise ValueError("template must be the path of an existing .mogrt")
     if not isinstance(texts, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in texts.items()):
         raise ValueError('texts must map a text name or index to its text, e.g. {"0": "สวัสดี"}')
+    styles = args.get("styles") or {}
+    if not isinstance(styles, dict) or not all(isinstance(k, str) and isinstance(v, dict) for k, v in styles.items()):
+        raise ValueError('styles must map a text name or index to its changes, e.g. {"0": {"fill": "#FF0000"}}')
     v, a = args.get("v"), args.get("a", 0)
     if type(v) is not int or v < 0 or type(a) is not int or a < 0:
         raise ValueError("v and a must be 0-based track indexes")
-    return {**_sequence(args), "mogrt": str(mogrt_text.bake(template, texts)),
+    return {**_sequence(args), "mogrt": str(mogrt_text.bake(template, texts, styles)),
             "at_ticks": _ticks(args.get("at_ticks"), "at_ticks"), "v": v, "a": a}
 
 
@@ -858,6 +868,13 @@ CONTROL_COMMANDS: dict[str, Command] = {
         " (CutDeck piece)"). Refuses any other name and the active sequence. One undo step.
         """,
         (("name", str),)),
+    "remove_style_bin": Command(
+        60, _remove_style_bin_arguments, "destructive",
+        """
+        Delete the root bin that importing a premiere_restyle_text style made (its name is
+        "CutDeck restyle <id>.prtextstyle"). Refuses any other name. One undo step.
+        """,
+        (("name", str),)),
     "select_clips": Command(
         60, _select_clips_arguments, "write",
         """
@@ -900,8 +917,18 @@ CONTROL_COMMANDS: dict[str, Command] = {
         texts read back (After Effects templates only; Premiere-made text can't be read from the
         panel, so check it with premiere_export_frame). To change the text of a placed Graphic,
         place a new one and remove the old: editing text in place is broken in Premiere 27.0.
+        styles (Premiere-made templates only) maps a text's name or index to style changes:
+        size, fill, fill_on, stroke, stroke_on, stroke_width, stroke_type (centre/inner/outer),
+        tracking, tsume, baseline_shift, caps (normal/small/all), baseline
+        (normal/superscript/subscript), bold, italic, underline (every run); alignment
+        (left/right/centre), vertical_alignment (top/centre/bottom), leading, tab_width, shadow,
+        shadow_on, shadow_opacity, shadow_angle, shadow_distance, shadow_size, shadow_blur,
+        background, background_on, background_opacity, background_size, background_corner,
+        mask_with_text, mask_invert, rtl (the layer). Colours "#RRGGBB", switches true/false;
+        texts may then be {}. Font, gradients and extra strokes/shadows can't be set.
         """,
-        (("template", str), ("texts", dict), ("at_ticks", str), ("v", int), ("a", int, 0), ("sequence", str | None, None))),
+        (("template", str), ("texts", dict), ("at_ticks", str), ("v", int), ("a", int, 0),
+         ("styles", dict | None, None), ("sequence", str | None, None))),
     "list_effects": Command(
         60, _no_arguments, "read",
         """
@@ -1065,6 +1092,18 @@ def _edit_text_arguments(args: dict, jobs) -> dict:
         raise ValueError("text must be one line of text (new lines are not supported yet)")
     at = args.get("at_ticks")
     return {**_sequence(args), "clip": clip, "text": text, **({"at_ticks": _ticks(at, "at_ticks")} if at is not None else {})}
+
+
+def _restyle_text_arguments(args: dict, jobs) -> dict:
+    clip, layer, styles = args.get("clip"), args.get("layer", 0), args.get("styles")
+    if not isinstance(clip, str) or not _CLIP_ID.fullmatch(clip) or not clip.startswith("V"):
+        raise ValueError("clip must be a video clip id like V2@0 (from premiere_read_timeline)")
+    if type(layer) is not int or layer < 0:
+        raise ValueError("layer must be a 0-based text layer index (Effect Controls' Text rows, top first)")
+    if not isinstance(styles, dict) or not styles:
+        raise ValueError('styles must map style fields to values, e.g. {"fill": "#FF0000", "size": 80}')
+    text_document.restyle({"runs": [{"text": "", "style": {}}]}, styles)  # names and values, before anything moves
+    return {**_sequence(args), "clip": clip, "layer": layer, "styles": styles}
 
 
 def _assistant_arguments(args: dict, jobs) -> dict:
@@ -1983,6 +2022,23 @@ HELPER_COMMANDS: dict[str, Command] = {
         """,
         (("clip", str), ("text", str), ("at_ticks", str | None, None), ("sequence", str | None, None)),
         run=lambda args, premiere: premiere_ui.edit_text(premiere, args), routes=("premiere_ui", "uxp")),
+    "restyle_text": Command(
+        180, _restyle_text_arguments, "destructive",
+        """
+        Change the look of one text layer of a Graphic already on the timeline, the way Premiere
+        does: through a text style, set by the Properties panel's Linked style. layer is the
+        0-based text layer (Effect Controls' "Text (...)" rows, top first); styles uses
+        premiere_place_text's style fields (size, fill, stroke..., alignment, leading, shadow...,
+        background..., rtl). The project is saved first (the layer is read from the saved file);
+        the change is written as a style, imported, linked to the layer and unlinked (the look
+        stays), and its bin removed; the project is saved again and read back: the layer must hold
+        exactly the asked look with its text, and every other layer what it held. Takes the
+        mouse: Premiere must show Effect Controls (every text row in view, folded) and the
+        Properties panel. Refuses a layer with several style runs or keyframed text. Four
+        Edit > Undo steps revert it. Font, gradients and extra strokes/shadows can't be set.
+        """,
+        (("clip", str), ("styles", dict), ("layer", int, 0), ("sequence", str | None, None)),
+        run=lambda args, premiere: premiere_ui.restyle_text(premiere, args), routes=("premiere_ui", "uxp")),
     "srt_subtitles": Command(
         300, _srt_subtitles_arguments, "destructive",
         """

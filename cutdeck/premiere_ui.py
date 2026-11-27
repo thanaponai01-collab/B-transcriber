@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageGrab
 
-from cutdeck import keys, menu, screenshot
+from cutdeck import keys, menu, ocr, screenshot
 
 SPEED_TITLE, NEST_TITLE, PASTE_TITLE = "Clip speed / duration", "Nested Sequence Name", "Paste Attributes"
 SPEED_SIZE = (488, 437)  # the dialog the offsets below were measured on (96 DPI)
@@ -533,3 +533,278 @@ async def edit_text(premiere, args: dict) -> dict:
     return {"sequence": seq, "clip": clip_id, "text": text, "at_ticks": at, "monitor_scale": round(where["scale"], 4),
             "changed_px_near_text": int(changed[inside].sum()), "changed_px_elsewhere": int(changed[~inside].sum()),
             **typed, "note": "History: Disable, Enable, then the text edit. One Edit > Undo reverts the text."}
+
+
+# --- text style by the Properties panel's Linked style ---------------------------------------------
+# Live 2026-11-27 (PREMIERE_FACTS "Linked style"): clicking a "Text (...)" row in Effect Controls
+# picks that layer; the Properties panel's Linked style dropdown then applies a style item to that
+# layer only, and setting it back to None unlinks it, keeping the look. The dropdown opens a popup
+# window of its own (class "DroverLord - Window Class", title "OS_PopupWindow"), which PrintWindow of the main
+# window does not show; it is read through its own handle. All text is found by OCR (cutdeck/ocr.py).
+
+SELECTED_ROW_GREY = 40  # Effect Controls row band: picked ~47, others ~29
+
+
+def _words(lines: list[dict]):
+    for line in lines:
+        yield from ((line, w) for w in line["words"])
+
+
+def effect_text_rows(lines: list[dict], layers: int) -> list[tuple[int, int]]:
+    """The centres of the "Text" words of the Effect Controls' text layer rows, top first (chain
+    order): the "Text" words between its "Graphics" and "Video" headers, just right of them (not the
+    Properties panel's "Mask with Text" beside them), at one x."""
+    graphics = [line for line in lines if line["text"] == "Graphics"]
+    video = [line for line in lines if line["text"] == "Video"]
+    pairs = [(g, v) for g in graphics for v in video if abs(g["box"][0] - v["box"][0]) <= 10 and v["box"][1] > g["box"][3]]
+    found = []
+    for g, v in pairs:
+        words = [w["box"] for line, w in _words(lines) if w["text"] == "Text"
+                 and g["box"][3] < w["box"][1] < v["box"][1] and 0 < w["box"][0] - g["box"][0] < 120]
+        if words and all(abs(b[0] - words[0][0]) <= 6 for b in words):
+            found = sorted((((b[0] + b[2]) // 2, (b[1] + b[3]) // 2) for b in words), key=lambda p: p[1])
+            break
+    if len(found) != layers:
+        raise RuntimeError(f"Effect Controls shows {len(found)} text layer rows, not the clip's {layers}: show "
+                           "Effect Controls with every text layer row in view and folded; nothing was clicked")
+    return found
+
+
+def panel_edges(image: Image.Image, x0: int, x1: int) -> list[int]:
+    """The rows where a panel ends between x0 and x1: Premiere draws the gap between panels black
+    (0), the panels 29 and a dropdown box 14 (live 2026-11-27)."""
+    grey = np.asarray(image.convert("L"))[:, x0:x1]
+    return [int(y) for y in np.nonzero(grey.max(axis=1) < 6)[0]]
+
+
+def dropdown_under(lines: list[dict], heading: str, edges: list[int]) -> tuple[int, int] | None:
+    """The centre of the line under `heading` (a dropdown's current value) if no panel edge lies
+    between them, else None: with the heading at a panel's bottom, the line under it is another
+    panel's (live 2026-11-27: the Libraries tab)."""
+    top = next((line for line in lines if line["text"].endswith(heading)), None)
+    if top is None:
+        return None
+    x0, _, _, y1 = top["box"]
+    below = [line for line in lines if 0 < line["box"][1] - y1 < 60 and line["box"][0] >= x0]
+    if not below:
+        return None
+    b = min(below, key=lambda line: line["box"][1])["box"]
+    if any(y1 < y < b[3] for y in edges):
+        return None
+    return (b[0] + b[2]) // 2, (b[1] + b[3]) // 2
+
+
+def _dropdown(image: Image.Image, lines: list[dict], heading: str = "Linked style") -> tuple[int, int] | None:
+    top = next((line for line in lines if line["text"].endswith(heading)), None)
+    return top and dropdown_under(lines, heading, panel_edges(image, top["box"][0], top["box"][0] + 300))
+
+
+def _plain(s: str) -> str:
+    return " ".join("".join(c for c in s.lower() if c.isalnum() or c == " ").split())
+
+
+def popup_row(lines: list[dict], name: str, least: float = 85) -> tuple[int, int]:
+    """The centre of the popup row that reads `name` (an icon before it reads as junk like "n:")."""
+    from rapidfuzz import fuzz
+    scored = []
+    for line in lines:
+        texts = [line["text"], " ".join(w["text"] for w in line["words"][1:])]
+        score = max(fuzz.ratio(_plain(name), _plain(t)) for t in texts)
+        b = line["box"]
+        scored.append((score, ((b[0] + b[2]) // 2, (b[1] + b[3]) // 2)))
+    good = [s for s in scored if s[0] >= least]
+    if len(good) != 1:
+        raise RuntimeError(f'the Linked style list has no row reading "{name}"' if not good
+                           else f'the Linked style list has {len(good)} rows like "{name}"')
+    return good[0][1]
+
+
+def wheel(x: int, y: int, clicks: int) -> None:
+    """Turn the mouse wheel at (x, y) screen pixels; a negative `clicks` scrolls down. The pointer
+    moves there first: a wheel sent with the move did not scroll Premiere's panel (live 2026-11-27)."""
+    _send([_mouse(x, y, 0)])
+    time.sleep(0.3)
+    event = _mouse(x, y, 0x0800)  # MOUSEEVENTF_WHEEL
+    event.mi.mouseData = (120 * clicks) & 0xFFFFFFFF
+    _send([event])
+    time.sleep(0.3)
+
+
+def _front(hwnd: int) -> None:
+    """Premiere's own window must be in front (a hover tooltip of Premiere's counts)."""
+    front = _user32().GetForegroundWindow()
+    if not front or _pid(front) != _pid(hwnd):
+        raise RuntimeError("Premiere is no longer in front; nothing more was clicked")
+
+
+def _popup(hwnd: int, timeout_s: float = 2.0) -> int:
+    """The dropdown popup that a click opened: Premiere's own foreground window other than its main one."""
+    end = time.monotonic() + timeout_s
+    while time.monotonic() < end:
+        front = _user32().GetForegroundWindow()
+        if front and front != hwnd and _pid(front) == _pid(hwnd) and keys.window_title(front) == "OS_PopupWindow":
+            time.sleep(0.3)
+            return front
+        time.sleep(0.1)
+    raise RuntimeError("the Linked style dropdown did not open")
+
+
+def _linked_style(hwnd: int) -> tuple[tuple[int, int], list[dict]]:
+    """The Linked style dropdown in window pixels, scrolling the Properties panel down to it. The
+    panel goes back to its top when a layer is picked (live 2026-11-27)."""
+    margin = None
+    for _ in range(12):
+        image = window_when(_steady, 2.0)  # the panel redraws after a layer is picked
+        lines = ocr.read(image)
+        at = _dropdown(image, lines)
+        if at:
+            return at, lines
+        if margin is None:
+            # The wheel turns on the panel's left margin, at a section heading's chevron: over a
+            # slider or number it would change the value.
+            heading = next((line for line in lines if line["text"].endswith(("Linked style", "Align and Transform", "Appearance"))), None)
+            if heading is None:
+                time.sleep(0.5)
+                continue
+            margin = (heading["box"][0] + 2, (heading["box"][1] + heading["box"][3]) // 2)
+        left, top, _, _ = _rect(hwnd)
+        _front(hwnd)
+        wheel(left + margin[0], top + margin[1], -10)
+    raise RuntimeError("the Properties panel shows no Linked style: open Window > Properties")
+
+
+def _choose(hwnd: int, at: tuple[int, int], name: str) -> None:
+    """Open the Linked style dropdown at `at` (window pixels) and pick the row reading `name`."""
+    left, top, _, _ = _rect(hwnd)
+    _front(hwnd)
+    click(left + at[0], top + at[1])
+    popup = _popup(hwnd)
+    try:
+        row = popup_row(ocr.read(screenshot.window_pixels(popup)), name)
+    except Exception:
+        if _user32().GetForegroundWindow() == popup:
+            press(VK_ESCAPE)
+        raise
+    if _user32().GetForegroundWindow() != popup:
+        raise RuntimeError("the Linked style list closed before its row was clicked")
+    pleft, ptop, _, _ = _rect(popup)
+    click(pleft + row[0], ptop + row[1])
+    time.sleep(0.8)
+
+
+def _reads(hwnd: int, name: str) -> bool:
+    from rapidfuzz import fuzz
+    image = window_image()
+    lines = ocr.read(image)
+    at = _dropdown(image, lines)
+    shown = next((line for line in lines if at and line["box"][0] <= at[0] <= line["box"][2]
+                  and line["box"][1] <= at[1] <= line["box"][3]), None)
+    return bool(shown) and max(fuzz.ratio(_plain(name), _plain(t)) for t in
+                               (shown["text"], " ".join(w["text"] for w in shown["words"][1:]))) >= 85
+
+
+def link_style(layer: int, layers: int, name: str) -> dict:
+    """Pick text layer `layer` (0-based, chain order) in Effect Controls and set its Linked style to
+    the style item `name` (blocking). The clip must be the selected one."""
+    hwnd = screenshot.premiere_window()
+    if not keys._bring_to_front(hwnd):
+        raise RuntimeError("Premiere could not be brought to the front; nothing was clicked")
+    time.sleep(0.2)
+    if _in_menu_mode(hwnd):
+        press(VK_ESCAPE)
+        time.sleep(0.2)
+    left, top, _, _ = _rect(hwnd)
+    rows = effect_text_rows(ocr.read(window_image()), layers)
+    x, y = rows[layer]
+    _front(hwnd)
+    click(left + x, top + y)
+    grey = np.asarray(window_image().convert("L")).astype(int)
+    band = lambda p: float(grey[p[1] - 6:p[1] + 6, p[0] + 90:p[0] + 290].mean())  # noqa: E731
+    if band(rows[layer]) < SELECTED_ROW_GREY or any(band(p) >= SELECTED_ROW_GREY for k, p in enumerate(rows) if k != layer):
+        raise RuntimeError(f"text layer {layer}'s Effect Controls row did not become the picked one; nothing more was clicked")
+    at, _ = _linked_style(hwnd)
+    _choose(hwnd, at, name)
+    if not _reads(hwnd, name):
+        raise RuntimeError(f'Linked style does not read "{name}" after picking it')
+    return {"row": rows[layer]}
+
+
+def unlink_style(name: str) -> None:
+    """Set the picked layer's Linked style back to None (blocking); the look stays."""
+    hwnd = screenshot.premiere_window()
+    if not keys._bring_to_front(hwnd):
+        raise RuntimeError("Premiere could not be brought to the front; nothing was clicked")
+    time.sleep(0.2)
+    at, _ = _linked_style(hwnd)
+    _choose(hwnd, at, "None")
+    if not _reads(hwnd, "None"):
+        raise RuntimeError(f'Linked style still reads "{name}"; the layer is linked to it')
+
+
+def _decoded(blob: bytes):
+    from cutdeck import text_document
+    try:
+        return text_document.decode(blob)
+    except text_document.UnmappedField:
+        return blob
+
+
+async def restyle_text(premiere, args: dict) -> dict:
+    """Restyle one text layer of a Graphic on the timeline as Premiere does: through a text style.
+    The saved project gives the layer's Source Text; the asked changes are written as a style
+    (cutdeck/text_style.py), imported, linked to the layer and unlinked again (the look stays), and
+    the style's bin removed. The saved project is then read back: the layer must hold exactly the
+    asked look, and every other layer what it held before."""
+    import tempfile
+    import uuid
+    from cutdeck import text_style
+    sequence, clip_id, layer, changes = args.get("sequence"), args["clip"], args["layer"], args["styles"]
+    seq = (await premiere("open_sequence", {"sequence": sequence}))["name"] if sequence else (await premiere("read_sequence"))["name"]
+    track = clip_id.split("@")[0]
+    found = [c for t in (await premiere("read_timeline", {"sequence": seq, "tracks": [track], "effects": "names"}))["tracks"]
+             for c in t.get("clips", []) if c["id"] == clip_id]
+    if not found:
+        raise ValueError(f"No clip {clip_id} in {seq} (see premiere_read_timeline)")
+    layers = sum(1 for e in found[0].get("effects", []) if e.get("match_name") == "AE.ADBE Text")
+    if layers == 0:
+        raise ValueError(f"{clip_id} has no Premiere text layer (an After Effects template or not a Graphic)")
+    if layer >= layers:
+        raise ValueError(f"{clip_id} has {layers} text layers (0 to {layers - 1}); layer {layer} is not one")
+    items = (await premiere("list_project", {"depth": 1})).get("items", [])
+    stale = [it["name"] for it in items if it.get("name", "").startswith("CutDeck restyle ")]
+    if stale:
+        raise ValueError(f"the project still holds {stale} from an earlier restyle: set any layer linked to it back to "
+                         "Linked style None, remove it with premiere_remove_style_bin, then run again")
+    path = (await premiere("save_project", {}))["path"].removeprefix("\\?\\")
+    before = [text_style.layer_blob(path, seq, clip_id, k) for k in range(layers)]
+    want = text_style.restyled_layer(before[layer], changes)
+    name = f"CutDeck restyle {uuid.uuid4().hex[:6]}"
+    style = text_style.write_style(want, name, Path(tempfile.gettempdir()) / f"{name}.prtextstyle")
+    await premiere("import_files", {"paths": [str(style)]})
+    try:
+        await premiere("select_clips", {"sequence": seq, "clips": [clip_id]})
+    except Exception:
+        await premiere("remove_style_bin", {"name": style.name})
+        raise
+    try:
+        picked = await asyncio.to_thread(link_style, layer, layers, name)
+        await asyncio.to_thread(unlink_style, name)
+    except Exception as exc:
+        raise RuntimeError(f"{exc}. The style {name!r} is still in the project (bin {style.name!r}): if text layer {layer}'s "
+                           "Linked style shows it, set that to None (or Edit > Undo), then premiere_remove_style_bin") from exc
+    removed = (await premiere("remove_style_bin", {"name": style.name}))["removed"]
+    await premiere("save_project", {})
+    after = [text_style.layer_blob(path, seq, clip_id, k) for k in range(layers)]
+    got = _decoded(after[layer])
+    wrong = text_style.mismatches(got, want, changes) if isinstance(got, dict) else ["the whole layer (no longer decodes)"]
+    if wrong:
+        raise RuntimeError(f"text layer {layer} does not hold the asked look after the restyle (differs in {wrong}); "
+                           "four Edit > Undo steps revert it")
+    moved = [k for k in range(layers) if k != layer and text_style._canonical(_decoded(after[k])) != text_style._canonical(_decoded(before[k]))]
+    if moved:
+        raise RuntimeError(f"text layers {moved} changed too; four Edit > Undo steps revert the restyle")
+    return {"sequence": seq, "clip": clip_id, "layer": layer, "layers": layers, "styles": changes,
+            "style_removed": removed, "effect_controls_row": picked["row"],
+            "note": "Read back from the saved project: the layer holds exactly the asked look, its text and the other "
+                    "layers unchanged. The project was saved before and after. Undo takes four Edit > Undo steps "
+                    "(style removal, unlink, link, import)."}

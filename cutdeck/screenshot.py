@@ -69,11 +69,11 @@ def capture(output: str | None = None) -> dict:
     return {"path": str(path), "width": image.width, "height": image.height}
 
 
-def window_pixels() -> Image.Image:
-    """Premiere's main window as an RGB image, kept in memory."""
+def window_pixels(hwnd: int | None = None) -> Image.Image:
+    """Premiere's main window (or its window `hwnd`, e.g. a dropdown's popup) as an RGB image, kept in memory."""
     if _user32 is None:
         raise RuntimeError("Screenshots need Windows")
-    hwnd = premiere_window()
+    hwnd = hwnd or premiere_window()
     if _user32.IsIconic(hwnd):
         raise RuntimeError("Premiere is minimised; restore its window first")
     rect = wintypes.RECT()
@@ -85,7 +85,7 @@ def window_pixels() -> Image.Image:
     old = _gdi32.SelectObject(dc, bitmap)
     try:
         if not _user32.PrintWindow(hwnd, dc, PW_RENDERFULLCONTENT):
-            raise RuntimeError("PrintWindow failed on Premiere's window")
+            raise RuntimeError("PrintWindow failed on a Premiere window")
 
         class BITMAPINFOHEADER(ctypes.Structure):
             _fields_ = [("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG), ("biHeight", wintypes.LONG),

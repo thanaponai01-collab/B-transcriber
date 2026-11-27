@@ -337,6 +337,19 @@ test("remove_piece deletes only a CutDeck piece", async () => {
   assert.equal(h.sequence("Q1 (CutDeck piece)"), undefined);
 });
 
+test("remove_style_bin deletes only the root bin a restyle imported", async () => {
+  const { h, run } = setup();
+  const name = "CutDeck restyle 1a2b3c.prtextstyle";
+  h.fileSequence([name], "CutDeck restyle 1a2b3c");
+  h.fileSequence(["CFD SUBTITLE.prtextstyle"], "CFD SUBTITLE");
+  await assert.rejects(run.remove_style_bin({ name: "CFD SUBTITLE.prtextstyle" }), /not a CutDeck restyle bin/);
+  await assert.rejects(run.remove_style_bin({ name: "CutDeck restyle ffffff.prtextstyle" }), /0 root bins/);
+  assert.deepEqual(await run.remove_style_bin({ name }), { removed: true });
+  const left = (await (await h.project.getRootItem()).getItems()).map((it) => it.name);
+  assert.deepEqual(left, ["CFD SUBTITLE.prtextstyle"]);
+  assert.ok(h.undoSteps.includes("CutDeck: remove restyle bin"));
+});
+
 test("make_subsequence of a range that starts in a gap starts on its first clip (as Premiere does)", async () => {
   const { h, run } = setup();
   await run.edit_clips({ edits: [{ clip: "V1@0", op: "trim_in", in_ticks: String(2n * S) }, { clip: "A1@0", op: "trim_in", in_ticks: String(2n * S) }] });
