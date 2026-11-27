@@ -140,6 +140,12 @@ def test_init_db_schema_is_unchanged():
             ("orphan_cues", "INTEGER", 0, None),
             ("speech_coverage_miss_ci_lo", "REAL", 0, None),
             ("speech_coverage_miss_ci_hi", "REAL", 0, None),
+            ("cer_thai_sub", "REAL", 0, None),
+            ("cer_thai_del", "REAL", 0, None),
+            ("cer_thai_ins", "REAL", 0, None),
+            ("cer_thai_spread", "REAL", 0, None),
+            ("cer_thai_spread_ci_lo", "REAL", 0, None),
+            ("cer_thai_spread_ci_hi", "REAL", 0, None),
             ("ran_at", "TEXT", 1, "datetime('now')"),
             ("passed", "INTEGER", 1, None),
         ]

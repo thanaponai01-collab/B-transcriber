@@ -5,6 +5,7 @@ from pathlib import Path
 
 import torch
 
+from transcribe.audio import prep
 from transcribe.db import store
 from transcribe.contracts import PipelineToken
 from transcribe.pipeline import align_force, coverage, engine_run, ingest, refine
@@ -23,6 +24,7 @@ _PHASE_WRITTEN = planning.PHASE_WRITTEN
 
 def _ingest_for_plan(audio_path: str, config: dict, job_plan) -> ingest.IngestResult:
     audio_arr, sr = ingest.load_audio(audio_path)
+    audio_arr = prep.prepare(audio_arr, sr, config)
     return ingest.ingest(
         audio_path,
         denoise=config.get("denoise", True) and job_plan.chunk_engine_active,
