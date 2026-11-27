@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -171,6 +172,12 @@ def _load_silero():
         return load_silero_vad(onnx=False), get_speech_timestamps
     except ImportError:
         import torch
+        # The hub copy already on disk first: a GitHub lookup that fails (HTTP 504, offline) would
+        # otherwise drop VAD silently and Engine A would decode the whole file as one window.
+        local = Path(torch.hub.get_dir()) / "snakers4_silero-vad_master"
+        if local.exists():
+            model, utils = torch.hub.load(repo_or_dir=str(local), model="silero_vad", source="local", onnx=False)
+            return model, utils[0]
         model, utils = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
             model="silero_vad",
