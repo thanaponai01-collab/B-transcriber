@@ -19,9 +19,11 @@ How each principle is applied today. Values are examples, not presets.
 | CFD-R6 | Pick **3** clips from the batch (fixed now); each makes **its own Short**, never mixed. | — | confirmed |
 | CFD-R6a | Pick by **story**, not advice: the most dramatic or the most unusual compared with the others; plus a caller line that catches and makes the viewer ask a question. | CFD-5 | confirmed |
 | CFD-R6b | Open on that catching line or question so the viewer wants the answer. | CFD-5 | seen (user's words; how it's placed: guess) |
-| CFD-R7 | Reframe vertical and check the frame (M-5). | M-5 | confirmed (vertical); frame check from M-5 |
-| CFD-R8 | Add subtitles: full, exact words; a long line splits into two, never shortened. | — | confirmed (subtitles); split rule carried from other projects, guess here |
+| CFD-R7 | Reframe vertical on a V2 video-only copy of each piece: Scale 374 on one host (wide shot) or ~241 (close-up), face centred; switch who is in frame by **cutting** the V2 copy, never keyframes. Check a frame per piece (M-5). How: [memory/shorts-reframe.md](memory/shorts-reframe.md). | M-5 | confirmed 2026-11-27 (cut not keyframe, V2 copies); face placement seen |
+| CFD-R8 | Add subtitles as **captions** (style CFD SUBTITLE), full, exact words; one line (≤19 chars) by default, two only when too long, all inside the guide window; never shortened. The user recolours and re-times them; never touch their caption tracks. How: [memory/shorts-captions.md](memory/shorts-captions.md). | — | confirmed 2026-11-27 |
 | CFD-R9 | One advice text per Short, the one that fits its story; it comes near the end. | CFD-2, CFD-5 | confirmed |
+| CFD-R10 | End each Short with the template ending: 3.84 s sting (adjustment layer, film damage, boom), CG transition + SFX, 5 s end card comp; music under all. Layout: [memory/shorts-layout.md](memory/shorts-layout.md). | — | seen (CFD 99, user-built) |
+| CFD-R11 | Export only when asked: BAS7, one In/Out per Short incl. end card, `Short<k>_ClubFriday EP.<ep> D<n>.mp4`. How: [memory/shorts-export.md](memory/shorts-export.md). | — | confirmed 2026-11-27 |
 
 ## Scope today
 
