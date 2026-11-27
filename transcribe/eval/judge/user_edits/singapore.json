@@ -1,0 +1,455 @@
+{
+ "cut": "yt t1 singapore (1RaceClub, 2026-10-11), first 60.2 s (the part the user re-timed)",
+ "fps": 30,
+ "placed_cues": 174,
+ "final_cues": 177,
+ "edges": 49,
+ "counts": {
+  "kept": 35,
+  "nudge": 0,
+  "resplit_or_text": 14
+ },
+ "rows": [
+  {
+   "edge": "start",
+   "final_ms": 0,
+   "placed_ms": 0,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "โค้งแรกเอาไงกันดีครับที่สิงคโปร์ ที่นี่ครับ",
+   "placed_text": "โค้งแรกเอาง่ายกันดีครับที่สิงคโปร์ที่เนี้ยครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 1900,
+   "placed_ms": 2720,
+   "moved_ms": -820,
+   "class": "resplit_or_text",
+   "final_text": "โค้งแรกเอาไงกันดีครับที่สิงคโปร์ ที่นี่ครับ",
+   "placed_text": "โค้งแรกเอาง่ายกันดีครับที่สิงคโปร์ที่เนี้ยครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 1900,
+   "placed_ms": 2720,
+   "moved_ms": -820,
+   "class": "resplit_or_text",
+   "final_text": "ที่นี่ครับ Start โค้งแรกถ้าใน",
+   "placed_text": "โค้งแรกเอาง่ายกันดีครับที่สิงคโปร์ที่เนี้ยครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 4466,
+   "placed_ms": 4680,
+   "moved_ms": -214,
+   "class": "resplit_or_text",
+   "final_text": "ที่นี่ครับ Start โค้งแรกถ้าใน",
+   "placed_text": "โค้งแรกถ้าใน"
+  },
+  {
+   "edge": "start",
+   "final_ms": 4466,
+   "placed_ms": 4680,
+   "moved_ms": -214,
+   "class": "resplit_or_text",
+   "final_text": "Track ที่แห้งเนี้ย",
+   "placed_text": "โค้งแรกถ้าใน"
+  },
+  {
+   "edge": "end",
+   "final_ms": 5833,
+   "placed_ms": 5840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "Track ที่แห้งเนี้ย",
+   "placed_text": "ที่แห้งเนี้ย"
+  },
+  {
+   "edge": "start",
+   "final_ms": 5833,
+   "placed_ms": 5840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "ไม่ค่อยมีปัญหากันเท่าไหร่นะครับแต่ในฝนก็อาจจะ",
+   "placed_text": "ที่แห้งเนี้ย"
+  },
+  {
+   "edge": "end",
+   "final_ms": 8333,
+   "placed_ms": 8340,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "ไม่ค่อยมีปัญหากันเท่าไหร่นะครับแต่ในฝนก็อาจจะ",
+   "placed_text": "ไม่ค่อยมีปัญหากันเท่าไหร่นะครับแต่ในฝนก็อาจจะ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 8333,
+   "placed_ms": 8340,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "วุ่นวายนิดหนึ่งนะครับ",
+   "placed_text": "ไม่ค่อยมีปัญหากันเท่าไหร่นะครับแต่ในฝนก็อาจจะ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 9600,
+   "placed_ms": 9620,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "วุ่นวายนิดหนึ่งนะครับ",
+   "placed_text": "วุ่นวายนิดหนึ่งนะครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 9600,
+   "placed_ms": 9620,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ซึ่งเราก็เห็นแล้วว่าใน Sprint Race เกิดอะไรขึ้นนะ",
+   "placed_text": "วุ่นวายนิดหนึ่งนะครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 13033,
+   "placed_ms": 13060,
+   "moved_ms": -27,
+   "class": "kept",
+   "final_text": "ซึ่งเราก็เห็นแล้วว่าใน Sprint Race เกิดอะไรขึ้นนะ",
+   "placed_text": "ซึ่งเราก็เห็นแล้วว่าในเกิดอะไรขึ้นนะ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 13033,
+   "placed_ms": 13060,
+   "moved_ms": -27,
+   "class": "kept",
+   "final_text": "เรามาดูจุดก่อนนะที่หนึ่งครับ",
+   "placed_text": "ซึ่งเราก็เห็นแล้วว่าในเกิดอะไรขึ้นนะ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 15333,
+   "placed_ms": 15340,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "เรามาดูจุดก่อนนะที่หนึ่งครับ",
+   "placed_text": "เรามาดูจุดก่อนนะที่หนึ่งครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 15333,
+   "placed_ms": 15340,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "Start ใน outside นะครับ",
+   "placed_text": "เรามาดูจุดก่อนนะที่หนึ่งครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 17300,
+   "placed_ms": 17300,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "Start ใน outside นะครับ",
+   "placed_text": "ใน นะครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 17300,
+   "placed_ms": 17300,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "ใน Racing line ที่สองนะครับ",
+   "placed_text": "ใน นะครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 19300,
+   "placed_ms": 19320,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ใน Racing line ที่สองนะครับ",
+   "placed_text": "ใน ที่สองนะครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 19300,
+   "placed_ms": 19320,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "start ใน inside ครับ ใน dirty track",
+   "placed_text": "ใน ที่สองนะครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 21600,
+   "placed_ms": 22840,
+   "moved_ms": -1240,
+   "class": "resplit_or_text",
+   "final_text": "start ใน inside ครับ ใน dirty track",
+   "placed_text": "ใน ครับ ใน จากจุด นะครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 21600,
+   "placed_ms": 22840,
+   "moved_ms": -1240,
+   "class": "resplit_or_text",
+   "final_text": "จากจุด Start นะครับ",
+   "placed_text": "ใน ครับ ใน จากจุด นะครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 22833,
+   "placed_ms": 22840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "จากจุด Start นะครับ",
+   "placed_text": "ใน ครับ ใน จากจุด นะครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 22833,
+   "placed_ms": 22840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "ถึงโค้งแรกเนี้ยมันไม่ไกลมากนะ",
+   "placed_text": "ใน ครับ ใน จากจุด นะครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 25500,
+   "placed_ms": 25520,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ถึงโค้งแรกเนี้ยมันไม่ไกลมากนะ",
+   "placed_text": "ถึงโค้งแรกเนี้ยมันไม่ไกลมากนะ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 25500,
+   "placed_ms": 25520,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "มันแป๊บเดียวโค้งหนึ่งนะครับซึ่งในช่วงแห้งเนี้ย",
+   "placed_text": "ถึงโค้งแรกเนี้ยมันไม่ไกลมากนะ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 29600,
+   "placed_ms": 29340,
+   "moved_ms": 260,
+   "class": "resplit_or_text",
+   "final_text": "มันแป๊บเดียวโค้งหนึ่งนะครับซึ่งในช่วงแห้งเนี้ย",
+   "placed_text": "มันแป๊บเดียวโค้งหนึ่งนะครับซึ่งในช่วงแห้ง"
+  },
+  {
+   "edge": "start",
+   "final_ms": 29600,
+   "placed_ms": 29340,
+   "moved_ms": 260,
+   "class": "resplit_or_text",
+   "final_text": "มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ",
+   "placed_text": "มันแป๊บเดียวโค้งหนึ่งนะครับซึ่งในช่วงแห้ง"
+  },
+  {
+   "edge": "end",
+   "final_ms": 32566,
+   "placed_ms": 32580,
+   "moved_ms": -14,
+   "class": "kept",
+   "final_text": "มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ",
+   "placed_text": "เนี้ย มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 32566,
+   "placed_ms": 32580,
+   "moved_ms": -14,
+   "class": "kept",
+   "final_text": "แล้วก็ แต่ในฝนเนี้ยมันจะวุ่นวายหน่อยครับ",
+   "placed_text": "เนี้ย มันหาตำแหน่งกันค่อนข้างยากนะในโค้งแรกครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 35300,
+   "placed_ms": 35300,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "แล้วก็ แต่ในฝนเนี้ยมันจะวุ่นวายหน่อยครับ",
+   "placed_text": "แล้วก็ แต่ในฝนเนี้ยมันจะวุ่นวายหน่อยครับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 35300,
+   "placed_ms": 35300,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "เพราะว่าเหมือนมันจะกลับกันนะไอในไอไลน์ที่",
+   "placed_text": "แล้วก็ แต่ในฝนเนี้ยมันจะวุ่นวายหน่อยครับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 39533,
+   "placed_ms": 39540,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "เพราะว่าเหมือนมันจะกลับกันนะไอในไอไลน์ที่",
+   "placed_text": "เพราะว่าเหมือนมันจะกลับกันนะไอในไอไลน์ที่"
+  },
+  {
+   "edge": "start",
+   "final_ms": 39533,
+   "placed_ms": 39540,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "มันค่อนข้างเป็น Racing line ที่มี rubber เนี่ย",
+   "placed_text": "เพราะว่าเหมือนมันจะกลับกันนะไอในไอไลน์ที่"
+  },
+  {
+   "edge": "end",
+   "final_ms": 42533,
+   "placed_ms": 41940,
+   "moved_ms": 593,
+   "class": "resplit_or_text",
+   "final_text": "มันค่อนข้างเป็น Racing line ที่มี rubber เนี่ย",
+   "placed_text": "มันค่อนข้างเป็นไลน์ที่มี"
+  },
+  {
+   "edge": "start",
+   "final_ms": 42533,
+   "placed_ms": 41940,
+   "moved_ms": 593,
+   "class": "resplit_or_text",
+   "final_text": "มันจะค่อนข้างลื่นครับ ส่วนใน Dirty track เนี้ย",
+   "placed_text": "มันค่อนข้างเป็นไลน์ที่มี"
+  },
+  {
+   "edge": "end",
+   "final_ms": 45933,
+   "placed_ms": 45960,
+   "moved_ms": -27,
+   "class": "kept",
+   "final_text": "มันจะค่อนข้างลื่นครับ ส่วนใน Dirty track เนี้ย",
+   "placed_text": "เนี้ยมันจะค่อนข้างลื่นครับส่วนใน เนี้ย"
+  },
+  {
+   "edge": "start",
+   "final_ms": 45933,
+   "placed_ms": 45960,
+   "moved_ms": -27,
+   "class": "kept",
+   "final_text": "ที่ไม่มี rubber เลยมันกลับมี grip มากขึ้นมานะ",
+   "placed_text": "เนี้ยมันจะค่อนข้างลื่นครับส่วนใน เนี้ย"
+  },
+  {
+   "edge": "end",
+   "final_ms": 48833,
+   "placed_ms": 48840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "ที่ไม่มี rubber เลยมันกลับมี grip มากขึ้นมานะ",
+   "placed_text": "ที่ไม่มี เลยมันกลับมีมากขึ้นมานะ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 48833,
+   "placed_ms": 48840,
+   "moved_ms": -7,
+   "class": "kept",
+   "final_text": "ใน Sprint race เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะ",
+   "placed_text": "ที่ไม่มี เลยมันกลับมีมากขึ้นมานะ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 51400,
+   "placed_ms": 51740,
+   "moved_ms": -340,
+   "class": "resplit_or_text",
+   "final_text": "ใน Sprint race เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะ",
+   "placed_text": "ใน เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะกลับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 51400,
+   "placed_ms": 51740,
+   "moved_ms": -340,
+   "class": "resplit_or_text",
+   "final_text": "กับข้างหลังครับ Hamilton",
+   "placed_text": "ใน เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะกลับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 52933,
+   "placed_ms": 51740,
+   "moved_ms": 1193,
+   "class": "resplit_or_text",
+   "final_text": "กับข้างหลังครับ Hamilton",
+   "placed_text": "ใน เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะกลับ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 52933,
+   "placed_ms": 51740,
+   "moved_ms": 1193,
+   "class": "resplit_or_text",
+   "final_text": "ซึ่งโค้งแรกผมว่าก็ถ้าสมมุติ",
+   "placed_text": "ใน เราก็ได้เห็นนะพี่จอร์จครับออกตัวดีนะกลับ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 55500,
+   "placed_ms": 55500,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "ซึ่งโค้งแรกผมว่าก็ถ้าสมมุติ",
+   "placed_text": "ข้างหลังครับ คือโค้งแรกผมว่าก็ถ้าสมมุติ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 55500,
+   "placed_ms": 55500,
+   "moved_ms": 0,
+   "class": "kept",
+   "final_text": "ใน dry นะไม่น่ามีปัญหาอะไรครับแต่น่าจะมีปัญหากัน",
+   "placed_text": "ข้างหลังครับ คือโค้งแรกผมว่าก็ถ้าสมมุติ"
+  },
+  {
+   "edge": "end",
+   "final_ms": 58600,
+   "placed_ms": 58620,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ใน dry นะไม่น่ามีปัญหาอะไรครับแต่น่าจะมีปัญหากัน",
+   "placed_text": "ใน นะไม่น่ามีปัญหาอะไรครับแต่น่าจะมีปัญหากัน"
+  },
+  {
+   "edge": "start",
+   "final_ms": 58600,
+   "placed_ms": 58620,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ในคันหลังหลังนะ",
+   "placed_text": "ใน นะไม่น่ามีปัญหาอะไรครับแต่น่าจะมีปัญหากัน"
+  },
+  {
+   "edge": "end",
+   "final_ms": 60200,
+   "placed_ms": 60220,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ในคันหลังหลังนะ",
+   "placed_text": "ในคันหลังหลังนะ"
+  },
+  {
+   "edge": "start",
+   "final_ms": 60200,
+   "placed_ms": 60220,
+   "moved_ms": -20,
+   "class": "kept",
+   "final_text": "ที่เข้าโค้งสามแล้วมันเป็นโค้งที่ค่อนข้าง tight ครับ",
+   "placed_text": "ในคันหลังหลังนะ"
+  }
+ ]
+}
