@@ -52,6 +52,19 @@ test("edit_clips moves, trims, disables and removes in ONE undo step", async () 
   assert.deepEqual(seq.audio.map((c) => c.start), [15n * S]);
 });
 
+test("edit_clips takes several ops on one clip, in order, in ONE undo step (slip, PREMIERE_FACTS Timeline verbs)", async () => {
+  const { h, run } = setup();
+  const before = h.undoSteps.length;
+  const B = `V1@${10n * S}`;
+  await run.edit_clips({ edits: [
+    { clip: B, op: "trim_out", out_ticks: String(39n * S) },
+    { clip: B, op: "move", dt_ticks: String(1n * S) },
+    { clip: B, op: "trim_in", in_ticks: String(29n * S) },
+  ] });
+  assert.equal(h.undoSteps.length, before + 1);
+  assert.deepEqual(h.sequence("Edit").video.map((c) => [c.start, c.end, c.in]), [[0n, 10n * S, 0n], [10n * S, 20n * S, 29n * S]]);
+});
+
 test("edit_clips refuses a clip id that names nothing, before editing", async () => {
   const { h, run } = setup();
   const before = h.undoSteps.length;

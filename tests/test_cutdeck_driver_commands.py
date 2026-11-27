@@ -230,12 +230,16 @@ def test_control_commands_check_ids_ticks_and_ops(tmp_path):
     donor = tmp_path / "d.prproj"
     donor.write_bytes(b"x")
     ids = ["8e214d18-932a-4ad9-b6aa-663740045e4b"]
+    slip = [{"clip": "V1@0", "op": "trim_out", "out_ticks": "9"}, {"clip": "V1@0", "op": "move", "dt_ticks": "1"},
+            {"clip": "V1@0", "op": "trim_in", "in_ticks": "1"}]  # several ops on one clip, in order (live 2026-11-27)
+    assert [e["op"] for e in c["edit_clips"].prepare({"edits": slip}, None)["edits"]] == ["trim_out", "move", "trim_in"]
     assert c["import_sequences"].prepare({"path": str(donor), "sequence_ids": ids}, None) == {"path": str(donor), "sequence_ids": ids}
     bad = [
         ("edit_clips", {"edits": [{"clip": "V0@0", "op": "move", "dt_ticks": "1"}]}),       # track 0
         ("edit_clips", {"edits": [{"clip": "V1@0", "op": "razor"}]}),                       # not an op
         ("edit_clips", {"edits": [{"clip": "V1@0", "op": "trim_in", "in_ticks": 5}]}),      # ticks not a string
-        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "disable"}, {"clip": "V1@0", "op": "enable"}]}),  # twice
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "remove"}, {"clip": "V1@0", "op": "remove", "ripple": True}]}),
+        ("edit_clips", {"edits": [{"clip": "V1@0", "op": "trim_in", "in_ticks": "1"}, {"clip": "V1@0", "op": "remove"}]}),
         ("set_in_out", {"in_ticks": "9", "out_ticks": "3"}),
         ("set_in_out", {}),
         ("set_param", {"clip": "V1@0", "component": 1, "param": 0, "value": {"x": 1}}),

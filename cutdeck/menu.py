@@ -3,7 +3,8 @@
 Premiere's menu bar is a real Win32 menu (`GetMenu` on the main window: 9 menus, live 27.0.0,
 2026-11-21). Posting WM_COMMAND with an item's ID runs it exactly as a click would, with no key
 press: `Edit > Undo` / `Redo` worked this way when Ctrl+Z sent as keys did not, and
-`Sequence > Add Edit to All Tracks` cut when its Ctrl+Alt+Z did nothing.
+`Sequence > Add Edit to All Tracks` cut when its Ctrl+Alt+Z did nothing (both presses went out
+with Shift until 2026-11-27, PREMIERE_FACTS "Keys sent letters with Shift"; not re-run).
 
 Timeline commands act on the FOCUSED panel, as with keys (Add Edit did nothing with the Project
 panel focused), so `cutdeck.keys.run_focused` focuses and checks the sequence first. The enabled

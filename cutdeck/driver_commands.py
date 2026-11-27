@@ -678,8 +678,11 @@ def _edit_clips_arguments(args: dict, jobs) -> dict:
                 raise ValueError("ripple must be true or false")
             edit["ripple"] = e.get("ripple", False)
         out.append(edit)
-    if len({e["clip"] for e in out}) != len(out):
-        raise ValueError("each clip may appear once per edit_clips call")
+    removed = [e["clip"] for e in out if e["op"] == "remove"]
+    if len(set(removed)) != len(removed):
+        raise ValueError("each clip may be removed once per edit_clips call")
+    if any(e["clip"] in removed and e["op"] != "remove" for e in out):
+        raise ValueError("a removed clip takes no other edit in the same call (removes run after every other op)")
     return {**_sequence(args), "edits": out}
 
 
@@ -890,8 +893,15 @@ CONTROL_COMMANDS: dict[str, Command] = {
         may be negative}, trim_in {in_ticks}, trim_out {out_ticks} (media time, as in_ticks/
         out_ticks read), enable, disable, rename {name}, remove {ripple: false}. Linked audio does
         NOT follow a video move or trim: edit the A clips too. Moving a block backward past other
-        clips can render black (PREMIERE_FACTS); prefer edits on a copy. No razor, link or
-        track-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched tracks after.
+        clips can render black (PREMIERE_FACTS); prefer edits on a copy. A clip may take several
+        ops, applied in list order (shrink before you extend), but every remove runs after all
+        the other ops, and a removed clip takes no other op: slip, slide, roll, ripple trim, and
+        lift or extract of a range that only crosses edits, are each one call (recipes in
+        docs/research/timeline-verb-matrix-2026-11-27.md). An extract with a whole clip inside
+        the range is two calls: remove that clip first, then trim and move (else the moves land
+        on it before it goes).
+        No razor, link or track-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched
+        tracks after.
         """,
         (("edits", list[dict]), ("sequence", str | None, None))),
     "place_media": Command(
