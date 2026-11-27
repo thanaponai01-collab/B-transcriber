@@ -114,3 +114,14 @@ def test_menu_find_refuses_blocked_dialog_and_unknown(monkeypatch):
     for path, why in (("File > Exit", "never run"), ("Clip > Nest...", "dialog"), ("Edit > Nope", "No menu item")):
         with pytest.raises(ValueError, match=why):
             menu.find(path)
+
+
+def test_a_bare_letter_is_sent_without_shift(monkeypatch):
+    # The .kys stores letters uppercase (W = 0x80000057); typing 'W' needs Shift, so W went out as
+    # Shift+W (Extend Next Edit) and rolled the edit (PREMIERE_FACTS "Keys sent letters with Shift").
+    sent = []
+    monkeypatch.setattr(keys, "_send", sent.append)
+    keys.press(keys.Shortcut("cmd.sequence.rippletrimnextedittoplayhead", "global", False, False, False, 0x80000057))
+    keys.press(keys.Shortcut("cmd.sequence.extendnextedittoplayhead", "global", False, True, False, 0x80000057))
+    keys.press(keys.Shortcut("cmd.sequence.razorateditline", "global", True, False, False, 0x8000004B))
+    assert sent == [[0x57], [0x10, 0x57], [0x11, 0x4B]]

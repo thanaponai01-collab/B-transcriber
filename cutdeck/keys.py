@@ -154,6 +154,9 @@ def _vk_for(code: int) -> tuple[int, bool]:
     """Windows virtual key for a .kys code, and whether the character itself needs Shift."""
     if code in KEY_CODES:
         return KEY_CODES[code], False
+    char = chr(code & 0xFFFF)
+    if char.isascii() and char.isalnum():  # the .kys stores letters uppercase; Shift is its own flag
+        return ord(char.upper()), False
     scan = ctypes.windll.user32.VkKeyScanW(ctypes.c_wchar(chr(code & 0xFFFF)))
     if scan == -1 or scan & 0xFF == 0xFF:
         raise ValueError(f"no key on this keyboard types {chr(code & 0xFFFF)!r}")
