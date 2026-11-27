@@ -85,6 +85,57 @@ condition and no clean clip (1 dB margin).
 6. Owner's calls, untouched: loanword script policy (training on pseudo-labels sets it implicitly;
    conflicts are counted above), any UNRESOLVED verdict, which recording is the noisy gold clip.
 
+### Steps 1-5 rerun on the RTX 3070 machine (owner: "rebuild the corpus here") — 2026-11-27
+
+The runs above came from another machine. This one has none of `eval_run` 73-77, the music bed, or 6
+of the 9 gold audio files (the four Bangkok Festivals clips, `shorts`, Wealthy 40), so every number
+below is on a **4-clip corpus** (Short1-3 and `yt t1 singapore first min`, 2208 Thai chars) in a
+scratch copy of `transcriber.db`, and pairs only with its own baselines. It cannot be compared with
+id=75/77. Four clips make the CIs wide; read directions, not verdicts.
+
+- **Music bed:** `[BGM]Chasing to the end.wav` (HKS project BGM) as 16 kHz mono mp3, sha256
+  `0f00b718…f099843`. `[BGM]Where Everything Began.wav` stays unused, free for LoRA augmentation.
+- **Envs:** PATH Python 3.13 (torch 2.6.0+cu124, ctranslate2 4.8.0, faster-whisper 1.2.1) for steps 1,
+  2 and 4. DeepFilterNet's `deepfilterlib` has wheels only up to cp311, so step 3 ran in a uv Python
+  3.11 venv pinned to the same versions (`deepfilternet` installed `--no-deps`: it declares numpy<2).
+  That venv reproduced the baseline exactly (A/A, every paired delta 0.0000). `pyloudnorm` was missing
+  from `requirements.txt`; added.
+- **Baselines:** v5 id=13 `cer_thai` 0.0530 [0.0404, 0.0697] = sub 0.0122 + del 0.0276 + ins 0.0131
+  (same value as the v4 runs on this corpus, so decode is unchanged). Robustness id=14, spread 0.0159
+  [0.0127, 0.0393].
+
+| condition | clean | -18 | -12 | -6 | +6 | noise10 | music10 | spread | pooled delta CI |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline (id=14) | 0.0530 | 0.0548 | 0.0521 | 0.0616 | 0.0589 | 0.0679 | 0.0634 | 0.0159 | |
+| LUFS -14 | 0.0566 | 0.0566 | 0.0566 | 0.0566 | 0.0566 | 0.0756 | 0.0688 | 0.0190 | [-0.0004, +0.0066] |
+| enhance < 21 dB | 0.0530 | 0.0548 | 0.0521 | 0.0616 | 0.0589 | 0.1259 | 0.0897 | 0.0738 | [+0.0045, +0.0221] |
+
+1. **LUFS -14:** UNRESOLVED, leaning worse on every row. The gain rows collapse to one value, which shows
+   normalisation works; it just doesn't help. Agrees with the -16/-23 runs above: do not activate.
+2. **int8_float16 + batch 16:** `cer_thai` 0.0571, paired CI [-0.0014, +0.0081], UNRESOLVED leaning
+   worse. Decode-only bench (`EngineInput` straight into the engine, 166 s of audio, 3 fresh processes
+   each; WDDM reports per-process VRAM as N/A, so peak is whole-card used minus the idle reading):
+
+   | compute / batch | decode RTF | peak VRAM over idle |
+   |---|---|---|
+   | float16 / 8 (current) | 0.116-0.137 | 2826-2960 MiB |
+   | int8_float16 / 8 | 0.164-0.171 | 1810-2073 MiB |
+   | int8_float16 / 16 | 0.079-0.112 | 2058-2105 MiB |
+
+   All fit in 8 GB, so VRAM is no reason to switch. int8 at batch 8 is slower, so the batch-16 gain is
+   likely from batching, not int8 (inferred: float16 / 16 was not measured). Not activated.
+3. **Enhancement on noisy files only:** the normal run is identical to id=13 (paired deltas 0.0000) and
+   the clean/gain rows are byte-identical to id=14, so the SNR gate skips clean audio. On the noisy
+   rows DeepFilterNet makes things much worse: noise10 deletions 62 -> 152, the whole pooled CI is above
+   zero. Do not activate. (It did produce the only Latin-script hypotheses here: 18 switches, 12 matched.)
+4. **Pseudo-label yield** (`label` then `yield`): 12 local files, 241 min (one HKS full episode and 11
+   1RaceClub YouTube exports, Mar-Jul 2026). The gold-overlap guard skipped 4: HKS 290969, tiw aus,
+   t1 aus, YT suzuka (inferred: the channel intro shares text with the `yt t1` gold clip). Kept cue time
+   by confidence: 104.6 min at >= 0, 75.4 at 0.90, **34.9 at 0.95**. Purity could not be re-measured
+   here (none of the manifest's 442 recut slices are on this machine), so the bar uses the 0.95 purity
+   above.
+5. **LoRA not started:** 34.9 min < 45 at 0.95, and 0.90 (75.4 min) fails purity (CER 0.055 > 0.05).
+
 ## Clause split (`cue_split_algorithm: clause`) — ACTIVATED on an unresolved gate — 2026-11-11
 
 Owner report: cues run too long, and a cue breaks before its sentence is finished.
