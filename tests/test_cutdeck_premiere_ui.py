@@ -112,3 +112,46 @@ def test_window_wait_gives_the_last_grab_after_its_timeout(monkeypatch):
     on = _img("monitor_on")
     monkeypatch.setattr(ui, "window_image", lambda: on)
     assert ui.window_when(lambda a, b: False, timeout_s=0.05) is on
+
+
+# Restyle by Linked style: OCR of the window with a 4-layer Graphic selected (layer 2 picked in
+# Effect Controls, Properties showing Linked style "None"; live 2026-11-27, 2576x1408) and of the
+# Linked style popup with a "CutDeck restyle aaaaaa" style in the project.
+from cutdeck import ocr  # noqa: E402
+
+
+def _ocr(name):
+    return ocr.parse((FIX / f"ocr_{name}.txt").read_text(encoding="utf-8"), ocr.UPSCALE)
+
+
+def test_ocr_lines_come_back_in_window_pixels():
+    linked = next(line for line in _ocr("window") if "Linked style" in line["text"])
+    assert linked["box"] == (2104, 621, 2182, 632)
+    assert [w["text"] for w in linked["words"]][-2:] == ["Linked", "style"]
+
+
+def test_effect_controls_text_rows_in_chain_order():
+    rows = ui.effect_text_rows(_ocr("window"), 4)
+    assert [y for _, y in rows] == sorted(y for _, y in rows) and len(rows) == 4
+    assert all(abs(x - rows[0][0]) <= 2 for x, _ in rows) and 340 < rows[0][1] < 360
+    with pytest.raises(RuntimeError, match="4 text layer rows.*3"):
+        ui.effect_text_rows(_ocr("window"), 3)
+
+
+def test_linked_style_dropdown_is_the_line_under_its_heading():
+    x, y = ui.dropdown_under(_ocr("window"), "Linked style", [])
+    assert 2150 <= x <= 2176 and 661 <= y <= 670
+    assert ui.dropdown_under(_ocr("style_popup"), "Linked style", []) is None
+    # Linked style at the panel's bottom: the line under it is the next panel's tab (live 2026-11-27).
+    edges = [760 + y for y in ui.panel_edges(_img("linked_style_at_edge"), 0, 300)]
+    assert edges and all(824 < y < 852 for y in edges)
+    assert ui.dropdown_under(_ocr("window_style_at_edge"), "Linked style", edges) is None
+
+
+def test_popup_row_is_picked_by_its_name_despite_ocr_slips():
+    lines = _ocr("style_popup")
+    x, y = ui.popup_row(lines, "CutDeck restyle aaaaaa")
+    assert 140 < y < 165  # the 4th row, not "CutDeck probe style"
+    assert ui.popup_row(lines, "None")[1] < 40
+    with pytest.raises(RuntimeError, match="no row"):
+        ui.popup_row(lines, "Lower third")

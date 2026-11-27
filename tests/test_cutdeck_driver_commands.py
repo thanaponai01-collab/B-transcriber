@@ -744,3 +744,30 @@ def test_arrange_is_four_steps_whatever_the_block_count():
         out = _arrange(host, [(i * S, (i + 1) * S) for i in range(n)][::-1])
         assert out["missing"] == [] and out["unexpected"] == []
         assert host.transactions == 4
+
+
+def test_place_text_passes_styles_to_the_bake(tmp_path, monkeypatch):
+    template = tmp_path / "t.mogrt"
+    template.write_bytes(b"zip")
+    seen = []
+    monkeypatch.setattr(driver_commands.mogrt_text, "bake", lambda t, texts, styles: seen.append((texts, styles)) or "c.mogrt")
+    prepare = driver_commands.COMMANDS["place_text"].prepare
+    out = prepare({"template": str(template), "texts": {}, "styles": {"0": {"size": 80}},
+                   "at_ticks": "0", "v": 2}, None)
+    assert out["mogrt"] == "c.mogrt" and seen == [({}, {"0": {"size": 80}})]
+    prepare({"template": str(template), "texts": {"0": "x"}, "at_ticks": "0", "v": 2}, None)
+    assert seen[-1] == ({"0": "x"}, {})
+    for styles in ([1], {"0": "big"}, {0: {}}):
+        with pytest.raises(ValueError, match="styles"):
+            prepare({"template": str(template), "texts": {}, "styles": styles, "at_ticks": "0", "v": 2}, None)
+
+
+def test_restyle_text_checks_its_arguments_before_anything_moves():
+    prepare = driver_commands.COMMANDS["restyle_text"].prepare
+    assert prepare({"clip": "V2@0", "styles": {"fill": "#FF0000"}}, None) == {"clip": "V2@0", "layer": 0, "styles": {"fill": "#FF0000"}}
+    for bad, error in (({"clip": "A1@0", "styles": {"size": 1}}, "video clip"), ({"clip": "V2@0", "styles": {}}, "styles"),
+                       ({"clip": "V2@0", "layer": -1, "styles": {"size": 1}}, "layer"),
+                       ({"clip": "V2@0", "styles": {"font": "Arial"}}, "unknown style"),
+                       ({"clip": "V2@0", "styles": {"fill": "red"}}, "#RRGGBB")):
+        with pytest.raises(ValueError, match=error):
+            prepare(bad, None)

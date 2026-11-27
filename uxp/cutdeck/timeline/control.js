@@ -329,6 +329,28 @@ async function removePiece(ppro, { name }) {
   return withFreshHandles(async () => ({ removed: !(await allSequences(await activeProject(ppro))).some((s) => s.name === name) }));
 }
 
+/* remove_style_bin: delete the root bin that importing a restyle's .prtextstyle made (Premiere
+   files a style file's item in a root bin named after the file, live 2026-11-27). Only a name
+   "CutDeck restyle *.prtextstyle", exactly one such bin. Project.getRootItem (premierepro.txt:501),
+   FolderItem.getItems / createRemoveItemAction (:349, :343), as removeRoughCuts does. */
+const RESTYLE_BIN = /^CutDeck restyle [^\\/]+\.prtextstyle$/;
+async function removeStyleBin(ppro, { name }) {
+  if (!RESTYLE_BIN.test(String(name))) throw new Error(`"${name}" is not a CutDeck restyle bin; nothing removed`);
+  const inRoot = async () => {
+    const root = asBinLike(await (await activeProject(ppro)).getRootItem());
+    return { root, found: ((await root.getItems()) || []).filter((it) => it && it.name === name) };
+  };
+  await withFreshHandles(async () => {
+    const project = await activeProject(ppro);
+    const { root, found } = await inRoot();
+    if (found.length !== 1) throw new Error(`"${name}" is ${found.length} root bins, not one; nothing removed`);
+    runTransaction(project, "CutDeck: remove restyle bin", (compound) => {
+      if (!compound.addAction(root.createRemoveItemAction(found[0]))) throw new Error("addAction(remove restyle bin) returned false");
+    });
+  });
+  return withFreshHandles(async () => ({ removed: (await inRoot()).found.length === 0 }));
+}
+
 /* select_clips: replace the timeline selection with `clips` (ids); [] clears it. */
 async function selectClips(ppro, { sequence: name = null, clips }) {
   const { sequence } = await projectAndSequenceNamed(ppro, name);
@@ -682,6 +704,7 @@ function controlHandlers(ppro) {
     set_in_out: (args) => setInOut(ppro, args),
     make_subsequence: (args) => makeSubsequence(ppro, args),
     remove_piece: (args) => removePiece(ppro, args),
+    remove_style_bin: (args) => removeStyleBin(ppro, args),
     select_clips: (args) => selectClips(ppro, args),
     edit_clips: (args) => editClips(ppro, args),
     place_media: (args) => placeMedia(ppro, args),

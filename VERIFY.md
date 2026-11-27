@@ -108,9 +108,15 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fresh trial (2026-11-23, `python tools/shorts_check_trial.py`, protocol posted on issue 128 before the run): the user's own `tt` timelines in 18 episodes from 2026-09-03 to 11-19 (the other 17 held out, not run). 56 gap-separated runs, 51 flags against a pass line of 1: **not met**. 10 runs are 5-min-plus working stretches, not Shorts. The check measured anything (feed, box or title) on only 22 runs; `FEED` matched no clip on 50 (feeds named `Qualifyin.ts`, `race.mp4`, `fp2.mp4`…), so a missed feed name passes silently. Each flag looked at: safe zone 44, all picture-in-picture boxes of moving feed in older Shorts; the box geometry matches the user's own export (`20260925 - q ant.mp4`, 5 s), so this is the user's practice before the 11-22 safe-zone rule, not a check bug. Moving video 5: the 68-min working stretch; 24.7 s (`TT max radio`) and 3.83 s (`NOR CHAMPENGE BROKE`) in exported Shorts, older practice before the 11-21 rule; two unexported runs. Title 2: both word-by-word subtitles that start on the first frame, so "text on the first frame" also catches subtitles (definition gap). Catching an agent's Short not tested here.
 
 ## place_text (text into Premiere via a baked .mogrt)
-- test: `python -m pytest tests/test_cutdeck_mogrt_text.py -q`
+- test: `python -m pytest tests/test_cutdeck_mogrt_text.py tests/test_cutdeck_text_document.py tests/test_cutdeck_driver_commands.py -q`
 - fail-signal: failed
 - live: `cdv.py call place_text` on the scratch (2026-11-21, runs `20261121-230511-mogrttext`, `20261121-232401-place-text-busy`): Thai rendered from Basic Title and an AE template, AE text read back, occupied track refused, Undo removes it.
+- live Premiere-made multi-layer template and `styles` (2026-11-27, runs `20261127-103637-prgraphic-text`, `20261127-110807-text-full-control`, `20261127-114856-text-styles-all`): text and all 34 style fields baked into the user's CFD template, frames rendered, values read back from the saved project; Graphics and Titles menu sweep read back and undone.
+
+## restyle_text (one layer of a placed Graphic, by Linked style)
+- test: `python -m pytest tests/test_cutdeck_text_style.py tests/test_cutdeck_premiere_ui.py tests/test_cutdeck_driver_commands.py -q` and `node --test tests/cutdeck_control.test.cjs`
+- fail-signal: failed
+- live: `cdv.py call restyle_text` on the scratch CFD Graphic (2026-11-27, run `20261127-121925-text-restyle-probe`): layers 0 and 2 restyled, every asked field read back from the saved project, text and other layers unchanged, style bin removed; the Linked style route, None unlink and 4-step Undo proven by hand in the same run.
 
 ## Premiere UI route (set_speed, nest_clips, edit_text, paste_attributes)
 - test: `python -m pytest tests/test_cutdeck_premiere_ui.py -q`
