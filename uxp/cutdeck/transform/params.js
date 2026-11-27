@@ -318,7 +318,11 @@ async function readAnchorFrameSize(ppro, item, seq) {
 // Its Vector Motion (Graphic Group) has Motion's first six params in the same order.
 const TEXT_MATCH_NAME = "AE.ADBE Text";
 const TEXT_PARAM_INDEX = { position: 2, scale: 3, horizontalScale: 4, uniformScale: 5, rotation: 6, opacity: 7, anchorPoint: 8 };
-const KNOWN_GRAPHIC_COMPONENTS = new Set(["AE.ADBE Opacity", MOTION_MATCH_NAME, GRAPHIC_GROUP_MATCH_NAME, TEXT_MATCH_NAME]);
+// Film Impact's Wiggle on the whole Graphic (the user's CFD quote template; match name read live
+// with Component.getMatchName, PREMIERE_FACTS "Panel align/anchor on a Graphic carrying an added
+// effect"): it moves with the text layers, so moving them leaves nothing behind.
+const WIGGLE_MATCH_NAME = "AE.Impact_Wiggle_FX";
+const KNOWN_GRAPHIC_COMPONENTS = new Set(["AE.ADBE Opacity", MOTION_MATCH_NAME, GRAPHIC_GROUP_MATCH_NAME, TEXT_MATCH_NAME, WIGGLE_MATCH_NAME]);
 
 // Reads a Graphic's Vector Motion (scale, scale width, uniform, rotation) and every Text layer's
 // Position param. `onlyText` is false when the chain holds anything else (a shape layer, an

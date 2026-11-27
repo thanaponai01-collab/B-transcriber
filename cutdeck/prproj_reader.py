@@ -152,7 +152,8 @@ def parse_source_text(blob: bytes) -> dict:
     font names (omitted = 0), f1 the size (float, omitted = 100), f8 the tracking (float),
     f14 the faux-bold flag, f2 the fill colour, f4 the stroke colour (colour tables) with f5 its
     on flag and f6 the stroke width (float, default 4), f15 faux italic, f16 underline. Document
-    f4 is the alignment, f6 the leading (float) and f11 the shadow flag.
+    f2 is the paragraph (area) text box width (omitted for point text), f4 the alignment, f6 the
+    leading (float) and f11 the shadow flag.
 
     ``runs`` has one entry per style change; ``font`` and ``size`` are the first run's. A layer
     with no text leaves out its runs and fonts: ``runs`` is empty and ``font`` None.
@@ -181,7 +182,7 @@ def parse_source_text(blob: bytes) -> dict:
         })
     first = runs[0] if runs else {"font": None, "size": _DEFAULT_TEXT_SIZE}
     return {"text": "".join(r["text"] for r in runs), "font": first["font"],
-            "size": first["size"], "leading": doc.float(6, 0.0),
+            "size": first["size"], "leading": doc.float(6, 0.0), "box_width": doc.float(2, 0.0),
             "alignment": _ALIGNMENT.get(doc.u32(4, 0)), "shadow": doc.flag(11), "runs": runs}
 
 
@@ -206,7 +207,7 @@ def _parse_json_source_text(blob: bytes) -> dict:
         "italic": _first(style, "mFauxItalic", False),
     }
     return {"text": run["text"], "font": run["font"], "size": run["size"],
-            "leading": float(param.get("mLeading", 0.0)),
+            "leading": float(param.get("mLeading", 0.0)), "box_width": float(param.get("mWidth", 0.0)),
             "alignment": _ALIGNMENT.get(param.get("mAlignment", 0)),
             "shadow": bool(param.get("mShadowVisible")), "runs": [run]}
 

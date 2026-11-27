@@ -4,7 +4,9 @@ predicted from the saved project's Source Text and the font file (cutdeck/text_b
 The rule, from Premiere's own Align Left/Right/Top/Bottom on two DB Heavent Med layers
 (live 2026-10-19, docs/PREMIERE_FACTS.md): in the text layer's own space (baseline y = 0,
 y down), the box is one em tall, centred capHeight / 2 above the baseline, and runs from
-x = 0 to the shaped advance width (kerning included)."""
+x = 0 to the shaped advance width (kerning included). Widened 2026-11-27 on DBEEStrokeX:
+centre / right lines start at -advance/2 / -advance with the box from the first letter's ink;
+lines stack 1.2 x size + Leading apart."""
 import os
 import time
 from pathlib import Path
@@ -60,9 +62,57 @@ def test_box_is_one_em_centred_on_half_the_cap_height_and_as_wide_as_the_kerned_
     assert got["ink"] == pytest.approx({"left": 50 * s, "right": (500 + 550) * s, "top": -700 * s, "bottom": 0})
 
 
+@pytest.mark.parametrize("alignment, left, right", [
+    ("center", -550 + 50, 550),   # starts at -advance / 2; the box at A's ink (bearing 50)
+    ("right", -1100 + 50, 0),     # starts at -advance
+])
+def test_centre_and_right_text_box_starts_at_the_first_letter_and_ends_at_the_line_end(tmp_path, alignment, left, right):
+    path = _font(tmp_path)
+    layer = _layer()
+    layer["alignment"] = alignment
+    got = text_box.layer_box(layer, lambda name: path)
+    s = 100 / 1000
+    assert got["box"] == pytest.approx({"left": left * s, "right": right * s, "top": -85, "bottom": 15})
+    assert got["ink"]["left"] == pytest.approx(left * s)
+
+
+@pytest.mark.parametrize("alignment, leading, left, right", [
+    ("left", 0.0, 0, 1100),        # the widest line sets the right edge
+    ("left", 10.0, 0, 1100),       # Leading adds to the auto 120%
+    ("center", -20.0, -550 + 50, 550),  # the widest line's first letter sets the left edge
+    ("right", 0.0, -1100 + 50, 0),
+])
+def test_lines_are_shaped_one_by_one_and_stacked_1_2_size_plus_leading_apart(tmp_path, alignment, leading, left, right):
+    path = _font(tmp_path)
+    layer = _layer("A\rAV")
+    layer["alignment"], layer["leading"] = alignment, leading
+    got = text_box.layer_box(layer, lambda name: path)
+    s = 100 / 1000
+    step = 1.2 * 100 + leading
+    assert got["box"] == pytest.approx({"left": left * s, "right": right * s, "top": -85, "bottom": 15 + step})
+    assert got["ink"]["top"] == pytest.approx(-70) and got["ink"]["bottom"] == pytest.approx(step)
+
+
+def test_an_empty_text_gives_a_reason(tmp_path):
+    path = _font(tmp_path)
+    got = text_box.layer_box(_layer(""), lambda name: path)
+    assert "box" not in got and "no runs" in got["reason"]
+
+
+@pytest.mark.parametrize("text, box_width, reason", [
+    ("AV\r", 0.0, "blank line"),
+    ("A\r\rV", 0.0, "blank line"),
+    ("AV", 800.0, "area"),
+])
+def test_blank_lines_and_area_text_were_not_measured_and_give_a_reason(tmp_path, text, box_width, reason):
+    path = _font(tmp_path)
+    layer = _layer(text)
+    layer["box_width"] = box_width
+    got = text_box.layer_box(layer, lambda name: path)
+    assert "box" not in got and reason in got["reason"]
+
+
 @pytest.mark.parametrize("change, reason", [
-    ({"alignment": "center"}, "aligned"),
-    ({"text": "A\rV"}, "line"),
     ({"tracking": 50.0}, "tracking"),
     ({"bold": True}, "bold"),
     ({"font": "NoSuchFont-Regular"}, "font"),
@@ -70,11 +120,7 @@ def test_box_is_one_em_centred_on_half_the_cap_height_and_as_wide_as_the_kerned_
 def test_cases_the_rule_was_not_proven_for_give_a_reason_not_a_box(tmp_path, change, reason):
     path = _font(tmp_path)
     layer = _layer()
-    if "alignment" in change:
-        layer["alignment"] = change["alignment"]
-    elif "text" in change:
-        layer["text"] = layer["runs"][0]["text"] = change["text"]
-    elif "font" in change:
+    if "font" in change:
         layer["font"] = layer["runs"][0]["font"] = change["font"]
     else:
         layer["runs"][0].update(change)
@@ -102,6 +148,30 @@ def test_live_db_heavent_boxes(size, top, bottom, right):
     layer = _layer("New Text Layer", "DBHeavent-Med", size)
     got = text_box.layer_box(layer, lambda name: HEAVENT if name == "DBHeavent-Med" else None)
     assert got["box"] == pytest.approx({"left": 0, "right": right, "top": top, "bottom": bottom}, abs=0.01)
+
+
+# Premiere's own Align to Video Frame per layer, live 2026-11-27 (run 20261127-135934-text-box-widen):
+# the CFD template's DBEEStrokeX layers at Scale 100 in a 1080x1920 frame, box edges in pixels.
+STROKE = Path(os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\DB EE Stroke X v3.2.ttf"))
+
+
+@pytest.mark.skipif(not STROKE.exists(), reason="DB EE Stroke X is installed on the live machine only")
+@pytest.mark.parametrize("text, size, alignment, leading, box", [
+    ("Hello ทดสอบ", 141.8235321044922, "left", 0, (0, 549.255, -105.225, 36.599)),
+    ("Hello ทดสอบ", 141.8235321044922, "center", 0, (-272.250, 274.626, -105.225, 36.599)),
+    ("Hello ทดสอบ", 120, "right", 0, (-462.725, 0, -89.033, 30.967)),
+    ("Hello\rทดสอบ", 120, "left", 0, (0, 241.054, -89.033, 174.967)),
+    ("Hello\rทดสอบ", 141.8235321044922, "center", 0, (-137.772, 142.447, -105.225, 206.787)),
+    ("ทดสอบ\rHello", 141.8235321044922, "right", 0, (-280.219, 0, -105.225, 206.787)),
+    ("Hello\rทดสอบ", 120, "left", 50, (0, 241.054, -89.033, 224.967)),
+    ("ทด\rHello\rทดสอบ", 120, "center", -20, (-116.572, 120.529, -89.033, 278.967)),
+])
+def test_live_db_ee_stroke_boxes(text, size, alignment, leading, box):
+    layer = _layer(text, "DBEEStrokeX", size)
+    layer["alignment"], layer["leading"] = alignment, leading
+    got = text_box.layer_box(layer, lambda name: STROKE if name == "DBEEStrokeX" else None)
+    left, right, top, bottom = box
+    assert got["box"] == pytest.approx({"left": left, "right": right, "top": top, "bottom": bottom}, abs=0.05)
 
 
 def test_newest_save_is_used_project_or_auto_save(tmp_path):
