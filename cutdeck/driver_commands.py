@@ -678,8 +678,6 @@ def _edit_clips_arguments(args: dict, jobs) -> dict:
                 raise ValueError("ripple must be true or false")
             edit["ripple"] = e.get("ripple", False)
         out.append(edit)
-    if len({e["clip"] for e in out}) != len(out):
-        raise ValueError("each clip may appear once per edit_clips call")
     return {**_sequence(args), "edits": out}
 
 
@@ -890,8 +888,11 @@ CONTROL_COMMANDS: dict[str, Command] = {
         may be negative}, trim_in {in_ticks}, trim_out {out_ticks} (media time, as in_ticks/
         out_ticks read), enable, disable, rename {name}, remove {ripple: false}. Linked audio does
         NOT follow a video move or trim: edit the A clips too. Moving a block backward past other
-        clips can render black (PREMIERE_FACTS); prefer edits on a copy. No razor, link or
-        track-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched tracks after.
+        clips can render black (PREMIERE_FACTS); prefer edits on a copy. A clip may take several
+        ops, applied in list order (shrink before you extend): slip, slide, roll, ripple trim,
+        lift and extract are each one call (recipes in docs/research/timeline-verb-matrix-2026-11-27.md).
+        No razor, link or track-move here (see docs/PREMIERE_CONTROL_MAP.md). Returns the touched
+        tracks after.
         """,
         (("edits", list[dict]), ("sequence", str | None, None))),
     "place_media": Command(
