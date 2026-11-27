@@ -97,3 +97,44 @@ Times are on the trimmed `Editing` (63:46).
 - Wording: the engine's text corrected by 3 other models (pathumma-large-v3, typhoon-large-v3, whisper-th-medium):
   กว่าเขา→ของเขา, เห็นคุย→แอบคุย, ในขณะที่เราก็รีบ→ทั้งๆ ที่เรากับลูก, เจ๊ข้อลูก→เจคลอดลูก (her name is เจ);
   dropped fillers นะคะ, อ่ะเนาะ, ปุ๊บ, อะค่ะ. Not checked by ear.
+
+## 2026-11-27 — CFD 99 Short 1 subtitles
+
+- User reframed Short 1 on `Shorts` (In/Out 0–59.16, recut into 16 pieces): V1 = whole 16:9 frame, V2 = copy punched in
+  on the speaker (Motion scale 374 panned left/right on one person, 241–246 centred on wider moments), V5 = `guideline.png`
+  (`F:\Me\1.All Pr&Ae\3-AnyMind\Project Atime\CFD SUBTITLE\`): 50% white with a clear safe window x 196–875, y 191–1347.
+  Subtitle style: caption style **CFD SUBTITLE** (`CFD SUBTITLE.prtextstyle`, first in the caption Style list).
+- Agent transcribed the marked span from clip 01's words, cross-checked with pathumma/typhoon large-v3
+  (ปฏิเหตุ→อุบัติเหตุ, บอ กรัก→บอกรัก, +อีก after แชท; fillers dropped), 36 one-line cues (≤ ~24 chars fits the box),
+  `CutDeck\Short 1.srt`, placed by `srt_subtitles` (style 1), first as 36 Graphics on V10.
+- User: don't upgrade to Graphics, they recolour subtitles per speaker. Graphics removed; placed again with
+  `upgrade: false` → 36 captions on caption track C3 (CFD SUBTITLE), inside the safe window. **Rule for CFD Shorts:
+  subtitles stay captions.** Keep SRT times on the 30 fps grid too (e.g. 59.10 not 59.12) or edges slip a frame.
+- Speaker words not checked by ear.
+
+## 2026-11-27 — CFD 99 Shorts 2–3 subtitles (captions)
+
+- User recoloured Short 1's captions per speaker (caller purple, host cyan) and re-timed some. **Never clear or
+  upgrade captions the agent did not place** — the agent's clear step upgraded them; the user undid it in History.
+- User: "text in the guide line, 2 lines is fine" → lines ≤ 19 characters (≈630 px of the 680 px window), 2 lines max.
+- Shorts 2 (clip 06, 119.16–171.24) and 3 (clip 07, 215.62–270.38) transcribed from the clip words, cross-checked with
+  pathumma/typhoon large-v3; 49 captions on a new caption track C4 (CFD SUBTITLE), `CutDeck\Shorts 2-3.srt`.
+  Unsure: Short 3 230.5 "อยู่กับแฟนมา 16 ปี" (models disagree), Short 2 name "คิม"; "พี่อ้อย พี่ชอบ" (130.9–131.8) left out.
+- 2-line captions: second line sits on the guide's bottom edge (~y 1320–1350); raise the track's captions by hand.
+- Shorts 2–3 not reframed yet (user reframes).
+
+## 2026-11-27 — CFD 99 Shorts 2–3 reframe, guide fit, export D1
+
+- Guide fit: two-line captions touch the guide's bottom edge. The user's rule: "one line in the main", two lines only if
+  too long, both inside the guide. The agent built `CutDeck\Shorts 2-3 one-line.srt` (75 cues ≤19 chars, not placed),
+  but the user had already hand-edited C4 (49 → 46 captions, retimed), so they kept their edits and fixed C4 themselves.
+- Reframe by the agent (Scale 374 per host, 241 close-up, faces matched to Short 1, Position **keyframes** for mid-clip
+  switches, Short 3 on V1) → the user redid it: **V2 video-only copies cut at each switch, no keyframes**, faces centred
+  (agent's were slightly left and high), several "who's in frame" picks changed. Short 3 moved to V2 copies.
+  User: "on the key frame i dont want that, when i change i cut … if keyframe … if cut, so its complicated".
+- "dont forget the guide layer": agent placed disabled `guideline.png` over Shorts 2–3; the user later rebuilt the upper
+  tracks (gradient bars, sting, end card per Short).
+- Export (user asked): BAS7, In/Out per Short incl. end card → `5. EXPORTS\Short1/2/3_ClubFriday EP.99 D1.mp4`
+  (68.00 / 60.20 / 63.82 s, 1080x1920 50 fps). The first try with forward-slash paths exported nothing yet reported ok.
+- Learned → memory: [shorts-layout](memory/shorts-layout.md), [shorts-reframe](memory/shorts-reframe.md),
+  [shorts-captions](memory/shorts-captions.md), [shorts-export](memory/shorts-export.md); rules R7, R8, R10, R11.

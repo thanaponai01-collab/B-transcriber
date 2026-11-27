@@ -1091,7 +1091,11 @@ def _srt_subtitles_arguments(args: dict, jobs) -> dict:
     scale = args.get("scale")
     if scale is not None and not (type(scale) in (int, float) and 0 < scale <= 1000):
         raise ValueError("scale must be the Motion Scale in percent (100 = as styled)")
-    return {"sequence": seq, "srt": srt, "track": track, "style": style, "position": position, "scale": scale}
+    upgrade = args.get("upgrade", True)
+    if type(upgrade) is not bool:
+        raise ValueError("upgrade must be true (Graphics) or false (keep captions)")
+    return {"sequence": seq, "srt": srt, "track": track, "style": style, "position": position, "scale": scale,
+            "upgrade": upgrade}
 
 
 def _edit_text_arguments(args: dict, jobs) -> dict:
@@ -2068,9 +2072,12 @@ HELPER_COMMANDS: dict[str, Command] = {
         Reads every Graphic back against the snapped cues (`off_cues`). Each run leaves an empty
         caption track, may leave an empty top video track, and clears the selection. Takes the
         mouse and keyboard for several seconds. Undo is several Edit > Undo steps (not tested).
+        upgrade false: stop after the captions (one caption track in that style, e.g. to recolour
+        per speaker); captions already on the sequence are left alone and the new ones go on a
+        track of their own; track, position and scale are then unused.
         """,
         (("sequence", str), ("srt", str), ("track", int | None, None), ("style", int, 1),
-         ("position", list[float] | None, None), ("scale", float | None, None)),
+         ("position", list[float] | None, None), ("scale", float | None, None), ("upgrade", bool, True)),
         run=lambda args, premiere: srt_subtitles.run(premiere, args), routes=("premiere_ui", "menu", "uxp")),
     "menu_command": Command(
         60, _menu_command_arguments, "destructive",

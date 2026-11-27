@@ -98,6 +98,7 @@ class FakePremiere:
 
     def __init__(self, tmp, landing=6, v5=(), v6=()):
         self.calls, self.captions, self.landing = [], [], landing
+        self.kept = []  # a caption track already on the sequence (the user's own)
         self.video = {f"V{n}": [] for n in range(1, 7)}
         self.video["V5"], self.video["V6"] = list(v5), list(v6)
         self.project = str(tmp / "show.prproj")
@@ -111,7 +112,8 @@ class FakePremiere:
                     "video_track_count": 6}
         if command == "run_probe":
             return {"report": {"complete": True, "sequence_name": "short",
-                               "tracks": [{"index": 0, "items": [{"start_ticks": str(s), "end_ticks": str(e)} for s, e in self.captions]}]}}
+                               "tracks": [{"index": i, "items": [{"start_ticks": str(s), "end_ticks": str(e)} for s, e in t]}
+                                          for i, t in enumerate([self.captions] + ([self.kept] if self.kept else []))]}}
         if command == "read_timeline":
             tracks = args.get("tracks") or list(self.video)
             return {"tracks": [{"id": t, "clips": [{"id": f"{t}@{s}", "start_ticks": str(s), "end_ticks": str(e)} for s, e in self.video[t]]}
@@ -194,8 +196,8 @@ def test_arguments_are_checked(tmp_path):
     srt.write_text(SRT, encoding="utf-8")
     prepare = COMMANDS["srt_subtitles"].prepare
     good = {"sequence": "short", "srt": str(srt), "track": 5, "position": [0.5, -0.0423], "scale": 112.5}
-    assert prepare(good, None) == {**good, "style": 1}
-    for bad in ({"srt": str(tmp_path / "missing.srt")}, {"track": 0}, {"style": -1}, {"position": [0.5]}, {"sequence": ""}, {"scale": 0}):
+    assert prepare(good, None) == {**good, "style": 1, "upgrade": True}
+    for bad in ({"upgrade": "no"}, {"srt": str(tmp_path / "missing.srt")}, {"track": 0}, {"style": -1}, {"position": [0.5]}, {"sequence": ""}, {"scale": 0}):
         with pytest.raises(ValueError):
             prepare({**good, **bad}, None)
 
@@ -223,3 +225,34 @@ def test_command_moves_only_the_graphics_around_a_clip_already_on_the_landing_tr
         ("clone", str(16 * TPF), str(58 * TPF + 1)), ("lift", str(16 * TPF), str(58 * TPF + 1)),
         ("clone", str(98 * TPF), str(98 * TPF + 1)), ("lift", str(98 * TPF), str(98 * TPF + 1))]
     assert len(build["restyle"]) == 2
+
+
+def test_upgrade_false_keeps_the_captions(tmp_path, monkeypatch):
+    """User 2026-11-27: captions stay captions so they can be recoloured per speaker."""
+    srt = tmp_path / "max.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    fake = FakePremiere(tmp_path, landing=6)
+    out = _run(fake, monkeypatch, srt, upgrade=False)
+    assert out["captions"] == out["cues"] - len(out["dropped_cues"]) and out["off_cues"] == []
+    assert not any(c == "menu_command" for c, _ in fake.calls)
+    assert not any(c == "build_sequence" for c, _ in fake.calls)
+
+
+def test_upgrade_false_adds_beside_captions_already_there(tmp_path, monkeypatch):
+    """Live 2026-11-27: Short 1's captions, recoloured by the user, must stay; Shorts 2-3 go on a new track."""
+    srt = tmp_path / "max.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    fake = FakePremiere(tmp_path, landing=6)
+    fake.kept = [(0, 50 * TPF), (50 * TPF, 90 * TPF)]
+    out = _run(fake, monkeypatch, srt, upgrade=False)
+    assert out["off_cues"] == [] and fake.kept == [(0, 50 * TPF), (50 * TPF, 90 * TPF)]
+    assert not any(c == "menu_command" for c, _ in fake.calls)
+
+
+def test_upgrade_refuses_captions_already_there(tmp_path, monkeypatch):
+    srt = tmp_path / "max.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    fake = FakePremiere(tmp_path, landing=6)
+    fake.kept = [(0, 50 * TPF)]
+    with pytest.raises(ValueError, match="already has captions"):
+        _run(fake, monkeypatch, srt)

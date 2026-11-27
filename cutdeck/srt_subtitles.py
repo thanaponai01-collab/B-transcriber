@@ -129,11 +129,22 @@ def find_timeline(window: Image.Image, caption_tracks: int) -> tuple[int, int]:
     t = np.where(np.asarray(template) > 100, 1.0, -1.0)
     w = np.where(np.asarray(window.convert("L")) > 100, 1.0, -1.0)
     score = fftconvolve(w, t[::-1, ::-1], mode="valid") / t.size
-    ys, xs = np.nonzero(score > 0.85)
-    if not len(xs):
+    # Minimized track rows (~17 px at 125% UI scale) clip the 18 px icon: its score drops to
+    # ~0.75-0.8 while taller rows still pass 0.85 (live 2026-11-27, CFD 99 Shorts): keep the
+    # threshold that finds the most rows, or the drop lands on an audio row.
+    rows = []
+    for threshold in (0.85, 0.75):
+        ys, xs = np.nonzero(score > threshold)
+        if not len(xs):
+            continue
+        column = np.bincount(xs).argmax()
+        hits = sorted(set(int(y) for x, y in zip(xs, ys) if abs(int(x) - int(column)) <= 2))
+        found = [y for k, y in enumerate(hits) if k == 0 or y - hits[k - 1] > 3]  # one per icon
+        if len(found) > len(rows):
+            rows, at = found, int(column)
+    if not rows:
         raise RuntimeError("no timeline track headers are visible; nothing was dragged")
-    column = np.bincount(xs).argmax()
-    rows = sorted(set(int(y) for x, y in zip(xs, ys) if abs(int(x) - int(column)) <= 2))
+    column = at
     if len(rows) < caption_tracks + 3:
         raise RuntimeError("the timeline's track headers are not visible; nothing was dragged")
     return int(column) + t.shape[1] // 2 + 300, rows[caption_tracks] + t.shape[0] // 2
@@ -261,10 +272,13 @@ async def run(premiere, args: dict) -> dict:
     frames, dropped = to_frames(parse_srt(source.read_text(encoding="utf-8-sig")), tpf)
     first, last = frames[0]["start_frame"] * tpf, frames[-1]["end_frame"] * tpf
 
+    upgrade = args.get("upgrade", True)
     captions = await _caption_report(premiere, seq)
-    if any(captions):
+    # Captions already there are left alone when nothing is upgraded (the user's own, recoloured per
+    # speaker, live 2026-11-27); Upgrade would turn them into Graphics too, so it refuses them.
+    if any(captions) and upgrade:
         raise ValueError(f"'{seq}' already has captions; Select All + Upgrade would turn them into Graphics too. "
-                         "Nothing was done")
+                         "Use upgrade false to add captions beside them. Nothing was done")
     before = _video(await premiere("read_timeline", {"sequence": seq}))
     if track is not None:
         if track > info["video_track_count"]:
@@ -281,10 +295,19 @@ async def run(premiere, args: dict) -> dict:
     await asyncio.sleep(1.0)
     drop = await keys.run_focused(premiere, "timeline", seq, lambda: place_by_drag(style, len(captions)))
     await asyncio.sleep(1.0)
-    placed = [t for t in await _caption_report(premiere, seq) if t]
-    if len(placed) != 1:
-        raise RuntimeError(f"expected one caption track with the subtitles, found {len(placed)}; nothing was upgraded")
+    after = await _caption_report(premiere, seq)
+    kept = [t for t in captions if t]
+    placed = [t for t in after if t and t not in kept]
+    if len(placed) != 1 or any(t not in after for t in kept):
+        raise RuntimeError(f"expected one new caption track with the subtitles beside the {len(kept)} already there, "
+                           f"found {len(placed)} new; nothing was upgraded")
     caption_off = _off(placed[0], frames, tpf)
+    if not upgrade:
+        # Kept as captions, e.g. to recolour them per speaker on the caption track (user, 2026-11-27).
+        return {"sequence": seq, "captions": len(placed[0]), "cues": len(frames) + len(dropped),
+                "off_cues": caption_off, "dropped_cues": dropped, "srt_imported": str(written), "drag": drop,
+                "note": "Left as captions (not upgraded). The SRT imports at 30 fps, so edges can sit up to a "
+                        "frame off a 50 fps grid (off_cues)."}
     if caption_off:
         raise RuntimeError(f"captions landed off the cues {caption_off[:5]}; nothing was upgraded")
 
