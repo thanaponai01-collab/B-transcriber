@@ -1,6 +1,6 @@
 # TODO_LEDGER
 
-## Engine A recording robustness: metrics v5, baselines, first prototypes — PARTIAL — 2026-11-27
+## Engine A recording robustness: metrics v5, baselines, prototypes (none activated) — 2026-11-27
 
 Goal (owner): make Engine A's transcript robust to how the audio was recorded, then more accurate,
 with every claim gated. Stopped on request after the LUFS runs; remaining steps are listed at the end.
@@ -122,19 +122,42 @@ id=75/77. Four clips make the CIs wide; read directions, not verdicts.
    | int8_float16 / 8 | 0.164-0.171 | 1810-2073 MiB |
    | int8_float16 / 16 | 0.079-0.112 | 2058-2105 MiB |
 
-   All fit in 8 GB, so VRAM is no reason to switch. int8 at batch 8 is slower, so the batch-16 gain is
-   likely from batching, not int8 (inferred: float16 / 16 was not measured). Not activated.
+   All fit in 8 GB, so VRAM is no reason to switch. The RTF spread is not explained: four short clips
+   may never fill a batch of 8, and `ffprobe`/`find` ran during the bench. float16 / 16 was not
+   measured. Treat speed as unproven either way. Not activated.
 3. **Enhancement on noisy files only:** the normal run is identical to id=13 (paired deltas 0.0000) and
    the clean/gain rows are byte-identical to id=14, so the SNR gate skips clean audio. On the noisy
    rows DeepFilterNet makes things much worse: noise10 deletions 62 -> 152, the whole pooled CI is above
-   zero. Do not activate. (It did produce the only Latin-script hypotheses here: 18 switches, 12 matched.)
+   zero. Do not activate. The 3.11 `--no-deps` install is sane: on the 8 noisy clips the SNR estimate
+   rises (e.g. 14.5 -> 29.9 dB), active speech level stays within 15% of clean, and SDR against the
+   clean clip improves on 6 of 8 (9.6 -> 16.0 dB at best; Short1 drops 9.1 -> 8.6 / 7.3). So the audio
+   gets cleaner and the decode still gets worse (inferred: enhancement artefacts). It did produce the
+   only Latin-script hypotheses here: 18 switches, 12 matched.
 4. **Pseudo-label yield** (`label` then `yield`): 12 local files, 241 min (one HKS full episode and 11
    1RaceClub YouTube exports, Mar-Jul 2026). The gold-overlap guard skipped 4: HKS 290969, tiw aus,
-   t1 aus, YT suzuka (inferred: the channel intro shares text with the `yt t1` gold clip). Kept cue time
-   by confidence: 104.6 min at >= 0, 75.4 at 0.90, **34.9 at 0.95**. Purity could not be re-measured
-   here (none of the manifest's 442 recut slices are on this machine), so the bar uses the 0.95 purity
-   above.
-5. **LoRA not started:** 34.9 min < 45 at 0.95, and 0.90 (75.4 min) fails purity (CER 0.055 > 0.05).
+   t1 aus, YT suzuka. Checked on `yt t1 aus`: its only shared 20-char run is `startในoutsideนะครับ`,
+   a stock F1 phrase also in `yt t1 singapore first min`, not a shared intro. One generic phrase
+   drops a whole file, so the guard over-excludes (the other 3 skips not inspected). Those 12 files
+   kept only 104.6 labelled min (34.9 at 0.95), so the list was extended to 28 files with the Canada
+   live and 15 more 1RaceClub exports (`output/robustness_local_20261127/footage_all.txt`; one more,
+   Monaco `yt QUAL`, skipped). Kept cue time over all 28:
+
+   | confidence >= | 0 | 0.80 | 0.85 | 0.90 | 0.95 |
+   |---|---|---|---|---|---|
+   | kept minutes | 238.8 | 215.3 | 189.5 | 141.3 | **58.7** |
+
+   Purity could not be re-measured here (none of the manifest's 442 recut slices are on this machine),
+   so the bar uses the 0.95 purity above (CER 0.041, optimistic).
+5. **The yield bar is cleared (58.7 >= 45 min at 0.95). LoRA not started:** the purity is from the
+   recut manifest, not this footage; this footage is mostly F1 commentary, unlike the eval's talk
+   shows; and baseline id=13 has zero Latin-script hypotheses, so training on these labels fixes the
+   loanword script policy, which is the owner's call. Next, if the owner says go: measure purity on a
+   hand-checked sample of this footage, then build the augmentation in `tools/finetune_lora.py`
+   (music: `[BGM]Where Everything Began.wav`, not the eval bed).
+
+Evidence (gitignored): `output/robustness_local_20261127/` in the main checkout holds the scratch DB
+(`eval_scratch.db`, ids 13-19), `footage.jsonl`, the bench script and results, the music bed and the
+pinned versions.
 
 ## Clause split (`cue_split_algorithm: clause`) — ACTIVATED on an unresolved gate — 2026-11-11
 
