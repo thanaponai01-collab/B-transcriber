@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-R5",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -19,7 +19,7 @@
   "K34"
  ],
  "gate": "same_frame_share",
- "confirm": "Is there any same-shot jump in plain studio view (timecodes)?",
+ "confirm": null,
  "probe": [
   "**HKS-C1. "
  ],

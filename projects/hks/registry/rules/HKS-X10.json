@@ -2,7 +2,7 @@
  "id": "HKS-X10",
  "aliases": [],
  "title": "No sponsor strip, bug or clock on footage",
- "text": "No sponsor strip, no 3HD bug, no clock on footage (on studio frames the bug and clock are fine, HKS-C3). Zoom a clip that carries the sponsor strip in, centred on the video.",
+ "text": "No sponsor strip, no 3HD bug, no clock on footage. Zoom a clip that carries the sponsor strip in, centred on the video. On studio frames the bug and clock are fine, but blur the TV clock wherever it would show the cut: a clock that jumps between pieces shows the re-cut (was HKS-C3).",
  "source": {
   "file": "projects/hks/rules.md",
   "heading": "Cut rules for the long form (step 3) / From the user's red markers on YT draft v4"
@@ -17,7 +17,7 @@
   "K7c"
  ],
  "gate": null,
- "confirm": "In a rendered frame of each footage cover, does any show a sponsor strip, the 3HD bug or the clock?",
+ "confirm": "In a rendered frame of each footage cover, does any show a sponsor strip, the 3HD bug or the clock? And where would a jumping clock show a cut, and is it blurred there?",
  "probe": [
   "*No sponsor strip, no 3HD bug, no clock"
  ],

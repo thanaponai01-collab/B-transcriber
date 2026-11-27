@@ -9,8 +9,8 @@
   "file": "projects/hks/before-you-cut.md",
   "heading": "Building"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X43",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -21,7 +21,7 @@
   "K25"
  ],
  "gate": null,
- "confirm": "Which Premiere tool did each picture fix use, and is any workaround named?",
+ "confirm": null,
  "probe": [
   "8. **Use Premiere's own tool first:**"
  ],

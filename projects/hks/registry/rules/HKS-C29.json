@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-R5",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -21,7 +21,7 @@
   "K64"
  ],
  "gate": "same_frame_share",
- "confirm": "List each same-scene speech jump and its cover.",
+ "confirm": null,
  "probe": [
   "**HKS-C29. "
  ],

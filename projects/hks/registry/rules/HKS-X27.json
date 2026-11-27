@@ -7,8 +7,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-C25",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -18,7 +18,7 @@
   "K54"
  ],
  "gate": null,
- "confirm": "In a rendered square frame of each cover, is each framed on its own subject (scale, position)?",
+ "confirm": null,
  "probe": [
   "**Square reframe per shot**"
  ],

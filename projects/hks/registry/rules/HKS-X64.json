@@ -9,8 +9,8 @@
   "file": "projects/hks/rules.md",
   "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X35",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -19,7 +19,7 @@
   "K56"
  ],
  "gate": "visible_cuts_in_speech",
- "confirm": "Which moments were added, and is each a whole passage with no mid-sentence join?",
+ "confirm": null,
  "probe": [
   "2. **I added moments as 1"
  ],

@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "From the user's verdict on the 20261125 YT agent v1 (2026-11-25; HKS-C27 to C31 confirmed)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X42",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -17,7 +17,7 @@
   "K24"
  ],
  "gate": null,
- "confirm": "Is the raw layer untouched under every trimmed copy?",
+ "confirm": null,
  "probe": [
   "**HKS-C30. "
  ],

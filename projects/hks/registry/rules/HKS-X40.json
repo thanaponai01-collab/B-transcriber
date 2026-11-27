@@ -7,8 +7,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Story first, then the speech (user, on YT agent v1, 2026-11-25)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X33",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -18,7 +18,7 @@
   "K22"
  ],
  "gate": "visible_cuts_in_speech",
- "confirm": "Reading every piece end, which end unfinished, and how was each fixed?",
+ "confirm": null,
  "probe": [
   "**Never cut a thing that isn't finished.**"
  ],

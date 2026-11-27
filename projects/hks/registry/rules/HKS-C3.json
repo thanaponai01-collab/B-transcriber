@@ -7,15 +7,15 @@
   "file": "projects/hks/principles.md",
   "heading": "Confirmed by the user (2026-11-24, answers to the overnight study's questions)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X10",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
  "stage": "build",
  "corrections": [],
  "gate": null,
- "confirm": "Where would a jumping clock show a cut, and is it covered there?",
+ "confirm": null,
  "probe": [
   "**HKS-C3. "
  ],

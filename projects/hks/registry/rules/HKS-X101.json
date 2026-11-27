@@ -7,8 +7,8 @@
   "file": "projects/hks/before-you-cut.md",
   "heading": "Why I broke the rules on 20261125 (what to watch for in myself)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X43",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -18,7 +18,7 @@
   "K25"
  ],
  "gate": null,
- "confirm": "Where an API was missing, which UI route was tried?",
+ "confirm": null,
  "probe": [
   "For the blur I read \"masks have no API\""
  ],

@@ -9,8 +9,8 @@
   "file": "projects/hks/before-you-cut.md",
   "heading": "Building"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X42",
  "confirmed": false,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -19,7 +19,7 @@
   "K24"
  ],
  "gate": null,
- "confirm": "Is every J/L made on a copy with the raw clip untouched below?",
+ "confirm": null,
  "probe": [
   "7. **J/L on a copy:**"
  ],

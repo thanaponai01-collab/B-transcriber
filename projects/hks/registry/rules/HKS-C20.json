@@ -7,8 +7,8 @@
   "file": "projects/hks/principles.md",
   "heading": "Agreed improvements (agent proposed, user agreed 2026-11-24)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X11",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -17,7 +17,7 @@
   "K7d"
  ],
  "gate": null,
- "confirm": "Which shots under 0.4 s sit at an edit point, and how was each fixed?",
+ "confirm": null,
  "probe": [
   "**HKS-C20. "
  ],

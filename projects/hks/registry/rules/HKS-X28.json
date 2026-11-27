@@ -7,8 +7,8 @@
   "file": "projects/hks/rules.md",
   "heading": "Short versions and finishing (from the user's fixes, 2026-11-24)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-C26",
  "confirmed": true,
  "kind": "do_confirm",
  "kind_source": "proposed",
@@ -17,7 +17,7 @@
   "K55"
  ],
  "gate": null,
- "confirm": "Which face is held under the sting, and how long is the 1-min?",
+ "confirm": null,
  "probe": [
   "**The 1-min ends on a held face under the sting**"
  ],

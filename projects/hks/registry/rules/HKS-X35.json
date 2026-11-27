@@ -16,7 +16,7 @@
  "corrections": [
   "K56"
  ],
- "gate": null,
+ "gate": "visible_cuts_in_speech",
  "confirm": "Which moments were added to the approved cut, and is each a whole passage (source range)?",
  "probe": [
   "**Add a moment as its whole passage or not at all.**"

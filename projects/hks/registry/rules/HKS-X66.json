@@ -9,8 +9,8 @@
   "file": "projects/hks/rules.md",
   "heading": "My own mistakes, and what stops each one (agent, 2026-11-25)"
  },
- "status": "active",
- "superseded_by": null,
+ "status": "superseded",
+ "superseded_by": "HKS-X37",
  "confirmed": false,
  "kind": "code_gate",
  "kind_source": "proposed",
