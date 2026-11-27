@@ -8,7 +8,7 @@ from transcribe.eval.metrics import CI_METRICS, EvalMetrics
 _GATE_LABELS = {
     "cer_thai": "CER_thai", "wer_latin": "WER_latin",
     "boundary_error_rate": "BER", "cue_boundary_error_rate": "cue_BER",
-    "speech_coverage_miss": "coverage_miss",
+    "speech_coverage_miss": "coverage_miss", "cer_thai_spread": "CER_thai_spread",
 }
 
 
@@ -26,6 +26,7 @@ def decide(
     metrics: EvalMetrics, baseline: EvalRunRow | None,
     paired_ci: dict[str, tuple[float, float]] | None,
     tol_frac: float, abs_floor: float, *, comparison_error: str | None = None,
+    names: tuple[str, ...] = CI_METRICS,
 ) -> GateVerdict:
     """Compare paired delta intervals with the allowed regression margin.
 
@@ -33,10 +34,11 @@ def decide(
     or touching it passes. An interval straddling it is unresolved even if its
     point estimate looks acceptable. Missing matching evidence is unresolved.
     A first/explicitly established baseline still enforces cue non-overlap.
+    `names` adds `cer_thai_spread` for robustness runs.
     """
     regressions, unresolved, unresolved_names, improvements = [], [], [], []
     if baseline is not None:
-        for name in CI_METRICS:
+        for name in names:
             label = _GATE_LABELS[name]
             if paired_ci is None:
                 unresolved.append(f"{label}: {comparison_error or 'paired baseline evidence unavailable'}")

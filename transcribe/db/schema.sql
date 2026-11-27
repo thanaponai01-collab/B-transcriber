@@ -192,6 +192,15 @@ CREATE TABLE IF NOT EXISTS eval_run (
     orphan_cues             INTEGER,
     speech_coverage_miss_ci_lo REAL,
     speech_coverage_miss_ci_hi REAL,
+    -- Metrics v5. Descriptive: cer_thai split into substitution, deletion and insertion rates
+    -- (they sum to cer_thai). Robustness runs (kind = 'robustness') also gate cer_thai_spread,
+    -- the largest minus smallest corpus cer_thai across recording conditions.
+    cer_thai_sub            REAL,
+    cer_thai_del            REAL,
+    cer_thai_ins            REAL,
+    cer_thai_spread         REAL,
+    cer_thai_spread_ci_lo   REAL,
+    cer_thai_spread_ci_hi   REAL,
     ran_at              TEXT    NOT NULL DEFAULT (datetime('now')),
     passed              INTEGER NOT NULL CHECK (passed IN (0, 1))
 );

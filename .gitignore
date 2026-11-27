@@ -87,3 +87,6 @@ test_projects/*
 
 # Adobe Premiere Pro C++ SDK: licensed, kept local only
 files/
+
+# Robustness music bed (licensed track, local only; its sha256 is part of every music clip key)
+transcribe/eval/beds/
