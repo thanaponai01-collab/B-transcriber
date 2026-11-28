@@ -130,7 +130,6 @@ SLOW = 2.84       # s of slowed footage after the goodbye, under the template st
 SLOW_SOURCE = 0.68  # s of source it shows (median of the saved endings: 0.31-1.24)
 LOGO = 5.0
 STING = 3.08
-TEMPLATE = ("Plattern_YT SIZE", 23.48, 26.32)  # the stack to paste: sequence, start, end
 
 
 @dataclass(frozen=True)
