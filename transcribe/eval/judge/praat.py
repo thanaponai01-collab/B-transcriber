@@ -51,6 +51,28 @@ def read_points(text: str) -> dict[str, list[float]]:
     return out
 
 
+def from_marks(marks_dir: Path, label_dir: Path, out_dir: Path) -> int:
+    """Agent marks (marks_dir/NN_xxxx.json: onset/offset seconds) written into copies of the
+    package TextGrids, so they go through the same `collect` as marks made in Praat."""
+    import shutil
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for m in sorted(marks_dir.glob("*.json")):
+        d = json.loads(m.read_text(encoding="utf-8"))
+        tg = (label_dir / f"{m.stem}.TextGrid").read_text(encoding="utf-8")
+        for tier in ("onset", "offset"):
+            pts = sorted(float(t) for t in d.get(tier, []))
+            body = "".join(f'        points [{i}]:\n            number = {t:.4f}\n            mark = ""\n'
+                           for i, t in enumerate(pts, 1))
+            empty = "points: size = 0\n"
+            j = tg.index(empty, tg.index(f'        name = "{tier}"\n'))
+            tg = tg[:j] + f"points: size = {len(pts)}\n" + body + tg[j + len(empty):]
+        (out_dir / f"{m.stem}.TextGrid").write_text(tg, encoding="utf-8")
+        shutil.copy2(label_dir / f"{m.stem}.wav", out_dir / f"{m.stem}.wav")
+        n += 1
+    return n
+
+
 def pack(out_dir: Path, key_path: Path, seed: int = 20261128) -> list[dict]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     jobs = [(c, 0.0, False) for c in manifest["clips"]]
@@ -97,7 +119,7 @@ def normalized(tg: Path, tmp: Path) -> str:
     return raw.decode("utf-16") if raw[:2] in (bytes([255, 254]), bytes([254, 255])) else raw.decode("utf-8")
 
 
-def collect(label_dir: Path, key_path: Path, lockbox_dir: Path) -> dict:
+def collect(label_dir: Path, key_path: Path, lockbox_dir: Path, source: str = "praat-user") -> dict:
     """Read every marked TextGrid. A file Praat cannot read stops the run; a file with no marks is
     listed as not labelled yet. Lockbox files are moved out of the labels folder once read."""
     import tempfile
@@ -128,7 +150,7 @@ def collect(label_dir: Path, key_path: Path, lockbox_dir: Path) -> dict:
             continue
         dest = (lockbox_dir / "reference") if clip["split"] == "lockbox" else REFERENCE
         dest.mkdir(parents=True, exist_ok=True)
-        (dest / f"{clip['name']}.json").write_text(json.dumps({"clip": clip["name"], "span_ms": [clip["span"][0] * 1000, clip["span"][1] * 1000], **m}, indent=1), encoding="utf-8")
+        (dest / f"{clip['name']}.json").write_text(json.dumps({"clip": clip["name"], "source": source, "span_ms": [clip["span"][0] * 1000, clip["span"][1] * 1000], **m}, indent=1), encoding="utf-8")
         counts.setdefault(clip["split"], 0)
         counts[clip["split"]] += len(m["onset"]) + len(m["offset"])
     noise = []
@@ -145,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("action", choices=["pack", "collect"])
     p.add_argument("--labels", default="E:/Me/5.Claude/timing-judge-labels")
+    p.add_argument("--source", default="praat-user", help="who marked them (stored in each reference file)")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -154,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         key = pack(Path(args.labels), key_path)
         print(f"{len(key)} files in {args.labels}")
     else:
-        print(json.dumps(collect(Path(args.labels), key_path, lockbox), indent=1))
+        print(json.dumps(collect(Path(args.labels), key_path, lockbox, args.source), indent=1))
     return 0
 
 
