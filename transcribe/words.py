@@ -1,6 +1,6 @@
-"""cutdeck/words.py — Phase 1: the word timeline (HANDOFF_CUTDECK_WORDLEVEL.md Phase 1).
+"""transcribe/words.py — the word timeline (HANDOFF_CUTDECK_WORDLEVEL.md Phase 1).
 
-Word-level cutting (fillers, stutters, mid-speech blades — Phase 2) needs real
+Word-level cutting (CutDeck fillers, stutters, mid-speech blades) needs real
 word spans, but faster-whisper's raw per-word output for spaceless Thai is
 sub-word fragments (see HANDOFF_CUTDECK_WORDLEVEL.md F2 — e.g. `{'text':
 'เท', 1520-2120}`, `{'text': 'ส', 2120-2420}`). A per-character timeline
