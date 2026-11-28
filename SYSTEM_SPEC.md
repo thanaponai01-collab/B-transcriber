@@ -195,7 +195,7 @@ lives in `config.yaml`.
 
 ## 7. Evaluation — `transcribe/eval/`
 
-- **`metrics.py`** — five gated signals on well-defined units (`METRICS_VERSION = 4`):
+- **`metrics.py`** — five gated signals on well-defined units (`METRICS_VERSION = 5`):
   - **`cer_thai`** — character error rate over Thai-script content (primary Thai signal;
     tokenization-free because Thai has no word boundaries)
   - **`wer_latin`** — case-insensitive word error over Latin/digit runs

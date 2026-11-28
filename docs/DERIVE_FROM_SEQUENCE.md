@@ -1,6 +1,7 @@
 # Derive from a sequence, don't rebuild
 
-Status: design, 2026-11-24. Nothing here is built yet. Each tool row says LIVE (proven in
+Status: designed 2026-11-24. Steps 1–4 are built (each one's **Done** line), step 5's route
+order is in `projects/hks/rules.md`, and step 6 is still open. Each tool row says LIVE (proven in
 Premiere, row in `docs/PREMIERE_FACTS.md`) or unproven.
 
 ## Goal
@@ -39,11 +40,11 @@ The user's day, as stages. Each one is cut from its parent, never from the foota
 | Transcript | footage files | `hks_day` (`hks_words`) once per file; `timeline_transcript` maps it onto any sequence | LIVE |
 | Split (razored at each question, one label colour per question) | `Editing` | user; agent draft with `cut_copy` + `hks_day` markers | LIVE |
 | `backup` (insert pool) | `Editing` | user; agent pastes into it | menu Copy/Paste LIVE |
-| `1 YOUTUBE D1` | Split + `backup` | copy of Split, keep and reorder questions, paste inserts | **gaps 3 and 4** |
+| `1 YOUTUBE D1` | Split + `backup` | copy of Split, keep and reorder questions, paste inserts | `arrange`, `paste_from`, `paste_pieces` LIVE |
 | Draft vN+1 | draft vN | `duplicate_sequence` + `edit_clips` / `set_param` | LIVE |
 | FB 1080x1080 | `1 YOUTUBE D1` | `cut_copy` / `keep_words` + `settings_from` | LIVE |
 | REEL 3M / 1M | FB or YT | `keep_words`, then nest in the reel frame (`place_media`) | LIVE |
-| Compilation (โหนหลังกระแส) | finished YT sequences or their exports | copy pieces from each YT sequence; exported .mp4 only when no sequence exists | **gap 4** |
+| Compilation (โหนหลังกระแส) | finished YT sequences or their exports | copy pieces from each YT sequence; exported .mp4 only when no sequence exists | `paste_from` LIVE |
 
 Every derive reads the parent **live** at the moment it runs, not a cached plan. So the user's
 fixes on YT reach FB and the reels.
