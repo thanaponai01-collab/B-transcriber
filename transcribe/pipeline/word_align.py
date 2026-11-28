@@ -184,10 +184,12 @@ def retime_cues(cues: list, old_words: list[dict], new_words: list[dict]) -> Non
 def align_words(words: list[dict], cues: list, audio: np.ndarray, sr: int, device: str, cfg: dict) -> list[dict]:
     """The step as the pipeline runs it (config ``word_align``): load the CTC model, re-time the
     word starts, snap them to the sound unless ``snap_to_sound`` is off, snap the ends before a
-    pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place."""
+    pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place.
+    ``start_snap`` / ``end_snap`` (dicts) override the snaps' keyword defaults."""
     lev = levels_db(audio, sr)
-    snap = (lambda s, prev: snap_to_sound(s, prev, lev)) if cfg.get("snap_to_sound", True) else None
-    snap_end = (lambda s, a: snap_end_to_sound(s, a, lev)) if cfg.get("snap_ends", True) else None
+    sk, ek = dict(cfg.get("start_snap") or {}), dict(cfg.get("end_snap") or {})
+    snap = (lambda s, prev: snap_to_sound(s, prev, lev, **sk)) if cfg.get("snap_to_sound", True) else None
+    snap_end = (lambda s, a: snap_end_to_sound(s, a, lev, **ek)) if cfg.get("snap_ends", True) else None
     aligner = ThaiCTCAligner(audio, sr, cfg.get("model", DEFAULT_MODEL), device)
     aligner.load()
     try:
