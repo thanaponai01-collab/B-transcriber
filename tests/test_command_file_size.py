@@ -1,11 +1,11 @@
 """The command table only shrinks: each family that moves out of cutdeck/driver_commands.py lowers
-its limit to the new line count rounded up to the next 50, and no family module grows past 500."""
+its limit to the new line count plus about 40, and no family module grows past 500."""
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LIMITS = {"cutdeck/driver_commands.py": 1750}
+LIMITS = {"cutdeck/driver_commands.py": 1690}
 FAMILY_LIMIT = 500
 FILES = ["cutdeck/driver_commands.py"] + sorted(p.relative_to(ROOT).as_posix()
                                                for p in (ROOT / "cutdeck" / "commands").glob("*.py"))
