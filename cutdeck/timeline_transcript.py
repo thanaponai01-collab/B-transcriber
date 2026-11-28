@@ -48,6 +48,10 @@ class SourceWord:
     end_ms: int
     cue: int  # index of the engine's phrase cue that holds it
     corrected: bool = False  # text from a person's correction of the cue, not the engine
+    start_by: str | None = None  # how the edge was placed (EDGE_HOW); None: not known
+    end_by: str | None = None
+    start_err_ms: int | None = None  # the edge's error bar (edge_bar); None: not known
+    end_err_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,10 @@ class TimelineWord:
     cue: int
     clipped: str | None  # "head" / "tail" / "both": the clip edge cuts this word
     corrected: bool = False
+    start_err_ms: int | None = None  # source error bar over the clip's speed: sequence ms
+    end_err_ms: int | None = None
+    start_by: str | None = None
+    end_by: str | None = None
 
 
 def _ticks(value) -> int:
@@ -176,11 +184,13 @@ def project(clips: list[Clip], words_by_media: dict[str, list[SourceWord]],
                 continue
             head = w.start_ms < in_ms - tolerance_ms
             tail = w.end_ms > out_ms + tolerance_ms
+            bar = lambda ms: None if ms is None else round(ms / clip.speed)  # noqa: E731
             out.append(TimelineWord(
                 w.text, clip.start + round((lo - clip.in_) / clip.speed),
                 clip.start + round((hi - clip.in_) / clip.speed), clip.id,
                 clip.media, w.start_ms, w.end_ms, w.cue,
-                "both" if head and tail else "head" if head else "tail" if tail else None, w.corrected))
+                "both" if head and tail else "head" if head else "tail" if tail else None, w.corrected,
+                bar(w.start_err_ms), bar(w.end_err_ms), w.start_by, w.end_by))
     out.sort(key=lambda w: (w.start, w.end))
     return out
 
@@ -232,6 +242,10 @@ def lines(words: list[TimelineWord], ticks_per_frame: int) -> list[dict]:
                 "end_s": seconds(last.end), "start_ticks": str(first.start), "end_ticks": str(last.end),
                 "text": join_words(w.text for w in group), "clip": first.clip,
                 "src_s": [round(first.src_start_ms / 1000, 3), round(last.src_end_ms / 1000, 3)]}
+        if first.start_err_ms is not None:
+            line["start_err_ms"] = first.start_err_ms
+        if last.end_err_ms is not None:
+            line["end_err_ms"] = last.end_err_ms
         cut = [w.text for w in group if w.clipped]
         if cut:
             line["clipped_words"] = cut
@@ -311,6 +325,9 @@ def edges(clips: list[Clip], words_by_media: dict[str, list[SourceWord]], ticks_
             if word:
                 edge["word_src_s"] = [word.start_ms / 1000, word.end_ms / 1000]
                 edge["cut_ms"] = round(edge_ms - word.start_ms if side == "in" else word.end_ms - edge_ms)
+                err = word.start_err_ms if side == "in" else word.end_err_ms
+                if err is not None:
+                    edge["cut_err_ms"] = err
             if over is not None:
                 quiet = _nearest_quiet_ms(over, edge_ms)
                 edge["nearest_quiet_ms"] = quiet
@@ -471,6 +488,86 @@ def tighten(words: list[SourceWord], levels, rule: lv.Rule = lv.QUIET) -> list[S
     return out
 
 
+# ── how sure each word edge is ──────────────────────────────────────────────
+# A word edge's error bar is the 90th percentile of |edge - marked sound edge| for edges placed
+# the same way, fitted on the timing judge's tune split (`python tools/timing_options.py
+# fit` writes EDGE_BARS; heldout checks the coverage). Placement ("how"): word_align's
+# ``start_by``/``end_by`` (snap, ctc, engine), "tightened" (no word_align: engine times through
+# `tighten`), "collapsed" (squeezed to under COLLAPSED_MS: its time is not known), "interpolated"
+# (a correction's words shared out by character count: never measured, no bar).
+
+EDGE_BARS = Path(__file__).with_name("edge_bars.json")
+COLLAPSED_MS = 5
+_bars: dict | None = None
+
+
+def edge_step_db(levels, t_ms: float, kind: str) -> float | None:
+    """How sharply the sound changes across an edge: mean level of the 30 ms after it minus the
+    30 ms before (a start), or before minus after (an end), in dB on the 10 ms envelope."""
+    import numpy as np
+    g = int(t_ms // ENVELOPE_MS)
+    a, b = levels[max(0, g - 3):max(0, g)], levels[max(0, g):g + 3]
+    if not len(a) or not len(b):
+        return None
+    step = float(np.mean(b) - np.mean(a))
+    return step if kind == "start" else -step
+
+
+def edge_bar(kind: str, how: str | None, step: float | None) -> int | None:
+    """The error bar (ms) of an edge placed by ``how`` with energy step ``step`` (EDGE_BARS)."""
+    global _bars
+    if how is None or how == "interpolated":
+        return None
+    if _bars is None:
+        _bars = json.loads(EDGE_BARS.read_text(encoding="utf-8"))
+    groups = _bars["bars"]
+    if step is not None:
+        band = sum(step > c for c in _bars["step_cuts"])
+        if f"{kind}|{how}|{band}" in groups:
+            return groups[f"{kind}|{how}|{band}"]
+    return groups.get(f"{kind}|{how}", _bars["fallback"])
+
+
+def placed_words(words: list[SourceWord], raw: list[dict]) -> list[SourceWord]:
+    """Each word's ``start_by``/``end_by`` from the stored word_align pieces whose edge it
+    shares (a merged Thai word starts on its first piece and ends on its last)."""
+    starts = {int(w["start_ms"]): w.get("start_by") for w in raw}
+    ends = {int(w["end_ms"]): w.get("end_by") for w in raw}
+    return [replace(w, start_by=starts.get(w.start_ms), end_by=ends.get(w.end_ms)) for w in words]
+
+
+def with_bars(words: list[SourceWord], levels) -> list[SourceWord]:
+    out = []
+    for w in words:
+        collapsed = w.end_ms - w.start_ms < COLLAPSED_MS
+        sb = "interpolated" if w.corrected and w.start_by is None else "collapsed" if collapsed else w.start_by
+        eb = "interpolated" if w.corrected and w.end_by is None else "collapsed" if collapsed else w.end_by
+        step = (lambda t, k: edge_step_db(levels, t, k)) if levels is not None else (lambda t, k: None)  # noqa: E731
+        out.append(replace(w, start_by=sb, end_by=eb, start_err_ms=edge_bar("start", sb, step(w.start_ms, "start")),
+                           end_err_ms=edge_bar("end", eb, step(w.end_ms, "end"))))
+    return out
+
+
+HOLE_MS = 100  # PAUSE-rule sound with no word for this long is a hole (judge: tune precision 0.87)
+
+
+def word_holes(words: list[SourceWord], levels, min_ms: int = HOLE_MS) -> list[tuple[int, int]]:
+    """Source spans (ms) of sound (levels.PAUSE rule, which skips breaths and room tone) at
+    least ``min_ms`` long that no word covers: speech the transcript has no word for. A
+    collapsed word covers nothing. On the judge's marked speech: heldout 14 of 14 reported holes
+    were speech and 4 of 5 wordless speech runs were found; tune 26 of 30 and 7 of 10."""
+    import numpy as np
+    sound = lv.sound(levels, lv.PAUSE)
+    covered = np.zeros(len(sound), dtype=bool)
+    for w in words:
+        if w.end_ms - w.start_ms >= COLLAPSED_MS:
+            covered[w.start_ms // ENVELOPE_MS:-(-w.end_ms // ENVELOPE_MS)] = True
+    hole = np.concatenate(([0], (sound & ~covered).astype(np.int8), [0]))
+    edges_ = np.flatnonzero(np.diff(hole))
+    return [(int(a) * ENVELOPE_MS, int(b) * ENVELOPE_MS) for a, b in zip(edges_[::2], edges_[1::2])
+            if (b - a) * ENVELOPE_MS >= min_ms]
+
+
 def source_levels(media: str, cache: Path, sample_rate: int = 16000):
     """The 10 ms level envelope of a source file's audio, decoded once (streamed, so a long
     file never sits in memory) and kept as ``cache`` (.npy)."""
@@ -560,13 +657,19 @@ def media_sha256(path: str, db_path: Path) -> str:
     return index[key]
 
 
-def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> tuple[int, list[SourceWord], object, list, str | None] | None:
+def source_words(media: str, db_path: Path, levels_dir: Path | None = None,
+                 bars: bool = False) -> tuple[int, list[SourceWord], object, list, str | None] | None:
     """(transcript job id, word timeline, level envelope or None, untranscribed speech gaps, other-language note or
     None) of the file's finished transcript that transcribe() last returned (`store.latest_transcript_job`), or
     None when it has never been transcribed. With ``levels_dir``, word times are tightened to
-    the audio (`tighten`); the file's level envelope is cached there by sha256."""
+    the audio (`tighten`); the file's level envelope is cached there by sha256.
+
+    With ``bars``, words word_align placed keep its times (`tighten` over them loses 6 heldout
+    points within a frame, all on ends) and every word gets its placement and error bars."""
+    import json as _json
     from transcribe.words import words_for_job
     from transcribe.db import store
+    from transcribe.retime import aligned
     sha = media_sha256(media, db_path)
     store.init_db(db_path)  # a store made before job.chosen_at gets the column (idempotent)
     conn = store.connect(db_path)
@@ -577,6 +680,11 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
         cues = [{"idx": t.idx, "text": t.text, "start_ms": t.start_ms, "end_ms": t.end_ms}
                 for t in store.get_tokens(conn, job.id)]
         words = source_word_list(words_for_job(conn, job.id), cues)
+        result = store.get_engine_result(conn, job.id, "a")
+        raw = _json.loads(result.raw_words_json) if result and result.raw_words_json else []
+        ctc = bars and aligned(raw)
+        if ctc:
+            words = placed_words(words, raw)
         words = apply_corrections(words, {c.token_idx: c.corrected_text
                                           for c in store.get_corrections(conn, job.id)})
         # Speech the VAD heard that no cue covers: the engine dropped it (transcribe.service's
@@ -593,8 +701,12 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
             levels = source_levels(media, levels_dir / f"{sha}.npy")
         except (RuntimeError, OSError):
             levels = None  # undecodable audio: engine times, and no sound checks, for this file
-        if levels is not None:
+        if levels is not None and not ctc:
             words = tighten(words, levels)
+            if bars:
+                words = [replace(w, start_by="tightened", end_by="tightened") for w in words]
+    if bars:
+        words = with_bars(words, levels)
     return job.id, words, levels, gaps, note
 
 
@@ -613,8 +725,15 @@ def _other_language_note(scripts: dict[int, str], used: int) -> str | None:
             f'transcribe(media_path, language="{other_code}") and read again')
 
 
-def _source_entry(media: str, job_id: int, probe_streams: bool, note: str | None = None) -> dict:
+def _source_entry(media: str, job_id: int, probe_streams: bool, note: str | None = None,
+                  timing: str | None = None) -> dict:
     entry = {"media": media, "transcript_job_id": job_id, **({"note": note} if note else {})}
+    if timing:
+        entry["timing"] = timing
+    if timing == "tightened":
+        entry["note"] = "; ".join(filter(None, [entry.get("note"), (
+            "word times are the engine's, fitted to the sound (wide error bars): "
+            f'run python -m transcribe.retime "{media}" once (CTC only, no new ASR, keeps text and corrections)')]))
     streams = audio_stream_count(media) if probe_streams else None
     if streams and streams > 1:
         entry["audio_streams"] = streams
@@ -638,7 +757,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         config = yaml.safe_load((root / "transcribe/config.yaml").read_text(encoding="utf-8"))
         db = Path(db_path) if db_path else store.resolve_db_path(config)
         levels_dir = (out_dir / "levels") if out_dir is not None and tighten_words else None
-        lookup = lambda media: source_words(media, db, levels_dir)  # noqa: E731
+        lookup = lambda media: source_words(media, db, levels_dir, bars=True)  # noqa: E731
     tpf = int(timeline["ticks_per_frame"])
     track_id, clips, skipped = audio_clips(timeline, track)
     words_by_media, levels_by_media, gaps_by_media, jobs, missing, notes = {}, {}, {}, {}, [], {}
@@ -658,6 +777,10 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
             gaps_by_media[media] = found[3]
         if len(found) > 4 and found[4]:
             notes[media] = found[4]
+    timing = {m: ("ctc" if any(w.start_by in ("snap", "ctc") for w in ws) else
+                  "tightened" if any(w.start_by == "tightened" for w in ws) else None)
+              for m, ws in words_by_media.items()}
+    holes_by_media = {m: word_holes(words_by_media[m], lv_) for m, lv_ in levels_by_media.items()}
     words = project(clips, words_by_media)
     cuts = edges(clips, words_by_media, tpf, levels_by_media=levels_by_media)
     if levels_by_media:
@@ -671,11 +794,13 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
     all_lines = lines(words, tpf)
     result = {"sequence": timeline.get("name"), "sequence_id": timeline.get("sequence_id"),
               "track": track_id, "clips": len(clips), "skipped": skipped, "missing": missing,
-              "sources": [_source_entry(m, j, probe_streams, notes.get(m)) for m, j in jobs.items()],
+              "sources": [_source_entry(m, j, probe_streams, notes.get(m), timing.get(m)) for m, j in jobs.items()],
               "words": len(words), "cuts_in_sound": cuts}
     if query:
         result["matches"] = find(words, query, tpf)
     result["untranscribed"] = spans_on_timeline(clips, gaps_by_media, tpf)
+    # Sound no word covers, on the timeline (skipped clips are holes too: see "skipped").
+    result["holes"] = spans_on_timeline(clips, holes_by_media, tpf)
     later = later_stream_clips(timeline, track_id)
     warnings = list(notes.values())
     if later:
@@ -692,6 +817,7 @@ def build(timeline: dict, *, track: str | None = None, query: str | None = None,
         all_lines = [ln for ln in all_lines if inside(int(ln["start_ticks"]), int(ln["end_ticks"]))]
         result["untranscribed"] = [u for u in result["untranscribed"]
                                    if inside(int(u["start_ticks"]), int(u["end_ticks"]))]
+        result["holes"] = [h for h in result["holes"] if inside(int(h["start_ticks"]), int(h["end_ticks"]))]
         result["cuts_in_sound"] = [e for e in result["cuts_in_sound"]
                                    if lo <= int(e["at_ticks"]) < hi]
     result["line_count"] = len(all_lines)

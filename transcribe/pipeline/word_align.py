@@ -155,7 +155,8 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
     dropped. Elsewhere a word ends at the engine's end. A word ends by the next word's
     start and keeps at least 1 ms. With ``pad_into_neighbours`` off, a cue's padded window
     stops at the engine's end of the previous cue's last word and the start of the next cue's
-    first word, so two windows never align the same sound."""
+    first word, so two windows never align the same sound. Each word records how its edges
+    were placed: ``start_by`` "snap" / "ctc" / "engine", ``end_by`` "snap" / "engine"."""
     out = [dict(w) for w in words]
     last_letter: dict[int, float] = {}
     for c in cues:
@@ -182,10 +183,14 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
             run = []
             if i is not None:
                 lo = words[i]["end_ms"]
+    for i, w in enumerate(out):
+        w["start_by"] = "ctc" if i in last_letter else "engine"
     if snap is not None:
         aligned = [w["start_ms"] for w in out]
         for i, w in enumerate(out):
             w["start_ms"] = snap(w["start_ms"], aligned[i - 1] if i else -1)
+            if w["start_ms"] != aligned[i]:
+                w["start_by"] = "snap"
     prev = 0
     for w in out:
         w["start_ms"] = max(w["start_ms"], prev)
@@ -198,6 +203,7 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
             heard = None
         end = min(w["end_ms"] if heard is None else heard, nxt_ms)
         w["end_ms"] = max(end, w["start_ms"] + 1)
+        w["end_by"] = "engine" if heard is None else "snap"
     return out
 
 

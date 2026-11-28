@@ -282,7 +282,7 @@ def test_audio_streams_are_probed_once_per_file_version(tmp_path, monkeypatch):
         return SimpleNamespace(returncode=0, stdout="0\n1\n" if len(probes) == 1 else "0\n1\n2\n")
 
     monkeypatch.setattr(tt, "_stream_counts", {})
-    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None: (5, SOURCE, None))
+    monkeypatch.setattr(tt, "source_words", lambda m, d, levels_dir=None, bars=False: (5, SOURCE, None))
     monkeypatch.setattr(shutil, "which", lambda name: name)
     monkeypatch.setattr(subprocess, "run", fake_run)
     tl = timeline(clip("A1@0", 0, 0, 7000, str(media)))
@@ -512,3 +512,63 @@ def test_the_offline_cli_prints_the_warnings(monkeypatch, capsys):
         "lines": [], "warnings": [note]})
     assert tt.main(["--prproj", "x.prproj", "--sequence", "S"]) == 0
     assert note in capsys.readouterr().out
+
+
+def _aligned_store(tmp_path, raw):
+    import json as _json
+    from transcribe.db import store
+    media = tmp_path / "a.wav"; media.write_bytes(b"not really audio")
+    db = tmp_path / "t.db"
+    store.init_db(db)
+    conn = store.connect(db)
+    job_id = store.create_job(conn, store.create_media(conn, str(media)), "faster_whisper", "passthrough", "v1")
+    store.create_token(conn, job_id, 0, "".join(w["text"] for w in raw), raw[0]["start_ms"], raw[-1]["end_ms"], "latin", None, "a")
+    store.save_engine_result(conn, job_id, "a", "faster_whisper", "[]", True, _json.dumps(raw))
+    conn.execute("UPDATE job SET status='done', job_phase='written' WHERE id=?", (job_id,))
+    conn.commit(); conn.close()
+    return media, db
+
+
+def test_words_word_align_placed_keep_their_times_and_get_bars(tmp_path, monkeypatch):
+    import numpy as np
+    raw = [{"text": " one", "start_ms": 1000, "end_ms": 1400, "start_by": "snap", "end_by": "snap"},
+           {"text": " two", "start_ms": 1400, "end_ms": 1401, "start_by": "ctc", "end_by": "engine"}]
+    media, db = _aligned_store(tmp_path, raw)
+    levels = np.full(400, -70.0, dtype=np.float32); levels[90:100] = -50.0; levels[100:150] = -20.0  # soft from 0.9 s
+    monkeypatch.setattr(tt, "source_levels", lambda m, cache: levels)
+    monkeypatch.setattr(tt, "_bars", {"step_cuts": [5.0, 20.0], "fallback": 300,
+                                      "bars": {"start|snap|2": 25, "end|snap": 45, "start|collapsed": 999}})
+    _, words, *_ = tt.source_words(str(media), db, tmp_path / "lv", bars=True)
+    one, two = words
+    assert (one.start_ms, one.end_ms) == (1000, 1400)         # not tightened onto the sound from 0.9 s
+    assert (one.start_by, one.start_err_ms, one.end_err_ms) == ("snap", 25, 45)
+    assert (two.start_by, two.end_by, two.start_err_ms) == ("collapsed", "collapsed", 999)
+    _, old, *_ = tt.source_words(str(media), db, tmp_path / "lv")  # other callers: as before
+    assert old[0].start_ms == 900 and old[0].start_err_ms is None
+
+
+def test_a_transcript_word_align_never_placed_is_tightened_and_says_how_to_retime(tmp_path, monkeypatch):
+    import numpy as np
+    raw = [{"text": " one", "start_ms": 1000, "end_ms": 1400}]
+    media, db = _aligned_store(tmp_path, raw)
+    monkeypatch.setattr(tt, "source_levels", lambda m, cache: np.full(400, -70.0, dtype=np.float32))
+    monkeypatch.setattr(tt, "_bars", {"step_cuts": [5.0, 20.0], "fallback": 300, "bars": {"start|tightened": 205}})
+    _, words, *_ = tt.source_words(str(media), db, tmp_path / "lv", bars=True)
+    assert (words[0].start_by, words[0].start_err_ms, words[0].end_err_ms) == ("tightened", 205, 300)
+    entry = tt._source_entry(str(media), 1, False, timing="tightened")
+    assert entry["timing"] == "tightened" and "transcribe.retime" in entry["note"]
+
+
+def test_sound_no_word_covers_is_a_hole_and_reaches_the_timeline(tmp_path):
+    import numpy as np
+    levels = np.full(500, -70.0, dtype=np.float32)
+    levels[100:150] = -20.0      # 1.0-1.5 s: the word
+    levels[200:230] = -20.0      # 2.0-2.3 s: nobody wrote it
+    levels[300:305] = -20.0      # 50 ms click: too short
+    levels[400:450] = -20.0      # 4.0-4.5 s: only a collapsed word
+    words = [tt.SourceWord("a", 1000, 1500, 0), tt.SourceWord("b", 4100, 4101, 0)]
+    assert tt.word_holes(words, levels) == [(2000, 2300), (4000, 4500)]
+    media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
+    r = tt.build(timeline(clip("A1@0", 0, 0, 3000, media)),
+                 lookup=lambda m: (1, words, levels, [], None))
+    assert [(h["start_s"], h["end_s"]) for h in r["holes"]] == [(2.0, 2.3)]
