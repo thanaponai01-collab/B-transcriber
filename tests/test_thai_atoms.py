@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cutdeck.words import timed_tokens, words_from_pieces
+from transcribe.words import timed_tokens, words_from_pieces
 from transcribe.cues import CuePolicy, split_cues
 from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
@@ -376,7 +376,7 @@ def test_atoms_never_change_text_concatenation_is_verbatim():
 # ── §2.3 item 4: CutDeck word-level rules keep seeing words, not atoms ─────
 
 def test_words_from_pieces_stays_word_level_not_atom_level():
-    """`words_from_pieces` (cutdeck/words.py) must not be rerouted through
+    """`words_from_pieces` (transcribe/words.py) must not be rerouted through
     glue_atoms — CutDeck's filler-excision rules operate on real words."""
     words = words_from_pieces(_char_pieces("เราทะเลาะกันเมื่อวาน"))
     texts = [w.text for w in words]

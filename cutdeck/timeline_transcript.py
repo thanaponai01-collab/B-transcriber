@@ -565,7 +565,7 @@ def source_words(media: str, db_path: Path, levels_dir: Path | None = None) -> t
     None) of the file's finished transcript that transcribe() last returned (`store.latest_transcript_job`), or
     None when it has never been transcribed. With ``levels_dir``, word times are tightened to
     the audio (`tighten`); the file's level envelope is cached there by sha256."""
-    from cutdeck.words import words_for_job
+    from transcribe.words import words_for_job
     from transcribe.db import store
     sha = media_sha256(media, db_path)
     store.init_db(db_path)  # a store made before job.chosen_at gets the column (idempotent)

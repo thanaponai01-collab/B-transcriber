@@ -21,7 +21,7 @@ from cutdeck.contracts import (
 )
 from cutdeck.rules import build_cut_spans, filler_cuts, repeat_cuts
 from cutdeck import plan as planmod
-from cutdeck.words import Word
+from transcribe.words import Word
 
 NTSC2997 = Timebase(fps_num=30000, fps_den=1001, duration_ms=3_600_000)
 

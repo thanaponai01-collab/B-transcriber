@@ -25,7 +25,7 @@ from cutdeck.rules import (  # noqa: E402
     silence_cuts,
 )
 from cutdeck.segment import segment_tokens  # noqa: E402
-from cutdeck.words import Word  # noqa: E402
+from transcribe.words import Word  # noqa: E402
 
 
 @dataclass

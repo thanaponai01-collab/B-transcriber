@@ -14,7 +14,7 @@ import pytest
 
 from cutdeck.premiere_transcript import (
     SPEAKER_ID, build_transcript, media_duration_s, transcript_for_job, validate)
-from cutdeck.words import Word
+from transcribe.words import Word
 from transcribe.db import store
 from transcribe.pipeline import ingest
 

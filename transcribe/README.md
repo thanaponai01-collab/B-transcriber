@@ -52,7 +52,8 @@ transcribe/
     base.py            Abstract Engine
     mock.py            MockEngine for testing
     registry.py        Name → adapter (config-driven)
-    whisper_thai.py    Engine A — Thai-specialist Whisper
+    faster_whisper.py  Engine A — Thai Whisper on CTranslate2 (active)
+    whisper_thai.py    Fallback — same checkpoint via HF transformers
   pipeline/
     ingest.py          Denoise + VAD → speech chunks
     align_hyp.py       Hypothesis-to-hypothesis alignment
@@ -79,7 +80,7 @@ Engines are selected by running the eval harness over candidate models.
 Results recorded in `eval_run` table. Active choices live in `config.yaml`.
 
 Current engines (verified against 8GB VRAM sequential-load budget):
-- **Engine A** (`whisper_thai`): `biodatlab/whisper-th-medium-combined`
+- **Engine A** (`faster_whisper`): `biodatlab/whisper-th-medium-combined` as CTranslate2
 - **Engine B** (`passthrough`): no second engine
 
 To swap an engine: add an adapter in `engines/`, register it, update `config.yaml`,

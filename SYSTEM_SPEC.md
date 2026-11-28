@@ -6,7 +6,7 @@ force-aligned (when needed), stored, human-corrected, and the corrections feed a
 that biases future runs — gated by an eval harness that blocks accuracy regressions.
 A CutDeck sub-system turns the token+VAD timeline into Premiere Pro rough cuts.
 
-**Stack:** Python **3.11.9** (venv; older docs said 3.13 — wrong) · faster-whisper/CTranslate2
+**Stack:** Python **3.13.4** on PATH (no `.venv`; torch 2.6.0+cu124, CUDA on) · faster-whisper/CTranslate2
 · PyTorch/torchaudio · HuggingFace transformers · silero-vad · SQLite · FastAPI · PyThaiNLP
 
 ---

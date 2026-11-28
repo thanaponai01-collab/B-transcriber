@@ -5,8 +5,8 @@ one-line status per engine and links here. Nothing below was changed in the move
 
 ## Current engines
 
-The working venv is **Python 3.11.9** (not 3.13, despite older comments
-elsewhere) — `funasr` and `editdistance` imported fine in it. Engine-B
+Runs use PATH **Python 3.13.4** (no `.venv`; the 3.11.9 venv these notes were
+written on is gone). Engine-B
 candidates below are eval-gated, not environment-blocked.
 
 - **Engine A** (`faster_whisper`, active): `biodatlab/whisper-th-medium-combined`
