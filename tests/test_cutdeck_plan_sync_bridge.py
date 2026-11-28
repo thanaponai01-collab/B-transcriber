@@ -1,4 +1,4 @@
-"""cutdeck.helper `plan_sync`: native Sync's matching job (docs/HANDOFF_CUTDECK_NATIVE_SYNC.md
+"""cutdeck.helper `plan_sync`: native Sync's matching job (docs/archive/HANDOFF_CUTDECK_NATIVE_SYNC.md
 step 2A). The helper matches clips by audio; the panel places them. Audio is served by the
 synthetic Shoot of test_cutdeck_sync_plan.py, so no ffmpeg or real media is needed."""
 

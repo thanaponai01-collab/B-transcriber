@@ -1,5 +1,5 @@
 // transform/params.js — HOST DISCOVERY ONLY for the Transform & Align panel (Phase 1 of
-// docs/research/cutdeck-transform-panel-plan.md). Finds the Motion component on a track item
+// docs/archive/cutdeck-transform-panel-plan.md). Finds the Motion component on a track item
 // and reads its four semantic fields (position, scale, rotation, anchor) by the param indices
 // this build was PROVEN to use — Part 1a of the plan, live Premiere runs (26.5.1) matched
 // against Effect Controls' own pixel readout to sub-pixel accuracy:

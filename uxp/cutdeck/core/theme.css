@@ -1035,7 +1035,7 @@
     border-width: 0;
   }
 
-  /* --- One panel, four tabs (docs/research/cutdeck-one-panel-plan.md) -------------------
+  /* --- One panel, four tabs (docs/archive/cutdeck-one-panel-plan.md) -------------------
      Flex and margins only: Grid and aspect-ratio gave 0x0 tiles in this UXP build (see
      .fx-preset-grid), and UXP has no CSS transitions (known-issues.md). */
   .header .tabs {

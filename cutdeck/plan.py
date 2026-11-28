@@ -1,6 +1,6 @@
 """plan.py — CutPlan assembly, validation, serialization, and the Phase-1 CLI.
 
-The CutPlan is the system's contract artifact (IMPLEMENT_CUTDECK.md §B.3). Spans
+The CutPlan is the system's contract artifact (docs/archive/IMPLEMENT_CUTDECK.md §B.3). Spans
 are **contiguous and exhaustive** over the media duration — a cut is represented,
 not deleted — so the review UI and the flywheel diff both see the full picture.
 :func:`build_plan` enforces that invariant with an assertion (no gaps, no

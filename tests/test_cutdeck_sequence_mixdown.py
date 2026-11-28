@@ -1,5 +1,5 @@
 """Phase 2 acceptance — sequence-mixdown ingest path
-(docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
+(docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
 
 A synthetic multi-silence WAV run through ingest() -> build_cut_spans() must
 produce a CutPlan whose CUT spans match hand-computed expected silence regions,

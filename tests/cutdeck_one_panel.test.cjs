@@ -1,4 +1,4 @@
-/* The one CutDeck panel (docs/research/cutdeck-one-panel-plan.md): four tabs, a busy dot on the
+/* The one CutDeck panel (docs/archive/cutdeck-one-panel-plan.md): four tabs, a busy dot on the
    tab a job started on, Transform reads only on the Transform and Align tabs, the fx block
    reset, and the Align tab's frame drawing. Premiere's real layout stays a live check (plan
    step 8); this file proves the wiring and the arithmetic. */

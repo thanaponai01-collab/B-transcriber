@@ -4,7 +4,7 @@
 only speaks to it over one-shot websocket exchanges, and keeps the two things MCP
 promises its agents: the published capabilities and the job-state vocabulary, plus
 paged transcript results. Live Premiere commands go through the same helper to the
-CutDeck panel, which must be open (docs/arch-design-helper-v2.md move 3).
+CutDeck panel, which must be open (docs/archive/arch-design-helper-v2.md move 3).
 """
 from __future__ import annotations
 

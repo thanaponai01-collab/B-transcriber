@@ -1,4 +1,4 @@
-"""Acceptance tests for tools/make_finetune_set.py (HANDOFF_ONE_ENGINE.md Phase C
+"""Acceptance tests for tools/make_finetune_set.py (docs/archive/HANDOFF_ONE_ENGINE.md Phase C
 step 1 — the fine-tune data engine). Covers the contamination guard (the
 mechanical enforcement of Section 3.4's hold-out rule) and both ingest paths."""
 

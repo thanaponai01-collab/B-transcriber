@@ -1,5 +1,5 @@
 // transform/snapshot.js — One read-model per timeline selection (Slice 2 of
-// docs/research/cutdeck-panel-responsiveness-plan.md).
+// docs/archive/cutdeck-panel-responsiveness-plan.md).
 //
 // Reads the full Transform & Align snapshot for the active selection in parallel:
 // - Frame size and pixel aspect ratio read ONCE for the sequence.

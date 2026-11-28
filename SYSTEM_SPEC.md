@@ -19,7 +19,7 @@ B-transcriber/
 ├── STYLE_GUIDE.md             # transcription style decisions (gold-authoring policy)
 ├── SYSTEM_SPEC.md             # this document
 ├── TODO_LEDGER.md             # deferred work, each entry with a due-when trigger
-├── docs/                       # BUILD_PLAN.md · HANDOFF_*.md · IMPLEMENT_*.md — historical build/handoff docs
+├── docs/                       # current docs; docs/archive/ holds finished and superseded build/handoff docs
 ├── requirements.txt · setup.py
 ├── transcriber.db             # SQLite store (schema in transcribe/db/schema.sql)
 ├── models/whisper-th-medium-ct2/   # CT2-converted Engine A checkpoint (local, untracked)
@@ -282,11 +282,11 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 
 The retired ExtendScript/QE-DOM `in_place` mode (`jsx_export.py`, razor + reverse-
 chronological ripple-delete) has been removed — see `TODO_LEDGER.md` for why and
-`docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`'s superseded-banner for the corrected history.
+`docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`'s superseded-banner for the corrected history.
 `mark` (split + disable, then one atomic ripple-delete of everything still disabled via
 a UXP plugin) replaces it.
 
-Status: see `docs/HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
+Status: see `docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md` for the authoritative phase-by-phase log.
 Phases 0–2 (rough cut, FCP7 export, word-level fillers/stutters/blade contract),
 Phase 3 (`preview.py` feedback loop), and Phase 4 (segment-first rough cut,
 opt-in via `cut.rough_cut_mode: segment`) are built and unit-tested;

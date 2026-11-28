@@ -2,7 +2,7 @@
 
 CutDeck's Adjustment Layer & Quick-Effects system automatically generates, imports, and places resolution-accurate Adjustment Layers onto the Premiere timeline, capturing and replaying keyframed effect stacks across clips.
 
-Traced on 2026-09-23 against `feat/cutdeck-transform-align` based on [HANDOFF_CUTDECK_AL_FX_NEXT.md](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/docs/HANDOFF_CUTDECK_AL_FX_NEXT.md). It is true on the day it was traced.
+Traced on 2026-09-23 against `feat/cutdeck-transform-align` based on [HANDOFF_CUTDECK_AL_FX_NEXT.md](HANDOFF_CUTDECK_AL_FX_NEXT.md). It is true on the day it was traced.
 
 *Evidence labels: **proven** = ran in Premiere/tests · **traced** = read the whole chain · **suspected** = neither.*
 
@@ -98,6 +98,6 @@ flowchart TB
 | `adj -> pproTimeline` | proven | `adjustmentLayer.js` → Premiere Host | [adjustmentLayer.js:1010-1065](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/uxp/cutdeck/timeline/adjustmentLayer.js#L1010-L1065) | `track.insertClip(alItem, startTickTime)` |
 | `fx -> comp` | traced | `effects.js` → `componentAccess.js` | [effects.js:37-44](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/uxp/cutdeck/timeline/effects.js#L37-L44) | Imports `getSelectedTrackItems`, `runInTransaction`, etc. |
 | `fx -> pproChain` | proven | `effects.js` → Premiere Host | [effects.js:72-85](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/uxp/cutdeck/timeline/effects.js#L72-L85), [effects.js:240-270](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/uxp/cutdeck/timeline/effects.js#L240-L270) | Mutates `VideoComponentChain` & Keyframe offsets |
-| `main -> batchApply` | suspected | `main.js` → Batch Apply | [HANDOFF_CUTDECK_AL_FX_NEXT.md:82](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/docs/HANDOFF_CUTDECK_AL_FX_NEXT.md#L82) | Proposed: loop `applyCapturedPreset` over selection |
-| `main -> batchSwap` | suspected | `main.js` → Batch Swap | [HANDOFF_CUTDECK_AL_FX_NEXT.md:85](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/docs/HANDOFF_CUTDECK_AL_FX_NEXT.md#L85) | Proposed: scan `ADJ_*`, clear matchNames, apply new |
-| `main -> batchStrip` | suspected | `main.js` → Batch Strip | [HANDOFF_CUTDECK_AL_FX_NEXT.md:88](file:///d:/01%20-%20Antigravity/00%20Claude/B-transcriber/docs/HANDOFF_CUTDECK_AL_FX_NEXT.md#L88) | Proposed: identify `ADJ_*` in range & remove in single undo |
+| `main -> batchApply` | suspected | `main.js` → Batch Apply | [HANDOFF_CUTDECK_AL_FX_NEXT.md:82](HANDOFF_CUTDECK_AL_FX_NEXT.md#L82) | Proposed: loop `applyCapturedPreset` over selection |
+| `main -> batchSwap` | suspected | `main.js` → Batch Swap | [HANDOFF_CUTDECK_AL_FX_NEXT.md:85](HANDOFF_CUTDECK_AL_FX_NEXT.md#L85) | Proposed: scan `ADJ_*`, clear matchNames, apply new |
+| `main -> batchStrip` | suspected | `main.js` → Batch Strip | [HANDOFF_CUTDECK_AL_FX_NEXT.md:88](HANDOFF_CUTDECK_AL_FX_NEXT.md#L88) | Proposed: identify `ADJ_*` in range & remove in single undo |

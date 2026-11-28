@@ -1,7 +1,7 @@
-/* The Transform and Align tabs of the one CutDeck panel (docs/research/cutdeck-one-panel-plan.md).
+/* The Transform and Align tabs of the one CutDeck panel (docs/archive/cutdeck-one-panel-plan.md).
 
    Until 2026-10 Transform & Align was a second panel entrypoint whose container a show() hook
-   moved into its own root (Phase 0a of docs/research/cutdeck-transform-panel-plan.md). It is
+   moved into its own root (Phase 0a of docs/archive/cutdeck-transform-panel-plan.md). It is
    now two tabs inside the main panel: core/panel.js shows #view-tools and picks the view,
    core/alignPanel.js renders inside it. These tests pin that shape down, plus everything the
    seam renders and binds.
@@ -264,7 +264,7 @@ test("anchor and align controls are disabled while there is no editable clip; re
   delete global.document;
 });
 
-// --- Phase 1: renderTransform (docs/research/cutdeck-transform-panel-plan.md) --------------
+// --- Phase 1: renderTransform (docs/archive/cutdeck-transform-panel-plan.md) --------------
 
 test("renderTransform shows 'No sequence open' and blanks and disables every field when transform is null", () => {
   const { nodes } = makeStub();

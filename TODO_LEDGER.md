@@ -429,7 +429,7 @@ Review: docs/research/cutdeck-uxp-panel-review-2026-09-24.md.
 
 ## CutDeck native rough cut — Phase 0 probes P1–P5 PASSED live — 2026-09-24
 
-Handoff: docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md. Probe: "Test Native Cut"
+Handoff: docs/archive/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md. Probe: "Test Native Cut"
 (`uxp/cutdeck/roughCutProbe.js`), run twice on `tiw_Synced` (29.97 fps, 1920x1080,
 camera clip = 1 video + 4 audio, keyframed effect). Premiere 26.5 (installed build per the
 2026-09-15 entry; not re-read by the probe).
@@ -512,10 +512,10 @@ meets the documented 26.2 XML-export API minimum. See
 `uxp/cutdeck/README.md` for installation and the live acceptance checklist.
 No new native split/clone experiments are needed for this workflow.
 
-Deferred work from the IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
+Deferred work from the docs/archive/IMPLEMENT_CUTDECK.md build. Each entry has a trigger that
 makes it due. Owner: build-discipline.
 
-## CutDeck XML recut, `recut_sequence` mode (docs/HANDOFF_CUTDECK_XML_RECUT.md) — Phases 0-4 built, Phase 5 still human-only — 2026-08-29
+## CutDeck XML recut, `recut_sequence` mode (docs/archive/HANDOFF_CUTDECK_XML_RECUT.md) — Phases 0-4 built, Phase 5 still human-only — 2026-08-29
 
 **Correction to the handoff doc itself, done in the same session:** its "Why
 this handoff exists" section repeated the retired "UXP has no split/razor
@@ -863,7 +863,7 @@ a future session cannot re-derive the wrong conclusion from these notes alone:**
   reuses existing media-sha256 job caching, and never triggers the fabricated-25fps-on-
   audio-only-probe trap `sequence_mixdown.py` documents.
 - **The multicam justification** ("this is what makes multicam workable") in
-  `docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`. Contradicted by the editor's real project
+  `docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`. Contradicted by the editor's real project
   (`20260217 - ATIME DO DEE.prproj`, inspected directly): **zero** multicam clips across
   28 sequences. The real target is a single clip, or a stack of already-synced raw clips
   assembled by hand. Corrected in that document directly (issue #23); multicam and nested/
@@ -895,7 +895,7 @@ way:**
 
 ---
 
-## [RETIRED, corrected above] CutDeck in-place live-sequence cutting (HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
+## [RETIRED, corrected above] CutDeck in-place live-sequence cutting (docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md) — Phases 1/2/4 built, Phase 0/3 still human-only — 2026-08-24
 
 Built and tested (all GPU-free, no live Premiere dependency):
 
@@ -1276,7 +1276,7 @@ sites remain in any splitter, harness run recorded against the real baseline.
 spoken demonstratives นี่/นั่น/โน่น, classifiers beyond 5 entries, final
 particles), Phase 3 (cue-legality lint in the harness, reusing the same
 `BreakLexicon`), Phase 4 (POS-conditioned rules, evidence-gated). See
-`docs/HANDOFF_THAI_BREAK_ATOMS.md` for the full spec.
+`docs/archive/HANDOFF_THAI_BREAK_ATOMS.md` for the full spec.
 
 ## HANDOFF_THAI_BREAK_ATOMS Phase 2 — lexicon grown in three batches — executed 2026-08-06
 
@@ -1530,7 +1530,7 @@ checked on all three break paths (greedy space, greedy forced, DP candidates);
 regression tests in `tests/test_faster_whisper_cues.py`; rules recorded in
 STYLE_GUIDE §7. Full suite 380 green 2026-08-06.
 
-**Deferred (the durable fix):** `docs/HANDOFF_THAI_BREAK_ATOMS.md` — invert
+**Deferred (the durable fix):** `docs/archive/HANDOFF_THAI_BREAK_ATOMS.md` — invert
 veto-at-break-time into atoms-by-construction: a `glue_atoms` pass next to
 `cutdeck/words.py::timed_tokens` driven by a declarative `BreakLexicon`
 (data, config-extensible), consumed by every splitter so illegal breaks
@@ -1677,12 +1677,12 @@ Engine Contract, `align_hyp.py`, `reconcile.py`, and the self-ensemble wiring
 all stay in the codebase (sound plumbing, proven correct, cheap to keep per
 §8 housekeeping) — but no further probing is planned without new evidence.
 `self_ensemble.enabled: false` in `config.yaml`, unchanged production config.
-See `docs/HANDOFF_ONE_ENGINE.md` §6/§9 for the original spec and standing
+See `docs/archive/HANDOFF_ONE_ENGINE.md` §6/§9 for the original spec and standing
 rejections this joins.
 
 ## HANDOFF_ONE_ENGINE Phase C step 1 — fine-tune data engine built — executed 2026-08-05
 
-**`tools/make_finetune_set.py`** (HANDOFF_ONE_ENGINE.md Section 5 item 1):
+**`tools/make_finetune_set.py`** (docs/archive/HANDOFF_ONE_ENGINE.md Section 5 item 1):
 ingests (audio, hand-recut SRT) pairs — the Premiere recut-loop artifact — and
 DB `correction` rows into a JSONL training manifest of (audio slice, corrected
 text) utterances, ready to feed a future LoRA fine-tune of the Phase B winner
@@ -1868,7 +1868,7 @@ handoff. `config.yaml`'s `engines.faster_whisper` comment block updated with
 this re-probe; production config unchanged.
 
 Acceptance met: one table, all 4 candidates × all gated metrics × CI, named
-checkpoint. See HANDOFF_ONE_ENGINE.md §4/§10 for what's next (Phase C).
+checkpoint. See docs/archive/HANDOFF_ONE_ENGINE.md §4/§10 for what's next (Phase C).
 
 ## HANDOFF_ONE_ENGINE Phase A — gate CIs/RTF + contamination guard — executed 2026-08-05
 
@@ -1993,7 +1993,7 @@ done). Checked the three remaining §8 items instead of forcing action on them:
 - **Editor GAP-7 "one-tap reason UI"** — turned out to be **already built**,
   predating this handoff: `transcribe/editor/static/index.html`'s reason-bar
   (click token → tag → `saveCorrections()` → `/jobs/{id}/save`) shipped in
-  commit `9a618f8` (2026-07-15). `HANDOFF_CEILING_BREAK.md` §8 called it
+  commit `9a618f8` (2026-07-15). `docs/archive/HANDOFF_CEILING_BREAK.md` §8 called it
   open; that was stale and is now corrected in that doc.
 - **Merged-group corrected-state display — dropped, asked the user
   directly.** Grepped the full repo (schema.sql, store.py, editor) for any
@@ -2219,7 +2219,7 @@ picks A outright, and Qwen3-ASR honestly reports `confidence=None` (never
 faked), so the confidence-tiebreak branch degrades to always favoring
 whichever side has *a* confidence value, i.e. A. This is the exact same
 structural bias diagnosed for `whisper_multi` in the 2026-07-16 entry below,
-and HANDOFF_CEILING_BREAK.md §4.3 already named it as the expected next
+and docs/archive/HANDOFF_CEILING_BREAK.md §4.3 already named it as the expected next
 failure mode ("Qwen3-ASR will likely report confidence=None too, so this
 fires immediately"). The small BER gain most likely comes from solo
 Engine-B slot insertions (align_hyp assigning a B token no A candidate
@@ -2237,7 +2237,7 @@ null-confidence engines (length/completeness heuristic) — now finally
 testable since a real Engine B exists — then re-probe; (2) §3.2's grown
 gold set, still not done, to tell signal from noise on a corpus this small.
 
-## Housekeeping (§8) + policy debts (§7) pass — HANDOFF_CEILING_BREAK.md — 2026-08-05
+## Housekeeping (§8) + policy debts (§7) pass — docs/archive/HANDOFF_CEILING_BREAK.md — 2026-08-05
 
 **Context:** §6/4.1 (Qwen3-ASR harness probe) is still blocked on missing
 `transcribe/eval/goldenset/*.wav` on this machine — asked the user again,
@@ -2416,7 +2416,7 @@ first, next session** —
 3. If the audio was never preserved anywhere, re-cut the gold set from
    original source media via `tools/make_gold.py` (draft → hand-correct →
    freeze, or `from-srt` if a hand-recut Premiere SRT exists) — this is the
-   same schedule-critical authoring task HANDOFF_CEILING_BREAK.md §3.2
+   same schedule-critical authoring task docs/archive/HANDOFF_CEILING_BREAK.md §3.2
    already flags as NOT DONE for growing the gold set to 10-15 minutes, so
    it may be worth doing both at once.
 Don't assume which of the three applies — ask again if still unclear.
@@ -2586,7 +2586,7 @@ in-file comment for the permanent record of this result).
 
 Suite: **310 passed** (+11 in new `tests/test_metrics_v3.py`).
 
-**Driven by** `docs/HANDOFF_CEILING_BREAK.md` §3's "make the gate see what
+**Driven by** `docs/archive/HANDOFF_CEILING_BREAK.md` §3's "make the gate see what
 matters before any engine swap" — the 2026-07-30 entry below found cue-F1
 0.717/0.691 by hand on Short4 with no reusable code; this promotes it to a
 first-class, regression-gated metric.
@@ -3068,7 +3068,7 @@ audio. **Due when:** the gold set grows enough to make a real `learn_from_srt`
 promotion worth measuring (same gate as Engine B/LLM-reconciler, see the
 2026-07-15 entry below).
 
-## IMPLEMENT_IMPROVEMENTS.md pass — executed 2026-07-14
+## docs/archive/IMPLEMENT_IMPROVEMENTS.md pass — executed 2026-07-14
 
 Fixed with tests (`tests/test_improvements_202607.py`, suite 116 green):
 harness scratch-DB bias-index mirroring (eval was running prompt-less);
@@ -3092,7 +3092,7 @@ gated — see below); LLM reconciler (`llm_reconcile.py`, local Ollama) wired an
 gated off (`llm_enabled: false`); resumability/raw-word persistence
 (`job_phase` + `engine_result` table) done; editor reason-tag/confidence/
 corrected-state UI done. `pytest tests/` → 148 passed. Full detail and
-resolution notes: IMPLEMENT_IMPROVEMENTS.md §2 (each phase now has a
+resolution notes: docs/archive/IMPLEMENT_IMPROVEMENTS.md §2 (each phase now has a
 **Resolution** block). **Remaining due-when:** Engine B / LLM-reconciler
 activation is still gated on a gold set with real code-switch-heavy or
 noisy material — the current 4 clips have `switches=0`, so the gate can't yet
@@ -3247,7 +3247,7 @@ Phases 1–7 landed; full suite 97 green (`pytest tests/`). New acceptance tests
   exists but is unused until the LLM classifier (Phase 5) produces judgement
   labels — rules currently emit cut reasons directly on spans.
 
-### HANDOFF_CUTDECK_WORDLEVEL.md (word-level cutting + rough-cut restructure)
+### docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md (word-level cutting + rough-cut restructure)
 
 Separate phase numbering from the Part B phases above — see the handoff file
 for the full plan (Phases 0–6).

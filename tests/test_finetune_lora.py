@@ -1,4 +1,4 @@
-"""Unit tests for tools/finetune_lora.py (HANDOFF_ONE_ENGINE.md Phase C step 3).
+"""Unit tests for tools/finetune_lora.py (docs/archive/HANDOFF_ONE_ENGINE.md Phase C step 3).
 
 Covers the parts that don't require loading real model weights: the manifest
 loader, the LoRA layer-freeze regex, the data collator's padding contract, and

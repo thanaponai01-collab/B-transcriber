@@ -1,4 +1,4 @@
-/* Phase 0 of the Transform & Align plan (docs/research/cutdeck-transform-panel-plan.md).
+/* Phase 0 of the Transform & Align plan (docs/archive/cutdeck-transform-panel-plan.md).
 
    The probe's whole job is to survive a hostile, undocumented host and still report something
    useful, so that is what these tests exercise: every call it makes is allowed to be absent,

@@ -1,4 +1,4 @@
-"""CutDeck contracts — the layered-timeline data structures (IMPLEMENT_CUTDECK.md §B.2).
+"""CutDeck contracts — the layered-timeline data structures (docs/archive/IMPLEMENT_CUTDECK.md §B.2).
 
 These are the durable boundary types for the rough-cut system, mirroring the
 discipline of ``transcribe/contracts.py``:
@@ -42,14 +42,14 @@ LABEL_KEEP_WORTHY = "keep_worthy"
 SOURCE_RULE = "rule"
 SOURCE_LLM = "llm"
 
-# Blade kinds (HANDOFF_CUTDECK_WORDLEVEL.md Phase 2.3) — where a cut boundary
+# Blade kinds (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 2.3) — where a cut boundary
 # came from. VAD-blade edges are trustworthy silence-edge boundaries; word-blade
 # edges land inside continuous speech (filler/repeat cuts) and need the
 # crossfade + review-UI attention a hard VAD cut doesn't.
 BLADE_VAD = "vad"
 BLADE_WORD = "word"
 
-# Rough-cut modes (HANDOFF_CUTDECK_WORDLEVEL.md Phase 4) — ``interval`` is the
+# Rough-cut modes (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 4) — ``interval`` is the
 # original silence-interval-subtraction pass (rules.apply_min_clip_merge and
 # its dissolve/standalone bookkeeping); ``segment`` builds keeps outward from
 # segments instead, so a too-short kept island is just a short utterance, not

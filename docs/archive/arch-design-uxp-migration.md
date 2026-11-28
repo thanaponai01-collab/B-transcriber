@@ -150,7 +150,7 @@ flowchart TD
 | **!6** | **Two job managers, no shared code.** `ai_backend.py` (MCP: `output/ai`, own lockfile, states `queued/running/succeeded/failed/interrupted`) and `xml_bridge.py` (panel: `output/premiere`, states `prepared/running/ready/no_cuts/failed`) both spawn `xml_recut` and share **zero** imports. Hidden coupling with no named owner. This is what makes YC2 expensive. | `cutdeck/ai_backend.py:30-181`, `cutdeck/xml_bridge.py:159-320` | two serialization schemes, two GPU serialization locks, two recovery stories for one pipeline | **Strong** | **7** |
 | **!7** | **Dead "Full:" label in the CEP panel.** `main.js:102` reads `snap.endSeconds`, but `workflow.capture()` (`workflow.js:39-52`) never returns it — `host.jsx:134` produces `end_seconds` and the mapping drops it. `Math.abs(undefined - x) < 0.1` is always false, so the branch never fires. | `cep/cutdeck/client/main.js:102` | cosmetic; dies with `cep/` anyway | **Speculative** | none — noted, not fixed |
 
-**Contradicts a settled decision.** `docs/arch-design-cutdeck-transcriber.md` § Decisions 3 chose *"Consolidate on CEP + Port 7891 … keep `uxp/` strictly for native assembly research."* Its forces were UXP compositing bugs, cold-start socket denial and the UDT requirement. Two of those are now answered in-repo (`746cc93` fixed cold-start denial with the retry rule; UDT can package a `.ccx` that installs without it — `uxp/spike18_split_probe/README.md:812-841`). The third — Adobe retiring CEP — was not weighed. This document reverses that entry deliberately.
+**Contradicts a settled decision.** `docs/archive/arch-design-cutdeck-transcriber.md` § Decisions 3 chose *"Consolidate on CEP + Port 7891 … keep `uxp/` strictly for native assembly research."* Its forces were UXP compositing bugs, cold-start socket denial and the UDT requirement. Two of those are now answered in-repo (`746cc93` fixed cold-start denial with the retry rule; UDT can package a `.ccx` that installs without it — `uxp/spike18_split_probe/README.md:812-841`). The third — Adobe retiring CEP — was not weighed. This document reverses that entry deliberately.
 
 ---
 
@@ -169,7 +169,7 @@ flowchart TD
 
 ## Context
 
-Every move below assumes: the helper stays on `ws://127.0.0.1:7891` and stays the one server; FCP7 XML stays the transport into Premiere; the `cutdeck/` core (`xml_recut`, `xml_sync`, `xml_audio_extract`) is not restructured here; the Python 3.11.9 venv is unchanged; and **`cep/` keeps working until Move 6, which you authorize separately.** The five moves in `docs/arch-design-cutdeck-transcriber.md` (#31–#35) are orthogonal — nothing here blocks or is blocked by them. A move that contradicts this paragraph is a new decision.
+Every move below assumes: the helper stays on `ws://127.0.0.1:7891` and stays the one server; FCP7 XML stays the transport into Premiere; the `cutdeck/` core (`xml_recut`, `xml_sync`, `xml_audio_extract`) is not restructured here; the Python 3.11.9 venv is unchanged; and **`cep/` keeps working until Move 6, which you authorize separately.** The five moves in `docs/archive/arch-design-cutdeck-transcriber.md` (#31–#35) are orthogonal — nothing here blocks or is blocked by them. A move that contradicts this paragraph is a new decision.
 
 Baseline to hold: `node --test tests/cutdeck_rpc.test.cjs tests/cutdeck_workflow.test.cjs tests/cutdeck_cep_workflow.test.cjs tests/cutdeck_cep_progress_text.test.cjs tests/cutdeck_uxp_progress_text.test.cjs` → **26 pass, 0 fail** (*proven*, this session).
 
@@ -340,6 +340,6 @@ after:    nothing (independent of the UXP migration — it is Python-side only)
 
 ## What this run did not read
 
-`transcribe/` (the ASR pipeline), `cutdeck/xml_recut.py`, `xml_sync.py`, `rules.py`, `sequence_mixdown.py` internals, and the eval harness — none is reached by YC1–YC3, and `docs/arch-design-cutdeck-transcriber.md` already covers that ground. `uxp/spike18_split_probe/` was read only for the `.ccx` packaging evidence; it is a spike, out of scope here.
+`transcribe/` (the ASR pipeline), `cutdeck/xml_recut.py`, `xml_sync.py`, `rules.py`, `sequence_mixdown.py` internals, and the eval harness — none is reached by YC1–YC3, and `docs/archive/arch-design-cutdeck-transcriber.md` already covers that ground. `uxp/spike18_split_probe/` was read only for the `.ccx` packaging evidence; it is a spike, out of scope here.
 
 **The observation that would prove this wrong:** if a live acceptance run (Move 3) shows the UXP panel cannot match CEP on export or import fidelity, D1 inverts — the answer becomes "stay on CEP until Adobe forces the move", and Moves 2, 4, 5 and 6 are all wasted. That is exactly why Move 3 sits before Move 6, and why Move 1 (which pays off under either outcome) goes first.

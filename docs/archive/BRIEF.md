@@ -1,11 +1,11 @@
 # Project brief
 
 Goal: local Thai-primary transcription and review, with CutDeck Premiere workflows
-and a separate SubtitleDesk quote workspace. Sources: [SYSTEM_SPEC.md](SYSTEM_SPEC.md),
-[SubtitleDesk requirements](subtitle_desk/README.md), [agent decisions](CLAUDE.md).
+and a separate SubtitleDesk quote workspace. Sources: [SYSTEM_SPEC.md](../../SYSTEM_SPEC.md),
+[SubtitleDesk requirements](../../subtitle_desk/README.md), [agent decisions](../../CLAUDE.md).
 
 ## Decisions and constraints in force
-- Text geometry follow-up (2026-10-19): reverse engineer Premiere's native text bounds for accurate alignment and anchor placement in the existing Transform UXP panel. Evidence and remaining live checks: [native text bounds](docs/research/cutdeck-native-text-bounds-2026-10-19.md). Native geometry must be validated before replacing rendered measurement.
+- Text geometry follow-up (2026-10-19): reverse engineer Premiere's native text bounds for accurate alignment and anchor placement in the existing Transform UXP panel. Evidence and remaining live checks: [native text bounds](../research/cutdeck-native-text-bounds-2026-10-19.md). Native geometry must be validated before replacing rendered measurement.
 - Engine A is faster_whisper; Engine B is passthrough; LLM reconciliation is off
   (transcribe/config.yaml). The older two-active-engine narrative is historical intent.
 - Select-only reconciliation, sequential GPU model residency, engine contract boundary
@@ -32,7 +32,7 @@ are refused. Requirement: subtitle_desk/README.md; checks: tests/test_subtitle_d
 - Real GPU accuracy, Premiere insertion and browser interactions need separate proof.
 - SYSTEM_SPEC.md was synchronized (2026-10-20, issue #76) with active engine statuses, service.py, coverage.py, review.py, and METRICS_VERSION=4.
 
-Read [features](FEATURES.md) for area paths and [work](BUILD.md) for Next.
+Read [features](../../FEATURES.md) for area paths and [work](BUILD.md) for Next.
 
 ## Native cutter prototype — 2026-10-16
 - Owner request: use Premiere native cutting internally in the existing Rough Cut system; no manual cutting toolbar. Build a disposable native bridge spike first; do not integrate until real-host behavior is verified.

@@ -1,4 +1,4 @@
-"""CutDeck — the rough-cut editing system (IMPLEMENT_CUTDECK.md Part B).
+"""CutDeck — the rough-cut editing system (docs/archive/IMPLEMENT_CUTDECK.md Part B).
 
 A sibling package to ``transcribe`` that consumes the same SQLite store and
 inherits the same invariants: select-only decisions, eval-gated flywheel,

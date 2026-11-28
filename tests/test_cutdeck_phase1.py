@@ -1,6 +1,6 @@
 """CutDeck Phase 1 acceptance tests — segment.py + rules.py + plan.py.
 
-Covers IMPLEMENT_CUTDECK.md §B.3 acceptance:
+Covers docs/archive/IMPLEMENT_CUTDECK.md §B.3 acceptance:
   * segmentation by gap and by VAD silence;
   * silence cuts shrunk by padding, padding never overlapping a kept clip;
   * short silence left as pace;
@@ -240,7 +240,7 @@ def test_min_clip_does_not_fire_when_disabled():
 # ── rules.py: filler removal ──────────────────────────────────────────────────
 #
 # filler_cuts operates on the Phase 1 word timeline (cutdeck/words.py), not
-# phrase-cue tokens — see HANDOFF_CUTDECK_WORDLEVEL.md F1: tokens have been
+# phrase-cue tokens — see docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md F1: tokens have been
 # multi-word phrase cues since granularity 5.4 and never `==` a filler. Calling
 # build_cut_spans with only `tokens` (the pre-Phase-2 call shape, no `words=`)
 # is the "old path" and must produce zero filler cuts plus a warning, not a

@@ -68,8 +68,8 @@ Installed Premiere: **27.0.0** since 2026-11-11; every live run below was on **2
 | `Project.setActiveSequence` / `openSequence` | WORKS | Opens the result for the editor (done last). | `nativeCut.js`, `nativeSync.js` |
 | `Sequence.getTimebase()` | WORKS | Returns **ticks per frame** as a string (e.g. `"8475667200"` at 29.97). | HANDOFF_CUTDECK_NATIVE_ROUGH_CUT 2.2 |
 | `Sequence.getInPoint/getOutPoint/getEndTime`, `get{Video,Audio}TrackCount`, `get{Video,Audio}Track` | WORKS | Plain reads. | `workflow.capture`, `nativeSync.js` |
-| `Project.path` | WORKS; CATCH | Live read returns the saved `.prproj` path with Windows extended prefix `\\?\`; SubtitleDesk normalizes it before saving SRTs in sibling `CutDeck/SubtitleDesk`. | 2026-10-06, `read_sequence`, live export in `BUILD.md` |
-| SubtitleDesk `read_audio_range` via existing `workflow.capture/readAudioTracks` | WORKS | Live Edditing range 39:08.613–43:56.467 captured source clip timing without a transaction; local extraction and helper ASR returned 114 Thai cues with absolute timeline timestamps. | 2026-10-06, helper job `965a35b46ad342f69367cec7468508cc`, `BUILD.md` |
+| `Project.path` | WORKS; CATCH | Live read returns the saved `.prproj` path with Windows extended prefix `\\?\`; SubtitleDesk normalizes it before saving SRTs in sibling `CutDeck/SubtitleDesk`. | 2026-10-06, `read_sequence`, live export in `docs/archive/BUILD.md` |
+| SubtitleDesk `read_audio_range` via existing `workflow.capture/readAudioTracks` | WORKS | Live Edditing range 39:08.613–43:56.467 captured source clip timing without a transaction; local extraction and helper ASR returned 114 Thai cues with absolute timeline timestamps. | 2026-10-06, helper job `965a35b46ad342f69367cec7468508cc`, `docs/archive/BUILD.md` |
 | `Sequence.getFrameSize()` = `SequenceSettings.getVideoFrameRect()` | WORKS | Both give the same size. `RectF` is **width/height only, no x/y**. | transform-panel-plan Part 1/1a |
 | `SequenceSettings.getVideoPixelAspectRatio()` | WORKS | Returns a **string** (`"1:1"`), so parse it. | transform-panel-plan Part 1a |
 | `SequenceSettings` width/height fields | ABSENT | No plain `videoFrameWidth/Height`; use `getVideoFrameRect()`. | `transform/params.js`, `alLibrary.js` |
@@ -256,7 +256,7 @@ Installed Premiere: **27.0.0** since 2026-11-11; every live run below was on **2
 | `hide()` / `destroy()` hooks | BROKEN | Adobe documents them as not working yet in Premiere; don't rely on them. | transform-panel-plan Part 2; panel review |
 | Helper v2 driver round trip | WORKS | The reloaded panel registered as the helper's Premiere driver ~30 s after Premiere started (it restarted the old `cutdeck-xml-4` helper itself). `premiere_cli read_sequence` returned the live sequence (6 A / 3 V tracks, 8467200000 ticks/frame); a refusal from the panel (no In/Out) came back to the terminal as the error. | live 2026-09-24 |
 | WebSocket to the helper, cold start | CATCH | An installed plugin can get "Permission denied to the url ws://…" with a correct manifest until UDT has loaded a dev build that session (timing). `core/rpc.js` retries connecting 5× over ~3 s; never resends a sent request. | Ledger 08-26 + 09-16 |
-| WebSocket message size | — | The helper's limit, not UXP's: was `max_size` 65536 (~200 clips with long paths ≈ 54 KB); 16 MiB since helper v2 (`cutdeck-xml-5`), for Rough Cut's JSON read of the audio tracks. | HANDOFF_CUTDECK_NATIVE_SYNC; docs/arch-design-helper-v2.md |
+| WebSocket message size | — | The helper's limit, not UXP's: was `max_size` 65536 (~200 clips with long paths ≈ 54 KB); 16 MiB since helper v2 (`cutdeck-xml-5`), for Rough Cut's JSON read of the audio tracks. | HANDOFF_CUTDECK_NATIVE_SYNC; docs/archive/arch-design-helper-v2.md |
 | `navigator.clipboard.writeText` / `setContent({"text/plain": …})` | WORKS (docs) | The documented clipboard. `uxp.clipboard.copyText` is **not** an API (see `tools/adobe/api-allowlist.json`). Needs `clipboard` permission. | `reference/adobe/docs/resources/recipes/clipboard/` |
 | `require("uxp").storage.localFileSystem` | WORKS | Missing from the UXP typings, but documented and used. | `helperStart.js`, docs |
 | Plugin temp folder (UDT load) | — | `%TEMP%\Adobe\UXP\PluginsStorage\PPRO\26\Developer\com.cutdeck.xml\PluginData` | HANDOFF_CUTDECK_AL_FX_NEXT |
@@ -474,7 +474,7 @@ logged command run. "ok" means the call returned; only a read-back proves the ed
 |---|---|---|---|---|---|
 | `read_sequence` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-233204-close-gaps` |
 | `read_audio_range` | uxp | LIVE | 26.5 | 2026-10-06 | this file, *Sequences*: SubtitleDesk `read_audio_range`, helper job `965a35b4` |
-| `apply_cuts` | uxp | LIVE | 26.5 | 2026-09-24 | `docs/arch-design-helper-v2.md` step 6: job `e8b96443`, 420 cuts, read-back clean |
+| `apply_cuts` | uxp | LIVE | 26.5 | 2026-09-24 | `docs/archive/arch-design-helper-v2.md` step 6: job `e8b96443`, 420 cuts, read-back clean |
 | `add_markers` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |
 | `run_probe` | uxp | LIVE | 27.0.0 | 2026-11-21 | `output/verify-cutdeck/runs/20261121-230511-mogrttext` |
 | `inspect_selection` | uxp | LIVE | 27.0.0 | 2026-11-22 | `output/verify-cutdeck/runs/20261122-000256-maintain-timeline` |

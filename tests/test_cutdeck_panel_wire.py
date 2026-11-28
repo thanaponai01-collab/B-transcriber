@@ -1,4 +1,4 @@
-"""End to end over the wire (docs/arch-design-helper-v2.md moves 1 and 3): the panel's real
+"""End to end over the wire (docs/archive/arch-design-helper-v2.md moves 1 and 3): the panel's real
 core/rpc.js and features/driver.js, run by Node, against the real helper socket. Proves both
 sides agree on ids, pushed job events and Premiere driver calls; Premiere itself is the fake."""
 import asyncio

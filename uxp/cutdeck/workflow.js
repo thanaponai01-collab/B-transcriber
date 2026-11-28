@@ -1,6 +1,6 @@
 /* Host operations kept separate from UI so identity and import behavior can be tested.
 
-   Rough Cut input (docs/arch-design-helper-v2.md move 6): the audio tracks are read natively and
+   Rough Cut input (docs/archive/arch-design-helper-v2.md move 6): the audio tracks are read natively and
    sent to the helper as sequence.json; nothing is exported.
    Adobe APIs read here: Sequence.getAudioTrackCount/getAudioTrack, AudioTrack.isMuted,
    AudioClipTrackItem.getStartTime/getInPoint/getOutPoint/isDisabled/getSpeed/getProjectItem,

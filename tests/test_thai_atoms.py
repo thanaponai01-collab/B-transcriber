@@ -1,4 +1,4 @@
-"""transcribe/thai/atoms.py — HANDOFF_THAI_BREAK_ATOMS.md Phase 1.
+"""transcribe/thai/atoms.py — docs/archive/HANDOFF_THAI_BREAK_ATOMS.md Phase 1.
 
 Direct unit tests for the glue-atoms inversion (break-legality knowledge as
 data, not veto-at-break-time checks), plus the property test that makes the
@@ -333,7 +333,7 @@ def test_unsplittable_terms_and_digit_glue_combine_when_both_active():
     rule (§7's numeral+unit protection) that also fires on '19' here — both
     rules just OR into the same glue_prev array, so the resulting atom can be
     bigger than the exception term alone. Over-gluing is the accepted safe
-    direction (HANDOFF_THAI_BREAK_ATOMS.md §2.4)."""
+    direction (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §2.4)."""
     lexicon = default_lexicon({"normalization": {"exception_lexicon": ["COVID-19"]}})
     atoms = _atoms_for("เขาเป็นCOVID-19ครับ", lexicon=lexicon)
     texts = [a[0] for a in atoms]

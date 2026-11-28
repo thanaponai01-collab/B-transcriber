@@ -1,6 +1,6 @@
 # Gold-set source videos (contamination guard)
 
-**Why this file exists** (HANDOFF_ONE_ENGINE.md §3.4): the gold set is a
+**Why this file exists** (docs/archive/HANDOFF_ONE_ENGINE.md §3.4): the gold set is a
 **test** set. The moment fine-tuning starts (Phase C), no clip in this
 directory — nor any clip from the **same source video** — may enter training
 data, even if the training clip covers a different time range. Silent

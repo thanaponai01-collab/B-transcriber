@@ -2,7 +2,7 @@
    off-host — which tracks each clip gets, video snapped to frames while audio keeps exact ticks,
    the refusal on *_Synced, the user's sequence left untouched, and a read-back that names a clip
    that landed short, late, or not at all. What real Premiere does with these calls is for the
-   live run (docs/HANDOFF_CUTDECK_NATIVE_SYNC.md, "Unknowns"). */
+   live run (docs/archive/HANDOFF_CUTDECK_NATIVE_SYNC.md, "Unknowns"). */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 

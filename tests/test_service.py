@@ -1,4 +1,4 @@
-"""Item 2 of docs/arch-design-transcription-engine.md: every tool transcribes through
+"""Item 2 of docs/archive/arch-design-transcription-engine.md: every tool transcribes through
 transcribe.service against one shared store."""
 
 import tempfile

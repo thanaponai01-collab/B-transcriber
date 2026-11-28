@@ -21,7 +21,7 @@
    Nothing is ever rounded: frames are a display and verification unit, ticks are
    the unit of record. Section 6 of the handoff mandates the same rule.
 
-   See docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md section 6. */
+   See docs/archive/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md section 6. */
 
 const { TICKS_PER_SECOND, toTicks } = require("./host/ticks.js");
 const ticks = toTicks;

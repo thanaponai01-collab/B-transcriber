@@ -1,6 +1,6 @@
 // Adjustment Layer bin and asset management — Project panel operations, no DOM.
 // Owned by uxp/cutdeck/timeline/adjustmentLayer.js and probes/capabilityProbe.js.
-// See docs/arch-design-cutdeck-panel.md Move 9 (issue #56).
+// See docs/archive/arch-design-cutdeck-panel.md Move 9 (issue #56).
 
 const {
   CUTDECK_BIN_NAME,

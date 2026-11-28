@@ -1,4 +1,4 @@
-"""Qwen3-ASR adapter contract tests (HANDOFF_CEILING_BREAK.md §6/4.1).
+"""Qwen3-ASR adapter contract tests (docs/archive/HANDOFF_CEILING_BREAK.md §6/4.1).
 
 Run: python -m pytest tests/test_qwen3_asr.py -v
 

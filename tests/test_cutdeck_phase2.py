@@ -1,4 +1,4 @@
-"""CutDeck Phase 2 acceptance tests (HANDOFF_CUTDECK_WORDLEVEL.md Phase 2).
+"""CutDeck Phase 2 acceptance tests (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 2).
 
 Covers:
   2.1 filler_cuts revived on the Word timeline (not phrase-cue tokens).

@@ -1,4 +1,4 @@
-"""segment.py — utterance segmentation (IMPLEMENT_CUTDECK.md §B.3, Layer 2).
+"""segment.py — utterance segmentation (docs/archive/IMPLEMENT_CUTDECK.md §B.3, Layer 2).
 
 Group the token stream into segments. Thai has no sentence punctuation to lean
 on, so *gaps are the honest signal* — we deliberately do not import a sentence

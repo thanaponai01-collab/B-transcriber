@@ -1,4 +1,4 @@
-"""Phase C step 3 — LoRA fine-tune of the Phase B winner (HANDOFF_ONE_ENGINE.md
+"""Phase C step 3 — LoRA fine-tune of the Phase B winner (docs/archive/HANDOFF_ONE_ENGINE.md
 Section 5 item 3): HF `transformers` + `peft` LoRA on
 `biodatlab/whisper-th-medium-combined`, the named fine-tuning base checkpoint
 (TODO_LEDGER.md, Phase B). Recipe per the handoff's arXiv 2604.06507 lineage:
@@ -145,7 +145,7 @@ def check_data_sufficiency(manifest: Path, dry_run: bool) -> None:
     if stats["total_minutes"] < MIN_COLLECT_MINUTES:
         raise ValueError(
             f"manifest has only {stats['total_minutes']} min, below the "
-            f"{MIN_COLLECT_MINUTES} min floor (HANDOFF_ONE_ENGINE.md Section 5) - "
+            f"{MIN_COLLECT_MINUTES} min floor (docs/archive/HANDOFF_ONE_ENGINE.md Section 5) - "
             "pass --dry-run for a wiring-proof run only, or collect more data first"
         )
 
@@ -198,7 +198,7 @@ def train(
     model.save_pretrained(str(output_dir))
     if dry_run:
         (output_dir / "DRY_RUN.md").write_text(
-            "Wiring-proof dry run (HANDOFF_ONE_ENGINE.md Phase C step 3), trained on "
+            "Wiring-proof dry run (docs/archive/HANDOFF_ONE_ENGINE.md Phase C step 3), trained on "
             f"{len(entries)} utterances - far below the data floor. Do NOT gate this "
             "checkpoint or treat it as a real Phase C candidate; re-run without --dry-run "
             "once tools/make_finetune_set.py stats clears MIN_COLLECT_MINUTES.",

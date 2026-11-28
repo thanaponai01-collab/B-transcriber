@@ -175,7 +175,7 @@ Each step ends green on `node --test tests/*.cjs` before the next starts.
 ### 7. Docs and checks
 
 - `FEATURES.md` / `features/cutdeck.md`: one panel, four tabs; remove "CutDeck Transform panel".
-- `docs/arch-design-panel-ui.md` and the `core/alignPanel.js` header: the second-panel rationale
+- `docs/archive/arch-design-panel-ui.md` and the `core/alignPanel.js` header: the second-panel rationale
   becomes history; state that both seams now render into one panel.
 - `VERIFY.md`: add the new tests with a fail-proof note each.
 - `work/cutdeck-history.md`: one entry.

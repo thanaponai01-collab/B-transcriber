@@ -1,4 +1,4 @@
-"""Phase C step 1 — fine-tune data engine (HANDOFF_ONE_ENGINE.md Section 5 item 1).
+"""Phase C step 1 — fine-tune data engine (docs/archive/HANDOFF_ONE_ENGINE.md Section 5 item 1).
 
 Ingests (audio, hand-recut SRT) pairs — the Premiere recut-loop artifact — and
 DB `correction` rows into a training-ready manifest of (audio slice, corrected
@@ -6,7 +6,7 @@ text) utterances for a future LoRA fine-tune of the Phase B winner
 (`biodatlab/whisper-th-medium-combined`).
 
 Mechanically enforces the gold-set contamination guard from
-HANDOFF_ONE_ENGINE.md Section 3.4: the gold set is a TEST set, so no clip in
+docs/archive/HANDOFF_ONE_ENGINE.md Section 3.4: the gold set is a TEST set, so no clip in
 `transcribe/eval/goldenset/` — nor anything sharing its source video — may
 enter training data. Every ingest call takes an explicit `--source` name and
 refuses (raises `ContaminationError`, writes nothing) if that name matches a
@@ -22,7 +22,7 @@ row in `transcribe/eval/goldenset/SOURCES.md`.
     python -m tools.make_finetune_set stats
 
 This tool only builds the manifest + audio slices; it does not train anything
-(HANDOFF_ONE_ENGINE.md Section 5 items 3-5 are separate, later work, gated on
+(docs/archive/HANDOFF_ONE_ENGINE.md Section 5 items 3-5 are separate, later work, gated on
 this step producing enough data to be worth training on).
 """
 
@@ -43,7 +43,7 @@ _GOLD_SOURCES = _ROOT / "transcribe" / "eval" / "goldenset" / "SOURCES.md"
 _DATA_DIR = _ROOT / "transcribe" / "finetune" / "data"
 _MANIFEST = _ROOT / "transcribe" / "finetune" / "manifest.jsonl"
 
-# Data thresholds from HANDOFF_ONE_ENGINE.md Section 5 (arXiv 2604.06507 lineage):
+# Data thresholds from docs/archive/HANDOFF_ONE_ENGINE.md Section 5 (arXiv 2604.06507 lineage):
 # gains become reliably large past ~800 utterances, roughly 60-90 min at
 # phrase-cue granularity. Below MIN_COLLECT_MINUTES, the handoff's instruction
 # is "collect, don't train yet".
@@ -120,7 +120,7 @@ def require_clean(declared_source: str, gold_rows: list[dict] | None = None) -> 
         raise ContaminationError(
             f"declared source {declared_source!r} matches gold-set row "
             f"{match['gold_clip']!r} (source video: {match['source_video']!r}) - "
-            "refusing to add this to the fine-tune training set (HANDOFF_ONE_ENGINE.md Section 3.4)"
+            "refusing to add this to the fine-tune training set (docs/archive/HANDOFF_ONE_ENGINE.md Section 3.4)"
         )
 
 

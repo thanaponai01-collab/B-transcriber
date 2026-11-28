@@ -1,11 +1,11 @@
 /* The Transform and Align tabs' UI seam — the counterpart to core/panel.js, under the same
    two-export contract (render(state) / bind(intents)) and the same rule: this is the only
-   place the transform controls are allowed to touch the DOM. See docs/arch-design-panel-ui.md
+   place the transform controls are allowed to touch the DOM. See docs/archive/arch-design-panel-ui.md
    and tests/panel_ui_contract.test.cjs, whose seam allowlist names both files.
 
    Until 2026-10 this was a second panel entrypoint whose container was moved into its own
    panel root by a show() hook. It is now two tabs of the one CutDeck panel
-   (docs/research/cutdeck-one-panel-plan.md): core/panel.js shows and hides #view-tools and its
+   (docs/archive/cutdeck-one-panel-plan.md): core/panel.js shows and hides #view-tools and its
    two views, and this seam renders inside that container only. */
 (function (global) {
   function $(id) {

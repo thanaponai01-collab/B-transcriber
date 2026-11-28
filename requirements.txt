@@ -28,7 +28,7 @@ funasr>=1.1.0
 # only a marginal BER edge. Don't re-try without new evidence; see TODO_LEDGER.
 # nemo_toolkit[asr]>=2.7.0
 # Engine B candidate (Qwen3-ASR) — LLM-decoder ASR, the code-switch-wall
-# priority candidate per HANDOFF_CEILING_BREAK.md §6/4.1. Not yet probed;
+# priority candidate per docs/archive/HANDOFF_CEILING_BREAK.md §6/4.1. Not yet probed;
 # kept commented out until an eval run judges it. `qwen-asr` is Qwen's own
 # inference wrapper, not the transformers pipeline other adapters share.
 # qwen-asr>=0.1.0
@@ -62,7 +62,7 @@ uharfbuzz>=0.40
 jiwer>=3.0.0
 rapidfuzz>=3.0.0   # C Levenshtein for eval metrics (~100× the pure-Python fallback)
 
-# Fine-tune (HANDOFF_ONE_ENGINE.md Phase C): LoRA adapters on the Phase B
+# Fine-tune (docs/archive/HANDOFF_ONE_ENGINE.md Phase C): LoRA adapters on the Phase B
 # winner (tools/finetune_lora.py) + the HF dataset wrapper the data engine
 # (tools/make_finetune_set.py) hands training examples through. Adapter
 # training only - the merge/CT2-convert step at the end of Phase C reuses

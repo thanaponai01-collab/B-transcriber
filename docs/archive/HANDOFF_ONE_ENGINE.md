@@ -3,7 +3,7 @@
 **For:** Claude Code, working in the B-transcriber repo
 **Hardware floor:** RTX 3070, 8 GB VRAM (design/gate target — actual sessions run on multiple machines, incl. an RTX 4070 Ti 12 GB). Working venv **Python 3.11.9**. Windows host.
 **Prime directive:** unchanged — accuracy first, nothing activates without the eval harness proving it, the reconciler selects and never generates.
-**Discipline:** read `CLAUDE.md`, `SYSTEM_SPEC.md`, `TODO_LEDGER.md`, `docs/HANDOFF_CEILING_BREAK.md` before touching anything. Every probe runs `--experiment`. Every phase ends suite-green with new acceptance tests. Update `TODO_LEDGER.md` as phases complete.
+**Discipline:** read `CLAUDE.md`, `SYSTEM_SPEC.md`, `TODO_LEDGER.md`, `docs/archive/HANDOFF_CEILING_BREAK.md` before touching anything. Every probe runs `--experiment`. Every phase ends suite-green with new acceptance tests. Update `TODO_LEDGER.md` as phases complete.
 **Date of audit:** 2026-08-05. External evidence current as of the same date.
 
 ---

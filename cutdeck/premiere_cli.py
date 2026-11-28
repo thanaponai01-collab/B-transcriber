@@ -9,7 +9,7 @@
 
 Every command in `cutdeck/driver_commands.py` runs here. Prints the result as JSON. The helper
 (`python -m cutdeck.helper`) must be running; panel commands also need the CutDeck panel open. Python scripts can call `cutdeck.ai_backend.Backend().premiere`
-directly instead (docs/arch-design-helper-v2.md move 3).
+directly instead (docs/archive/arch-design-helper-v2.md move 3).
 """
 from __future__ import annotations
 

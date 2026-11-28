@@ -1,4 +1,4 @@
-/* Native rough cut Route A (docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md 3.2): apply the helper's
+/* Native rough cut Route A (docs/archive/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md 3.2): apply the helper's
    cut list to a COPY of the editor's sequence with live Premiere edits, then prove it by
    read-back. The source sequence is never edited.
 

@@ -1,4 +1,4 @@
-"""CutDeck Phase 1 acceptance tests — cutdeck/words.py (HANDOFF_CUTDECK_WORDLEVEL.md).
+"""CutDeck Phase 1 acceptance tests — cutdeck/words.py (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md).
 
 Covers the word-timeline enabling layer:
   * sub-word fragments regroup into real words (job-29 fixture, F2);

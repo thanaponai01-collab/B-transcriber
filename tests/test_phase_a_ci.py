@@ -1,5 +1,5 @@
 """Phase A acceptance — bootstrap CIs, RTF, and the CI-gated "unresolved" verdict
-(HANDOFF_ONE_ENGINE.md §3, "make the gate trustworthy at 1% margins").
+(docs/archive/HANDOFF_ONE_ENGINE.md §3, "make the gate trustworthy at 1% margins").
 
 Why this exists: every regression verdict before this phase compared two
 single point estimates, with no way to tell a real 1% move from run-to-run

@@ -1,5 +1,5 @@
 """Phase 3 acceptance — cutdeck.rough_cut CLI + duration guard
-(docs/HANDOFF_CUTDECK_XML_RECUT.md).
+(docs/archive/HANDOFF_CUTDECK_XML_RECUT.md).
 """
 
 import json

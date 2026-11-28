@@ -1,4 +1,4 @@
-"""Rough Cut input as JSON (docs/arch-design-helper-v2.md move 6): the panel's native read of the
+"""Rough Cut input as JSON (docs/archive/arch-design-helper-v2.md move 6): the panel's native read of the
 audio tracks must reach the analysis exactly as a real Premiere XML export did."""
 import asyncio
 import json

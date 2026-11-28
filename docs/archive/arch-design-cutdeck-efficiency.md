@@ -2,7 +2,7 @@
 
 Date: 2026-10-13. Scope: the panel (`uxp/cutdeck/`), the helper (`cutdeck/xml_bridge.py`) and
 the processes it starts (`cutdeck.xml_recut`, `cutdeck.ai_worker`), Sync (`cutdeck/sync_plan.py`),
-the mixdown (`cutdeck/xml_audio_extract.py`). Follows `docs/arch-design-helper-v3.md`; its four
+the mixdown (`cutdeck/xml_audio_extract.py`). Follows `docs/archive/arch-design-helper-v3.md`; its four
 moves have landed (`driver_commands.py`, transcript reuse by mixdown sha256, `sequence_model.py`,
 `sequence.json` jobs), and its decisions stand. This doc changes no code.
 

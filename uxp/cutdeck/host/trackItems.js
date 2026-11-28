@@ -1,5 +1,5 @@
 // Single owner for track items lookup and timeline selection.
-// Part of Move 5 (issue #53, docs/arch-design-cutdeck-panel.md).
+// Part of Move 5 (issue #53, docs/archive/arch-design-cutdeck-panel.md).
 //
 // Host-agnostic: takes ppro as an optional parameter instead of requiring
 // "premierepro" at module scope, allowing pure off-host testing under Node.js.

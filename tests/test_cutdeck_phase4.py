@@ -1,4 +1,4 @@
-"""Phase 4 acceptance — segment-first rough cut (HANDOFF_CUTDECK_WORDLEVEL.md).
+"""Phase 4 acceptance — segment-first rough cut (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md).
 
 ``cut.rough_cut_mode: segment`` builds keeps outward from segments instead of
 subtracting VAD silence intervals out of the whole timeline: a kept segment is

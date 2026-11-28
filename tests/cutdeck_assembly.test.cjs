@@ -1,4 +1,4 @@
-/* Phase 1 of docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md: exact range and placement
+/* Phase 1 of docs/archive/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md: exact range and placement
    arithmetic. Pure — nothing here touches Premiere or mutates a timeline. */
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -1,4 +1,4 @@
-/* The panel as the Premiere driver (docs/arch-design-helper-v2.md move 3): the fixed commands
+/* The panel as the Premiere driver (docs/archive/arch-design-helper-v2.md move 3): the fixed commands
    the helper forwards from MCP agents and scripts, run against the shared Premiere fake. */
 const test = require("node:test");
 const assert = require("node:assert/strict");

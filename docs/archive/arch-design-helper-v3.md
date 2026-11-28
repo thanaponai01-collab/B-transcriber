@@ -4,7 +4,7 @@ Date: 2026-09-25. Scope: the helper (`cutdeck/xml_bridge.py`, `ws://127.0.0.1:78
 clients (`cutdeck/ai_backend.py`, `cutdeck/mcp_server.py`, `cutdeck/premiere_cli.py`), the
 panel's driver (`uxp/cutdeck/features/driver.js`) and the rough-cut analysis it launches
 (`cutdeck/xml_recut.py`, `cutdeck/sequence_json.py`, `cutdeck/xml_sequence.py`). Follows
-`docs/arch-design-helper-v2.md`, whose decisions stand.
+`docs/archive/arch-design-helper-v2.md`, whose decisions stand.
 
 ## Verdict
 

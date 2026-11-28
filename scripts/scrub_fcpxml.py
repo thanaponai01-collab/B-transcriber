@@ -1,5 +1,5 @@
 """scrub_fcpxml.py — sanitize a real Premiere FCP7 XML export so it can be
-committed as a test fixture (docs/HANDOFF_CUTDECK_XML_RECUT.md Phase 1).
+committed as a test fixture (docs/archive/HANDOFF_CUTDECK_XML_RECUT.md Phase 1).
 
 A real export carries absolute paths to the editor's footage
 (``file://localhost/E:/Clients/.../angle1.mp4``) and often a client or project

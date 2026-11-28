@@ -1,7 +1,7 @@
-"""takes.py — the LLM classifier (IMPLEMENT_CUTDECK.md §B.3 ``takes.py``).
+"""takes.py — the LLM classifier (docs/archive/IMPLEMENT_CUTDECK.md §B.3 ``takes.py``).
 
 The only judgment module in CutDeck; every other pass in ``rules.py`` is
-deterministic, no LLM, ever (HANDOFF_CUTDECK_WORDLEVEL.md Phase 6). Inherits
+deterministic, no LLM, ever (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 6). Inherits
 ``transcribe.pipeline.reconcile``'s select-only discipline exactly: the LLM
 never sees or emits timecodes, never rewrites text, and can only choose
 keep/cut on the segment ids it was shown — enforced by an explicit raise
