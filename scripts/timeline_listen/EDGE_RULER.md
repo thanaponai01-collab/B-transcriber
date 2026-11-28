@@ -38,3 +38,16 @@ were both recorded on 2026-07-12 and sit in different halves.
 Where pad 60 misses on tune: In edges are planned a median 33 ms early (66 of 222 more than a frame
 early, 22 late); Out edges are centred (median 0; 37 early, 45 late). 43 edges are off by more than
 200 ms, mostly cuts inside a word.
+
+## Round 2 (system round, 2026-11-29): pass line, written before any run
+
+Hypothesis: the user starts a piece closer to its first word than they end it after its last, so
+a shorter pause before the In (the Out keeps 60 ms) puts more In edges within a frame of theirs.
+
+- Change: `plan_pieces` takes the pause before the In apart from the pause after the Out. The In
+  value is picked on tune only from {0, 20, 30, 40, 50} ms; heldout is scored once, with that value.
+- Ruler: this edge ruler, reference rank 1 (the user's hand cuts), heldout half.
+- Pass line: on heldout, the within-one-frame share of all edges rises, with a 95% bootstrap
+  interval over days above 0; Out edges are unchanged; and the share of planned In edges that land
+  in sound (level over the quiet threshold) rises by no more than 2 points.
+- Wrong if: the heldout interval contains 0, or In edges move into sound by more than 2 points.
