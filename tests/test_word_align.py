@@ -249,3 +249,12 @@ def test_config_overrides_reach_both_snaps(monkeypatch):
     word_align.align_words(words, [Cue(start_ms=0, end_ms=300)], np.zeros(16000, dtype=np.float32), 16000, "cpu",
                            {"start_snap": {"reach": 38}, "end_snap": {"tail_db": 25.61}})
     assert seen == {"start": {"reach": 38}, "end": {"tail_db": 25.61}}
+
+
+def test_each_word_records_how_its_edges_were_placed():
+    align, _ = fake({"สวัสดี": 1080, "วันนี้": 2960})     # ครับ not heard; F1 is Latin (kept)
+    new = retime_words(WORDS, CUES, align, thai, pad_ms=400, duration_ms=10_000,
+                       snap=lambda s, prev: s - 50 if s == 2960 else s,
+                       snap_end=lambda s, a: 1890 if s == 1500 else None)
+    assert [(x["start_by"], x["end_by"]) for x in new] == [
+        ("ctc", "engine"), ("engine", "snap"), ("snap", "engine"), ("engine", "engine")]

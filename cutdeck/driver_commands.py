@@ -1374,8 +1374,13 @@ HELPER_COMMANDS: dict[str, Command] = {
         in|out, tc, at_ticks, word or null, cut_ms, nearest_quiet_ms, severity "sound" (a bad cut)
         or "tail" (the faint end of a fade, usually fine)}). This transcript plus that sound check is
         how the system "listens" to a result; nothing plays audio. `untranscribed`: speech
-        the engine left without words (read it as talk, not a pause). from_ticks/to_ticks narrow
-        lines, cuts_in_sound and untranscribed alike. `query` finds
+        the engine left without words (read it as talk, not a pause). `holes`: sound (louder than
+        breath or room tone) 100 ms or longer that no word covers. Each line has start_err_ms /
+        end_err_ms: the 90% error bar of its first word's start and last word's end against the
+        sound (sequence ms; 20-45 ms where the edge sits on a clear sound edge, 300+ where only
+        the engine placed it); each cut edge with a word has cut_err_ms. A source with `timing`
+        "tightened" has engine word times: its note gives the retime command that fixes it.
+        from_ticks/to_ticks narrow lines, cuts_in_sound, untranscribed and holes alike. `query` finds
         a phrase (matches, also across a cut; spaces and punctuation ignored; numbers as the engine
         wrote them, e.g. "20" not "ยี่สิบ"). `missing` lists source files never transcribed: run
         transcribe on each, poll get_job, then call this again. Works the same on a copy or re-cut
