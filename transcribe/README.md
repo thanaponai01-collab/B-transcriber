@@ -53,7 +53,6 @@ transcribe/
     mock.py            MockEngine for testing
     registry.py        Name → adapter (config-driven)
     whisper_thai.py    Engine A — Thai-specialist Whisper
-    funasr.py          Engine B — FunASR SenseVoiceSmall
   pipeline/
     ingest.py          Denoise + VAD → speech chunks
     align_hyp.py       Hypothesis-to-hypothesis alignment
@@ -81,7 +80,7 @@ Results recorded in `eval_run` table. Active choices live in `config.yaml`.
 
 Current engines (verified against 8GB VRAM sequential-load budget):
 - **Engine A** (`whisper_thai`): `biodatlab/whisper-th-medium-combined`
-- **Engine B** (`funasr`): `FunAudioLLM/SenseVoiceSmall`
+- **Engine B** (`passthrough`): no second engine
 
 To swap an engine: add an adapter in `engines/`, register it, update `config.yaml`,
 re-run the harness — it is rejected automatically if WER regresses.
