@@ -10,28 +10,14 @@ snapshot, and a signed record the panel reads. Exit 1 when the draft fails.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
-import shutil
 import sys
 from pathlib import Path
 
-from cutdeck import hks_gates
-
-OVERRIDES = hks_gates.REGISTRY.parent / "overrides.jsonl"
-
-
-def snapshot(prproj: Path, sequence: str, drafts: Path | None, now: dt.datetime) -> Path:
-    folder = drafts or prproj.parent / "CutDeck" / "Drafts"
-    folder.mkdir(parents=True, exist_ok=True)
-    safe = "".join(ch if ch.isalnum() or ch in " -_()" else "_" for ch in sequence)
-    target = folder / f"{safe} {now:%Y%m%d-%H%M%S}.prproj"
-    shutil.copy2(prproj, target)
-    return target
+from cutdeck import hks_enforce
 
 
 def main(argv: list[str] | None = None) -> int:
-    from cutdeck import hks_enforce
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--prproj", type=Path, required=True)
     ap.add_argument("--sequence", required=True, help="the draft's GUID, or a name no other sequence has")

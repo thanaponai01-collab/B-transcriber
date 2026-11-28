@@ -25,7 +25,6 @@ character (`0x8000004B` = "K"); smaller values are Premiere's own codes for spec
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 import os
@@ -33,7 +32,8 @@ import re
 import time
 import xml.etree.ElementTree as ET
 
-from cutdeck import screenshot
+from cutdeck import menu, screenshot
+from cutdeck.win_input import _KEYBDINPUT, _bring_to_front, _send  # noqa: F401  (_KEYBDINPUT: premiere_ui)
 
 DEFAULTS = Path(r"C:\Program Files\Adobe\Adobe Premiere Pro 2027\Keyboard Shortcuts\en\Adobe Premiere Pro Defaults.kys")
 # Documents may live under OneDrive (it does on the user's PC, 2026-11-27): look in both.
@@ -141,21 +141,6 @@ def list_commands(query: str = "", path: Path | None = None) -> list[dict]:
 
 # --- pressing keys (Windows) ---------------------------------------------------------------------
 
-class _KEYBDINPUT(ctypes.Structure):
-    _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD),
-                ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
-
-
-class _INPUT(ctypes.Structure):
-    class _U(ctypes.Union):
-        _fields_ = [("ki", _KEYBDINPUT), ("pad", ctypes.c_byte * 32)]
-    _anonymous_ = ("u",)
-    _fields_ = [("type", wintypes.DWORD), ("u", _U)]
-
-
-_EXTENDED = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2E}
-
-
 def _vk_for(code: int) -> tuple[int, bool]:
     """Windows virtual key for a .kys code, and whether the character itself needs Shift."""
     if code in KEY_CODES:
@@ -169,37 +154,10 @@ def _vk_for(code: int) -> tuple[int, bool]:
     return scan & 0xFF, bool(scan & 0x100)
 
 
-def _send(vks_down: list[int]) -> None:
-    user32 = ctypes.windll.user32
-    events = []
-    for vk in vks_down + vks_down[::-1]:
-        up = len(events) >= len(vks_down)
-        flags = (0x0002 if up else 0) | (0x0001 if vk in _EXTENDED else 0)
-        events.append(_INPUT(type=1, ki=_KEYBDINPUT(vk, user32.MapVirtualKeyW(vk, 0), flags, 0, 0)))
-    array = (_INPUT * len(events))(*events)
-    if user32.SendInput(len(events), array, ctypes.sizeof(_INPUT)) != len(events):
-        raise RuntimeError("SendInput was blocked")
-
-
 def press(sc: Shortcut) -> None:
     vk, char_shift = _vk_for(sc.code)
     mods = [m for m, on in ((0x11, sc.ctrl), (0x10, sc.shift or char_shift), (0x12, sc.alt)) if on]
     _send(mods + [vk])
-
-
-def _bring_to_front(hwnd: int) -> bool:
-    user32 = ctypes.windll.user32
-    if user32.GetForegroundWindow() == hwnd:
-        return True
-    if user32.IsIconic(hwnd):
-        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-    _send([0x12])  # a lone Alt press lets this process set the foreground window
-    user32.SetForegroundWindow(hwnd)
-    for _ in range(20):
-        if user32.GetForegroundWindow() == hwnd:
-            return True
-        time.sleep(0.05)
-    return False
 
 
 def window_title(hwnd: int) -> str:
@@ -256,7 +214,6 @@ async def run_focused(premiere, focus: str | None, sequence: str | None, action)
         expected = (await premiere("read_sequence"))["name"]
     if expected is not None:
         # Window > Timelines > <name> focuses exactly that timeline, no key press (live 2026-11-21).
-        from cutdeck import menu
         await asyncio.to_thread(menu.invoke, f"Window > Timelines > {expected}", True)
         await asyncio.sleep(0.4)
         focused = {"focused": "timeline", "via": f"Window > Timelines > {expected}"}
