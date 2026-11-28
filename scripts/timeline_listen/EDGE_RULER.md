@@ -67,7 +67,12 @@ a shorter pause before the In (the Out keeps 60 ms) puts more In edges within a 
 
 Heldout, scored once with 30: all edges 179 → 246 of 420 (42.6% → 58.6%); paired change +16.0 pts
 [+10.6, +20.0] over days, 65 better, 0 worse. In 81 → 148 of 210, Out 98 → 98 (unchanged), planned In
-edges in sound 42 → 42. `PAD_IN_MS = 30` is now the default; `pad_in_ms` is a new argument of
+edges in sound 42 → 42 (this guard cannot move: the planner's own quiet-frame step reads the same
+level, so it is no evidence about clipped onsets; the evidence is the match to the user's edges).
+Per day (all edges, pad 60 → In 30): 0627 74 → 80%, 0712 60 → 73%, 0808 38 → 37% (iPhone VFR), 1117
+35 → 48% (tune); 0706 39 → 58%, 0713 56 → 72%, 1116 30 → 40% (heldout). The gain holds on the
+low-scoring days, not only on the three high ones (0627, 0712, 0713), whose folders hold no XML/EDL
+and whose names look hand-made; that those three were cut by hand is still an assumption. `PAD_IN_MS = 30` is now the default; `pad_in_ms` is a new argument of
 `plan_pieces`, `keep_words` and their helper commands, and `pad_ms` is now the pause after the Out only.
 Not yet proved in live Premiere: Premiere was in use by another session (a project of 2026-11-29 open
 and polled) during this round.
