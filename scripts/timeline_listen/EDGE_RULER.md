@@ -80,3 +80,9 @@ Hypothesis: the pause after the Out (60 ms, set on two cuts) is not the best val
   a 95% interval over days above 0; In edges unchanged; planned Out edges in sound rise by no more
   than 2 points. If no value beats 60 on tune by at least 2 points, heldout is not scored and the
   round ends "no change".
+
+### Result (2026-11-29): no change
+
+Tune, In 30: Out 60 → 59.0% of all edges (Out hits 110/222); 40 → 59.9% (114); 50 → 59.0% (110);
+80 → 56.5% (99); 100 → 54.5% (90). Best gain +0.9 pts, under the 2-point bar: heldout not scored,
+`PAD_MS` stays 60.
