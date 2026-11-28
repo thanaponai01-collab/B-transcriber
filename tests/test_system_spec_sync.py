@@ -20,12 +20,11 @@ def test_system_spec_engine_table_statuses():
 
     # 2. Engine status table
     assert "qwen3_asr.py" in text
-    assert re.search(r"`funasr\.py`.*?retired", text, re.IGNORECASE | re.DOTALL), (
-        "funasr.py must be marked retired in SYSTEM_SPEC.md"
-    )
-    assert re.search(r"`typhoon_rt\.py`.*?rejected", text, re.IGNORECASE | re.DOTALL), (
-        "typhoon_rt.py must be marked rejected in SYSTEM_SPEC.md"
-    )
+    rows = [line.lower() for line in text.splitlines() if line.startswith("|")]
+    for engine, status in (("funasr", "retired"), ("typhoon_rt", "rejected")):
+        assert any(f"`{engine}`" in row and status in row and "removed" in row for row in rows), (
+            f"SYSTEM_SPEC.md engine table must mark {engine} {status}, code removed"
+        )
     assert re.search(r"`qwen3_asr\.py`.*?not activated", text, re.IGNORECASE | re.DOTALL), (
         "qwen3_asr.py must be marked built / not activated in SYSTEM_SPEC.md"
     )

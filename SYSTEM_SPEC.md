@@ -80,8 +80,8 @@ thresholds, batch_size, bias budget) — an engine/model/compute swap is a YAML 
 | `whisper_thai.py` | `whisper_thai` | same checkpoint via HF transformers — slower per-chunk fallback | registered |
 | `whisper_multi.py` | `whisper_multi` | `openai/whisper-large-v3` — multilingual code-switch slot | registered |
 | `qwen3_asr.py` | `qwen3_asr` | `Qwen/Qwen3-ASR-1.7B` via `qwen_asr`. LLM-decoder ASR candidate for code-switching; own internal VAD segmentation (`speech_windows`, capped at `max_span_s: 8.0`); context prompt injection. Probed with real disagreements; **not activated** because model transliterates English loanwords into Thai script (model quality, not a reconciler bug; docs/ENGINES.md:53-70). | built, not activated |
-| `typhoon_rt.py` | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. **Rejected**: regresses `cer_thai` and `wer_latin` vs baseline (docs/ENGINES.md:46-52). Do not retry without new evidence. | rejected |
-| `funasr.py` | `funasr` | `SenseVoiceSmall`. **Retired**: model has no Thai support (only zh/en/yue/ja/ko); auto-detects Thai as Cantonese and emits CJK garbage (docs/ENGINES.md:31-40). Do not re-probe without a different model. | retired |
+| — | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. **Rejected**: regresses `cer_thai` and `wer_latin` vs baseline (docs/ENGINES.md:46-52). Code removed 2026-11-28; git history keeps `typhoon_rt.py`. Do not retry without new evidence. | rejected, code removed |
+| — | `funasr` | `SenseVoiceSmall`. **Retired**: model has no Thai support (only zh/en/yue/ja/ko); auto-detects Thai as Cantonese and emits CJK garbage (docs/ENGINES.md:31-40). Code removed 2026-11-28; git history keeps `funasr.py`. Do not re-probe without a different model. | retired, code removed |
 | `mock.py` | `mock` | canned tokens, no GPU — used by all pipeline tests | tests only |
 | `base.py` / `registry.py` | — | `Engine` ABC (`load → transcribe → unload`), `@register` + `get_engine()` | — |
 

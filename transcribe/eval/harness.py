@@ -426,7 +426,7 @@ if __name__ == "__main__":
     parser.add_argument("--db", default=None,
                         help="Eval database; default is store.path from config.yaml")
     parser.add_argument("--engine-b", help="Override engine_b for a one-command A/B "
-                        "comparison, e.g. --engine-b typhoon_rt (4.2)")
+                        "comparison, e.g. --engine-b whisper_multi (4.2)")
     parser.add_argument("--llm-enabled", action="store_true",
                         help="Turn on the local-Ollama LLM reconciler tiebreak for this "
                         "run, for an A/B comparison against the script fallback (Phase 3)")

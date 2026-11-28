@@ -141,8 +141,8 @@ The GPU venv is **Python 3.11.9**. Tests also run on PATH Python 3.13.
 | `whisper_thai` | Fallback: same checkpoint via HF `transformers`; slow. |
 | `whisper_multi` | Candidate (`whisper-large-v3`), Thai-capable; not activated. |
 | `qwen3_asr` | Built, **not activated**: transliterates English loanwords into Thai script (model quality, not a reconciler bug). |
-| `typhoon_rt` | **Rejected**: worse `cer_thai` and `wer_latin`. Don't retry without new evidence. |
-| `funasr` | **Retired**: SenseVoiceSmall has no Thai. Don't re-probe without a different model. |
+| `typhoon_rt` | **Rejected**: worse `cer_thai` and `wer_latin`. Code removed (git history keeps it). Don't retry without new evidence. |
+| `funasr` | **Retired**: SenseVoiceSmall has no Thai. Code removed (git history keeps it). Don't re-probe without a different model. |
 | `mock` | Canned tokens, no GPU; used by all pipeline tests. |
 
 **LLM reconciler tiebreak** (`transcribe/pipeline/llm_reconcile.py`, local Ollama
