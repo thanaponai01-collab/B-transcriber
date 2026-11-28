@@ -120,7 +120,7 @@ def transcribe(media_path, *, config: dict, db_path: Path | None = None,
     A finished job for the same media sha256, engine pair and pipeline version is reused
     (zero ASR passes). `db_path` overrides the shared store for scratch databases only.
     """
-    from cutdeck.words import words_for_job
+    from transcribe.words import words_for_job
 
     if language and language != (config.get("language") or "th"):
         config = {**config, "language": language}

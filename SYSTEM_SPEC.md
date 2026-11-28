@@ -271,7 +271,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | File | Role |
 |---|---|
 | `contracts.py` | `Segment/Label/CutSpan/CutPlan/CutConfig` + Timebase re-export; `CutSpan.blade` (`BLADE_VAD`/`BLADE_WORD`) marks whether an edge came from a VAD silence boundary or a word timestamp inside continuous speech |
-| `words.py` | word-timeline reconstruction (`Word`, `words_from_pieces`, `words_for_job`) from raw sub-word ASR pieces — the one implementation shared with `transcribe/engines/faster_whisper.py`'s cue grouping |
+| `words.py` | re-exports `transcribe/words.py`: word-timeline reconstruction (`Word`, `words_from_pieces`, `words_for_job`) from raw sub-word ASR pieces, the one implementation shared with `transcribe/cues/split.py`'s cue grouping. It lives in `transcribe/` because transcribe never imports cutdeck (`tests/test_layers.py`) |
 | `segment.py` | gap/VAD utterance segmentation over the token + speech_span timeline |
 | `rules.py` | deterministic cut pass; two rough-cut modes via `cut.rough_cut_mode` (default `interval`: silence-interval subtraction + min-clip merge; opt-in `segment`: keeps built outward from segments, no merge/dissolve needed), plus word-level `filler_cuts` (on the Phase 1 word timeline, config-gated) and `repeat_cuts` (deterministic stutter/duplicate-word n-gram detector, segment-bounded, config-gated) — both apply identically in either mode |
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |
