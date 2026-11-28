@@ -187,7 +187,7 @@ def _sentence_boundary_offsets(text: str) -> list[int]:
 
 
 def _prepare(words, policy: CuePolicy, *, return_words: bool = False):
-    from cutdeck.words import timed_tokens, Word
+    from transcribe.words import timed_tokens, Word
     from transcribe.thai.atoms import default_lexicon, glue_atoms, snap_boundary_offsets
 
     def pause_runs(items, max_gap_ms):
