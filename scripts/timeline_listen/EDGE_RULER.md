@@ -71,3 +71,12 @@ edges in sound 42 → 42. `PAD_IN_MS = 30` is now the default; `pad_in_ms` is a 
 `plan_pieces`, `keep_words` and their helper commands, and `pad_ms` is now the pause after the Out only.
 Not yet proved in live Premiere: Premiere was in use by another session (a project of 2026-11-29 open
 and polled) during this round.
+
+## Round 3 (system round, 2026-11-29): pass line, written before any run
+
+Hypothesis: the pause after the Out (60 ms, set on two cuts) is not the best value on ten.
+- Change: `PAD_MS`, picked on tune only from {40, 50, 80, 100} against 60, In fixed at 30.
+- Pass line: same as round 2, for Out edges: heldout within-one-frame share of all edges rises with
+  a 95% interval over days above 0; In edges unchanged; planned Out edges in sound rise by no more
+  than 2 points. If no value beats 60 on tune by at least 2 points, heldout is not scored and the
+  round ends "no change".
