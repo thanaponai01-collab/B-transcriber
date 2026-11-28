@@ -190,6 +190,10 @@ Full rules: `transcribe/eval/README.md` and `STYLE_GUIDE.md`.
   with principles, rules, memory and logs. Read [projects/PRINCIPLES.md](projects/PRINCIPLES.md) first,
   then the project's README. New project facts go in its `memory/`, not in `docs/`.
 
+## Memory
+
+Before trying an approach, read `.owner/memory/INDEX.md`: what was tried here, what failed, and when to retry. Record new attempts there.
+
 ## Project checks
 - `.claude/skills/verify-cutdeck/`: drive CutDeck in live Premiere and keep evidence (`scripts/cdv.py doctor | launch | start | scratch | call | shot | cleanup`). Use it after changing `cutdeck/` or `uxp/cutdeck/`; tests use a fake Premiere.
 - `VERIFY.md`: each feature and the command that proves it. Run every check before saying done;
