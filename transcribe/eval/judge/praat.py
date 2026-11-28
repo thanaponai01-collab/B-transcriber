@@ -58,6 +58,8 @@ def from_marks(marks_dir: Path, label_dir: Path, out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     n = 0
     for m in sorted(marks_dir.glob("*.json")):
+        if not (label_dir / f"{m.stem}.TextGrid").exists():  # a retired package file
+            continue
         d = json.loads(m.read_text(encoding="utf-8"))
         tg = (label_dir / f"{m.stem}.TextGrid").read_text(encoding="utf-8")
         for tier in ("onset", "offset"):

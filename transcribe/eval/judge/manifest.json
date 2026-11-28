@@ -1,5 +1,5 @@
 {
-  "about": "Timing judge clips (2026-11-28). Every source video sits in one split only (group = source video, goldenset/SOURCES.md exclusion groups). tune: the loop tunes on it. heldout: checked through the gate only for a candidate that gained on tune. lockbox: sources never used for any tuning, scored once at the milestone; its labels live outside the repo. 'span' is the stretch of the clip (seconds) the reference marks cover: every onset after a pause and every offset before one inside it. 'fps' is the sequence frame rate the clip's project cuts at: 1RaceClub 30 (read from the .prproj), HKS 25 and CFD Shorts 50 (projects/ notes); CFD 90 = 50 and the BeamOil vlog = 30 are assumed. Clip audio is 16 kHz mono; 'start_s'/'dur_s' cut it from 'source'.",
+  "about": "Timing judge clips (2026-11-28). Every source video sits in one split only (group = source video, goldenset/SOURCES.md exclusion groups). tune: the loop tunes on it. heldout: checked through the gate only for a candidate that gained on tune. lockbox: sources never used for any tuning, scored once at the milestone; its labels live outside the repo. 'span' is the stretch of the clip (seconds) the reference marks cover: every onset after a pause and every offset before one inside it. 'fps' is the sequence frame rate the clip's project cuts at: 1RaceClub 30 (read from the .prproj), HKS 25 and CFD Shorts 50 (projects/ notes); CFD 90 = 50 and the BeamOil vlog = 30 are assumed. Clip audio is 16 kHz mono; 'start_s'/'dur_s' cut it from 'source'. Spans under 60% live (non-zero) audio were moved to the clip's most-live window of the same length (2026-11-28); obs_lec was dropped (no window reaches 30%).",
   "cache": "E:/Me/5.Claude/timing-judge-audio",
   "lockbox_dir": "E:/Me/5.Claude/timing-judge-lockbox",
   "clips": [
@@ -12,22 +12,19 @@
     {"name": "hks_studio3", "group": "hks-231169", "split": "tune", "fps": 25, "start_s": 3500, "dur_s": 180, "span": [60, 90], "source": "G:/Me/Works/20261123 - โหนกระแส/1. FOOTAGE/HKS Facebook 231169 Full.mp4"},
     {"name": "vlog", "group": "beamoil-130", "split": "tune", "fps": 30, "start_s": 20, "dur_s": 180, "span": [60, 90], "source": "G:/Me/Works/20261111 - BeamOil/1. FOOTAGE/130 พาเมียกินข้าววันนี้นำเสนอร้านลับแบบลับมาก บ้านลำไย.mp4"},
     {"name": "vlog2", "group": "beamoil-130", "split": "tune", "fps": 30, "start_s": 200, "dur_s": 180, "span": [60, 90], "source": "G:/Me/Works/20261111 - BeamOil/1. FOOTAGE/130 พาเมียกินข้าววันนี้นำเสนอร้านลับแบบลับมาก บ้านลำไย.mp4"},
-
-    {"name": "obs_lec", "group": "gillette-lec-20261116", "split": "heldout", "fps": 30, "start_s": 120, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
-    {"name": "obs_lec2", "group": "gillette-lec-20261116", "split": "heldout", "fps": 30, "start_s": 400, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
-    {"name": "obs_lec3", "group": "gillette-lec-20261116", "split": "heldout", "fps": 30, "start_s": 700, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
+    {"name": "obs_lec2", "group": "gillette-lec-20261116", "split": "heldout", "fps": 30, "start_s": 400, "dur_s": 180, "span": [146, 176], "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
+    {"name": "obs_lec3", "group": "gillette-lec-20261116", "split": "heldout", "fps": 30, "start_s": 700, "dur_s": 180, "span": [99, 129], "source": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/1. FOOTAGE/LEC/cam/2026-11-16 16-51-03.mp4"},
     {"name": "obs_review", "group": "gillette-review-20261117", "split": "heldout", "fps": 30, "start_s": 30, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20261117 - 02 gillete review/1. FOOTAGE/2026-11-17 09-30-15.mp4"},
-    {"name": "obs_review2", "group": "gillette-review-20261117", "split": "heldout", "fps": 30, "start_s": 210, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20261117 - 02 gillete review/1. FOOTAGE/2026-11-17 09-30-15.mp4"},
-    {"name": "lewis", "group": "lewis-20260920", "split": "heldout", "fps": 30, "start_s": 200, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20260920 - lewis/1. FOOTAGE/2026-09-20 14-39-33.mp4"},
-    {"name": "sourvo", "group": "sour-bkk-vo-20260712", "split": "heldout", "fps": 30, "start_s": 100, "dur_s": 180, "span": [60, 90], "source": "E:/Me/2.Tasks/20260712 - SOUR BKK/1. FOOTAGE/vo/2026-07-12 12-26-42.mp4"},
+    {"name": "obs_review2", "group": "gillette-review-20261117", "split": "heldout", "fps": 30, "start_s": 210, "dur_s": 180, "span": [2, 32], "source": "E:/Me/2.Tasks/20261117 - 02 gillete review/1. FOOTAGE/2026-11-17 09-30-15.mp4"},
+    {"name": "lewis", "group": "lewis-20260920", "split": "heldout", "fps": 30, "start_s": 200, "dur_s": 180, "span": [137, 167], "source": "E:/Me/2.Tasks/20260920 - lewis/1. FOOTAGE/2026-09-20 14-39-33.mp4"},
+    {"name": "sourvo", "group": "sour-bkk-vo-20260712", "split": "heldout", "fps": 30, "start_s": 100, "dur_s": 180, "span": [4, 34], "source": "E:/Me/2.Tasks/20260712 - SOUR BKK/1. FOOTAGE/vo/2026-07-12 12-26-42.mp4"},
     {"name": "gold_Short1", "group": "cfd90", "split": "heldout", "fps": 50, "start_s": 0, "dur_s": 35.98, "span": [2, 32], "source": "transcribe/eval/goldenset/Short1.mp3"},
     {"name": "gold_Short2", "group": "cfd90", "split": "heldout", "fps": 50, "start_s": 0, "dur_s": 32.45, "span": [1, 31], "source": "transcribe/eval/goldenset/Short2.mp3"},
     {"name": "gold_Short3", "group": "cfd90", "split": "heldout", "fps": 50, "start_s": 0, "dur_s": 37.18, "span": [2, 32], "source": "transcribe/eval/goldenset/Short3.mp3"},
     {"name": "gold_singapore", "group": "yt-t1-singapore", "split": "heldout", "fps": 30, "start_s": 0, "dur_s": 60.2, "span": [15, 45], "source": "transcribe/eval/goldenset/yt t1 singapore first min.wav"},
-
     {"name": "nov24", "group": "1rc-20261124", "split": "lockbox", "fps": 30, "start_s": 1500, "dur_s": 180, "span": [60, 105], "source": "E:/Me/2.Tasks/20261124 - 4/1. FOOTAGE/2026-11-24 21-10-00.mp4"},
-    {"name": "nov22", "group": "1rc-20261122", "split": "lockbox", "fps": 30, "start_s": 3000, "dur_s": 180, "span": [60, 105], "source": "E:/Me/2.Tasks/20261122 - 3/1. FOOTAGE/2026-11-22 10-35-58.mp4"},
-    {"name": "ruskimi", "group": "1rc-rus-kimi-20260711", "split": "lockbox", "fps": 30, "start_s": 400, "dur_s": 180, "span": [60, 105], "source": "E:/Me/2.Tasks/20260711 - rus kimi/1. FOOTAGE/2026-07-11 10-45-08.mp4"},
+    {"name": "nov22", "group": "1rc-20261122", "split": "lockbox", "fps": 30, "start_s": 3000, "dur_s": 180, "span": [112, 157], "source": "E:/Me/2.Tasks/20261122 - 3/1. FOOTAGE/2026-11-22 10-35-58.mp4"},
+    {"name": "ruskimi", "group": "1rc-rus-kimi-20260711", "split": "lockbox", "fps": 30, "start_s": 400, "dur_s": 180, "span": [86, 131], "source": "E:/Me/2.Tasks/20260711 - rus kimi/1. FOOTAGE/2026-07-11 10-45-08.mp4"},
     {"name": "monza", "group": "tiw-monza-20260903", "split": "lockbox", "fps": 30, "start_s": 1200, "dur_s": 180, "span": [60, 105], "source": "E:/Me/2.Tasks/20260903 - tiw monza/1. FOOTAGE/cam/2026-09-03 20-25-39.mp4"}
   ]
 }
