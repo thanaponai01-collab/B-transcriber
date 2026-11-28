@@ -65,6 +65,40 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
     return start_ms if g == f else g * 10
 
 
+def rolling_peak(lev: np.ndarray, frames: int) -> np.ndarray:
+    """The loudest level within ``frames`` either side of each frame (digital silence ignored)."""
+    from scipy.ndimage import maximum_filter1d
+    live = np.where(lev > DIGITAL_DB, lev, lev.max(initial=0.0) - 200)
+    return maximum_filter1d(live, size=2 * frames + 1, mode="nearest") if len(lev) else lev
+
+
+def flux_onsets(audio: np.ndarray, sr: int) -> np.ndarray:
+    """Spectral-flux onsets, each backtracked to the energy minimum before it (librosa), in ms."""
+    import librosa
+    hop = sr // 100
+    env = librosa.onset.onset_strength(y=audio.astype(np.float32), sr=sr, hop_length=hop)
+    frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop, backtrack=True, units="frames")
+    return np.asarray(frames, dtype=np.int64) * 10
+
+
+def snap_to_flux(start_ms: int, prev_ms: int, onsets_ms: np.ndarray, lev: np.ndarray, reach_ms: int = 200,
+                 pause: int = 6, ctx: int = 50, quiet_db: float = 6.0) -> int:
+    """A start moved to the nearest backtracked flux onset within ``reach_ms``, when that onset
+    comes after the previous word's start and ``pause`` quiet frames (as in ``snap_to_sound``)
+    come before it; otherwise the start stays."""
+    if not len(onsets_ms):
+        return start_ms
+    near = onsets_ms[np.abs(onsets_ms - start_ms) <= reach_ms]
+    for o in sorted(near, key=lambda o: abs(int(o) - start_ms)):
+        g = int(o) // 10
+        if g - pause < 0 or g >= len(lev) or (g - pause) * 10 <= prev_ms:
+            continue
+        floor = _floor(lev[max(0, g - ctx):g + ctx])
+        if (lev[g - pause:g] < floor + quiet_db).all():
+            return int(o)
+    return start_ms
+
+
 def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int = 40, pause: int = 6,
                       ctx: int = 50, quiet_db: float = 6.0, range_db: float = 20.0,
                       below_peak_db: float = 30.0, tail_db: float = 25.0, hold_db: float = 3.0) -> int | None:
@@ -108,7 +142,8 @@ def snap_end_to_sound(start_ms: int, anchor_ms: int, lev: np.ndarray, reach: int
 
 def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: Callable[[str], bool],
                  pad_ms: int, duration_ms: int, snap: Callable[[int, int], int] | None = None,
-                 snap_end: Callable[[int, int], int | None] | None = None) -> list[dict]:
+                 snap_end: Callable[[int, int], int | None] | None = None,
+                 pad_into_neighbours: bool = True) -> list[dict]:
     """New word dicts with aligned starts and, where a pause follows, ends. ``cues`` give the
     windows: each word goes with the cue its start falls in. A word the model cannot align
     (Latin, digits) keeps its times and walls off its own audio: the Thai words either side
@@ -118,18 +153,27 @@ def retime_words(words: list[dict], cues: list, align: AlignWindow, alignable: C
     end of a word a pause follows, from CTC's last letter (the engine's end where the model
     has no letters), kept before the next word's start; an end found past that start is
     dropped. Elsewhere a word ends at the engine's end. A word ends by the next word's
-    start and keeps at least 1 ms."""
+    start and keeps at least 1 ms. With ``pad_into_neighbours`` off, a cue's padded window
+    stops at the engine's end of the previous cue's last word and the start of the next cue's
+    first word, so two windows never align the same sound."""
     out = [dict(w) for w in words]
     last_letter: dict[int, float] = {}
     for c in cues:
         idx = [i for i, w in enumerate(words) if c.start_ms <= w["start_ms"] < c.end_ms]
         lo = max(c.start_ms - pad_ms, 0)
+        lo_wall, hi_wall = 0, duration_ms
+        if not pad_into_neighbours and idx:
+            if idx[0] > 0:
+                lo_wall = words[idx[0] - 1]["end_ms"]
+            if idx[-1] + 1 < len(words):
+                hi_wall = words[idx[-1] + 1]["start_ms"]
+            lo = max(lo, min(lo_wall, c.start_ms))
         run: list[int] = []
         for i in idx + [None]:
             if i is not None and alignable(words[i]["text"]):
                 run.append(i)
                 continue
-            hi = min(c.end_ms + pad_ms, duration_ms) if i is None else words[i]["start_ms"]
+            hi = min(c.end_ms + pad_ms, duration_ms, max(hi_wall, c.end_ms)) if i is None else words[i]["start_ms"]
             if run and hi > lo:
                 for j, span in zip(run, align(lo, hi, [words[j]["text"] for j in run])):
                     if span is not None:
@@ -185,16 +229,22 @@ def align_words(words: list[dict], cues: list, audio: np.ndarray, sr: int, devic
     """The step as the pipeline runs it (config ``word_align``): load the CTC model, re-time the
     word starts, snap them to the sound unless ``snap_to_sound`` is off, snap the ends before a
     pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place.
-    ``start_snap`` / ``end_snap`` (dicts) override the snaps' keyword defaults."""
+    ``start_snap`` / ``end_snap`` (dicts) override the snaps' keyword defaults; ``level_norm: agc``
+    measures the snaps' levels against a 3 s rolling peak (loudness normalisation)."""
     lev = levels_db(audio, sr)
+    if cfg.get("level_norm") == "agc":
+        lev = lev - rolling_peak(lev, 300)
     sk, ek = dict(cfg.get("start_snap") or {}), dict(cfg.get("end_snap") or {})
     snap = (lambda s, prev: snap_to_sound(s, prev, lev, **sk)) if cfg.get("snap_to_sound", True) else None
+    if snap is not None and cfg.get("snap_method", "loudness") == "flux":
+        onsets = flux_onsets(audio, sr)
+        snap = lambda s, prev: snap_to_flux(s, prev, onsets, lev)
     snap_end = (lambda s, a: snap_end_to_sound(s, a, lev, **ek)) if cfg.get("snap_ends", True) else None
     aligner = ThaiCTCAligner(audio, sr, cfg.get("model", DEFAULT_MODEL), device)
     aligner.load()
     try:
         new = retime_words(words, cues, aligner, aligner.alignable, int(cfg.get("pad_ms", 400)),
-                           len(audio) * 1000 // sr, snap, snap_end)
+                           len(audio) * 1000 // sr, snap, snap_end, bool(cfg.get("pad_into_neighbours", True)))
     finally:
         aligner.unload()
     retime_cues(cues, words, new)
