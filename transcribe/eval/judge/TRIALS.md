@@ -109,5 +109,14 @@ Within-1-frame share of all marked edges (starts + ends); delta = paired, CI = 9
 | T3 | Cue-window collisions (6 tune misses; 1 ms words) | `pad_into_neighbours: false` | 56.1 → 58.3 (+2.2, CI −0.4…+5.4; 11/8) | not run | no frame gain; hygiene: 1 ms words 254 → 82 of 5296, text identical, w1 not worse. **User's call** |
 | T4 | Snap misses from level differences between loud and soft passages (loudness normalisation before the snap) | `level_norm: agc` (3 s rolling peak) | 59.4 → 59.0 (−0.4, CI −1.1…0; 0/0) | not run | **reverted** (no effect: snap thresholds are relative) |
 | T5 | End snap finds nothing / misplaces (55 tune misses) and start snap declines (13): its thresholds are mis-set | Optuna, 40 evaluations on tune, CTC cached: `start_snap {reach 38, pause 3, quiet_db 7.09, range_db 17.73}`, `end_snap {reach 79, pause 6, quiet_db 10.67, below_peak_db 34.05, tail_db 25.61, hold_db 2.0}` | 59.4 → 70.5 (+11.1, CI +5.3…+17.8; 26/4); starts 66.7 → 76.3, ends 52.2 → 64.7; start median unchanged (−18 ms) | 71.3 → 79.6 (+8.2, CI +4.4…+12.1; 26/10); starts 76.6 → 86.5, ends 65.9 → 72.5 | **kept** |
+| T6 | The T5 search stopped at its bounds; wider bounds find more of the end-snap misses | Optuna, 40 evaluations, wider bounds: start reach 51, pause 1; end reach 111, tail_db 31.6 | 70.5 → 70.8 (+0.4, CI 0…+1.2; 2/0) | not run | **reverted** (converged; start pause pinned at a 10 ms bound) |
+| T7 | Cue-window collisions, re-tested on the T5 baseline | `pad_into_neighbours: false` | 70.5 → 70.5 (0.0, CI −1.1…+1.0; 9/6) | not run | no frame gain; hygiene as T3. **User's call** |
+| T8 | Low-frequency rumble makes Whisper misplace or miss words (missing text 7, no edge matched 13) | zero-phase 80 Hz high-pass on Engine A's input only (Whisper re-run) | 70.5 → 69.4 (−1.1, CI −3.6…+1.5; 14/11) | CER_thai 0.0530 → 0.0562 (Δ CI 0…+0.0082, UNRESOLVED); cue_BER 0.333 → 0.302 | **reverted** (CER worse, no timing gain; code removed) |
+| T9 | VAD cuts (6 tune misses): a lower engine VAD threshold keeps soft onsets | `engines.faster_whisper.vad_threshold: 0.25` (Whisper re-run) | 70.5 → 70.5 (0.0; 2/0) | CER: pending | no timing gain |
+| T10 | VAD cuts: shorter minimum silence splits windows at real pauses | `vad_min_silence_ms: 300` (Whisper re-run) | 70.5 → 70.5 (0.0; 0/0) | CER: pending | no timing gain |
+| T11 | Beam width: a narrower beam changes word boundaries little and is faster | `beam_size: 3` (Whisper re-run) | 70.5 → 70.8 (+0.4, CI −1.6…+2.2; 9/4) | CER: pending; speed: pending | no timing gain |
 
-All trials so far: text identical (`same_text: true`), so CER is unchanged by construction.
+T1-T7: text identical (`same_text: true`), so CER is unchanged by construction. The kept
+config (T2 + T5) through the harness on a copy of the eval DB (experiment run, vs eval_run 8):
+CER_thai 0.0530 → 0.0530 (Δ CI 0…0), cue_BER 0.333 → 0.310 (Δ CI −0.093…+0.049): UNRESOLVED
+(small gold set), not a regression.
