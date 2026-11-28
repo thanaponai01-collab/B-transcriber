@@ -58,7 +58,7 @@
 #           zero regression, real (if small) improvement, blocked mainly by
 #           the same _script_fallback confidence=None bias diagnosed for
 #           whisper_multi. Next lever: fix that tiebreak (§4.3 in
-#           HANDOFF_CEILING_BREAK.md), then re-probe. See TODO_LEDGER.md
+#           docs/archive/HANDOFF_CEILING_BREAK.md), then re-probe. See TODO_LEDGER.md
 #           "Qwen3-ASR internal VAD chunking fix" for full numbers.
 #
 #           qwen3_asr as ENGINE A (HANDOFF_ONE_ENGINE §4 item 4, 2026-08-05):
@@ -156,7 +156,7 @@ engines:
     # One retry at most; false restores the previous decode/recovery behavior.
     recover_short_spans: true
   # Engine B candidate — not active (engine_b: passthrough above). LLM-decoder
-  # ASR, the code-switch-wall priority candidate per HANDOFF_CEILING_BREAK.md
+  # ASR, the code-switch-wall priority candidate per docs/archive/HANDOFF_CEILING_BREAK.md
   # §6/4.1. Requires `qwen-asr` (see requirements.txt, commented out) — install
   # before setting engine_b: qwen3_asr and probing with --experiment.
   qwen3_asr:
@@ -171,7 +171,7 @@ engines:
     # TODO_LEDGER.md "Qwen3-ASR span-granularity fix".
     max_span_s: 8.0
 
-# HANDOFF_ONE_ENGINE.md §6 (Phase D) — N-best self-ensemble: pseudo-Engine-B is
+# docs/archive/HANDOFF_ONE_ENGINE.md §6 (Phase D) — N-best self-ensemble: pseudo-Engine-B is
 # a SECOND decode pass through Engine A's own already-loaded residency instead
 # of a real second model. Off by default — when enabled, run.py never
 # instantiates or loads engine_b at all (see pipeline/run.py's
@@ -282,7 +282,7 @@ normalization:
     - WiFi
     - Premiere Pro
 
-# Cue break-atom lexicon (HANDOFF_THAI_BREAK_ATOMS.md, STYLE_GUIDE §7) — grows
+# Cue break-atom lexicon (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md, STYLE_GUIDE §7) — grows
 # the four seeded rules (mai yamok, reciprocal particle กัน, numeral+unit,
 # classifier+demonstrative) from observed Premiere-recut pain without a code
 # change. unsplittable_terms is NOT set here — it's the exception_lexicon
@@ -293,7 +293,7 @@ thai_atoms:
   disable: []               # rule names to turn off: mai_yamok, reciprocal_particle,
                              # numeral_unit, classifier_demonstrative, final_particle
   pos_condition_reciprocal: false
-    # HANDOFF_THAI_BREAK_ATOMS.md §6 Phase 4 probe. Default (false): กัน glues
+    # docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §6 Phase 4 probe. Default (false): กัน glues
     # to whatever precedes it unconditionally (bind_left, §2.4's "over-gluing
     # is the safe failure direction"). true: กัน only glues after a token
     # pythainlp.tag.pos_tag (perceptron, ORCHID tagset) tags as a verb — กัน
@@ -347,7 +347,7 @@ cut:
   filler_lexicon: [เอ่อ, อ่า, อืม, เอิ่ม, um, uh]
   filler_lexicon_contextual: [แบบ, แบบว่า, ก็คือ, คือว่า, like, you know]
   retake_markers: [เดี๋ยวเอาใหม่, เอาใหม่นะ, ตัดตรงนี้, อันนี้ผิด, เมื่อกี้พูดผิด]
-  llm_enabled: false       # HANDOFF_CUTDECK_WORDLEVEL.md Phase 6 (cutdeck/takes.py)
+  llm_enabled: false       # docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 6 (cutdeck/takes.py)
                              # gates the retake/false-start LLM classifier; the
                              # deterministic marker pre-pass runs regardless. Off
                              # until an eval baseline exists, same discipline as
@@ -357,11 +357,11 @@ cut:
   retake_window_segments: 5      # 6 — Jaccard-cluster / marker-lookback window width
   repeat_take_jaccard_threshold: 0.55  # 6 — char-Jaccard above this = same take
   false_start_max_ms: 2500        # 6 — false-start candidate must be shorter than this
-  repeats_enabled: false    # HANDOFF_CUTDECK_WORDLEVEL.md 2.2 — stutter/duplicate-word removal, off until an eval baseline exists
+  repeats_enabled: false    # docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md 2.2 — stutter/duplicate-word removal, off until an eval baseline exists
   repeat_max_ngram: 4
   repeat_max_gap_ms: 600
   word_blade_crossfade_ms: 20   # 2.3 — audio crossfade on mid-speech (word-blade) cuts
-  rough_cut_mode: interval  # HANDOFF_CUTDECK_WORDLEVEL.md Phase 4 — interval | segment;
+  rough_cut_mode: interval  # docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 4 — interval | segment;
                              # segment builds keeps outward from segments (no min-clip
                              # merge needed) but is unproven on real footage, stays
                              # opt-in until watched via cutdeck/preview.py
@@ -423,7 +423,7 @@ word_align:
   start_snap: {reach: 38, pause: 3, quiet_db: 7.09, range_db: 17.73}
   end_snap: {reach: 79, pause: 6, quiet_db: 10.67, below_peak_db: 34.05, tail_db: 25.61, hold_db: 2.0}
 
-# Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
+# Coverage guard (docs/archive/arch-design-transcription-engine.md item 3): re-decode speech
 # (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU
 # harness run shows speech_coverage_miss drops with no gated regression.
 coverage_guard:

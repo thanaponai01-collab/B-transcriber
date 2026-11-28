@@ -8,8 +8,8 @@ const uxpDir = path.join(root, "uxp", "cutdeck");
 
 /* Structure rules keep the panel's layers and single-owner invariants from drifting.
    Each entry in KNOWN_EXCEPTIONS represents existing drift documented in
-   docs/arch-design-cutdeck-panel.md and is tagged with the move number that eliminates it.
-   Adding an entry here is a deliberate architectural decision (see docs/arch-design-cutdeck-panel.md),
+   docs/archive/arch-design-cutdeck-panel.md and is tagged with the move number that eliminates it.
+   Adding an entry here is a deliberate architectural decision (see docs/archive/arch-design-cutdeck-panel.md),
    never a way to quiet this test: this table must only shrink as refactoring moves land. */
 const KNOWN_EXCEPTIONS = {
   // (a) executeTransaction( allowed only in host/project.js

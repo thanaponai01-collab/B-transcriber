@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS eval_run (
     baseline_eval_id     INTEGER REFERENCES eval_run(id),
     paired_delta_ci_json TEXT,
     gate_status          TEXT CHECK (gate_status IN ('pass', 'regression', 'unresolved')),
-    -- Cue-legality lint (HANDOFF_THAI_BREAK_ATOMS.md §5): count of hypothesis
+    -- Cue-legality lint (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §5): count of hypothesis
     -- cues whose break the BreakLexicon says is illegal (particle-initial,
     -- digit-final, a split classifier+demonstrative pair, a split exception-
     -- lexicon term). Descriptive only for now (no gate, no METRICS_VERSION
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS eval_run (
     -- lexicon, per the handoff's own instruction. NULL on rows predating
     -- this column.
     cue_legality_violations INTEGER,
-    -- Coverage signals (metrics v4, docs/arch-design-transcription-engine.md #1).
+    -- Coverage signals (metrics v4, docs/archive/arch-design-transcription-engine.md #1).
     -- Gated: speech_coverage_miss = reference cue time no hypothesis cue overlaps
     -- / total reference cue time. Descriptive: orphan_cues.
     speech_coverage_miss    REAL    NOT NULL DEFAULT 0.0,

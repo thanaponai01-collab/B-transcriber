@@ -1,4 +1,4 @@
-"""HANDOFF_ONE_ENGINE.md §6 (Phase D) — N-best self-ensemble.
+"""docs/archive/HANDOFF_ONE_ENGINE.md §6 (Phase D) — N-best self-ensemble.
 
 Pseudo-Engine-B is a second decode pass through Engine A's own already-loaded
 residency, fed through the *existing* align_hyp -> reconcile path as if it

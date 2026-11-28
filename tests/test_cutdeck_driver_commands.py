@@ -1,4 +1,4 @@
-"""One table owns the Premiere driver commands (docs/arch-design-helper-v3.md move 1)."""
+"""One table owns the Premiere driver commands (docs/archive/arch-design-helper-v3.md move 1)."""
 import asyncio
 import json
 import subprocess

@@ -12,7 +12,7 @@ const uxpHtml = fs.readFileSync(uxpHtmlPath, "utf8");
 /* The UI seam is one file per area of the panel, not one file forever. CutDeck is one panel
    (one index.html); core/panel.js owns the Cut and FX tabs and the frame around them,
    core/alignPanel.js the Transform and Align tabs, and DOM access stays confined to these.
-   Adding a name here is a deliberate architectural decision (see docs/arch-design-panel-ui.md),
+   Adding a name here is a deliberate architectural decision (see docs/archive/arch-design-panel-ui.md),
    never a way to quiet this test: anything listed must also be held to the id-resolution and
    render-idempotence tests below. */
 const UI_SEAM_FILES = ["core/panel.js", "core/alignPanel.js"];

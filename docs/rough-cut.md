@@ -68,7 +68,7 @@ This is reversible code, without a stored-data or public-API migration.
 - Filler setup/removal errors and commit failures are not automatically retried.
 - Native razor is announced for 27.1 but unproven here (PREMIERE_FACTS.md:205).
   Replacing overwrite-as-razor requires an installed-host probe first.
-- Historical HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md describes retired XML input and
+- Historical docs/archive/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md describes retired XML input and
   earlier split proposals; use this current map and workflow.js for today's flow.
 
 

@@ -78,7 +78,7 @@ The current workflow already captures timeline marks. Its overhead comes after c
 
 The user reports that the UXP workflow works. Preserve it as the existing automatic mode while adding the new path. No Python helper, transcription, GPU work, XML, or rendered media is needed for manual assembly if native copying is proven.
 
-Read repository guidance in `CLAUDE.md` and relevant current entries in `TODO_LEDGER.md` before changing code. `docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md` explicitly marks its old ExtendScript/QE design as superseded; it is historical context, not an implementation recipe.
+Read repository guidance in `CLAUDE.md` and relevant current entries in `TODO_LEDGER.md` before changing code. `docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md` explicitly marks its old ExtendScript/QE design as superseded; it is historical context, not an implementation recipe.
 
 ## 3. Product contract
 

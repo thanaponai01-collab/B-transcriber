@@ -1,5 +1,5 @@
 /* Helper transport for the CutDeck panel. Connects to the CutDeck Python helper on
-   ws://localhost:7891 (protocol v2, docs/arch-design-helper-v2.md).
+   ws://localhost:7891 (protocol v2, docs/archive/arch-design-helper-v2.md).
 
    Premiere can deny the socket on a cold start with "Permission denied to the url
    ws://localhost:<port>. Manifest entry not found." even though the manifest does

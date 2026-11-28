@@ -32,7 +32,7 @@
 // Selection lookup, the fixed-effect skip list, the {value:{value:X}} unwrap and the
 // transaction helper all live in timeline/componentAccess.js — lifted out of this file once
 // transform/params.js became a second consumer (see that module's header and
-// docs/research/cutdeck-transform-panel-plan.md Part 2). Re-exported below for callers that
+// docs/archive/cutdeck-transform-panel-plan.md Part 2). Re-exported below for callers that
 // already import them from here.
 const {
   getSelectedTrackItems,

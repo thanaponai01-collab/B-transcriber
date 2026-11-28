@@ -2,7 +2,7 @@
 // Turns the helper's cut list (sequence frames) plus the clone's clip items into the
 // per-item edits Route A applies, and the read-back it must see afterwards.
 // Ports cutdeck/xml_recut.py's _keep_subranges / _shift_for_frame / _process_track case
-// table to exact BigInt ticks. See docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md 3.2.
+// table to exact BigInt ticks. See docs/archive/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md 3.2.
 
 const { TICKS_PER_SECOND, toTicks } = require("../host/ticks.js");
 

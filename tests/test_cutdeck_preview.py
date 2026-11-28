@@ -1,4 +1,4 @@
-"""Phase 3 acceptance — ffmpeg concat-demuxer preview render (HANDOFF_CUTDECK_WORDLEVEL.md).
+"""Phase 3 acceptance — ffmpeg concat-demuxer preview render (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md).
 
 Uses the real ffmpeg on PATH against a tiny synthetic ``lavfi testsrc`` clip so the
 acceptance criteria (duration match, shorter-by-cuts, missing-ffmpeg message) are

@@ -1,8 +1,8 @@
-"""transcribe/words.py — the word timeline (HANDOFF_CUTDECK_WORDLEVEL.md Phase 1).
+"""transcribe/words.py — the word timeline (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 1).
 
 Word-level cutting (CutDeck fillers, stutters, mid-speech blades) needs real
 word spans, but faster-whisper's raw per-word output for spaceless Thai is
-sub-word fragments (see HANDOFF_CUTDECK_WORDLEVEL.md F2 — e.g. `{'text':
+sub-word fragments (see docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md F2 — e.g. `{'text':
 'เท', 1520-2120}`, `{'text': 'ส', 2120-2420}`). A per-character timeline
 reconstructs the full text, then ``pythainlp.word_tokenize`` finds real word
 boundaries, and each resulting token is mapped back to a time span via the

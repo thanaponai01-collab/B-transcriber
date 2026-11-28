@@ -1,7 +1,7 @@
 # Current work
 
-History: [SubtitleDesk history](work/subtitle_desk-history.md), [CutDeck history](work/cutdeck-history.md).
-Current execution state owned by [RUN.json](RUN.json) (status: complete at issue #76).
+History: [SubtitleDesk history](../../work/subtitle_desk-history.md), [CutDeck history](../../work/cutdeck-history.md).
+Current execution state owned by [RUN.json](../../RUN.json) (status: complete at issue #76).
 
 ## Pipeline Evolution & Robustness (Issues #69-#76) - 2026-10-20
 - **#69:** Reset `last_speech_timestamp` on segment breaks, filter silent/empty segments (`tests/test_faster_whisper.py`).

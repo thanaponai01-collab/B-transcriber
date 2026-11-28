@@ -1,4 +1,4 @@
-"""preview.py — ffmpeg concat-demuxer stream-copy preview render (HANDOFF_CUTDECK_WORDLEVEL.md Phase 3).
+"""preview.py — ffmpeg concat-demuxer stream-copy preview render (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 3).
 
 Every threshold in this system (silence, filler, repeat, blade) was being tuned
 blind until this module existed — a rough cut can only be judged in Premiere,

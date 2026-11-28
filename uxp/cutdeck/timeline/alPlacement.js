@@ -1,6 +1,6 @@
 // Pure planning logic for CutDeck adjustment-layer placement — no host APIs, no DOM.
 // Owned by uxp/cutdeck/timeline/adjustmentLayer.js via planPlacements() and assignPlacementLanes().
-// See docs/arch-design-cutdeck-panel.md Move 9 (issue #56).
+// See docs/archive/arch-design-cutdeck-panel.md Move 9 (issue #56).
 
 // Groups planned placements into "lanes" so any two that overlap in time never end up in
 // the same lane — classic interval-scheduling greedy assignment (sort by start, drop each

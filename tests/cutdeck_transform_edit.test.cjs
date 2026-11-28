@@ -1,4 +1,4 @@
-/* Phases 2–5 of docs/research/cutdeck-transform-panel-plan.md: typed field edits, the nine-point
+/* Phases 2–5 of docs/archive/cutdeck-transform-panel-plan.md: typed field edits, the nine-point
    anchor (Position compensated so the picture stays put) and align to the sequence frame.
 
    Proven here: the geometry is self-consistent (moving the anchor moves no source pixel; aligned

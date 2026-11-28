@@ -1,6 +1,6 @@
 // transform/geometry.js — PURE rect/point math for the Transform & Align panel. No
 // require("premierepro"), so it is unit-testable off-host (plan Part 2's file layout,
-// docs/research/cutdeck-transform-panel-plan.md).
+// docs/archive/cutdeck-transform-panel-plan.md).
 //
 // Two pixel spaces (Part 1a, proven live against Effect Controls): Position is normalized to the
 // SEQUENCE frame, Anchor Point to the clip's SOURCE frame. Pass the right frame for the param;

@@ -1,5 +1,5 @@
 """Local job service for CutDeck's processing tools: the one job owner, and the hub between
-its clients and Premiere (docs/arch-design-helper-v2.md).
+its clients and Premiere (docs/archive/arch-design-helper-v2.md).
 
 The UXP panel and the MCP server (`cutdeck.ai_backend`) are both clients of this
 socket, so there is one job_id space. GPU jobs (rough cut, transcribe) run one at a time;

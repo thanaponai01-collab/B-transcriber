@@ -1,4 +1,4 @@
-"""Helper v2 (docs/arch-design-helper-v2.md): request ids answered out of order, pushed job
+"""Helper v2 (docs/archive/arch-design-helper-v2.md): request ids answered out of order, pushed job
 events, the CPU lane, jobs that outlive the helper, and the panel as the Premiere driver.
 Every test talks to a real helper socket on an ephemeral port."""
 

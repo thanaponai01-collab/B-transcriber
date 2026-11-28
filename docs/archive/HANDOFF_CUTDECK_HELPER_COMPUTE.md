@@ -2,8 +2,8 @@
 
 **Written 2026-09-23** on branch `feat/cutdeck-transform-align` (the latest commit at the time
 was `f1183ef`). Scope is the **Cut & Sync** tab of the UXP panel and the XML export → recut
-pipeline only. The Adj & FX tab has its own handoff (`docs/HANDOFF_CUTDECK_AL_FX_NEXT.md`).
-Read `CLAUDE.md`, `uxp/cutdeck/README.md` and `docs/HANDOFF_CUTDECK_XML_RECUT.md` first.
+pipeline only. The Adj & FX tab has its own handoff (`docs/archive/HANDOFF_CUTDECK_AL_FX_NEXT.md`).
+Read `CLAUDE.md`, `uxp/cutdeck/README.md` and `docs/archive/HANDOFF_CUTDECK_XML_RECUT.md` first.
 
 ## The principle
 

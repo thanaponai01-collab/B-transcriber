@@ -1,4 +1,4 @@
-"""rules.py — the deterministic cut pass (IMPLEMENT_CUTDECK.md §B.3).
+"""rules.py — the deterministic cut pass (docs/archive/IMPLEMENT_CUTDECK.md §B.3).
 
 No LLM, ever. Three rules, in order:
 
@@ -23,7 +23,7 @@ Layer 0 (these VAD spans) decides *where* the blade lands.
 The whole pass is a pure function of (tokens, spans, duration, cfg): identical
 inputs yield a byte-identical plan (determinism is an acceptance criterion).
 
-**``cfg.rough_cut_mode`` (HANDOFF_CUTDECK_WORDLEVEL.md Phase 4, default
+**``cfg.rough_cut_mode`` (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 4, default
 ``"interval"``)** picks which rule builds rule 1's base keep/cut tiling.
 ``"interval"`` is the three rules above — silence intervals subtracted out of
 the whole timeline, then rule 3 repairs any too-short kept island the
@@ -139,7 +139,7 @@ def filler_cuts(
 
     Operates on the Phase 1 word timeline, not phrase-cue tokens — tokens are
     multi-word phrase cues since granularity 5.4 and will never ``==`` a filler
-    (HANDOFF_CUTDECK_WORDLEVEL.md F1). Always-safe fillers cut unconditionally;
+    (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md F1). Always-safe fillers cut unconditionally;
     contextual fillers only when isolated by silence on both sides (cutting
     them mid-sentence is how tools mangle Thai).
     """
@@ -254,7 +254,7 @@ def nonspeech_cuts(
     VAD marks breaths, lip smacks, coughs and camera noise as *speech*, so
     they survive the silence pass as kept pace forever — the largest
     remaining gap between "silence removal" and a real rough cut
-    (HANDOFF_CUTDECK_WORDLEVEL.md 5.1). A speech-classified span with no
+    (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md 5.1). A speech-classified span with no
     token midpoint inside it and longer than ``min_nonspeech_ms`` is cut
     outright, entire, no padding — there is no real content on either edge to
     protect. Guarded twice: only spans VAD already called ``speech`` are
@@ -289,7 +289,7 @@ def retake_marker_segments(segments: list[Segment], cfg: CutConfig) -> list[int]
 
     Whole-phrase substring match of ``cfg.retake_markers`` against each
     segment's text. Whether a marker phrase is present is never the LLM's
-    call (IMPLEMENT_CUTDECK.md §B.3 ``takes.py``) — only *how far back* the
+    call (docs/archive/IMPLEMENT_CUTDECK.md §B.3 ``takes.py``) — only *how far back* the
     retake it flags reaches is, and that resolution happens in
     ``cutdeck.takes``, not here.
     """
@@ -609,7 +609,7 @@ def build_cut_spans(
 
     ``words`` (Phase 1 word timeline) and ``segments`` (utterance grouping) are
     optional and independent of ``tokens``: fillers/repeats need real word spans,
-    not phrase-cue tokens (HANDOFF_CUTDECK_WORDLEVEL.md F1); a caller with no
+    not phrase-cue tokens (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md F1); a caller with no
     word timeline degrades to no filler/repeat cuts (``filler_cuts`` logs a
     warning), not a crash.
 

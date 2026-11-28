@@ -1,4 +1,4 @@
-/* Native multi-cam Sync (docs/HANDOFF_CUTDECK_NATIVE_SYNC.md step 2B). The helper matches the
+/* Native multi-cam Sync (docs/archive/HANDOFF_CUTDECK_NATIVE_SYNC.md step 2B). The helper matches the
    clips by audio (`plan_sync`); this places them in Premiere, with no XML round trip:
 
      1. refuse a sequence already named *_Synced; read every clip off the timeline

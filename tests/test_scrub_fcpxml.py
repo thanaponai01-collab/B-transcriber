@@ -1,4 +1,4 @@
-"""Tests for scripts/scrub_fcpxml.py (HANDOFF_CUTDECK_XML_RECUT.md Phase 1).
+"""Tests for scripts/scrub_fcpxml.py (docs/archive/HANDOFF_CUTDECK_XML_RECUT.md Phase 1).
 
 The scrubber's whole contract is asymmetric: strings that identify the editor's
 real project are rewritten, numbers that describe the sequence's structure are

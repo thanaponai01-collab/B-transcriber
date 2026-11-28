@@ -1,5 +1,5 @@
 """sequence_mixdown.py — sequence-mixdown ingest path (Phase 2,
-docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
+docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md).
 
 **Superseded as the in-place timestamp source** by the (since-retired,
 issue #25) ``live_clip.py`` mark-and-apply path, which read the clip's
@@ -75,7 +75,7 @@ def plan_from_mixdown(
     (``rules.apply_min_clip_merge``) can never tell a short real utterance
     from noise, so it re-admits adjacent silence into the kept timeline rather
     than risk dropping real speech (2026-08-29 real-footage finding — see
-    ``docs/HANDOFF_CUTDECK_XML_RECUT.md``). Passing real tokens lets it protect
+    ``docs/archive/HANDOFF_CUTDECK_XML_RECUT.md``). Passing real tokens lets it protect
     short speech islands by standing them alone instead of dissolving a
     neighbouring cut, so less silence survives into the recut output.
 

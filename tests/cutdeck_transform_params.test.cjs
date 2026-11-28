@@ -1,5 +1,5 @@
 /* transform/params.js and transform/geometry.js — Phase 1 of
-   docs/research/cutdeck-transform-panel-plan.md ("Read-only display of the selected clip's
+   docs/archive/cutdeck-transform-panel-plan.md ("Read-only display of the selected clip's
    position/scale/rotation/anchor, live"). params.js is host discovery only (talks to a fake
    premierepro host, never throws); geometry.js is pure math (no host at all). The param index
    map here (0 Position, 1 Scale, 3 Uniform Scale, 4 Rotation, 5 Anchor Point) is the one Part

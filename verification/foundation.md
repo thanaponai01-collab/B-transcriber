@@ -38,7 +38,7 @@ Root baseline was refreshed to current 152 check files; no tests were edited.
 ## Remaining gaps
 - No live browser, Premiere, real audio extraction, GPU ASR or hosted CI checks.
 - Current config uses one active engine despite older two-engine specification text.
-- Memory structural check reports 80-line limits for legacy docs/arch-design.md,
+- Memory structural check reports 80-line limits for legacy docs/archive/arch-design.md,
   SYSTEM_SPEC.md, CLAUDE.md, docs/ENGINES.md and MAINT_LOG.md, plus feature area records
   features/transcribe.md and features/cutdeck.md. Handoff's 150-line feature budgets pass.
   Preserve these facts; a future area split can resolve the stricter index budgets.

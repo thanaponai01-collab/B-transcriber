@@ -16,7 +16,7 @@ CUE_SPLIT_ALGORITHM = "greedy"
 class CuePolicy:
     """How to cut a word-piece stream into subtitle cues.
 
-    `lexicon` is a `transcribe.thai.atoms.BreakLexicon` (HANDOFF_THAI_BREAK_ATOMS.md):
+    `lexicon` is a `transcribe.thai.atoms.BreakLexicon` (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md):
     the break-atom set that makes STYLE_GUIDE §7's unsplittable units illegal to break
     *by construction* rather than by a veto check at each break decision. `None` falls
     back to `default_lexicon({})` — the four base rules, no exception-lexicon terms.

@@ -1,4 +1,4 @@
-"""Phase 5 acceptance — two cheap wins on dead air (HANDOFF_CUTDECK_WORDLEVEL.md).
+"""Phase 5 acceptance — two cheap wins on dead air (docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md).
 
 5.1 Token-less speech spans: VAD marks breaths/lip-smacks/coughs/camera noise
 as speech, so they survive the silence pass as kept pace forever. A "speech"

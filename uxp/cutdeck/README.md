@@ -170,12 +170,12 @@ where cuts land. A native razor is not used without an installed-host probe.
 
 ## Layout
 
-The panel follows the layered architecture and conventions defined in [docs/arch-design-cutdeck-panel.md](../../docs/arch-design-cutdeck-panel.md):
+The panel follows the layered architecture and conventions defined in [docs/archive/arch-design-cutdeck-panel.md](../../docs/archive/arch-design-cutdeck-panel.md):
 
 - **UI Seams (`core/`):** `core/panel.js` and `core/alignPanel.js` own all DOM access under a pure `render(state)` / `bind(intents)` contract. Styling is tokenized in `core/theme.css`.
 - **Composition & Controllers (`main.js`):** Composition root wiring UI intents to feature actions and host operations.
 - **Timeline & Host (`timeline/`, `transform/`):** Resolution detection, adjustment layer creation/placement, keyframe capture/apply, and native transform geometry.
-- **Conventions:** Layer rule (Composition → UI → features → domain → host → `premierepro`), single owner per host concern, direct in-place editing under `uxp/cutdeck/core/` (no source mirror). See the module table and conventions in `docs/arch-design-cutdeck-panel.md`.
+- **Conventions:** Layer rule (Composition → UI → features → domain → host → `premierepro`), single owner per host concern, direct in-place editing under `uxp/cutdeck/core/` (no source mirror). See the module table and conventions in `docs/archive/arch-design-cutdeck-panel.md`.
 
 ## Development
 

@@ -1,5 +1,5 @@
 /* host/components.js & host/trackItems.js — split out of timeline/componentAccess.js
-   as part of Move 5 (issue #53, docs/arch-design-cutdeck-panel.md).
+   as part of Move 5 (issue #53, docs/archive/arch-design-cutdeck-panel.md).
    Tests component helpers, keyframe value unwrapping, track item access, and selection. */
 const test = require("node:test");
 const assert = require("node:assert/strict");

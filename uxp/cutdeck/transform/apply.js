@@ -1,5 +1,5 @@
 // transform/apply.js — WRITES Motion values for the Transform & Align panel (Phases 2–5 of
-// docs/research/cutdeck-transform-panel-plan.md). No geometry, no DOM: callers pass values
+// docs/archive/cutdeck-transform-panel-plan.md). No geometry, no DOM: callers pass values
 // already in Premiere's own units (Position/Anchor Point normalized, Scale %, Rotation °).
 //
 // APIs (reference/adobe/api/premierepro.txt): Component.getParam, ComponentParam.createKeyframe,

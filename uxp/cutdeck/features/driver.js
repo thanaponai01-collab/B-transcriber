@@ -1,4 +1,4 @@
-// The panel as the Premiere driver (docs/arch-design-helper-v2.md move 3): runs the helper's
+// The panel as the Premiere driver (docs/archive/arch-design-helper-v2.md move 3): runs the helper's
 // fixed commands, sent on behalf of MCP agents and scripts (`python -m cutdeck.premiere_cli`),
 // with the same code the panel's own buttons use. Never runs code it was sent.
 // Must not know: the DOM, the helper socket, or who asked.

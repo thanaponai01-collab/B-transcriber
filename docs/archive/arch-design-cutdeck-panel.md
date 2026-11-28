@@ -417,7 +417,7 @@ before it merges.
 cost:     Every UI edit happens twice plus a sync step, and tests read `panel/core/*` while Premiere runs `uxp/cutdeck/core/*`, so a missed sync passes tests and still ships stale UI.
 files:    `scripts/sync_panel_core.py` (delete); `panel/core/{panel,alignPanel,rpc,progressText}.js`, `panel/core/theme.css` (delete after confirming they are byte-identical to `uxp/cutdeck/core/*`: `panel_core_sync.test.cjs` passing proves that); `tests/panel_core_sync.test.cjs` (delete); header comments of `uxp/cutdeck/core/panel.js:1-2`, `core/rpc.js:1-2`, `core/progressText.js:1-2` (drop "source of truth: panel/core"), `core/alignPanel.js`.
 owner:    `uxp/cutdeck/core/`
-callers:  `tests/panel_ui_contract.test.cjs:7` (`panelJsPath`), `:58-66` (the "exists in both source and mirror" test becomes "exists"), and its `require("../panel/core/panel.js")`; `tests/cutdeck_rpc.test.cjs:3`; `tests/cutdeck_align_panel.test.cjs:160`; `tests/cutdeck_progress_text.test.cjs`; `tests/cutdeck_transform_probe.test.cjs` (grep `panel/core`). Each becomes `../uxp/cutdeck/core/...`. Docs: `uxp/cutdeck/README.md`, `docs/HANDOFF_CUTDECK_AL_FX_NEXT.md`, and a superseded note at the top of `docs/arch-design-panel-ui.md`.
+callers:  `tests/panel_ui_contract.test.cjs:7` (`panelJsPath`), `:58-66` (the "exists in both source and mirror" test becomes "exists"), and its `require("../panel/core/panel.js")`; `tests/cutdeck_rpc.test.cjs:3`; `tests/cutdeck_align_panel.test.cjs:160`; `tests/cutdeck_progress_text.test.cjs`; `tests/cutdeck_transform_probe.test.cjs` (grep `panel/core`). Each becomes `../uxp/cutdeck/core/...`. Docs: `uxp/cutdeck/README.md`, `docs/archive/HANDOFF_CUTDECK_AL_FX_NEXT.md`, and a superseded note at the top of `docs/archive/arch-design-panel-ui.md`.
 proof:    `node --test tests/cutdeck_*.test.cjs tests/panel_*.test.cjs` → 0 fail (the count drops by the deleted sync tests only); `grep -rn "panel/core" tests scripts uxp` → no output.
 effort:   S
 after:    nothing
@@ -506,7 +506,7 @@ issue:    #56
 ### 10. Tidy: ignore build output, fix the README
 cost:     `uxp/cutdeck/package/*.ccx` is one `git add -A` away from being committed. The README sends a maintainer to `panel/core/panel.js` and describes native assembly as "in progress".
 files:    `.gitignore` (add `uxp/cutdeck/package/`); `uxp/cutdeck/README.md`: replace the "Native assembly (in progress)" section and every `panel/core` / CEP reference with a short **Layout** section that links to this doc's module table and conventions.
-owner:    `uxp/cutdeck/README.md` (user guide + pointer), `docs/arch-design-cutdeck-panel.md` (structure)
+owner:    `uxp/cutdeck/README.md` (user guide + pointer), `docs/archive/arch-design-cutdeck-panel.md` (structure)
 callers:  none
 proof:    `git status --porcelain uxp/cutdeck` → no `package/` line; `grep -n "panel/core\|in progress" uxp/cutdeck/README.md` → no output.
 effort:   S

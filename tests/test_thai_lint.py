@@ -1,4 +1,4 @@
-"""transcribe/thai/lint.py — HANDOFF_THAI_BREAK_ATOMS.md Phase 3.
+"""transcribe/thai/lint.py — docs/archive/HANDOFF_THAI_BREAK_ATOMS.md Phase 3.
 
 Cue-legality lint: the harness's own eyes for the incident's failure class,
 scanning real hypothesis (and reference) cue output for breaks the shared

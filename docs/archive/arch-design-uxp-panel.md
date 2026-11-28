@@ -8,7 +8,7 @@
 
 Not read: probe bodies (capabilityProbe.js, roughCutProbe.js, syncProbe.js, layoutProbe.js), spike18_split_probe/ (a spike, not the shipped panel), the helper (cutdeck/*.py).
 
-Earlier designs (docs/arch-design-cutdeck-panel.md, arch-design-helper-v2.md) are landed: main.js is 224 lines of wiring, `KNOWN_EXCEPTIONS` in the structure test is all empty, 588 node tests pass (proven, `node --test tests/*.cjs`). This file does not reopen them.
+Earlier designs (docs/archive/arch-design-cutdeck-panel.md, arch-design-helper-v2.md) are landed: main.js is 224 lines of wiring, `KNOWN_EXCEPTIONS` in the structure test is all empty, 588 node tests pass (proven, `node --test tests/*.cjs`). This file does not reopen them.
 
 ## Finding 1: features/align.js became a domain module inside the feature layer
 - where: uxp/cutdeck/features/align.js:16 (domain starts) to :756 (domain ends); controller `createAlignFeature` at :796; consumer uxp/cutdeck/features/driver.js:27

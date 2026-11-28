@@ -36,7 +36,7 @@ def find_cue_legality_violations(
     cues: list[dict], lexicon: BreakLexicon
 ) -> list[CueViolation]:
     """Scan time-ordered cues (each a dict with a "text" key) for edges the
-    lexicon says are illegal — the four checks HANDOFF_THAI_BREAK_ATOMS.md §5
+    lexicon says are illegal — the four checks docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §5
     names:
 
     - `particle_initial`: a cue (other than the first) opens with `bind_left`

@@ -147,13 +147,13 @@ matters for a future term shaped that way.
 
 Enforced today for cue breaks (`_split_greedy`/`_split_dp` behind
 `split_cues` in `transcribe/cues/`) via `transcribe/thai/atoms.py`'s
-`glue_atoms`/`BreakLexicon` (HANDOFF_THAI_BREAK_ATOMS.md): every unsplittable
+`glue_atoms`/`BreakLexicon` (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md): every unsplittable
 unit below is merged into one indivisible break-atom *before* either splitter
 runs, so a break inside one is unrepresentable rather than checked-and-vetoed.
 `align_force.py`'s `export_srt`/`export_vtt` still write one line per
 phrase-cue and never split a cue across display lines, and CutDeck captions
 burn-in (`TODO_LEDGER.md`) hasn't been built yet — whichever feature ships the
-first two-line wrapper must call `glue_atoms` too (HANDOFF_THAI_BREAK_ATOMS.md
+first two-line wrapper must call `glue_atoms` too (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md
 §7: "do not build the CutDeck two-line wrapper without atoms"), not improvise
 a second, independently-tuned heuristic. Each bullet names the `BreakLexicon`
 field that implements it — if a bullet and the field it names disagree,
@@ -184,7 +184,7 @@ that's a defect.
   (`BreakLexicon.pos_conditioned_bind_left` — only glues after a
   verb-tagged token, since `กัน` is also "to block" outside the reciprocal
   sense) — **off by default, and confirmed to regress on real corpus data**
-  (HANDOFF_THAI_BREAK_ATOMS.md §6 Phase 4: probed 2026-08-06 — the real
+  (docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §6 Phase 4: probed 2026-08-06 — the real
   sentence `ทำแบบนี้กันทั้งนั้น` in `Short2.json`'s reference has กัน follow
   the demonstrative `แบบนี้`, not the verb `ทำ`; a single-token POS lookback
   strands it, reproducing the stranded-particle defect this section exists to
@@ -202,7 +202,7 @@ that's a defect.
   decision this rule doesn't touch; it only refuses to split whichever one
   was said. Classifier set: `คน อัน ตัว ที่ สิ่ง เรื่อง แห่ง ลูก ใบ เล่ม คัน
   หลัง เครื่อง ชิ้น ชุด คู่ ครั้ง ที รอบ` — the original five plus
-  HANDOFF_THAI_BREAK_ATOMS.md §4 item 2's growth batch toward the common
+  docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §4 item 2's growth batch toward the common
   spoken-Thai set. (`BreakLexicon.pair_bind_left`.)
 - **Never strand an utterance-final/polite particle at a cue start** — Thai
   final particles (`นะ ครับ ค่ะ คะ สิ เลย ล่ะ แหละ หรอก เถอะ จ้ะ อ่ะ มั้ย
@@ -211,7 +211,7 @@ that's a defect.
   risk of this section's rules (`เลย` is also "at all"/"past"/a place name),
   accepted per this section's over-gluing-is-safe rationale: a cosmetic
   early break beats a stranded particle. (`BreakLexicon.bind_left`, rule
-  `final_particle` — HANDOFF_THAI_BREAK_ATOMS.md §4 item 3.)
+  `final_particle` — docs/archive/HANDOFF_THAI_BREAK_ATOMS.md §4 item 3.)
 - **Prefer breaking at a clause or phrase boundary** (before a conjunction like
   แต่/และ/ที่, at a natural pause) over an arbitrary mid-phrase split, and
   prefer a roughly even split across lines over one long line + one short

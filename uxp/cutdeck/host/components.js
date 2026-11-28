@@ -1,5 +1,5 @@
 // Shared low-level Premiere component-chain access and keyframe value unwrap.
-// Moved to host/components.js as part of Move 5 (issue #53, docs/arch-design-cutdeck-panel.md).
+// Moved to host/components.js as part of Move 5 (issue #53, docs/archive/arch-design-cutdeck-panel.md).
 
 // Every plain video clip and Adjustment Layer carries these fixed effects in Premiere's own
 // Effect Controls panel — never something a user added. Matched by display name because this

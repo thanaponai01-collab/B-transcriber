@@ -1,4 +1,4 @@
-/* Phase 0 probe 1 of docs/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md: marks and timing.
+/* Phase 0 probe 1 of docs/archive/HANDOFF_CUTDECK_TIMELINE_IN_OUT.md: marks and timing.
 
    Read-only. It creates nothing, inserts nothing and deletes nothing, so it is safe
    to run in a real project — unlike probes 2-6, which mutate and belong in a
@@ -432,7 +432,7 @@ function formatEffectChainReport(report) {
   return formatFindings("Effect chain probe", report);
 }
 
-/* Phase 0 probe of docs/research/cutdeck-transform-panel-plan.md — the Transform & Align
+/* Phase 0 probe of docs/archive/cutdeck-transform-panel-plan.md — the Transform & Align
    feature's blocking unknowns, asked of the installed build rather than of Adobe's reference.
 
    Adobe documents no parameter map. `@adobe/premierepro@26.2.1`'s declarations (the release
@@ -969,7 +969,7 @@ function formatKeyframeReport(report) {
     : `No verdict yet — read the findings above for what to change, then run again.`);
 }
 
-/* Adjustment Layer creation probe (docs/HANDOFF_CUTDECK_AL_FX_NEXT.md task 1). NOT read-only:
+/* Adjustment Layer creation probe (docs/archive/HANDOFF_CUTDECK_AL_FX_NEXT.md task 1). NOT read-only:
    it imports one generated Adjustment Layer into Project panel > CutDeck > ADJ & FX. That is
    the whole question: the API has no create call, so can a generated one-AL .prproj
    (timeline/alProject.js), sized to the active sequence, come in through importFiles?

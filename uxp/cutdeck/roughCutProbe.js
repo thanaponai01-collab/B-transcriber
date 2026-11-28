@@ -1,4 +1,4 @@
-/* Native rough cut probes P1-P5 ("Test Native Cut"), docs/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md
+/* Native rough cut probes P1-P5 ("Test Native Cut"), docs/archive/HANDOFF_CUTDECK_NATIVE_ROUGH_CUT.md
    section 5. Answers from the real host what Route A/B need before they are built:
 
      P2  project-item In/Out + overwrite in ONE transaction: does the overwrite place only the

@@ -1,4 +1,4 @@
-"""Metrics v4: speech_coverage_miss and orphan_cues (docs/arch-design-transcription-engine.md #1).
+"""Metrics v4: speech_coverage_miss and orphan_cues (docs/archive/arch-design-transcription-engine.md #1).
 
 Run: python -m pytest tests/test_metrics_v4.py -v
 """

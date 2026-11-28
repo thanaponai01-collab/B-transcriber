@@ -1,5 +1,5 @@
 // Owns the Transform panel display state and polling loop; the reads and edits themselves
-// live in transform/edit.js (docs/research/cutdeck-transform-panel-plan.md).
+// live in transform/edit.js (docs/archive/cutdeck-transform-panel-plan.md).
 // Must not know: the DOM, UI panels, Rough Cut or Sync job semantics.
 
 const frameBounds = require("../transform/frameBounds.js");

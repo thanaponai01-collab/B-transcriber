@@ -1,6 +1,6 @@
 // Owns the rough cut job lifecycle (capture, prepare, follow, native apply) and job persistence.
 // The helper analyses the audio tracks the panel reads natively (workflow.prepare; no XML export
-// since docs/arch-design-helper-v2.md move 6); the cuts are applied natively to a copy
+// since docs/archive/arch-design-helper-v2.md move 6); the cuts are applied natively to a copy
 // (timeline/nativeCut.js). The XML *output* route is retired (HANDOFF_CUTDECK_NATIVE_ROUGH_CUT Phase 6).
 // Must not know: the DOM, UI panels, Adjustment Layer or Effects logic.
 

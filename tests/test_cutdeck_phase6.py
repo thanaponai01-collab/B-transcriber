@@ -1,5 +1,5 @@
 """Phase 6 acceptance — cutdeck/takes.py, the retake/false-start LLM classifier
-(HANDOFF_CUTDECK_WORDLEVEL.md Phase 6, IMPLEMENT_CUTDECK.md §B.3 ``takes.py``).
+(docs/archive/HANDOFF_CUTDECK_WORDLEVEL.md Phase 6, docs/archive/IMPLEMENT_CUTDECK.md §B.3 ``takes.py``).
 
 Select-only discipline mirrors ``transcribe.pipeline.reconcile``: a mock LLM
 returning a hallucinated or missing id must raise, never be silently

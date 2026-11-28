@@ -845,7 +845,7 @@ UXP Developer Tool too) and note the finding on #17, since it changes what
 ## Before clicking anything
 
 Open a **throwaway copy** of a project (per this repo's existing convention
-for anything that mutates a live sequence — see `docs/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`
+for anything that mutates a live sequence — see `docs/archive/HANDOFF_CUTDECK_LIVE_SEQUENCE.md`
 Phase 0). Put a clip on V1 and a clip on A1, each long enough to mark an
 in/out point inside it. **Mark an in point and an out point on the timeline
 (I / O) that fall entirely within the target clip's span** before clicking —

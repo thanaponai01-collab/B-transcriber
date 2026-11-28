@@ -1,6 +1,6 @@
 /* The UXP panel's UI seam. This is the only file in the panel allowed to call
    getElementById, classList, textContent or addEventListener — see
-   docs/arch-design-panel-ui.md and issue #45.
+   docs/archive/arch-design-panel-ui.md and issue #45.
 
    Two exports only:
      render(state)  — state -> screen. A pure sink: writes the DOM, never reads it back, and is
