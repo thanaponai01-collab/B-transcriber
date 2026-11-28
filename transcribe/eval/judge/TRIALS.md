@@ -70,7 +70,22 @@ Tune misses by cause (119 of 271; ranking comes from tune only):
 
 ## Lessons
 
-(none yet)
+After trials 1-5:
+1. The snap's knobs are where the frames are. One search moved 26 tune edges into a frame for 4
+   moved out, and it held on heldout (+8.2 pts). Cause-ranked: ends (end snap found nothing / put
+   the edge wrong) were 55 of 119 tune misses.
+2. Operations that only rescale levels do nothing to the snap, whose thresholds are relative to
+   the local floor and peak (AGC: 0 edges moved).
+3. Spectral flux is a worse onset cue than loudness on this audio (room noise, music beds): it
+   fires on non-speech changes.
+4. A tune gain whose better/worse edge counts are close (22/19) did not replicate on heldout;
+   one with a lopsided count (26/4) did. Read the edge counts, not only the CI.
+5. Three T5 knobs sit at their search bounds (start reach 38/40, start pause 3/3, end reach
+   79/80): the next search should widen them.
+
+Ranked next: T6 wider snap search; T7 bounded cue windows on the new baseline; T8 high-pass
+before Whisper (Engine A re-run + CER gate); T9 loudness normalisation before VAD (VAD cuts are 6
+of 119 tune misses: low).
 
 ## Prepared candidates (built, off, not yet scored: the reference is not marked yet)
 
@@ -85,4 +100,14 @@ Tune misses by cause (119 of 271; ranking comes from tune only):
 
 ## Trials
 
-(none yet)
+Within-1-frame share of all marked edges (starts + ends); delta = paired, CI = 95% clip bootstrap.
+
+| # | Hypothesis (cause targeted) | Change | Tune | Heldout | Verdict |
+|---|---|---|---|---|---|
+| T1 | Starts the loudness snap declines or misplaces (26 tune) land better on a spectral-flux onset backtracked to its energy minimum | `snap_method: flux` | 56.1 → 48.3 (−7.7, CI −11.9…−3.3; 6 better / 20 worse) | not run | **reverted** |
+| T2 | CTC placement: a second Thai CTC checkpoint places first/last letters closer to the sound | `model: models/wav2vec2-th-ctc-airesearch.pt` (airesearch/wav2vec2-large-xlsr-53-th) | 56.1 → 59.4 (+3.3, CI +0.4…+6.5; 22/19) | 70.97 → 71.3 (+0.4, CI −2.1…+3.0; 16/15): no regression, gate passes | **kept** (weak: tune gain did not replicate) |
+| T3 | Cue-window collisions (6 tune misses; 1 ms words) | `pad_into_neighbours: false` | 56.1 → 58.3 (+2.2, CI −0.4…+5.4; 11/8) | not run | no frame gain; hygiene: 1 ms words 254 → 82 of 5296, text identical, w1 not worse. **User's call** |
+| T4 | Snap misses from level differences between loud and soft passages (loudness normalisation before the snap) | `level_norm: agc` (3 s rolling peak) | 59.4 → 59.0 (−0.4, CI −1.1…0; 0/0) | not run | **reverted** (no effect: snap thresholds are relative) |
+| T5 | End snap finds nothing / misplaces (55 tune misses) and start snap declines (13): its thresholds are mis-set | Optuna, 40 evaluations on tune, CTC cached: `start_snap {reach 38, pause 3, quiet_db 7.09, range_db 17.73}`, `end_snap {reach 79, pause 6, quiet_db 10.67, below_peak_db 34.05, tail_db 25.61, hold_db 2.0}` | 59.4 → 70.5 (+11.1, CI +5.3…+17.8; 26/4); starts 66.7 → 76.3, ends 52.2 → 64.7; start median unchanged (−18 ms) | 71.3 → 79.6 (+8.2, CI +4.4…+12.1; 26/10); starts 76.6 → 86.5, ends 65.9 → 72.5 | **kept** |
+
+All trials so far: text identical (`same_text: true`), so CER is unchanged by construction.
