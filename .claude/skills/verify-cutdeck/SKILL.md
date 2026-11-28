@@ -5,9 +5,10 @@ description: Drive the real CutDeck stack in live Adobe Premiere Pro (helper on 
 
 # Verify CutDeck in live Premiere
 
-CutDeck lets agents and scripts control Premiere. Every Premiere command is one entry in
-`cutdeck/driver_commands.py`. It runs through the helper (`python -m cutdeck.helper`, port 7891);
-panel commands go on to the CutDeck UXP panel inside Premiere, and the menu, key, screenshot and
+CutDeck lets agents and scripts control Premiere. Every Premiere command is one entry in the
+table `cutdeck/driver_commands.py`; a command family's code lives in `cutdeck/commands/`
+(`pieces.py`: paste_from, paste_pieces, arrange). It runs through the helper
+(`python -m cutdeck.helper`, port 7891); panel commands go on to the CutDeck UXP panel inside Premiere, and the menu, key, screenshot and
 AI Assistant commands run in the helper itself. Tests use a fake Premiere
 (`tests/fakes/premiere.cjs`); this skill drives the real one.
 
@@ -44,7 +45,7 @@ Premiere must already be running with a project open. An agent cannot do that st
 
 ```
 cdv.py launch                     # start a helper if none answers; wait for the panel
-cdv.py launch --restart-helper    # after changing cutdeck/*.py: helper restarts in place on this code
+cdv.py launch --restart-helper    # after changing cutdeck/**/*.py: helper restarts in place on this code
 cdv.py launch --reload-panel      # after changing uxp/cutdeck/*: save project, reload panel, wait
 ```
 
@@ -63,7 +64,7 @@ cdv.py doctor
 Read-only. Checks, in order: Premiere running, helper answering, panel connected as the driver,
 panel offering every panel command (else it runs older code: `launch --reload-panel`), a
 sequence readable, the current selection (a non-empty selection means transform commands WILL
-edit those clips), the helper started after the newest `cutdeck/*.py` change (else
+edit those clips), the helper started after the newest `cutdeck/**/*.py` change (else
 `launch --restart-helper`), and that UXP Developer Tool loads this checkout's `uxp/cutdeck`.
 Run it first, and again whenever anything looks off.
 
