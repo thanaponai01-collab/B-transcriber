@@ -1,5 +1,5 @@
-"""CLAUDE.md rule 2 for routes: every command in cutdeck/driver_commands.py takes only routes
-proven live, and none that is off limits.
+"""CLAUDE.md rule 2 for routes: every command in the table cutdeck/driver_commands.py (family code in
+cutdeck/commands/) takes only routes proven live, and none that is off limits.
 
     python tools/adobe/check_routes.py [--json] [--commands MODULE] [--facts PATH]
 

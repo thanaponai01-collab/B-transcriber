@@ -37,8 +37,9 @@ nothing), and read the result back. Keys and the Premiere UI take the user's mou
 approved standing (user, 2026-11-26), no need to ask each time. Never use the AI Assistant
 (`premiere_assistant_ask`): it spends the user's Adobe credits, and they have not allowed that.
 Don't fake or approximate a feature; if a CutDeck guard blocks a task, name the guard, not
-"Premiere can't". A new route or command is built in the helper (`cutdeck/driver_commands.py`),
-proved live (verify-cutdeck) and recorded before agents use it. Premiere's built-in MCP server
+"Premiere can't". A new route or command is built in the helper (`cutdeck/driver_commands.py`, the
+table; family code in `cutdeck/commands/`), proved live (verify-cutdeck) and recorded before
+agents use it. Premiere's built-in MCP server
 and `hSLScripting` are off limits: first-party only, never force them.
 
 For panel code (`uxp/cutdeck/`), never write an Adobe API from memory. Check, in order:

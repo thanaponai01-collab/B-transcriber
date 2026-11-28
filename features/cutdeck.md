@@ -124,7 +124,7 @@
 ## Paste several pieces at once (MCP)
 - what: Pieces of a source sequence (yt, a rough cut, a split), in play order, into an existing sequence in place or into a new copy of a 9:16 template (a Short); the default for any copy of several pieces: every track, effect and Graphic kept, a fixed number of edits whatever the piece count, temporaries removed, saved before and after. The template's own clips stay where the Short doesn't cover them. paste_from refuses a third paste into one target without per_piece_reason, so a Short can't fall back to piece by piece silently.
 - mcp: `premiere_paste_pieces(source, target, pieces=[{from_ticks,to_ticks}], template="", at_ticks=0)`
-- trace: `_paste_pieces` @ cutdeck/driver_commands.py > `make_subsequence`, `cut_copy`, `_arrange` (4 build_sequence steps, clone `ranges`), `_paste_from`, `remove_piece`; guard `_paste_from_guarded`
+- trace: `_paste_pieces` @ cutdeck/commands/pieces.py > `make_subsequence`, `cut_copy`, `_arrange` (4 build_sequence steps, clone `ranges`), `_paste_from`, `remove_piece`; guard `_paste_from_guarded`
 - verify: Derive a Short at fixed cost (VERIFY.md)
 - status: live-proven 2026-11-26 on a scratch project: 40 pieces in 47.5 s, 0 missing / 0 unexpected; edges render identical to paste-per-piece
 
