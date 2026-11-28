@@ -18,15 +18,6 @@ faster-whisper>=1.2.0   # Engine A default (CTranslate2) — needs a CT2-convert
                         #     --copy_files tokenizer.json preprocessor_config.json
 # word_align's Thai CTC model, exported once as a torchaudio checkpoint (models/wav2vec2-th-ctc.pt):
 #   python -c "from transcribe.pipeline.word_align import export_checkpoint; export_checkpoint()"
-funasr>=1.1.0
-# Engine B candidate (Typhoon RT / FastConformer-Transducer). Heavy C-dep tree
-# (pytorch-lightning, optuna, wandb, ...) — kept commented out of the default
-# install. VERIFIED 2026-07-16: installs and imports cleanly on this 3.11.9
-# venv (nemo_toolkit==2.7.3) — the old "Python 3.13 wheel UNVERIFIED" note no
-# longer applies. Probed as engine_b and REJECTED on accuracy: regresses
-# CER_thai and WER_latin vs both the passthrough baseline and funasr, with
-# only a marginal BER edge. Don't re-try without new evidence; see TODO_LEDGER.
-# nemo_toolkit[asr]>=2.7.0
 # Engine B candidate (Qwen3-ASR) — LLM-decoder ASR, the code-switch-wall
 # priority candidate per docs/archive/HANDOFF_CEILING_BREAK.md §6/4.1. Not yet probed;
 # kept commented out until an eval run judges it. `qwen-asr` is Qwen's own

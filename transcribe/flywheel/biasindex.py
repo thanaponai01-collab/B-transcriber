@@ -45,7 +45,7 @@ def update_bias_index(
 
     Args:
         conn: DB connection
-        active_engines: engine names currently in config (e.g. ["whisper_thai", "funasr"])
+        active_engines: engine names currently in config (e.g. ["faster_whisper", "passthrough"])
         eval_config: config dict for running the regression gate
         db_path: path to DB (needed for regression gate)
         run_regression_gate: if True, run eval harness after update

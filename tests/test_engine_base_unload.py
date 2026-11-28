@@ -5,7 +5,7 @@ empty_cache()), not the allocator: actual VRAM reclamation needs a real GPU
 and isn't assertable on a CPU test runner (see the ticket's Testing
 Decisions). A purpose-built Engine subclass reaches `_release()` without a
 model, the same fake-backend-into-a-private-handle pattern
-test_qwen3_asr.py/test_phase4_typhoon.py use for their adapters.
+test_qwen3_asr.py uses for its adapter.
 """
 
 import sys

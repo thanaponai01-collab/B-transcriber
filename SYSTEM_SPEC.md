@@ -80,8 +80,8 @@ thresholds, batch_size, bias budget) — an engine/model/compute swap is a YAML 
 | `whisper_thai.py` | `whisper_thai` | same checkpoint via HF transformers — slower per-chunk fallback | registered |
 | `whisper_multi.py` | `whisper_multi` | `openai/whisper-large-v3` — multilingual code-switch slot | registered |
 | `qwen3_asr.py` | `qwen3_asr` | `Qwen/Qwen3-ASR-1.7B` via `qwen_asr`. LLM-decoder ASR candidate for code-switching; own internal VAD segmentation (`speech_windows`, capped at `max_span_s: 8.0`); context prompt injection. Probed with real disagreements; **not activated** because model transliterates English loanwords into Thai script (model quality, not a reconciler bug; docs/ENGINES.md:53-70). | built, not activated |
-| `typhoon_rt.py` | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. **Rejected**: regresses `cer_thai` and `wer_latin` vs baseline (docs/ENGINES.md:46-52). Do not retry without new evidence. | rejected |
-| `funasr.py` | `funasr` | `SenseVoiceSmall`. **Retired**: model has no Thai support (only zh/en/yue/ja/ko); auto-detects Thai as Cantonese and emits CJK garbage (docs/ENGINES.md:31-40). Do not re-probe without a different model. | retired |
+| — | `typhoon_rt` | SCB10X Typhoon ASR Real-time (FastConformer-Transducer, ~115M) via NeMo — decorrelated Engine B candidate. **Rejected**: regresses `cer_thai` and `wer_latin` vs baseline (docs/ENGINES.md:46-52). Code removed 2026-11-28; git history keeps `typhoon_rt.py`. Do not retry without new evidence. | rejected, code removed |
+| — | `funasr` | `SenseVoiceSmall`. **Retired**: model has no Thai support (only zh/en/yue/ja/ko); auto-detects Thai as Cantonese and emits CJK garbage (docs/ENGINES.md:31-40). Code removed 2026-11-28; git history keeps `funasr.py`. Do not re-probe without a different model. | retired, code removed |
 | `mock.py` | `mock` | canned tokens, no GPU — used by all pipeline tests | tests only |
 | `base.py` / `registry.py` | — | `Engine` ABC (`load → transcribe → unload`), `@register` + `get_engine()` | — |
 
@@ -195,7 +195,7 @@ lives in `config.yaml`.
 
 ## 7. Evaluation — `transcribe/eval/`
 
-- **`metrics.py`** — five gated signals on well-defined units (`METRICS_VERSION = 4`):
+- **`metrics.py`** — five gated signals on well-defined units (`METRICS_VERSION = 5`):
   - **`cer_thai`** — character error rate over Thai-script content (primary Thai signal;
     tokenization-free because Thai has no word boundaries)
   - **`wer_latin`** — case-insensitive word error over Latin/digit runs
@@ -271,7 +271,7 @@ Run: `uvicorn transcribe.editor.server:app --port 8000`.
 | File | Role |
 |---|---|
 | `contracts.py` | `Segment/Label/CutSpan/CutPlan/CutConfig` + Timebase re-export; `CutSpan.blade` (`BLADE_VAD`/`BLADE_WORD`) marks whether an edge came from a VAD silence boundary or a word timestamp inside continuous speech |
-| `words.py` | word-timeline reconstruction (`Word`, `words_from_pieces`, `words_for_job`) from raw sub-word ASR pieces — the one implementation shared with `transcribe/engines/faster_whisper.py`'s cue grouping |
+| `words.py` | re-exports `transcribe/words.py`: word-timeline reconstruction (`Word`, `words_from_pieces`, `words_for_job`) from raw sub-word ASR pieces, the one implementation shared with `transcribe/cues/split.py`'s cue grouping. It lives in `transcribe/` because transcribe never imports cutdeck (`tests/test_layers.py`) |
 | `segment.py` | gap/VAD utterance segmentation over the token + speech_span timeline |
 | `rules.py` | deterministic cut pass; two rough-cut modes via `cut.rough_cut_mode` (default `interval`: silence-interval subtraction + min-clip merge; opt-in `segment`: keeps built outward from segments, no merge/dissolve needed), plus word-level `filler_cuts` (on the Phase 1 word timeline, config-gated) and `repeat_cuts` (deterministic stutter/duplicate-word n-gram detector, segment-bounded, config-gated) — both apply identically in either mode |
 | `plan.py` | contiguous/exhaustive CutPlan, JSON round-trip, `cut_plan` store glue, CLI `python -m cutdeck.plan --job-id N` |

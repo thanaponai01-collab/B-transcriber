@@ -124,7 +124,7 @@
 ## Paste several pieces at once (MCP)
 - what: Pieces of a source sequence (yt, a rough cut, a split), in play order, into an existing sequence in place or into a new copy of a 9:16 template (a Short); the default for any copy of several pieces: every track, effect and Graphic kept, a fixed number of edits whatever the piece count, temporaries removed, saved before and after. The template's own clips stay where the Short doesn't cover them. paste_from refuses a third paste into one target without per_piece_reason, so a Short can't fall back to piece by piece silently.
 - mcp: `premiere_paste_pieces(source, target, pieces=[{from_ticks,to_ticks}], template="", at_ticks=0)`
-- trace: `_paste_pieces` @ cutdeck/driver_commands.py > `make_subsequence`, `cut_copy`, `_arrange` (4 build_sequence steps, clone `ranges`), `_paste_from`, `remove_piece`; guard `_paste_from_guarded`
+- trace: `_paste_pieces` @ cutdeck/commands/pieces.py > `make_subsequence`, `cut_copy`, `_arrange` (4 build_sequence steps, clone `ranges`), `_paste_from`, `remove_piece`; guard `_paste_from_guarded`
 - verify: Derive a Short at fixed cost (VERIFY.md)
 - status: live-proven 2026-11-26 on a scratch project: 40 pieces in 47.5 s, 0 missing / 0 unexpected; edges render identical to paste-per-piece
 
@@ -204,7 +204,7 @@
 - what: The helper saves, reads the save, runs every HKS gate on a draft by its GUID, checks a written answer for every active do-confirm rule in projects/hks/registry/, copies the save into CutDeck/Drafts and stores a signed record keyed by GUID and cut hash. The panel's HKS Gates section shows every sequence as pass, fail (gate id and value) or ungated from those records only.
 - mcp: `premiere_hks_handover(sequence, body_from=0, show_end?, answers?, overrides?, by="agent")`, `premiere_hks_status(mark_baseline=false)`
 - cli: `python -m cutdeck.hks_handover --prproj <file> --sequence <guid|name> --from <s> [--answers <json>]` @ cutdeck/hks_handover.py (a saved project, no Premiere)
-- trace: `_hks_handover` @ cutdeck/driver_commands.py > `save_project` (panel) > `handover` @ cutdeck/hks_enforce.py > `run` @ cutdeck/hks_gates.py > `append` @ cutdeck/hks_gate_store.py; panel `features/hks.js` > `hks_status` > `status` @ cutdeck/hks_enforce.py
+- trace: `_hks_handover` @ cutdeck/commands/hks.py > `save_project` (panel) > `handover` @ cutdeck/hks_enforce.py > `run` @ cutdeck/hks_gates.py > `append` @ cutdeck/hks_gate_store.py; panel `features/hks.js` > `hks_status` > `status` @ cutdeck/hks_enforce.py
 - verify: HKS handover gates (VERIFY.md)
 - status: live-proven 2026-11-26 on a copy of the 1125 save (run 20261126-163421-hks-gates): 1125 v1 red in the panel; menu label and duplicate show as ungated
 

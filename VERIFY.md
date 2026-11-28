@@ -29,7 +29,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: disabled the zero-gap span merge in audio/windows.py, test_audio_windows/test_phase3_ingest went red, reverted
 
 ## Engines
-- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_config_validation.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_faster_whisper_short_span_recovery.py tests/test_hf_whisper_engines.py tests/test_phase4_typhoon.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
+- test: `python -m pytest tests/test_engine_base_unload.py tests/test_engine_config_validation.py tests/test_engine_contract_import_direction.py tests/test_engine_unload_order.py tests/test_faster_whisper.py tests/test_faster_whisper_path_scoping.py tests/test_faster_whisper_truncation_recovery.py tests/test_faster_whisper_short_span_recovery.py tests/test_hf_whisper_engines.py tests/test_qwen3_asr.py tests/test_self_ensemble.py -q -p no:cacheprovider`
 - fail-signal: AssertionError
 - fail-proof: no-op'd _release() in engines/base.py unload(), test_engine_base_unload went red; also removed gc.collect() and the empty_cache() call, and forced the CUDA check on, test_engine_unload_order went red on each (gc.collect() and empty_cache() removal had stayed green before), reverted
 
@@ -86,6 +86,10 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - test (2026-11-23, cdv call startup): `python -m pytest tests/test_cutdeck_cdv_startup.py -q -p no:cacheprovider` (a cdv round trip leaves asyncio, websockets, ai_backend, the helper, driver_commands, premiere_ui, numpy and PIL unloaded; the standard-library client in cutdeck/helper_protocol.py gives the same replies and errors as Backend against a real serve(), answers pings during a slow reply, and round-trips every frame length and a fragmented reply)
 - fail-proof: the first 3 tests red on 26ca379 (before PORT/VERSION moved to cutdeck/helper_protocol.py), green after; removing the pong, the continuation join, or the refusal check in `ask` each turned tests red, restored.
 - live (2026-11-23, bench `output/perf/2026-11-23-cutdeck-profile/cdv_bench.py`, helper on :7891 not restarted): fresh-process `cdv.py call read_sequence` timed from outside, 4 alternating block pairs of 6 per side, one warm-up dropped per side; old 26ca379 median 507 ms (477-618, n=24), new median 302 ms (278-359, n=24), 0 failures; the recorded result and the unknown-command error are identical on both sides. `import cdv` 354 ms to 155 ms.
+
+- test (2026-11-28, command file size): `python -m pytest tests/test_command_file_size.py -q -p no:cacheprovider` (cutdeck/driver_commands.py at most 1690 lines, each cutdeck/commands/*.py at most 500)
+- fail-proof: red on 6c540d0's 2146-line driver_commands.py, green after the pieces family moved to cutdeck/commands/pieces.py.
+- fail-proof (hks): the 1690 limit is red on 609ca78's 1707-line driver_commands.py, green after the hks family moved to cutdeck/commands/hks.py (1649).
 - live (2026-11-23, same bench, standard-library client and lazy subprocess/ctypes): c4b47d3 median 281 ms (275-325, n=24), new median 102 ms (97-109, n=24), 0 failures; recorded result, unknown-command record, stdout and exit code identical to c4b47d3; 0 bytes added to the helper log; `doctor` and plain `launch` run live on the new client (`scratch`, `cleanup`, `launch --restart-helper` not run live). Left: python start ~32 ms, argparse + re ~19, socket + client ~9, pathlib/json ~11, first Winsock connect ~4, the command ~4.
 
 ## Premiere project readers
@@ -141,6 +145,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 ## Several pieces at fixed cost: paste_pieces, the paste_from guard, the razor re-read
 - test: `python -m pytest tests/test_cutdeck_driver_commands.py -k "derive or paste or arrange" -q -p no:cacheprovider`, `node --test tests/cutdeck_build_sequence.test.cjs tests/cutdeck_native_cut.test.cjs`
 - fail-proof (2026-11-26): the two `razor:` tests fail on master with the live message "razor filler on audio track 0 is not one frame long"; the `ranges` clone test fails on the old `buildSequence.js`.
+- fail-proof (2026-11-28, memory guard patches on `cutdeck.commands.pieces._commit_free_gb`): the autouse 64.0 set to 2.0 turned 12 paste_pieces tests red; the refusal test's 2.0 set to 64.0 turned it red.
 - live (2026-11-26, scratch `output/short-bench/short-bench.prproj`, `python tools/short_route_bench.py --route A|D --n 5|20|40 ...`, log `output/short-bench/bench.jsonl`): route A (derive) 19.6 / 24.0 / 35.0 s and 6-8 top-level calls at N 5 / 20 / 40, route D (paste per piece) 43 / 172 / 411 s and 1+N calls; both exact against the plan; A and D render pixel-identical at all 80 piece edges (`output/short-bench/frames/edges.json`); `paste_pieces` (then `derive_short`) 40 pieces in 47.5 s, 0 missing, temporaries removed; a third `paste_from` into one target refused live.
 - stale handles (2026-11-26, `output/short-bench/stale_exp.py tiny|control40 N [--no-reload]`, log `stale_exp.jsonl`): `node --test tests/cutdeck_control.test.cjs tests/cutdeck_driver.test.cjs tests/cutdeck_build_sequence.test.cjs` cover the fresh-fetch retry and the null-entry re-read; live, 6 of 6 two-piece reordered builds exact with one logged recovery in a settled session; in a storm (PREMIERE_FACTS "Panel writes right after another command's commits") builds still fail loudly and name every temporary left.
 
@@ -206,7 +211,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: in cutdeck/hks_judge.py kept_runs, made a run join across hidden content (`if False:`), test_kept_lines_join_unless_hidden_content_lies_between went red; in cutdeck/hks_bleep.py dropped the `(?!ว)` guards, test_compounds_are_not_swears went red; reverted, `git diff` empty
 
 ## HKS handover gates and rule registry
-- path: cutdeck/hks_enforce.py, cutdeck/hks_gate_store.py, cutdeck/hks_registry.py, uxp/cutdeck/features/hks.js, projects/hks/registry/
+- path: cutdeck/commands/hks.py, cutdeck/hks_enforce.py, cutdeck/hks_gate_store.py, cutdeck/hks_registry.py, uxp/cutdeck/features/hks.js, projects/hks/registry/
 - oracle: projects/hks/gates/redesign-20261126.md
 - test: `python -m pytest tests/test_hks_enforce.py tests/test_hks_gate_store.py tests/test_hks_registry.py tests/test_hks_gates.py tests/test_hks_gates_mutate.py -q -p no:cacheprovider` and `node --test tests/cutdeck_feature_hks.test.cjs`
 - fail-signal: AssertionError

@@ -37,8 +37,9 @@ nothing), and read the result back. Keys and the Premiere UI take the user's mou
 approved standing (user, 2026-11-26), no need to ask each time. Never use the AI Assistant
 (`premiere_assistant_ask`): it spends the user's Adobe credits, and they have not allowed that.
 Don't fake or approximate a feature; if a CutDeck guard blocks a task, name the guard, not
-"Premiere can't". A new route or command is built in the helper (`cutdeck/driver_commands.py`),
-proved live (verify-cutdeck) and recorded before agents use it. Premiere's built-in MCP server
+"Premiere can't". A new route or command is built in the helper (`cutdeck/driver_commands.py`, the
+table; family code in `cutdeck/commands/`), proved live (verify-cutdeck) and recorded before
+agents use it. Premiere's built-in MCP server
 and `hSLScripting` are off limits: first-party only, never force them.
 
 For panel code (`uxp/cutdeck/`), never write an Adobe API from memory. Check, in order:
@@ -54,7 +55,7 @@ proven rules and is itself checked against the typings.
 ## Commands
 
 ```bash
-# Install
+# Install (on 3.13 deepfilternet has no wheel and fails; the default pipeline runs without it)
 pip install -r requirements.txt
 pip install -e .
 
@@ -67,8 +68,8 @@ python -m transcribe.pipeline.run path/to/audio.wav --config transcribe/config.y
 # Start the web editor
 uvicorn transcribe.editor.server:app --host 127.0.0.1 --port 8000
 
-# Run the eval harness
-python -m transcribe.eval.harness --config transcribe/config.yaml
+# Run the eval harness (piped Windows stdout is cp1252; Thai file names crash it without utf-8)
+PYTHONIOENCODING=utf-8 python -m transcribe.eval.harness --config transcribe/config.yaml
 
 # Python tests (all, or one)
 python -m pytest tests/test_smoke.py -v
@@ -132,7 +133,7 @@ Boundaries that must hold:
 
 ## Current engines
 
-The GPU venv is **Python 3.11.9**. Tests also run on PATH Python 3.13.
+There is no `.venv`. Every run uses PATH **Python 3.13.4** (torch 2.6.0+cu124, CUDA on).
 
 | Engine | Status |
 |---|---|
@@ -141,8 +142,8 @@ The GPU venv is **Python 3.11.9**. Tests also run on PATH Python 3.13.
 | `whisper_thai` | Fallback: same checkpoint via HF `transformers`; slow. |
 | `whisper_multi` | Candidate (`whisper-large-v3`), Thai-capable; not activated. |
 | `qwen3_asr` | Built, **not activated**: transliterates English loanwords into Thai script (model quality, not a reconciler bug). |
-| `typhoon_rt` | **Rejected**: worse `cer_thai` and `wer_latin`. Don't retry without new evidence. |
-| `funasr` | **Retired**: SenseVoiceSmall has no Thai. Don't re-probe without a different model. |
+| `typhoon_rt` | **Rejected**: worse `cer_thai` and `wer_latin`. Code removed (git history keeps it). Don't retry without new evidence. |
+| `funasr` | **Retired**: SenseVoiceSmall has no Thai. Code removed (git history keeps it). Don't re-probe without a different model. |
 | `mock` | Canned tokens, no GPU; used by all pipeline tests. |
 
 **LLM reconciler tiebreak** (`transcribe/pipeline/llm_reconcile.py`, local Ollama
@@ -152,8 +153,10 @@ wiring or prompt framing. Still open: a larger model or a richer prompt.
 
 ## Eval and the regression gate
 
-Gated signals: `cer_thai` (primary), `wer_latin`, `boundary_error_rate` (Thai↔Latin
-switch timing) and `cue_boundary_error_rate` (cue starts, the Premiere-recut signal).
+Gated signals (`metrics.CI_METRICS`): `cer_thai` (primary), `wer_latin`,
+`boundary_error_rate` (Thai↔Latin switch timing), `cue_boundary_error_rate` (cue starts,
+the Premiere-recut signal) and `speech_coverage_miss` (reference cues that no output cue
+overlaps). A robustness run also gates `cer_thai_spread`.
 Plain `wer` is recorded but never gates.
 
 - Any bias-index update or engine swap runs the harness. A change is rejected if a

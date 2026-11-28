@@ -16,6 +16,7 @@
 #           tradeoff — DO NOT cite them as evidence about decorrelated engines
 #           in general. See docs/ENGINES.md and TODO_LEDGER.md.
 #           Not re-testable without a different underlying model.
+#           Adapter code removed 2026-11-28 (git history keeps it).
 #
 #           typhoon_rt (2026-07-16) — TRIED and rejected on genuine accuracy
 #           grounds: CER_thai regressed 0.1601 vs 0.1451 baseline, WER_latin
@@ -24,6 +25,7 @@
 #           MISMATCH — a real, separate bug in faster_whisper.py's PATH
 #           mutation leaking into any same-process NeMo engine, since fixed;
 #           see TODO_LEDGER.) Don't re-try without new evidence.
+#           Adapter code removed 2026-11-28 (git history keeps it).
 #
 #           whisper_multi (Whisper large-v3) — genuinely Thai-capable (~100
 #           languages incl. Thai), architecturally the right decorrelated

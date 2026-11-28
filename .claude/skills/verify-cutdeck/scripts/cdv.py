@@ -81,7 +81,7 @@ def process_started(pid: int) -> float | None:
 
 
 def newest_python_change() -> float:
-    return max(p.stat().st_mtime for p in (REPO / "cutdeck").glob("*.py"))
+    return max(p.stat().st_mtime for p in (REPO / "cutdeck").rglob("*.py"))
 
 
 def wait_for_panel(timeout_s: float = 60) -> dict:
@@ -176,8 +176,8 @@ def cmd_doctor(args) -> None:
         started = process_started(hello["pid"])
         fresh = started is not None and started >= newest_python_change()
         print(("PASS  " if fresh else "FAIL  ") + f"helper pid {hello['pid']} "
-              + ("started after the newest cutdeck/*.py change" if fresh else
-                 "is older than the cutdeck/*.py code: run `cdv.py launch --restart-helper`"))
+              + ("started after the newest cutdeck/**/*.py change" if fresh else
+                 "is older than the cutdeck/**/*.py code: run `cdv.py launch --restart-helper`"))
         ok &= fresh
     try:
         loaded = json.loads(UDT_WORKSPACE.read_text(encoding="utf-8"))["plugins"]

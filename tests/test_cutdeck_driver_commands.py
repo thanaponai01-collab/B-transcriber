@@ -500,7 +500,7 @@ def test_paste_from_replaces_a_piece_an_earlier_failed_run_kept():
 
 @pytest.fixture(autouse=True)
 def _plenty_of_memory(monkeypatch):
-    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 64.0)
+    monkeypatch.setattr("cutdeck.commands.pieces._commit_free_gb", lambda: 64.0)
 
 
 def _derive(host, pieces, **extra):
@@ -680,7 +680,7 @@ def test_paste_pieces_removes_only_its_own_pieces_and_leaves_the_short_open():
 def test_paste_pieces_refuses_to_start_when_memory_is_nearly_gone(monkeypatch):
     # Live 2026-11-26: 17 soak runs took Premiere to 41 GB private with 0.6 GB of commit left;
     # Premiere keeps what each cut used until it quits, so the next run would have crashed it.
-    monkeypatch.setattr(driver_commands, "_commit_free_gb", lambda: 2.0)
+    monkeypatch.setattr("cutdeck.commands.pieces._commit_free_gb", lambda: 2.0)
     host = _PasteHost()
     S = _parent(host, 5)
     try:

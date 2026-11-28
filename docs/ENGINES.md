@@ -6,7 +6,7 @@ one-line status per engine and links here. Nothing below was changed in the move
 ## Current engines
 
 The working venv is **Python 3.11.9** (not 3.13, despite older comments
-elsewhere) — `funasr` and `editdistance` import fine in it. Engine-B
+elsewhere) — `funasr` and `editdistance` imported fine in it. Engine-B
 candidates below are eval-gated, not environment-blocked.
 
 - **Engine A** (`faster_whisper`, active): `biodatlab/whisper-th-medium-combined`
@@ -28,8 +28,8 @@ candidates below are eval-gated, not environment-blocked.
   `BER 0.8592` (hyp emits only 38 switch points, 10 matched) — a huge, real
   code-switch gap that Engine-B / LLM-reconciler A/B probes can finally be
   judged against. See docs/archive/IMPLEMENT_IMPROVEMENTS.md Phase 2 for history.
-- **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter registered, deps import
-  fine on this venv. **RETIRED as a Thai candidate (2026-07-16): the model
+- **`funasr`** (`FunAudioLLM/SenseVoiceSmall`): adapter code removed 2026-11-28
+  (git history keeps it). **RETIRED as a Thai candidate (2026-07-16): the model
   itself does not support Thai** — its README documents exactly five languages
   (zh/en/yue/ja/ko), and with `language="auto"` it misdetects Thai speech as
   Cantonese, decoding Chinese-script garbage throughout (confirmed via raw
@@ -43,8 +43,8 @@ candidates below are eval-gated, not environment-blocked.
   second hypothesis so cross-engine agreement would be a live confidence
   signal if activated. Probed 2026-07-16 — see TODO_LEDGER for the result.
 - **`typhoon_rt`**: SCB10X Typhoon ASR Real-time (FastConformer-Transducer,
-  ~115M) via NeMo — decorrelated Engine B candidate. Adapter built; NeMo
-  installed and verified clean on this 3.11.9 venv (`nemo_toolkit==2.7.3`) —
+  ~115M) via NeMo — decorrelated Engine B candidate. Adapter code removed 2026-11-28 (git history keeps it); NeMo
+  had installed clean on this 3.11.9 venv (`nemo_toolkit==2.7.3`) —
   the Py3.13 wheel risk originally logged doesn't apply here. **TRIED and
   REJECTED (2026-07-16):** regresses CER_thai and WER_latin vs baseline with
   only a marginal BER edge — worse than every other candidate on accuracy.

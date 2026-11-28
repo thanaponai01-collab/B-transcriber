@@ -120,6 +120,31 @@ def test_mock_engine_full_pipeline():
         assert tok.end_ms > tok.start_ms
 
 
+
+def test_dual_engine_reconcile_source_engines(monkeypatch):
+    """Two mock engines through run_file tag every token a, b or both."""
+    import numpy as np
+    import soundfile as sf
+    from transcribe.pipeline import ingest, run as pipeline_run
+    from transcribe.db import store
+
+    monkeypatch.setattr(ingest, "_load_silero",
+                        lambda: (object(), lambda a, m, **k: [{"start": 0, "end": len(a)}]))
+
+    t = np.linspace(0, 2.0, 32000, endpoint=False)
+    f = tempfile.NamedTemporaryFile(suffix=".wav", delete=False); f.close()
+    sf.write(f.name, (0.2 * np.sin(2 * np.pi * 200 * t)).astype(np.float32), 16000)
+
+    db = Path(tempfile.NamedTemporaryFile(suffix=".db", delete=False).name)
+    store.init_db(db)
+
+    cfg = {"engine_a": "mock", "engine_b": "mock", "denoise": False,
+           "drop_tokens_over_silence": False}
+    tokens = pipeline_run.run_file(f.name, cfg, db)
+
+    assert tokens, "dual-engine run produced no tokens"
+    assert all(t["source_engine"] in {"a", "b", "both"} for t in tokens)
+
 # ── Step 3: Alignment + Reconciler logic ─────────────────────────────────────
 
 def test_align_identical():
