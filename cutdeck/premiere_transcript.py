@@ -5,7 +5,7 @@ import"), so CutDeck hands Premiere our transcript through the public import pat
 ``Transcript.importFromJSON`` + ``Transcript.createImportTextSegmentsAction``. The format is
 Adobe's ``reference/adobe/samples/sample-panels/premiere-api/assets/transcript_format_spec.json``:
 times in seconds from the start of the source media, one segment per phrase cue (the token
-table), the real Thai words of each cue from ``cutdeck.words.words_for_job``.
+table), the real Thai words of each cue from ``transcribe.words.words_for_job``.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import unicodedata
 from pathlib import Path
 from typing import Iterable, Optional
 
-from cutdeck.words import Word, words_for_job
+from transcribe.words import Word, words_for_job
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = ROOT / "reference/adobe/samples/sample-panels/premiere-api/assets/transcript_format_spec.json"

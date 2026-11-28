@@ -32,7 +32,7 @@ from cutdeck.contracts import (
 from cutdeck.rules import build_cut_spans
 from cutdeck.segment import segment_tokens
 from cutdeck.takes import LlmFn, label_takes
-from cutdeck.words import words_for_job
+from transcribe.words import words_for_job
 from transcribe.console import safe_print
 
 

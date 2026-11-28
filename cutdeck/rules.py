@@ -55,7 +55,7 @@ from cutdeck.contracts import (
     Segment,
 )
 from cutdeck.segment import _max_silence_between, _silence_intervals
-from cutdeck.words import Word
+from transcribe.words import Word
 
 logger = logging.getLogger(__name__)
 

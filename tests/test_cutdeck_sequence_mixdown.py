@@ -132,7 +132,7 @@ def _filler_cfg(**kw):
 
 
 def test_words_keep_fillers_enabled_and_cut_the_filler(mixdown_path, caplog):
-    from cutdeck.words import Word
+    from transcribe.words import Word
 
     # "เอ่อ" sits inside the first speech island [0-1500ms].
     words = [Word("สวัสดี", 100, 600, None), Word("เอ่อ", 700, 1000, None),
@@ -147,7 +147,7 @@ def test_words_keep_fillers_enabled_and_cut_the_filler(mixdown_path, caplog):
 
 
 def test_words_without_filler_match_cut_nothing_extra(mixdown_path):
-    from cutdeck.words import Word
+    from transcribe.words import Word
 
     words = [Word("สวัสดี", 100, 600, None)]
     plan = plan_from_mixdown(mixdown_path, job_id=1, cfg=_filler_cfg(fillers_enabled=True),
@@ -158,7 +158,7 @@ def test_words_without_filler_match_cut_nothing_extra(mixdown_path):
 def test_words_and_tokens_enable_repeat_cuts(mixdown_path, caplog):
     from types import SimpleNamespace
 
-    from cutdeck.words import Word
+    from transcribe.words import Word
 
     words = [Word("ครับ", 100, 400, None), Word("ครับ", 450, 750, None),
              Word("ผม", 800, 1100, None)]

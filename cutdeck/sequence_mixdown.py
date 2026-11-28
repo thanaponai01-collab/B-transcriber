@@ -37,7 +37,7 @@ from cutdeck.contracts import CutConfig, CutPlan
 from cutdeck.plan import build_plan
 from cutdeck.rules import build_cut_spans
 from cutdeck.segment import segment_tokens
-from cutdeck.words import Word
+from transcribe.words import Word
 from transcribe.console import safe_print
 from transcribe.pipeline.ingest import ingest
 from transcribe.timebase import Timebase, probe
@@ -63,7 +63,7 @@ def plan_from_mixdown(
     ``rms_gate_enabled=False`` for a deterministic test run).
 
     ``cfg.fillers_enabled`` / ``cfg.repeats_enabled`` need a real word timeline
-    (``words``, e.g. ``cutdeck.words.words_for_job`` on an ASR job for this same
+    (``words``, e.g. ``transcribe.words.words_for_job`` on an ASR job for this same
     mixdown). Without one — a mixdown-only run — either flag degrades to
     silence-only removal with a logged warning rather than crashing or silently
     guessing a word timeline. Repeat cuts also need ``tokens`` (they are

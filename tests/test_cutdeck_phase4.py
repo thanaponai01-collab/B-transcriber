@@ -227,7 +227,7 @@ def test_segment_mode_short_gap_between_segments_stays_pace():
 # ── word-level cuts still apply on top of segment gaps ───────────────────────
 
 def test_segment_mode_still_honors_repeat_cuts():
-    from cutdeck.words import Word
+    from transcribe.words import Word
 
     cfg = _seg_cfg(repeats_enabled=True)
     tokens = [Tok(0, "go go stop", 0, 3000)]

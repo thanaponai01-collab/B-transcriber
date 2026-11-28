@@ -151,7 +151,7 @@ def _mapped_transcript(seq: sequence_model.Sequence, audio_track: int | None,
     from types import SimpleNamespace
 
     from cutdeck import timeline_transcript as tt
-    from cutdeck.words import Word
+    from transcribe.words import Word
     from transcribe.db import store
 
     track = seq.reference_track(audio_track)
