@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SECTION = "## Route proof per command"
 # First-party only: PREMIERE_FACTS "UXP platform" rows on hSLScripting and the built-in MCP server.
 OFF_LIMITS = {"first_party_mcp", "hsl_scripting"}
-OFF_LIMITS_CODE = re.compile(r"hSLScripting|EnableMCPServer|(?:localhost|127\.0\.0\.1|::1)\W{1,4}3111")
+OFF_LIMITS_CODE = re.compile(r"hSLScripting|EnableMCPServer|(?:localhost|127\.0\.0\.1|::1)\W{1,4}3111\b")
 # Panel code that names first-party scripting yet no agent command can run: the "List Premiere MCP
 # Tools" probe, a button only the user clicks. The helper's run_probe list must leave it out.
 PANEL_ONLY = {"uxp/cutdeck/mcpToolsProbe.js": "mcptools"}

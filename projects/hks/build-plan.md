@@ -13,7 +13,7 @@ sequence**. ⚑ = needs a panel reload or the user's go-ahead.
 ## Already done
 - Export: `python -m cutdeck.honekasae_export "<day folder>"` queues YT / FB / REEL 3M /
   REEL 1M in Media Encoder with the next D number and starts the queue (PR #105, live-proven).
-- Pieces to reuse: transcription with word times (`faster_whisper`, `cutdeck/words.py`),
+- Pieces to reuse: transcription with word times (`faster_whisper`, `transcribe/words.py`),
   silence/filler rules (`cutdeck/rules.py`), select-only LLM keep/cut (`cutdeck/takes.py`),
   studio-vs-clip frame classifier (`cutdeck/topic_layout.py`), host-vs-guest voice
   (`cutdeck/topic_speakers.py`), cuts on a sequence copy (`apply_cuts`), markers

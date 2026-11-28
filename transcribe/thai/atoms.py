@@ -3,7 +3,7 @@ from __future__ import annotations
 import bisect
 from dataclasses import dataclass, field
 
-from cutdeck.words import TimedToken
+from transcribe.words import TimedToken
 
 _CLASSIFIERS = frozenset({
     "คน", "อัน", "ตัว", "ที่", "สิ่ง",

@@ -40,7 +40,7 @@ def fit_profile(corrected_srts: list[str]) -> LayoutProfile:
 def wrap_text(text: str, profile: LayoutProfile, config: dict | None = None) -> str:
     if '\n' in text or len(text) < profile.wrap_threshold_chars:
         return text
-    from cutdeck.words import timed_tokens
+    from transcribe.words import timed_tokens
     from transcribe.thai.atoms import default_lexicon, glue_atoms
 
     _, timed = timed_tokens([(text, 0, 1, None)])
