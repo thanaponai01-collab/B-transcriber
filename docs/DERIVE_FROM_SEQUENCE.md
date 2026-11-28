@@ -44,7 +44,7 @@ The user's day, as stages. Each one is cut from its parent, never from the foota
 | Draft vN+1 | draft vN | `duplicate_sequence` + `edit_clips` / `set_param` | LIVE |
 | FB 1080x1080 | `1 YOUTUBE D1` | `cut_copy` / `keep_words` + `settings_from` | LIVE |
 | REEL 3M / 1M | FB or YT | `keep_words`, then nest in the reel frame (`place_media`) | LIVE |
-| Compilation (โหนหลังกระแส) | finished YT sequences or their exports | copy pieces from each YT sequence; exported .mp4 only when no sequence exists | `paste_from` LIVE |
+| Compilation (โหนหลังกระแส) | finished YT sequences or their exports | copy pieces from each YT sequence; exported .mp4 only when no sequence exists | `paste_pieces`, `paste_from` LIVE |
 
 Every derive reads the parent **live** at the moment it runs, not a cached plan. So the user's
 fixes on YT reach FB and the reels.
