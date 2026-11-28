@@ -42,22 +42,93 @@ def _audio(manifest, clip):
     return y
 
 
-def tool_view(pieces: list[dict], levels, ctc: bool) -> list[dict]:
-    """Words as `timeline_transcript.source_words(bars=True)` makes them from stored pieces."""
+class Recorder:
+    """A ThaiCTCAligner that also keeps, per aligned word (keyed by its CTC start), the margin of
+    its first and last letter: that letter's log-probability minus the best other token's
+    (blank included) at the frame CTC put it on."""
+
+    def __init__(self, aligner):
+        self.a, self.cache, self.margin = aligner, {}, {}
+
+    def alignable(self, text):
+        return self.a.alignable(text)
+
+    def __call__(self, lo, hi, texts):
+        key = (lo, hi, tuple(texts))
+        if key in self.cache:
+            return self.cache[key]
+        import numpy as np
+        import torch
+        import torchaudio
+        a = self.a
+        ids, owner = [], []
+        for wi, text in enumerate(texts):
+            for ch in text:
+                if ch in a._vocab and a._vocab[ch] != a._blank:
+                    ids.append(a._vocab[ch])
+                    owner.append(wi)
+        seg = a._audio[lo * a._sr // 1000:hi * a._sr // 1000]
+        out = [None] * len(texts)
+        if ids and len(seg) >= a._sr // 10:
+            seg = (seg - seg.mean()) / np.sqrt(seg.var() + 1e-7)
+            x = torch.from_numpy(seg.astype(np.float32))[None].to(a._device)
+            with torch.inference_mode():
+                logits = a._model(x.half() if a._device == "cuda" else x)[0].float()
+            lp = torch.log_softmax(logits, -1)
+            path = None
+            if len(ids) <= lp.shape[1]:
+                try:
+                    path, _ = torchaudio.functional.forced_align(lp, torch.tensor([ids], device=lp.device), blank=a._blank)
+                except RuntimeError:
+                    path = None
+            if path is not None:
+                lpn, p = lp[0].cpu().numpy(), path[0].tolist()
+                frame_ms = (hi - lo) / lp.shape[1]
+                spans, k, prev = {}, -1, a._blank
+                for f, tok in enumerate(p):
+                    if tok != a._blank:
+                        if tok != prev:
+                            k += 1
+                        s0, e0 = spans.get(owner[k], (f, f))
+                        spans[owner[k]] = (min(s0, f), max(e0, f))
+                    prev = tok
+
+                def margin(f):
+                    row = lpn[f].copy()
+                    best = row[p[f]]
+                    row[p[f]] = -np.inf
+                    return float(best - row.max())
+                for i, (s0, e0) in spans.items():
+                    out[i] = (lo + s0 * frame_ms, lo + (e0 + 1) * frame_ms)
+                    self.margin[int(round(out[i][0]))] = {"start": margin(s0), "end": margin(e0)}
+        self.cache[key] = out
+        return out
+
+
+def tool_view(pieces: list[dict], levels, ctc: bool, margins: list | None = None) -> list[dict]:
+    """Words as `timeline_transcript.source_words(bars=True)` makes them from stored pieces, with
+    each edge's energy step, CTC margin (``margins``: per piece) and whether a pause borders it."""
     from cutdeck import timeline_transcript as tt
     from transcribe.words import words_from_pieces
     words = [tt.SourceWord(w.text, w.start_ms, w.end_ms, 0) for w in
              words_from_pieces([(p["text"], int(p["start_ms"]), int(p["end_ms"]), p.get("confidence")) for p in pieces])]
+    m_start = {int(p["start_ms"]): m["start"] for p, m in zip(pieces, margins or []) if m}
+    m_end = {int(p["end_ms"]): m["end"] for p, m in zip(pieces, margins or []) if m}
     if ctc:
         words = tt.placed_words(words, pieces)
     else:
         words = [tt.replace(w, start_by="tightened", end_by="tightened") for w in tt.tighten(words, levels)]
+    gated = {(w.start_ms, w.end_ms): (w.start_err_ms is not None, w.end_err_ms is not None)
+             for w in tt.with_bars(words, levels)}
     out = []
     for w in words:
         collapsed = w.end_ms - w.start_ms < tt.COLLAPSED_MS
+        sp, ep = gated[(w.start_ms, w.end_ms)]
         out.append({"text": w.text, "start_ms": w.start_ms, "end_ms": w.end_ms,
                     "start_by": "collapsed" if collapsed else w.start_by, "end_by": "collapsed" if collapsed else w.end_by,
-                    "start_step": tt.edge_step_db(levels, w.start_ms, "start"), "end_step": tt.edge_step_db(levels, w.end_ms, "end")})
+                    "start_step": tt.edge_step_db(levels, w.start_ms, "start"), "end_step": tt.edge_step_db(levels, w.end_ms, "end"),
+                    "start_margin": m_start.get(w.start_ms), "end_margin": m_end.get(w.end_ms),
+                    "start_paused": sp, "end_paused": ep})
     return out
 
 
@@ -84,9 +155,24 @@ def clip_options(clip, manifest, config) -> dict:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     for name, file in MODELS.items():
         cues = [SimpleNamespace(**c) for c in d["cues"]]
-        new = wa.align_words(whisper, cues, y, 16000, device, {**cfg, "model": str(MODELS_DIR / file)})
+        margins = None
+        if name == "sakares":  # align_words' own steps, with the recorder in the aligner's place
+            aligner = wa.ThaiCTCAligner(y, 16000, str(MODELS_DIR / file), device)
+            aligner.load()
+            try:
+                rec = Recorder(aligner)
+                new = wa.retime_words(whisper, cues, rec, rec.alignable, pad, dur, snap, snap_end,
+                                      bool(cfg.get("pad_into_neighbours", True)))
+                raw = wa.retime_words(whisper, cues, rec, rec.alignable, pad, dur, None, None,
+                                      bool(cfg.get("pad_into_neighbours", True)))
+            finally:
+                aligner.unload()
+            wa.retime_cues(cues, whisper, new)
+            margins = [rec.margin.get(int(r["start_ms"])) if r["start_by"] == "ctc" else None for r in raw]
+        else:
+            new = wa.align_words(whisper, cues, y, 16000, device, {**cfg, "model": str(MODELS_DIR / file)})
         cue_dicts = [vars(c) for c in cues]
-        out[f"ctc:{name}"] = (tool_view(new, tool_levels, True), cue_dicts)
+        out[f"ctc:{name}"] = (tool_view(new, tool_levels, True, margins), cue_dicts)
         out[f"ctc:{name}+tighten"] = (tool_view(new, tool_levels, False), cue_dicts)
         if name == "sakares":
             out["pieces:ctc:sakares"] = (new, cue_dicts)
@@ -96,11 +182,13 @@ def clip_options(clip, manifest, config) -> dict:
 def scored_rows(ref, words, cues, fps) -> list[dict]:
     """score.edge_rows, each matched row carrying its word edge's placement and energy step."""
     rows = score.edge_rows(ref, words, cues, fps)
-    feats = {(w["start_ms"], "start"): (w.get("start_by"), w.get("start_step")) for w in words}
-    feats |= {(w["end_ms"], "end"): (w.get("end_by"), w.get("end_step")) for w in words}
+    feats = {(w["start_ms"], "start"): (w.get("start_by"), w.get("start_step"), w.get("start_margin"), w.get("start_paused", True))
+             for w in words}
+    feats |= {(w["end_ms"], "end"): (w.get("end_by"), w.get("end_step"), w.get("end_margin"), w.get("end_paused", True))
+              for w in words}
     for r in rows:
         if r["word"] is not None:
-            r["how"], r["step"] = feats.get((r["word"], r["kind"]), (None, None))
+            r["how"], r["step"], r["margin"], r["paused"] = feats.get((r["word"], r["kind"]), (None, None, None, True))
     return rows
 
 
@@ -154,30 +242,34 @@ def _auroc(scores, good):
     return sum((p > n) + 0.5 * (p == n) for p in pos for n in neg) / (len(pos) * len(neg))
 
 
-def fit_bars(tune: list[dict]) -> dict:
-    """Bars per (kind, how, energy-step band), else per (kind, how), else one: each the COVER
+def fit_bars(tune: list[dict], feature: str = "step") -> dict:
+    """Bars per (kind, how, band of ``feature``), else per (kind, how), else one: each the COVER
     quantile of |error| over at least MIN_GROUP matched tune edges."""
-    rows = [r for r in tune if r["word"] is not None and r.get("how")]
-    steps = sorted(r["step"] for r in rows if r["step"] is not None)
+    rows = [r for r in tune if r["word"] is not None and r.get("how") and r.get("paused", True)]
+    steps = sorted(r[feature] for r in rows if r.get(feature) is not None)
     cuts = [steps[len(steps) // 3], steps[2 * len(steps) // 3]]
     groups: dict[str, list[float]] = {}
     for r in rows:
         groups.setdefault(f"{r['kind']}|{r['how']}", []).append(_err(r))
-        if r["step"] is not None:
-            groups.setdefault(f"{r['kind']}|{r['how']}|{sum(r['step'] > c for c in cuts)}", []).append(_err(r))
+        if r.get(feature) is not None:
+            groups.setdefault(f"{r['kind']}|{r['how']}|{sum(r[feature] > c for c in cuts)}", []).append(_err(r))
     bars = {g: int(round(_q(v, COVER))) for g, v in sorted(groups.items()) if len(v) >= MIN_GROUP}
     return {"cover": COVER, "step_cuts": [round(c, 2) for c in cuts], "fallback": int(round(_q([_err(r) for r in rows], COVER))),
             "bars": bars, "tune_n": {g: len(v) for g, v in sorted(groups.items())}}
 
 
-def check_bars(fit: dict, held: list[dict]) -> dict:
-    """Heldout: share of matched edges inside their bar, overall and per placement."""
+def check_bars(fit: dict, held: list[dict], feature: str = "step") -> dict:
+    """Heldout: share of matched edges inside their bar, overall and per placement. An edge the
+    tool gives no bar (no pause beside it in the tool's words) is counted apart."""
     from cutdeck import timeline_transcript as tt
     tt._bars = fit
     rows = [r for r in held if r["word"] is not None and r.get("how")]
     inside, width, by = [], [], {}
+    unbarred = sum(not r.get("paused", True) for r in rows)
     for r in rows:
-        b = tt.edge_bar(r["kind"], r["how"], r["step"])
+        if not r.get("paused", True):
+            continue
+        b = tt.edge_bar(r["kind"], r["how"], r.get(feature))
         if b is None:
             continue
         ok = _err(r) <= b
@@ -189,6 +281,7 @@ def check_bars(fit: dict, held: list[dict]) -> dict:
         by[k][1] += 1
     tt._bars = None
     return {"coverage": sum(inside) / len(inside), "mean_bar_ms": sum(width) / len(width), "n": len(inside),
+            "matched_without_bar": unbarred,
             "by_placement": {k: {"inside": a, "n": n} for k, (a, n) in sorted(by.items())}}
 
 
@@ -201,9 +294,14 @@ def calibration(rows: dict) -> dict:
     one = {"cover": COVER, "step_cuts": [], "fallback": fit["fallback"], "bars": {}}
     m = [r for r in held_w if r["word"] is not None and r.get("how")]
     good = [_err(r) <= 1000 / r["fps"] for r in m]
+    fit_m = fit_bars(rows["tune"][CURRENT], "margin")
+    mm = [r for r in m if r.get("margin") is not None]
     return {"fit": fit,
             "heldout_winner": check_bars(fit, held_w), "heldout_stale": check_bars(fit, held_t),
             "heldout_winner_one_bar": check_bars(one, held_w),
+            "heldout_winner_ctc_margin_bars": check_bars(fit_m, held_w, "margin"),
+            "auroc_ctc_margin": _auroc([r["margin"] for r in mm], [_err(r) <= 1000 / r["fps"] for r in mm]),
+            "ctc_margin_n": len(mm),
             "auroc_energy_step": _auroc([r["step"] if r["step"] is not None else 0 for r in m], good),
             "auroc_placed_by_snap": _auroc([r["how"] == "snap" for r in m], good)}
 

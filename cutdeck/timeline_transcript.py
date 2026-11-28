@@ -373,12 +373,13 @@ def later_stream_clips(timeline: dict, track_id: str) -> list[str]:
             if (c.get("media"), c["start_ticks"], c["in_ticks"], c["out_ticks"]) in lower]
 
 
-def spans_on_timeline(clips: list[Clip], spans_by_media: dict[str, list[tuple[int, int]]],
+def spans_on_timeline(clips: list[Clip], spans_by_media: dict[str, list[tuple]],
                       ticks_per_frame: int) -> list[dict]:
-    """Source spans (ms) where each clip plays them, cut to the clip, in sequence order."""
+    """Source spans (ms) where each clip plays them, cut to the clip, in sequence order. A third
+    item in a span is the words with no known time inside it (`word_holes`)."""
     out = []
     for clip in clips:
-        for a, b in spans_by_media.get(clip.media) or []:
+        for a, b, *untimed in spans_by_media.get(clip.media) or []:
             lo, hi = max(a * TICKS_PER_MS, clip.in_), min(b * TICKS_PER_MS, clip.out)
             if hi <= lo:
                 continue
@@ -387,6 +388,10 @@ def spans_on_timeline(clips: list[Clip], spans_by_media: dict[str, list[tuple[in
             out.append({"tc": timecode(start, ticks_per_frame), "start_s": seconds(start), "end_s": seconds(end),
                         "start_ticks": str(start), "end_ticks": str(end), "clip": clip.id,
                         "src_s": [a / 1000, b / 1000]})
+            if untimed and untimed[0]:
+                out[-1]["untimed_words"] = untimed[0]
+            if len(untimed) > 1:
+                out[-1]["between_words"] = untimed[1]
     out.sort(key=lambda x: int(x["start_ticks"]))
     return out
 
@@ -536,26 +541,59 @@ def placed_words(words: list[SourceWord], raw: list[dict]) -> list[SourceWord]:
     return [replace(w, start_by=starts.get(w.start_ms), end_by=ends.get(w.end_ms)) for w in words]
 
 
+PAUSE_MS = 100  # the judge marks only edges with a pause this long beside them
+PAUSE_REACH_MS = 300  # how far outside an edge that pause may start (start) or end (end)
+
+
 def with_bars(words: list[SourceWord], levels) -> list[SourceWord]:
+    """Placement and error bars for each word edge. Only an edge with a pause beside it gets a
+    bar: the judge measured no other kind, so a start or end inside running speech has none
+    (None: not measured, not "exact"). With levels, a pause is PAUSE_MS of quiet (levels.PAUSE
+    rule) within PAUSE_REACH_MS outside the edge; without, PAUSE_MS to the neighbouring word."""
+    import numpy as np
+    timed = [w for w in words if w.end_ms - w.start_ms >= COLLAPSED_MS]
+    starts, ends = [w.start_ms for w in timed], [w.end_ms for w in timed]
+    if levels is not None:
+        run = PAUSE_MS // ENVELOPE_MS
+        quiet = (~lv.sound(levels, lv.PAUSE)).astype(np.int32)
+        full = np.flatnonzero(np.convolve(quiet, np.ones(run, dtype=np.int32), "valid") == run)  # run starts
+
+        def paused(t: int, outside: int) -> bool:  # outside -1: before the edge, +1: after it
+            g = t // ENVELOPE_MS
+            lo, hi = (g - PAUSE_REACH_MS // ENVELOPE_MS, g + 6 - run) if outside < 0 else (g - 6, g + PAUSE_REACH_MS // ENVELOPE_MS - run)
+            k = bisect.bisect_left(full, lo)
+            return k < len(full) and full[k] <= hi
     out = []
     for w in words:
         collapsed = w.end_ms - w.start_ms < COLLAPSED_MS
         sb = "interpolated" if w.corrected and w.start_by is None else "collapsed" if collapsed else w.start_by
         eb = "interpolated" if w.corrected and w.end_by is None else "collapsed" if collapsed else w.end_by
         step = (lambda t, k: edge_step_db(levels, t, k)) if levels is not None else (lambda t, k: None)  # noqa: E731
-        out.append(replace(w, start_by=sb, end_by=eb, start_err_ms=edge_bar("start", sb, step(w.start_ms, "start")),
-                           end_err_ms=edge_bar("end", eb, step(w.end_ms, "end"))))
+        i = bisect.bisect_left(ends, w.start_ms + 1) - 1           # last timed word ending by this start
+        j = bisect.bisect_left(starts, w.end_ms)                  # first timed word starting at this end or later
+        if levels is not None:
+            after_pause, before_pause = paused(w.start_ms, -1), paused(w.end_ms, +1)
+        else:
+            after_pause = i < 0 or w.start_ms - ends[i] >= PAUSE_MS
+            before_pause = j >= len(starts) or starts[j] - w.end_ms >= PAUSE_MS
+        out.append(replace(w, start_by=sb, end_by=eb,
+                           start_err_ms=edge_bar("start", sb, step(w.start_ms, "start")) if after_pause else None,
+                           end_err_ms=edge_bar("end", eb, step(w.end_ms, "end")) if before_pause else None))
     return out
 
 
 HOLE_MS = 100  # PAUSE-rule sound with no word for this long is a hole (judge: tune precision 0.87)
 
 
-def word_holes(words: list[SourceWord], levels, min_ms: int = HOLE_MS) -> list[tuple[int, int]]:
+def word_holes(words: list[SourceWord], levels, min_ms: int = HOLE_MS) -> list[tuple[int, int, list[str], bool]]:
     """Source spans (ms) of sound (levels.PAUSE rule, which skips breaths and room tone) at
     least ``min_ms`` long that no word covers: speech the transcript has no word for. A
     collapsed word covers nothing. On the judge's marked speech: heldout 14 of 14 reported holes
-    were speech and 4 of 5 wordless speech runs were found; tune 26 of 30 and 7 of 10."""
+    were speech and 4 of 5 wordless speech runs were found; tune 26 of 30 and 7 of 10.
+    Each hole lists the collapsed words inside it (the words are known, their times not), and
+    says whether a word ends at its start and another starts at its end (within 30 ms): such a
+    hole is mostly a word edge placed late or early inside running speech, the rest missing text
+    (8 of 8 sampled on `yt` 20261124 were the first kind). Edges inside speech are unmeasured."""
     import numpy as np
     sound = lv.sound(levels, lv.PAUSE)
     covered = np.zeros(len(sound), dtype=bool)
@@ -564,8 +602,16 @@ def word_holes(words: list[SourceWord], levels, min_ms: int = HOLE_MS) -> list[t
             covered[w.start_ms // ENVELOPE_MS:-(-w.end_ms // ENVELOPE_MS)] = True
     hole = np.concatenate(([0], (sound & ~covered).astype(np.int8), [0]))
     edges_ = np.flatnonzero(np.diff(hole))
-    return [(int(a) * ENVELOPE_MS, int(b) * ENVELOPE_MS) for a, b in zip(edges_[::2], edges_[1::2])
-            if (b - a) * ENVELOPE_MS >= min_ms]
+    squeezed = [w for w in words if w.end_ms - w.start_ms < COLLAPSED_MS]
+    timed = [w for w in words if w.end_ms - w.start_ms >= COLLAPSED_MS]
+    out = []
+    for a, b in zip(edges_[::2], edges_[1::2]):
+        lo, hi = int(a) * ENVELOPE_MS, int(b) * ENVELOPE_MS
+        if hi - lo < min_ms:
+            continue
+        between = (any(abs(w.end_ms - lo) <= 30 for w in timed) and any(abs(w.start_ms - hi) <= 30 for w in timed))
+        out.append((lo, hi, [w.text for w in squeezed if lo <= w.start_ms <= hi], between))
+    return out
 
 
 def source_levels(media: str, cache: Path, sample_rate: int = 16000):
@@ -733,7 +779,8 @@ def _source_entry(media: str, job_id: int, probe_streams: bool, note: str | None
     if timing == "tightened":
         entry["note"] = "; ".join(filter(None, [entry.get("note"), (
             "word times are the engine's, fitted to the sound (wide error bars): "
-            f'run python -m transcribe.retime "{media}" once (CTC only, no new ASR, keeps text and corrections)')]))
+            f'run python -m transcribe.retime "{media}" once, while no transcribe job is running (CTC only, no new '
+            "ASR, keeps text and corrections; Rough Cut and the HKS gates then read the new times too)")]))
     streams = audio_stream_count(media) if probe_streams else None
     if streams and streams > 1:
         entry["audio_streams"] = streams

@@ -532,17 +532,21 @@ def _aligned_store(tmp_path, raw):
 def test_words_word_align_placed_keep_their_times_and_get_bars(tmp_path, monkeypatch):
     import numpy as np
     raw = [{"text": " one", "start_ms": 1000, "end_ms": 1400, "start_by": "snap", "end_by": "snap"},
-           {"text": " two", "start_ms": 1400, "end_ms": 1401, "start_by": "ctc", "end_by": "engine"}]
+           {"text": " two", "start_ms": 1600, "end_ms": 1601, "start_by": "ctc", "end_by": "engine"},
+           {"text": " three", "start_ms": 1601, "end_ms": 1900, "start_by": "ctc", "end_by": "snap"},
+           {"text": " four", "start_ms": 1900, "end_ms": 2200, "start_by": "ctc", "end_by": "snap"}]
     media, db = _aligned_store(tmp_path, raw)
-    levels = np.full(400, -70.0, dtype=np.float32); levels[90:100] = -50.0; levels[100:150] = -20.0  # soft from 0.9 s
+    levels = np.full(400, -70.0, dtype=np.float32); levels[90:100] = -50.0; levels[100:150] = -20.0; levels[160:220] = -20.0  # soft from 0.9 s; speech again 1.6-2.2 s
     monkeypatch.setattr(tt, "source_levels", lambda m, cache: levels)
     monkeypatch.setattr(tt, "_bars", {"step_cuts": [5.0, 20.0], "fallback": 300,
                                       "bars": {"start|snap|2": 25, "end|snap": 45, "start|collapsed": 999}})
     _, words, *_ = tt.source_words(str(media), db, tmp_path / "lv", bars=True)
-    one, two = words
+    one, two, three, four = words
     assert (one.start_ms, one.end_ms) == (1000, 1400)         # not tightened onto the sound from 0.9 s
     assert (one.start_by, one.start_err_ms, one.end_err_ms) == ("snap", 25, 45)
     assert (two.start_by, two.end_by, two.start_err_ms) == ("collapsed", "collapsed", 999)
+    assert three.end_err_ms is None and four.start_err_ms is None  # inside running speech: not measured
+    assert three.start_err_ms is not None and four.end_err_ms is not None
     _, old, *_ = tt.source_words(str(media), db, tmp_path / "lv")  # other callers: as before
     assert old[0].start_ms == 900 and old[0].start_err_ms is None
 
@@ -567,8 +571,12 @@ def test_sound_no_word_covers_is_a_hole_and_reaches_the_timeline(tmp_path):
     levels[300:305] = -20.0      # 50 ms click: too short
     levels[400:450] = -20.0      # 4.0-4.5 s: only a collapsed word
     words = [tt.SourceWord("a", 1000, 1500, 0), tt.SourceWord("b", 4100, 4101, 0)]
-    assert tt.word_holes(words, levels) == [(2000, 2300), (4000, 4500)]
+    assert tt.word_holes(words, levels) == [(2000, 2300, [], False), (4000, 4500, ["b"], False)]
+    gap = [tt.SourceWord("x", 1700, 2000, 0), tt.SourceWord("y", 2300, 2600, 0)]  # words on both sides
+    assert (2000, 2300, [], True) in tt.word_holes(gap, levels)
     media = str(tmp_path / "a.mp4"); (tmp_path / "a.mp4").write_bytes(b"")
     r = tt.build(timeline(clip("A1@0", 0, 0, 3000, media)),
                  lookup=lambda m: (1, words, levels, [], None))
     assert [(h["start_s"], h["end_s"]) for h in r["holes"]] == [(2.0, 2.3)]
+    r = tt.build(timeline(clip("A1@0", 0, 0, 5000, media)), lookup=lambda m: (1, words, levels, [], None))
+    assert r["holes"][1]["untimed_words"] == ["b"] and "untimed_words" not in r["holes"][0]

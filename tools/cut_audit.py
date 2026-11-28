@@ -78,10 +78,13 @@ def main(argv=None) -> int:
                "missing": r["missing"], "sources": r["sources"], "edges": count(set(keys)),
                "sound_within_20ms_F1": count(set(f1)), "faint_tail": count({k for k, e in loud.items() if e.get("severity") == "tail"}),
                "inside_word_beyond_bar_F2": count(set(f2)),
-               "holes": len(r["holes"]), "hole_s": round(sum(h["end_s"] - h["start_s"] for h in r["holes"]), 1),
+               "holes": len(r["holes"]), "holes_with_untimed_words": sum(bool(h.get("untimed_words")) for h in r["holes"]),
+               "holes_between_words": sum(bool(h.get("between_words")) for h in r["holes"]), "hole_s": round(sum(h["end_s"] - h["start_s"] for h in r["holes"]), 1),
                "holes_touching_a_cut": len(holes_at_cut), "untranscribed": len(r["untranscribed"]),
                "words": len(words), "word_start_placement": by}
-    detail = {"F1_own": [dict(e, own=True) for k, e in f1.items() if k in own],
+    import random
+    wordless = [h for h in r["holes"] if not h.get("untimed_words")]
+    detail = {"hole_sample": random.Random(0).sample(wordless, min(8, len(wordless))), "F1_own": [dict(e, own=True) for k, e in f1.items() if k in own],
               "F2": [dict(e, own=k in own) for k, e in f2.items()], "holes_touching_a_cut": holes_at_cut}
     out.mkdir(parents=True, exist_ok=True)
     safe = "".join(ch if ch.isalnum() else "_" for ch in args.sequence)[:50]
