@@ -155,6 +155,22 @@ id=75/77. Four clips make the CIs wide; read directions, not verdicts.
    hand-checked sample of this footage, then build the augmentation in `tools/finetune_lora.py`
    (music: `[BGM]Where Everything Began.wav`, not the eval bed).
 
+6. **Purity on the footage (owner: "measure purity first") — sample drawn, review pending.** No human
+   text exists for any of the 28 files: the two Miami SRTs are machine transcripts (`ไมอาร์มีย์` for
+   Miami), the SubtitleDesk sessions hold machine cues, and the Premiere projects have no caption
+   tracks. So a person checks a sample. `python -m tools.purity_review sample` drew 150 cues (seed
+   20261128, uniform over the cues at confidence >= 0.95, 5.21 min, 21 of the 23 labelled files);
+   `serve` opens the review page and saves each edit; `score` reports the CER.
+   **Rule, written before review:** reviewer fixes only what was misheard and leaves the script as
+   is, ticking "English term written in Thai" instead; a no-speech cue counts all its characters as
+   errors. Pass if the bootstrap 95% CI upper bound is <= 0.05, fail if the lower bound is > 0.05,
+   otherwise UNRESOLVED (owner's call). The page starts from the pipeline text, so the CER is
+   optimistic. The loanword-tick share is reported beside it and decides nothing by itself.
+
+   To review: `python -m tools.purity_review serve --dir output/robustness_local_20261127/purity`
+   from the main checkout (after merge), then open http://127.0.0.1:8020. Ctrl+Enter saves and plays
+   the next cue. Then `python -m tools.purity_review score --dir output/robustness_local_20261127/purity`.
+
 Evidence (gitignored): `output/robustness_local_20261127/` in the main checkout holds the scratch DB
 (`eval_scratch.db`, ids 13-19), `footage.jsonl`, the bench script and results, the music bed and the
 pinned versions.
