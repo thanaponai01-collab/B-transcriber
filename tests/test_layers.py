@@ -17,7 +17,7 @@ MAY_IMPORT = {
     "subtitle_desk": {"cutdeck", "transcribe"},
 }
 # The one place control reaches into hks_*: the premiere_hks_* commands run hks_enforce.
-EXCEPTIONS = {("cutdeck/driver_commands.py", "cutdeck.hks_enforce")}
+EXCEPTIONS = {("cutdeck/commands/hks.py", "cutdeck.hks_enforce")}
 
 
 def layer(module: str) -> str:

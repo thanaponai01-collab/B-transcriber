@@ -22,6 +22,7 @@ from pathlib import Path
 from cutdeck import (assistant, keys, menu, mogrt_text, premiere_ui, screenshot, speech_clean, srt_subtitles,
                      text_document, timeline_transcript, word_cut)
 from cutdeck.commands.core import Command, PIECE_SUFFIX, Premiere, _range_arguments, _ticks
+from cutdeck.commands.hks import COMMANDS as _HKS
 from cutdeck.commands.pieces import COMMANDS as _PIECES, CLONE_BATCH, _PASTES_INTO  # noqa: F401 (tests)
 from cutdeck.sequence_timing import PPRO_TICKS_PER_SECOND
 
@@ -1361,39 +1362,6 @@ async def _keep_words(args: dict, premiere: Premiere) -> dict:
             **_warnings(before)}
 
 
-def _hks_handover_arguments(args: dict, jobs) -> dict:
-    if not isinstance(args.get("sequence"), str) or not args["sequence"].strip():
-        raise ValueError("sequence must name the draft (its sequence_id, or a unique name)")
-    for key in ("answers", "overrides"):
-        value = args.get(key) or {}
-        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
-            raise ValueError(f"{key} must map ids to text")
-    if any(not v.strip() for v in (args.get("overrides") or {}).values()):
-        raise ValueError("every override needs a written reason")
-    return {"sequence": args["sequence"], "body_from": float(args.get("body_from") or 0.0),
-            "show_end": args.get("show_end"), "answers": args.get("answers") or {},
-            "overrides": args.get("overrides") or {}, "by": str(args.get("by") or "agent")}
-
-
-async def _hks_handover(args: dict, premiere: Premiere) -> dict:
-    from cutdeck import hks_enforce
-    saved = await premiere("save_project", {})
-    return await asyncio.to_thread(hks_enforce.handover, Path(saved["path"]), args["sequence"], args["body_from"],
-                                   args["show_end"], args["answers"], args["overrides"], args["by"])
-
-
-def _hks_status_arguments(args: dict, jobs) -> dict:
-    return {"mark_baseline": args.get("mark_baseline") is True}
-
-
-async def _hks_status(args: dict, premiere: Premiere) -> dict:
-    from cutdeck import hks_enforce
-    project = await premiere("list_project", {"depth": 1})
-    rows = await asyncio.to_thread(hks_enforce.status, Path(project["path"]), project["sequences"],
-                                   mark_baseline=args["mark_baseline"])
-    return {"project": project["path"], "sequences": rows}
-
-
 HELPER_COMMANDS: dict[str, Command] = {
     "timeline_transcript": Command(
         300, _timeline_transcript_arguments, "read",
@@ -1674,34 +1642,8 @@ HELPER_COMMANDS: dict[str, Command] = {
         cli_target=("prompt", lambda target: {"prompt": target}),
         run=lambda args, premiere: asyncio.to_thread(assistant.ask, args["prompt"], args["timeout_s"]),
         routes=("assistant",)),
-    "hks_handover": Command(
-        600, _hks_handover_arguments, "write",
-        """
-        Hand over an HKS draft: the helper saves the project, reads the save, runs every HKS gate on
-        the sequence (by sequence_id, or a name no other sequence has), checks that every active
-        do-confirm rule in projects/hks/registry/rules/ has a written answer in `answers`
-        ({rule_id: answer}), copies the save into CutDeck/Drafts and stores the result keyed by the
-        sequence and its saved cut. Returns status pass or fail with each failed gate's id and value
-        and the rule ids still unanswered. `body_from` is the body start in seconds (after the hook
-        and sting); the record keeps it. `overrides` ({gate: reason}) waives a failed control, each
-        with a written reason; `by` says who. The panel shows the stored status; an edit after this
-        call makes the draft ungated until it is called again. Needs the CutDeck panel open.
-        """,
-        (("sequence", str), ("body_from", float, 0.0), ("show_end", float | None, None),
-         ("answers", dict | None, None), ("overrides", dict | None, None), ("by", str, "agent")),
-        run=_hks_handover),
-    "hks_status": Command(
-        120, _hks_status_arguments, "write",
-        """
-        Every sequence of the open project with its HKS gate status from the helper's records
-        (never from an agent): pass, fail (gate id and value), or ungated (never gated, changed
-        after its last gate run, or not saved yet). Reads the last save; does not save.
-        `mark_baseline: true` (once, at day set-up) records the sequences there now as the day's
-        start; each row then says `new` for any sequence made later, by any route.
-        Needs the CutDeck panel open.
-        """,
-        (("mark_baseline", bool, False),),
-        run=_hks_status),
+    "hks_handover": _HKS["hks_handover"],
+    "hks_status": _HKS["hks_status"],
 }
 COMMANDS.update(HELPER_COMMANDS)
 PANEL_COMMANDS = [name for name, command in COMMANDS.items() if command.run is None]
