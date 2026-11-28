@@ -19,6 +19,7 @@ import ctypes
 import re
 
 from cutdeck import screenshot
+from cutdeck.win_input import _bring_to_front
 
 WM_COMMAND, WM_INITMENUPOPUP = 0x0111, 0x0117
 BLOCKED = re.compile(r"^file > (exit|close|open|new|export|save as|save a copy|revert|import)|^help >", re.I)
@@ -92,8 +93,7 @@ def invoke(path: str, front: bool = False) -> dict:
     item = find(path)
     hwnd = screenshot.premiere_window()
     if front:
-        from cutdeck import keys
-        keys._bring_to_front(hwnd)
+        _bring_to_front(hwnd)
     if not _user32().PostMessageW(hwnd, WM_COMMAND, item["id"], 0):
         raise RuntimeError("PostMessage to Premiere failed")
     return {"menu": item["path"], "id": item["id"], "keys": item["keys"], "enabled_hint": item["enabled_hint"],

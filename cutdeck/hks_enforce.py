@@ -17,13 +17,23 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 from pathlib import Path
 
 from cutdeck import hks_gate_store, hks_gates, hks_registry
-from cutdeck.hks_handover import OVERRIDES, snapshot
 
 MAX_BODY_FROM = 45.0
 MIN_BODY_S = 900.0
+OVERRIDES = hks_gates.REGISTRY.parent / "overrides.jsonl"
+
+
+def snapshot(prproj: Path, sequence: str, drafts: Path | None, now: dt.datetime) -> Path:
+    folder = drafts or prproj.parent / "CutDeck" / "Drafts"
+    folder.mkdir(parents=True, exist_ok=True)
+    safe = "".join(ch if ch.isalnum() or ch in " -_()" else "_" for ch in sequence)
+    target = folder / f"{safe} {now:%Y%m%d-%H%M%S}.prproj"
+    shutil.copy2(prproj, target)
+    return target
 
 
 def do_confirm_rules() -> dict[str, str]:
