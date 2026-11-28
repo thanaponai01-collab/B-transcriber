@@ -441,3 +441,9 @@ reconciler:
 # Short1_D5: reference cues are 3-line paragraphs (12 cues vs ~29 output), 2026-10-07.
 eval_cue_metric_exclude:
   - Bangkok Festivals_CT6_Short1_D5
+
+# Robustness suite (`harness --robustness`, transcribe/eval/robustness.py): every gold clip is
+# decoded under gain shifts, pink noise and this instrumental music bed. The bed is local only
+# (gitignored); a different file changes the music clips' pairing keys.
+eval_robustness:
+  music_bed: transcribe/eval/beds/music_bed.mp3

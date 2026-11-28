@@ -42,7 +42,8 @@ silero-vad>=5.1   # pip package — no torch.hub network fetch / supply-chain su
                   # (falls back to torch.hub if this package is absent)
 
 # Denoising
-deepfilternet>=0.5.6
+deepfilternet>=0.5.6   # wheels for its deepfilterlib exist only up to Python 3.11
+pyloudnorm>=0.1.1   # transcribe/audio/prep.py: audio_prep.loudness_target_lufs
 
 # Web editor
 fastapi>=0.110.0

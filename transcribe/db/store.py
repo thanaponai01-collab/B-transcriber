@@ -229,6 +229,12 @@ class EvalRunRow:
     orphan_cues: Optional[int] = None
     speech_coverage_miss_ci_lo: Optional[float] = None
     speech_coverage_miss_ci_hi: Optional[float] = None
+    cer_thai_sub: Optional[float] = None
+    cer_thai_del: Optional[float] = None
+    cer_thai_ins: Optional[float] = None
+    cer_thai_spread: Optional[float] = None
+    cer_thai_spread_ci_lo: Optional[float] = None
+    cer_thai_spread_ci_hi: Optional[float] = None
     baseline_eval_id: Optional[int] = None
     paired_delta_ci_json: Optional[str] = None
     gate_status: Optional[str] = None
@@ -273,6 +279,12 @@ class EvalRun:
     orphan_cues: Optional[int] = None
     speech_coverage_miss_ci_lo: Optional[float] = None
     speech_coverage_miss_ci_hi: Optional[float] = None
+    cer_thai_sub: Optional[float] = None
+    cer_thai_del: Optional[float] = None
+    cer_thai_ins: Optional[float] = None
+    cer_thai_spread: Optional[float] = None
+    cer_thai_spread_ci_lo: Optional[float] = None
+    cer_thai_spread_ci_hi: Optional[float] = None
     baseline_eval_id: Optional[int] = None
     paired_delta_ci_json: Optional[str] = None
     gate_status: Optional[str] = None
@@ -719,7 +731,9 @@ _EVAL_RUN_COLUMNS = (
     "rtf", "gate_unresolved", "cue_legality_violations", "baseline_eval_id",
     "paired_delta_ci_json", "gate_status",
     "speech_coverage_miss", "orphan_cues",
-    "speech_coverage_miss_ci_lo", "speech_coverage_miss_ci_hi", "passed",
+    "speech_coverage_miss_ci_lo", "speech_coverage_miss_ci_hi",
+    "cer_thai_sub", "cer_thai_del", "cer_thai_ins",
+    "cer_thai_spread", "cer_thai_spread_ci_lo", "cer_thai_spread_ci_hi", "passed",
 )
 
 _EVAL_RUN_COERCE = {

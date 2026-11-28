@@ -15,7 +15,7 @@ def _tok(text, start, end):
 
 
 def test_version_bumped():
-    assert METRICS_VERSION == 4
+    assert METRICS_VERSION >= 4
 
 
 def test_dropped_cue_counts_its_full_duration():

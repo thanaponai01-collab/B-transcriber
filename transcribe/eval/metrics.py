@@ -7,7 +7,7 @@ from dataclasses import dataclass
 _THAI_CHAR = re.compile(r"[฀-๿]")
 _LATIN_RUN = re.compile(r"[a-z0-9]+")
 
-METRICS_VERSION = 4
+METRICS_VERSION = 5
 
 ORPHAN_MAX_MS = 300.0
 ORPHAN_ISOLATION_MS = 300.0
@@ -37,6 +37,9 @@ class EvalMetrics:
     ref_speech_ms: float = 0.0
     missed_speech_ms: float = 0.0
     orphan_cues: int = 0
+    thai_sub: int = 0
+    thai_del: int = 0
+    thai_ins: int = 0
 
     @classmethod
     def aggregate(cls, clips: "list[EvalMetrics]") -> "EvalMetrics":
@@ -57,7 +60,8 @@ class EvalMetrics:
           penalized (metrics v2).
         * `shortest_cue_ms` — a global minimum, skipping None, so a single
           flash-frame cue anywhere in the corpus is still caught.
-        * count fields — plain sums, since they are the weights themselves.
+        * count fields (including the `thai_sub`/`thai_del`/`thai_ins` edit counts
+          behind `cer_thai`) — plain sums, since they are the weights themselves.
 
         An empty clip list aggregates to all-zeros rather than raising; the
         empty-gold-set refusal is the harness's job and happens before this.
@@ -96,6 +100,9 @@ class EvalMetrics:
             ref_speech_ms=_sum("ref_speech_ms"),
             missed_speech_ms=_sum("missed_speech_ms"),
             orphan_cues=_sum("orphan_cues"),
+            thai_sub=_sum("thai_sub"),
+            thai_del=_sum("thai_del"),
+            thai_ins=_sum("thai_ins"),
         )
 
 
@@ -123,6 +130,43 @@ def _edit_distance_py(ref: list | str, hyp: list | str) -> int:
             else:
                 dp[j] = 1 + min(prev[j], dp[j - 1], prev[j - 1])
     return dp[m]
+
+
+def _edit_counts(ref: str, hyp: str) -> tuple[int, int, int]:
+    """(substitutions, deletions, insertions) of one minimal alignment; they sum to the
+    edit distance, so sub + del + ins over the reference length is exactly the error rate."""
+    try:
+        from rapidfuzz.distance import Levenshtein
+    except ImportError:
+        return _edit_counts_py(ref, hyp)
+    ops = [op.tag for op in Levenshtein.editops(ref, hyp)]
+    return ops.count("replace"), ops.count("delete"), ops.count("insert")
+
+
+def _edit_counts_py(ref: str, hyp: str) -> tuple[int, int, int]:
+    n, m = len(ref), len(hyp)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost = 0 if ref[i - 1] == hyp[j - 1] else 1
+            dp[i][j] = min(dp[i - 1][j - 1] + cost, dp[i - 1][j] + 1, dp[i][j - 1] + 1)
+    sub = dele = ins = 0
+    i, j = n, m
+    while i or j:
+        if i and j and dp[i][j] == dp[i - 1][j - 1] + (ref[i - 1] != hyp[j - 1]):
+            sub += ref[i - 1] != hyp[j - 1]
+            i, j = i - 1, j - 1
+        elif i and dp[i][j] == dp[i - 1][j] + 1:
+            dele += 1
+            i -= 1
+        else:
+            ins += 1
+            j -= 1
+    return sub, dele, ins
 
 
 def _error_rate(ref: list | str, hyp: list | str) -> float:
@@ -360,6 +404,7 @@ def compute_metrics(
     ref_thai = _thai_char_stream(ref_tokens)
     hyp_thai = _thai_char_stream(hyp_tokens)
     cer_thai = _error_rate(ref_thai, hyp_thai)
+    thai_sub, thai_del, thai_ins = _edit_counts(ref_thai, hyp_thai)
 
     ref_latin = _latin_word_stream(ref_tokens)
     hyp_latin = _latin_word_stream(hyp_tokens)
@@ -404,4 +449,7 @@ def compute_metrics(
         ref_speech_ms=ref_speech_ms,
         missed_speech_ms=missed_speech_ms,
         orphan_cues=_orphan_count(hyp_tokens),
+        thai_sub=thai_sub,
+        thai_del=thai_del,
+        thai_ins=thai_ins,
     )

@@ -1,5 +1,194 @@
 # TODO_LEDGER
 
+## Engine A recording robustness: metrics v5, baselines, prototypes (none activated) — 2026-11-27
+
+Goal (owner): make Engine A's transcript robust to how the audio was recorded, then more accurate,
+with every claim gated. Stopped on request after the LUFS runs; remaining steps are listed at the end.
+
+**Measurement (merged in this branch).** METRICS_VERSION 4 -> 5: `cer_thai` splits into
+substitution/deletion/insertion rates (`eval_run.cer_thai_sub/del/ins`). `harness --robustness`
+decodes every gold clip under 7 conditions (clean, gain -18/-12/-6/+6 dB with +6 clipped at full
+scale, pink noise and an instrumental music bed at 10 dB SNR against active-speech level) and
+gates the pooled metrics plus `cer_thai_spread` (worst minus best condition) as
+`eval_run.kind = 'robustness'`. `--set KEY=VALUE` overrides config for an experiment. The music bed
+is a licensed track kept local (`transcribe/eval/beds/`, gitignored); its sha256 is in the clip keys.
+
+**Baselines reconciled.** Corpus is 9 clips (`yt t1 singapore first min.json` has no audio).
+`eval_run.id=73` (v3, production, 0.1276) and `id=74` (v4, flagged experiment, 0.1280) differ on 5 of
+9 clips in both directions, matching the 10-29 batched-decode fixes (`b6f41d0`, `a9f1d89`). v4 never
+had a production baseline. New v5 production baseline `id=75` (current config: clause split,
+word_align): `cer_thai` 0.1266 [0.0663, 0.1809] = sub 0.0190 + **del 0.0702** + ins 0.0374,
+`wer_latin` 0.7312, BER 0.5515, `cue_BER` 0.3791. Versus id=74, `shorts` 0.0650 -> 0.0477 and Wealthy
+0.0566 -> 0.0685 (inferred: tail-recovery decode changes 11-20..11-25, not bisected). A/A rerun
+(`id=76`, experiment): every paired delta exactly 0.0000, so decode is deterministic. Harness `rtf`
+read 0.137 and 0.104 on identical runs: not usable for speed claims. `bias_term` is empty, so no
+terms reach the decoder prompt.
+
+**Robustness baseline `id=77`** (spread 0.0218 [0.0119, 0.0413]):
+
+| condition | clean | -18 | -12 | -6 | +6 | noise10 | music10 |
+|---|---|---|---|---|---|---|---|
+| `cer_thai` | 0.1266 | 0.1199 | 0.1232 | 0.1284 | 0.1265 | 0.1416 | 0.1417 |
+
+Gain barely matters (Whisper's log-mel is max-normalised); differences go both ways. Noise and music
+cost ~+0.015. The spread is set by noise/music at the top and a lucky -18 dB run at the bottom.
+
+**LUFS normalisation before decode (`audio_prep.loudness_target_lufs`, -1 dBFS peak ceiling).**
+Gold clips sit at -18.3..-22.8 LUFS.
+
+| target | clean `cer_thai` (paired delta CI) | verdict | robustness spread (paired delta CI) | pooled `cer_thai` delta CI |
+|---|---|---|---|---|
+| -23 | 0.1320 [+0.0003, +0.0108] | UNRESOLVED (worse) | 0.0108 [-0.0231, +0.0001] | [-0.0028, +0.0084] |
+| -16 | 0.1265 [-0.0020, +0.0029] | UNRESOLVED (BER, cue_BER, wer_latin) | 0.0205 [-0.0161, +0.0214] | [-0.0019, +0.0090] |
+| -14 | 0.1261 [-0.0027, +0.0023] | UNRESOLVED (cue_BER) | not run (stopped) | |
+
+Reading: -23 halves the spread only by making clean and gain rows uniformly worse (0.129-0.132);
+-16 makes clipped +6 dB worse (0.1428, deletions 580 -> 789). No target improves anything with
+confidence. Recommendation so far: do not activate.
+
+**Pseudo-label purity** (`python -m tools.pseudo_label check`, pipeline cues aligned to the 430 recut
+SRT rows = 12.2 min; optimistic because the recuts were edited from pipeline output):
+
+| cue confidence >= | 0 | 0.85 | 0.90 | 0.95 |
+|---|---|---|---|---|
+| kept minutes | 11.95 | 11.02 | 9.72 | 5.71 |
+| CER of kept | 0.074 | 0.066 | 0.055 | 0.041 |
+| loanword-script conflicts | 10 | 5 | 3 | 2 |
+
+Confidence filters weakly. "Clean" bar, written before any footage yield was seen: CER <= 0.05 here
+(threshold 0.95, ~48% kept) and >= 45 kept minutes (`MIN_COLLECT_MINUTES`).
+
+**Found on the way.** DeepFilterNet fails to import in the venv (`torchaudio.backend` is gone in
+torchaudio 2.11), and `ingest._apply_rolling_denoise` logs a warning and skips, so `denoise: true` is a
+silent no-op; it is also wired only to the chunk path, never to whole-file Engine A.
+`transcribe/audio/prep.py` loads it behind a one-line module shim: SNR 9.5 -> 16.0 dB on a 10 s gold
+excerpt with noise added (CPU). SNR estimate (p90 - p10 frame level): clean gold 22.0-31.8 dB,
+noise10 14.5-16.0, music10 15.3-20.8, so `enhance_below_snr_db: 21` triggers on every noisy
+condition and no clean clip (1 dB margin).
+
+**Remaining (in order; GPU jobs one at a time):**
+1. LUFS -14 under `--robustness`, for the record.
+2. int8_float16 + batch 16: `harness --set engines.faster_whisper.compute_type=int8_float16 --set
+   engines.faster_whisper.batch_size=16`, plus decode-only RTF and per-process peak VRAM over 3 repeats
+   for float16/8, int8_float16/8, int8_float16/16 (harness rtf is noise; a scratch bench sampled
+   `nvidia-smi --query-compute-apps`). Something else holds ~6 GB on the 12 GB card; judge against 8 GB.
+3. Enhancement on noisy clips only: `--set audio_prep.enhance_below_snr_db=21`, normal run (must be
+   byte-identical to id=75: proof it skips clean audio) and `--robustness` (must move noise10/music10).
+4. Pseudo-label yield: `python -m tools.pseudo_label label --list <footage list> --out
+   output/pseudo_label/footage.jsonl`, then `yield`. The list used was 14 files / 221 min across CFD
+   98/99, HKS, พุธทอล์ค, โหน(หลัง)กระแส, คชาภา and BeamOil (Bangkok Festival excluded as a gold source;
+   the tool also skips files sharing a 20-char run with any gold reference).
+5. LoRA only if step 4 clears the bar above. Add gain and noise augmentation to `tools/finetune_lora.py`
+   with a noise source and music other than the eval's (pink-noise seed and the music bed would leak).
+   The owner chose synthetic-only for now, so the held-out verdict is the robustness suite's
+   noise10/music10 rows, not a real noisy clip.
+6. Owner's calls, untouched: loanword script policy (training on pseudo-labels sets it implicitly;
+   conflicts are counted above), any UNRESOLVED verdict, which recording is the noisy gold clip.
+
+### Steps 1-5 rerun on the RTX 3070 machine (owner: "rebuild the corpus here") — 2026-11-27
+
+The runs above came from another machine. This one has none of `eval_run` 73-77, the music bed, or 6
+of the 9 gold audio files (the four Bangkok Festivals clips, `shorts`, Wealthy 40), so every number
+below is on a **4-clip corpus** (Short1-3 and `yt t1 singapore first min`, 2208 Thai chars) in a
+scratch copy of `transcriber.db`, and pairs only with its own baselines. It cannot be compared with
+id=75/77. Four clips make the CIs wide; read directions, not verdicts.
+
+- **Music bed:** `[BGM]Chasing to the end.wav` (HKS project BGM) as 16 kHz mono mp3, sha256
+  `0f00b718…f099843`. `[BGM]Where Everything Began.wav` stays unused, free for LoRA augmentation.
+- **Envs:** PATH Python 3.13 (torch 2.6.0+cu124, ctranslate2 4.8.0, faster-whisper 1.2.1) for steps 1,
+  2 and 4. DeepFilterNet's `deepfilterlib` has wheels only up to cp311, so step 3 ran in a uv Python
+  3.11 venv pinned to the same versions (`deepfilternet` installed `--no-deps`: it declares numpy<2).
+  That venv reproduced the baseline exactly (A/A, every paired delta 0.0000). `pyloudnorm` was missing
+  from `requirements.txt`; added.
+- **Baselines:** v5 id=13 `cer_thai` 0.0530 [0.0404, 0.0697] = sub 0.0122 + del 0.0276 + ins 0.0131
+  (same value as the v4 runs on this corpus, so decode is unchanged). Robustness id=14, spread 0.0159
+  [0.0127, 0.0393].
+
+| condition | clean | -18 | -12 | -6 | +6 | noise10 | music10 | spread | pooled delta CI |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline (id=14) | 0.0530 | 0.0548 | 0.0521 | 0.0616 | 0.0589 | 0.0679 | 0.0634 | 0.0159 | |
+| LUFS -14 | 0.0566 | 0.0566 | 0.0566 | 0.0566 | 0.0566 | 0.0756 | 0.0688 | 0.0190 | [-0.0004, +0.0066] |
+| enhance < 21 dB | 0.0530 | 0.0548 | 0.0521 | 0.0616 | 0.0589 | 0.1259 | 0.0897 | 0.0738 | [+0.0045, +0.0221] |
+
+1. **LUFS -14:** UNRESOLVED, leaning worse on every row. The gain rows collapse to one value, which shows
+   normalisation works; it just doesn't help. Agrees with the -16/-23 runs above: do not activate.
+2. **int8_float16 + batch 16:** `cer_thai` 0.0571, paired CI [-0.0014, +0.0081], UNRESOLVED leaning
+   worse. Decode-only bench (`EngineInput` straight into the engine, 166 s of audio, 3 fresh processes
+   each; WDDM reports per-process VRAM as N/A, so peak is whole-card used minus the idle reading):
+
+   | compute / batch | decode RTF | peak VRAM over idle |
+   |---|---|---|
+   | float16 / 8 (current) | 0.116-0.137 | 2826-2960 MiB |
+   | int8_float16 / 8 | 0.164-0.171 | 1810-2073 MiB |
+   | int8_float16 / 16 | 0.079-0.112 | 2058-2105 MiB |
+
+   All fit in 8 GB, so VRAM is no reason to switch. The RTF spread is not explained: four short clips
+   may never fill a batch of 8, and `ffprobe`/`find` ran during the bench. float16 / 16 was not
+   measured. Treat speed as unproven either way. Not activated.
+3. **Enhancement on noisy files only:** the normal run is identical to id=13 (paired deltas 0.0000) and
+   the clean/gain rows are byte-identical to id=14, so the SNR gate skips clean audio. On the noisy
+   rows DeepFilterNet makes things much worse: noise10 deletions 62 -> 152, the whole pooled CI is above
+   zero. Do not activate. The 3.11 `--no-deps` install is sane: on the 8 noisy clips the SNR estimate
+   rises (e.g. 14.5 -> 29.9 dB), active speech level stays within 15% of clean, and SDR against the
+   clean clip improves on 6 of 8 (9.6 -> 16.0 dB at best; Short1 drops 9.1 -> 8.6 / 7.3). So the audio
+   gets cleaner and the decode still gets worse (inferred: enhancement artefacts). It did produce the
+   only Latin-script hypotheses here: 18 switches, 12 matched.
+4. **Pseudo-label yield** (`label` then `yield`): 12 local files, 241 min (one HKS full episode and 11
+   1RaceClub YouTube exports, Mar-Jul 2026). The gold-overlap guard skipped 4: HKS 290969, tiw aus,
+   t1 aus, YT suzuka. Checked on `yt t1 aus`: its only shared 20-char run is `startในoutsideนะครับ`,
+   a stock F1 phrase also in `yt t1 singapore first min`, not a shared intro. One generic phrase
+   drops a whole file, so the guard over-excludes (the other 3 skips not inspected). Those 12 files
+   kept only 104.6 labelled min (34.9 at 0.95), so the list was extended to 28 files with the Canada
+   live and 15 more 1RaceClub exports (`output/robustness_local_20261127/footage_all.txt`; one more,
+   Monaco `yt QUAL`, skipped). Kept cue time over all 28:
+
+   | confidence >= | 0 | 0.80 | 0.85 | 0.90 | 0.95 |
+   |---|---|---|---|---|---|
+   | kept minutes | 238.8 | 215.3 | 189.5 | 141.3 | **58.7** |
+
+   Purity could not be re-measured here (none of the manifest's 442 recut slices are on this machine),
+   so the bar uses the 0.95 purity above (CER 0.041, optimistic).
+5. **The yield bar is cleared (58.7 >= 45 min at 0.95). LoRA not started:** the purity is from the
+   recut manifest, not this footage; this footage is mostly F1 commentary, unlike the eval's talk
+   shows; and baseline id=13 has zero Latin-script hypotheses, so training on these labels fixes the
+   loanword script policy, which is the owner's call. Next, if the owner says go: measure purity on a
+   hand-checked sample of this footage, then build the augmentation in `tools/finetune_lora.py`
+   (music: `[BGM]Where Everything Began.wav`, not the eval bed).
+
+6. **Purity on the footage (owner: "measure purity first") — FAIL, LoRA does not start.** No human
+   text exists for any of the 28 files: the two Miami SRTs are machine transcripts (`ไมอาร์มีย์` for
+   Miami), the SubtitleDesk sessions hold machine cues, and the Premiere projects have no caption
+   tracks. So a person checks a sample. `python -m tools.purity_review sample` drew 150 cues (seed
+   20261128, uniform over the cues at confidence >= 0.95, 5.21 min, 21 of the 23 labelled files);
+   `serve` opens the review page and saves each edit; `score` reports the CER.
+   **Rule, written before review:** reviewer fixes only what was misheard and leaves the script as
+   is, ticking "English term written in Thai" instead; a no-speech cue counts all its characters as
+   errors. Pass if the bootstrap 95% CI upper bound is <= 0.05, fail if the lower bound is > 0.05,
+   otherwise UNRESOLVED (owner's call). The page starts from the pipeline text, so the CER is
+   optimistic. The loanword-tick share is reported beside it and decides nothing by itself.
+
+   **Result (owner reviewed 64 of the 150, 2026-11-28): FAIL.** CER 0.2102, bootstrap CI
+   [0.1546, 0.2794], lower bound far above 0.05, so the other 86 cues cannot change the verdict.
+   47% of reviewed cues (51% of their minutes) were ticked "English term written in Thai". The
+   owner wrote those terms in Latin script, so their corrections hold the policy for F1 terms.
+   38 cues with a Latin-script term carry 368 of the 416 errors; the other 23 cues (no Latin, not
+   no-speech) score 0.038. Most of the Latin-term errors hold under any script policy: Engine A
+   **drops** the English term outright (`แล้วก็จะเข้าสู่ ___ เป็น ___ ที่` for "Nouvelle Chicane …
+   Chicane"; Decreasing Radius, Steering Wheel, Full Lock, a whole clause about Leclerc) or
+   mishears it in Thai (`อันเดอร์คลาส` Undercut, `แฮมพิวเตอร์` Hamilton, `ด่า…อินไซส์` Dive Inside).
+   **So LoRA on these pseudo-labels does not start:** it would train Engine A on its own dropped
+   and misheard English terms. The 4-clip gold set has 26 Latin words, so `cer_thai` cannot see
+   this; `wer_latin` 0.92 and BER 1.0 already said it. Corrections:
+   `output/robustness_local_20261127/purity/corrections.json`.
+
+   To review: `python -m tools.purity_review serve --dir output/robustness_local_20261127/purity`
+   from the main checkout (after merge), then open http://127.0.0.1:8020. Ctrl+Enter saves and plays
+   the next cue. Then `python -m tools.purity_review score --dir output/robustness_local_20261127/purity`.
+
+Evidence (gitignored): `output/robustness_local_20261127/` in the main checkout holds the scratch DB
+(`eval_scratch.db`, ids 13-19), `footage.jsonl`, the bench script and results, the music bed and the
+pinned versions.
+
 ## Clause split (`cue_split_algorithm: clause`) — ACTIVATED on an unresolved gate — 2026-11-11
 
 Owner report: cues run too long, and a cue breaks before its sentence is finished.
