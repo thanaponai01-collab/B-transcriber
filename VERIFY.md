@@ -87,8 +87,9 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: the first 3 tests red on 26ca379 (before PORT/VERSION moved to cutdeck/helper_protocol.py), green after; removing the pong, the continuation join, or the refusal check in `ask` each turned tests red, restored.
 - live (2026-11-23, bench `output/perf/2026-11-23-cutdeck-profile/cdv_bench.py`, helper on :7891 not restarted): fresh-process `cdv.py call read_sequence` timed from outside, 4 alternating block pairs of 6 per side, one warm-up dropped per side; old 26ca379 median 507 ms (477-618, n=24), new median 302 ms (278-359, n=24), 0 failures; the recorded result and the unknown-command error are identical on both sides. `import cdv` 354 ms to 155 ms.
 
-- test (2026-11-28, command file size): `python -m pytest tests/test_command_file_size.py -q -p no:cacheprovider` (cutdeck/driver_commands.py at most 1750 lines, each cutdeck/commands/*.py at most 500)
+- test (2026-11-28, command file size): `python -m pytest tests/test_command_file_size.py -q -p no:cacheprovider` (cutdeck/driver_commands.py at most 1690 lines, each cutdeck/commands/*.py at most 500)
 - fail-proof: red on 6c540d0's 2146-line driver_commands.py, green after the pieces family moved to cutdeck/commands/pieces.py.
+- fail-proof (hks): the 1690 limit is red on 609ca78's 1707-line driver_commands.py, green after the hks family moved to cutdeck/commands/hks.py (1649).
 - live (2026-11-23, same bench, standard-library client and lazy subprocess/ctypes): c4b47d3 median 281 ms (275-325, n=24), new median 102 ms (97-109, n=24), 0 failures; recorded result, unknown-command record, stdout and exit code identical to c4b47d3; 0 bytes added to the helper log; `doctor` and plain `launch` run live on the new client (`scratch`, `cleanup`, `launch --restart-helper` not run live). Left: python start ~32 ms, argparse + re ~19, socket + client ~9, pathlib/json ~11, first Winsock connect ~4, the command ~4.
 
 ## Premiere project readers
@@ -210,7 +211,7 @@ Run them all with `python <verify-loop>/scripts/verify.py run`. Baseline (2026-0
 - fail-proof: in cutdeck/hks_judge.py kept_runs, made a run join across hidden content (`if False:`), test_kept_lines_join_unless_hidden_content_lies_between went red; in cutdeck/hks_bleep.py dropped the `(?!ว)` guards, test_compounds_are_not_swears went red; reverted, `git diff` empty
 
 ## HKS handover gates and rule registry
-- path: cutdeck/hks_enforce.py, cutdeck/hks_gate_store.py, cutdeck/hks_registry.py, uxp/cutdeck/features/hks.js, projects/hks/registry/
+- path: cutdeck/commands/hks.py, cutdeck/hks_enforce.py, cutdeck/hks_gate_store.py, cutdeck/hks_registry.py, uxp/cutdeck/features/hks.js, projects/hks/registry/
 - oracle: projects/hks/gates/redesign-20261126.md
 - test: `python -m pytest tests/test_hks_enforce.py tests/test_hks_gate_store.py tests/test_hks_registry.py tests/test_hks_gates.py tests/test_hks_gates_mutate.py -q -p no:cacheprovider` and `node --test tests/cutdeck_feature_hks.test.cjs`
 - fail-signal: AssertionError

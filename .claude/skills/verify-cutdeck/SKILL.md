@@ -7,7 +7,7 @@ description: Drive the real CutDeck stack in live Adobe Premiere Pro (helper on 
 
 CutDeck lets agents and scripts control Premiere. Every Premiere command is one entry in the
 table `cutdeck/driver_commands.py`; a command family's code lives in `cutdeck/commands/`
-(`pieces.py`: paste_from, paste_pieces, arrange). It runs through the helper
+(`pieces.py`: paste_from, paste_pieces, arrange; `hks.py`: hks_handover, hks_status). It runs through the helper
 (`python -m cutdeck.helper`, port 7891); panel commands go on to the CutDeck UXP panel inside Premiere, and the menu, key, screenshot and
 AI Assistant commands run in the helper itself. Tests use a fake Premiere
 (`tests/fakes/premiere.cjs`); this skill drives the real one.
