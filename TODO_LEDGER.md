@@ -155,7 +155,7 @@ id=75/77. Four clips make the CIs wide; read directions, not verdicts.
    hand-checked sample of this footage, then build the augmentation in `tools/finetune_lora.py`
    (music: `[BGM]Where Everything Began.wav`, not the eval bed).
 
-6. **Purity on the footage (owner: "measure purity first") — sample drawn, review pending.** No human
+6. **Purity on the footage (owner: "measure purity first") — FAIL, LoRA does not start.** No human
    text exists for any of the 28 files: the two Miami SRTs are machine transcripts (`ไมอาร์มีย์` for
    Miami), the SubtitleDesk sessions hold machine cues, and the Premiere projects have no caption
    tracks. So a person checks a sample. `python -m tools.purity_review sample` drew 150 cues (seed
@@ -166,6 +166,20 @@ id=75/77. Four clips make the CIs wide; read directions, not verdicts.
    errors. Pass if the bootstrap 95% CI upper bound is <= 0.05, fail if the lower bound is > 0.05,
    otherwise UNRESOLVED (owner's call). The page starts from the pipeline text, so the CER is
    optimistic. The loanword-tick share is reported beside it and decides nothing by itself.
+
+   **Result (owner reviewed 64 of the 150, 2026-11-28): FAIL.** CER 0.2102, bootstrap CI
+   [0.1546, 0.2794], lower bound far above 0.05, so the other 86 cues cannot change the verdict.
+   47% of reviewed cues (51% of their minutes) were ticked "English term written in Thai". The
+   owner wrote those terms in Latin script, so their corrections hold the policy for F1 terms.
+   38 cues with a Latin-script term carry 368 of the 416 errors; the other 23 cues (no Latin, not
+   no-speech) score 0.038. Most of the Latin-term errors hold under any script policy: Engine A
+   **drops** the English term outright (`แล้วก็จะเข้าสู่ ___ เป็น ___ ที่` for "Nouvelle Chicane …
+   Chicane"; Decreasing Radius, Steering Wheel, Full Lock, a whole clause about Leclerc) or
+   mishears it in Thai (`อันเดอร์คลาส` Undercut, `แฮมพิวเตอร์` Hamilton, `ด่า…อินไซส์` Dive Inside).
+   **So LoRA on these pseudo-labels does not start:** it would train Engine A on its own dropped
+   and misheard English terms. The 4-clip gold set has 26 Latin words, so `cer_thai` cannot see
+   this; `wer_latin` 0.92 and BER 1.0 already said it. Corrections:
+   `output/robustness_local_20261127/purity/corrections.json`.
 
    To review: `python -m tools.purity_review serve --dir output/robustness_local_20261127/purity`
    from the main checkout (after merge), then open http://127.0.0.1:8020. Ctrl+Enter saves and plays
