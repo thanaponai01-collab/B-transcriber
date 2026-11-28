@@ -51,3 +51,23 @@ a shorter pause before the In (the Out keeps 60 ms) puts more In edges within a 
   interval over days above 0; Out edges are unchanged; and the share of planned In edges that land
   in sound (level over the quiet threshold) rises by no more than 2 points.
 - Wrong if: the heldout interval contains 0, or In edges move into sound by more than 2 points.
+
+### Result (2026-11-29): pass on the ruler; live Premiere proof pending
+
+`edge_ruler.py run --pads 60:60,0:60,20:60,30:60,40:60,50:60 --out output/edge_ruler/r2.json`.
+
+| In pad (Out 60) | tune: all edges within 1 frame | tune In hits / 222 | In planned in sound |
+|---|---|---|---|
+| 60 (before) | 52.0% | 121 | 30 |
+| 0 | 58.6% | 150 | 30 |
+| 20 | 58.8% | 151 | 30 |
+| **30 (picked)** | **59.0%** | **152** | 30 |
+| 40 | 57.7% | 146 | 30 |
+| 50 | 56.8% | 142 | 30 |
+
+Heldout, scored once with 30: all edges 179 → 246 of 420 (42.6% → 58.6%); paired change +16.0 pts
+[+10.6, +20.0] over days, 65 better, 0 worse. In 81 → 148 of 210, Out 98 → 98 (unchanged), planned In
+edges in sound 42 → 42. `PAD_IN_MS = 30` is now the default; `pad_in_ms` is a new argument of
+`plan_pieces`, `keep_words` and their helper commands, and `pad_ms` is now the pause after the Out only.
+Not yet proved in live Premiere: Premiere was in use by another session (a project of 2026-11-29 open
+and polled) during this round.

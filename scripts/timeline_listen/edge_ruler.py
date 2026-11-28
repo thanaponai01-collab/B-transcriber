@@ -45,7 +45,7 @@ def pieces(project: dict, media: str) -> list[tuple[float, float]]:
     return sorted(spans)
 
 
-def score_entry(entry: dict, settings: list[tuple[int, int]], db: Path, levels_dir: Path) -> list[dict]:
+def score_entry(entry: dict, settings: list[tuple[int, int, int]], db: Path, levels_dir: Path) -> list[dict]:
     media = entry["media"]
     got = tt.source_words(media, db, levels_dir)
     if got is None:
@@ -62,16 +62,16 @@ def score_entry(entry: dict, settings: list[tuple[int, int]], db: Path, levels_d
         k = [n for n, w in enumerate(src) if w.src_start_ms >= i0 - 40 and w.src_end_ms <= i1 + 40]
         if not k:
             continue
-        for pad, wordless in settings:
+        for pad_in, pad, wordless in settings:
             # Each edge from its own edge word, as keep_ranges places them: a piece the user kept may
             # hold a long pause, which plan_pieces refuses as one stretch.
             plan = lambda n: word_cut.plan_pieces(src, [{"word_range": [n, n]}], TPF, {media: words}, lvl,  # noqa: E731
-                                                  pad, wordless)[0]
+                                                  pad, wordless, pad_in)[0]
             head, tail = plan(k[0]), plan(k[-1])
             for side, owner, planned in (("in", i0, int(head["in_ticks"]) / T), ("out", i1, int(tail["out_ticks"]) / T)):
-                rows.append({"source": entry["source"], "setting": f"{pad}/{wordless}", "side": side,
+                rows.append({"source": entry["source"], "setting": f"{pad_in}/{pad}/{wordless}", "side": side,
                              "owner_ms": round(owner), "planned_ms": round(planned), "diff": round(planned - owner),
-                             "sound": lvl(media, owner * T) >= 0,
+                             "sound": lvl(media, owner * T) >= 0, "planned_sound": lvl(media, planned * T) >= 0,
                              "inword": any(w.start_ms + 20 < owner < w.end_ms - 20 for w in words)})
     return rows
 
@@ -117,7 +117,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--pads", default="60,120")
+    r.add_argument("--pads", default="60,120", help="IN:OUT or one pad for both, comma-separated")
     r.add_argument("--wordless", type=int, default=0)
     r.add_argument("--out", type=Path, default=Path("output/edge_ruler/runs.json"))
     c = sub.add_parser("compare")
@@ -127,7 +127,7 @@ def main() -> None:
     args = ap.parse_args()
     entries = json.loads(SET.read_text(encoding="utf-8"))["cuts"]
     if args.cmd == "run":
-        settings = [(int(p), args.wordless) for p in args.pads.split(",")]
+        settings = [(int(p.split(":")[0]), int(p.split(":")[-1]), args.wordless) for p in args.pads.split(",")]
         db = store.resolve_db_path({"store": {"path": "transcriber.db"}})
         rows = []
         for e in entries:
@@ -135,13 +135,13 @@ def main() -> None:
             for x in got:
                 x["split"] = e["split"]
             rows += got
-            print(e["source"], e["split"], {s: summary([x for x in got if x["setting"] == f"{s[0]}/{s[1]}"])["w1"]
+            print(e["source"], e["split"], {s: summary([x for x in got if x["setting"] == "/".join(map(str, s))])["w1"]
                                             for s in settings}, flush=True)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
         for split in ("tune", "heldout"):
             for s in settings:
-                tag = f"{s[0]}/{s[1]}"
+                tag = "/".join(map(str, s))
                 print(split, tag, summary([x for x in rows if x["split"] == split and x["setting"] == tag]))
     else:
         rows = [x for x in json.loads(args.runs.read_text(encoding="utf-8")) if x["split"] == args.split]

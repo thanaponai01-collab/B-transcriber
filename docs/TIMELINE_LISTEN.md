@@ -138,7 +138,8 @@ What remains is sound beyond the 400 ms reach.
 ### `premiere_plan_pieces` (helper command `plan_pieces`, `word_cut.plan_pieces`): placing a Short's edges
 - `keep`: the phrases to play, in order, found on any timeline (usually the rough cut).
 - Each piece's In/Out is placed in the **source file's** pauses around its words, using the
-  source's full word list and levels: 60 ms of pause (`pad_ms`), then the nearest quiet frame.
+  source's full word list and levels: 30 ms of pause before (`pad_in_ms`) and 60 ms after (`pad_ms`),
+  then the nearest quiet frame (30 ms In: scripts/timeline_listen/EDGE_RULER.md round 2).
   `wordless_ms` (off by default) also takes along a laugh or breath that touches the phrase. A
   rough cut has removed most pauses; the source still has them.
 - Returns `items` for `premiere_build_sequence` (back to back on V1/A1) and `pieces`, with
