@@ -65,6 +65,13 @@ def snap_to_sound(start_ms: int, prev_ms: int, lev: np.ndarray, reach: int = 20,
     return start_ms if g == f else g * 10
 
 
+def rolling_peak(lev: np.ndarray, frames: int) -> np.ndarray:
+    """The loudest level within ``frames`` either side of each frame (digital silence ignored)."""
+    from scipy.ndimage import maximum_filter1d
+    live = np.where(lev > DIGITAL_DB, lev, lev.max(initial=0.0) - 200)
+    return maximum_filter1d(live, size=2 * frames + 1, mode="nearest") if len(lev) else lev
+
+
 def flux_onsets(audio: np.ndarray, sr: int) -> np.ndarray:
     """Spectral-flux onsets, each backtracked to the energy minimum before it (librosa), in ms."""
     import librosa
@@ -221,13 +228,18 @@ def retime_cues(cues: list, old_words: list[dict], new_words: list[dict]) -> Non
 def align_words(words: list[dict], cues: list, audio: np.ndarray, sr: int, device: str, cfg: dict) -> list[dict]:
     """The step as the pipeline runs it (config ``word_align``): load the CTC model, re-time the
     word starts, snap them to the sound unless ``snap_to_sound`` is off, snap the ends before a
-    pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place."""
+    pause unless ``snap_ends`` is off, unload. New word dicts; the cues move in place.
+    ``start_snap`` / ``end_snap`` (dicts) override the snaps' keyword defaults; ``level_norm: agc``
+    measures the snaps' levels against a 3 s rolling peak (loudness normalisation)."""
     lev = levels_db(audio, sr)
-    snap = (lambda s, prev: snap_to_sound(s, prev, lev)) if cfg.get("snap_to_sound", True) else None
+    if cfg.get("level_norm") == "agc":
+        lev = lev - rolling_peak(lev, 300)
+    sk, ek = dict(cfg.get("start_snap") or {}), dict(cfg.get("end_snap") or {})
+    snap = (lambda s, prev: snap_to_sound(s, prev, lev, **sk)) if cfg.get("snap_to_sound", True) else None
     if snap is not None and cfg.get("snap_method", "loudness") == "flux":
         onsets = flux_onsets(audio, sr)
         snap = lambda s, prev: snap_to_flux(s, prev, onsets, lev)
-    snap_end = (lambda s, a: snap_end_to_sound(s, a, lev)) if cfg.get("snap_ends", True) else None
+    snap_end = (lambda s, a: snap_end_to_sound(s, a, lev, **ek)) if cfg.get("snap_ends", True) else None
     aligner = ThaiCTCAligner(audio, sr, cfg.get("model", DEFAULT_MODEL), device)
     aligner.load()
     try:
