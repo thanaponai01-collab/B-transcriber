@@ -218,3 +218,34 @@ def test_a_last_letter_inside_the_next_word_is_kept_before_it_and_an_end_past_it
                        snap_end=snap_end)
     assert seen[0] == 1990  # kept before ข's start
     assert new[0]["end_ms"] == 1500  # 2290 is past ข's start: dropped, the engine's end stands
+
+
+def test_config_overrides_reach_both_snaps(monkeypatch):
+    import numpy as np
+    from transcribe.pipeline import word_align
+
+    seen = {}
+
+    class FakeAligner:
+        def __init__(self, *a, **k):
+            pass
+
+        def load(self):
+            pass
+
+        def unload(self):
+            pass
+
+        def alignable(self, text):
+            return True
+
+        def __call__(self, lo, hi, texts):
+            return [(lo + 100.0, lo + 200.0)] * len(texts)
+
+    monkeypatch.setattr(word_align, "ThaiCTCAligner", FakeAligner)
+    monkeypatch.setattr(word_align, "snap_to_sound", lambda s, p, lev, **k: seen.setdefault("start", k) and s)
+    monkeypatch.setattr(word_align, "snap_end_to_sound", lambda s, a, lev, **k: seen.setdefault("end", k) and None)
+    words = [{"text": "a", "start_ms": 0, "end_ms": 300}]
+    word_align.align_words(words, [Cue(start_ms=0, end_ms=300)], np.zeros(16000, dtype=np.float32), 16000, "cpu",
+                           {"start_snap": {"reach": 38}, "end_snap": {"tail_db": 25.61}})
+    assert seen == {"start": {"reach": 38}, "end": {"tail_db": 25.61}}

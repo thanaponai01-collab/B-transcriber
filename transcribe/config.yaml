@@ -416,6 +416,10 @@ word_align:
   pad_ms: 400   # audio either side of each cue window
   snap_to_sound: true   # a start next to a pause moves onto the sound's edge (word_align.snap_to_sound)
   snap_ends: true   # an end before a pause moves to where the sound fades (word_align.snap_end_to_sound)
+  # Snap thresholds from an Optuna search on hand-marked speech edges (2026-11-28, branch
+  # timing/judge, transcribe/eval/judge/TRIALS.md T5). Keys are the snap functions' keyword arguments.
+  start_snap: {reach: 38, pause: 3, quiet_db: 7.09, range_db: 17.73}
+  end_snap: {reach: 79, pause: 6, quiet_db: 10.67, below_peak_db: 34.05, tail_db: 25.61, hold_db: 2.0}
 
 # Coverage guard (docs/arch-design-transcription-engine.md item 3): re-decode speech
 # (>= 600 ms) that no cue covers, with Engine A, after the main pass. OFF until a GPU
