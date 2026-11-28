@@ -1,0 +1,75 @@
+{
+ "note": "User hand cuts, no CutDeck rough cut in the project. 'source' is the recording day: the bootstrap resamples days, and one day is never in both halves. Halves alternate by sorted day.",
+ "cuts": [
+  {
+   "source": "20260627",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20260627 - 2/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260627 - 2\\1. FOOTAGE\\2\\2026-06-28 07-48-03.mp4",
+   "edges_seen": 79
+  },
+  {
+   "source": "20260706",
+   "split": "heldout",
+   "project": "E:/Me/2.Tasks/20260706 - Gillette/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260706 - Gillette\\1. FOOTAGE\\New folder\\obs\\2026-07-05 11-39-11.mp4",
+   "edges_seen": 26
+  },
+  {
+   "source": "20260706",
+   "split": "heldout",
+   "project": "E:/Me/2.Tasks/20260706 - Gillette/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260706 - Gillette\\1. FOOTAGE\\New folder\\obs\\2026-07-05 12-00-17.mp4",
+   "edges_seen": 134
+  },
+  {
+   "source": "20260712",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20260712 - SOUR BKK/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260712 - SOUR BKK\\1. FOOTAGE\\2026-07-12 15-49-17.mp4",
+   "edges_seen": 143
+  },
+  {
+   "source": "20260713",
+   "split": "heldout",
+   "project": "E:/Me/2.Tasks/20260713 - tss/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260713 - tss\\1. FOOTAGE\\2026-07-12 12-45-58.mp4",
+   "edges_seen": 156
+  },
+  {
+   "source": "20260808",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20260808 - นักแข่งคนนี้คือใคร/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260808 - นักแข่งคนนี้คือใคร\\1. FOOTAGE\\IMG_3394.MOV",
+   "edges_seen": 61
+  },
+  {
+   "source": "20260808",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20260808 - นักแข่งคนนี้คือใคร/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260808 - นักแข่งคนนี้คือใคร\\1. FOOTAGE\\IMG_3395.MOV",
+   "edges_seen": 51
+  },
+  {
+   "source": "20260808",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20260808 - นักแข่งคนนี้คือใคร/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template.prproj",
+   "media": "E:\\Me\\2.Tasks\\20260808 - นักแข่งคนนี้คือใคร\\1. FOOTAGE\\IMG_3396.MOV",
+   "edges_seen": 54
+  },
+  {
+   "source": "20261116",
+   "split": "heldout",
+   "project": "E:/Me/2.Tasks/20261116 - 01 gillete vegas lec/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template_1.prproj",
+   "media": "E:\\Me\\2.Tasks\\20261116 - 01 gillete vegas lec\\1. FOOTAGE\\LEC\\cam\\2026-11-16 16-51-03.mp4",
+   "edges_seen": 109
+  },
+  {
+   "source": "20261117",
+   "split": "tune",
+   "project": "E:/Me/2.Tasks/20261117 - 02 gillete review/4. PROJECTS/1. PREMIERE PRO/20260130 RENAME template_1.prproj",
+   "media": "E:\\Me\\2.Tasks\\20261117 - 02 gillete review\\1. FOOTAGE\\2026-11-17 09-30-15.mp4",
+   "edges_seen": 51
+  }
+ ]
+}

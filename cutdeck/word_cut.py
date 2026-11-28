@@ -151,16 +151,17 @@ def _wordless_reach(media: str, edge: int, bound: int, step: int, source_level, 
     return reached
 
 
-PAD_MS = 60  # pause kept before and after a piece: the owner's own edges sit here (21 of 25 within a frame, 2026-11-22)
+PAD_MS = 60  # pause kept after a piece: the owner's own edges sit here (21 of 25 within a frame, 2026-11-22)
+PAD_IN_MS = 30  # pause kept before a piece: the owner starts closer to the first word (EDGE_RULER.md round 2)
 
 
 def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
                 source_words: dict, source_level=None, pad_ms: int = PAD_MS,
-                wordless_ms: int = WORDLESS_MS) -> list[dict]:
+                wordless_ms: int = WORDLESS_MS, pad_in_ms: int = PAD_IN_MS) -> list[dict]:
     """The pieces of source media that play each kept phrase, in the order given.
 
     The phrase is found on this timeline (a rough cut, a copy), but its edges are placed in the
-    SOURCE file: in the pauses around its words there (``pad_ms`` of pause, then the nearest
+    SOURCE file: in the pauses around its words there (``pad_in_ms`` of pause before, ``pad_ms`` after, then the nearest
     quiet frame; with no pause, the word boundary). A rough cut has already removed most pauses; the source still has them, so the
     piece starts and ends cleanly even where the rough cut's words touch, and never carries a
     sliver of a neighbouring clip.
@@ -169,6 +170,7 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
     over the sound threshold at a source position (negative = quiet). Source In/Out are whole
     frames of ``tpf``. Returns ``[{text, media, in_ticks, out_ticks, src_s, no_quiet?}]``."""
     pad = pad_ms * TICKS_PER_MS
+    pad_in = pad_in_ms * TICKS_PER_MS
     out = []
     for keep in keeps:
         i, j = _resolve(words, keep, tpf)
@@ -197,7 +199,7 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
             last = _wordless_reach(media, last, next_word if next_word is not None else 1 << 62, 1,
                                    source_level, wordless_ms)
         after = next_word if next_word is not None else last + pad
-        fa = max(first - pad, before) // tpf
+        fa = max(first - pad_in, before) // tpf
         if fa * tpf < before:
             fa += 1
         if fa * tpf > first:
@@ -224,7 +226,7 @@ def plan_pieces(words: list[TimelineWord], keeps: list[dict], tpf: int,
 
 def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: list,
                 source_words: dict, source_level=None, pad_ms: int = PAD_MS,
-                end_ticks: int | None = None, wordless_ms: int = WORDLESS_MS) -> dict:
+                end_ticks: int | None = None, wordless_ms: int = WORDLESS_MS, pad_in_ms: int = PAD_IN_MS) -> dict:
     """Keep only these phrases on this timeline, in its own order: their spans in sequence
     frames, and the frame cuts (everything else) for `cut_copy`, which keeps every track and
     layer. Each span's edges are placed as `plan_pieces` places them, in the source file's
@@ -236,9 +238,9 @@ def keep_ranges(words: list[TimelineWord], keeps: list[dict], tpf: int, clips: l
         # Only the outer edges are placed: a span on a rough cut crosses its joins, which stay
         # where they are. Each edge is a one-word plan in that word's own source.
         head = plan_pieces(words, [{"word_range": [i, i], "text": words[i].text}],
-                           tpf, source_words, source_level, pad_ms, wordless_ms)[0]
+                           tpf, source_words, source_level, pad_ms, wordless_ms, pad_in_ms)[0]
         tail = plan_pieces(words, [{"word_range": [j, j], "text": words[j].text}],
-                           tpf, source_words, source_level, pad_ms, wordless_ms)[0]
+                           tpf, source_words, source_level, pad_ms, wordless_ms, pad_in_ms)[0]
         piece = {"text": keep.get("text") or join_words(w.text for w in words[i:j + 1]),
                  "no_quiet": {**({"start": head["no_quiet"]["start"]} if "start" in head.get("no_quiet", {}) else {}),
                               **({"end": tail["no_quiet"]["end"]} if "end" in tail.get("no_quiet", {}) else {})}}

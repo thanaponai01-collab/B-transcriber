@@ -52,7 +52,8 @@ def main() -> None:
         if not k:
             continue
         for pad, wordless in ((120, 0), (60, 0), (60, 600)):
-            p = word_cut.plan_pieces(src, [{"word_range": [k[0], k[-1]]}], TPF, {media: words}, lvl, pad, wordless)[0]
+            p = word_cut.plan_pieces(src, [{"word_range": [k[0], k[-1]]}], TPF, {media: words}, lvl, pad, wordless,
+                                     pad_in_ms=pad)[0]  # one pad both sides, as these numbers were measured
             for side, owner, planned in (("in", i0, int(p["in_ticks"]) / T), ("out", i1, int(p["out_ticks"]) / T)):
                 rows.append({"setting": (pad, wordless), "side": side, "diff": abs(owner - planned), "rough": near_rough(owner),
                              "sound": lvl(media, owner * T) >= 0,

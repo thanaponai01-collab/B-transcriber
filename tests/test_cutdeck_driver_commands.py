@@ -282,7 +282,7 @@ def test_word_tools_pass_on_the_transcript_warnings(monkeypatch):
     async def premiere(command, args):
         return {"name": "S", "ticks_per_frame": "8467200000"}
 
-    args = {"keep": [{"text": "x"}], "pad_ms": 60, "wordless_ms": 0}
+    args = {"keep": [{"text": "x"}], "pad_ms": 60, "pad_in_ms": 30, "wordless_ms": 0}
     result = asyncio.run(driver_commands._plan_pieces(args, premiere))
     assert result["warnings"] == [note]
 

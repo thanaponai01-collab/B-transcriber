@@ -96,7 +96,7 @@ def test_plan_pieces_places_edges_in_the_source_pauses_in_the_order_given():
              [("two", 0, 400, 1000, 1400), ("three", 400, 800, 1400, 1800), ("four", 800, 1200, 2200, 2600)]]
     four, = word_cut.plan_pieces(rough, [{"text": "four"}], TPF, _src(WORDS))
     a, b = int(four["in_ticks"]) // MS, int(four["out_ticks"]) // MS
-    assert 1800 <= a <= 2200 and 2200 - a >= 50           # starts in the source pause, ~60 ms before
+    assert 1800 <= a <= 2200 and 2200 - a >= 20           # starts in the source pause, ~30 ms before (PAD_IN_MS)
     assert 2600 <= b <= 2600 + 34                          # "five" touches: ends at the boundary
     one, four2 = word_cut.plan_pieces(WORDS, [{"text": "one"}, {"text": "four"}], TPF, _src(WORDS))
     assert int(one["in_ticks"]) == 0 and 450 <= int(one["out_ticks"]) // MS <= 1000
